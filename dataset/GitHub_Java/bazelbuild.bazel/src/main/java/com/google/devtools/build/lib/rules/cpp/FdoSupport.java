@@ -605,19 +605,12 @@ public class FdoSupport {
       FeatureConfiguration featureConfiguration,
       FdoSupportProvider fdoSupportProvider) {
 
-    ImmutableMap.Builder<String, String> variablesBuilder = ImmutableMap.builder();
-
-    if ((fdoSupportProvider != null)
-        && (fdoSupportProvider.getPrefetchHintsArtifact() != null)) {
-      variablesBuilder.put(
-          CompileBuildVariables.FDO_PREFETCH_HINTS_PATH.getVariableName(),
-          fdoSupportProvider.getPrefetchHintsArtifact().getExecPathString());
-    }
-
     // FDO is disabled -> do nothing.
     if ((fdoInstrument == null) && (fdoRoot == null)) {
       return ImmutableMap.of();
     }
+
+    ImmutableMap.Builder<String, String> variablesBuilder = ImmutableMap.builder();
 
     if (featureConfiguration.isEnabled(CppRuleClasses.FDO_INSTRUMENT)) {
       variablesBuilder.put(
@@ -670,21 +663,19 @@ public class FdoSupport {
     LipoContextProvider lipoContextProvider =
         toolchain.isLLVMCompiler() ? null : CppHelper.getLipoContextProvider(ruleContext);
 
-    ImmutableSet.Builder<Artifact> auxiliaryInputs = ImmutableSet.builder();
-
-    if (fdoSupportProvider.getPrefetchHintsArtifact() != null) {
-      auxiliaryInputs.add(fdoSupportProvider.getPrefetchHintsArtifact());
-    }
     // If --fdo_optimize was not specified, we don't have any additional inputs.
     if (fdoProfile == null) {
-      return auxiliaryInputs.build();
+      return ImmutableSet.of();
     } else if (fdoMode == FdoMode.LLVM_FDO || fdoMode == FdoMode.AUTO_FDO) {
+      ImmutableSet.Builder<Artifact> auxiliaryInputs = ImmutableSet.builder();
       auxiliaryInputs.add(fdoSupportProvider.getProfileArtifact());
       if (lipoContextProvider != null) {
         auxiliaryInputs.addAll(getAutoFdoImports(ruleContext, sourceExecPath, lipoContextProvider));
       }
       return auxiliaryInputs.build();
     } else {
+      ImmutableSet.Builder<Artifact> auxiliaryInputs = ImmutableSet.builder();
+
       PathFragment objectName =
           FileSystemUtils.appendExtension(outputName, usePic ? ".pic.o" : ".o");
 
@@ -812,22 +803,18 @@ public class FdoSupport {
    * AutoFDO is disabled, no build variable is added and returns null.
    */
   @ThreadSafe
-  public ProfileArtifacts buildProfileForLtoBackend(
+  public Artifact buildProfileForLtoBackend(
       FdoSupportProvider fdoSupportProvider,
       FeatureConfiguration featureConfiguration,
       CcToolchainVariables.Builder buildVariables,
       RuleContext ruleContext) {
-    Artifact prefetch = fdoSupportProvider.getPrefetchHintsArtifact();
-    if (prefetch != null) {
-      buildVariables.addStringVariable("fdo_prefetch_hints_path", prefetch.getExecPathString());
-    }
     if (!featureConfiguration.isEnabled(CppRuleClasses.AUTOFDO)) {
-      return new ProfileArtifacts(null, prefetch);
+      return null;
     }
 
     Artifact profile = fdoSupportProvider.getProfileArtifact();
     buildVariables.addStringVariable("fdo_profile_path", profile.getExecPathString());
-    return new ProfileArtifacts(profile, prefetch);
+    return profile;
   }
 
   /**
@@ -840,20 +827,20 @@ public class FdoSupport {
   }
 
   public FdoSupportProvider createFdoSupportProvider(
-      RuleContext ruleContext, ProfileArtifacts profiles) {
+      RuleContext ruleContext, Artifact profileArtifact) {
     if (fdoRoot == null) {
-      return new FdoSupportProvider(this, profiles, null);
+      return new FdoSupportProvider(this, null, null);
     }
 
     if (fdoMode == FdoMode.LLVM_FDO) {
-      Preconditions.checkState(profiles != null && profiles.getProfileArtifact() != null);
-      return new FdoSupportProvider(this, profiles, null);
+      Preconditions.checkState(profileArtifact != null);
+      return new FdoSupportProvider(this, profileArtifact, null);
     }
 
     Preconditions.checkState(fdoPath != null);
     PathFragment profileRootRelativePath = getAutoProfileRootRelativePath(fdoProfile);
 
-    Artifact profileArtifact =
+    profileArtifact =
         ruleContext
             .getAnalysisEnvironment()
             .getDerivedArtifact(fdoPath.getRelative(profileRootRelativePath), fdoRoot);
@@ -867,11 +854,7 @@ public class FdoSupport {
       gcdaArtifacts.put(path, gcdaArtifact);
     }
 
-    return new FdoSupportProvider(
-        this,
-        new ProfileArtifacts(
-            profileArtifact, profiles == null ? null : profiles.getPrefetchHintsArtifact()),
-        gcdaArtifacts.build());
+    return new FdoSupportProvider(this, profileArtifact, gcdaArtifacts.build());
   }
 
   /**

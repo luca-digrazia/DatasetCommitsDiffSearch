@@ -25,15 +25,19 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
+import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.StringSequenceBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.VariablesExtension;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import java.util.Set;
 
 /** Build variable extensions for templating a toolchain for objc builds. */
 class ObjcVariablesExtension implements VariablesExtension {
 
   static final String PCH_FILE_VARIABLE_NAME = "pch_file";
-  static final String FRAMEWORKS_PATH_NAME = "framework_paths";
+  static final String FRAMEWORKS_VARIABLE_NAME = "framework_paths";
   static final String MODULES_MAPS_DIR_NAME = "module_maps_dir";
   static final String OBJC_MODULE_CACHE_DIR_NAME = "_objc_module_cache";
   static final String OBJC_MODULE_CACHE_KEY = "modules_cache_path";
@@ -58,6 +62,7 @@ class ObjcVariablesExtension implements VariablesExtension {
 
   // dsym variables
   static final String DSYM_PATH_VARIABLE_NAME = "dsym_path";
+  static final String DSYM_BUNDLE_ZIP_VARIABLE_NAME = "dsym_bundle_zip";
 
   // ARC variables. Mutually exclusive.
   static final String OBJC_ARC_VARIABLE_NAME = "objc_arc";
@@ -69,13 +74,12 @@ class ObjcVariablesExtension implements VariablesExtension {
   private final Artifact fullyLinkArchive;
   private final IntermediateArtifacts intermediateArtifacts;
   private final BuildConfiguration buildConfiguration;
-  private final ImmutableList<String> frameworkSearchPaths;
   private final Set<String> frameworkNames;
   private final ImmutableList<String> libraryNames;
   private final ImmutableSet<Artifact> forceLoadArtifacts;
   private final ImmutableList<String> attributeLinkopts;
   private final ImmutableSet<VariableCategory> activeVariableCategories;
-  private final Artifact dsymSymbol;
+  private final Artifact dsymBundleZip;
   private final Artifact linkmap;
   private final Artifact bitcodeSymbolMap;
   private boolean arcEnabled = true;
@@ -87,13 +91,12 @@ class ObjcVariablesExtension implements VariablesExtension {
       Artifact fullyLinkArchive,
       IntermediateArtifacts intermediateArtifacts,
       BuildConfiguration buildConfiguration,
-      ImmutableList<String> frameworkSearchPaths,
       Set<String> frameworkNames,
       ImmutableList<String> libraryNames,
       ImmutableSet<Artifact> forceLoadArtifacts,
       ImmutableList<String> attributeLinkopts,
       ImmutableSet<VariableCategory> activeVariableCategories,
-      Artifact dsymSymbol,
+      Artifact dsymBundleZip,
       Artifact linkmap,
       Artifact bitcodeSymbolMap,
       boolean arcEnabled) {
@@ -103,13 +106,12 @@ class ObjcVariablesExtension implements VariablesExtension {
     this.fullyLinkArchive = fullyLinkArchive;
     this.intermediateArtifacts = intermediateArtifacts;
     this.buildConfiguration = buildConfiguration;
-    this.frameworkSearchPaths = frameworkSearchPaths;
     this.frameworkNames = frameworkNames;
     this.libraryNames = libraryNames;
     this.forceLoadArtifacts = forceLoadArtifacts;
     this.attributeLinkopts = attributeLinkopts;
     this.activeVariableCategories = activeVariableCategories;
-    this.dsymSymbol = dsymSymbol;
+    this.dsymBundleZip = dsymBundleZip;
     this.linkmap = linkmap;
     this.bitcodeSymbolMap = bitcodeSymbolMap;
     this.arcEnabled = arcEnabled;
@@ -165,7 +167,14 @@ class ObjcVariablesExtension implements VariablesExtension {
   }
 
   private void addFrameworkVariables(CcToolchainVariables.Builder builder) {
-    builder.addStringSequenceVariable(FRAMEWORKS_PATH_NAME, frameworkSearchPaths);
+    ApplePlatform applePlatform =
+        buildConfiguration.getFragment(AppleConfiguration.class).getSingleArchPlatform();
+    StringSequenceBuilder frameworkSequence = new StringSequenceBuilder();
+    for (String framework :
+        CompilationSupport.commonFrameworkNames(objcProvider, ruleContext, applePlatform)) {
+      frameworkSequence.addValue(framework);
+    }
+    builder.addCustomBuiltVariable(FRAMEWORKS_VARIABLE_NAME, frameworkSequence);
   }
 
   private void addModuleMapVariables(CcToolchainVariables.Builder builder) {
@@ -227,7 +236,11 @@ class ObjcVariablesExtension implements VariablesExtension {
   }
 
   private void addDsymVariables(CcToolchainVariables.Builder builder) {
-    builder.addStringVariable(DSYM_PATH_VARIABLE_NAME, dsymSymbol.getShellEscapedExecPathString());
+    builder.addStringVariable(
+        DSYM_BUNDLE_ZIP_VARIABLE_NAME, dsymBundleZip.getShellEscapedExecPathString());
+    builder.addStringVariable(
+        DSYM_PATH_VARIABLE_NAME,
+        FileSystemUtils.removeExtension(dsymBundleZip.getExecPath()).getPathString());
   }
 
   private void addLinkmapVariables(CcToolchainVariables.Builder builder) {
@@ -247,12 +260,11 @@ class ObjcVariablesExtension implements VariablesExtension {
     private Artifact fullyLinkArchive;
     private IntermediateArtifacts intermediateArtifacts;
     private BuildConfiguration buildConfiguration;
-    private ImmutableList<String> frameworkSearchPaths;
     private Set<String> frameworkNames;
     private ImmutableSet<Artifact> forceLoadArtifacts;
     private ImmutableList<String> libraryNames;
     private ImmutableList<String> attributeLinkopts;
-    private Artifact dsymSymbol;
+    private Artifact dsymBundleZip;
     private Artifact linkmap;
     private Artifact bitcodeSymbolMap;
     private boolean arcEnabled = true;
@@ -296,45 +308,39 @@ class ObjcVariablesExtension implements VariablesExtension {
       return this;
     }
 
-    /** Sets the framework search paths to be passed to the compiler/linker using {@code -F}. */
-    public Builder setFrameworkSearchPath(ImmutableList<String> frameworkSearchPaths) {
-      this.frameworkSearchPaths = Preconditions.checkNotNull(frameworkSearchPaths);
-      return this;
-    }
-
     /** Sets the framework names to be passed to the linker using {@code -framework}. */
     public Builder setFrameworkNames(Set<String> frameworkNames) {
       this.frameworkNames = Preconditions.checkNotNull(frameworkNames);
       return this;
     }
-
+    
     /** Sets binary input files to be passed to the linker with "-l" flags. */
     public Builder setLibraryNames(ImmutableList<String> libraryNames) {
       this.libraryNames = Preconditions.checkNotNull(libraryNames);
       return this;
     }
-
+    
     /** Sets artifacts to be passed to the linker with {@code -force_load}. */
     public Builder setForceLoadArtifacts(ImmutableSet<Artifact> forceLoadArtifacts) {
       this.forceLoadArtifacts = Preconditions.checkNotNull(forceLoadArtifacts);
       return this;
     }
-
+    
     /** Sets linkopts arising from rule attributes. */
     public Builder setAttributeLinkopts(ImmutableList<String> attributeLinkopts) {
       this.attributeLinkopts = Preconditions.checkNotNull(attributeLinkopts);
       return this;
     }
-
+    
     /** Sets the given {@link VariableCategory} as active for this extension. */
     public Builder addVariableCategory(VariableCategory variableCategory) {
       this.activeVariableCategoriesBuilder.add(Preconditions.checkNotNull(variableCategory));
       return this;
     }
 
-    /** Sets the Artifact for the dsym symbol file. */
-    public Builder setDsymSymbol(Artifact dsymSymbol) {
-      this.dsymSymbol = dsymSymbol;
+    /** Sets the Artifact for the zipped dsym bundle. */
+    public Builder setDsymBundleZip(Artifact dsymBundleZip) {
+      this.dsymBundleZip = dsymBundleZip;
       return this;
     }
 
@@ -357,15 +363,14 @@ class ObjcVariablesExtension implements VariablesExtension {
     }
 
     public ObjcVariablesExtension build() {
-
+      
       ImmutableSet<VariableCategory> activeVariableCategories =
           activeVariableCategoriesBuilder.build();
-
+      
       Preconditions.checkNotNull(ruleContext, "missing RuleContext");
       Preconditions.checkNotNull(objcProvider, "missing ObjcProvider");
       Preconditions.checkNotNull(buildConfiguration, "missing BuildConfiguration");
       Preconditions.checkNotNull(intermediateArtifacts, "missing IntermediateArtifacts");
-      Preconditions.checkNotNull(frameworkSearchPaths, "missing FrameworkSearchPaths");
       if (activeVariableCategories.contains(VariableCategory.ARCHIVE_VARIABLES)) {
         Preconditions.checkNotNull(compilationArtifacts, "missing CompilationArtifacts");
       }
@@ -379,7 +384,7 @@ class ObjcVariablesExtension implements VariablesExtension {
         Preconditions.checkNotNull(attributeLinkopts, "missing attribute linkopts");
       }
       if (activeVariableCategories.contains(VariableCategory.DSYM_VARIABLES)) {
-        Preconditions.checkNotNull(dsymSymbol, "missing dsym symbol artifact");
+        Preconditions.checkNotNull(dsymBundleZip, "missing dsym bundle zip artifact");
       }
       if (activeVariableCategories.contains(VariableCategory.LINKMAP_VARIABLES)) {
         Preconditions.checkNotNull(linkmap, "missing linkmap artifact");
@@ -395,13 +400,12 @@ class ObjcVariablesExtension implements VariablesExtension {
           fullyLinkArchive,
           intermediateArtifacts,
           buildConfiguration,
-          frameworkSearchPaths,
           frameworkNames,
           libraryNames,
           forceLoadArtifacts,
           attributeLinkopts,
           activeVariableCategories,
-          dsymSymbol,
+          dsymBundleZip,
           linkmap,
           bitcodeSymbolMap,
           arcEnabled);

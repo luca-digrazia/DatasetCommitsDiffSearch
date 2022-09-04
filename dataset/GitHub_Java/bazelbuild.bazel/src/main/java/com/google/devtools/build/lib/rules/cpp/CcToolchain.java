@@ -343,6 +343,11 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             fdoProvider.getFdoPath() != null
                 ? fdoProvider.getFdoPath()
                 : fdoProvider.getProfileArtifact().getPath().asFragment();
+        // Unlike --fdo_optimize, --fdo_profile should not allow .afdo profiles.
+        if (fdoZip != null && CppFileTypes.GCC_AUTO_PROFILE.matches(fdoZip.getPathString())) {
+          ruleContext.ruleError("Invalid extension for FDO profile file.");
+          return null;
+        }
       }
     }
 

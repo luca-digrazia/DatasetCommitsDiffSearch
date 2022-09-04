@@ -318,7 +318,7 @@ public class CompilationSupport {
                 fdoSupport,
                 buildConfiguration)
             .addSources(sources)
-            .addPrivateHeaders(privateHdrs)
+            .addSources(privateHdrs)
             .addDefines(objcProvider.get(DEFINE))
             .enableCompileProviders()
             .addPublicHeaders(publicHdrs)

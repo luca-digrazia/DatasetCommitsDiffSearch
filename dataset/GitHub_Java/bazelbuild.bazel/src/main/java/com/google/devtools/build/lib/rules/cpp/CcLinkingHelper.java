@@ -140,10 +140,9 @@ public final class CcLinkingHelper {
           .addAll(LinkerInputs.toLibraryArtifacts(linkingOutputs.getPicStaticLibraries()));
       if (addDynamicLibraries) {
         filesBuilder
+            .addAll(LinkerInputs.toNonSolibArtifacts(linkingOutputs.getDynamicLibraries()))
             .addAll(
-                LinkerInputs.toNonSolibArtifacts(linkingOutputs.getDynamicLibrariesForLinking()))
-            .addAll(
-                LinkerInputs.toNonSolibArtifacts(linkingOutputs.getDynamicLibrariesForRuntime()));
+                LinkerInputs.toNonSolibArtifacts(linkingOutputs.getExecutionDynamicLibraries()));
       }
     }
 
@@ -382,7 +381,7 @@ public final class CcLinkingHelper {
 
   /**
    * This adds the {@link CcSpecificLinkParamsProvider} to the providers created by this class.
-   * Otherwise the result will contain an instance of {@link CcLinkParamsStore}.
+   * Otherwise the result will contain an instance of {@link CcLinkParamsInfo}.
    */
   public CcLinkingHelper enableCcSpecificLinkParamsProvider() {
     this.emitCcSpecificLinkParamsProvider = true;
@@ -542,8 +541,8 @@ public final class CcLinkingHelper {
 
     CcLinkingInfo.Builder ccLinkingInfoBuilder = CcLinkingInfo.Builder.create();
     ccLinkingInfoBuilder.setCcRunfiles(new CcRunfiles(cppStaticRunfiles, cppSharedRunfiles));
-    ccLinkingInfoBuilder.setCcExecutionDynamicLibraries(
-        collectExecutionDynamicLibraryArtifacts(ccLinkingOutputs.getDynamicLibrariesForRuntime()));
+    ccLinkingInfoBuilder.setCcExecutionDynamicLibrariesInfo(
+        collectExecutionDynamicLibraryArtifacts(ccLinkingOutputs.getExecutionDynamicLibraries()));
 
     CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     boolean forcePic = cppConfiguration.forcePic();
@@ -552,8 +551,8 @@ public final class CcLinkingHelper {
           new CcSpecificLinkParamsProvider(
               createCcLinkParamsStore(ccLinkingOutputs, ccCompilationContext, forcePic)));
     } else {
-      ccLinkingInfoBuilder.setCcLinkParamsStore(
-          new CcLinkParamsStore(
+      ccLinkingInfoBuilder.setCcLinkParamsInfo(
+          new CcLinkParamsInfo(
               createCcLinkParamsStore(ccLinkingOutputs, ccCompilationContext, forcePic)));
     }
     providers.put(ccLinkingInfoBuilder.build());
@@ -634,17 +633,17 @@ public final class CcLinkingHelper {
     return builder.build();
   }
 
-  private AbstractCcLinkParamsStore createCcLinkParamsStore(
+  private CcLinkParamsStore createCcLinkParamsStore(
       final CcLinkingOutputs ccLinkingOutputs,
       final CcCompilationContext ccCompilationContext,
       final boolean forcePic) {
-    return new AbstractCcLinkParamsStore() {
+    return new CcLinkParamsStore() {
       @Override
       protected void collect(
           CcLinkParams.Builder builder, boolean linkingStatically, boolean linkShared) {
         builder.addLinkstamps(linkstamps.build(), ccCompilationContext);
         builder.addTransitiveTargets(
-            deps, CcLinkParamsStore.TO_LINK_PARAMS, CcSpecificLinkParamsProvider.TO_LINK_PARAMS);
+            deps, CcLinkParamsInfo.TO_LINK_PARAMS, CcSpecificLinkParamsProvider.TO_LINK_PARAMS);
         if (!neverlink) {
           builder.addLibraries(
               ccLinkingOutputs.getPreferredLibraries(
@@ -653,7 +652,7 @@ public final class CcLinkingHelper {
               || (ccLinkingOutputs.getStaticLibraries().isEmpty()
                   && ccLinkingOutputs.getPicStaticLibraries().isEmpty())) {
             builder.addExecutionDynamicLibraries(
-                LinkerInputs.toLibraryArtifacts(ccLinkingOutputs.getDynamicLibrariesForRuntime()));
+                LinkerInputs.toLibraryArtifacts(ccLinkingOutputs.getExecutionDynamicLibraries()));
           }
           builder.addLinkOpts(linkopts);
           builder.addNonCodeInputs(nonCodeLinkerInputs);
@@ -664,7 +663,7 @@ public final class CcLinkingHelper {
 
   private NestedSet<LinkerInput> collectNativeCcLibraries(CcLinkingOutputs ccLinkingOutputs) {
     NestedSetBuilder<LinkerInput> result = NestedSetBuilder.linkOrder();
-    result.addAll(ccLinkingOutputs.getDynamicLibrariesForLinking());
+    result.addAll(ccLinkingOutputs.getDynamicLibraries());
     for (CcNativeLibraryProvider dep :
         AnalysisUtils.getProviders(deps, CcNativeLibraryProvider.class)) {
       result.addTransitive(dep.getTransitiveCcNativeLibraries());
@@ -673,24 +672,26 @@ public final class CcLinkingHelper {
     return result.build();
   }
 
-  private CcExecutionDynamicLibraries collectExecutionDynamicLibraryArtifacts(
+  private CcExecutionDynamicLibrariesInfo collectExecutionDynamicLibraryArtifacts(
       List<LibraryToLink> executionDynamicLibraries) {
     Iterable<Artifact> artifacts = LinkerInputs.toLibraryArtifacts(executionDynamicLibraries);
     if (!Iterables.isEmpty(artifacts)) {
-      return new CcExecutionDynamicLibraries(NestedSetBuilder.wrap(Order.STABLE_ORDER, artifacts));
+      return new CcExecutionDynamicLibrariesInfo(
+          NestedSetBuilder.wrap(Order.STABLE_ORDER, artifacts));
     }
 
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
     for (CcLinkingInfo dep : AnalysisUtils.getProviders(deps, CcLinkingInfo.PROVIDER)) {
-      CcExecutionDynamicLibraries ccExecutionDynamicLibraries =
-          dep.getCcExecutionDynamicLibraries();
-      if (ccExecutionDynamicLibraries != null) {
-        builder.addTransitive(ccExecutionDynamicLibraries.getExecutionDynamicLibraryArtifacts());
+      CcExecutionDynamicLibrariesInfo ccExecutionDynamicLibrariesInfo =
+          dep.getCcExecutionDynamicLibrariesInfo();
+      if (ccExecutionDynamicLibrariesInfo != null) {
+        builder.addTransitive(
+            ccExecutionDynamicLibrariesInfo.getExecutionDynamicLibraryArtifacts());
       }
     }
     return builder.isEmpty()
-        ? CcExecutionDynamicLibraries.EMPTY
-        : new CcExecutionDynamicLibraries(builder.build());
+        ? CcExecutionDynamicLibrariesInfo.EMPTY
+        : new CcExecutionDynamicLibrariesInfo(builder.build());
   }
 
   /**

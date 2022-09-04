@@ -284,20 +284,9 @@ public class LibrariesToLinkCollector {
             || input.getArtifactCategory() == ArtifactCategory.INTERFACE_LIBRARY);
     Preconditions.checkState(
         !Link.useStartEndLib(
-            input,
-            CppHelper.getArchiveType(cppConfiguration, ccToolchainProvider, featureConfiguration)));
+            input, CppHelper.getArchiveType(cppConfiguration, ccToolchainProvider)));
 
     expandedLinkerInputsBuilder.add(input);
-    if (featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)
-        && ccToolchainProvider.supportsInterfaceSharedLibraries(featureConfiguration)) {
-      // On Windows, dynamic library (dll) cannot be linked directly when using toolchains that
-      // support interface library (eg. MSVC). If the user is doing so, it is only to be referenced
-      // in other places (such as copy_dynamic_libraries_to_binary); skip adding it.
-      if (CppFileTypes.SHARED_LIBRARY.matches(input.getArtifact().getFilename())) {
-        return;
-      }
-    }
-
     Artifact inputArtifact = input.getArtifact();
     PathFragment libDir = inputArtifact.getExecPath().getParentDirectory();
     if (!libDir.equals(solibDir)
@@ -383,8 +372,7 @@ public class LibrariesToLinkCollector {
 
     // start-lib/end-lib library: adds its input object files.
     if (Link.useStartEndLib(
-        input,
-        CppHelper.getArchiveType(cppConfiguration, ccToolchainProvider, featureConfiguration))) {
+        input, CppHelper.getArchiveType(cppConfiguration, ccToolchainProvider))) {
       Iterable<Artifact> archiveMembers = input.getObjectFiles();
       if (!Iterables.isEmpty(archiveMembers)) {
         ImmutableList.Builder<Artifact> nonLtoArchiveMembersBuilder = ImmutableList.builder();
@@ -511,8 +499,7 @@ public class LibrariesToLinkCollector {
     // As a bonus, we can rephrase --nostart_end_lib as --features=-start_end_lib and get rid
     // of a command line option.
 
-    Preconditions.checkState(
-        CppHelper.useStartEndLib(cppConfiguration, ccToolchainProvider, featureConfiguration));
+    Preconditions.checkState(CppHelper.useStartEndLib(cppConfiguration, ccToolchainProvider));
     Map<Artifact, Artifact> ltoMap = new HashMap<>();
     for (LtoBackendArtifacts l : allLtoArtifacts) {
       ltoMap.put(l.getBitcodeFile(), l.getObjectFile());

@@ -73,7 +73,7 @@ public final class CompileCommandLine {
         featureConfiguration.actionIsConfigured(actionName),
         "Expected action_config for '%s' to be configured",
         actionName);
-    return featureConfiguration.getToolPathForAction(actionName);
+    return featureConfiguration.getToolForAction(actionName).getToolPathFragment().getPathString();
   }
 
   /**
