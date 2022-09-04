@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.OS;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -80,7 +79,7 @@ public class OutputDirectories {
     INCLUDE(BlazeDirectories.RELATIVE_INCLUDE_DIR),
     OUTPUT(false);
 
-    private final String nameFragment;
+    private final PathFragment nameFragment;
     private final boolean middleman;
 
     /**
@@ -90,14 +89,12 @@ public class OutputDirectories {
      * @param isMiddleman whether the root should be a middleman root or a "normal" derived root.
      */
     OutputDirectory(boolean isMiddleman) {
-      this.nameFragment = "";
+      this.nameFragment = PathFragment.EMPTY_FRAGMENT;
       this.middleman = isMiddleman;
     }
 
     OutputDirectory(String name) {
-      this.nameFragment = name;
-      // Must be a legal basename for root: no segments allowed.
-      FileSystemUtils.checkBaseName(nameFragment);
+      this.nameFragment = PathFragment.create(name);
       this.middleman = false;
     }
 
@@ -114,7 +111,10 @@ public class OutputDirectories {
       }
       // e.g., [[execroot/repo1]/bazel-out/config/bin]
       return ArtifactRoot.asDerivedRoot(
-          execRoot, directories.getRelativeOutputPath(), outputDirName, nameFragment);
+          execRoot,
+          PathFragment.create(directories.getRelativeOutputPath()),
+          PathFragment.create(outputDirName),
+          nameFragment);
     }
   }
 
