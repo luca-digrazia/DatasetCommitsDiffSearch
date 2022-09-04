@@ -42,8 +42,6 @@ public interface BooleanVector extends BaseVector<Boolean, Integer, IntStream> {
 
     /**
      * Returns the value at position i.
-     * @param i the index.
-     * @return the value.
      */
     boolean getBoolean(int i);
 
@@ -79,20 +77,17 @@ public interface BooleanVector extends BaseVector<Boolean, Integer, IntStream> {
 
     /**
      * Returns the string representation of vector.
-     * @param n the number of elements to show.
-     * @return the string representation of vector.
+     * @param n Number of elements to show
      */
     default String toString(int n) {
         String suffix = n >= size() ? "]" : String.format(", ... %,d more]", size() - n);
         return stream().limit(n).mapToObj(String::valueOf).collect(Collectors.joining(", ", "[", suffix));
     }
 
-    /**
-     * Creates a named boolean vector.
+    /** Creates a named boolean vector.
      *
      * @param name the name of vector.
      * @param vector the data of vector.
-     * @return the vector.
      */
     static BooleanVector of(String name, boolean[] vector) {
         return new BooleanVectorImpl(name, vector);
@@ -102,7 +97,6 @@ public interface BooleanVector extends BaseVector<Boolean, Integer, IntStream> {
      *
      * @param field the struct field of vector.
      * @param vector the data of vector.
-     * @return the vector.
      */
     static BooleanVector of(StructField field, boolean[] vector) {
         return new BooleanVectorImpl(field, vector);

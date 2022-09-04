@@ -23,6 +23,7 @@ import java.beans.PropertyDescriptor;
 import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import smile.data.measure.NominalScale;
@@ -205,7 +206,7 @@ class DataFrameImpl implements DataFrame, Serializable {
      * @param data The data stream.
      */
     public DataFrameImpl(Stream<? extends Tuple> data) {
-        this(data.collect(java.util.stream.Collectors.toList()));
+        this(data.collect(Collectors.toList()));
     }
 
     /**
@@ -213,7 +214,7 @@ class DataFrameImpl implements DataFrame, Serializable {
      * @param data The data stream.
      */
     public DataFrameImpl(Stream<? extends Tuple> data, StructType schema) {
-        this(data.collect(java.util.stream.Collectors.toList()), schema);
+        this(data.collect(Collectors.toList()), schema);
     }
     /**
      * Constructor.
@@ -347,7 +348,7 @@ class DataFrameImpl implements DataFrame, Serializable {
     }
 
     @Override
-    public int indexOf(String name) {
+    public int columnIndex(String name) {
         return schema.fieldIndex(name);
     }
 

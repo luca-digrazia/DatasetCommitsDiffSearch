@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,10 +13,9 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.data.vector;
-
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -25,8 +24,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 
-import smile.data.measure.ContinuousMeasure;
-import smile.data.measure.DiscreteMeasure;
+import smile.data.measure.CategoricalMeasure;
 import smile.data.measure.NominalScale;
 import smile.data.type.DataTypes;
 import smile.data.type.StructField;
@@ -47,8 +45,8 @@ class StringVectorImpl extends VectorImpl<String> implements StringVector {
     public StringVectorImpl(StructField field, String[] vector) {
         super(field.name, field.type, vector);
 
-        if (field.measure.isPresent()) {
-            throw new IllegalArgumentException(String.format("Invalid measure %s for %s", field.measure.get(), type()));
+        if (field.measure != null) {
+            throw new IllegalArgumentException(String.format("Invalid measure %s for %s", field.measure, type()));
         }
     }
 
@@ -56,7 +54,7 @@ class StringVectorImpl extends VectorImpl<String> implements StringVector {
     public StringVector get(int... index) {
         String[] v = new String[index.length];
         for (int i = 0; i < index.length; i++) v[i] = get(index[i]);
-        return new StringVectorImpl(name(), v);
+        return new StringVectorImpl(field(), v);
     }
 
     @Override
@@ -66,7 +64,7 @@ class StringVectorImpl extends VectorImpl<String> implements StringVector {
 
     @Override
     public Vector<LocalDate> toDate(DateTimeFormatter format) {
-        LocalDate[] dates = stream().map(s -> format.parse(s)).toArray(LocalDate[]::new);
+        LocalDate[] dates = stream().map(format::parse).toArray(LocalDate[]::new);
         return new VectorImpl<>(name(), DataTypes.DateType, dates);
     }
 
@@ -77,7 +75,7 @@ class StringVectorImpl extends VectorImpl<String> implements StringVector {
 
     @Override
     public Vector<LocalTime> toTime(DateTimeFormatter format) {
-        LocalTime[] dates = stream().map(s -> format.parse(s)).toArray(LocalTime[]::new);
+        LocalTime[] dates = stream().map(format::parse).toArray(LocalTime[]::new);
         return new VectorImpl<>(name(), DataTypes.TimeType, dates);
     }
 
@@ -88,7 +86,7 @@ class StringVectorImpl extends VectorImpl<String> implements StringVector {
 
     @Override
     public Vector<LocalDateTime> toDateTime(DateTimeFormatter format) {
-        LocalDateTime[] dates = stream().map(s -> format.parse(s)).toArray(LocalDateTime[]::new);
+        LocalDateTime[] dates = stream().map(format::parse).toArray(LocalDateTime[]::new);
         return new VectorImpl<>(name(), DataTypes.DateTimeType, dates);
     }
 
@@ -100,20 +98,35 @@ class StringVectorImpl extends VectorImpl<String> implements StringVector {
     }
 
     @Override
-    public BaseVector factorize(DiscreteMeasure scale) {
-        int[] data = stream().mapToInt(s -> s == null ? -1 : (int) scale.valueOf(s)).toArray();
-
+    public BaseVector factorize(CategoricalMeasure scale) {
         switch (scale.type().id()) {
-            case Byte:
-                byte[] bytes = new byte[data.length];
-                System.arraycopy(data, 0, bytes, 0, data.length);
-                return new ByteVectorImpl(new StructField(name(), DataTypes.ByteType, scale), bytes);
-            case Short:
-                short[] shorts = new short[data.length];
-                System.arraycopy(data, 0, shorts, 0, data.length);
-                return new ShortVectorImpl(new StructField(name(), DataTypes.ShortType, scale), shorts);
-            case Integer:
+            case Byte: {
+                byte[] data = new byte[size()];
+                for (int i = 0; i < data.length; i++) {
+                    String s = get(i);
+                    data[i] = s == null ? (byte) -1 : scale.valueOf(s).byteValue();
+                }
+
+                return new ByteVectorImpl(new StructField(name(), DataTypes.ByteType, scale), data);
+            }
+            case Short: {
+                short[] data = new short[size()];
+                for (int i = 0; i < data.length; i++) {
+                    String s = get(i);
+                    data[i] = s == null ? (short) -1 : scale.valueOf(s).shortValue();
+                }
+
+                return new ShortVectorImpl(new StructField(name(), DataTypes.ShortType, scale), data);
+            }
+            case Integer: {
+                int[] data = new int[size()];
+                for (int i = 0; i < data.length; i++) {
+                    String s = get(i);
+                    data[i] = s == null ? -1 : scale.valueOf(s).intValue();
+                }
+
                 return new IntVectorImpl(new StructField(name(), DataTypes.IntegerType, scale), data);
+            }
             default:
                 // we should never reach here.
                 throw new UnsupportedOperationException("Unsupported data type for nominal measure: " + scale.type());

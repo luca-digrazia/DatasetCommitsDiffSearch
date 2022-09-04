@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.data.formula;
 
@@ -30,20 +30,19 @@ import smile.data.type.StructType;
  *
  * @author Haifeng Li
  */
-class FactorCrossing implements Term {
+public class FactorCrossing implements Term {
     /** The order of interactions. */
-    private int order;
+    private final int order;
     /** The children factors. */
-    private List<String> factors;
+    private final List<String> factors;
     /** The terms. */
-    private List<Term> terms;
+    private final List<Term> terms;
 
     /**
      * Constructor.
      *
      * @param factors the factors to be crossed.
      */
-    @SafeVarargs
     public FactorCrossing(String... factors) {
         this(factors.length, factors);
     }
@@ -54,7 +53,6 @@ class FactorCrossing implements Term {
      * @param order the order of interactions.
      * @param factors the factors to be crossed.
      */
-    @SafeVarargs
     public FactorCrossing(int order, String... factors) {
         if (factors.length < 2) {
             throw new IllegalArgumentException("FactorCrossing takes at least two factors");
@@ -70,12 +68,18 @@ class FactorCrossing implements Term {
         terms = new ArrayList<>();
         String[] work = new String[order];
         combination(terms, factors, work, order, 0, factors.length-1, 0);
+        Comparator<Term> compareBySize = (Term o1, Term o2) -> {
+            int n1 = o1 instanceof FactorInteraction ? ((FactorInteraction) o1).size() : 1;
+            int n2 = o2 instanceof FactorInteraction ? ((FactorInteraction) o2).size() : 1;
+            return n1 - n2;
+        };
+        terms.sort(compareBySize);
     }
 
     /**
      * Generates all combinations of `order` elements in the array `factors`.
      */
-    private static void combination(List<Term> terms, String factors[], String data[], int order, int start, int end, int index) {
+    private static void combination(List<Term> terms, String[] factors, String[] data, int order, int start, int end, int index) {
         if (index == order) {
             return;
         }
@@ -104,6 +108,11 @@ class FactorCrossing implements Term {
     @Override
     public Set<String> variables() {
         return new HashSet<>(factors);
+    }
+
+    @Override
+    public List<Term> expand() {
+        return terms;
     }
 
     @Override

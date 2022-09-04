@@ -19,6 +19,7 @@ package smile.data;
 
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import smile.data.type.*;
 import smile.data.vector.*;
@@ -60,8 +61,8 @@ public class IndexDataFrame implements DataFrame {
     }
 
     @Override
-    public int indexOf(String name) {
-        return df.indexOf(name);
+    public int columnIndex(String name) {
+        return df.columnIndex(name);
     }
 
     @Override
@@ -151,7 +152,7 @@ public class IndexDataFrame implements DataFrame {
 
     /** Returns a new data frame with regular index. */
     private DataFrame rebase() {
-        return DataFrame.of(stream().collect(java.util.stream.Collectors.toList()));
+        return DataFrame.of(stream().collect(Collectors.toList()));
     }
 
     @Override

@@ -21,6 +21,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.stream.Collector;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -39,41 +40,29 @@ import smile.util.Strings;
  * @author Haifeng Li
  */
 public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
-    /**
-     * Returns the schema of DataFrame.
-     * @return the schema.
-     */
+    /** Returns the schema of DataFrame. */
     StructType schema();
 
-    /**
-     * Returns the column names.
-     * @return the column names.
-     */
+    /** Returns the column names. */
     default String[] names() {
         StructField[] fields = schema().fields();
         return Arrays.stream(fields)
                 .map(field -> field.name)
-                .collect(java.util.stream.Collectors.toList())
+                .collect(Collectors.toList())
                 .toArray(new String[fields.length]);
     }
 
-    /**
-     * Returns the column data types.
-     * @return the column data types.
-     */
+    /** Returns the column types. */
     default DataType[] types() {
         StructField[] fields = schema().fields();
         return Arrays.stream(fields)
                 .map(field -> field.type)
-                .collect(java.util.stream.Collectors.toList())
+                .collect(Collectors.toList())
                 .toArray(new DataType[fields.length]);
     }
 
 
-    /**
-     * Returns the column's level of measurements.
-     * @return the column's level of measurements.
-     */
+    /** Returns the column measures. */
     default Measure[] measures() {
         StructField[] fields = schema().fields();
         return Arrays.stream(fields)
@@ -83,7 +72,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
 
     /**
      * Returns the number of rows.
-     * @return the number of rows.
      */
     default int nrows() {
         return size();
@@ -91,14 +79,10 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
 
     /**
      * Returns the number of columns.
-     * @return the number of columns.
      */
     int ncols();
 
-    /**
-     * Returns the structure of data frame.
-     * @return the structure of data frame.
-     */
+    /** Returns the structure of data frame. */
     default DataFrame structure() {
         List<BaseVector> vectors = Arrays.asList(
                 Vector.of("Column", String.class, names()),
@@ -109,48 +93,27 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
         return new DataFrameImpl(vectors);
     }
 
-    /**
-     * Returns a new data frame without rows that have null/missing values.
-     * @return the data frame without nulls.
-     */
+    /** Returns a new data frame without rows that have null/missing values. */
     default DataFrame omitNullRows() {
         return DataFrame.of(stream().filter(r -> !r.hasNull()), schema().unboxed());
     }
 
-    /**
-     * Returns the cell at (i, j).
-     * @param i the row index.
-     * @param j the column index.
-     * @return the cell value.
-     */
+    /** Returns the cell at (i, j). */
     default Object get(int i, int j) {
         return get(i).get(j);
     }
 
-    /**
-     * Returns the cell at (i, j).
-     * @param i the row index.
-     * @param column the column name.
-     * @return the cell value.
-     */
-    default Object get(int i, String column) {
-        return get(i).get(column);
+    /** Returns the cell at (i, j). */
+    default Object get(int i, String field) {
+        return get(i).get(field);
     }
 
-    /**
-     * Returns a new data frame with row indexing.
-     * @param index the row indices.
-     * @return the data frame of selected rows.
-     */
+    /** Returns a new data frame with row indexing. */
     default DataFrame of(int... index) {
         return new IndexDataFrame(this, index);
     }
 
-    /**
-     * Returns a new data frame with boolean indexing.
-     * @param index the boolean index.
-     * @return the data frame of selected rows.
-     */
+    /** Returns a new data frame with boolean indexing. */
     default DataFrame of(boolean... index) {
         return of(IntStream.range(0, index.length).filter(i -> index[i]).toArray());
     }
@@ -159,40 +122,26 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * Copies the specified range into a new data frame.
      * @param from the initial index of the range to be copied, inclusive
      * @param to the final index of the range to be copied, exclusive.
-     * @return the data frame of selected range of rows.
      */
     default DataFrame slice(int from, int to) {
-        return IntStream.range(from, to).mapToObj(this::get).collect(Collectors.collect());
+        return IntStream.range(from, to).mapToObj(this::get).collect(collect());
     }
 
-    /**
-     * Checks whether the value at position (i, j) is null.
-     * @param i the row index.
-     * @param j the column index.
-     * @return true if the cell value is null.
-     */
+    /** Checks whether the value at position (i, j) is null. */
     default boolean isNullAt(int i, int j) {
         return get(i).isNullAt(j);
     }
 
-    /**
-     * Checks whether the field value is null.
-     * @param i the row index.
-     * @param column the column name.
-     * @return true if the cell value is null.
-     */
-    default boolean isNullAt(int i, String column) {
-        return get(i).isNullAt(column);
+    /** Checks whether the field value is null. */
+    default boolean isNullAt(int i, String field) {
+        return get(i).isNullAt(field);
     }
 
     /**
      * Returns the value at position (i, j) as a primitive boolean.
      *
-     * @param i the row index.
-     * @param j the column index.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
     default boolean getBoolean(int i, int j) {
         return get(i).getBoolean(j);
@@ -201,24 +150,18 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the field value as a primitive boolean.
      *
-     * @param i the row index.
-     * @param column the column name.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
-    default boolean getBoolean(int i, String column) {
-        return get(i).getBoolean(column);
+    default boolean getBoolean(int i, String field) {
+        return get(i).getBoolean(field);
     }
 
     /**
      * Returns the value at position (i, j) as a primitive byte.
      *
-     * @param i the row index.
-     * @param j the column index.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
     default char getChar(int i, int j) {
         return get(i).getChar(j);
@@ -227,24 +170,18 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the field value as a primitive byte.
      *
-     * @param i the row index.
-     * @param column the column name.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
-    default char getChar(int i, String column) {
-        return get(i).getChar(column);
+    default char getChar(int i, String field) {
+        return get(i).getChar(field);
     }
 
     /**
      * Returns the value at position (i, j) as a primitive byte.
      *
-     * @param i the row index.
-     * @param j the column index.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
     default byte getByte(int i, int j) {
         return get(i).getByte(j);
@@ -253,24 +190,18 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the field value as a primitive byte.
      *
-     * @param i the row index.
-     * @param column the column name.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
-    default byte getByte(int i, String column) {
-        return get(i).getByte(column);
+    default byte getByte(int i, String field) {
+        return get(i).getByte(field);
     }
 
     /**
      * Returns the value at position (i, j) as a primitive short.
      *
-     * @param i the row index.
-     * @param j the column index.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
     default short getShort(int i, int j) {
         return get(i).getShort(j);
@@ -279,24 +210,18 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the field value as a primitive short.
      *
-     * @param i the row index.
-     * @param column the column name.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
-    default short getShort(int i, String column) {
-        return get(i).getShort(column);
+    default short getShort(int i, String field) {
+        return get(i).getShort(field);
     }
 
     /**
      * Returns the value at position (i, j) as a primitive int.
      *
-     * @param i the row index.
-     * @param j the column index.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
     default int getInt(int i, int j) {
         return get(i).getInt(j);
@@ -305,24 +230,18 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the field value as a primitive int.
      *
-     * @param i the row index.
-     * @param column the column name.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
-    default int getInt(int i, String column) {
-        return get(i).getInt(column);
+    default int getInt(int i, String field) {
+        return get(i).getInt(field);
     }
 
     /**
      * Returns the value at position (i, j) as a primitive long.
      *
-     * @param i the row index.
-     * @param j the column index.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
     default long getLong(int i, int j) {
         return get(i).getLong(j);
@@ -331,25 +250,19 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the field value as a primitive long.
      *
-     * @param i the row index.
-     * @param column the column name.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
-    default long getLong(int i, String column) {
-        return get(i).getLong(column);
+    default long getLong(int i, String field) {
+        return get(i).getLong(field);
     }
 
     /**
      * Returns the value at position (i, j) as a primitive float.
      * Throws an exception if the type mismatches or if the value is null.
      *
-     * @param i the row index.
-     * @param j the column index.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
     default float getFloat(int i, int j) {
         return get(i).getFloat(j);
@@ -359,24 +272,18 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * Returns the field value as a primitive float.
      * Throws an exception if the type mismatches or if the value is null.
      *
-     * @param i the row index.
-     * @param column the column name.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
-    default float getFloat(int i, String column) {
-        return get(i).getFloat(column);
+    default float getFloat(int i, String field) {
+        return get(i).getFloat(field);
     }
 
     /**
      * Returns the value at position (i, j) as a primitive double.
      *
-     * @param i the row index.
-     * @param j the column index.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
     default double getDouble(int i, int j) {
         return get(i).getDouble(j);
@@ -385,23 +292,17 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the field value as a primitive double.
      *
-     * @param i the row index.
-     * @param column the column name.
      * @throws ClassCastException when data type does not match.
      * @throws NullPointerException when value is null.
-     * @return the cell value.
      */
-    default double getDouble(int i, String column) {
-        return get(i).getDouble(column);
+    default double getDouble(int i, String field) {
+        return get(i).getDouble(field);
     }
 
     /**
      * Returns the value at position (i, j) as a String object.
      *
-     * @param i the row index.
-     * @param j the column index.
      * @throws ClassCastException when data type does not match.
-     * @return the cell value.
      */
     default String getString(int i, int j) {
         return get(i).getString(j);
@@ -410,20 +311,14 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the field value as a String object.
      *
-     * @param i the row index.
-     * @param column the column name.
      * @throws ClassCastException when data type does not match.
-     * @return the cell value.
      */
-    default String getString(int i, String column) {
-        return get(i).getString(column);
+    default String getString(int i, String field) {
+        return get(i).getString(field);
     }
 
     /**
      * Returns the string representation of the value at position (i, j).
-     * @param i the row index.
-     * @param j the column index.
-     * @return the string representation of cell value.
      */
     default String toString(int i, int j) {
         Object o = get(i, j);
@@ -438,21 +333,15 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
 
     /**
      * Returns the string representation of the field value.
-     * @param i the row index.
-     * @param column the column name.
-     * @return the string representation of cell value.
      */
-    default String toString(int i, String column) {
-        return toString(i, indexOf(column));
+    default String toString(int i, String field) {
+        return toString(i, columnIndex(field));
     }
 
     /**
      * Returns the value at position (i, j) of decimal type as java.math.BigDecimal.
      *
-     * @param i the row index.
-     * @param j the column index.
      * @throws ClassCastException when data type does not match.
-     * @return the cell value.
      */
     default java.math.BigDecimal getDecimal(int i, int j) {
         return get(i).getDecimal(j);
@@ -461,22 +350,16 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the field value of decimal type as java.math.BigDecimal.
      *
-     * @param i the row index.
-     * @param column the column name.
      * @throws ClassCastException when data type does not match.
-     * @return the cell value.
      */
-    default java.math.BigDecimal getDecimal(int i, String column) {
-        return get(i).getDecimal(column);
+    default java.math.BigDecimal getDecimal(int i, String field) {
+        return get(i).getDecimal(field);
     }
 
     /**
      * Returns the value at position (i, j) of date type as java.time.LocalDate.
      *
-     * @param i the row index.
-     * @param j the column index.
      * @throws ClassCastException when data type does not match.
-     * @return the cell value.
      */
     default java.time.LocalDate getDate(int i, int j) {
         return get(i).getDate(j);
@@ -485,22 +368,16 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the field value of date type as java.time.LocalDate.
      *
-     * @param i the row index.
-     * @param column the column name.
      * @throws ClassCastException when data type does not match.
-     * @return the cell value.
      */
-    default java.time.LocalDate getDate(int i, String column) {
-        return get(i).getDate(column);
+    default java.time.LocalDate getDate(int i, String field) {
+        return get(i).getDate(field);
     }
 
     /**
      * Returns the value at position (i, j) of date type as java.time.LocalTime.
      *
-     * @param i the row index.
-     * @param j the column index.
      * @throws ClassCastException when data type does not match.
-     * @return the cell value.
      */
     default java.time.LocalTime getTime(int i, int j) {
         return get(i).getTime(j);
@@ -509,22 +386,16 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the field value of date type as java.time.LocalTime.
      *
-     * @param i the row index.
-     * @param column the column name.
      * @throws ClassCastException when data type does not match.
-     * @return the cell value.
      */
-    default java.time.LocalTime getTime(int i, String column) {
-        return get(i).getTime(column);
+    default java.time.LocalTime getTime(int i, String field) {
+        return get(i).getTime(field);
     }
 
     /**
      * Returns the value at position (i, j) as java.time.LocalDateTime.
      *
-     * @param i the row index.
-     * @param j the column index.
      * @throws ClassCastException when data type does not match.
-     * @return the cell value.
      */
     default java.time.LocalDateTime getDateTime(int i, int j) {
         return get(i).getDateTime(j);
@@ -533,22 +404,16 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the field value as java.time.LocalDateTime.
      *
-     * @param i the row index.
-     * @param column the column name.
      * @throws ClassCastException when data type does not match.
-     * @return the cell value.
      */
-    default java.time.LocalDateTime getDateTime(int i, String column) {
-        return get(i).getDateTime(column);
+    default java.time.LocalDateTime getDateTime(int i, String field) {
+        return get(i).getDateTime(field);
     }
 
     /**
      * Returns the value at position (i, j) of NominalScale or OrdinalScale.
      *
-     * @param i the row index.
-     * @param j the column index.
      * @throws ClassCastException when the data is not nominal or ordinal.
-     * @return the cell scale.
      */
     default String getScale(int i, int j) {
         int x = getInt(i, j);
@@ -559,23 +424,16 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the field value of NominalScale or OrdinalScale.
      *
-     * @param i the row index.
-     * @param column the column name.
      * @throws ClassCastException when the data is not nominal or ordinal.
-     * @return the cell scale.
      */
-    default String getScale(int i, String column) {
-        return getScale(i, indexOf(column));
+    default String getScale(int i, String field) {
+        return getScale(i, columnIndex(field));
     }
 
     /**
      * Returns the value at position (i, j) of array type.
      *
-     * @param i the row index.
-     * @param j the column index.
-     * @param <T> the data type of array elements.
      * @throws ClassCastException when data type does not match.
-     * @return the cell value.
      */
     default <T> T[] getArray(int i, int j) {
         return get(i).getArray(j);
@@ -584,23 +442,16 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the field value of array type.
      *
-     * @param i the row index.
-     * @param column the column name.
-     * @param <T> the data type of array elements.
      * @throws ClassCastException when data type does not match.
-     * @return the cell value.
      */
-    default <T> T[] getArray(int i, String column) {
-        return get(i).getArray(column);
+    default <T> T[] getArray(int i, String field) {
+        return get(i).getArray(field);
     }
 
     /**
      * Returns the value at position (i, j) of struct type.
      *
-     * @param i the row index.
-     * @param j the column index.
      * @throws ClassCastException when data type does not match.
-     * @return the cell value.
      */
     default Tuple getStruct(int i, int j) {
         return get(i).getStruct(j);
@@ -609,399 +460,232 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the field value of struct type.
      *
-     * @param i the row index.
-     * @param column the column name.
      * @throws ClassCastException when data type does not match.
-     * @return the cell value.
      */
-    default Tuple getStruct(int i, String column) {
-        return get(i).getStruct(column);
+    default Tuple getStruct(int i, String field) {
+        return get(i).getStruct(field);
     }
 
     /**
      * Returns the index of a given column name.
-     * @param column the column name.
      * @throws IllegalArgumentException when a field `name` does not exist.
-     * @return the index of column.
      */
-    int indexOf(String column);
+    int columnIndex(String name);
 
-    /**
-     * Selects column based on the column name and return it as a Column.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default BaseVector apply(String column) {
-        return column(column);
+    /** Selects column based on the column name and return it as a Column. */
+    default BaseVector apply(String colName) {
+        return column(colName);
     }
 
-    /**
-     * Selects column using an enum value.
-     * @param column the field enum.
-     * @return the column vector.
-     */
-    default BaseVector apply(Enum<?> column) {
-        return column(column.toString());
+    /** Selects column using an enum value. */
+    default BaseVector apply(Enum<?> e) {
+        return column(e.toString());
     }
 
-    /**
-     * Selects column based on the column index.
-     * @param i the column index.
-     * @return the column vector.
-     */
+    /** Selects column based on the column index. */
     BaseVector column(int i);
 
-    /**
-     * Selects column based on the column name.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default BaseVector column(String column) {
-        return column(indexOf(column));
+    /** Selects column based on the column name. */
+    default BaseVector column(String colName) {
+        return column(columnIndex(colName));
     }
 
-    /**
-     * Selects column using an enum value.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default BaseVector column(Enum<?> column) {
-        return column(indexOf(column.toString()));
+    /** Selects column using an enum value. */
+    default BaseVector column(Enum<?> e) {
+        return column(columnIndex(e.toString()));
     }
 
-    /**
-     * Selects column based on the column index.
-     * @param i the column index.
-     * @param <T> the data type of column.
-     * @return the column vector.
-     */
+    /** Selects column based on the column index. */
     <T> Vector<T> vector(int i);
 
-    /**
-     * Selects column based on the column name.
-     * @param column the column name.
-     * @param <T> the data type of column.
-     * @return the column vector.
-     */
-    default <T> Vector<T> vector(String column) {
-        return vector(indexOf(column));
+    /** Selects column based on the column name. */
+    default <T> Vector<T> vector(String colName) {
+        return vector(columnIndex(colName));
     }
 
-    /**
-     * Selects column using an enum value.
-     * @param column the column name.
-     * @param <T> the data type of column.
-     * @return the column vector.
-     */
-    default <T> Vector<T> vector(Enum<?> column) {
-        return vector(indexOf(column.toString()));
+    /** Selects column using an enum value. */
+    default <T> Vector<T> vector(Enum<?> e) {
+        return vector(columnIndex(e.toString()));
     }
 
-    /**
-     * Selects column based on the column index.
-     * @param i the column index.
-     * @return the column vector.
-     */
+    /** Selects column based on the column index. */
     BooleanVector booleanVector(int i);
 
-    /**
-     * Selects column based on the column name.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default BooleanVector booleanVector(String column) {
-        return booleanVector(indexOf(column));
+    /** Selects column based on the column name. */
+    default BooleanVector booleanVector(String colName) {
+        return booleanVector(columnIndex(colName));
     }
 
-    /**
-     * Selects column using an enum value.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default BooleanVector booleanVector(Enum<?> column) {
-        return booleanVector(indexOf(column.toString()));
+    /** Selects column using an enum value. */
+    default BooleanVector booleanVector(Enum<?> e) {
+        return booleanVector(columnIndex(e.toString()));
     }
 
-    /**
-     * Selects column based on the column index.
-     * @param i the column index.
-     * @return the column vector.
-     */
+    /** Selects column based on the column index. */
     CharVector charVector(int i);
 
-    /**
-     * Selects column based on the column name.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default CharVector charVector(String column) {
-        return charVector(indexOf(column));
+    /** Selects column based on the column name. */
+    default CharVector charVector(String colName) {
+        return charVector(columnIndex(colName));
     }
 
-    /**
-     * Selects column using an enum value.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default CharVector charVector(Enum<?> column) {
-        return charVector(indexOf(column.toString()));
+    /** Selects column using an enum value. */
+    default CharVector charVector(Enum<?> e) {
+        return charVector(columnIndex(e.toString()));
     }
 
-    /**
-     * Selects column based on the column index.
-     * @param i the column index.
-     * @return the column vector.
-     */
+    /** Selects column based on the column index. */
     ByteVector byteVector(int i);
 
-    /**
-     * Selects column based on the column name.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default ByteVector byteVector(String column) {
-        return byteVector(indexOf(column));
+    /** Selects column based on the column name. */
+    default ByteVector byteVector(String colName) {
+        return byteVector(columnIndex(colName));
     }
 
-    /**
-     * Selects column using an enum value.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default ByteVector byteVector(Enum<?> column) {
-        return byteVector(indexOf(column.toString()));
+    /** Selects column using an enum value. */
+    default ByteVector byteVector(Enum<?> e) {
+        return byteVector(columnIndex(e.toString()));
     }
 
-    /**
-     * Selects column based on the column index.
-     * @param i the column index.
-     * @return the column vector.
-     */
+    /** Selects column based on the column index. */
     ShortVector shortVector(int i);
 
-    /**
-     * Selects column based on the column name.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default ShortVector shortVector(String column) {
-        return shortVector(indexOf(column));
+    /** Selects column based on the column name. */
+    default ShortVector shortVector(String colName) {
+        return shortVector(columnIndex(colName));
     }
 
-    /**
-     * Selects column using an enum value.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default ShortVector shortVector(Enum<?> column) {
-        return shortVector(indexOf(column.toString()));
+    /** Selects column using an enum value. */
+    default ShortVector shortVector(Enum<?> e) {
+        return shortVector(columnIndex(e.toString()));
     }
 
-    /**
-     * Selects column based on the column index.
-     * @param i the column index.
-     * @return the column vector.
-     */
+    /** Selects column based on the column index. */
     IntVector intVector(int i);
 
-    /**
-     * Selects column based on the column name.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default IntVector intVector(String column) {
-        return intVector(indexOf(column));
+    /** Selects column based on the column name. */
+    default IntVector intVector(String colName) {
+        return intVector(columnIndex(colName));
     }
 
-    /**
-     * Selects column using an enum value.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default IntVector intVector(Enum<?> column) {
-        return intVector(indexOf(column.toString()));
+    /** Selects column using an enum value. */
+    default IntVector intVector(Enum<?> e) {
+        return intVector(columnIndex(e.toString()));
     }
 
-    /**
-     * Selects column based on the column index.
-     * @param i the column index.
-     * @return the column vector.
-     */
+    /** Selects column based on the column index. */
     LongVector longVector(int i);
 
-    /**
-     * Selects column based on the column name.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default LongVector longVector(String column) {
-        return longVector(indexOf(column));
+    /** Selects column based on the column name. */
+    default LongVector longVector(String colName) {
+        return longVector(columnIndex(colName));
     }
 
-    /**
-     * Selects column using an enum value.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default LongVector longVector(Enum<?> column) {
-        return longVector(indexOf(column.toString()));
+    /** Selects column using an enum value. */
+    default LongVector longVector(Enum<?> e) {
+        return longVector(columnIndex(e.toString()));
     }
 
-    /**
-     * Selects column based on the column index.
-     * @param i the column index.
-     * @return the column vector.
-     */
+    /** Selects column based on the column index. */
     FloatVector floatVector(int i);
 
-    /**
-     * Selects column based on the column name.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default FloatVector floatVector(String column) {
-        return floatVector(indexOf(column));
+    /** Selects column based on the column name. */
+    default FloatVector floatVector(String colName) {
+        return floatVector(columnIndex(colName));
     }
 
-    /**
-     * Selects column using an enum value.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default FloatVector floatVector(Enum<?> column) {
-        return floatVector(indexOf(column.toString()));
+    /** Selects column using an enum value. */
+    default FloatVector floatVector(Enum<?> e) {
+        return floatVector(columnIndex(e.toString()));
     }
 
-    /**
-     * Selects column based on the column index.
-     * @param i the column index.
-     * @return the column vector.
-     */
+    /** Selects column based on the column index. */
     DoubleVector doubleVector(int i);
 
-    /**
-     * Selects column based on the column name.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default DoubleVector doubleVector(String column) {
-        return doubleVector(indexOf(column));
+    /** Selects column based on the column name. */
+    default DoubleVector doubleVector(String colName) {
+        return doubleVector(columnIndex(colName));
     }
 
-    /**
-     * Selects column using an enum value.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default DoubleVector doubleVector(Enum<?> column) {
-        return doubleVector(indexOf(column.toString()));
+    /** Selects column using an enum value. */
+    default DoubleVector doubleVector(Enum<?> e) {
+        return doubleVector(columnIndex(e.toString()));
     }
 
-    /**
-     * Selects column based on the column index.
-     * @param i the column index.
-     * @return the column vector.
-     */
+    /** Selects column based on the column index. */
     StringVector stringVector(int i);
 
-    /**
-     * Selects column based on the column name.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default StringVector stringVector(String column) {
-        return stringVector(indexOf(column));
+    /** Selects column based on the column name. */
+    default StringVector stringVector(String colName) {
+        return stringVector(columnIndex(colName));
     }
 
-    /**
-     * Selects column using an enum value.
-     * @param column the column name.
-     * @return the column vector.
-     */
-    default StringVector stringVector(Enum<?> column) {
-        return stringVector(indexOf(column.toString()));
+    /** Selects column using an enum value. */
+    default StringVector stringVector(Enum<?> e) {
+        return stringVector(columnIndex(e.toString()));
     }
 
-    /**
-     * Returns a new DataFrame with selected columns.
-     * @param columns the column indices.
-     * @return a new DataFrame with selected columns.
-     */
-    DataFrame select(int... columns);
+    /** Selects a new DataFrame with given column indices. */
+    DataFrame select(int... cols);
 
-    /**
-     * Returns a new DataFrame with selected columns.
-     * @param columns the column names.
-     * @return a new DataFrame with selected columns.
-     */
-    default DataFrame select(String... columns) {
-        int[] indices = Arrays.stream(columns).mapToInt(this::indexOf).toArray();
+    /** Selects a new DataFrame with given column names. */
+    default DataFrame select(String... cols) {
+        int[] indices = Arrays.stream(cols).mapToInt(this::columnIndex).toArray();
         return select(indices);
     }
 
-    /**
-     * Returns a new DataFrame without selected columns.
-     * @param columns the column indices.
-     * @return a new DataFrame without selected columns.
-     */
-    DataFrame drop(int... columns);
-
-    /**
-     * Returns a new DataFrame without selected columns.
-     * @param columns the column names.
-     * @return a new DataFrame without selected columns.
-     */
-    default DataFrame drop(String... columns) {
-        int[] indices = Arrays.stream(columns).mapToInt(this::indexOf).toArray();
-        return drop(indices);
-    }
+    /** Returns a new DataFrame without given column indices. */
+    DataFrame drop(int... cols);
 
     /**
      * Merges data frames horizontally by columns.
-     * @param dataframes the data frames to merge.
      * @return a new data frame that combines this DataFrame
      * with one more more other DataFrames by columns.
      */
     DataFrame merge(DataFrame... dataframes);
 
     /**
-     * Merges vectors with this data frame.
-     * @param vectors the vectors to merge.
+     * Merges data frames horizontally by columns.
      * @return a new data frame that combines this DataFrame
      * with one more more additional vectors.
      */
     DataFrame merge(BaseVector... vectors);
 
     /**
-     * Unions data frames vertically by rows.
-     * @param dataframes the data frames to union.
+     * Merges data frames vertically by rows.
      * @return a new data frame that combines all the rows.
      */
     DataFrame union(DataFrame... dataframes);
 
+    /** Returns a new DataFrame without given column names. */
+    default DataFrame drop(String... cols) {
+        int[] indices = Arrays.stream(cols).mapToInt(this::columnIndex).toArray();
+        return drop(indices);
+    }
+
     /**
      * Returns a new DataFrame with given columns converted to nominal.
      *
-     * @param columns column names. If empty, all object columns
+     * @param cols column names. If empty, all object columns
      *             in the data frame will be converted.
      * @return a new DataFrame.
      */
-    default DataFrame factorize(String... columns) {
-        if (columns.length == 0) {
-            columns = Arrays.stream(schema().fields())
+    default DataFrame factorize(String... cols) {
+        if (cols.length == 0) {
+            cols = Arrays.stream(schema().fields())
                     .filter(field -> field.type.isObject())
                     .map(field -> field.name)
                     .toArray(String[]::new);
         }
 
         int n = size();
-        HashSet<String> set = new HashSet<>(Arrays.asList(columns));
+        HashSet<String> set = new HashSet<>(Arrays.asList(cols));
         BaseVector[] vectors = Arrays.stream(names()).map(col -> {
             if (set.contains(col)) {
-                int j = indexOf(col);
+                int j = columnIndex(col);
                 List<String> levels = IntStream.range(0, n)
                         .mapToObj(i -> getString(i, j))
-                        .distinct().sorted().collect(java.util.stream.Collectors.toList());
+                        .distinct().sorted().collect(Collectors.toList());
                 NominalScale scale =  new NominalScale(levels);
 
                 int[] data = new int[n];
@@ -1023,7 +707,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * as the columns of a matrix. Missing values/nulls will be
      * encoded as Double.NaN. No bias term and uses level encoding
      * for categorical variables.
-     * @return the numeric array.
      */
     default double[][] toArray() {
         return toArray(false, CategoricalEncoder.LEVEL);
@@ -1037,7 +720,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      *
      * @param bias if true, add the first column of all 1's.
      * @param encoder the categorical variable encoder.
-     * @return the numeric array.
      */
     default double[][] toArray(boolean bias, CategoricalEncoder encoder) {
         int nrows = nrows();
@@ -1113,7 +795,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * in a data frame to numeric mode and then binding them together
      * as the columns of a matrix. Missing values/nulls will be
      * encoded as Double.NaN.
-     * @return the numeric matrix.
      */
     default Matrix toMatrix() {
         return toMatrix(false, CategoricalEncoder.LEVEL, null);
@@ -1129,7 +810,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * @param bias if true, add the first column of all 1's.
      * @param encoder the categorical variable encoder.
      * @param rowNames the column to be used as row names.
-     * @return the numeric matrix.
      */
     default Matrix toMatrix(boolean bias, CategoricalEncoder encoder, String rowNames) {
         int nrows = nrows();
@@ -1211,10 +891,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
         return matrix;
     }
 
-    /**
-     * Returns the statistic summary of numeric columns.
-     * @return the statistic summary of numeric columns.
-     */
+    /** Returns the statistic summary of numeric columns. */
     default DataFrame summary() {
         int ncols = ncols();
         String[] names = names();
@@ -1299,8 +976,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
 
     /**
      * Returns the string representation of top rows.
-     * @param numRows the number of rows to show
-     * @return the string representation of top rows.
+     * @param numRows Number of rows to show
      */
     default String toString(int numRows) {
         return toString(numRows, true);
@@ -1310,7 +986,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * Returns the string representation of top rows.
      * @param numRows Number of rows to show
      * @param truncate Whether truncate long strings and align cells right.
-     * @return the string representation of top rows.
      */
     default String toString(final int numRows, final boolean truncate) {
         StringBuilder sb = new StringBuilder(schema().toString());
@@ -1343,7 +1018,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
                 cells[i] = (truncate && str.length() > maxColumnWidth) ? str.substring(0, maxColumnWidth - 3) + "..." : str;
             }
             return cells;
-        }).collect(java.util.stream.Collectors.toList());
+        }).collect(Collectors.toList());
 
         // Compute the width of each column
         for (String[] row : rows) {
@@ -1353,9 +1028,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
         }
 
         // Create SeparateLine
-        String sep = IntStream.of(colWidths)
-                .mapToObj(w -> Strings.fill('-', w))
-                .collect(java.util.stream.Collectors.joining("+", "+", "+\n"));
+        String sep = IntStream.of(colWidths).mapToObj(w -> Strings.fill('-', w)).collect(Collectors.joining("+", "+", "+\n"));
         sb.append(sep);
 
         // column names
@@ -1406,7 +1079,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Returns the string representation of top rows.
      * @param numRows Number of rows to show
-     * @return the string representation of top rows.
      */
     default String[][] toStrings(int numRows) {
         return toStrings(numRows, true);
@@ -1416,7 +1088,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * Returns the string representation of top rows.
      * @param numRows Number of rows to show
      * @param truncate Whether truncate long strings.
-     * @return the string representation of top rows.
      */
     default String[][] toStrings(final int numRows, final boolean truncate) {
         String[] names = names();
@@ -1438,7 +1109,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Creates a DataFrame from a set of vectors.
      * @param vectors The column vectors.
-     * @return the data frame.
      */
     static DataFrame of(BaseVector... vectors) {
         return new DataFrameImpl(vectors);
@@ -1448,7 +1118,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * Creates a DataFrame from a 2-dimensional array.
      * @param data The data array.
      * @param names the name of columns.
-     * @return the data frame.
      */
     static DataFrame of(double[][] data, String... names) {
         int p = data[0].length;
@@ -1471,7 +1140,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * Creates a DataFrame from a 2-dimensional array.
      * @param data The data array.
      * @param names the name of columns.
-     * @return the data frame.
      */
     static DataFrame of(float[][] data, String... names) {
         int p = data[0].length;
@@ -1494,7 +1162,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * Creates a DataFrame from a 2-dimensional array.
      * @param data The data array.
      * @param names the name of columns.
-     * @return the data frame.
      */
     static DataFrame of(int[][] data, String... names) {
         int p = data[0].length;
@@ -1517,8 +1184,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * Creates a DataFrame from a collection.
      * @param data The data collection.
      * @param clazz The class type of elements.
-     * @param <T> The data type of elements.
-     * @return the data frame.
+     * @param <T> The type of elements.
      */
     static <T> DataFrame of(List<T> data, Class<T> clazz) {
         return new DataFrameImpl(data, clazz);
@@ -1527,7 +1193,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Creates a DataFrame from a stream of tuples.
      * @param data The data stream.
-     * @return the data frame.
      */
     static DataFrame of(Stream<? extends Tuple> data) {
         return new DataFrameImpl(data);
@@ -1536,8 +1201,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Creates a DataFrame from a stream of tuples.
      * @param data The data stream.
-     * @param schema The schema of tuple.
-     * @return the data frame.
      */
     static DataFrame of(Stream<? extends Tuple> data, StructType schema) {
         return new DataFrameImpl(data, schema);
@@ -1546,7 +1209,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Creates a DataFrame from a set of tuples.
      * @param data The data collection.
-     * @return the data frame.
      */
     static DataFrame of(List<? extends Tuple> data) {
         return new DataFrameImpl(data);
@@ -1555,8 +1217,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Creates a DataFrame from a set of tuples.
      * @param data The data collection.
-     * @param schema The schema of tuple.
-     * @return the data frame.
      */
     static DataFrame of(List<? extends Tuple> data, StructType schema) {
         return new DataFrameImpl(data, schema);
@@ -1565,9 +1225,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /**
      * Creates a DataFrame from a set of Maps.
      * @param data The data collection.
-     * @param schema The schema of data.
-     * @param <T> The data type of elements.
-     * @return the data frame.
      */
     static <T> DataFrame of(Collection<Map<String, T>> data, StructType schema) {
         List<Tuple> rows = data.stream().map(map -> {
@@ -1576,15 +1233,13 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
                 row[i] = map.get(schema.fieldName(i));
             }
             return Tuple.of(row, schema);
-        }).collect(java.util.stream.Collectors.toList());
+        }).collect(Collectors.toList());
         return of(rows, schema);
     }
 
     /**
      * Creates a DataFrame from a JDBC ResultSet.
      * @param rs The JDBC result set.
-     * @throws SQLException when JDBC operation fails.
-     * @return the data frame.
      */
     static DataFrame of(ResultSet rs) throws SQLException {
         StructType schema = DataTypes.struct(rs);
@@ -1596,84 +1251,67 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
         return DataFrame.of(rows);
     }
 
-    /** Stream collectors. */
-    interface Collectors {
-        /**
-         * Returns a stream collector that accumulates objects into a DataFrame.
-         *
-         * @param <T>   the type of input elements to the reduction operation
-         * @param clazz The class type of elements.
-         * @return the stream collector.
-         */
-        static <T> Collector<T, List<T>, DataFrame> collect(Class<T> clazz) {
-            return Collector.of(
-                    // supplier
-                    ArrayList::new,
-                    // accumulator
-                    List::add,
-                    // combiner
-                    (c1, c2) -> {
-                        c1.addAll(c2);
-                        return c1;
-                    },
-                    // finisher
-                    (container) -> DataFrame.of(container, clazz)
-            );
-        }
+    /**
+     * Returns a stream collector that accumulates objects into a DataFrame.
+     *
+     * @param <T> the type of input elements to the reduction operation
+     * @param clazz The class type of elements.
+     */
+    static <T> Collector<T, List<T>, DataFrame> collect(Class<T> clazz) {
+        return Collector.of(
+                // supplier
+                ArrayList::new,
+                // accumulator
+                List::add,
+                // combiner
+                (c1, c2) -> { c1.addAll(c2); return c1; },
+                // finisher
+                (container) -> DataFrame.of(container, clazz)
+        );
+    }
 
-        /**
-         * Returns a stream collector that accumulates tuples into a DataFrame.
-         *
-         * @return the stream collector.
-         */
-        static Collector<Tuple, List<Tuple>, DataFrame> collect() {
-            return Collector.of(
-                    // supplier
-                    ArrayList::new,
-                    // accumulator
-                    List::add,
-                    // combiner
-                    (c1, c2) -> {
-                        c1.addAll(c2);
-                        return c1;
-                    },
-                    // finisher
-                    DataFrame::of
-            );
-        }
+    /**
+     * Returns a stream collector that accumulates tuples into a DataFrame.
+     */
+    static Collector<Tuple, List<Tuple>, DataFrame> collect() {
+        return Collector.of(
+                // supplier
+                ArrayList::new,
+                // accumulator
+                List::add,
+                // combiner
+                (c1, c2) -> { c1.addAll(c2); return c1; },
+                // finisher
+                DataFrame::of
+        );
+    }
 
-        /**
-         * Returns a stream collector that accumulates tuples into a Matrix.
-         *
-         * @return the stream collector.
-         */
-        static Collector<Tuple, List<Tuple>, Matrix> matrix() {
-            return Collector.of(
-                    // supplier
-                    ArrayList::new,
-                    // accumulator
-                    List::add,
-                    // combiner
-                    (c1, c2) -> {
-                        c1.addAll(c2);
-                        return c1;
-                    },
-                    // finisher
-                    (container) -> {
-                        if (container.isEmpty()) {
-                            throw new IllegalArgumentException("Empty list of tuples");
-                        }
-                        int nrows = container.size();
-                        int ncols = container.get(0).length();
-                        Matrix m = new Matrix(nrows, ncols);
-                        for (int i = 0; i < nrows; i++) {
-                            for (int j = 0; j < ncols; j++) {
-                                m.set(i, j, container.get(i).getDouble(j));
-                            }
-                        }
-                        return m;
+    /**
+     * Returns a stream collector that accumulates tuples into a Matrix.
+     */
+    static Collector<Tuple, List<Tuple>, Matrix> matrix() {
+        return Collector.of(
+                // supplier
+                ArrayList::new,
+                // accumulator
+                List::add,
+                // combiner
+                (c1, c2) -> { c1.addAll(c2); return c1; },
+                // finisher
+                (container) -> {
+                    if (container.isEmpty()) {
+                        throw new IllegalArgumentException("Empty list of tuples");
                     }
-            );
-        }
+                    int nrows = container.size();
+                    int ncols = container.get(0).length();
+                    Matrix m = new Matrix(nrows, ncols);
+                    for (int i = 0; i < nrows; i++) {
+                        for (int j = 0; j < ncols; j++) {
+                            m.set(i, j, container.get(i).getDouble(j));
+                        }
+                    }
+                    return m;
+                }
+        );
     }
 }

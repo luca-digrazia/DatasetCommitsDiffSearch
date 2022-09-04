@@ -1,66 +1,97 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.data.formula;
 
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
+import smile.data.Tuple;
 import smile.data.type.DataType;
-import smile.data.type.DataTypes;
+import smile.data.type.StructField;
+import smile.data.type.StructType;
 
 /**
  * The term of abs function.
  *
  * @author Haifeng Li
  */
-public class Abs<T> implements Factor<T, Double> {
-    /** The operand factor of abs expression. */
-    private Factor<T, Double> child;
-
+public class Abs extends AbstractFunction {
     /**
      * Constructor.
      *
-     * @param factor the factor that abs function is applied to.
+     * @param x the term that the function is applied to.
      */
-    public Abs(Factor<T, Double> factor) {
-        this.child = factor;
+    public Abs(Term x) {
+        super("abs", x);
     }
 
     @Override
-    public String toString() {
-        return String.format("abs(%s)", child);
-    }
+    public List<Feature> bind(StructType schema) {
+        List<Feature> features = new ArrayList<>();
 
-    @Override
-    public List<Factor> factors() {
-        return Collections.singletonList(this);
-    }
+        for (Feature feature : x.bind(schema)) {
+            StructField xfield = feature.field();
+            DataType type = xfield.type;
+            if (!(type.isInt() ||  type.isLong() ||  type.isDouble() || type.isFloat())) {
+                throw new IllegalStateException(String.format("Invalid expression: abs(%s)", type));
+            }
 
-    @Override
-    public Set<String> variables() {
-        return child.variables();
-    }
+            features.add(new Feature() {
+                final StructField field = new StructField(String.format("abs(%s)", xfield.name), xfield.type, xfield.measure);
 
-    @Override
-    public Double apply(T o) {
-        return Math.abs(child.apply(o));
-    }
+                @Override
+                public StructField field() {
+                    return field;
+                }
 
-    @Override
-    public DataType type() {
-        return DataTypes.DoubleType;
+                @Override
+                public Object apply(Tuple o) {
+                    Object y = feature.apply(o);
+                    if (y == null) return null;
+
+                    if (y instanceof Double) return Math.abs((double) y);
+                    else if (y instanceof Integer) return Math.abs((int) y);
+                    else if (y instanceof Float) return Math.abs((float) y);
+                    else if (y instanceof Long) return Math.abs((long) y);
+                    else throw new IllegalArgumentException("Invalid argument for abs(): " + y);
+                }
+
+                @Override
+                public int applyAsInt(Tuple o) {
+                    return Math.abs(feature.applyAsInt(o));
+                }
+
+                @Override
+                public long applyAsLong(Tuple o) {
+                    return Math.abs(feature.applyAsLong(o));
+                }
+
+                @Override
+                public float applyAsFloat(Tuple o) {
+                    return Math.abs(feature.applyAsFloat(o));
+                }
+
+                @Override
+                public double applyAsDouble(Tuple o) {
+                    return Math.abs(feature.applyAsDouble(o));
+                }
+            });
+        }
+
+        return features;
     }
 }

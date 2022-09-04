@@ -21,9 +21,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import smile.data.Tuple;
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
@@ -36,14 +33,8 @@ import smile.data.type.StructType;
  * @author Haifeng Li
  */
 public interface Terms {
-    /**
-     * Creates a variable.
-     * @param x the variable.
-     * @return the term.
-     */
+    /** Returns a variable. */
     static Term $(String x) {
-        x = x.trim();
-
         switch (x) {
             case ".":
                 return new Dot();
@@ -51,196 +42,35 @@ public interface Terms {
                 return new Intercept(false);
             case "1":
                 return new Intercept(true);
+            default:
+                return new Variable(x);
         }
-
-        String[] tokens = x.split(":");
-        if (tokens.length > 1) {
-            for (int i = 0; i < tokens.length; i++) {
-                tokens[i] = tokens[i].trim();
-            }
-            return interact(tokens);
-        }
-
-        if (x.startsWith("(") && x.endsWith(")")) {
-            String y = x.substring(1, x.length() - 1);
-            tokens = y.split("[+]", 2);
-            if (tokens.length == 2) {
-                return add(tokens[0], tokens[1]);
-            }
-            tokens = y.split("[-]", 2);
-            if (tokens.length == 2) {
-                return sub(tokens[0], tokens[1]);
-            }
-            tokens = y.split("[*]", 2);
-            if (tokens.length == 2) {
-                return mul(tokens[0], tokens[1]);
-            }
-            tokens = y.split("[/]", 2);
-            if (tokens.length == 2) {
-                return div(tokens[0], tokens[1]);
-            }
-        }
-
-        Pattern regex = Pattern.compile("\\)(^(\\d+))?$");
-        Matcher matcher = regex.matcher(x);
-        if (x.startsWith("(") && matcher.find()) {
-            String y = x.substring(1, matcher.start());
-            tokens = y.split(" x ");
-            if (tokens.length > 1) {
-                for (int i = 0; i < tokens.length; i++) {
-                    tokens[i] = tokens[i].trim();
-                    System.out.print(tokens[i]+" ");
-                }
-                System.out.println();
-                String rank = matcher.group(2);
-                return cross(rank == null ? tokens.length : Integer.parseInt(rank), tokens);
-            }
-        }
-
-        if (x.startsWith("abs(") && x.endsWith(")")) {
-            return abs(x.substring(4, x.length()-1));
-        }
-
-        if (x.startsWith("ceil(") && x.endsWith(")")) {
-            return ceil(x.substring(5, x.length()-1));
-        }
-
-        if (x.startsWith("floor(") && x.endsWith(")")) {
-            return floor(x.substring(6, x.length()-1));
-        }
-
-        if (x.startsWith("round(") && x.endsWith(")")) {
-            return round(x.substring(6, x.length()-1));
-        }
-
-        if (x.startsWith("rint(") && x.endsWith(")")) {
-            return rint(x.substring(5, x.length()-1));
-        }
-
-        if (x.startsWith("exp(") && x.endsWith(")")) {
-            return exp(x.substring(4, x.length()-1));
-        }
-
-        if (x.startsWith("expm1(") && x.endsWith(")")) {
-            return expm1(x.substring(6, x.length()-1));
-        }
-
-        if (x.startsWith("log(") && x.endsWith(")")) {
-            return log(x.substring(4, x.length()-1));
-        }
-
-        if (x.startsWith("log1p(") && x.endsWith(")")) {
-            return log1p(x.substring(6, x.length()-1));
-        }
-
-        if (x.startsWith("log2(") && x.endsWith(")")) {
-            return log2(x.substring(5, x.length()-1));
-        }
-
-        if (x.startsWith("log10(") && x.endsWith(")")) {
-            return log10(x.substring(6, x.length()-1));
-        }
-
-        if (x.startsWith("signum(") && x.endsWith(")")) {
-            return signum(x.substring(7, x.length()-1));
-        }
-
-        if (x.startsWith("sign(") && x.endsWith(")")) {
-            return sign(x.substring(5, x.length()-1));
-        }
-
-        if (x.startsWith("sqrt(") && x.endsWith(")")) {
-            return sqrt(x.substring(5, x.length()-1));
-        }
-
-        if (x.startsWith("cbrt(") && x.endsWith(")")) {
-            return cbrt(x.substring(5, x.length()-1));
-        }
-        if (x.startsWith("sin(") && x.endsWith(")")) {
-            return sin(x.substring(4, x.length()-1));
-        }
-
-        if (x.startsWith("cos(") && x.endsWith(")")) {
-            return cos(x.substring(4, x.length()-1));
-        }
-
-        if (x.startsWith("tan(") && x.endsWith(")")) {
-            return tan(x.substring(4, x.length()-1));
-        }
-
-        if (x.startsWith("asin(") && x.endsWith(")")) {
-            return asin(x.substring(5, x.length()-1));
-        }
-
-        if (x.startsWith("acos(") && x.endsWith(")")) {
-            return acos(x.substring(5, x.length()-1));
-        }
-
-        if (x.startsWith("atan(") && x.endsWith(")")) {
-            return atan(x.substring(5, x.length()-1));
-        }
-
-        if (x.startsWith("sinh(") && x.endsWith(")")) {
-            return sinh(x.substring(5, x.length()-1));
-        }
-
-        if (x.startsWith("cosh(") && x.endsWith(")")) {
-            return cosh(x.substring(5, x.length()-1));
-        }
-
-        if (x.startsWith("tanh(") && x.endsWith(")")) {
-            return tanh(x.substring(5, x.length()-1));
-        }
-
-        if (x.startsWith("ulp(") && x.endsWith(")")) {
-            return ulp(x.substring(4, x.length()-1));
-        }
-
-        return new Variable(x);
     }
 
     /**
      * Returns the special term "." that means all columns not otherwise
      * in the formula in the context of a data frame.
-     * @return the special term ".".
      */
     static Dot dot() {
         return new Dot();
     }
 
-    /**
-     * Factor interaction of two or more factors.
-     * @param factors the factors.
-     * @return the interaction term.
-     */
+    /** Factor interaction of two or more factors. */
     static FactorInteraction interact(String... factors) {
         return new FactorInteraction(factors);
     }
 
-    /**
-     * Factor crossing of two or more factors.
-     * @param factors the factors.
-     * @return the crossing term.
-     */
+    /** Factor crossing of two or more factors. */
     static FactorCrossing cross(String... factors) {
         return new FactorCrossing(factors);
     }
 
-    /**
-     * Factor crossing of two or more factors.
-     * @param order the order of factor interactions.
-     * @param factors the factors.
-     * @return the crossing term.
-     */
+    /** Factor crossing of two or more factors. */
     static FactorCrossing cross(int order, String... factors) {
         return new FactorCrossing(order, factors);
     }
 
-    /**
-     * Deletes a variable or the intercept ("1") from the formula.
-     * @param x the variable.
-     * @return the deleting term.
-     */
+    /** Deletes a variable or the intercept ("1") from the formula. */
     static Term delete(String x) {
         if (x.equals("1"))
             return new Intercept(false);
@@ -248,11 +78,7 @@ public interface Terms {
             return delete($(x));
     }
 
-    /**
-     * Deletes a term from the formula.
-     * @param x the term.
-     * @return the deleting term.
-     */
+    /** Deletes a term from the formula. */
     static Term delete(Term x) {
         if (x instanceof Intercept) {
             return new Intercept(false);
@@ -261,631 +87,342 @@ public interface Terms {
         return new Delete(x);
     }
 
-    /**
-     * Extracts date/time features.
-     * @param x the variable.
-     * @param features the date features.
-     * @return the date term.
-     */
+    /** Extracts date/time features. */
     static Date date(String x, DateFeature... features) {
         return new Date(x, features);
     }
 
-    /**
-     * Adds two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a + b} term.
-     */
+    /** Adds two terms. */
     static Term add(Term a, Term b) {
         return new Add(a, b);
     }
 
-    /**
-     * Adds two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a + b} term.
-     */
+    /** Adds two terms. */
     static Term add(String a, String b) {
         return new Add($(a), $(b));
     }
 
-    /**
-     * Adds two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a + b} term.
-     */
+    /** Adds two terms. */
     static Term add(Term a, String b) {
         return new Add(a, $(b));
     }
 
-    /**
-     * Adds two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a + b} term.
-     */
+    /** Adds two terms. */
     static Term add(String a, Term b) {
         return new Add($(a), b);
     }
 
-    /**
-     * Subtracts two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a - b} term.
-     */
+    /** Subtracts two terms. */
     static Term sub(Term a, Term b) {
         return new Sub(a, b);
     }
 
-    /**
-     * Subtracts two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a - b} term.
-     */
+    /** Subtracts two terms. */
     static Term sub(String a, String b) {
         return new Sub($(a), $(b));
     }
 
-    /**
-     * Subtracts two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a - b} term.
-     */
+    /** Subtracts two terms. */
     static Term sub(Term a, String b) {
         return new Sub(a, $(b));
     }
 
-    /**
-     * Subtracts two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a - b} term.
-     */
+    /** Subtracts two terms. */
     static Term sub(String a, Term b) {
         return new Sub($(a), b);
     }
 
-    /**
-     * Multiplies two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a * b} term.
-     */
+    /** Multiplies two terms. */
     static Term mul(Term a, Term b) {
         return new Mul(a, b);
     }
 
-    /**
-     * Multiplies two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a * b} term.
-     */
+    /** Multiplies two terms. */
     static Term mul(String a, String b) {
         return new Mul($(a), $(b));
     }
 
-    /**
-     * Multiplies two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a * b} term.
-     */
+    /** Multiplies two terms. */
     static Term mul(Term a, String b) {
         return new Mul(a, $(b));
     }
 
-    /**
-     * Multiplies two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a * b} term.
-     */
+    /** Multiplies two terms. */
     static Term mul(String a, Term b) {
         return new Mul($(a), b);
     }
 
-    /**
-     * Divides two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a / b} term.
-     */
+    /** Divides two terms. */
     static Term div(Term a, Term b) {
         return new Div(a, b);
     }
 
-    /**
-     * Divides two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a / b} term.
-     */
+    /** Divides two terms. */
     static Term div(String a, String b) {
         return new Div($(a), $(b));
     }
 
-    /**
-     * Divides two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a / b} term.
-     */
+    /** Divides two terms. */
     static Term div(Term a, String b) {
         return new Div(a, $(b));
     }
 
-    /**
-     * Divides two terms.
-     * @param a the term.
-     * @param b the term.
-     * @return the {@code a / b} term.
-     */
+    /** Divides two terms. */
     static Term div(String a, Term b) {
         return new Div($(a), b);
     }
-
-    /**
-     * The {@code abs(x)} term.
-     * @param x the term.
-     * @return the {@code abs(x)} term.
-     */
+    
+    /** Applies Math.abs. */
     static Abs abs(String x) {
         return abs($(x));
     }
 
-    /**
-     * The {@code abs(x)} term.
-     * @param x the term.
-     * @return the {@code abs(x)} term.
-     */
+    /** Applies Math.abs. */
     static Abs abs(Term x) {
         return new Abs(x);
     }
 
-    /**
-     * The {@code ceil(x)} term.
-     * @param x the term.
-     * @return the {@code ceil(x)} term.
-     */
+    /** Applies Math.ceil. */
     static DoubleFunction ceil(String x) {
         return ceil($(x));
     }
 
-    /**
-     * The {@code ceil(x)} term.
-     * @param x the term.
-     * @return the {@code ceil(x)} term.
-     */
+    /** Applies Math.ceil. */
     static DoubleFunction ceil(Term x) {
         return new DoubleFunction("ceil", x, Math::ceil);
     }
 
-    /**
-     * The {@code floor(x)} term.
-     * @param x the term.
-     * @return the {@code floor(x)} term.
-     */
+    /** Applies Math.floor. */
     static DoubleFunction floor(String x) {
         return floor($(x));
     }
 
-    /**
-     * The {@code floor(x)} term.
-     * @param x the term.
-     * @return the {@code floor(x)} term.
-     */
+    /** Applies Math.floor. */
     static DoubleFunction floor(Term x) {
         return new DoubleFunction("floor", x, Math::floor);
     }
 
-    /**
-     * The {@code round(x)} term.
-     * @param x the term.
-     * @return the {@code round(x)} term.
-     */
+    /** Applies Math.round. */
     static Round round(String x) {
         return round($(x));
     }
 
-    /**
-     * The {@code round(x)} term.
-     * @param x the term.
-     * @return the {@code round(x)} term.
-     */
+    /** Applies Math.round. */
     static Round round(Term x) {
         return new Round(x);
     }
 
-    /**
-     * The {@code rint(x)} term.
-     * @param x the term.
-     * @return the {@code rint(x)} term.
-     */
+    /** Applies Math.rint. */
     static DoubleFunction rint(String x) {
         return rint($(x));
     }
 
-    /**
-     * The {@code rint(x)} term.
-     * @param x the term.
-     * @return the {@code rint(x)} term.
-     */
+    /** Applies Math.rint. */
     static DoubleFunction rint(Term x) {
         return new DoubleFunction("rint", x, Math::rint);
     }
 
-    /**
-     * The {@code exp(x)} term.
-     * @param x the term.
-     * @return the {@code exp(x)} term.
-     */
+    /** Applies Math.exp. */
     static DoubleFunction exp(String x) {
         return exp($(x));
     }
 
-    /**
-     * The {@code exp(x)} term.
-     * @param x the term.
-     * @return the {@code exp(x)} term.
-     */
+    /** Applies Math.exp. */
     static DoubleFunction exp(Term x) {
         return new DoubleFunction("exp", x, Math::exp);
     }
 
-    /**
-     * The {@code exp(x) - 1} term.
-     * @param x the term.
-     * @return the {@code exp(x) - 1} term.
-     */
+    /** Applies Math.expm1. */
     static DoubleFunction expm1(String x) {
         return expm1($(x));
     }
 
-    /**
-     * The {@code exp(x) - 1} term.
-     * @param x the term.
-     * @return the {@code exp(x) - 1} term.
-     */
+    /** Applies Math.expm1. */
     static DoubleFunction expm1(Term x) {
         return new DoubleFunction("expm1", x, Math::expm1);
     }
 
-    /**
-     * The {@code log(x)} term.
-     * @param x the term.
-     * @return the {@code log(x)} term.
-     */
+    /** Applies Math.log. */
     static DoubleFunction log(String x) {
         return log($(x));
     }
 
-    /**
-     * The {@code log(x)} term.
-     * @param x the term.
-     * @return the {@code log(x)} term.
-     */
+    /** Applies Math.log. */
     static DoubleFunction log(Term x) {
         return new DoubleFunction("log", x, Math::log);
     }
 
-    /**
-     * The {@code log(1 + x)} term.
-     * @param x the term.
-     * @return the {@code log(1 + x)} term.
-     */
+    /** Applies Math.log1p. */
     static DoubleFunction log1p(String x) {
         return log1p($(x));
     }
 
-    /**
-     * The {@code log(1 + x)} term.
-     * @param x the term.
-     * @return the {@code log(1 + x)} term.
-     */
+    /** Applies Math.log1p. */
     static DoubleFunction log1p(Term x) {
         return new DoubleFunction("log1p", x, Math::log1p);
     }
 
-    /**
-     * The {@code log10(x)} term.
-     * @param x the term.
-     * @return the {@code log10(x)} term.
-     */
+    /** Applies Math.log10. */
     static DoubleFunction log10(String x) {
         return log10($(x));
     }
 
-    /**
-     * The {@code log10(x)} term.
-     * @param x the term.
-     * @return the {@code log10(x)} term.
-     */
+    /** Applies Math.log10. */
     static DoubleFunction log10(Term x) {
         return new DoubleFunction("log10", x, Math::log10);
     }
 
-    /**
-     * The {@code log2(x)} term.
-     * @param x the term.
-     * @return the {@code log2(x)} term.
-     */
+    /** Applies MathEx.log2. */
     static DoubleFunction log2(String x) {
         return log2($(x));
     }
 
-    /**
-     * The {@code log2(x)} term.
-     * @param x the term.
-     * @return the {@code log2(x)} term.
-     */
+    /** Applies MathEx.log2. */
     static DoubleFunction log2(Term x) {
         return new DoubleFunction("log2", x, smile.math.MathEx::log2);
     }
 
-    /**
-     * The {@code signum(x)} term.
-     * @param x the term.
-     * @return the {@code signum(x)} term.
-     */
+    /** Applies Math.signum. */
     static DoubleFunction signum(String x) {
         return signum($(x));
     }
 
-    /**
-     * The {@code signum(x)} term.
-     * @param x the term.
-     * @return the {@code signum(x)} term.
-     */
+    /** Applies Math.signum. */
     static DoubleFunction signum(Term x) {
         return new DoubleFunction("signum", x, Math::signum);
     }
 
-    /**
-     * The {@code sign(x)} term.
-     * @param x the term.
-     * @return the {@code sign(x)} term.
-     */
+    /** Applies Integer.signum. */
     static IntFunction sign(String x) {
         return sign($(x));
     }
 
-    /**
-     * The {@code sign(x)} term.
-     * @param x the term.
-     * @return the {@code sign(x)} term.
-     */
+    /** Applies Integer.signum. */
     static IntFunction sign(Term x) {
         return new IntFunction("sign", x, Integer::signum);
     }
 
-    /**
-     * The {@code sqrt(x)} term.
-     * @param x the term.
-     * @return the {@code sqrt(x)} term.
-     */
+    /** Applies Math.sqrt. */
     static DoubleFunction sqrt(String x) {
         return sqrt($(x));
     }
 
-    /**
-     * The {@code sqrt(x)} term.
-     * @param x the term.
-     * @return the {@code sqrt(x)} term.
-     */
+    /** Applies Math.sqrt. */
     static DoubleFunction sqrt(Term x) {
         return new DoubleFunction("sqrt", x, Math::sqrt);
     }
 
-    /**
-     * The {@code cbrt(x)} term.
-     * @param x the term.
-     * @return the {@code cbrt(x)} term.
-     */
+    /** Applies Math.cbrt. */
     static DoubleFunction cbrt(String x) {
         return cbrt($(x));
     }
 
-    /**
-     * The {@code cbrt(x)} term.
-     * @param x the term.
-     * @return the {@code cbrt(x)} term.
-     */
+    /** Applies Math.cbrt. */
     static DoubleFunction cbrt(Term x) {
         return new DoubleFunction("cbrt", x, Math::cbrt);
     }
 
-    /**
-     * The {@code sin(x)} term.
-     * @param x the term.
-     * @return the {@code sin(x)} term.
-     */
+    /** Applies Math.sin. */
     static DoubleFunction sin(String x) {
         return sin($(x));
     }
 
-    /**
-     * The {@code sin(x)} term.
-     * @param x the term.
-     * @return the {@code sin(x)} term.
-     */
+    /** Applies Math.sin. */
     static DoubleFunction sin(Term x) {
         return new DoubleFunction("sin", x, Math::sin);
     }
 
-    /**
-     * The {@code cos(x)} term.
-     * @param x the term.
-     * @return the {@code cos(x)} term.
-     */
+    /** Applies Math.cos. */
     static DoubleFunction cos(String x) {
         return cos($(x));
     }
 
-    /**
-     * The {@code cos(x)} term.
-     * @param x the term.
-     * @return the {@code cos(x)} term.
-     */
+    /** Applies Math.cos. */
     static DoubleFunction cos(Term x) {
         return new DoubleFunction("cos", x, Math::cos);
     }
 
-    /**
-     * The {@code tan(x)} term.
-     * @param x the term.
-     * @return the {@code tan(x)} term.
-     */
+    /** Applies Math.tan. */
     static DoubleFunction tan(String x) {
         return tan($(x));
     }
 
-    /**
-     * The {@code tan(x)} term.
-     * @param x the term.
-     * @return the {@code tan(x)} term.
-     */
+    /** Applies Math.tan. */
     static DoubleFunction tan(Term x) {
         return new DoubleFunction("tan", x, Math::tan);
     }
 
-    /**
-     * The {@code sinh(x)} term.
-     * @param x the term.
-     * @return the {@code sinh(x)} term.
-     */
+    /** Applies Math.sinh. */
     static DoubleFunction sinh(String x) {
         return sinh($(x));
     }
 
-    /**
-     * The {@code sinh(x)} term.
-     * @param x the term.
-     * @return the {@code sinh(x)} term.
-     */
+    /** Applies Math.sinh. */
     static DoubleFunction sinh(Term x) {
         return new DoubleFunction("sinh", x, Math::sinh);
     }
 
-    /**
-     * The {@code cosh(x)} term.
-     * @param x the term.
-     * @return the {@code cosh(x)} term.
-     */
+    /** Applies Math.cosh. */
     static DoubleFunction cosh(String x) {
         return cosh($(x));
     }
 
-    /**
-     * The {@code cosh(x)} term.
-     * @param x the term.
-     * @return the {@code cosh(x)} term.
-     */
+    /** Applies Math.cosh. */
     static DoubleFunction cosh(Term x) {
         return new DoubleFunction("cosh", x, Math::cosh);
     }
 
-    /**
-     * The {@code tanh(x)} term.
-     * @param x the term.
-     * @return the {@code tanh(x)} term.
-     */
+    /** Applies Math.tanh. */
     static DoubleFunction tanh(String x) {
         return tanh($(x));
     }
 
-    /**
-     * The {@code tanh(x)} term.
-     * @param x the term.
-     * @return the {@code tanh(x)} term.
-     */
+    /** Applies Math.tanh. */
     static DoubleFunction tanh(Term x) {
         return new DoubleFunction("tanh", x, Math::tanh);
     }
 
-    /**
-     * The {@code asin(x)} term.
-     * @param x the term.
-     * @return the {@code asin(x)} term.
-     */
+    /** Applies Math.asin. */
     static DoubleFunction asin(String x) {
         return asin($(x));
     }
 
-    /**
-     * The {@code asin(x)} term.
-     * @param x the term.
-     * @return the {@code asin(x)} term.
-     */
+    /** Applies Math.asin. */
     static DoubleFunction asin(Term x) {
         return new DoubleFunction("asin", x, Math::asin);
     }
 
-    /**
-     * The {@code acos(x)} term.
-     * @param x the term.
-     * @return the {@code acos(x)} term.
-     */
+    /** Applies Math.acos. */
     static DoubleFunction acos(String x) {
         return acos($(x));
     }
 
-    /**
-     * The {@code acos(x)} term.
-     * @param x the term.
-     * @return the {@code acos(x)} term.
-     */
+    /** Applies Math.acos. */
     static DoubleFunction acos(Term x) {
         return new DoubleFunction("acos", x, Math::acos);
     }
 
-    /**
-     * The {@code atan(x)} term.
-     * @param x the term.
-     * @return the {@code atan(x)} term.
-     */
+    /** Applies Math.atan. */
     static DoubleFunction atan(String x) {
         return atan($(x));
     }
 
-    /**
-     * The {@code atan(x)} term.
-     * @param x the term.
-     * @return the {@code atan(x)} term.
-     */
+    /** Applies Math.atan. */
     static DoubleFunction atan(Term x) {
         return new DoubleFunction("atan", x, Math::acos);
     }
 
-    /**
-     * The {@code ulp(x)} term.
-     * @param x the term.
-     * @return the {@code ulp(x)} term.
-     */
+    /** Applies Math.ulp. */
     static DoubleFunction ulp(String x) {
         return ulp($(x));
     }
 
-    /**
-     * The {@code ulp(x)} term.
-     * @param x the term.
-     * @return the {@code ulp(x)} term.
-     */
+    /** Applies Math.ulp. */
     static DoubleFunction ulp(Term x) {
         return new DoubleFunction("ulp", x, Math::ulp);
     }
 
-    /**
-     * Returns a constant boolean term.
-     * @param x the value.
-     * @return the constant value term.
-     */
+    /** Returns a constant boolean term. */
     static Term val(final boolean x) {
         return new Constant() {
             @Override
@@ -919,11 +456,7 @@ public interface Terms {
         };
     }
 
-    /**
-     * Returns a constant char term.
-     * @param x the value.
-     * @return the constant value term.
-     */
+    /** Returns a constant char term. */
     static Term val(final char x) {
         return new Constant() {
             @Override
@@ -957,11 +490,7 @@ public interface Terms {
         };
     }
 
-    /**
-     * Returns a constant byte term.
-     * @param x the value.
-     * @return the constant value term.
-     */
+    /** Returns a constant byte term. */
     static Term val(final byte x) {
         return new Constant() {
             @Override
@@ -1020,11 +549,7 @@ public interface Terms {
         };
     }
 
-    /**
-     * Returns a constant short integer term.
-     * @param x the value.
-     * @return the constant value term.
-     */
+    /** Returns a constant short term. */
     static Term val(final short x) {
         return new Constant() {
             @Override
@@ -1078,11 +603,7 @@ public interface Terms {
         };
     }
 
-    /**
-     * Returns a constant integer term.
-     * @param x the value.
-     * @return the constant value term.
-     */
+    /** Returns a constant integer term. */
     static Term val(final int x) {
         return new Constant() {
             @Override
@@ -1131,11 +652,7 @@ public interface Terms {
         };
     }
 
-    /**
-     * Returns a constant long integer term.
-     * @param x the value.
-     * @return the constant value term.
-     */
+    /** Returns a constant long term. */
     static Term val(final long x) {
         return new Constant() {
             @Override
@@ -1179,11 +696,7 @@ public interface Terms {
         };
     }
 
-    /**
-     * Returns a constant single precision floating number term.
-     * @param x the value.
-     * @return the constant value term.
-     */
+    /** Returns a constant float term. */
     static Term val(final float x) {
         return new Constant() {
             @Override
@@ -1222,11 +735,7 @@ public interface Terms {
         };
     }
 
-    /**
-     * Returns a constant double precision floating number term.
-     * @param x the value.
-     * @return the constant value term.
-     */
+    /** Returns a constant double term. */
     static Term val(final double x) {
         return new Constant() {
             @Override
@@ -1260,11 +769,7 @@ public interface Terms {
         };
     }
 
-    /**
-     * Returns a constant object term.
-     * @param x the object.
-     * @return the constant object term.
-     */
+    /** Returns a constant object term. */
     static Term val(final Object x) {
         return new Constant() {
             @Override
@@ -1298,8 +803,6 @@ public interface Terms {
      * @param name the function name.
      * @param x the variable name.
      * @param f the lambda to apply on the variable.
-     * @param <T> the data type of input term.
-     * @return the term.
      */
     static <T> Term of(final String name, final String x, ToIntFunction<T> f) {
         return of(name, $(x), f);
@@ -1310,8 +813,6 @@ public interface Terms {
      * @param name the function name.
      * @param x the term.
      * @param f the lambda to apply on the term.
-     * @param <T> the data type of input term.
-     * @return the term.
      */
     @SuppressWarnings("unchecked")
     static <T> Term of(final String name, final Term x, ToIntFunction<T> f) {
@@ -1366,8 +867,6 @@ public interface Terms {
      * @param name the function name.
      * @param x the variable name.
      * @param f the lambda to apply on the variable.
-     * @param <T> the data type of input term.
-     * @return the term.
      */
     static <T> Term of(final String name, final String x, ToLongFunction<T> f) {
         return of(name, $(x), f);
@@ -1378,8 +877,6 @@ public interface Terms {
      * @param name the function name.
      * @param x the term.
      * @param f the lambda to apply on the term.
-     * @param <T> the data type of input term.
-     * @return the term.
      */
     @SuppressWarnings("unchecked")
     static <T> Term of(final String name, final Term x, ToLongFunction<T> f) {
@@ -1429,8 +926,6 @@ public interface Terms {
      * @param name the function name.
      * @param x the variable name.
      * @param f the lambda to apply on the variable.
-     * @param <T> the data type of input term.
-     * @return the term.
      */
     static <T> Term of(final String name, final String x, ToDoubleFunction<T> f) {
         return of(name, $(x), f);
@@ -1441,8 +936,6 @@ public interface Terms {
      * @param name the function name.
      * @param x the term.
      * @param f the lambda to apply on the term.
-     * @param <T> the data type of input term.
-     * @return the term.
      */
     @SuppressWarnings("unchecked")
     static <T> Term of(final String name, final Term x, ToDoubleFunction<T> f) {
@@ -1483,9 +976,6 @@ public interface Terms {
      * @param x the variable name.
      * @param clazz the class of return object.
      * @param f the lambda to apply on the variable.
-     * @param <T> the data type of input term.
-     * @param <R> the data type of output term.
-     * @return the term.
      */
     static <T, R> Term of(final String name, final String x, final Class<R> clazz, java.util.function.Function<T, R> f) {
         return of(name, $(x), clazz, f);
@@ -1497,9 +987,6 @@ public interface Terms {
      * @param x the term.
      * @param clazz the class of return object.
      * @param f the lambda to apply on the term.
-     * @param <T> the data type of input term.
-     * @param <R> the data type of output term.
-     * @return the term.
      */
     @SuppressWarnings("unchecked")
     static <T, R> Term of(final String name, final Term x, final Class<R> clazz, java.util.function.Function<T, R> f) {
@@ -1535,9 +1022,6 @@ public interface Terms {
      * @param x the first parameter of function.
      * @param y the second parameter of function.
      * @param f the lambda to apply on the variables.
-     * @param <T> the data type of first input term.
-     * @param <U> the data type of second input term.
-     * @return the term.
      */
     static <T, U> Term of(final String name, final String x, final String y, ToIntBiFunction<T, U> f) {
         return of(name, $(x), $(y), f);
@@ -1549,9 +1033,6 @@ public interface Terms {
      * @param x the first parameter of function.
      * @param y the second parameter of function.
      * @param f the lambda to apply on the terms.
-     * @param <T> the data type of first input term.
-     * @param <U> the data type of second input term.
-     * @return the term.
      */
     @SuppressWarnings("unchecked")
     static <T, U> Term of(final String name, final Term x, final Term y, ToIntBiFunction<T, U> f) {
@@ -1607,9 +1088,6 @@ public interface Terms {
      * @param x the first parameter of function.
      * @param y the second parameter of function.
      * @param f the lambda to apply on the variables.
-     * @param <T> the data type of first input term.
-     * @param <U> the data type of second input term.
-     * @return the term.
      */
     static <T, U> Term of(final String name, final String x, final String y, ToLongBiFunction<T, U> f) {
         return of(name, $(x), $(y), f);
@@ -1621,9 +1099,6 @@ public interface Terms {
      * @param x the first parameter of function.
      * @param y the second parameter of function.
      * @param f the lambda to apply on the terms.
-     * @param <T> the data type of first input term.
-     * @param <U> the data type of second input term.
-     * @return the term.
      */
     @SuppressWarnings("unchecked")
     static <T, U> Term of(final String name, final Term x, final Term y, ToLongBiFunction<T, U> f) {
@@ -1679,9 +1154,6 @@ public interface Terms {
      * @param x the first parameter of function.
      * @param y the second parameter of function.
      * @param f the lambda to apply on the variables.
-     * @param <T> the data type of first input term.
-     * @param <U> the data type of second input term.
-     * @return the term.
      */
     static <T, U> Term of(final String name, final String x, final String y, ToDoubleBiFunction<T, U> f) {
         return of(name, $(x), $(y), f);
@@ -1693,9 +1165,6 @@ public interface Terms {
      * @param x the first parameter of function.
      * @param y the second parameter of function.
      * @param f the lambda to apply on the terms.
-     * @param <T> the data type of first input term.
-     * @param <U> the data type of second input term.
-     * @return the term.
      */
     @SuppressWarnings("unchecked")
     static <T, U> Term of(final String name, final Term x, final Term y, ToDoubleBiFunction<T, U> f) {
@@ -1752,10 +1221,6 @@ public interface Terms {
      * @param y the second parameter of function.
      * @param clazz the class of return object.
      * @param f the lambda to apply on the variables.
-     * @param <T> the data type of first input term.
-     * @param <U> the data type of second input term.
-     * @param <R> the data type of output term.
-     * @return the term.
      */
     static <T, U, R> Term of(final String name, final String x, final String y, final Class<R> clazz, BiFunction<T, U, R> f) {
         return of(name, $(x), $(y), clazz, f);
@@ -1768,10 +1233,6 @@ public interface Terms {
      * @param y the second parameter of function.
      * @param clazz the class of return object.
      * @param f the lambda to apply on the terms.
-     * @param <T> the data type of first input term.
-     * @param <U> the data type of second input term.
-     * @param <R> the data type of output term.
-     * @return the term.
      */
     @SuppressWarnings("unchecked")
     static <T, U, R> Term of(final String name, final Term x, final Term y, final Class<R> clazz, BiFunction<T, U, R> f) {

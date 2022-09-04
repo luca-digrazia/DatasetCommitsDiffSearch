@@ -62,7 +62,7 @@ public class Date implements Term {
 
     @Override
     public List<Feature> bind(StructType schema) {
-        int index = schema.indexOf(name);
+        int index = schema.fieldIndex(name);
         DataType type = schema.field(name).type;
         switch (type.id()) {
             case Date:

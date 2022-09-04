@@ -18,7 +18,6 @@
 package smile.data;
 
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Collection;
 import java.util.stream.Stream;
 
@@ -56,10 +55,5 @@ class DatasetImpl<T> implements Dataset<T> {
     @Override
     public Stream<T> stream() {
         return data.stream();
-    }
-
-    @Override
-    public List<T> toList() {
-        return new ArrayList<>(data);
     }
 }

@@ -1,24 +1,26 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.data;
 
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.stream.Stream;
-import smile.math.Math;
+import smile.math.MathEx;
 import smile.math.matrix.SparseMatrix;
 
 /**
@@ -28,10 +30,12 @@ import smile.math.matrix.SparseMatrix;
  * @author Haifeng Li
  */
 class BinarySparseDatasetImpl implements BinarySparseDataset {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(BinarySparseDatasetImpl.class);
+
     /**
      * The data objects.
      */
-    private int[][] data;
+    private final int[][] data;
     /**
      * The number of nonzero entries.
      */
@@ -39,35 +43,38 @@ class BinarySparseDatasetImpl implements BinarySparseDataset {
     /**
      * The number of columns.
      */
-    private int ncols;
+    private final int ncols;
     /**
      * The number of nonzero entries in each column.
      */
-    private int[] colSize;
+    private final int[] colSize;
 
     /**
      * Constructor.
-     * @data Each row is a data item which are the indices of nonzero elements.
-     *       Every row will be sorted into ascending order.
+     * @param data Each row is a data item which are the indices
+     *             of nonzero elements. Every row will be sorted
+     *             into ascending order.
      */
     public BinarySparseDatasetImpl(Collection<int[]> data) {
         this.data = data.toArray(new int[data.size()][]);
 
-        int min = Math.min(this.data);
-        if (min < 0) {
-            throw new IllegalArgumentException(String.format("Negative index of nonzero element: %d", min));
-        }
-
-        ncols = Math.max(this.data) + 1;
+        ncols = MathEx.max(this.data) + 1;
         colSize = new int[ncols];
-        for (int[] x : data) {
-            n += x.length;
+        for (int[] x : this.data) {
             Arrays.sort(x);
-            colSize[x[0]]++;
-            for (int i = 1; i < x.length; i++) {
-                colSize[x[i]]++;
-                if (x[i] == x[i - 1]) {
-                    throw new IllegalArgumentException(String.format("Duplicated indices of nonzero elements: %d in a row", x[i]));
+
+            int prev = -1; // index of previous element
+            for (int xi : x) {
+                if (xi < 0) {
+                    throw new IllegalArgumentException(String.format("Negative index of nonzero element: %d", xi));
+                }
+
+                if (xi == prev) {
+                    logger.warn(String.format("Ignore duplicated indices: %d in [%s]", xi, Arrays.toString(x)));
+                } else {
+                    colSize[xi]++;
+                    n++;
+                    prev = xi;
                 }
             }
         }
@@ -79,13 +86,18 @@ class BinarySparseDatasetImpl implements BinarySparseDataset {
     }
 
     @Override
-    public int[] get(int i) {
-        return data[i];
+    public int length() {
+        return n;
     }
 
     @Override
     public int ncols() {
         return ncols;
+    }
+
+    @Override
+    public int[] get(int i) {
+        return data[i];
     }
 
     @Override

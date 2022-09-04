@@ -40,7 +40,6 @@ public class StructType implements DataType {
 
     /**
      * Constructor.
-     * @param fields the struct fields.
      */
     public StructType(List<StructField> fields) {
         this(fields.toArray(new StructField[0]));
@@ -48,7 +47,6 @@ public class StructType implements DataType {
 
     /**
      * Constructor.
-     * @param fields the struct fields.
      */
     public StructType(StructField... fields) {
         this.fields = fields;
@@ -58,62 +56,37 @@ public class StructType implements DataType {
         }
     }
 
-    /**
-     * Returns the number of fields.
-     * @return the number of fields.
-     */
+    /** Returns the number of fields. */
     public int length() {
         return fields.length;
     }
 
-    /**
-     * Returns the fields.
-     * @return the fields.
-     */
+    /** Returns the fields. */
     public StructField[] fields() {
         return fields;
     }
 
-    /**
-     * Return the field of given name.
-     * @param name the field name.
-     * @return the field.
-     */
+    /** Return the field of given name. */
     public StructField field(String name) {
         return fields[fieldIndex(name)];
     }
 
-    /**
-     * Return the field at position i.
-     * @param i the field index.
-     * @return the field.
-     */
+    /** Return the field at position i. */
     public StructField field(int i) {
         return fields[i];
     }
 
-    /**
-     * Returns the index of a field.
-     * @param field the field name.
-     * @return the index of field.
-     */
+    /** Returns the index of a field. */
     public int fieldIndex(String field) {
         return index.get(field);
     }
 
-    /**
-     * Returns the field name.
-     * @param i the index of field.
-     * @return the field name.
-     */
+    /** Returns the name of a field. */
     public String fieldName(int i) {
         return fields[i].name;
     }
 
-    /**
-     * Returns the lambda functions that parse field values.
-     * @return the lambda functions that parse field values.
-     */
+    /** Returns the lambda functions that parse field values. */
     public List<Function<String, Object>> parser() {
         List<Function<String, Object>> parser = new ArrayList<>();
         for (StructField field : fields) {
@@ -127,7 +100,6 @@ public class StructType implements DataType {
      * null/missing values in the data.
      *
      * @param rows a set of tuples.
-     * @return the new struct with boxed field types.
      */
     public StructType boxed(Collection<Tuple> rows) {
         return new StructType(IntStream.range(0, length()).mapToObj(i -> {
@@ -145,7 +117,6 @@ public class StructType implements DataType {
 
     /**
      * Updates the field type to the primitive one.
-     * @return the new struct with primitive field types.
      */
     public StructType unboxed() {
         return new StructType(IntStream.range(0, length()).mapToObj(i -> {

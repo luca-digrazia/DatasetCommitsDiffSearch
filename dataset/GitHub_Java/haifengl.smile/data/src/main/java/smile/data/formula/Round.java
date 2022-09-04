@@ -1,67 +1,86 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.data.formula;
 
+import smile.data.Tuple;
 import smile.data.type.DataType;
-import smile.data.type.DataTypes;
+import smile.data.type.StructField;
+import smile.data.type.StructType;
 
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 /**
  * The term of round function.
  *
  * @author Haifeng Li
  */
-public class Round<T> implements Factor<T, Long> {
-    /** The operand factor of round expression. */
-    private Factor<T, Double> child;
-
+class Round extends AbstractFunction {
     /**
      * Constructor.
      *
-     * @param factor the factor that round function is applied to.
+     * @param x the term that the function is applied to.
      */
-    public Round(Factor<T, Double> factor) {
-        this.child = factor;
+    public Round(Term x) {
+        super("round", x);
     }
 
     @Override
-    public String toString() {
-        return String.format("round(%s)", child);
-    }
+    public List<Feature> bind(StructType schema) {
+        List<Feature> features = new ArrayList<>();
 
-    @Override
-    public List<Factor> factors() {
-        return Collections.singletonList(this);
-    }
+        for (Feature feature : x.bind(schema)) {
+            StructField xfield = feature.field();
+            DataType type = xfield.type;
+            if (!(type.isDouble() || type.isFloat())) {
+                throw new IllegalStateException(String.format("Invalid expression: round(%s)", type));
+            }
 
-    @Override
-    public Set<String> variables() {
-        return child.variables();
-    }
+            features.add(new Feature() {
+                final StructField field = new StructField(String.format("round(%s)", xfield.name), xfield.type, xfield.measure);
 
-    @Override
-    public Long apply(T o) {
-        return Math.round(child.apply(o));
-    }
+                @Override
+                public StructField field() {
+                    return field;
+                }
 
-    @Override
-    public DataType type() {
-        return DataTypes.LongType;
+                @Override
+                public Object apply(Tuple o) {
+                    Object y = feature.apply(o);
+                    if (y == null) return null;
+
+                    if (y instanceof Double) return Math.round((double) y);
+                    else if (y instanceof Float) return Math.abs((float) y);
+                    else throw new IllegalArgumentException("Invalid argument for abs(): " + y);
+                }
+
+                @Override
+                public float applyAsFloat(Tuple o) {
+                    return Math.round(feature.applyAsFloat(o));
+                }
+
+                @Override
+                public double applyAsDouble(Tuple o) {
+                    return Math.round(feature.applyAsDouble(o));
+                }
+            });
+        }
+
+        return features;
     }
 }

@@ -55,7 +55,6 @@ public class ArrayType implements DataType {
 
     /**
      * Returns the type of array elements.
-     * @return the type of array elements.
      */
     public DataType getComponentType() {
         return type;

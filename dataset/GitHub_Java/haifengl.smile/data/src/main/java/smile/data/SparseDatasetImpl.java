@@ -1,26 +1,25 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.data;
 
 import java.util.*;
 import java.util.stream.Stream;
-
-import smile.math.Math;
-import smile.math.SparseArray;
-import smile.math.matrix.SparseMatrix;
+import smile.util.SparseArray;
 
 /**
  * List of Lists sparse matrix format. LIL stores one list per row,
@@ -36,10 +35,12 @@ import smile.math.matrix.SparseMatrix;
  * @author Haifeng Li
  */
 class SparseDatasetImpl implements SparseDataset {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SparseDatasetImpl.class);
+
     /**
      * The data objects.
      */
-    private SparseArray[] data;
+    private final SparseArray[] data;
     /**
      * The number of nonzero entries.
      */
@@ -47,41 +48,56 @@ class SparseDatasetImpl implements SparseDataset {
     /**
      * The number of columns.
      */
-    private int ncols;
+    private final int ncols;
     /**
      * The number of nonzero entries in each column.
      */
     private int[] colSize;
+    /**
+     * Constructor.
+     * @param data Each row is a data item which are the indices
+     *             of nonzero elements. Every row will be sorted
+     *             into ascending order.
+     */
+    public SparseDatasetImpl(Collection<SparseArray> data) {
+        this(data, 1 + data.stream().flatMap(SparseArray::stream).mapToInt(e -> e.i).max().orElse(0));
+    }
 
     /**
      * Constructor.
-     * @data Each row is a data item which are the indices of nonzero elements.
-     *       Every row will be sorted into ascending order.
+     * @param data Each row is a data item which are the indices
+     *             of nonzero elements. Every row will be sorted
+     *             into ascending order.
+     * @param ncols The number of columns.
      */
-    public SparseDatasetImpl(Collection<SparseArray> data) {
-        this.data = data.toArray(new SparseArray[data.size()]);
-
+    public SparseDatasetImpl(Collection<SparseArray> data, int ncols) {
+        this.data = data.toArray(new SparseArray[0]);
+        this.ncols = ncols;
         colSize = new int[ncols];
+
         for (SparseArray x : data) {
             x.sort(); // sort array index into ascending order.
 
-            n += x.size();
             int i = -1; // index of previous element
             for (SparseArray.Entry e : x) {
                 if (e.i < 0) {
                     throw new IllegalArgumentException(String.format("Negative index of nonzero element: %d", e.i));
                 }
 
-                if (ncols <= e.i) {
-                    ncols = e.i + 1;
-                }
-
-                colSize[e.i]++;
                 if (e.i == i) {
-                    throw new IllegalArgumentException(String.format("Duplicated indices of nonzero elements: %d in a row", e.i));
-                }
+                    logger.warn(String.format("Ignore duplicated indices: %d in [%s]", e.i, x));
+                } else {
+                    if (ncols <= e.i) {
+                        ncols = e.i + 1;
+                        int[] newColSize = new int[3 * ncols / 2];
+                        System.arraycopy(colSize, 0, newColSize, 0, colSize.length);
+                        colSize = newColSize;
+                    }
 
-                i = e.i;
+                    colSize[e.i]++;
+                    n++;
+                    i = e.i;
+                }
             }
         }
     }
@@ -89,6 +105,16 @@ class SparseDatasetImpl implements SparseDataset {
     @Override
     public int size() {
         return data.length;
+    }
+
+    @Override
+    public int nz() {
+        return n;
+    }
+
+    @Override
+    public int nz(int j) {
+        return colSize[j];
     }
 
     @Override
@@ -104,31 +130,5 @@ class SparseDatasetImpl implements SparseDataset {
     @Override
     public Stream<SparseArray> stream() {
         return Arrays.stream(data);
-    }
-
-    @Override
-    public SparseMatrix toSparseMatrix() {
-        int[] pos = new int[ncols];
-        int[] colIndex = new int[ncols + 1];
-        for (int i = 0; i < ncols; i++) {
-            colIndex[i + 1] = colIndex[i] + colSize[i];
-        }
-
-        int nrows = size();
-        int[] rowIndex = new int[n];
-        double[] x = new double[n];
-
-        for (int i = 0; i < nrows; i++) {
-            for (SparseArray.Entry e : data[i]) {
-                int j = e.i;
-                int k = colIndex[j] + pos[j];
-
-                rowIndex[k] = i;
-                x[k] = e.x;
-                pos[j]++;
-            }
-        }
-
-        return new SparseMatrix(nrows, ncols, x, rowIndex, colIndex);
     }
 }

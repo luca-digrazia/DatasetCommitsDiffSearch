@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,12 +13,14 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.data.formula;
 
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
+
 import smile.data.type.StructType;
 
 /**
@@ -26,36 +28,36 @@ import smile.data.type.StructType;
  *
  * @author Haifeng Li
  */
-class Delete implements HyperTerm {
+class Delete implements Term {
     /** The term to delete. */
-    HyperTerm x;
+    Term x;
 
     /**
      * Constructor.
      *
      * @param x the term to delete.
      */
-    public Delete(HyperTerm x) {
+    public Delete(Term x) {
         this.x = x;
     }
 
     @Override
     public String toString() {
-        return String.format("-%s", x);
+        return String.format("- %s", x);
     }
 
     @Override
-    public void bind(StructType schema) {
-        x.bind(schema);
-    }
-
-    @Override
-    public List<? extends Term> terms() {
-        return x.terms();
+    public List<Feature> bind(StructType schema) {
+        throw new IllegalStateException("Delete.bind() should not be called.");
     }
 
     @Override
     public Set<String> variables() {
         return x.variables();
+    }
+
+    @Override
+    public List<Term> expand() {
+        return x.expand().stream().map(Delete::new).collect(Collectors.toList());
     }
 }

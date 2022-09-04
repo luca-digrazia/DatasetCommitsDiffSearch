@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,19 +13,13 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.data.formula;
 
 import java.util.Collections;
-import java.util.Optional;
+import java.util.List;
 import java.util.Set;
-
-import smile.data.Tuple;
-import smile.data.measure.Measure;
-import smile.data.type.DataType;
-import smile.data.type.DataTypes;
-import smile.data.type.StructField;
 import smile.data.type.StructType;
 
 /**
@@ -35,48 +29,25 @@ import smile.data.type.StructType;
  */
 final class Intercept implements Term {
     /** The flag if the model has the intercept. */
-    private final boolean flag;
+    private final boolean bias;
 
     /**
      * Constructor.
      *
-     * @param flag The flag if the model has the intercept.
+     * @param bias The flag if the model has the intercept.
      */
-    public Intercept(boolean flag) {
-        this.flag = flag;
+    public Intercept(boolean bias) {
+        this.bias = bias;
     }
 
     /** Returns the flag if the intercept is included in the model. */
-    public boolean isInclulded() {
-        return flag;
-    }
-
-    @Override
-    public String name() {
-        return flag ? "1" : "0";
+    public boolean bias() {
+        return bias;
     }
 
     @Override
     public String toString() {
-        return name();
-    }
-
-    @Override
-    public boolean isVariable() {
-        return false;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == this) {
-            return true;
-        }
-
-        if (o instanceof Intercept) {
-            return flag == ((Intercept) o).flag;
-        }
-
-        return false;
+        return bias ? "1" : "0";
     }
 
     @Override
@@ -85,41 +56,7 @@ final class Intercept implements Term {
     }
 
     @Override
-    public Object apply(Tuple o) {
-        return flag ? 1 : 0;
-    }
-
-    @Override
-    public int applyAsInt(Tuple o) {
-        return flag ? 1 : 0;
-    }
-
-    @Override
-    public long applyAsLong(Tuple o) {
-        return flag ? 1 : 0;
-    }
-
-    @Override
-    public float applyAsFloat(Tuple o) {
-        return flag ? 1 : 0;
-    }
-
-    @Override
-    public double applyAsDouble(Tuple o) {
-        return flag ? 1 : 0;
-    }
-
-    @Override
-    public DataType type() {
-        return DataTypes.DoubleType;
-    }
-
-    @Override
-    public Optional<Measure> measure() {
-        return Optional.empty();
-    }
-
-    @Override
-    public void bind(StructType schema) {
+    public List<Feature> bind(StructType schema) {
+        throw new IllegalStateException("Intercept.bind() should not be called.");
     }
 }

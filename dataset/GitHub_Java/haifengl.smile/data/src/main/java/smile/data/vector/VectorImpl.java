@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.data.vector;
 
@@ -24,11 +24,9 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.Optional;
 import java.util.stream.Stream;
-
-import smile.data.measure.ContinuousMeasure;
-import smile.data.measure.DiscreteMeasure;
+import smile.data.measure.CategoricalMeasure;
+import smile.data.measure.NumericalMeasure;
 import smile.data.measure.Measure;
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
@@ -42,16 +40,16 @@ import smile.data.type.StructField;
  */
 class VectorImpl<T> implements Vector<T> {
     /** The name of vector. */
-    private String name;
+    private final String name;
     /** The data type of vector. */
-    private DataType type;
+    private final DataType type;
     /** Optional measure. */
-    private Measure measure;
+    private final Measure measure;
     /** The vector data. */
-    private T[] vector;
+    private final T[] vector;
 
     /** Constructor. */
-    public VectorImpl(String name, Class clazz, T[] vector) {
+    public VectorImpl(String name, Class<?> clazz, T[] vector) {
         this.name = name;
         this.type = DataTypes.object(clazz);
         this.measure = null;
@@ -69,8 +67,8 @@ class VectorImpl<T> implements Vector<T> {
     /** Constructor. */
     public VectorImpl(StructField field, T[] vector) {
         if (field.measure != null) {
-            if ((field.type.isIntegral() && field.measure instanceof ContinuousMeasure) ||
-                (field.type.isFloating() && field.measure instanceof DiscreteMeasure) ||
+            if ((field.type.isIntegral() && field.measure instanceof NumericalMeasure) ||
+                (field.type.isFloating() && field.measure instanceof CategoricalMeasure) ||
                 (!field.type.isIntegral() && !field.type.isFloating())) {
                 throw new IllegalArgumentException(String.format("Invalid measure %s for %s", field.measure, type()));
             }
@@ -93,8 +91,8 @@ class VectorImpl<T> implements Vector<T> {
     }
 
     @Override
-    public Optional<Measure> measure() {
-        return Optional.ofNullable(measure);
+    public Measure measure() {
+        return measure;
     }
 
     @Override
@@ -112,7 +110,7 @@ class VectorImpl<T> implements Vector<T> {
         @SuppressWarnings("unchecked")
         T[] v = (T[]) java.lang.reflect.Array.newInstance(vector.getClass().getComponentType(), index.length);
         for (int i = 0; i < index.length; i++) v[i] = vector[index[i]];
-        return new VectorImpl<>(name, type, v);
+        return new VectorImpl<>(field(), v);
     }
 
     @Override
@@ -136,12 +134,44 @@ class VectorImpl<T> implements Vector<T> {
     }
 
     @Override
+    public double[] toDoubleArray() {
+        if (!type.isNumeric()) throw new UnsupportedOperationException(name() + ":" + type());
+        return stream().mapToDouble(d -> d == null ? Double.NaN : ((Number) d).doubleValue()).toArray();
+    }
+
+    @Override
+    public double[] toDoubleArray(double[] a) {
+        if (!type.isNumeric()) throw new UnsupportedOperationException(name() + ":" + type());
+        for (int i = 0; i < vector.length; i++) {
+            Number n = (Number) vector[i];
+            a[i] = n == null ? Double.NaN : n.doubleValue();
+        }
+        return a;
+    }
+
+    @Override
+    public int[] toIntArray() {
+        if (!type.isIntegral()) throw new UnsupportedOperationException(name() + ":" + type());
+        return stream().mapToInt(d -> d == null ? Integer.MIN_VALUE : ((Number) d).intValue()).toArray();
+    }
+
+    @Override
+    public int[] toIntArray(int[] a) {
+        if (!type.isIntegral()) throw new UnsupportedOperationException(name() + ":" + type());
+        for (int i = 0; i < vector.length; i++) {
+            Number n = (Number) vector[i];
+            a[i] = n == null ? Integer.MIN_VALUE : n.intValue();
+        }
+        return a;
+    }
+
+    @Override
     public Vector<LocalDate> toDate() {
         LocalDate[] dates = null;
         if (type.id() == DataType.ID.DateTime) {
             dates = stream().map(d -> ((LocalDateTime) d).toLocalDate()).toArray(LocalDate[]::new);
         } else if (type.id() == DataType.ID.Object) {
-            Class clazz = ((ObjectType) type).getObjectClass();
+            Class<?> clazz = ((ObjectType) type).getObjectClass();
 
             if (clazz == Date.class) {
                 dates = stream().map(d -> ((Date) d).toInstant().atZone(ZoneId.systemDefault()).toLocalDate()).toArray(LocalDate[]::new);
@@ -163,7 +193,7 @@ class VectorImpl<T> implements Vector<T> {
         if (type.id() == DataType.ID.DateTime) {
             dates = stream().map(d -> ((LocalDateTime) d).toLocalTime()).toArray(LocalTime[]::new);
         } else if (type.id() == DataType.ID.Object) {
-            Class clazz = ((ObjectType) type).getObjectClass();
+            Class<?> clazz = ((ObjectType) type).getObjectClass();
 
             if (clazz == Date.class) {
                 dates = stream().map(d -> ((Date) d).toInstant().atZone(ZoneId.systemDefault()).toLocalTime()).toArray(LocalTime[]::new);
@@ -183,7 +213,7 @@ class VectorImpl<T> implements Vector<T> {
     public Vector<LocalDateTime> toDateTime() {
         LocalDateTime[] dates = null;
         if (type.id() == DataType.ID.Object) {
-            Class clazz = ((ObjectType) type).getObjectClass();
+            Class<?> clazz = ((ObjectType) type).getObjectClass();
 
             if (clazz == Date.class) {
                 dates = stream().map(d -> ((Date) d).toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()).toArray(LocalDateTime[]::new);
@@ -192,7 +222,7 @@ class VectorImpl<T> implements Vector<T> {
             }
         }
 
-        if (dates != null) {
+        if (dates == null) {
             throw new UnsupportedOperationException("Unsupported data type for toDateTime(): " + type);
         }
 
