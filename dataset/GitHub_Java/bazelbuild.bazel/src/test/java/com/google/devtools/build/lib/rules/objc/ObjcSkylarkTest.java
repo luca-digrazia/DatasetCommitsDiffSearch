@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.syntax.Depset;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,10 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class ObjcSkylarkTest extends ObjcRuleTestCase {
+  private static ObjcProvider.Builder objcProviderBuilder() {
+    return new ObjcProvider.Builder(StarlarkSemantics.DEFAULT_SEMANTICS);
+  }
+
   private void writeObjcSplitTransitionTestFiles() throws Exception {
     scratch.file(
         "examples/rule/apple_rules.bzl",
@@ -259,7 +264,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testSkylarkExportsObjcProviderToNativeRulePreMigration() throws Exception {
+  public void testSkylarkExportsObjcProviderToNativeRule() throws Exception {
     scratch.file("examples/rule/BUILD");
     scratch.file(
         "examples/rule/apple_rules.bzl",
@@ -286,20 +291,11 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
         "   srcs = ['a.m'],",
         "   defines = ['mock_define']",
         ")",
-        "objc_library(",
-        "   name = 'lib_root',",
-        "   deps = [':my_target']",
-        ")",
         "apple_binary(",
         "   name = 'bin',",
         "   platform_type = 'ios',",
-        "   deps = [':lib_root']",
+        "   deps = [':my_target']",
         ")");
-
-    useConfiguration("--incompatible_objc_compile_info_migration=false");
-    ConfiguredTarget libRootTarget = getConfiguredTarget("//examples/apple_skylark:lib_root");
-    ObjcProvider libRootObjcProvider = libRootTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR);
-    assertThat(libRootObjcProvider.define().toList()).contains("mock_define");
 
     ConfiguredTarget binaryTarget = getConfiguredTarget("//examples/apple_skylark:bin");
     AppleExecutableBinaryInfo executableProvider =
@@ -308,54 +304,11 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
 
     assertThat(Artifact.toRootRelativePaths(objcProvider.get(ObjcProvider.LIBRARY)))
         .contains("examples/apple_skylark/liblib.a");
+    assertThat(objcProvider.get(ObjcProvider.DEFINE).toList()).contains("mock_define");
   }
 
   @Test
-  public void testSkylarkExportsObjcProviderToNativeRulePostMigration() throws Exception {
-    scratch.file("examples/rule/BUILD");
-    scratch.file(
-        "examples/rule/apple_rules.bzl",
-        "def my_rule_impl(ctx):",
-        "   dep = ctx.attr.deps[0]",
-        "   objc_provider = dep.objc",
-        "   return [objc_provider]",
-        "swift_library = rule(implementation = my_rule_impl,",
-        "   attrs = {",
-        "   'deps': attr.label_list(allow_files = False, mandatory = False, providers = ['objc'])",
-        "})");
-
-    scratch.file("examples/apple_skylark/a.m");
-    scratch.file(
-        "examples/apple_skylark/BUILD",
-        "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'swift_library')",
-        "swift_library(",
-        "   name='my_target',",
-        "   deps=[':lib'],",
-        ")",
-        "objc_library(",
-        "   name = 'lib',",
-        "   srcs = ['a.m'],",
-        ")",
-        "apple_binary(",
-        "   name = 'bin',",
-        "   platform_type = 'ios',",
-        "   deps = [':my_target']",
-        ")");
-
-    useConfiguration("--incompatible_objc_compile_info_migration=true");
-    ConfiguredTarget binaryTarget = getConfiguredTarget("//examples/apple_skylark:bin");
-    AppleExecutableBinaryInfo executableProvider =
-        binaryTarget.get(AppleExecutableBinaryInfo.SKYLARK_CONSTRUCTOR);
-    ObjcProvider objcProvider = executableProvider.getDepsObjcProvider();
-
-    assertThat(Artifact.toRootRelativePaths(objcProvider.get(ObjcProvider.LIBRARY)))
-        .contains("examples/apple_skylark/liblib.a");
-  }
-
-  @Test
-  public void testObjcRuleCanDependOnArbitrarySkylarkRuleThatProvidesObjcPreMigration()
-      throws Exception {
+  public void testObjcRuleCanDependOnArbitrarySkylarkRuleThatProvidesObjc() throws Exception {
     scratch.file("examples/rule/BUILD");
     scratch.file(
         "examples/rule/apple_rules.bzl",
@@ -384,47 +337,12 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
         "   deps = [':lib']",
         ")");
 
-    useConfiguration("--incompatible_objc_compile_info_migration=false");
-    ConfiguredTarget libTarget = getConfiguredTarget("//examples/apple_skylark:lib");
-    ObjcProvider libObjcProvider = libTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR);
-    assertThat(libObjcProvider.define().toList()).contains("mock_define");
-  }
+    ConfiguredTarget binaryTarget = getConfiguredTarget("//examples/apple_skylark:bin");
+    AppleExecutableBinaryInfo executableProvider =
+        binaryTarget.get(AppleExecutableBinaryInfo.SKYLARK_CONSTRUCTOR);
+    ObjcProvider objcProvider = executableProvider.getDepsObjcProvider();
 
-  @Test
-  public void testObjcRuleCanDependOnArbitrarySkylarkRuleThatProvidesObjcPostMigration()
-      throws Exception {
-    scratch.file("examples/rule/BUILD");
-    scratch.file(
-        "examples/rule/apple_rules.bzl",
-        "def my_rule_impl(ctx):",
-        "   objc_provider = apple_common.new_objc_provider(linkopt=depset(['mock_linkopt']))",
-        "   return [objc_provider]",
-        "my_rule = rule(implementation = my_rule_impl,",
-        "   attrs = {})");
-
-    scratch.file("examples/apple_skylark/a.m");
-    scratch.file(
-        "examples/apple_skylark/BUILD",
-        "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'my_rule')",
-        "my_rule(",
-        "   name='my_target'",
-        ")",
-        "objc_library(",
-        "   name = 'lib',",
-        "   srcs = ['a.m'],",
-        "   deps = [':my_target']",
-        ")",
-        "apple_binary(",
-        "   name = 'bin',",
-        "   platform_type = 'ios',",
-        "   deps = [':lib']",
-        ")");
-
-    useConfiguration("--incompatible_objc_compile_info_migration=true");
-    ConfiguredTarget libTarget = getConfiguredTarget("//examples/apple_skylark:lib");
-    ObjcProvider libObjcProvider = libTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR);
-    assertThat(libObjcProvider.get(ObjcProvider.LINKOPT).toList()).contains("mock_linkopt");
+    assertThat(objcProvider.get(ObjcProvider.DEFINE).toList()).contains("mock_define");
   }
 
   @Test
@@ -1006,7 +924,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     Iterable<String> foundLinkopts =
         skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).get(ObjcProvider.LINKOPT).toList();
     Iterable<String> foundDefines =
-        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).define().toList();
+        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).get(ObjcProvider.DEFINE).toList();
     boolean usesSwift =
         skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).is(ObjcProvider.Flag.USES_SWIFT);
 
@@ -1045,40 +963,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testSkylarkCanCreateObjcProviderWithDefines() throws Exception {
-    ConfiguredTarget skylarkTarget =
-        createObjcProviderSkylarkTarget(
-            "   define = depset(['def1', 'def2', 'def3'])",
-            "   created_provider = apple_common.new_objc_provider\\",
-            "(define=define)",
-            "   return [created_provider]");
-
-    Iterable<String> foundDefines =
-        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).define().toList();
-
-    assertThat(foundDefines).containsExactly("def1", "def2", "def3");
-  }
-
-  @Test
-  public void testSkylarkCanCreateObjcProviderWithHeaders() throws Exception {
-    ConfiguredTarget skylarkTarget =
-        createObjcProviderSkylarkTarget(
-            "   hdr1 = ctx.actions.declare_file('hdr1')",
-            "   hdr2 = ctx.actions.declare_file('hdr2')",
-            "   ctx.actions.run_shell(outputs=[hdr1, hdr2], command='echo')",
-            "   header = depset([hdr1, hdr2])",
-            "   created_provider = apple_common.new_objc_provider\\",
-            "(header=header)",
-            "   return [created_provider]");
-
-    Iterable<Artifact> foundHeaders =
-        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).header().toList();
-
-    assertThat(ActionsTestUtil.baseArtifactNames(foundHeaders)).containsExactly("hdr1", "hdr2");
-  }
-
-  @Test
-  public void testSkylarkCanCreateObjcProviderWithIncludePathFragments() throws Exception {
+  public void testSkylarkCanCreateObjcProviderWithPathFragments() throws Exception {
     ConfiguredTarget skylarkTarget =
         createObjcProviderSkylarkTarget(
             "   includes = depset(['path1', 'path_dir/path2', 'path_dir1/path_dir2/path3'])",
@@ -1087,7 +972,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
             "   return [created_provider]");
 
     Iterable<PathFragment> foundIncludes =
-        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).include();
+        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).get(ObjcProvider.INCLUDE).toList();
 
     assertThat(foundIncludes)
         .containsExactly(
@@ -1097,62 +982,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testSkylarkCanCreateObjcProviderWithFrameworkIncludes() throws Exception {
-    ConfiguredTarget skylarkTarget =
-        createObjcProviderSkylarkTarget(
-            "   includes = depset(['path1/foo.framework', 'path_dir/path2/bar.framework'])",
-            "   created_provider = apple_common.new_objc_provider\\",
-            "(framework_search_paths=includes)",
-            "   return [created_provider]");
-
-    Iterable<PathFragment> foundIncludes =
-        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).frameworkInclude();
-
-    assertThat(foundIncludes)
-        .containsExactly(PathFragment.create("path1"), PathFragment.create("path_dir/path2"));
-  }
-
-  @Test
-  public void testSkylarkCanCreateObjcProviderWithSystemIncludes() throws Exception {
-    ConfiguredTarget skylarkTarget =
-        createObjcProviderSkylarkTarget(
-            "   includes = depset(['path1', 'path_dir/path2', 'path_dir1/path_dir2/path3'])",
-            "   created_provider = apple_common.new_objc_provider\\",
-            "(include_system=includes)",
-            "   return [created_provider]");
-
-    Iterable<PathFragment> foundIncludes =
-        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).systemInclude();
-
-    assertThat(foundIncludes)
-        .containsExactly(
-            PathFragment.create("path1"),
-            PathFragment.create("path_dir/path2"),
-            PathFragment.create("path_dir1/path_dir2/path3"));
-  }
-
-  @Test
-  public void testSkylarkCanCreateObjcProviderWithQuoteIncludes() throws Exception {
-    ConfiguredTarget skylarkTarget =
-        createObjcProviderSkylarkTarget(
-            "   includes = depset(['path1', 'path_dir/path2', 'path_dir1/path_dir2/path3'])",
-            "   created_provider = apple_common.new_objc_provider\\",
-            "(iquote=includes)",
-            "   return [created_provider]");
-
-    Iterable<PathFragment> foundIncludes =
-        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).quoteInclude();
-
-    assertThat(foundIncludes)
-        .containsExactly(
-            PathFragment.create("path1"),
-            PathFragment.create("path_dir/path2"),
-            PathFragment.create("path_dir1/path_dir2/path3"));
-  }
-
-  @Test
-  public void testSkylarkCanCreateObjcProviderWithStrictDepsPreMigration() throws Exception {
-    useConfiguration("--incompatible_objc_compile_info_migration=false");
+  public void testSkylarkCanCreateObjcProviderWithStrictDeps() throws Exception {
     ConfiguredTarget skylarkTarget =
         createObjcProviderSkylarkTarget(
             "   strict_includes = depset(['path1'])",
@@ -1164,69 +994,21 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
             "   return [created_provider]");
 
     ObjcProvider skylarkProvider = skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR);
-    assertThat(skylarkProvider.include())
-        .containsExactly(PathFragment.create("path1"), PathFragment.create("path2"));
-    assertThat(skylarkProvider.getStrictDependencyIncludes())
-        .containsExactly(PathFragment.create("path1"));
-
-    scratch.file(
-        "examples/objc_skylark2/BUILD",
-        "objc_library(",
-        "   name = 'direct_dep',",
-        "   deps = ['//examples/objc_skylark:my_target']",
-        ")",
-        "objc_library(",
-        "   name = 'indirect_dep',",
-        "   deps = [':direct_dep']",
-        ")");
-
     ObjcProvider skylarkProviderDirectDepender =
-        getConfiguredTarget("//examples/objc_skylark2:direct_dep")
-            .get(ObjcProvider.SKYLARK_CONSTRUCTOR);
-    assertThat(skylarkProviderDirectDepender.include())
-        .containsExactly(PathFragment.create("path2"));
-
+        objcProviderBuilder().addTransitiveAndPropagate(skylarkProvider).build();
     ObjcProvider skylarkProviderIndirectDepender =
-        getConfiguredTarget("//examples/objc_skylark2:indirect_dep")
-            .get(ObjcProvider.SKYLARK_CONSTRUCTOR);
-    assertThat(skylarkProviderIndirectDepender.include())
+        objcProviderBuilder().addTransitiveAndPropagate(skylarkProviderDirectDepender).build();
+
+    assertThat(skylarkProvider.get(ObjcProvider.INCLUDE).toList())
+        .containsExactly(PathFragment.create("path1"), PathFragment.create("path2"));
+    assertThat(skylarkProviderDirectDepender.get(ObjcProvider.INCLUDE).toList())
+        .containsExactly(PathFragment.create("path1"), PathFragment.create("path2"));
+    assertThat(skylarkProviderIndirectDepender.get(ObjcProvider.INCLUDE).toList())
         .containsExactly(PathFragment.create("path2"));
   }
 
   @Test
-  public void testSkylarkCanCreateObjcProviderWithStrictDepsPostMigration() throws Exception {
-    useConfiguration("--incompatible_objc_compile_info_migration=true");
-    ConfiguredTarget skylarkTarget =
-        createObjcProviderSkylarkTarget(
-            "   strict_includes = depset(['path1'])",
-            "   propagated_includes = depset(['path2'])",
-            "   strict_provider = apple_common.new_objc_provider\\",
-            "(include=strict_includes)",
-            "   created_provider = apple_common.new_objc_provider\\",
-            "(include=propagated_includes, direct_dep_providers=[strict_provider])",
-            "   return [created_provider]");
-
-    ObjcProvider skylarkProvider = skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR);
-    assertThat(skylarkProvider.include())
-        .containsExactly(PathFragment.create("path1"), PathFragment.create("path2"));
-    assertThat(skylarkProvider.getStrictDependencyIncludes())
-        .containsExactly(PathFragment.create("path1"));
-
-    scratch.file(
-        "examples/objc_skylark2/BUILD",
-        "objc_library(",
-        "   name = 'direct_dep',",
-        "   deps = ['//examples/objc_skylark:my_target']",
-        ")");
-
-    ObjcProvider skylarkProviderDirectDepender =
-        getConfiguredTarget("//examples/objc_skylark2:direct_dep")
-            .get(ObjcProvider.SKYLARK_CONSTRUCTOR);
-    assertThat(skylarkProviderDirectDepender.include()).isEmpty();
-  }
-
-  @Test
-  public void testSkylarkStrictDepsDoesNotSupportDefine() throws Exception {
+  public void testSkylarkStrictDepsWhitelist() throws Exception {
     AssertionError e =
         assertThrows(
             AssertionError.class,
@@ -1244,24 +1026,6 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testSkylarkStrictDepsDoesNotSupportLinkopt() throws Exception {
-    AssertionError e =
-        assertThrows(
-            AssertionError.class,
-            () ->
-                createObjcProviderSkylarkTarget(
-                    "   strict_linkopts = depset(['opt1'])",
-                    "   strict_provider = apple_common.new_objc_provider\\",
-                    "(linkopt=strict_linkopts)",
-                    "   created_provider = apple_common.new_objc_provider\\",
-                    "(direct_dep_providers=[strict_provider])",
-                    "   return [created_provider]"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains(String.format(AppleSkylarkCommon.BAD_DIRECT_DEPENDENCY_KEY_ERROR, "linkopt"));
-  }
-
-  @Test
   public void testSkylarkCanCreateObjcProviderFromObjcProvider() throws Exception {
     ConfiguredTarget skylarkTarget =
         createObjcProviderSkylarkTarget(
@@ -1272,7 +1036,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
             "   return [created_provider]");
 
     Iterable<String> foundStrings =
-        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).define().toList();
+        skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR).get(ObjcProvider.DEFINE).toList();
 
     assertThat(foundStrings).containsExactly("define_from_dep", "define_from_impl");
   }

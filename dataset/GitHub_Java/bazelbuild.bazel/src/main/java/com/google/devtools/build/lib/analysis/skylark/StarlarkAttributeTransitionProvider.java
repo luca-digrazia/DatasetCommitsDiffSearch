@@ -105,16 +105,7 @@ public class StarlarkAttributeTransitionProvider
     public final Map<String, BuildOptions> split(BuildOptions buildOptions) {
       try {
         return applyAndValidate(buildOptions, starlarkDefinedConfigTransition, attrObject);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        starlarkDefinedConfigTransition
-            .getEventHandler()
-            .handle(
-                Event.error(
-                    starlarkDefinedConfigTransition.getLocationForErrorReporting(),
-                    "Starlark transition interrupted during attribute transition implementation"));
-        return ImmutableMap.of("error", buildOptions.clone());
-      } catch (EvalException e) {
+      } catch (InterruptedException | EvalException e) {
         starlarkDefinedConfigTransition
             .getEventHandler()
             .handle(

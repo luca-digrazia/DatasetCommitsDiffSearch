@@ -20,14 +20,11 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.packages.Type.INTEGER;
 import static com.google.devtools.build.lib.packages.Type.STRING;
 import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Predicates;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.TransitionFactories;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
@@ -35,7 +32,6 @@ import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
 import com.google.devtools.build.lib.analysis.util.TestAspects;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassNamePredicate;
 import com.google.devtools.build.lib.testutil.FakeAttributeMapper;
 import com.google.devtools.build.lib.util.FileType;
@@ -44,7 +40,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import net.starlark.java.eval.StarlarkInt;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -63,9 +58,9 @@ public class AttributeTest {
 
   @Test
   public void testBasics() throws Exception {
-    Attribute attr = attr("foo", Type.INTEGER).mandatory().value(StarlarkInt.of(3)).build();
+    Attribute attr = attr("foo", Type.INTEGER).mandatory().value(3).build();
     assertThat(attr.getName()).isEqualTo("foo");
-    assertThat(attr.getDefaultValue(null)).isEqualTo(StarlarkInt.of(3));
+    assertThat(attr.getDefaultValue(null)).isEqualTo(3);
     assertThat(attr.getType()).isEqualTo(Type.INTEGER);
     assertThat(attr.isMandatory()).isTrue();
     assertThat(attr.isDocumented()).isTrue();
@@ -78,7 +73,7 @@ public class AttributeTest {
     NullPointerException e =
         assertThrows(
             NullPointerException.class,
-            () -> attr("foo", Type.INTEGER).nonEmpty().value(StarlarkInt.of(3)).build());
+            () -> attr("foo", Type.INTEGER).nonEmpty().value(3).build());
     assertThat(e).hasMessageThat().isEqualTo("attribute 'foo' must be a list");
   }
 
@@ -95,7 +90,7 @@ public class AttributeTest {
     IllegalStateException e =
         assertThrows(
             IllegalStateException.class,
-            () -> attr("foo", Type.INTEGER).singleArtifact().value(StarlarkInt.of(3)).build());
+            () -> attr("foo", Type.INTEGER).singleArtifact().value(3).build());
     assertThat(e).hasMessageThat().isEqualTo("attribute 'foo' must be a label-valued type");
   }
 
@@ -122,8 +117,10 @@ public class AttributeTest {
    */
   @Test
   public void testConvenienceFactoriesDefaultValues() throws Exception {
-    assertDefaultValue(StarlarkInt.of(0), attr("x", INTEGER).build());
-    assertDefaultValue(StarlarkInt.of(42), attr("x", INTEGER).value(StarlarkInt.of(42)).build());
+    assertDefaultValue(0,
+                       attr("x", INTEGER).build());
+    assertDefaultValue(42,
+                       attr("x", INTEGER).value(42).build());
 
     assertDefaultValue("",
                        attr("x", STRING).build());
@@ -159,7 +156,8 @@ public class AttributeTest {
   public void testConvenienceFactoriesTypes() throws Exception {
     assertType(INTEGER,
                attr("x", INTEGER).build());
-    assertType(INTEGER, attr("x", INTEGER).value(StarlarkInt.of(42)).build());
+    assertType(INTEGER,
+               attr("x", INTEGER).value(42).build());
 
     assertType(STRING,
                attr("x", STRING).build());
@@ -288,10 +286,8 @@ public class AttributeTest {
 
   private static class TestSplitTransition implements SplitTransition {
     @Override
-    public Map<String, BuildOptions> split(
-        BuildOptionsView buildOptions, EventHandler eventHandler) {
-      return ImmutableMap.of(
-          "test0", buildOptions.clone().underlying(), "test1", buildOptions.clone().underlying());
+    public Map<String, BuildOptions> split(BuildOptions buildOptions) {
+      return ImmutableMap.of("test0", buildOptions.clone(), "test1", buildOptions.clone());
     }
   }
 
@@ -320,229 +316,5 @@ public class AttributeTest {
                     .allowedFileTypes()
                     .build());
     assertThat(e).hasMessageThat().contains("may not contain the same rule classes");
-  }
-
-  private static final Label FAKE_LABEL = Label.parseAbsoluteUnchecked("//fake/label.bzl");
-
-  private static final StarlarkProviderIdentifier STARLARK_P1 =
-      StarlarkProviderIdentifier.forKey(new StarlarkProvider.Key(FAKE_LABEL, "STARLARK_P1"));
-
-  private static final StarlarkProviderIdentifier STARLARK_P2 =
-      StarlarkProviderIdentifier.forKey(new StarlarkProvider.Key(FAKE_LABEL, "STARLARK_P2"));
-
-  private static final StarlarkProviderIdentifier STARLARK_P3 =
-      StarlarkProviderIdentifier.forKey(new StarlarkProvider.Key(FAKE_LABEL, "STARLARK_P3"));
-
-  private static final StarlarkProviderIdentifier STARLARK_P4 =
-      StarlarkProviderIdentifier.forKey(new StarlarkProvider.Key(FAKE_LABEL, "STARLARK_P4"));
-
-  @Test
-  public void testAttrRequiredAspects_inheritAttrAspects() throws Exception {
-    ImmutableList<String> inheritedAttributeAspects1 = ImmutableList.of("attr1", "attr2");
-    ImmutableList<String> inheritedAttributeAspects2 = ImmutableList.of("attr3", "attr2");
-
-    Attribute attr =
-        attr("x", LABEL)
-            .aspect(
-                TestAspects.SIMPLE_ASPECT,
-                "base_aspect_1",
-                /** inheritedRequiredProviders= */
-                ImmutableList.of(),
-                inheritedAttributeAspects1)
-            .aspect(
-                TestAspects.SIMPLE_ASPECT,
-                "base_aspect_2",
-                /** inheritedRequiredProviders= */
-                ImmutableList.of(),
-                inheritedAttributeAspects2)
-            .allowedFileTypes()
-            .build();
-
-    ImmutableList<Aspect> aspects = attr.getAspects(null);
-    assertThat(aspects).hasSize(1);
-    AspectDescriptor aspectDescriptor = aspects.get(0).getDescriptor();
-    assertThat(aspectDescriptor.getInheritedAttributeAspects())
-        .containsExactly("attr1", "attr2", "attr3");
-  }
-
-  @Test
-  public void testAttrRequiredAspects_inheritRequiredProviders() throws Exception {
-    ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> inheritedRequiredProviders1 =
-        ImmutableList.of(ImmutableSet.of(STARLARK_P1), ImmutableSet.of(STARLARK_P2, STARLARK_P3));
-    ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> inheritedRequiredProviders2 =
-        ImmutableList.of(ImmutableSet.of(STARLARK_P4), ImmutableSet.of(STARLARK_P2, STARLARK_P3));
-
-    Attribute attr =
-        attr("x", LABEL)
-            .aspect(
-                TestAspects.SIMPLE_ASPECT,
-                "base_aspect_1",
-                inheritedRequiredProviders1,
-                /** inheritedAttributeAspects= */
-                ImmutableList.of())
-            .aspect(
-                TestAspects.SIMPLE_ASPECT,
-                "base_aspect_2",
-                inheritedRequiredProviders2,
-                /** inheritedAttributeAspects= */
-                ImmutableList.of())
-            .allowedFileTypes()
-            .build();
-
-    ImmutableList<Aspect> aspects = attr.getAspects(null);
-    assertThat(aspects).hasSize(1);
-
-    RequiredProviders actualInheritedRequiredProviders =
-        aspects.get(0).getDescriptor().getInheritedRequiredProviders();
-    AdvertisedProviderSet expectedOkSet1 =
-        AdvertisedProviderSet.builder().addStarlark(STARLARK_P1).build();
-    assertThat(actualInheritedRequiredProviders.isSatisfiedBy(expectedOkSet1)).isTrue();
-
-    AdvertisedProviderSet expectedOkSet2 =
-        AdvertisedProviderSet.builder().addStarlark(STARLARK_P4).build();
-    assertThat(actualInheritedRequiredProviders.isSatisfiedBy(expectedOkSet2)).isTrue();
-
-    AdvertisedProviderSet expectedOkSet3 =
-        AdvertisedProviderSet.builder().addStarlark(STARLARK_P2).addStarlark(STARLARK_P3).build();
-    assertThat(actualInheritedRequiredProviders.isSatisfiedBy(expectedOkSet3)).isTrue();
-
-    assertThat(actualInheritedRequiredProviders.isSatisfiedBy(AdvertisedProviderSet.ANY)).isTrue();
-    assertThat(actualInheritedRequiredProviders.isSatisfiedBy(AdvertisedProviderSet.EMPTY))
-        .isFalse();
-  }
-
-  @Test
-  public void testAttrRequiredAspects_aspectAlreadyExists_inheritAttrAspects() throws Exception {
-    ImmutableList<String> inheritedAttributeAspects = ImmutableList.of("attr1", "attr2");
-
-    Attribute attr =
-        attr("x", LABEL)
-            .aspect(TestAspects.SIMPLE_ASPECT)
-            .aspect(
-                TestAspects.SIMPLE_ASPECT,
-                "base_aspect",
-                /** inheritedRequiredProviders = */
-                ImmutableList.of(),
-                inheritedAttributeAspects)
-            .allowedFileTypes()
-            .build();
-
-    ImmutableList<Aspect> aspects = attr.getAspects(null);
-    assertThat(aspects).hasSize(1);
-    AspectDescriptor aspectDescriptor = aspects.get(0).getDescriptor();
-    assertThat(aspectDescriptor.getInheritedAttributeAspects()).containsExactly("attr1", "attr2");
-  }
-
-  @Test
-  public void testAttrRequiredAspects_aspectAlreadyExists_inheritRequiredProviders()
-      throws Exception {
-    ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> inheritedRequiredProviders =
-        ImmutableList.of(ImmutableSet.of(STARLARK_P1), ImmutableSet.of(STARLARK_P2, STARLARK_P3));
-
-    Attribute attr =
-        attr("x", LABEL)
-            .aspect(TestAspects.SIMPLE_ASPECT)
-            .aspect(
-                TestAspects.SIMPLE_ASPECT,
-                "base_aspect",
-                inheritedRequiredProviders,
-                /** inheritedAttributeAspects= */
-                ImmutableList.of())
-            .allowedFileTypes()
-            .build();
-
-    ImmutableList<Aspect> aspects = attr.getAspects(null);
-    assertThat(aspects).hasSize(1);
-
-    RequiredProviders actualInheritedRequiredProviders =
-        aspects.get(0).getDescriptor().getInheritedRequiredProviders();
-    AdvertisedProviderSet expectedOkSet1 =
-        AdvertisedProviderSet.builder().addStarlark(STARLARK_P1).build();
-    assertThat(actualInheritedRequiredProviders.isSatisfiedBy(expectedOkSet1)).isTrue();
-
-    AdvertisedProviderSet expectedOkSet2 =
-        AdvertisedProviderSet.builder().addStarlark(STARLARK_P4).build();
-    assertThat(actualInheritedRequiredProviders.isSatisfiedBy(expectedOkSet2)).isFalse();
-
-    AdvertisedProviderSet expectedOkSet3 =
-        AdvertisedProviderSet.builder().addStarlark(STARLARK_P2).addStarlark(STARLARK_P3).build();
-    assertThat(actualInheritedRequiredProviders.isSatisfiedBy(expectedOkSet3)).isTrue();
-
-    assertThat(actualInheritedRequiredProviders.isSatisfiedBy(AdvertisedProviderSet.ANY)).isTrue();
-    assertThat(actualInheritedRequiredProviders.isSatisfiedBy(AdvertisedProviderSet.EMPTY))
-        .isFalse();
-  }
-
-  @Test
-  public void testAttrRequiredAspects_inheritAllAttrAspects() throws Exception {
-    ImmutableList<String> inheritedAttributeAspects1 = ImmutableList.of("attr1", "attr2");
-    ImmutableList<String> inheritedAttributeAspects2 = ImmutableList.of("*");
-
-    Attribute attr =
-        attr("x", LABEL)
-            .aspect(TestAspects.SIMPLE_ASPECT)
-            .aspect(
-                TestAspects.SIMPLE_ASPECT,
-                "base_aspect_1",
-                /** inheritedRequiredProviders = */
-                ImmutableList.of(),
-                inheritedAttributeAspects1)
-            .aspect(
-                TestAspects.SIMPLE_ASPECT,
-                "base_aspect_2",
-                /** inheritedRequiredProviders = */
-                ImmutableList.of(),
-                inheritedAttributeAspects2)
-            .allowedFileTypes()
-            .build();
-
-    ImmutableList<Aspect> aspects = attr.getAspects(null);
-    assertThat(aspects).hasSize(1);
-    AspectDescriptor aspectDescriptor = aspects.get(0).getDescriptor();
-    assertThat(aspectDescriptor.getInheritedAttributeAspects()).isNull();
-  }
-
-  @Test
-  public void testAttrRequiredAspects_inheritAllRequiredProviders() throws Exception {
-    ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> inheritedRequiredProviders1 =
-        ImmutableList.of();
-    ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> inheritedRequiredProviders2 =
-        ImmutableList.of(ImmutableSet.of(STARLARK_P4), ImmutableSet.of(STARLARK_P2, STARLARK_P3));
-
-    Attribute attr =
-        attr("x", LABEL)
-            .aspect(TestAspects.SIMPLE_ASPECT)
-            .aspect(
-                TestAspects.SIMPLE_ASPECT,
-                "base_aspect_1",
-                inheritedRequiredProviders1,
-                /** inheritedAttributeAspects= */
-                ImmutableList.of())
-            .aspect(
-                TestAspects.SIMPLE_ASPECT,
-                "base_aspect_2",
-                inheritedRequiredProviders2,
-                /** inheritedAttributeAspects= */
-                ImmutableList.of())
-            .allowedFileTypes()
-            .build();
-
-    ImmutableList<Aspect> aspects = attr.getAspects(null);
-    assertThat(aspects).hasSize(1);
-    AspectDescriptor aspectDescriptor = aspects.get(0).getDescriptor();
-    assertThat(aspectDescriptor.getInheritedRequiredProviders())
-        .isEqualTo(RequiredProviders.acceptAnyBuilder().build());
-  }
-
-  @Test
-  public void testAttrRequiredAspects_defaultInheritedRequiredProvidersAndAttrAspects()
-      throws Exception {
-    Attribute attr = attr("x", LABEL).aspect(TestAspects.SIMPLE_ASPECT).allowedFileTypes().build();
-
-    ImmutableList<Aspect> aspects = attr.getAspects(null);
-    assertThat(aspects).hasSize(1);
-    AspectDescriptor aspectDescriptor = aspects.get(0).getDescriptor();
-    assertThat(aspectDescriptor.getInheritedAttributeAspects()).isEmpty();
-    assertThat(aspectDescriptor.getInheritedRequiredProviders()).isNull();
   }
 }

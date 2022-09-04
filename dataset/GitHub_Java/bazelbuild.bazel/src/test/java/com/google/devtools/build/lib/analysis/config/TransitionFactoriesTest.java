@@ -59,9 +59,7 @@ public class TransitionFactoriesTest {
   public void splitTransition() {
     TransitionFactory<Object> factory =
         TransitionFactories.of(
-            (SplitTransition)
-                (buildOptions, eventHandler) ->
-                    ImmutableMap.of("test0", buildOptions.clone().underlying()));
+            (SplitTransition) buildOptions -> ImmutableMap.of("test0", buildOptions.clone()));
     assertThat(factory).isNotNull();
     assertThat(factory.isHost()).isFalse();
     assertThat(factory.isSplit()).isTrue();

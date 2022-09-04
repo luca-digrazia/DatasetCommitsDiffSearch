@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.analysis.config.transitions;
 
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -23,7 +22,7 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.TransitionFactories;
 import com.google.devtools.build.lib.cmdline.Label;
-import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 import org.junit.Test;
@@ -48,7 +47,7 @@ public class ComposingTransitionFactoryTest {
     assertThat(composed).isNotNull();
     assertThat(composed.isSplit()).isFalse();
     ConfigurationTransition transition = composed.create(new StubData());
-    Collection<BuildOptions> results = transition.apply(BuildOptions.builder().build()).values();
+    List<BuildOptions> results = transition.apply(BuildOptions.builder().build());
     assertThat(results).isNotNull();
     assertThat(results).hasSize(1);
     BuildOptions result = Iterables.getOnlyElement(results);
@@ -67,16 +66,16 @@ public class ComposingTransitionFactoryTest {
     assertThat(composed).isNotNull();
     assertThat(composed.isSplit()).isTrue();
     ConfigurationTransition transition = composed.create(new StubData());
-    Map<String, BuildOptions> results = transition.apply(BuildOptions.builder().build());
+    List<BuildOptions> results = transition.apply(BuildOptions.builder().build());
     assertThat(results).isNotNull();
     assertThat(results).hasSize(2);
 
-    BuildOptions result0 = results.get("stub_split0");
+    BuildOptions result0 = results.get(0);
     assertThat(result0).isNotNull();
     assertThat(result0.getStarlarkOptions()).containsEntry(FLAG_1, "value1");
     assertThat(result0.getStarlarkOptions()).containsEntry(FLAG_2, "value2a");
 
-    BuildOptions result1 = results.get("stub_split1");
+    BuildOptions result1 = results.get(1);
     assertThat(result1).isNotNull();
     assertThat(result1.getStarlarkOptions()).containsEntry(FLAG_1, "value1");
     assertThat(result1.getStarlarkOptions()).containsEntry(FLAG_2, "value2b");
@@ -93,16 +92,16 @@ public class ComposingTransitionFactoryTest {
     assertThat(composed).isNotNull();
     assertThat(composed.isSplit()).isTrue();
     ConfigurationTransition transition = composed.create(new StubData());
-    Map<String, BuildOptions> results = transition.apply(BuildOptions.builder().build());
+    List<BuildOptions> results = transition.apply(BuildOptions.builder().build());
     assertThat(results).isNotNull();
     assertThat(results).hasSize(2);
 
-    BuildOptions result0 = results.get("stub_split0");
+    BuildOptions result0 = results.get(0);
     assertThat(result0).isNotNull();
     assertThat(result0.getStarlarkOptions()).containsEntry(FLAG_1, "value1a");
     assertThat(result0.getStarlarkOptions()).containsEntry(FLAG_2, "value2");
 
-    BuildOptions result1 = results.get("stub_split1");
+    BuildOptions result1 = results.get(1);
     assertThat(result1).isNotNull();
     assertThat(result1.getStarlarkOptions()).containsEntry(FLAG_1, "value1b");
     assertThat(result1.getStarlarkOptions()).containsEntry(FLAG_2, "value2");
@@ -110,13 +109,38 @@ public class ComposingTransitionFactoryTest {
 
   @Test
   public void compose_split_split() {
-    // Combining two split transition factories is not allowed.
-    assertThrows(
-        IllegalArgumentException.class,
-        () ->
-            ComposingTransitionFactory.of(
-                TransitionFactories.of(new StubSplit(FLAG_1, "value1a", "value1b")),
-                TransitionFactories.of(new StubSplit(FLAG_2, "value2a", "value2b"))));
+    // Different flags, will combine.
+    TransitionFactory<StubData> composed =
+        ComposingTransitionFactory.of(
+            TransitionFactories.of(new StubSplit(FLAG_1, "value1a", "value1b")),
+            TransitionFactories.of(new StubSplit(FLAG_2, "value2a", "value2b")));
+
+    assertThat(composed).isNotNull();
+    assertThat(composed.isSplit()).isTrue();
+    ConfigurationTransition transition = composed.create(new StubData());
+    List<BuildOptions> results = transition.apply(BuildOptions.builder().build());
+    assertThat(results).isNotNull();
+    assertThat(results).hasSize(4);
+
+    BuildOptions result0 = results.get(0);
+    assertThat(result0).isNotNull();
+    assertThat(result0.getStarlarkOptions()).containsEntry(FLAG_1, "value1a");
+    assertThat(result0.getStarlarkOptions()).containsEntry(FLAG_2, "value2a");
+
+    BuildOptions result1 = results.get(1);
+    assertThat(result1).isNotNull();
+    assertThat(result1.getStarlarkOptions()).containsEntry(FLAG_1, "value1a");
+    assertThat(result1.getStarlarkOptions()).containsEntry(FLAG_2, "value2b");
+
+    BuildOptions result2 = results.get(2);
+    assertThat(result2).isNotNull();
+    assertThat(result2.getStarlarkOptions()).containsEntry(FLAG_1, "value1b");
+    assertThat(result2.getStarlarkOptions()).containsEntry(FLAG_2, "value2a");
+
+    BuildOptions result3 = results.get(3);
+    assertThat(result3).isNotNull();
+    assertThat(result3.getStarlarkOptions()).containsEntry(FLAG_1, "value1b");
+    assertThat(result3.getStarlarkOptions()).containsEntry(FLAG_2, "value2b");
   }
 
   @Test

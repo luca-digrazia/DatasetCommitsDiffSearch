@@ -15,13 +15,13 @@ package com.google.devtools.build.lib.analysis.config.transitions;
 
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.cmdline.Label;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 import org.junit.Test;
@@ -42,10 +42,10 @@ public class ComposingTransitionTest {
         ComposingTransition.of(new StubPatch(FLAG_1, "value1"), new StubPatch(FLAG_1, "value2"));
 
     assertThat(composed).isNotNull();
-    Map<String, BuildOptions> results = composed.apply(BuildOptions.builder().build());
+    List<BuildOptions> results = composed.apply(BuildOptions.builder().build());
     assertThat(results).isNotNull();
     assertThat(results).hasSize(1);
-    BuildOptions result = Iterables.getOnlyElement(results.values());
+    BuildOptions result = Iterables.getOnlyElement(results);
     assertThat(result).isNotNull();
     assertThat(result.getStarlarkOptions()).containsEntry(FLAG_1, "value2");
   }
@@ -58,16 +58,16 @@ public class ComposingTransitionTest {
             new StubPatch(FLAG_1, "value1"), new StubSplit(FLAG_2, "value2a", "value2b"));
 
     assertThat(composed).isNotNull();
-    Map<String, BuildOptions> results = composed.apply(BuildOptions.builder().build());
+    List<BuildOptions> results = composed.apply(BuildOptions.builder().build());
     assertThat(results).isNotNull();
     assertThat(results).hasSize(2);
 
-    BuildOptions result0 = results.get("stub_split0");
+    BuildOptions result0 = results.get(0);
     assertThat(result0).isNotNull();
     assertThat(result0.getStarlarkOptions()).containsEntry(FLAG_1, "value1");
     assertThat(result0.getStarlarkOptions()).containsEntry(FLAG_2, "value2a");
 
-    BuildOptions result1 = results.get("stub_split1");
+    BuildOptions result1 = results.get(1);
     assertThat(result1).isNotNull();
     assertThat(result1.getStarlarkOptions()).containsEntry(FLAG_1, "value1");
     assertThat(result1.getStarlarkOptions()).containsEntry(FLAG_2, "value2b");
@@ -81,31 +81,53 @@ public class ComposingTransitionTest {
             new StubSplit(FLAG_1, "value1a", "value1b"), new StubPatch(FLAG_2, "value2"));
 
     assertThat(composed).isNotNull();
-    Map<String, BuildOptions> results = composed.apply(BuildOptions.builder().build());
+    List<BuildOptions> results = composed.apply(BuildOptions.builder().build());
     assertThat(results).isNotNull();
     assertThat(results).hasSize(2);
 
-    BuildOptions result0 = results.get("stub_split0");
+    BuildOptions result0 = results.get(0);
     assertThat(result0).isNotNull();
     assertThat(result0.getStarlarkOptions()).containsEntry(FLAG_1, "value1a");
     assertThat(result0.getStarlarkOptions()).containsEntry(FLAG_2, "value2");
 
-    BuildOptions result1 = results.get("stub_split1");
+    BuildOptions result1 = results.get(1);
     assertThat(result1).isNotNull();
     assertThat(result1.getStarlarkOptions()).containsEntry(FLAG_1, "value1b");
     assertThat(result1.getStarlarkOptions()).containsEntry(FLAG_2, "value2");
   }
 
   @Test
-  public void compose_split_split_disallowed() {
-    // Combining two split transitions is not allowed.
+  public void compose_split_split() {
+    // Different flags, will combine.
     ConfigurationTransition composed =
         ComposingTransition.of(
             new StubSplit(FLAG_1, "value1a", "value1b"),
             new StubSplit(FLAG_2, "value2a", "value2b"));
 
     assertThat(composed).isNotNull();
-    assertThrows(IllegalStateException.class, () -> composed.apply(BuildOptions.builder().build()));
+    List<BuildOptions> results = composed.apply(BuildOptions.builder().build());
+    assertThat(results).isNotNull();
+    assertThat(results).hasSize(4);
+
+    BuildOptions result0 = results.get(0);
+    assertThat(result0).isNotNull();
+    assertThat(result0.getStarlarkOptions()).containsEntry(FLAG_1, "value1a");
+    assertThat(result0.getStarlarkOptions()).containsEntry(FLAG_2, "value2a");
+
+    BuildOptions result1 = results.get(1);
+    assertThat(result1).isNotNull();
+    assertThat(result1.getStarlarkOptions()).containsEntry(FLAG_1, "value1a");
+    assertThat(result1.getStarlarkOptions()).containsEntry(FLAG_2, "value2b");
+
+    BuildOptions result2 = results.get(2);
+    assertThat(result2).isNotNull();
+    assertThat(result2.getStarlarkOptions()).containsEntry(FLAG_1, "value1b");
+    assertThat(result2.getStarlarkOptions()).containsEntry(FLAG_2, "value2a");
+
+    BuildOptions result3 = results.get(3);
+    assertThat(result3).isNotNull();
+    assertThat(result3.getStarlarkOptions()).containsEntry(FLAG_1, "value1b");
+    assertThat(result3.getStarlarkOptions()).containsEntry(FLAG_2, "value2b");
   }
 
   @Test
