@@ -56,14 +56,9 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.LocalMetadataCollector;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -84,6 +79,10 @@ import com.google.devtools.build.lib.rules.cpp.CppModuleMapAction;
 import com.google.devtools.build.lib.rules.cpp.FdoSupportProvider;
 import com.google.devtools.build.lib.rules.cpp.UmbrellaHeaderAction;
 import com.google.devtools.build.lib.rules.objc.ObjcCommandLineOptions.ObjcCrosstoolMode;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.InstrumentationSpec;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.LocalMetadataCollector;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -883,7 +882,7 @@ public abstract class CompilationSupport {
         treeObjFiles.add(objFile);
         objFilesToLinkParam.addExpandedTreeArtifactExecPaths(objFile);
       } else {
-        objFilesToLinkParam.add(objFile.getExecPath());
+        objFilesToLinkParam.addPath(objFile.getExecPath());
       }
     }
 
@@ -1075,17 +1074,14 @@ public abstract class CompilationSupport {
 
       CustomCommandLine commandLine =
           CustomCommandLine.builder()
-              .add("--input_archive", j2objcArchive)
-              .add("--output_archive", prunedJ2ObjcArchive)
-              .add("--dummy_archive", dummyArchive)
-              .add("--xcrunwrapper", xcrunwrapper(ruleContext).getExecutable())
-              .add(
-                  "--dependency_mapping_files",
-                  VectorArg.of(j2ObjcDependencyMappingFiles).joinWith(","))
-              .add("--header_mapping_files", VectorArg.of(j2ObjcHeaderMappingFiles).joinWith(","))
-              .add(
-                  "--archive_source_mapping_files",
-                  VectorArg.of(j2ObjcArchiveSourceMappingFiles).joinWith(","))
+              .addExecPath("--input_archive", j2objcArchive)
+              .addExecPath("--output_archive", prunedJ2ObjcArchive)
+              .addExecPath("--dummy_archive", dummyArchive)
+              .addExecPath("--xcrunwrapper", xcrunwrapper(ruleContext).getExecutable())
+              .addJoinExecPaths("--dependency_mapping_files", ",", j2ObjcDependencyMappingFiles)
+              .addJoinExecPaths("--header_mapping_files", ",", j2ObjcHeaderMappingFiles)
+              .addJoinExecPaths(
+                  "--archive_source_mapping_files", ",", j2ObjcArchiveSourceMappingFiles)
               .add("--entry_classes")
               .add(Joiner.on(",").join(entryClasses))
               .build();
@@ -1111,7 +1107,7 @@ public abstract class CompilationSupport {
               .addTransitiveInputs(j2ObjcHeaderMappingFiles)
               .addTransitiveInputs(j2ObjcArchiveSourceMappingFiles)
               .setCommandLine(
-                  CustomCommandLine.builder().addFormatted("@%s", paramFile.getExecPath()).build())
+                  CustomCommandLine.builder().addPaths("@%s", paramFile.getExecPath()).build())
               .addOutput(prunedJ2ObjcArchive)
               .build(ruleContext));
     }
@@ -1169,8 +1165,8 @@ public abstract class CompilationSupport {
     return CustomCommandLine.builder()
         .add(STRIP)
         .add(extraFlags)
-        .add("-o", strippedArtifact)
-        .add(unstrippedArtifact.getExecPath())
+        .addExecPath("-o", strippedArtifact)
+        .addPath(unstrippedArtifact.getExecPath())
         .build();
   }
 
@@ -1397,11 +1393,8 @@ public abstract class CompilationSupport {
             .add(XcodeConfig.getXcodeVersion(ruleContext).toStringWithMinimumComponents(2))
             .add("--");
     for (ObjcHeaderThinningInfo info : infos) {
-      cmdLine.add(
-          VectorArg.of(
-                  ImmutableList.of(
-                      info.sourceFile.getExecPath(), info.headersListFile.getExecPath()))
-              .joinWith(":"));
+      cmdLine.addJoinPaths(
+          ":", ImmutableList.of(info.sourceFile.getExecPath(), info.headersListFile.getExecPath()));
       builder.addInput(info.sourceFile).addOutput(info.headersListFile);
     }
     ruleContext.registerAction(

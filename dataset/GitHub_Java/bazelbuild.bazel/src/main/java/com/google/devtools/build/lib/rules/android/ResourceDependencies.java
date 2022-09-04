@@ -164,21 +164,17 @@ public final class ResourceDependencies {
    * Creates a new AndroidResourcesProvider with the supplied ResourceContainer as the direct dep.
    *
    * <p>When a library produces a new resource container the AndroidResourcesProvider should use
-   * that container as a the direct dependency for that library. This makes the consuming rule to
-   * identify the new container and merge appropriately. The previous direct dependencies are then
-   * added to the transitive dependencies.
+   * that container as a the direct dependency for that library. This makes the consuming rule
+   * to identify the new container and merge appropriately. The  previous direct dependencies are
+   * then added to the transitive dependencies.
    *
    * @param label The label of the library exporting this provider.
    * @param newDirectResource The new direct dependency for AndroidResourcesProvider
-   * @param isResourcesOnly if the direct dependency is either an android_resources
-   *     target or an android_library target with no fields that android_resources targets do not
-   *     provide.
    * @return A provider with the current resources and label.
    */
-  public AndroidResourcesProvider toProvider(
-      Label label, ResourceContainer newDirectResource, boolean isResourcesOnly) {
+  public AndroidResourcesProvider toProvider(Label label, ResourceContainer newDirectResource) {
     if (neverlink) {
-      return ResourceDependencies.empty().toProvider(label, isResourcesOnly);
+      return ResourceDependencies.empty().toProvider(label);
     }
     return AndroidResourcesProvider.create(
         label,
@@ -186,8 +182,7 @@ public final class ResourceDependencies {
             .addTransitive(transitiveResources)
             .addTransitive(directResources)
             .build(),
-        NestedSetBuilder.<ResourceContainer>naiveLinkOrder().add(newDirectResource).build(),
-        isResourcesOnly);
+        NestedSetBuilder.<ResourceContainer>naiveLinkOrder().add(newDirectResource).build());
   }
 
   /**
@@ -198,17 +193,13 @@ public final class ResourceDependencies {
    * the resource merging as if this library didn't exist.
    *
    * @param label The label of the library exporting this provider.
-   * @param isResourcesOnly if the direct dependency is either an android_resources
-   *     target or an android_library target with no fields that android_resources targets do not
-   *     provide.
    * @return A provider with the current resources and label.
    */
-  public AndroidResourcesProvider toProvider(Label label, boolean isResourcesOnly) {
+  public AndroidResourcesProvider toProvider(Label label) {
     if (neverlink) {
-      return ResourceDependencies.empty().toProvider(label, isResourcesOnly);
+      return ResourceDependencies.empty().toProvider(label);
     }
-    return AndroidResourcesProvider.create(
-        label, transitiveResources, directResources, isResourcesOnly);
+    return AndroidResourcesProvider.create(label, transitiveResources, directResources);
   }
 
   /** Provides an NestedSet of the direct and transitive resources. */

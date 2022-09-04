@@ -67,8 +67,6 @@ import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.actions.BinaryFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.Builder;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
@@ -2157,19 +2155,16 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     String archiveRoot = targetDevices.contains("watch") ? "." : "1.storyboardc";
     assertThat(compileAction.getOutputs()).containsExactly(storyboardZip);
     assertThat(compileAction.getArguments())
-        .containsExactlyElementsIn(
-            new Builder()
-                .add(MOCK_IBTOOLWRAPPER_PATH)
-                .add(storyboardZip.getExecPathString())
-                .add(archiveRoot) // archive root
-                .add("--minimum-deployment-target")
-                .add(minimumOsVersion.toString())
-                .add("--module")
-                .add("x")
-                .add(VectorArg.of(targetDevices).beforeEach("--target-device"))
-                .add("x/1.storyboard")
-                .build()
-                .arguments())
+        .containsExactlyElementsIn(new CustomCommandLine.Builder()
+            .add(MOCK_IBTOOLWRAPPER_PATH)
+            .add(storyboardZip.getExecPathString())
+            .add(archiveRoot) // archive root
+            .add("--minimum-deployment-target").add(minimumOsVersion.toString())
+            .add("--module").add("x")
+            .addBeforeEach("--target-device", targetDevices)
+            .add("x/1.storyboard")
+            .build()
+            .arguments())
         .inOrder();
 
     storyboardZip = getBinArtifact("x/ja.lproj/loc.storyboard.zip", target);
@@ -2181,19 +2176,15 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     assertThat(compileAction.getOutputs()).containsExactly(storyboardZip);
     archiveRoot = targetDevices.contains("watch") ? "ja.lproj/" : "ja.lproj/loc.storyboardc";
     assertThat(compileAction.getArguments())
-        .containsExactlyElementsIn(
-            new Builder()
-                .add(MOCK_IBTOOLWRAPPER_PATH)
-                .add(storyboardZip.getExecPathString())
-                .add(archiveRoot) // archive root
-                .add("--minimum-deployment-target")
-                .add(minimumOsVersion.toString())
-                .add("--module")
-                .add("x")
-                .add(VectorArg.of(targetDevices).beforeEach("--target-device"))
-                .add("x/ja.lproj/loc.storyboard")
-                .build()
-                .arguments())
+        .containsExactlyElementsIn(new CustomCommandLine.Builder()
+            .add(MOCK_IBTOOLWRAPPER_PATH)
+            .add(storyboardZip.getExecPathString())
+            .add(archiveRoot) // archive root
+            .add("--minimum-deployment-target").add(minimumOsVersion.toString())
+            .add("--module").add("x")
+            .addBeforeEach("--target-device", targetDevices)
+            .add("x/ja.lproj/loc.storyboard")
+            .build().arguments())
         .inOrder();
   }
 

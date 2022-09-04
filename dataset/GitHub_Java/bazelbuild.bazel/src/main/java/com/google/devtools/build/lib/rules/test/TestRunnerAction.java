@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,34 +14,43 @@
 
 package com.google.devtools.build.lib.rules.test;
 
-import com.google.common.base.Preconditions;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
+import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit;
-import com.google.devtools.build.lib.actions.ResourceSet;
+import com.google.devtools.build.lib.actions.UserExecException;
+import com.google.devtools.build.lib.analysis.RunfilesSupplierImpl;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
-import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.collect.ImmutableIterable;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.LoggingUtil;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.test.TestStatus.TestResultData;
 import com.google.devtools.common.options.TriState;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
-
 import javax.annotation.Nullable;
 
 /**
@@ -51,13 +60,20 @@ import javax.annotation.Nullable;
  */
 // Not final so that we can mock it in tests.
 public class TestRunnerAction extends AbstractAction implements NotifyOnActionCacheHit {
+  public static final PathFragment COVERAGE_TMP_ROOT = PathFragment.create("_coverage");
 
-  private static final String GUID = "94857c93-f11c-4cbc-8c1b-e0a281633f9e";
+  // Used for selecting subset of testcase / testmethods.
+  private static final String TEST_BRIDGE_TEST_FILTER_ENV = "TESTBRIDGE_TEST_ONLY";
 
+  private static final String GUID = "cc41f9d0-47a6-11e7-8726-eb6ce83a8cc8";
+
+  private final NestedSet<Artifact> runtime;
   private final BuildConfiguration configuration;
+  private final TestConfiguration testConfiguration;
   private final Artifact testLog;
   private final Artifact cacheStatus;
   private final PathFragment testWarningsPath;
+  private final PathFragment unusedRunfilesLogPath;
   private final PathFragment splitLogsPath;
   private final PathFragment splitLogsDir;
   private final PathFragment undeclaredOutputsDir;
@@ -72,17 +88,25 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
   private final PathFragment testStderr;
   private final PathFragment testInfrastructureFailure;
   private final PathFragment baseDir;
-  private final String namePrefix;
   private final Artifact coverageData;
-  private final Artifact microCoverageData;
   private final TestTargetProperties testProperties;
   private final TestTargetExecutionSettings executionSettings;
   private final int shardNum;
   private final int runNumber;
+  private final String workspaceName;
+  private final boolean useTestRunner;
 
-  // Mutable state related to test caching.
-  private boolean checkedCaching = false;
-  private boolean unconditionalExecution = false;
+  // Mutable state related to test caching. Lazily initialized: null indicates unknown.
+  private Boolean unconditionalExecution;
+
+  /** Any extra environment variables (and values) added by the rule that created this action. */
+  private final ImmutableMap<String, String> extraTestEnv;
+
+  /**
+   * The set of environment variables that are inherited from the client environment. These are
+   * handled explicitly by the ActionCacheChecker and so don't have to be included in the cache key.
+   */
+  private final ImmutableIterable<String> requiredClientEnvVariables;
 
   private static ImmutableList<Artifact> list(Artifact... artifacts) {
     ImmutableList.Builder<Artifact> builder = ImmutableList.builder();
@@ -102,51 +126,70 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
    *     (no sharding). Otherwise, must be >= 0 and < totalShards.
    * @param runNumber test run number
    */
-  TestRunnerAction(ActionOwner owner,
+  TestRunnerAction(
+      ActionOwner owner,
       Iterable<Artifact> inputs,
+      NestedSet<Artifact> runtime,   // Must be a subset of inputs
       Artifact testLog,
       Artifact cacheStatus,
       Artifact coverageArtifact,
-      Artifact microCoverageArtifact,
       TestTargetProperties testProperties,
+      Map<String, String> extraTestEnv,
       TestTargetExecutionSettings executionSettings,
       int shardNum,
       int runNumber,
-      BuildConfiguration configuration) {
-    super(owner, inputs, list(testLog, cacheStatus, coverageArtifact, microCoverageArtifact));
+      BuildConfiguration configuration,
+      String workspaceName,
+      boolean useTestRunner) {
+    super(
+        owner,
+        inputs,
+        // Note that this action only cares about the runfiles, not the mapping.
+        new RunfilesSupplierImpl(PathFragment.create("runfiles"), executionSettings.getRunfiles()),
+        list(testLog, cacheStatus, coverageArtifact));
+    this.runtime = runtime;
     this.configuration = Preconditions.checkNotNull(configuration);
+    this.testConfiguration =
+        Preconditions.checkNotNull(configuration.getFragment(TestConfiguration.class));
     this.testLog = testLog;
     this.cacheStatus = cacheStatus;
     this.coverageData = coverageArtifact;
-    this.microCoverageData = microCoverageArtifact;
     this.shardNum = shardNum;
     this.runNumber = runNumber;
     this.testProperties = Preconditions.checkNotNull(testProperties);
     this.executionSettings = Preconditions.checkNotNull(executionSettings);
 
     this.baseDir = cacheStatus.getExecPath().getParentDirectory();
-    this.namePrefix = FileSystemUtils.removeExtension(cacheStatus.getExecPath().getBaseName());
 
     int totalShards = executionSettings.getTotalShards();
     Preconditions.checkState((totalShards == 0 && shardNum == 0) ||
                                 (totalShards > 0 && 0 <= shardNum && shardNum < totalShards));
-    this.testExitSafe = baseDir.getChild(namePrefix + ".exited_prematurely");
+    this.testExitSafe = baseDir.getChild("test.exited_prematurely");
     // testShard Path should be set only if sharding is enabled.
     this.testShard = totalShards > 1
-        ? baseDir.getChild(namePrefix + ".shard")
+        ? baseDir.getChild("test.shard")
         : null;
-    this.xmlOutputPath = baseDir.getChild(namePrefix + ".xml");
-    this.testWarningsPath = baseDir.getChild(namePrefix + ".warnings");
-    this.testStderr = baseDir.getChild(namePrefix + ".err");
-    this.splitLogsDir = baseDir.getChild(namePrefix + ".raw_splitlogs");
+    this.xmlOutputPath = baseDir.getChild("test.xml");
+    this.testWarningsPath = baseDir.getChild("test.warnings");
+    this.unusedRunfilesLogPath = baseDir.getChild("test.unused_runfiles_log");
+    this.testStderr = baseDir.getChild("test.err");
+    this.splitLogsDir = baseDir.getChild("test.raw_splitlogs");
     // See note in {@link #getSplitLogsPath} on the choice of file name.
     this.splitLogsPath = splitLogsDir.getChild("test.splitlogs");
-    this.undeclaredOutputsDir = baseDir.getChild(namePrefix + ".outputs");
+    this.undeclaredOutputsDir = baseDir.getChild("test.outputs");
     this.undeclaredOutputsZipPath = undeclaredOutputsDir.getChild("outputs.zip");
-    this.undeclaredOutputsAnnotationsDir = baseDir.getChild(namePrefix + ".outputs_manifest");
+    this.undeclaredOutputsAnnotationsDir = baseDir.getChild("test.outputs_manifest");
     this.undeclaredOutputsManifestPath = undeclaredOutputsAnnotationsDir.getChild("MANIFEST");
     this.undeclaredOutputsAnnotationsPath = undeclaredOutputsAnnotationsDir.getChild("ANNOTATIONS");
-    this.testInfrastructureFailure = baseDir.getChild(namePrefix + ".infrastructure_failure");
+    this.testInfrastructureFailure = baseDir.getChild("test.infrastructure_failure");
+    this.workspaceName = workspaceName;
+    this.useTestRunner = useTestRunner;
+
+    this.extraTestEnv = ImmutableMap.copyOf(extraTestEnv);
+    this.requiredClientEnvVariables =
+        ImmutableIterable.from(Iterables.concat(
+            configuration.getActionEnvironment().getInheritedEnv(),
+            configuration.getTestActionEnvironment().getInheritedEnv()));
   }
 
   public BuildConfiguration getConfiguration() {
@@ -157,29 +200,45 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     return baseDir;
   }
 
-  public final String getNamePrefix() {
-    return namePrefix;
-  }
-
   @Override
   public boolean showsOutputUnconditionally() {
     return true;
   }
-  
-  @Override
-  public int getInputCount() {
-    return Iterables.size(getInputs());
+
+  public List<ActionInput> getSpawnOutputs() {
+    final List<ActionInput> outputs = new ArrayList<>();
+    outputs.add(ActionInputHelper.fromPath(getXmlOutputPath()));
+    outputs.add(ActionInputHelper.fromPath(getExitSafeFile()));
+    if (isSharded()) {
+      outputs.add(ActionInputHelper.fromPath(getTestShard()));
+    }
+    outputs.add(ActionInputHelper.fromPath(getTestWarningsPath()));
+    outputs.add(ActionInputHelper.fromPath(getSplitLogsPath()));
+    outputs.add(ActionInputHelper.fromPath(getUnusedRunfilesLogPath()));
+    outputs.add(ActionInputHelper.fromPath(getInfrastructureFailureFile()));
+    outputs.add(ActionInputHelper.fromPath(getUndeclaredOutputsZipPath()));
+    outputs.add(ActionInputHelper.fromPath(getUndeclaredOutputsManifestPath()));
+    outputs.add(ActionInputHelper.fromPath(getUndeclaredOutputsAnnotationsPath()));
+    if (isCoverageMode()) {
+      outputs.add(getCoverageData());
+    }
+    return outputs;
   }
 
   @Override
   protected String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addString(GUID);
-    f.addStrings(executionSettings.getArgs());
+    f.addStrings(executionSettings.getArgs().arguments());
     f.addString(executionSettings.getTestFilter() == null ? "" : executionSettings.getTestFilter());
     RunUnder runUnder = executionSettings.getRunUnder();
     f.addString(runUnder == null ? "" : runUnder.getValue());
-    f.addStringMap(configuration.getTestEnv());
+    f.addStringMap(extraTestEnv);
+    // TODO(ulfjack): It might be better for performance to hash the action and test envs in config,
+    // and only add a hash here.
+    configuration.getActionEnvironment().addTo(f);
+    configuration.getTestActionEnvironment().addTo(f);
+    // The 'requiredClientEnvVariables' are handled by Skyframe and don't need to be added here.
     f.addString(testProperties.getSize().toString());
     f.addString(testProperties.getTimeout().toString());
     f.addStrings(testProperties.getTags());
@@ -187,7 +246,7 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     f.addInt(shardNum);
     f.addInt(executionSettings.getTotalShards());
     f.addInt(runNumber);
-    f.addInt(configuration.getRunsPerTestForLabel(getOwner().getLabel()));
+    f.addInt(testConfiguration.getRunsPerTestForLabel(getOwner().getLabel()));
     f.addInt(configuration.isCodeCoverageEnabled() ? 1 : 0);
     return f.hexDigestAndReset();
   }
@@ -196,8 +255,9 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
   public boolean executeUnconditionally() {
     // Note: isVolatile must return true if executeUnconditionally can ever return true
     // for this instance.
-    unconditionalExecution = updateExecuteUnconditionallyFromTestStatus();
-    checkedCaching = true;
+    if (unconditionalExecution == null) {
+      unconditionalExecution = computeExecuteUnconditionallyFromTestStatus();
+    }
     return unconditionalExecution;
   }
 
@@ -216,57 +276,60 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
   }
 
   /**
-   * Returns the cache from disk, or null if there is an error.
+   * Returns the cache from disk, or null if the file doesn't exist or if there is an error.
    */
   @Nullable
   private TestResultData readCacheStatus() {
     try (InputStream in = cacheStatus.getPath().getInputStream()) {
       return TestResultData.parseFrom(in);
     } catch (IOException expected) {
-
+      return null;
     }
-    return null;
   }
 
-  private boolean updateExecuteUnconditionallyFromTestStatus() {
-    if (configuration.cacheTestResults() == TriState.NO || testProperties.isExternal()
-        || (configuration.cacheTestResults() == TriState.AUTO
-            && configuration.getRunsPerTestForLabel(getOwner().getLabel()) > 1)) {
-      return true;
-    }
+  private boolean computeExecuteUnconditionallyFromTestStatus() {
+    return !canBeCached(
+        testConfiguration.cacheTestResults(),
+        readCacheStatus(),
+        testProperties.isExternal(),
+        testConfiguration.getRunsPerTestForLabel(getOwner().getLabel()));
+  }
 
+  @VisibleForTesting
+  static boolean canBeCached(
+      TriState cacheTestResults, TestResultData prevStatus, boolean isExternal, int runsPerTest) {
+    if (cacheTestResults == TriState.NO) {
+      return false;
+    }
+    if (isExternal) {
+      return false;
+    }
+    if (cacheTestResults == TriState.AUTO && (runsPerTest > 1)) {
+      return false;
+    }
     // Test will not be executed unconditionally - check whether test result exists and is
     // valid. If it is, method will return false and we will rely on the dependency checker
     // to make a decision about test execution.
-    TestResultData status = readCacheStatus();
-    if (status != null) {
-      if (!status.getCachable()) {
-        return true;
-      }
-
-      return (configuration.cacheTestResults() == TriState.AUTO
-          && !status.getTestPassed());
+    if (cacheTestResults == TriState.AUTO && prevStatus != null && !prevStatus.getTestPassed()) {
+      return false;
     }
-
-    // CacheStatus is an artifact, so if it does not exist, the dependency checker will rebuild
-    // it. We can't return "true" here, as it also signals to not accept cached remote results.
-    return false;
+    // Rely on the dependency checker to determine if the test can be cached. Note that the status
+    // is a declared output, so its non-existence also triggers a re-run.
+    return true;
   }
 
   /**
-   * May only be called after the dependency checked called executeUnconditionally().
    * Returns whether caching has been deemed safe by looking at the previous test run
    * (for local caching). If the previous run is not present, return "true" here, as
    * remote execution caching should be safe.
    */
   public boolean shouldCacheResult() {
-    Preconditions.checkState(checkedCaching);
-    return !unconditionalExecution;
+    return !executeUnconditionally();
   }
 
   @Override
-  public void actionCacheHit(Executor executor) {
-    checkedCaching = false;
+  public void actionCacheHit(ActionCachedContext executor) {
+    unconditionalExecution = null;
     try {
       executor.getEventBus().post(
           executor.getContext(TestActionContext.class).newCachedTestResult(
@@ -277,20 +340,8 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
   }
 
   @Override
-  public ResourceSet estimateResourceConsumption(Executor executor) {
-    // return null here to indicate that resources would be managed manually
-    // during action execution.
-    return null;
-  }
-
-  @Override
   protected String getRawProgressMessage() {
     return "Testing " + getTestName();
-  }
-
-  @Override
-  public String describeStrategy(Executor executor) {
-    return executor.getContext(TestActionContext.class).strategyLocality(this);
   }
 
   /**
@@ -310,6 +361,7 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     // We also need to remove *.(xml|data|shard|warnings|zip) files if they are present.
     execRoot.getRelative(xmlOutputPath).delete();
     execRoot.getRelative(testWarningsPath).delete();
+    execRoot.getRelative(unusedRunfilesLogPath).delete();
     // Note that splitLogsPath points to a file inside the splitLogsDir so
     // it's not necessary to delete it explicitly.
     FileSystemUtils.deleteTree(execRoot.getRelative(splitLogsDir));
@@ -323,16 +375,14 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     execRoot.getRelative(testInfrastructureFailure).delete();
 
     // Coverage files use "coverage" instead of "test".
-    String coveragePrefix = "coverage" + namePrefix.substring(4);
+    String coveragePrefix = "coverage";
 
     // We cannot use coverageData artifact since it may be null. Generate coverage name instead.
     execRoot.getRelative(baseDir.getChild(coveragePrefix + ".dat")).delete();
-    // We cannot use microcoverageData artifact since it may be null. Generate filename instead.
-    execRoot.getRelative(baseDir.getChild(coveragePrefix + ".micro.dat")).delete();
 
     // Delete files fetched from remote execution.
-    execRoot.getRelative(baseDir.getChild(namePrefix + ".zip")).delete();
-    deleteTestAttemptsDirMaybe(execRoot.getRelative(baseDir), namePrefix);
+    execRoot.getRelative(baseDir.getChild("test.zip")).delete();
+    deleteTestAttemptsDirMaybe(execRoot.getRelative(baseDir), "test");
   }
 
   private void deleteTestAttemptsDirMaybe(Path outputDir, String namePrefix) throws IOException {
@@ -349,6 +399,69 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
       } catch (IOException e) {
         // Do nothing.
       }
+    }
+  }
+
+  public void setupEnvVariables(Map<String, String> env, Duration timeout) {
+    env.put("TEST_SIZE", getTestProperties().getSize().toString());
+    env.put("TEST_TIMEOUT", Long.toString(timeout.getSeconds()));
+    env.put("TEST_WORKSPACE", getRunfilesPrefix());
+    env.put(
+        "TEST_BINARY",
+        getExecutionSettings().getExecutable().getRootRelativePath().getCallablePathString());
+
+    // When we run test multiple times, set different TEST_RANDOM_SEED values for each run.
+    // Don't override any previous setting.
+    if (testConfiguration.getRunsPerTestForLabel(getOwner().getLabel()) > 1
+        && !env.containsKey("TEST_RANDOM_SEED")) {
+      env.put("TEST_RANDOM_SEED", Integer.toString(getRunNumber() + 1));
+    }
+
+    String testFilter = getExecutionSettings().getTestFilter();
+    if (testFilter != null) {
+      env.put(TEST_BRIDGE_TEST_FILTER_ENV, testFilter);
+    }
+
+    env.put("TEST_WARNINGS_OUTPUT_FILE", getTestWarningsPath().getPathString());
+    env.put("TEST_UNUSED_RUNFILES_LOG_FILE", getUnusedRunfilesLogPath().getPathString());
+
+    env.put("TEST_LOGSPLITTER_OUTPUT_FILE", getSplitLogsPath().getPathString());
+
+    env.put("TEST_UNDECLARED_OUTPUTS_ZIP", getUndeclaredOutputsZipPath().getPathString());
+    env.put("TEST_UNDECLARED_OUTPUTS_DIR", getUndeclaredOutputsDir().getPathString());
+    env.put("TEST_UNDECLARED_OUTPUTS_MANIFEST", getUndeclaredOutputsManifestPath().getPathString());
+    env.put(
+        "TEST_UNDECLARED_OUTPUTS_ANNOTATIONS",
+        getUndeclaredOutputsAnnotationsPath().getPathString());
+    env.put(
+        "TEST_UNDECLARED_OUTPUTS_ANNOTATIONS_DIR",
+        getUndeclaredOutputsAnnotationsDir().getPathString());
+
+    env.put("TEST_PREMATURE_EXIT_FILE", getExitSafeFile().getPathString());
+    env.put("TEST_INFRASTRUCTURE_FAILURE_FILE", getInfrastructureFailureFile().getPathString());
+
+    if (isSharded()) {
+      env.put("TEST_SHARD_INDEX", Integer.toString(getShardNum()));
+      env.put("TEST_TOTAL_SHARDS", Integer.toString(getExecutionSettings().getTotalShards()));
+      env.put("TEST_SHARD_STATUS_FILE", getTestShard().getPathString());
+    }
+    env.put("XML_OUTPUT_FILE", getXmlOutputPath().getPathString());
+
+    if (!isEnableRunfiles()) {
+      // If runfiles are disabled, tell remote-runtest.sh/local-runtest.sh about that.
+      env.put("RUNFILES_MANIFEST_ONLY", "1");
+    }
+
+    if (isCoverageMode()) {
+      // Instruct remote-runtest.sh/local-runtest.sh not to cd into the runfiles directory.
+      // TODO(ulfjack): Find a way to avoid setting this variable.
+      env.put("RUNTEST_PRESERVE_CWD", "1");
+
+      env.put("COVERAGE_MANIFEST", getCoverageManifest().getExecPathString());
+      env.put("COVERAGE_DIR", getCoverageDirectory().getPathString());
+      env.put("COVERAGE_OUTPUT_FILE", getCoverageData().getExecPathString());
+      // TODO(elenairina): Remove this after the next blaze release (after 2017.07.30).
+      env.put("NEW_JAVA_COVERAGE_IMPL", "True");
     }
   }
 
@@ -369,7 +482,7 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
   public String getTestSuffix() {
     int totalShards = executionSettings.getTotalShards();
     // Use a 1-based index for user friendliness.
-    int runsPerTest = configuration.getRunsPerTestForLabel(getOwner().getLabel());
+    int runsPerTest = testConfiguration.getRunsPerTestForLabel(getOwner().getLabel());
     if (totalShards > 1 && runsPerTest > 1) {
       return String.format("(shard %d of %d, run %d of %d)", shardNum + 1, totalShards,
           runNumber + 1, runsPerTest);
@@ -386,6 +499,18 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     return testLog;
   }
 
+  /**
+   * Returns all environment variables which must be set in order to run this test.
+   */
+  public Map<String, String> getExtraTestEnv() {
+    return extraTestEnv;
+  }
+
+  @Override
+  public Iterable<String> getClientEnvironmentVariables() {
+    return requiredClientEnvVariables;
+  }
+
   public ResolvedPaths resolve(Path execRoot) {
     return new ResolvedPaths(execRoot);
   }
@@ -398,8 +523,16 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     return testWarningsPath;
   }
 
+  public PathFragment getUnusedRunfilesLogPath() {
+    return unusedRunfilesLogPath;
+  }
+
   public PathFragment getSplitLogsPath() {
     return splitLogsPath;
+  }
+
+  public PathFragment getUndeclaredOutputsDir() {
+    return undeclaredOutputsDir;
   }
 
   /**
@@ -414,6 +547,10 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
    */
   public PathFragment getUndeclaredOutputsManifestPath() {
     return undeclaredOutputsManifestPath;
+  }
+
+  public PathFragment getUndeclaredOutputsAnnotationsDir() {
+    return undeclaredOutputsAnnotationsDir;
   }
 
   /**
@@ -449,11 +586,28 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     return coverageData;
   }
 
+  @Nullable public Artifact getCoverageManifest() {
+    return getExecutionSettings().getInstrumentedFileManifest();
+  }
+
+  /** Returns true if coverage data should be gathered. */
+  public boolean isCoverageMode() {
+    return coverageData != null;
+  }
+
   /**
-   * @return microcoverage data artifact or null if code coverage was not requested.
+   * Returns a directory to temporarily store coverage results for the given action relative to the
+   * execution root. This directory is used to store all coverage results related to the test
+   * execution with exception of the locally generated *.gcda files. Those are stored separately
+   * using relative path within coverage directory.
+   *
+   * <p>The directory name for the given test runner action is constructed as: {@code
+   * _coverage/target_path/test_log_name} where {@code test_log_name} is usually a target name but
+   * potentially can include extra suffix, such as a shard number (if test execution was sharded).
    */
-  @Nullable public Artifact getMicroCoverageData() {
-    return microCoverageData;
+  public PathFragment getCoverageDirectory() {
+    return COVERAGE_TMP_ROOT.getRelative(
+        FileSystemUtils.removeExtension(getTestLog().getRootRelativePath()));
   }
 
   public TestTargetProperties getTestProperties() {
@@ -462,6 +616,10 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
 
   public TestTargetExecutionSettings getExecutionSettings() {
     return executionSettings;
+  }
+
+  public boolean useTestRunner() {
+    return useTestRunner;
   }
 
   public boolean isSharded() {
@@ -484,6 +642,13 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     return runNumber;
   }
 
+  /**
+   * @return the workspace name.
+   */
+  public String getRunfilesPrefix() {
+    return workspaceName;
+  }
+
   @Override
   public Artifact getPrimaryOutput() {
     return testLog;
@@ -492,20 +657,46 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
   @Override
   public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
-    TestActionContext context =
-        actionExecutionContext.getExecutor().getContext(TestActionContext.class);
+    TestActionContext context = actionExecutionContext.getContext(TestActionContext.class);
     try {
       context.exec(this, actionExecutionContext);
     } catch (ExecException e) {
       throw e.toActionExecutionException(this);
     } finally {
-      checkedCaching = false;
+      unconditionalExecution = null;
     }
   }
 
   @Override
   public String getMnemonic() {
     return "TestRunner";
+  }
+
+  @Override
+  public ImmutableSet<Artifact> getMandatoryOutputs() {
+    return getOutputs();
+  }
+
+  public Artifact getRuntimeArtifact(String basename) throws ExecException {
+    for (Artifact runtimeArtifact : runtime) {
+      if (runtimeArtifact.getExecPath().getBaseName().equals(basename)) {
+        return runtimeArtifact;
+      }
+    }
+
+    throw new UserExecException("'" + basename + "' not found in test runtime");
+  }
+
+  public PathFragment getShExecutable() {
+    return configuration.getShellExecutable();
+  }
+
+  public ImmutableMap<String, String> getLocalShellEnvironment() {
+    return configuration.getLocalShellEnvironment();
+  }
+
+  public boolean isEnableRunfiles() {
+    return configuration.runfilesEnabled();
   }
 
   /**
@@ -540,6 +731,10 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
 
     public Path getSplitLogsPath() {
       return getPath(splitLogsPath);
+    }
+
+    public Path getUnusedRunfilesLogPath() {
+      return getPath(unusedRunfilesLogPath);
     }
 
     /**
