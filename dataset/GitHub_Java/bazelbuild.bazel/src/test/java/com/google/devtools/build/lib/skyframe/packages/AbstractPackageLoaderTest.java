@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import org.junit.Before;
 import org.junit.Test;
@@ -41,7 +40,6 @@ public abstract class AbstractPackageLoaderTest {
   protected Path workspaceDir;
   protected StoredEventHandler handler;
   protected FileSystem fs;
-  protected Root root;
   private Reporter reporter;
 
   @Before
@@ -49,13 +47,12 @@ public abstract class AbstractPackageLoaderTest {
     fs = new InMemoryFileSystem();
     workspaceDir = fs.getPath("/workspace/");
     workspaceDir.createDirectoryAndParents();
-    root = Root.fromPath(workspaceDir);
     reporter = new Reporter(new EventBus());
     handler = new StoredEventHandler();
     reporter.addHandler(handler);
   }
 
-  protected abstract AbstractPackageLoader.Builder newPackageLoaderBuilder(Root workspaceDir);
+  protected abstract AbstractPackageLoader.Builder newPackageLoaderBuilder(Path workspaceDir);
 
   @Test
   public void simpleNoPackage() throws Exception {
@@ -156,7 +153,7 @@ public abstract class AbstractPackageLoaderTest {
   }
 
   protected PackageLoader newPackageLoader() {
-    return newPackageLoaderBuilder(root)
+    return newPackageLoaderBuilder(workspaceDir)
         .useDefaultSkylarkSemantics()
         .setReporter(reporter)
         .build();

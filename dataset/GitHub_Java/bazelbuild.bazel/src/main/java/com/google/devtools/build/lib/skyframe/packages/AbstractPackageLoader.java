@@ -146,20 +146,20 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     int legacyGlobbingThreads = 1;
     int skyframeThreads = 1;
 
-    protected Builder(Root workspaceDir, Path installBase, Path outputBase) {
-      this.workspaceDir = workspaceDir.asPath();
-      Path devNull = workspaceDir.getRelative("/dev/null");
+    protected Builder(Path workspaceDir, Path installBase, Path outputBase) {
+      this.workspaceDir = workspaceDir;
+      Path devNull = workspaceDir.getFileSystem().getPath("/dev/null");
       directories =
           new BlazeDirectories(
               new ServerDirectories(installBase, outputBase, devNull),
-              this.workspaceDir,
+              workspaceDir,
               /* defaultSystemJavabase= */ null,
               "blaze");
 
       this.pkgLocator =
           new PathPackageLocator(
               directories.getOutputBase(),
-              ImmutableList.of(workspaceDir),
+              ImmutableList.of(Root.fromPath(workspaceDir)),
               BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
       this.pkgLocatorRef = new AtomicReference<>(pkgLocator);
       this.externalFilesHelper =
