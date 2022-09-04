@@ -1,8 +1,6 @@
 package io.quarkus.funqy.runtime.bindings.knative.events;
 
 import java.lang.reflect.Method;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -19,9 +17,7 @@ import com.fasterxml.jackson.databind.ObjectWriter;
 
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.InstanceHandle;
-import io.quarkus.arc.impl.Reflections;
 import io.quarkus.arc.runtime.BeanContainer;
-import io.quarkus.funqy.knative.events.CloudEvent;
 import io.quarkus.funqy.knative.events.CloudEventMapping;
 import io.quarkus.funqy.runtime.FunctionConstructor;
 import io.quarkus.funqy.runtime.FunctionInvoker;
@@ -48,10 +44,6 @@ public class KnativeEventsBindingRecorder {
 
     public static final String RESPONSE_TYPE = "response.cloud.event.type";
     public static final String RESPONSE_SOURCE = "response.cloud.event.source";
-    public static final String INPUT_CE_DATA_TYPE = "io.quarkus.funqy.knative.events.INPUT_CE_DATA_TYPE";
-    public static final String OUTPUT_CE_DATA_TYPE = "io.quarkus.funqy.knative.events.OUTPUT_CE_DATA_TYPE";
-    public static final String DATA_OBJECT_READER = ObjectReader.class.getName() + "_DATA_OBJECT_READER";
-    public static final String DATA_OBJECT_WRITER = ObjectWriter.class.getName() + "_DATA_OBJECT_WRITER";
 
     public void init() {
         typeTriggers = new HashMap<>();
@@ -69,44 +61,16 @@ public class KnativeEventsBindingRecorder {
             }
 
             if (invoker.hasInput()) {
-                Type inputType = invoker.getInputType();
-
-                if (CloudEvent.class.equals(Reflections.getRawType(inputType))) {
-                    if (inputType instanceof ParameterizedType) {
-                        Type[] params = ((ParameterizedType) inputType).getActualTypeArguments();
-                        if (params.length == 1) {
-                            inputType = params[0];
-                            invoker.getBindingContext().put(INPUT_CE_DATA_TYPE, inputType);
-                        }
-                    } else {
-                        throw new RuntimeException("When using CloudEvent<> generic parameter must be used.");
-                    }
-                }
-
-                JavaType javaInputType = objectMapper.constructType(inputType);
+                JavaType javaInputType = objectMapper.constructType(invoker.getInputType());
                 ObjectReader reader = objectMapper.readerFor(javaInputType);
-                invoker.getBindingContext().put(DATA_OBJECT_READER, reader);
-                QueryReader queryReader = queryMapper.readerFor(inputType);
+                invoker.getBindingContext().put(ObjectReader.class.getName(), reader);
+                QueryReader queryReader = queryMapper.readerFor(invoker.getInputType());
                 invoker.getBindingContext().put(QueryReader.class.getName(), queryReader);
             }
             if (invoker.hasOutput()) {
-                Type outputType = invoker.getOutputType();
-
-                if (CloudEvent.class.equals(Reflections.getRawType(outputType))) {
-                    if (outputType instanceof ParameterizedType) {
-                        Type[] params = ((ParameterizedType) outputType).getActualTypeArguments();
-                        if (params.length == 1) {
-                            outputType = params[0];
-                            invoker.getBindingContext().put(OUTPUT_CE_DATA_TYPE, outputType);
-                        }
-                    } else {
-                        throw new RuntimeException("When using CloudEvent<> generic parameter must be used.");
-                    }
-                }
-
-                JavaType outputJavaType = objectMapper.constructType(outputType);
+                JavaType outputJavaType = objectMapper.constructType(invoker.getOutputType());
                 ObjectWriter writer = objectMapper.writerFor(outputJavaType);
-                invoker.getBindingContext().put(DATA_OBJECT_WRITER, writer);
+                invoker.getBindingContext().put(ObjectWriter.class.getName(), writer);
 
                 String functionName = invoker.getName();
                 if (annotation != null && !annotation.responseType().isEmpty()) {
