@@ -60,6 +60,7 @@ import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy;
 import com.google.devtools.build.lib.packages.FileTarget;
 import com.google.devtools.build.lib.packages.FilesetEntry;
@@ -819,28 +820,6 @@ public final class RuleContext extends TargetContext
   }
 
   /**
-   * For a given attribute, returns all declared provider provided by targets
-   * of that attribute. Each declared provider is keyed by the
-   * {@link BuildConfiguration} under which the provider was created.
-   */
-  public <C extends SkylarkClassObject> ImmutableListMultimap<BuildConfiguration, C>
-  getPrerequisitesByConfiguration(String attributeName, Mode mode,
-      final NativeClassObjectConstructor<C> provider) {
-    List<? extends TransitiveInfoCollection> transitiveInfoCollections =
-        getPrerequisites(attributeName, mode);
-
-    ImmutableListMultimap.Builder<BuildConfiguration, C> result =
-        ImmutableListMultimap.builder();
-    for (TransitiveInfoCollection prerequisite : transitiveInfoCollections) {
-      C prerequisiteProvider = prerequisite.get(provider);
-      if (prerequisiteProvider != null) {
-        result.put(prerequisite.getConfiguration(), prerequisiteProvider);
-      }
-    }
-    return result.build();
-  }
-
-  /**
    * For a given attribute, returns all {@link TransitiveInfoCollection}s provided by targets
    * of that attribute. Each {@link TransitiveInfoCollection} is keyed by the
    * {@link BuildConfiguration} under which the collection was created.
@@ -883,8 +862,8 @@ public final class RuleContext extends TargetContext
    * TransitiveInfoCollection under the specified attribute.
    */
   @Nullable
-  public <T extends SkylarkClassObject> T getPrerequisite(
-      String attributeName, Mode mode, final NativeClassObjectConstructor<T> skylarkKey) {
+  public SkylarkClassObject getPrerequisite(
+      String attributeName, Mode mode, final ClassObjectConstructor.Key skylarkKey) {
     TransitiveInfoCollection prerequisite = getPrerequisite(attributeName, mode);
     return prerequisite == null ? null : prerequisite.get(skylarkKey);
   }

@@ -386,6 +386,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
 
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext)
+            .addProvider(ccProvider)
             .addNativeDeclaredProvider(ccProvider)
             .addNativeDeclaredProvider(makeVariableProvider)
             .addProvider(

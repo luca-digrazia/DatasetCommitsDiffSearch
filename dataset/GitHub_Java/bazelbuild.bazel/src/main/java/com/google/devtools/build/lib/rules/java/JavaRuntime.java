@@ -19,17 +19,18 @@ import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.CompilationHelper;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.MakeVariableInfo;
 import com.google.devtools.build.lib.analysis.MiddlemanProvider;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.rules.MakeVariableProvider;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -46,8 +47,8 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
         PrerequisiteArtifacts.nestedSet(ruleContext, "srcs", Mode.TARGET);
     PathFragment javaHome = defaultJavaHome(ruleContext.getLabel());
     if (ruleContext.attributes().isAttributeValueExplicitlySpecified("java_home")) {
-      PathFragment javaHomeAttribute =
-          PathFragment.create(ruleContext.expandedMakeVariables("java_home"));
+      PathFragment javaHomeAttribute = PathFragment.create(ruleContext.expandMakeVariables(
+          "java_home", ruleContext.attributes().get("java_home", Type.STRING)));
       if (!filesToBuild.isEmpty() && javaHomeAttribute.isAbsolute()) {
         ruleContext.ruleError("'java_home' with an absolute path requires 'srcs' to be empty.");
       }
@@ -72,10 +73,10 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
             .addTransitiveArtifacts(filesToBuild)
             .build();
 
-    JavaRuntimeInfo javaRuntime = new JavaRuntimeInfo(
+    JavaRuntimeProvider javaRuntime = new JavaRuntimeProvider(
         filesToBuild, javaHome, javaBinaryExecPath, javaBinaryRunfilesPath);
 
-    MakeVariableInfo makeVariableInfo = new MakeVariableInfo(ImmutableMap.of(
+    MakeVariableProvider makeVariableProvider = new MakeVariableProvider(ImmutableMap.of(
         "JAVA", javaBinaryExecPath.getPathString(),
         "JAVABASE", javaHome.getPathString()));
 
@@ -84,7 +85,7 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
         .setFilesToBuild(filesToBuild)
         .addNativeDeclaredProvider(javaRuntime)
         .addProvider(MiddlemanProvider.class, new MiddlemanProvider(middleman))
-        .addNativeDeclaredProvider(makeVariableInfo)
+        .addNativeDeclaredProvider(makeVariableProvider)
         .build();
   }
 

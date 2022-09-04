@@ -17,15 +17,12 @@ package com.google.devtools.build.lib.rules.java;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
-import com.google.devtools.build.lib.analysis.MakeVariableInfo;
 import com.google.devtools.build.lib.analysis.MiddlemanProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -34,6 +31,8 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.rules.MakeVariableProvider;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 
 /**
  * Implementation of the {@code java_runtime_alias} rule.
@@ -50,28 +49,15 @@ public class JavaRuntimeAlias implements RuleConfiguredTargetFactory {
 
     if (runtime != null) {
       builder
-          .addNativeDeclaredProvider(runtime.get(JavaRuntimeInfo.PROVIDER))
-          .addNativeDeclaredProvider(runtime.get(MakeVariableInfo.PROVIDER))
+          .addNativeDeclaredProvider(runtime.get(JavaRuntimeProvider.SKYLARK_CONSTRUCTOR))
+          .addNativeDeclaredProvider(runtime.get(MakeVariableProvider.SKYLARK_CONSTRUCTOR))
           .addProvider(RunfilesProvider.class, runtime.getProvider(RunfilesProvider.class))
           .addProvider(MiddlemanProvider.class, runtime.getProvider(MiddlemanProvider.class))
           .setFilesToBuild(runtime.getProvider(FileProvider.class).getFilesToBuild());
     } else {
-      // This happens when --javabase is an absolute path (as opposed to a label). In this case,
-      // we don't have a java_runtime rule we can proxy, thus we synthesize all its providers.
-      // This can go away once --javabase=<absolute path> is not supported anymore.
-      Jvm jvm = ruleContext.getFragment(Jvm.class);
-      JavaRuntimeInfo runtimeInfo = new JavaRuntimeInfo(
-          NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-          jvm.getJavaHome(),
-          jvm.getJavaExecutable(),
-          jvm.getJavaExecutable());
       builder
           .setFilesToBuild(NestedSetBuilder.emptySet(Order.STABLE_ORDER))
-          .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
-          .addNativeDeclaredProvider(runtimeInfo)
-          .addNativeDeclaredProvider(new MakeVariableInfo(ImmutableMap.of(
-              "JAVABASE", jvm.getJavaHome().getPathString(),
-              "JAVA", jvm.getJavaExecutable().getPathString())));
+          .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY);
     }
 
     return builder.build();
@@ -85,7 +71,7 @@ public class JavaRuntimeAlias implements RuleConfiguredTargetFactory {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
       return builder
-          .requiresConfigurationFragments(JavaConfiguration.class, Jvm.class)
+          .requiresConfigurationFragments(JavaConfiguration.class)
           .removeAttribute("licenses")
           .removeAttribute("distribs")
           .add(attr(":jvm", LABEL).value(JavaSemantics.jvmAttribute(environment)))

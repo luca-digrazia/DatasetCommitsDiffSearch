@@ -161,7 +161,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
 
   private CcToolchainProvider getCcToolchainProvider(CppConfiguration cppConfiguration)
       throws Exception {
-    return getCcToolchainTarget(cppConfiguration).get(CcToolchainProvider.SKYLARK_CONSTRUCTOR);
+    return getCcToolchainTarget(cppConfiguration).getProvider(CcToolchainProvider.class);
   }
 
   /**
@@ -488,7 +488,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     CppConfiguration toolchainA =
         create(loader, "--cpu=piii", "--host_cpu=piii", "--android_cpu=", "--fat_apk_cpu=");
     ConfiguredTarget ccToolchainA = getCcToolchainTarget(toolchainA);
-    CcToolchainProvider ccProviderA = ccToolchainA.get(CcToolchainProvider.SKYLARK_CONSTRUCTOR);
+    CcToolchainProvider ccProviderA = ccToolchainA.getProvider(CcToolchainProvider.class);
     MakeVariableProvider makeProviderA = ccToolchainA.get(MakeVariableProvider.SKYLARK_CONSTRUCTOR);
     assertThat(toolchainA.getToolchainIdentifier()).isEqualTo("toolchain-identifier-A");
     assertThat(toolchainA.getHostSystemName()).isEqualTo("host-system-name-A");

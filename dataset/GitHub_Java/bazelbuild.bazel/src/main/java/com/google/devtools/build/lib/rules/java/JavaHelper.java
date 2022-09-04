@@ -17,9 +17,9 @@ import static com.google.devtools.build.lib.packages.BuildType.NODEP_LABEL_LIST;
 
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -149,22 +149,22 @@ public abstract class JavaHelper {
         ruleContext, ":host_jdk" + implicitAttributesSuffix, Mode.HOST);
   }
 
-  public static JavaRuntimeInfo getJavaRuntime(RuleContext ruleContext) {
+  public static JavaRuntimeProvider getJavaRuntime(RuleContext ruleContext) {
     if (!ruleContext.attributes().has(":jvm", BuildType.LABEL)) {
       return null;
     }
 
     TransitiveInfoCollection jvm = ruleContext.getPrerequisite(":jvm", Mode.TARGET);
-    return jvm == null ? null :  jvm.get(JavaRuntimeInfo.PROVIDER);
+    return jvm == null ? null :  jvm.get(JavaRuntimeProvider.SKYLARK_CONSTRUCTOR);
   }
 
-  public static JavaRuntimeInfo getHostJavaRuntime(RuleContext ruleContext) {
+  public static JavaRuntimeProvider getHostJavaRuntime(RuleContext ruleContext) {
     if (!ruleContext.attributes().has(":host_jdk", BuildType.LABEL)) {
       return null;
     }
 
     TransitiveInfoCollection jvm = ruleContext.getPrerequisite(":host_jdk", Mode.HOST);
-    return jvm == null ? null :  jvm.get(JavaRuntimeInfo.PROVIDER);
+    return jvm == null ? null :  jvm.get(JavaRuntimeProvider.SKYLARK_CONSTRUCTOR);
   }
 
   /**
