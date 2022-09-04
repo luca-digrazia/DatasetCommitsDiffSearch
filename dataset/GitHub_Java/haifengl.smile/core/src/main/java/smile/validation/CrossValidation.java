@@ -1,33 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.validation;
 
-import java.util.Optional;
-import java.util.function.Function;
-import java.util.function.BiFunction;
-
-import smile.classification.Classifier;
-import smile.classification.DataFrameClassifier;
-import smile.data.DataFrame;
-import smile.data.formula.Formula;
-import smile.math.MathEx;
-import smile.regression.DataFrameRegression;
-import smile.regression.Regression;
+import smile.math.Math;
 
 /**
  * Cross-validation is a technique for assessing how the results of a
@@ -85,7 +74,7 @@ public class CrossValidation {
 
         int[] index;
         if (permutate){
-            index = MathEx.permutate(n);
+            index = Math.permutate(n);
         }
         else{
             index = new int[n];
@@ -113,118 +102,5 @@ public class CrossValidation {
                 }
             }
         }
-    }
-
-    /**
-     * Runs cross validation tests.
-     * @return the predictions.
-     */
-    public <T> int[] classification(T[] x, int[] y, BiFunction<T[], int[], Classifier<T>> trainer) {
-        int[] prediction = new int[x.length];
-
-        for (int i = 0; i < k; i++) {
-            T[] trainx = MathEx.slice(x, train[i]);
-            int[] trainy = MathEx.slice(y, train[i]);
-
-            Classifier<T> model = trainer.apply(trainx, trainy);
-
-            for (int j : test[i]) {
-                prediction[j] = model.predict(x[j]);
-            }
-        }
-
-        return prediction;
-    }
-
-    /**
-     * Runs cross validation tests.
-     * @return the predictions.
-     */
-    public int[] classification(DataFrame data, Function<DataFrame, DataFrameClassifier> trainer) {
-        int[] prediction = new int[data.size()];
-
-        for (int i = 0; i < k; i++) {
-            DataFrameClassifier model = trainer.apply(data.of(train[i]));
-            for (int j : test[i]) {
-                prediction[j] = model.predict(data.get(j));
-            }
-        }
-
-        return prediction;
-    }
-
-    /**
-     * Runs cross validation tests.
-     * @return the predictions.
-     */
-    public <T> double[] regression(T[] x, double[] y, BiFunction<T[], double[], Regression<T>> trainer) {
-        double[] prediction = new double[x.length];
-
-        for (int i = 0; i < k; i++) {
-            T[] trainx = MathEx.slice(x, train[i]);
-            double[] trainy = MathEx.slice(y, train[i]);
-
-            Regression<T> model = trainer.apply(trainx, trainy);
-
-            for (int j : test[i]) {
-                prediction[j] = model.predict(x[j]);
-            }
-        }
-
-        return prediction;
-    }
-
-    /**
-     * Runs cross validation tests.
-     * @return the predictions.
-     */
-    public double[] regression(DataFrame data, Function<DataFrame, DataFrameRegression> trainer) {
-        double[] prediction = new double[data.size()];
-
-        for (int i = 0; i < k; i++) {
-            DataFrameRegression model = trainer.apply(data.of(train[i]));
-
-            for (int j : test[i]) {
-                prediction[j] = model.predict(data.get(j));
-            }
-        }
-
-        return prediction;
-    }
-
-    /**
-     * Runs cross validation tests.
-     * @return the predictions.
-     */
-    public static <T> int[] classification(int k, T[] x, int[] y, BiFunction<T[], int[], Classifier<T>> trainer) {
-        CrossValidation cv = new CrossValidation(x.length, k);
-        return cv.classification(x, y, trainer);
-    }
-
-    /**
-     * Runs cross validation tests.
-     * @return the predictions.
-     */
-    public static int[] classification(int k, DataFrame data, Function<DataFrame, DataFrameClassifier> trainer) {
-        CrossValidation cv = new CrossValidation(data.size(), k);
-        return cv.classification(data, trainer);
-    }
-
-    /**
-     * Runs cross validation tests.
-     * @return the predictions.
-     */
-    public static <T> double[] regression(int k, T[] x, double[] y, BiFunction<T[], double[], Regression<T>> trainer) {
-        CrossValidation cv = new CrossValidation(x.length, k);
-        return cv.regression(x, y, trainer);
-    }
-
-    /**
-     * Runs cross validation tests.
-     * @return the predictions.
-     */
-    public static double[] regression(int k, DataFrame data, Function<DataFrame, DataFrameRegression> trainer) {
-        CrossValidation cv = new CrossValidation(data.size(), k);
-        return cv.regression(data, trainer);
     }
 }
