@@ -67,7 +67,7 @@ public class NativeConfig {
     public File javaHome;
 
     /**
-     * The maximum Java heap to be used during the native image generation
+     * The default maximum old generation size of the native image
      */
     @ConfigItem
     public Optional<String> nativeImageXmx;
