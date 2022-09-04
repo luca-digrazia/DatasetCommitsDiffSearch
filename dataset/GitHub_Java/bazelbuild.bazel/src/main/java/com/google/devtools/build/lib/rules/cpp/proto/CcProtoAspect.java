@@ -220,12 +220,8 @@ public class CcProtoAspect extends NativeAspectClass implements ConfiguredAspect
 
     private CcLibraryHelper initializeCcLibraryHelper(FeatureConfiguration featureConfiguration) {
       CcLibraryHelper helper =
-          new CcLibraryHelper(
-              ruleContext,
-              cppSemantics,
-              featureConfiguration,
-              ccToolchain(ruleContext),
-              CppHelper.getFdoSupport(ruleContext, ":cc_toolchain"));
+          new CcLibraryHelper(ruleContext, cppSemantics, featureConfiguration,
+              ccToolchain(ruleContext));
       helper.enableCcSpecificLinkParamsProvider();
       helper.enableCcNativeLibrariesProvider();
       // TODO(dougk): Configure output artifact with action_config

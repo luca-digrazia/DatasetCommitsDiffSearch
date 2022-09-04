@@ -19,6 +19,7 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -80,7 +81,6 @@ public class CppCompileActionBuilder {
       new ImmutableList.Builder<>();
   private RuleContext ruleContext = null;
   private Boolean shouldScanIncludes;
-  private Map<String, String> executionInfo = new LinkedHashMap<>();
   private Map<String, String> environment = new LinkedHashMap<>();
   private CppSemantics cppSemantics;
   private CcToolchainProvider ccToolchain;
@@ -155,7 +155,6 @@ public class CppCompileActionBuilder {
     this.lipoScannableMap = other.lipoScannableMap;
     this.ruleContext = other.ruleContext;
     this.shouldScanIncludes = other.shouldScanIncludes;
-    this.executionInfo = new LinkedHashMap<>(other.executionInfo);
     this.environment = new LinkedHashMap<>(other.environment);
     this.cppSemantics = other.cppSemantics;
     this.ccToolchain = other.ccToolchain;
@@ -278,11 +277,10 @@ public class CppCompileActionBuilder {
     // If the crosstool uses action_configs to configure cc compilation, collect execution info
     // from there, otherwise, use no execution info.
     // TODO(b/27903698): Assert that the crosstool has an action_config for this action.
+    ImmutableSet<String> executionRequirements = ImmutableSet.of();
     if (featureConfiguration.actionIsConfigured(getActionName())) {
-      for (String executionRequirement :
-          featureConfiguration.getToolForAction(getActionName()).getExecutionRequirements()) {
-        executionInfo.put(executionRequirement, "");
-      }
+      executionRequirements =
+          featureConfiguration.getToolForAction(getActionName()).getExecutionRequirements();
     }
 
     NestedSet<Artifact> realMandatoryInputs = realMandatoryInputsBuilder.build();
@@ -319,8 +317,7 @@ public class CppCompileActionBuilder {
           getNocoptPredicate(nocopts),
           ruleContext,
           cppSemantics,
-          ccToolchain,
-          ImmutableMap.copyOf(executionInfo));
+          ccToolchain);
     } else {
       return new CppCompileAction(
           owner,
@@ -351,7 +348,7 @@ public class CppCompileActionBuilder {
           getLipoScannables(realMandatoryInputs),
           additionalIncludeFiles.build(),
           actionClassId,
-          ImmutableMap.copyOf(executionInfo),
+          executionRequirements,
           ImmutableMap.copyOf(environment),
           getActionName(),
           ruleContext,
@@ -379,11 +376,6 @@ public class CppCompileActionBuilder {
 
   public CppCompileActionBuilder addEnvironment(Map<String, String> environment) {
     this.environment.putAll(environment);
-    return this;
-  }
-
-  public CppCompileActionBuilder addExecutionInfo(Map<String, String> executionInfo) {
-    this.executionInfo.putAll(executionInfo);
     return this;
   }
 

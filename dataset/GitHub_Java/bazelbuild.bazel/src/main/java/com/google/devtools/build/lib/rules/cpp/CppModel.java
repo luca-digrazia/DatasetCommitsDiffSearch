@@ -144,10 +144,9 @@ public final class CppModel {
    * units, including module files or headers to be parsed or preprocessed.
    */
   public CppModel addCompilationUnitSources(
-      Iterable<Artifact> sourceFiles, Label sourceLabel, Map<String, String> buildVariables,
-      CppSource.Type type) {
+      Iterable<Artifact> sourceFiles, Label sourceLabel, Map<String, String> buildVariables) {
     for (Artifact sourceFile : sourceFiles) {
-      this.sourceFiles.add(CppSource.create(sourceFile, sourceLabel, buildVariables, type));
+      this.sourceFiles.add(CppSource.create(sourceFile, sourceLabel, buildVariables));
     }
     return this;
   }
@@ -381,7 +380,7 @@ public final class CppModel {
       buildVariables.addStringVariable("output_object_file", realOutputFilePath);
     }
 
-    DotdFile dotdFile = CppFileTypes.mustProduceDotdFile(sourceFile)
+    DotdFile dotdFile = CppFileTypes.mustProduceDotdFile(sourceFile.getPath().toString())
         ? Preconditions.checkNotNull(builder.getDotdFile()) : null;
     // Set dependency_file to enable <object>.d file generation.
     if (dotdFile != null) {
@@ -486,61 +485,33 @@ public final class CppModel {
       CppCompileActionBuilder builder = initializeCompileAction(sourceArtifact, sourceLabel);
 
       builder.setSemantics(semantics);
-
-      if (!sourceArtifact.isTreeArtifact()) {
-        switch (source.getType()) {
-          case HEADER:
-            createHeaderAction(outputName, result, env, builder,
-                CppFileTypes.mustProduceDotdFile(sourceArtifact));
-            break;
-          case CLIF_INPUT_PROTO:
-            createClifMatchAction(outputName, result, env, builder);
-            break;
-          default:
-            boolean bitcodeOutput =
-                featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)
-                    && CppFileTypes.LTO_SOURCE.matches(sourceArtifact.getFilename());
-            createSourceAction(
-                outputName,
-                result,
-                env,
-                sourceArtifact,
-                builder,
-                ArtifactCategory.OBJECT_FILE,
-                context.getCppModuleMap(),
-                /*addObject=*/ true,
-                isCodeCoverageEnabled(),
-                // The source action does not generate dwo when it has bitcode
-                // output (since it isn't generating a native object with debug
-                // info). In that case the LTOBackendAction will generate the dwo.
-                /*generateDwo=*/ cppConfiguration.useFission() && !bitcodeOutput,
-                CppFileTypes.mustProduceDotdFile(sourceArtifact),
-                source.getBuildVariables(), /*addHeaderTokenFile=*/
-                false);
-            break;
-        }
+      
+      if (CppFileTypes.CPP_HEADER.matches(source.getSource().getExecPath())) {
+        createHeaderAction(outputName, result, env, builder,
+            CppFileTypes.mustProduceDotdFile(sourceArtifact.getFilename()));
+      } else if (CppFileTypes.CLIF_INPUT_PROTO.matches(source.getSource().getExecPath())) {
+        createClifMatchAction(outputName, result, env, builder);
       } else {
-        switch (source.getType()) {
-          case HEADER:
-            Artifact headerTokenFile =
-                createCompileActionTemplate(
-                    env,
-                    source,
-                    builder,
-                    ImmutableList.of(
-                        ArtifactCategory.GENERATED_HEADER, ArtifactCategory.PROCESSED_HEADER));
-            result.addHeaderTokenFile(headerTokenFile);
-            break;
-          case SOURCE:
-            Artifact objectFile =
-                createCompileActionTemplate(
-                    env, source, builder, ImmutableList.of(ArtifactCategory.OBJECT_FILE));
-            result.addObjectFile(objectFile);
-            break;
-          default:
-            throw new IllegalStateException(
-                "Encountered invalid source types when creating CppCompileActionTemplates");
-        }
+        boolean bitcodeOutput =
+            featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)
+                && CppFileTypes.LTO_SOURCE.matches(sourceArtifact.getFilename());
+        createSourceAction(
+            outputName,
+            result,
+            env,
+            sourceArtifact,
+            builder,
+            ArtifactCategory.OBJECT_FILE,
+            context.getCppModuleMap(),
+            /*addObject=*/ true,
+            isCodeCoverageEnabled(),
+            // The source action does not generate dwo when it has bitcode
+            // output (since it isn't generating a native object with debug
+            // info). In that case the LTOBackendAction will generate the dwo.
+            /*generateDwo=*/ cppConfiguration.useFission() && !bitcodeOutput,
+            CppFileTypes.mustProduceDotdFile(sourceArtifact.getFilename()),
+            source.getBuildVariables(), /*addHeaderTokenFile=*/
+            false);
       }
     }
 
@@ -554,7 +525,7 @@ public final class CppModel {
         ruleContext, ccToolchain, ArtifactCategory.GENERATED_HEADER, outputName);
 
     builder
-        .setOutputs(ruleContext, ArtifactCategory.PROCESSED_HEADER, outputNameBase, generateDotd)
+        .setOutputs(ArtifactCategory.PROCESSED_HEADER, outputNameBase, generateDotd)
         // If we generate pic actions, we prefer the header actions to use the pic artifacts.
         .setPicMode(this.getGeneratePicActions());
     setupCompileBuildVariables(
@@ -567,7 +538,7 @@ public final class CppModel {
         builder.getContext().getCppModuleMap(),
         ImmutableMap.<String, String>of());
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
-    CppCompileAction compileAction = builder.buildAndValidate(ruleContext);
+    CppCompileAction compileAction = builder.build();
     env.registerAction(compileAction);
     Artifact tokenFile = compileAction.getOutputFile();
     result.addHeaderTokenFile(tokenFile);
@@ -597,7 +568,7 @@ public final class CppModel {
         /*addObject=*/ false,
         /*enableCoverage=*/ false,
         /*generateDwo=*/ false,
-        CppFileTypes.mustProduceDotdFile(moduleMapArtifact),
+        CppFileTypes.mustProduceDotdFile(moduleMapArtifact.getFilename()),
         ImmutableMap.<String, String>of(), /*addHeaderTokenFile=*/
         addHeaderTokenFiles);
   }
@@ -605,7 +576,7 @@ public final class CppModel {
   private void createClifMatchAction(
       String outputName, Builder result, AnalysisEnvironment env, CppCompileActionBuilder builder) {
     builder
-        .setOutputs(ruleContext, ArtifactCategory.CLIF_OUTPUT_PROTO, outputName, false)
+        .setOutputs(ArtifactCategory.CLIF_OUTPUT_PROTO, outputName, false)
         .setPicMode(false)
         // The additional headers in a clif action are both mandatory inputs and
         // need to be include-scanned.
@@ -621,7 +592,7 @@ public final class CppModel {
         builder.getContext().getCppModuleMap(),
         /*sourceSpecificBuildVariables=*/ ImmutableMap.<String, String>of());
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
-    CppCompileAction compileAction = builder.buildAndValidate(ruleContext);
+    CppCompileAction compileAction = builder.build();
     env.registerAction(compileAction);
     Artifact tokenFile = compileAction.getOutputFile();
     result.addHeaderTokenFile(tokenFile);
@@ -692,7 +663,7 @@ public final class CppModel {
         picBuilder.setDwoFile(dwoFile);
 
         semantics.finalizeCompileActionBuilder(ruleContext, picBuilder);
-        CppCompileAction picAction = picBuilder.buildAndValidate(ruleContext);
+        CppCompileAction picAction = picBuilder.build();
         env.registerAction(picAction);
         if (addHeaderTokenFiles) {
           result.addHeaderTokenFile(picAction.getOutputFile());
@@ -719,7 +690,7 @@ public final class CppModel {
             ruleContext,
             CppHelper.getArtifactNameForCategory(
                 ruleContext, ccToolchain, outputCategory, outputName));
-        builder.setOutputs(ruleContext, outputCategory, outputName, generateDotd);
+        builder.setOutputs(outputCategory, outputName, generateDotd);
         String gcnoFileName = CppHelper.getArtifactNameForCategory(ruleContext,
             ccToolchain, ArtifactCategory.COVERAGE_DATA_FILE, outputName);
 
@@ -756,7 +727,7 @@ public final class CppModel {
         builder.setDwoFile(noPicDwoFile);
 
         semantics.finalizeCompileActionBuilder(ruleContext, builder);
-        CppCompileAction compileAction = builder.buildAndValidate(ruleContext);
+        CppCompileAction compileAction = builder.build();
         env.registerAction(compileAction);
         Artifact objectFile = compileAction.getOutputFile();
         if (addHeaderTokenFiles) {
@@ -780,35 +751,6 @@ public final class CppModel {
     }
   }
 
-  private Artifact createCompileActionTemplate(AnalysisEnvironment env,
-      CppSource source, CppCompileActionBuilder builder,
-      Iterable<ArtifactCategory> outputCategories) {
-    Artifact sourceArtifact = source.getSource();
-    Artifact outputFiles = CppHelper.getCompileOutputTreeArtifact(ruleContext, sourceArtifact);
-    // TODO(rduan): Dotd file output is not supported yet.
-    builder.setOutputs(outputFiles, null);
-    setupCompileBuildVariables(
-        builder,
-        /* usePic=*/ false,
-        /*ccRelativeName=*/ null,
-        /*autoFdoImportPath=*/ null,
-        /*gcnoFile=*/ null,
-        /*dwoFile=*/ null,
-        builder.getContext().getCppModuleMap(),
-        source.getBuildVariables());
-    semantics.finalizeCompileActionBuilder(ruleContext, builder);
-    CppCompileActionTemplate actionTemplate = new CppCompileActionTemplate(
-        sourceArtifact,
-        outputFiles,
-        builder,
-        cppConfiguration,
-        outputCategories,
-        ruleContext.getActionOwner());
-    env.registerAction(actionTemplate);
-
-    return outputFiles;
-  }
-
   String getOutputNameBaseWith(String base, boolean usePic) {
     return usePic
         ? CppHelper.getArtifactNameForCategory(
@@ -829,7 +771,7 @@ public final class CppModel {
         .getPathString();
     builder
         .setPicMode(usePic)
-        .setOutputs(ruleContext, outputCategory, outputNameBase, generateDotd)
+        .setOutputs(outputCategory, outputNameBase, generateDotd)
         .setTempOutputFile(new PathFragment(tempOutputName));
 
     setupCompileBuildVariables(
@@ -842,7 +784,7 @@ public final class CppModel {
         builder.getContext().getCppModuleMap(),
         ImmutableMap.<String, String>of());
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
-    CppCompileAction action = builder.buildAndValidate(ruleContext);
+    CppCompileAction action = builder.build();
     env.registerAction(action);
     if (addObject) {
       if (usePic) {
@@ -876,6 +818,7 @@ public final class CppModel {
         maybePicName = CppHelper.getArtifactNameForCategory(
             ruleContext, ccToolchain, ArtifactCategory.PIC_FILE, maybePicName);
       }
+
       String linkedName = CppHelper.getArtifactNameForCategory(
           ruleContext, ccToolchain, linkTargetType.getLinkerOutput(), maybePicName);
       PathFragment artifactFragment = new PathFragment(ruleContext.getLabel().getName())
@@ -980,6 +923,7 @@ public final class CppModel {
       // If the crosstool is configured to select an output artifact, we use that selection.
       // Otherwise, we use linux defaults.
       Artifact picArtifact = getLinkedArtifact(picLinkType);
+
       CppLinkAction picAction =
           newLinkActionBuilder(picArtifact)
               .addObjectFiles(ccOutputs.getObjectFiles(true))
@@ -1118,8 +1062,9 @@ public final class CppModel {
    * inputs, output and dotd file names, compilation context and copts.
    */
   private CppCompileActionBuilder createCompileActionBuilder(Artifact source, Label label) {
-    CppCompileActionBuilder builder = new CppCompileActionBuilder(ruleContext, label, ccToolchain);
-    builder.setSourceFile(source);
+    CppCompileActionBuilder builder = new CppCompileActionBuilder(
+        ruleContext, source, label, ccToolchain);
+
     builder.setContext(context).addCopts(copts);
     builder.addEnvironment(ccToolchain.getEnvironment());
     return builder;
@@ -1135,7 +1080,7 @@ public final class CppModel {
     CppCompileActionBuilder picBuilder = new CppCompileActionBuilder(builder);
     picBuilder
         .setPicMode(true)
-        .setOutputs(ruleContext, outputCategory, outputName, generateDotd);
+        .setOutputs(outputCategory, outputName, generateDotd);
 
     return picBuilder;
   }
@@ -1164,7 +1109,7 @@ public final class CppModel {
     String outputArtifactNameBase = getOutputNameBaseWith(outputName, usePic);
 
     CppCompileActionBuilder dBuilder = new CppCompileActionBuilder(builder);
-    dBuilder.setOutputs(ruleContext, category, outputArtifactNameBase, generateDotd);
+    dBuilder.setOutputs(category, outputArtifactNameBase, generateDotd);
     setupCompileBuildVariables(
         dBuilder,
         usePic,
@@ -1175,12 +1120,11 @@ public final class CppModel {
         builder.getContext().getCppModuleMap(),
         ImmutableMap.<String, String>of());
     semantics.finalizeCompileActionBuilder(ruleContext, dBuilder);
-    CppCompileAction dAction = dBuilder.buildAndValidate(ruleContext);
+    CppCompileAction dAction = dBuilder.build();
     ruleContext.registerAction(dAction);
 
     CppCompileActionBuilder sdBuilder = new CppCompileActionBuilder(builder);
-    sdBuilder.setOutputs(
-        ruleContext, ArtifactCategory.GENERATED_ASSEMBLY, outputArtifactNameBase, generateDotd);
+    sdBuilder.setOutputs(ArtifactCategory.GENERATED_ASSEMBLY, outputArtifactNameBase, generateDotd);
     setupCompileBuildVariables(
         sdBuilder,
         usePic,
@@ -1191,7 +1135,7 @@ public final class CppModel {
         builder.getContext().getCppModuleMap(),
         ImmutableMap.<String, String>of());
     semantics.finalizeCompileActionBuilder(ruleContext, sdBuilder);
-    CppCompileAction sdAction = sdBuilder.buildAndValidate(ruleContext);
+    CppCompileAction sdAction = sdBuilder.build();
     ruleContext.registerAction(sdAction);
 
     return ImmutableList.of(

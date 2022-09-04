@@ -21,6 +21,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
@@ -83,8 +84,7 @@ public class FakeCppCompileAction extends CppCompileAction {
       Predicate<String> nocopts,
       RuleContext ruleContext,
       CppSemantics cppSemantics,
-      CcToolchainProvider ccToolchain,
-      ImmutableMap<String, String> executionInfo) {
+      CcToolchainProvider ccToolchain) {
     super(
         owner,
         features,
@@ -121,7 +121,7 @@ public class FakeCppCompileAction extends CppCompileAction {
         ImmutableList.<IncludeScannable>of(),
         ImmutableList.<Artifact>of(),
         GUID,
-        executionInfo,
+        ImmutableSet.<String>of(),
         ImmutableMap.<String, String>of(),
         CppCompileAction.CPP_COMPILE,
         ruleContext,
