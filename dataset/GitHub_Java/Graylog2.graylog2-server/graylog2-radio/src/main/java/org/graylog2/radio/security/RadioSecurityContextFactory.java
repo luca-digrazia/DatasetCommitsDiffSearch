@@ -1,3 +1,19 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog2.radio.security;
 
 import org.apache.shiro.authc.AuthenticationException;
@@ -23,10 +39,10 @@ public class RadioSecurityContextFactory implements SecurityContextFactory {
             super(subject, token, true, "radio");
         }
     }
-    public class RadioPrinipal implements Principal {
+    public class RadioPrincipal implements Principal {
         @Override
         public boolean equals(Object another) {
-            if (another instanceof RadioPrinipal)
+            if (another instanceof RadioPrincipal)
                 return true;
             else
                 return false;
@@ -51,7 +67,7 @@ public class RadioSecurityContextFactory implements SecurityContextFactory {
     public class RadioSubject implements Subject {
         @Override
         public Object getPrincipal() {
-            return new RadioPrinipal();
+            return new RadioPrincipal();
         }
 
         @Override
@@ -219,7 +235,7 @@ public class RadioSecurityContextFactory implements SecurityContextFactory {
         final AuthenticationToken authenticationToken = new AuthenticationToken() {
             @Override
             public Object getPrincipal() {
-                return new RadioPrinipal();
+                return new RadioPrincipal();
             }
 
             @Override
