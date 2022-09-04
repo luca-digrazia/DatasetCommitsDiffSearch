@@ -19,7 +19,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.collect.Extrema;
@@ -387,8 +386,67 @@ public final class Profiler {
     }
   }
 
+  /**
+   * Which {@link ProfilerTask}s are profiled.
+   */
+  public enum ProfiledTaskKinds {
+    /**
+     * Do not profile anything.
+     *
+     * <p>Performance is best with this case, but we lose critical path analysis and slowest
+     * operation tracking.
+     */
+    NONE {
+      @Override
+      boolean isProfiling(ProfilerTask type) {
+        return false;
+      }
+    },
+
+    /**
+     * Profile on a few, known-to-be-slow tasks.
+     *
+     * <p>Performance is somewhat decreased in comparison to {@link #NONE}, but we still track the
+     * slowest operations (VFS).
+     */
+    SLOWEST {
+      @Override
+      boolean isProfiling(ProfilerTask type) {
+        return type.collectsSlowestInstances();
+      }
+    },
+
+    /** A set of tasks that's useful for the Json trace output. */
+    ALL_FOR_TRACE {
+      @Override
+      boolean isProfiling(ProfilerTask type) {
+        return !type.isVfs()
+            // CRITICAL_PATH corresponds to writing the file.
+            && type != ProfilerTask.CRITICAL_PATH
+            && type != ProfilerTask.SKYFUNCTION
+            && type != ProfilerTask.ACTION_COMPLETE
+            && !type.isStarlark();
+      }
+    },
+
+    /**
+     * Profile all tasks.
+     *
+     * <p>This is in use when {@code --profile} is specified.
+     */
+    ALL {
+      @Override
+      boolean isProfiling(ProfilerTask type) {
+        return true;
+      }
+    };
+
+    /** Whether the Profiler collects data for the given task type. */
+    abstract boolean isProfiling(ProfilerTask type);
+  }
+
   private Clock clock;
-  private ImmutableSet<ProfilerTask> profiledTasks;
+  private ProfiledTaskKinds profiledTaskKinds;
   private volatile long profileStartTime;
   private volatile boolean recordAllDurations = false;
 
@@ -479,7 +537,7 @@ public final class Profiler {
    * <p>Subsequent calls to beginTask/endTask will be recorded in the provided output stream. Please
    * note that stream performance is extremely important and buffered streams should be utilized.
    *
-   * @param profiledTasks which of {@link ProfilerTask}s to track
+   * @param profiledTaskKinds which kinds of {@link ProfilerTask}s to track
    * @param stream output stream to store profile data. Note: passing unbuffered stream object
    *     reference may result in significant performance penalties
    * @param comment a comment to insert in the profile data
@@ -489,7 +547,7 @@ public final class Profiler {
    * @param execStartTimeNanos execution start time in nanos obtained from {@code clock.nanoTime()}
    */
   public synchronized void start(
-      ImmutableSet<ProfilerTask> profiledTasks,
+      ProfiledTaskKinds profiledTaskKinds,
       OutputStream stream,
       Format format,
       String comment,
@@ -501,7 +559,7 @@ public final class Profiler {
     Preconditions.checkState(!isActive(), "Profiler already active");
     initHistograms();
 
-    this.profiledTasks = profiledTasks;
+    this.profiledTaskKinds = profiledTaskKinds;
     this.clock = clock;
 
     // sanity check for current limitation on the number of supported types due
@@ -603,7 +661,7 @@ public final class Profiler {
   }
 
   public boolean isProfiling(ProfilerTask type) {
-    return profiledTasks.contains(type);
+    return profiledTaskKinds.isProfiling(type);
   }
 
   /**

@@ -13,9 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.profiler.statistics;
 
+import com.google.common.base.Predicate;
+import com.google.devtools.build.lib.actions.MiddlemanAction;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.analysis.ProfileInfo;
 import com.google.devtools.build.lib.profiler.analysis.ProfileInfo.CriticalPathEntry;
+import com.google.devtools.build.lib.profiler.analysis.ProfileInfo.Task;
 import com.google.devtools.build.lib.util.Pair;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,6 +26,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
+import javax.annotation.Nullable;
 
 /**
  * Keeps a predefined list of {@link CriticalPathEntry}'s cumulative durations and allows
@@ -44,7 +48,12 @@ public final class CriticalPathStatistics implements Iterable<Pair<String, Doubl
           Pair.of(
               "the VFS calls",
               ProfilerTask.allSatisfying(
-                  task -> DEFAULT_FILTER.contains(task) || task.name().startsWith("VFS_"))),
+                  new Predicate<ProfilerTask>() {
+                    @Override
+                    public boolean apply(ProfilerTask task) {
+                      return DEFAULT_FILTER.contains(task) || task.name().startsWith("VFS_");
+                    }
+                  })),
           typeFilter("the dependency checking", ProfilerTask.ACTION_CHECK),
           typeFilter("the execution setup", ProfilerTask.ACTION),
           typeFilter("local execution", ProfilerTask.LOCAL_EXECUTION),
@@ -80,6 +89,8 @@ public final class CriticalPathStatistics implements Iterable<Pair<String, Doubl
    */
   private final CriticalPathEntry optimalPath;
 
+  private final long mainThreadWaitTime;
+
   public CriticalPathStatistics(ProfileInfo info) {
     totalPath = info.getCriticalPath(FILTER_NONE);
     info.analyzeCriticalPath(FILTER_NONE, totalPath);
@@ -88,10 +99,18 @@ public final class CriticalPathStatistics implements Iterable<Pair<String, Doubl
     info.analyzeCriticalPath(DEFAULT_FILTER, optimalPath);
 
     if (totalPath == null || totalPath.isComponent()) {
+      this.mainThreadWaitTime = 0;
       criticalPathDurations = Collections.emptyList();
-    } else {
-      criticalPathDurations = getCriticalPathDurations(info);
+      return;
     }
+    // Worker thread pool scheduling delays for the actual critical path.
+    long mainThreadWaitTime = 0;
+    for (CriticalPathEntry entry = totalPath; entry != null; entry = entry.next) {
+      mainThreadWaitTime += info.getActionQueueTime(entry.task);
+    }
+    this.mainThreadWaitTime = mainThreadWaitTime;
+
+    criticalPathDurations = getCriticalPathDurations(info);
   }
 
   /**
@@ -110,13 +129,24 @@ public final class CriticalPathStatistics implements Iterable<Pair<String, Doubl
   }
 
   /**
+   * @see ProfileInfo#getActionQueueTime(Task)
+   * @return the mainThreadWaitTime
+   */
+  public long getMainThreadWaitTime() {
+    return mainThreadWaitTime;
+  }
+
+  /**
    * Constructs a filtered Iterable from a critical path.
    *
-   * <p>Ignores all fake (task id < 0) path entries.
+   *  <p>Ignores all fake (task id < 0) path entries and
+   *  {@link com.google.devtools.build.lib.actions.MiddlemanAction}-related entries.
    */
-  public Iterable<CriticalPathEntry> getFilteredPath(final CriticalPathEntry path) {
-    return () ->
-        new Iterator<CriticalPathEntry>() {
+  public Iterable<CriticalPathEntry> getMiddlemanFilteredPath(final CriticalPathEntry path) {
+    return new Iterable<CriticalPathEntry>() {
+      @Override
+      public Iterator<CriticalPathEntry> iterator() {
+        return new Iterator<CriticalPathEntry>() {
           private CriticalPathEntry nextEntry = path;
 
           @Override
@@ -129,7 +159,7 @@ public final class CriticalPathStatistics implements Iterable<Pair<String, Doubl
             CriticalPathEntry current = nextEntry;
             do {
               nextEntry = nextEntry.next;
-            } while (nextEntry != null && nextEntry.task.isFake());
+            } while (nextEntry != null && (nextEntry.task.isFake() || isMiddleMan(nextEntry.task)));
             return current;
           }
 
@@ -138,6 +168,8 @@ public final class CriticalPathStatistics implements Iterable<Pair<String, Doubl
             throw new UnsupportedOperationException();
           }
         };
+      }
+    };
   }
 
   @Override
@@ -198,6 +230,53 @@ public final class CriticalPathStatistics implements Iterable<Pair<String, Doubl
     EnumSet<ProfilerTask> filter = EnumSet.of(ProfilerTask.ACTION_LOCK, ProfilerTask.WAIT);
     Collections.addAll(filter, tasks);
     return Pair.of(description, filter);
+  }
+
+  /**
+   * @return Whether the task is {@link MiddlemanAction}-related.
+   */
+  private static boolean isMiddleMan(Task task) {
+    String description = task.getDescription();
+    return description.startsWith(MiddlemanAction.MIDDLEMAN_MNEMONIC + " ")
+        || description.startsWith("TargetCompletionMiddleman");
+  }
+
+  /**
+   * Aggregates statistics related to {@link MiddlemanAction}s on the critical path.
+   */
+  public static final class MiddleManStatistics {
+    public final int count;
+    public final long duration;
+    public final long criticalTime;
+
+    private MiddleManStatistics(int count, long duration, long criticalTime) {
+      this.count = count;
+      this.duration = duration;
+      this.criticalTime = criticalTime;
+    }
+
+    /**
+     * Summarizes middleman actions on the critical path.
+     * @return null if path is null, else the aggregate statistics
+     */
+    public static MiddleManStatistics create(@Nullable CriticalPathEntry path) {
+      if (path == null) {
+        return null;
+      }
+      int middleManCount = 0;
+      long middleManDuration = 0;
+      long middleManCritTime = 0;
+      for (CriticalPathEntry entry = path; entry != null; entry = entry.next) {
+        Task task = entry.task;
+        if (!task.isFake() && isMiddleMan(task)) {
+          // Aggregate middleman actions.
+          middleManCount++;
+          middleManDuration += entry.duration;
+          middleManCritTime += entry.getCriticalTime();
+        }
+      }
+      return new MiddleManStatistics(middleManCount, middleManDuration, middleManCritTime);
+    }
   }
 }
 
