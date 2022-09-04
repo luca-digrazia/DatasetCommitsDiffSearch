@@ -1,30 +1,22 @@
 package com.codahale.dropwizard.server;
 
-import com.codahale.dropwizard.jersey.setup.JerseyEnvironment;
-import com.codahale.dropwizard.lifecycle.setup.LifecycleEnvironment;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.health.HealthCheckRegistry;
+import com.codahale.dropwizard.jackson.Discoverable;
+import com.codahale.dropwizard.setup.Environment;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.jersey.spi.container.servlet.ServletContainer;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.servlet.ServletContextHandler;
 
-import javax.validation.Validator;
-
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME,
-              include = JsonTypeInfo.As.PROPERTY,
-              property = "type",
-              defaultImpl = DefaultServerFactory.class)
-public interface ServerFactory {
-    Server build(String name,
-                 MetricRegistry metricRegistry,
-                 HealthCheckRegistry healthChecks,
-                 LifecycleEnvironment lifecycle,
-                 ServletContextHandler applicationContext,
-                 ServletContainer jerseyContainer,
-                 ServletContextHandler adminContext,
-                 JerseyEnvironment jersey,
-                 ObjectMapper objectMapper,
-                 Validator validator);
+/**
+ * A factory for building {@link Server} instances for Dropwizard applications.
+ *
+ * @see DefaultServerFactory
+ */
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", defaultImpl = DefaultServerFactory.class)
+public interface ServerFactory extends Discoverable {
+    /**
+     * Build a server for the given Dropwizard application.
+     *
+     * @param environment the application's environment
+     * @return a {@link Server} running the Dropwizard application
+     */
+    Server build(Environment environment);
 }
