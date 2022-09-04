@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -754,14 +753,14 @@ public final class CcCompilationHelper {
    *
    * @throws RuleErrorException
    */
-  public CompilationInfo compile(RuleContext ruleContext, Consumer<String> errorReporter)
+  public CompilationInfo compile(Consumer<String> errorReporter)
       throws RuleErrorException, InterruptedException {
 
     if (!generatePicAction && !generateNoPicAction) {
       ruleErrorConsumer.ruleError("Either PIC or no PIC actions have to be created.");
     }
 
-    ccCompilationContext = initializeCcCompilationContext(ruleContext);
+    ccCompilationContext = initializeCcCompilationContext();
 
     boolean compileHeaderModules = featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES);
     Preconditions.checkState(
@@ -978,8 +977,7 @@ public final class CcCompilationHelper {
   }
 
   /** Create {@code CcCompilationContext} for cc compile action from generated inputs. */
-  private CcCompilationContext initializeCcCompilationContext(RuleContext ruleContext)
-      throws InterruptedException {
+  private CcCompilationContext initializeCcCompilationContext() throws InterruptedException {
     CcCompilationContext.Builder ccCompilationContextBuilder =
         CcCompilationContext.builder(actionConstructionContext, configuration, label);
 
@@ -996,13 +994,13 @@ public final class CcCompilationHelper {
             .getAnalysisEnvironment()
             .getStarlarkSemantics()
             .getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT);
-    RepositoryName repositoryName = label.getPackageIdentifier().getRepository();
-    PathFragment repositoryPath = repositoryName.getExecPath(siblingRepositoryLayout);
+    PathFragment repositoryPath =
+        label.getPackageIdentifier().getRepository().getExecPath(siblingRepositoryLayout);
     ccCompilationContextBuilder.addQuoteIncludeDir(repositoryPath);
     ccCompilationContextBuilder.addQuoteIncludeDir(
-        ruleContext.getGenfilesFragment().getRelative(repositoryPath));
+        configuration.getGenfilesFragment().getRelative(repositoryPath));
     ccCompilationContextBuilder.addQuoteIncludeDir(
-        ruleContext.getBinFragment().getRelative(repositoryPath));
+        configuration.getBinFragment().getRelative(repositoryPath));
 
     ccCompilationContextBuilder.addSystemIncludeDirs(systemIncludeDirs);
     ccCompilationContextBuilder.addFrameworkIncludeDirs(frameworkIncludeDirs);

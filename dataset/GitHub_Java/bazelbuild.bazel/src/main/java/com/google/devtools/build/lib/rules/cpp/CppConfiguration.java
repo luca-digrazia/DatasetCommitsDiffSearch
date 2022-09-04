@@ -761,8 +761,4 @@ public final class CppConfiguration extends Fragment
   public boolean strictHeaderCheckingFromStarlark() {
     return cppOptions.forceStrictHeaderCheckFromStarlark;
   }
-
-  public boolean useCppCompileHeaderMnemonic() {
-    return cppOptions.useCppCompileHeaderMnemonic;
-  }
 }

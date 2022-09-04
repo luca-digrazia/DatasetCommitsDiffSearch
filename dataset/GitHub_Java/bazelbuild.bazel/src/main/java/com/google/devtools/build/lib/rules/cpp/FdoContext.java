@@ -14,23 +14,18 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.rules.cpp.FdoContext.BranchFdoProfile;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.starlarkbuildapi.cpp.BranchFdoProfileApi;
-import com.google.devtools.build.lib.starlarkbuildapi.cpp.FdoContextApi;
-import javax.annotation.Nullable;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.StarlarkThread;
 
 /**
- * Describes how C++ FDO compilation should be done.
+ * A {@link TransitiveInfoProvider} that describes how C++ FDO compilation should be done.
  *
  * <p><b>The {@code fdoProfilePath} member was a mistake. DO NOT USE IT FOR ANYTHING!</b>
  */
 @Immutable
 @AutoCodec
-public class FdoContext implements FdoContextApi<BranchFdoProfile> {
+public class FdoContext implements TransitiveInfoProvider {
   public static FdoContext getDisabledContext() {
     return new FdoContext(
         /* branchFdoProfile= */ null,
@@ -55,7 +50,7 @@ public class FdoContext implements FdoContextApi<BranchFdoProfile> {
 
   /** A POJO encapsulating the branch profiling configuration. */
   @Immutable
-  public static class BranchFdoProfile implements BranchFdoProfileApi {
+  public static class BranchFdoProfile {
     private final BranchFdoMode branchFdoMode;
     private final Artifact profileArtifact;
     private final Artifact protoProfileArtifact;
@@ -71,40 +66,16 @@ public class FdoContext implements FdoContextApi<BranchFdoProfile> {
       return branchFdoMode == BranchFdoMode.AUTO_FDO;
     }
 
-    @Override
-    public boolean isAutoFdoForStarlark(StarlarkThread thread) throws EvalException {
-      CcModule.checkPrivateStarlarkificationAllowlist(thread);
-      return isAutoFdo();
-    }
-
     public boolean isAutoXBinaryFdo() {
       return branchFdoMode == BranchFdoMode.XBINARY_FDO;
-    }
-
-    @Override
-    public boolean isAutoXBinaryFdoForStarlark(StarlarkThread thread) throws EvalException {
-      CcModule.checkPrivateStarlarkificationAllowlist(thread);
-      return isAutoXBinaryFdo();
     }
 
     public boolean isLlvmFdo() {
       return branchFdoMode == BranchFdoMode.LLVM_FDO;
     }
 
-    @Override
-    public boolean isLlvmFdoForStarlark(StarlarkThread thread) throws EvalException {
-      CcModule.checkPrivateStarlarkificationAllowlist(thread);
-      return isLlvmFdo();
-    }
-
     public boolean isLlvmCSFdo() {
       return branchFdoMode == BranchFdoMode.LLVM_CS_FDO;
-    }
-
-    @Override
-    public boolean isLlvmCSFdoForStarlark(StarlarkThread thread) throws EvalException {
-      CcModule.checkPrivateStarlarkificationAllowlist(thread);
-      return isLlvmCSFdo();
     }
 
     public Artifact getProfileArtifact() {
@@ -131,14 +102,6 @@ public class FdoContext implements FdoContextApi<BranchFdoProfile> {
   }
 
   public BranchFdoProfile getBranchFdoProfile() {
-    return branchFdoProfile;
-  }
-
-  @Override
-  @Nullable
-  public BranchFdoProfile getBranchFdoProfileForStarlark(StarlarkThread thread)
-      throws EvalException {
-    CcModule.checkPrivateStarlarkificationAllowlist(thread);
     return branchFdoProfile;
   }
 

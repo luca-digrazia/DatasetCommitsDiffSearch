@@ -48,6 +48,7 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.SourceCategory;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.CollidingProvidesException;
@@ -303,8 +304,9 @@ public final class CcCommon {
   }
 
   /**
-   * Returns the files from headers and does some checks. Note that this method reports warnings to
-   * the {@link RuleContext} as a side effect, and so should only be called once for any given rule.
+   * Returns the files from headers and does some sanity checks. Note that this method reports
+   * warnings to the {@link RuleContext} as a side effect, and so should only be called once for any
+   * given rule.
    */
   public static List<Pair<Artifact, Label>> getHeaders(RuleContext ruleContext) {
     Map<Artifact, Label> map = Maps.newLinkedHashMap();
@@ -350,8 +352,9 @@ public final class CcCommon {
   }
 
   /**
-   * Returns the files from headers and does some checks. Note that this method reports warnings to
-   * the {@link RuleContext} as a side effect, and so should only be called once for any given rule.
+   * Returns the files from headers and does some sanity checks. Note that this method reports
+   * warnings to the {@link RuleContext} as a side effect, and so should only be called once for any
+   * given rule.
    */
   public List<Pair<Artifact, Label>> getHeaders() {
     return getHeaders(ruleContext);
@@ -551,7 +554,7 @@ public final class CcCommon {
    * Determines a list of loose include directories that are only allowed to be referenced when
    * headers checking is {@link HeadersCheckingMode#LOOSE}.
    */
-  Set<PathFragment> getLooseIncludeDirs() {
+  Set<PathFragment> getLooseIncludeDirs() throws InterruptedException {
     ImmutableSet.Builder<PathFragment> result = ImmutableSet.builder();
     // The package directory of the rule contributes includes. Note that this also covers all
     // non-subpackage sub-directories.
@@ -559,7 +562,11 @@ public final class CcCommon {
         ruleContext
             .getLabel()
             .getPackageIdentifier()
-            .getExecPath(ruleContext.getConfiguration().isSiblingRepositoryLayout());
+            .getExecPath(
+                ruleContext
+                    .getAnalysisEnvironment()
+                    .getStarlarkSemantics()
+                    .getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
     result.add(rulePackage);
 
     if (ruleContext
@@ -572,15 +579,23 @@ public final class CcCommon {
           ruleContext
               .getLabel()
               .getPackageIdentifier()
-              .getExecPath(ruleContext.getConfiguration().isSiblingRepositoryLayout());
+              .getExecPath(
+                  ruleContext
+                      .getAnalysisEnvironment()
+                      .getStarlarkSemantics()
+                      .getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
       // For now, anything with an 'includes' needs a blanket declaration
       result.add(packageFragment.getRelative("**"));
     }
     return result.build();
   }
 
-  List<PathFragment> getSystemIncludeDirs() {
-    boolean siblingRepositoryLayout = ruleContext.getConfiguration().isSiblingRepositoryLayout();
+  List<PathFragment> getSystemIncludeDirs() throws InterruptedException {
+    boolean siblingRepositoryLayout =
+        ruleContext
+            .getAnalysisEnvironment()
+            .getStarlarkSemantics()
+            .getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT);
     List<PathFragment> result = new ArrayList<>();
     PackageIdentifier packageIdentifier = ruleContext.getLabel().getPackageIdentifier();
     PathFragment packageExecPath = packageIdentifier.getExecPath(siblingRepositoryLayout);
@@ -620,9 +635,10 @@ public final class CcCommon {
       // must have manifested in includesPath already.
       PathFragment outIncludesPath = packageSourceRoot.getRelative(includesAttr);
       if (ruleContext.getConfiguration().hasSeparateGenfilesDirectory()) {
-        result.add(ruleContext.getGenfilesFragment().getRelative(outIncludesPath));
+        result.add(
+            ruleContext.getConfiguration().getGenfilesFragment().getRelative(outIncludesPath));
       }
-      result.add(ruleContext.getBinFragment().getRelative(outIncludesPath));
+      result.add(ruleContext.getConfiguration().getBinFragment().getRelative(outIncludesPath));
     }
     return result;
   }
