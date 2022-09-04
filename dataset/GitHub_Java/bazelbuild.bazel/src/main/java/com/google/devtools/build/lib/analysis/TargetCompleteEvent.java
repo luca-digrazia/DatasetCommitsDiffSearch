@@ -139,7 +139,7 @@ public final class TargetCompleteEvent
         ConfiguredTargetKey.of(
             targetAndData.getConfiguredTarget(), targetAndData.getConfiguration());
     postedAfterBuilder.add(BuildEventId.targetConfigured(aliasLabel));
-    for (Cause cause : getRootCauses().toList()) {
+    for (Cause cause : getRootCauses()) {
       postedAfterBuilder.add(BuildEventId.fromCause(cause));
     }
     this.postedAfter = postedAfterBuilder.build();
@@ -209,7 +209,7 @@ public final class TargetCompleteEvent
    */
   public static TargetCompleteEvent createFailed(
       ConfiguredTargetAndData ct, NestedSet<Cause> rootCauses) {
-    Preconditions.checkArgument(!rootCauses.isEmpty());
+    Preconditions.checkArgument(!Iterables.isEmpty(rootCauses));
     return new TargetCompleteEvent(
         ct,
         rootCauses,
@@ -237,20 +237,20 @@ public final class TargetCompleteEvent
   }
 
   /** Get the root causes of the target. May be empty. */
-  public NestedSet<Cause> getRootCauses() {
+  public Iterable<Cause> getRootCauses() {
     return rootCauses;
   }
 
   public Iterable<Artifact> getLegacyFilteredImportantArtifacts() {
     // TODO(ulfjack): This duplicates code in ArtifactsToBuild.
     NestedSetBuilder<Artifact> builder = new NestedSetBuilder<>(outputs.getOrder());
-    for (ArtifactsInOutputGroup artifactsInOutputGroup : outputs.toList()) {
+    for (ArtifactsInOutputGroup artifactsInOutputGroup : outputs) {
       if (artifactsInOutputGroup.areImportant()) {
         builder.addTransitive(artifactsInOutputGroup.getArtifacts());
       }
     }
     return Iterables.filter(
-        builder.build().toList(),
+        builder.build(),
         (artifact) -> !artifact.isSourceArtifact() && !artifact.isMiddlemanArtifact());
   }
 
@@ -262,7 +262,7 @@ public final class TargetCompleteEvent
   @Override
   public Collection<BuildEventId> getChildrenEvents() {
     ImmutableList.Builder<BuildEventId> childrenBuilder = ImmutableList.builder();
-    for (Cause cause : getRootCauses().toList()) {
+    for (Cause cause : getRootCauses()) {
       childrenBuilder.add(BuildEventId.fromCause(cause));
     }
     if (isTest) {
@@ -349,10 +349,10 @@ public final class TargetCompleteEvent
   @Override
   public Collection<LocalFile> referencedLocalFiles() {
     ImmutableList.Builder<LocalFile> builder = ImmutableList.builder();
-    for (ArtifactsInOutputGroup group : outputs.toList()) {
+    for (ArtifactsInOutputGroup group : outputs) {
       if (group.areImportant()) {
         completionContext.visitArtifacts(
-            filterFilesets(group.getArtifacts().toList()),
+            filterFilesets(group.getArtifacts()),
             new ArtifactReceiver() {
               @Override
               public void accept(Artifact artifact) {
@@ -370,7 +370,7 @@ public final class TargetCompleteEvent
       }
     }
     if (baselineCoverageArtifacts != null) {
-      for (Artifact artifact : baselineCoverageArtifacts.toList()) {
+      for (Artifact artifact : baselineCoverageArtifacts) {
         builder.add(
             new LocalFile(
                 completionContext.pathResolver().toPath(artifact), LocalFileType.COVERAGE_OUTPUT));
@@ -403,7 +403,7 @@ public final class TargetCompleteEvent
             builder,
             (artifact -> BASELINE_COVERAGE),
             converters,
-            baselineCoverageArtifacts.toList());
+            baselineCoverageArtifacts);
       }
     }
 
@@ -419,7 +419,7 @@ public final class TargetCompleteEvent
   @Override
   public ReportedArtifacts reportedArtifacts() {
     ImmutableSet.Builder<NestedSet<Artifact>> builder = ImmutableSet.builder();
-    for (ArtifactsInOutputGroup artifactsInGroup : outputs.toList()) {
+    for (ArtifactsInOutputGroup artifactsInGroup : outputs) {
       if (artifactsInGroup.areImportant()) {
         builder.add(artifactsInGroup.getArtifacts());
       }
@@ -441,7 +441,7 @@ public final class TargetCompleteEvent
 
   private Iterable<OutputGroup> getOutputFilesByGroup(ArtifactGroupNamer namer) {
     ImmutableList.Builder<OutputGroup> groups = ImmutableList.builder();
-    for (ArtifactsInOutputGroup artifactsInOutputGroup : outputs.toList()) {
+    for (ArtifactsInOutputGroup artifactsInOutputGroup : outputs) {
       if (!artifactsInOutputGroup.areImportant()) {
         continue;
       }
