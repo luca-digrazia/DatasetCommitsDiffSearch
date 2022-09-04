@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
@@ -30,6 +29,7 @@ import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.packages.TestTimeout;
 import com.google.devtools.build.lib.runtime.TerminalTestResultNotifier.TestSummaryOptions;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import java.util.ArrayList;
@@ -252,11 +252,13 @@ public class TestResultAnalyzer {
 
     List<Path> passed = new ArrayList<>();
     if (result.getData().hasPassedLog()) {
-      passed.add(result.getTestLogPath().getRelative(result.getData().getPassedLog()));
+      passed.add(result.getTestAction().getTestLog().getPath().getRelative(
+          result.getData().getPassedLog()));
     }
+
     List<Path> failed = new ArrayList<>();
     for (String path : result.getData().getFailedLogsList()) {
-      failed.add(result.getTestLogPath().getRelative(path));
+      failed.add(result.getTestAction().getTestLog().getPath().getRelative(path));
     }
 
     summaryBuilder

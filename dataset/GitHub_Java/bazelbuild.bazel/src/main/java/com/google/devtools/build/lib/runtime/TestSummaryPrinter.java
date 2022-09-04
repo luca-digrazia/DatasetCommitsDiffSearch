@@ -113,7 +113,7 @@ public class TestSummaryPrinter {
     String message = getCacheMessage(summary) + statusString(summary.getStatus());
     String targetName = summary.getLabel().toString();
     if (withConfigurationName) {
-      targetName += " (" + summary.getConfiguration().getMnemonic() + ")";
+      targetName += " (" + summary.getTarget().getConfiguration().getMnemonic() + ")";
     }
     terminalPrinter.print(
         Strings.padEnd(targetName, 78 - message.length(), ' ')
