@@ -49,7 +49,6 @@ import org.graylog2.contentpacks.model.entities.references.ValueReference;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.streams.StreamService;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,22 +74,19 @@ public class PipelineFacade implements EntityFacade<PipelineDao> {
     private final PipelineStreamConnectionsService connectionsService;
     private final PipelineRuleParser pipelineRuleParser;
     private final RuleService ruleService;
-    private final StreamService streamService;
 
     @Inject
     public PipelineFacade(ObjectMapper objectMapper,
                           PipelineService pipelineService,
                           PipelineStreamConnectionsService connectionsService,
                           PipelineRuleParser pipelineRuleParser,
-                          RuleService rulesService,
-                          StreamService streamService
+                          RuleService rulesService
     ) {
         this.objectMapper = objectMapper;
         this.pipelineService = pipelineService;
         this.connectionsService = connectionsService;
         this.pipelineRuleParser = pipelineRuleParser;
         this.ruleService = rulesService;
-        this.streamService = streamService;
     }
 
     @VisibleForTesting
@@ -160,20 +156,8 @@ public class PipelineFacade implements EntityFacade<PipelineDao> {
             final Object stream = nativeEntities.get(descriptor);
             if (stream instanceof Stream) {
                 streams.add((Stream) stream);
-            }
-            else {
-                if (EntityDescriptorIds.isDefaultStreamDescriptor(descriptor)) {
-                    try {
-                        streamService.load(descriptor.id().id());
-                    }
-                    catch (NotFoundException e) {
-                        LOG.warn("Default stream {} not found!", descriptor.id().id(), e);
-                        throw new MissingNativeEntityException(descriptor);
-                    }
-                }
-                else {
-                    throw new MissingNativeEntityException(descriptor);
-                }
+            } else {
+                throw new MissingNativeEntityException(descriptor);
             }
         }
         return streams.build();
