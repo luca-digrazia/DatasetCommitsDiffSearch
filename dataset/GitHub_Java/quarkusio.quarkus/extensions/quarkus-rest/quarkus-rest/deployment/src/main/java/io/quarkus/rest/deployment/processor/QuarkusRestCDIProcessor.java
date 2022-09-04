@@ -6,7 +6,6 @@ import javax.ws.rs.BeanParam;
 import javax.ws.rs.core.Context;
 
 import org.jboss.jandex.DotName;
-import org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.AutoInjectAnnotationBuildItem;
@@ -15,13 +14,14 @@ import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.rest.common.deployment.framework.QuarkusRestDotNames;
 import io.quarkus.rest.server.runtime.injection.ContextProducers;
-import io.quarkus.resteasy.reactive.spi.ContainerRequestFilterBuildItem;
-import io.quarkus.resteasy.reactive.spi.ContainerResponseFilterBuildItem;
-import io.quarkus.resteasy.reactive.spi.ContextResolverBuildItem;
-import io.quarkus.resteasy.reactive.spi.DynamicFeatureBuildItem;
-import io.quarkus.resteasy.reactive.spi.ExceptionMapperBuildItem;
-import io.quarkus.resteasy.reactive.spi.JaxrsFeatureBuildItem;
+import io.quarkus.rest.spi.ContainerRequestFilterBuildItem;
+import io.quarkus.rest.spi.ContainerResponseFilterBuildItem;
+import io.quarkus.rest.spi.ContextResolverBuildItem;
+import io.quarkus.rest.spi.DynamicFeatureBuildItem;
+import io.quarkus.rest.spi.ExceptionMapperBuildItem;
+import io.quarkus.rest.spi.JaxrsFeatureBuildItem;
 
 public class QuarkusRestCDIProcessor {
 
@@ -39,12 +39,12 @@ public class QuarkusRestCDIProcessor {
     @BuildStep
     void beanDefiningAnnotations(BuildProducer<BeanDefiningAnnotationBuildItem> beanDefiningAnnotations) {
         beanDefiningAnnotations
-                .produce(new BeanDefiningAnnotationBuildItem(ResteasyReactiveDotNames.PATH, BuiltinScope.SINGLETON.getName()));
+                .produce(new BeanDefiningAnnotationBuildItem(QuarkusRestDotNames.PATH, BuiltinScope.SINGLETON.getName()));
         beanDefiningAnnotations
-                .produce(new BeanDefiningAnnotationBuildItem(ResteasyReactiveDotNames.APPLICATION_PATH,
+                .produce(new BeanDefiningAnnotationBuildItem(QuarkusRestDotNames.APPLICATION_PATH,
                         BuiltinScope.SINGLETON.getName()));
         beanDefiningAnnotations
-                .produce(new BeanDefiningAnnotationBuildItem(ResteasyReactiveDotNames.PROVIDER,
+                .produce(new BeanDefiningAnnotationBuildItem(QuarkusRestDotNames.PROVIDER,
                         BuiltinScope.SINGLETON.getName()));
     }
 
