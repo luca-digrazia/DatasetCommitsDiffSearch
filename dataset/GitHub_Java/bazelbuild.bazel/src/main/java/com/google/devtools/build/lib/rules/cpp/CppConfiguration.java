@@ -1166,16 +1166,17 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.disableLinkingModeFlags;
   }
 
-  public boolean disableMakeVariables() {
-    return cppOptions.disableMakeVariables || !cppOptions.enableMakeVariables;
-  }
-
   public boolean enableLinkoptsInUserLinkFlags() {
     return cppOptions.enableLinkoptsInUserLinkFlags;
   }
 
   public boolean disableEmittingStaticLibgcc() {
     return cppOptions.disableEmittingStaticLibgcc;
+  }
+
+  /** Returns true if the deprecated CcDynamicLibrariesForRuntime class should be used */
+  public boolean enableCcDynamicLibrariesForRuntime() {
+    return cppOptions.enableCcDynamicLibrariesForRuntime;
   }
 
   private void checkForToolchainSkylarkApiAvailability() throws EvalException {
