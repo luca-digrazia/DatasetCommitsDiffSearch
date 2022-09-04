@@ -108,9 +108,13 @@ import smile.math.MathEx;
  * @author Haifeng Li
  */
 public class NeuralNetwork extends AbstractNeuralNetwork implements OnlineClassifier<double[]>, SoftClassifier<double[]>, Serializable {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(NeuralNetwork.class);
 
+    /**
+     * The dimensionality of input data.
+     */
+    private int p;
     /**
      * The number of classes.
      */
@@ -157,6 +161,7 @@ public class NeuralNetwork extends AbstractNeuralNetwork implements OnlineClassi
                 }
         }
 
+        p = net[0].getInputUnits();
         k = outputLayer.getOutputUnits();
         if (k == 1) k = 2;
     }
@@ -200,6 +205,7 @@ public class NeuralNetwork extends AbstractNeuralNetwork implements OnlineClassi
         propagate(x);
         setTarget(y);
         backpropagate(target);
+
         update();
     }
 
