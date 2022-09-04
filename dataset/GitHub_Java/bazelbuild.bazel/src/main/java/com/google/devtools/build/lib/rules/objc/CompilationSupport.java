@@ -85,7 +85,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions.AppleBitcodeMode;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.XcodeConfig;
@@ -293,7 +292,7 @@ public class CompilationSupport {
       ObjcCppSemantics semantics,
       String purpose,
       boolean generateModuleMap)
-      throws RuleErrorException, InterruptedException {
+      throws RuleErrorException {
     CcCompilationHelper result =
         new CcCompilationHelper(
                 ruleContext,
@@ -305,9 +304,7 @@ public class CompilationSupport {
                 CcCompilationHelper.SourceCategory.CC_AND_OBJC,
                 ccToolchain,
                 fdoContext,
-                buildConfiguration,
-                TargetUtils.getExecutionInfo(
-                    ruleContext.getRule(), ruleContext.isAllowTagsPropagation()))
+                buildConfiguration)
             .addSources(sources)
             .addPrivateHeaders(privateHdrs)
             .addDefines(objcProvider.get(DEFINE))
@@ -427,9 +424,7 @@ public class CompilationSupport {
                 fdoContext,
                 buildConfiguration,
                 ruleContext.getFragment(CppConfiguration.class),
-                ruleContext.getSymbolGenerator(),
-                TargetUtils.getExecutionInfo(
-                    ruleContext.getRule(), ruleContext.isAllowTagsPropagation()))
+                ruleContext.getSymbolGenerator())
             .setGrepIncludes(CppHelper.getGrepIncludes(ruleContext))
             .setIsStampingEnabled(AnalysisUtils.isStampingEnabled(ruleContext))
             .setTestOrTestOnlyTarget(ruleContext.isTestTarget() || ruleContext.isTestOnlyTarget())
@@ -672,31 +667,25 @@ public class CompilationSupport {
   }
 
   /** Returns a list of framework search paths for clang actions for pre-cleanup mode. */
-  static ImmutableList<PathFragment> preCleanupFrameworkSearchPathFragments(
+  static ImmutableList<String> preCleanupFrameworkSearchPaths(
       ObjcProvider provider, RuleContext ruleContext, BuildConfiguration buildConfiguration) {
 
-    ImmutableList.Builder<PathFragment> searchPaths = new ImmutableList.Builder<>();
-    return searchPaths
+    ImmutableList.Builder<String> frameworkNames = new ImmutableList.Builder<>();
+    return frameworkNames
         // Add custom (non-SDK) framework search paths. For each framework foo/bar.framework,
         // include "foo" as a search path.
-        .addAll(uniqueParentDirectories(provider.getStaticFrameworkDirs()))
-        .addAll(uniqueParentDirectories(provider.get(DYNAMIC_FRAMEWORK_DIR)))
-        .addAll(uniqueParentDirectories(provider.get(FRAMEWORK_SEARCH_PATH_ONLY)))
-        .build();
-  }
-
-  /** Returns a list of framework header search path fragments. */
-  static ImmutableList<PathFragment> frameworkHeaderSearchPathFragments(
-      ObjcProvider provider, RuleContext ruleContext, BuildConfiguration buildConfiguration)
-      throws InterruptedException {
-    StarlarkSemantics starlarkSemantics =
-        ruleContext.getAnalysisEnvironment().getSkylarkSemantics();
-    if (!starlarkSemantics.incompatibleObjcFrameworkCleanup()) {
-      return preCleanupFrameworkSearchPathFragments(provider, ruleContext, buildConfiguration);
-    }
-    ImmutableList.Builder<PathFragment> searchPaths = new ImmutableList.Builder<>();
-    return searchPaths
-        .addAll(uniqueParentDirectories(provider.get(FRAMEWORK_SEARCH_PATH_ONLY)))
+        .addAll(
+            Iterables.transform(
+                uniqueParentDirectories(provider.getStaticFrameworkDirs()),
+                PathFragment::getSafePathString))
+        .addAll(
+            Iterables.transform(
+                uniqueParentDirectories(provider.get(DYNAMIC_FRAMEWORK_DIR)),
+                PathFragment::getSafePathString))
+        .addAll(
+            Iterables.transform(
+                uniqueParentDirectories(provider.get(FRAMEWORK_SEARCH_PATH_ONLY)),
+                PathFragment::getSafePathString))
         .build();
   }
 
@@ -704,11 +693,18 @@ public class CompilationSupport {
   static ImmutableList<String> frameworkHeaderSearchPaths(
       ObjcProvider provider, RuleContext ruleContext, BuildConfiguration buildConfiguration)
       throws InterruptedException {
+    StarlarkSemantics starlarkSemantics =
+        ruleContext.getAnalysisEnvironment().getSkylarkSemantics();
+    if (!starlarkSemantics.incompatibleObjcFrameworkCleanup()) {
+      return preCleanupFrameworkSearchPaths(provider, ruleContext, buildConfiguration);
+    }
     ImmutableList.Builder<String> searchPaths = new ImmutableList.Builder<>();
     return searchPaths
+        // Add header search paths corresponding to custom (non-SDK) frameworks. For each framework
+        // foo/bar.framework, include "foo" as a search path.
         .addAll(
             Iterables.transform(
-                frameworkHeaderSearchPathFragments(provider, ruleContext, buildConfiguration),
+                uniqueParentDirectories(provider.get(FRAMEWORK_SEARCH_PATH_ONLY)),
                 PathFragment::getSafePathString))
         .build();
   }
@@ -719,15 +715,10 @@ public class CompilationSupport {
       throws InterruptedException {
     StarlarkSemantics starlarkSemantics =
         ruleContext.getAnalysisEnvironment().getSkylarkSemantics();
-    ImmutableList.Builder<String> searchPaths = new ImmutableList.Builder<>();
     if (!starlarkSemantics.incompatibleObjcFrameworkCleanup()) {
-      return searchPaths
-          .addAll(
-              Iterables.transform(
-                  preCleanupFrameworkSearchPathFragments(provider, ruleContext, buildConfiguration),
-                  PathFragment::getSafePathString))
-          .build();
+      return preCleanupFrameworkSearchPaths(provider, ruleContext, buildConfiguration);
     }
+    ImmutableList.Builder<String> searchPaths = new ImmutableList.Builder<>();
     return searchPaths
         // Add library search paths corresponding to custom (non-SDK) frameworks. For each framework
         // foo/bar.framework, include "foo" as a search path.
@@ -800,6 +791,7 @@ public class CompilationSupport {
     private BuildConfiguration buildConfiguration;
     private IntermediateArtifacts intermediateArtifacts;
     private CompilationAttributes compilationAttributes;
+    private boolean useDeps = true;
     private Map<String, NestedSet<Artifact>> outputGroupCollector;
     private ImmutableList.Builder<Artifact> objectFilesCollector;
     private CcToolchainProvider toolchain;
