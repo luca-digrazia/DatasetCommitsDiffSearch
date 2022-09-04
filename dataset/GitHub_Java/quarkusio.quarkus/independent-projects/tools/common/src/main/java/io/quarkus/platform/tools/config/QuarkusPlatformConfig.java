@@ -1,13 +1,14 @@
 package io.quarkus.platform.tools.config;
 
+import java.util.Iterator;
+import java.util.ServiceLoader;
+import java.util.concurrent.atomic.AtomicReference;
+
 import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
 import io.quarkus.platform.descriptor.loader.QuarkusPlatformDescriptorLoader;
 import io.quarkus.platform.descriptor.loader.QuarkusPlatformDescriptorLoaderContext;
 import io.quarkus.platform.tools.DefaultMessageWriter;
 import io.quarkus.platform.tools.MessageWriter;
-import java.util.Iterator;
-import java.util.ServiceLoader;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class QuarkusPlatformConfig {
 
@@ -18,9 +19,9 @@ public class QuarkusPlatformConfig {
         private QuarkusPlatformDescriptor platformDescr;
 
         private Builder(int type) {
-            if (type == GLOBAL) {
+            if(type == GLOBAL) {
                 assertNoGlobalConfig();
-            } else if (type == THREAD_LOCAL) {
+            } else if(type == THREAD_LOCAL) {
                 assertNoThreadLocalConfig();
             }
             this.type = type;
@@ -42,23 +43,19 @@ public class QuarkusPlatformConfig {
 
         @SuppressWarnings({ "unchecked", "rawtypes" })
         private QuarkusPlatformDescriptor getPlatformDescriptor() {
-            if (platformDescr != null) {
+            if(platformDescr != null) {
                 return platformDescr;
             }
 
-            final Iterator<QuarkusPlatformDescriptorLoader> i = ServiceLoader.load(QuarkusPlatformDescriptorLoader.class)
-                    .iterator();
-            if (!i.hasNext()) {
-                throw new IllegalStateException("Failed to locate an implementation of "
-                        + QuarkusPlatformDescriptorLoader.class.getName() + " on the classpath");
+            final Iterator<QuarkusPlatformDescriptorLoader> i = ServiceLoader.load(QuarkusPlatformDescriptorLoader.class).iterator();
+            if(!i.hasNext()) {
+                throw new IllegalStateException("Failed to locate an implementation of " + QuarkusPlatformDescriptorLoader.class.getName() + " on the classpath");
             }
-            final QuarkusPlatformDescriptorLoader<QuarkusPlatformDescriptor, QuarkusPlatformDescriptorLoaderContext> dl = i
-                    .next();
-            if (i.hasNext()) {
+            final QuarkusPlatformDescriptorLoader<QuarkusPlatformDescriptor, QuarkusPlatformDescriptorLoaderContext> dl = i.next();
+            if(i.hasNext()) {
                 final StringBuilder buf = new StringBuilder();
-                buf.append("Found multiple implementations of ").append(QuarkusPlatformDescriptorLoader.class.getName())
-                        .append("on the classpath: ").append(dl.getClass().getName());
-                while (i.hasNext()) {
+                buf.append("Found multiple implementations of ").append(QuarkusPlatformDescriptorLoader.class.getName()).append("on the classpath: ").append(dl.getClass().getName());
+                while(i.hasNext()) {
                     buf.append(", ").append(i.next().getClass().getName());
                 }
                 throw new IllegalStateException(buf.toString());
@@ -67,8 +64,7 @@ public class QuarkusPlatformConfig {
                 @Override
                 public MessageWriter getMessageWriter() {
                     return Builder.this.getMessageWriter();
-                }
-            });
+                }});
         }
 
         public QuarkusPlatformConfig build() {
@@ -102,9 +98,9 @@ public class QuarkusPlatformConfig {
         return builder().build();
     }
 
-    public static synchronized QuarkusPlatformConfig getGlobalDefault() {
+    public static QuarkusPlatformConfig getGlobalDefault() {
         final QuarkusPlatformConfig c = globalConfig.get();
-        if (c != null) {
+        if(c != null) {
             return c;
         }
         return defaultConfigBuilder().build();
@@ -116,7 +112,7 @@ public class QuarkusPlatformConfig {
 
     public static QuarkusPlatformConfig getThreadLocal() {
         final QuarkusPlatformConfig c = threadLocalConfig.get();
-        if (c != null) {
+        if(c != null) {
             return c;
         }
         return threadLocalConfigBuilder().build();
@@ -157,10 +153,10 @@ public class QuarkusPlatformConfig {
     private QuarkusPlatformConfig(Builder builder) {
         this.log = builder.getMessageWriter();
         this.platformDescr = builder.getPlatformDescriptor();
-        if (builder.type == GLOBAL) {
+        if(builder.type == GLOBAL) {
             assertNoGlobalConfig();
             globalConfig.set(this);
-        } else if (builder.type == THREAD_LOCAL) {
+        } else if(builder.type == THREAD_LOCAL) {
             assertNoThreadLocalConfig();
             threadLocalConfig.set(this);
         }

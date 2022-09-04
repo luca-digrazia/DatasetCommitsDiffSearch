@@ -6,10 +6,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
 
-import io.quarkus.cli.commands.QuarkusCommandInvocation;
 import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
 import io.quarkus.platform.descriptor.resolver.json.QuarkusJsonPlatformDescriptorResolver;
-import io.quarkus.platform.tools.MessageWriter;
+import io.quarkus.platform.tools.config.QuarkusPlatformConfig;
 
 public abstract class QuarkusPlatformTask extends QuarkusTask {
 
@@ -18,36 +17,50 @@ public abstract class QuarkusPlatformTask extends QuarkusTask {
     }
 
     protected void execute() {
-        final MessageWriter msgWriter = new GradleMessageWriter(getProject().getLogger());
-        final QuarkusPlatformDescriptor platformDescr = getPlatformDescriptor(msgWriter);
-        doExecute(new QuarkusCommandInvocation(platformDescr, msgWriter));
+        try {
+            setupPlatformDescriptor();
+            doExecute();
+        } finally {
+            QuarkusPlatformConfig.clearThreadLocal();
+        }
     }
 
-    protected abstract void doExecute(QuarkusCommandInvocation invocation);
+    protected abstract void doExecute();
 
-    private QuarkusPlatformDescriptor getPlatformDescriptor(MessageWriter msgWriter) {
+    protected void setupPlatformDescriptor() {
+
+        if (QuarkusPlatformConfig.hasThreadLocal()) {
+            getProject().getLogger().debug("Quarkus platform descriptor has already been initialized");
+            return;
+        } else {
+            getProject().getLogger().debug("Initializing Quarkus platform descriptor");
+        }
+
         final Path currentDir = getProject().getProjectDir().toPath();
 
         final Path gradlePropsPath = currentDir.resolve("gradle.properties");
-        if (!Files.exists(gradlePropsPath)) {
+        if (Files.exists(gradlePropsPath)) {
+            final Properties props = new Properties();
+            try (InputStream is = Files.newInputStream(gradlePropsPath)) {
+                props.load(is);
+            } catch (IOException e) {
+                throw new IllegalStateException("Failed to load " + gradlePropsPath, e);
+            }
+
+            final QuarkusPlatformDescriptor platform = QuarkusJsonPlatformDescriptorResolver.newInstance()
+                    .setArtifactResolver(extension().resolveAppModel())
+                    .setMessageWriter(new GradleMessageWriter(getProject().getLogger()))
+                    .resolveFromBom(
+                            getRequiredProperty(props, "quarkusPlatformGroupId"),
+                            getRequiredProperty(props, "quarkusPlatformArtifactId"),
+                            getRequiredProperty(props, "quarkusPlatformVersion"));
+
+            QuarkusPlatformConfig.threadLocalConfigBuilder().setPlatformDescriptor(platform).build();
+
+        } else {
             getProject().getLogger()
                     .warn("Failed to locate " + gradlePropsPath + " to determine the Quarkus Platform BOM coordinates");
-            return null;
         }
-        final Properties props = new Properties();
-        try (InputStream is = Files.newInputStream(gradlePropsPath)) {
-            props.load(is);
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to load " + gradlePropsPath, e);
-        }
-
-        return QuarkusJsonPlatformDescriptorResolver.newInstance()
-                .setArtifactResolver(extension().getAppModelResolver())
-                .setMessageWriter(msgWriter)
-                .resolveFromBom(
-                        getRequiredProperty(props, "quarkusPlatformGroupId"),
-                        getRequiredProperty(props, "quarkusPlatformArtifactId"),
-                        getRequiredProperty(props, "quarkusPlatformVersion"));
     }
 
     private static String getRequiredProperty(Properties props, String name) {
