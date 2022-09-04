@@ -16,16 +16,17 @@ package com.google.devtools.build.lib.analysis.actions;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionKeyCacher;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionTemplate;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
+import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
@@ -97,15 +98,16 @@ public final class SpawnActionTemplate extends ActionKeyCacher
 
   @Override
   public Iterable<SpawnAction> generateActionForInputArtifacts(
-      Iterable<TreeFileArtifact> inputTreeFileArtifacts, ActionLookupKey artifactOwner) {
+      Iterable<TreeFileArtifact> inputTreeFileArtifacts, ArtifactOwner artifactOwner) {
     ImmutableList.Builder<SpawnAction> expandedActions = new ImmutableList.Builder<>();
     for (TreeFileArtifact inputTreeFileArtifact : inputTreeFileArtifacts) {
       PathFragment parentRelativeOutputPath =
           outputPathMapper.parentRelativeOutputPath(inputTreeFileArtifact);
 
-      TreeFileArtifact outputTreeFileArtifact =
-          ActionInputHelper.treeFileArtifactWithNoGeneratingActionSet(
-              outputTreeArtifact, parentRelativeOutputPath, artifactOwner);
+      TreeFileArtifact outputTreeFileArtifact = ActionInputHelper.treeFileArtifact(
+          outputTreeArtifact,
+          parentRelativeOutputPath,
+          artifactOwner);
 
       expandedActions.add(createAction(inputTreeFileArtifact, outputTreeFileArtifact));
     }
@@ -119,10 +121,8 @@ public final class SpawnActionTemplate extends ActionKeyCacher
     TreeFileArtifact inputTreeFileArtifact =
         ActionInputHelper.treeFileArtifact(inputTreeArtifact, "dummy_for_key");
     TreeFileArtifact outputTreeFileArtifact =
-        ActionInputHelper.treeFileArtifactWithNoGeneratingActionSet(
-            outputTreeArtifact,
-            outputPathMapper.parentRelativeOutputPath(inputTreeFileArtifact),
-            outputTreeArtifact.getArtifactOwner());
+        ActionInputHelper.treeFileArtifact(
+            outputTreeArtifact, outputPathMapper.parentRelativeOutputPath(inputTreeFileArtifact));
     SpawnAction dummyAction = createAction(inputTreeFileArtifact, outputTreeFileArtifact);
     dummyAction.computeKey(actionKeyContext, fp);
   }
@@ -226,6 +226,10 @@ public final class SpawnActionTemplate extends ActionKeyCacher
     return spawnActionBuilder.buildForActionTemplate(getOwner()).getClientEnvironmentVariables();
   }
 
+  @Override
+  public boolean shouldReportPathPrefixConflict(ActionAnalysisMetadata action) {
+    return this != action;
+  }
 
   @Override
   public MiddlemanType getActionType() {
