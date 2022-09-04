@@ -2,8 +2,8 @@ package io.quarkus.arc.processor;
 
 import static io.quarkus.arc.processor.Basics.index;
 import static io.quarkus.arc.processor.Basics.name;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import io.quarkus.arc.processor.types.Bar;
 import io.quarkus.arc.processor.types.Foo;
@@ -12,13 +12,14 @@ import java.io.IOException;
 import java.util.AbstractCollection;
 import java.util.AbstractList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget.Kind;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 /**
  *
@@ -34,9 +35,7 @@ public class BeanInfoQualifiersTest {
         DotName fooQualifierName = name(FooQualifier.class);
         ClassInfo fooClass = index.getClassByName(fooName);
 
-        BeanInfo bean = Beans.createClassBean(fooClass,
-                BeanProcessor.builder().setBeanArchiveIndex(index).build().getBeanDeployment(),
-                null);
+        BeanInfo bean = Beans.createClassBean(fooClass, new BeanDeployment(index, null, Collections.emptyList()), null);
 
         AnnotationInstance requiredFooQualifier = index.getAnnotations(fooQualifierName).stream()
                 .filter(a -> Kind.FIELD.equals(a.target().kind()) && a.target().asField().name().equals("foo")).findFirst()

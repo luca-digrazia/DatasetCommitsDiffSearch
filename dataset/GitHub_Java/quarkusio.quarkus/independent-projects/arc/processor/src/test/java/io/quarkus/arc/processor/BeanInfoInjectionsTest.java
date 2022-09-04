@@ -2,8 +2,7 @@ package io.quarkus.arc.processor;
 
 import static io.quarkus.arc.processor.Basics.index;
 import static io.quarkus.arc.processor.Basics.name;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.Assert.assertEquals;
 
 import io.quarkus.arc.processor.types.Bar;
 import io.quarkus.arc.processor.types.Foo;
@@ -20,7 +19,8 @@ import org.jboss.jandex.Index;
 import org.jboss.jandex.ParameterizedType;
 import org.jboss.jandex.Type;
 import org.jboss.jandex.Type.Kind;
-import org.junit.jupiter.api.Test;
+import org.junit.Assert;
+import org.junit.Test;
 
 /**
  *
@@ -40,7 +40,7 @@ public class BeanInfoInjectionsTest {
         Type listStringType = ParameterizedType.create(name(List.class),
                 new Type[] { Type.create(name(String.class), Kind.CLASS) }, null);
 
-        BeanDeployment deployment = BeanProcessor.builder().setBeanArchiveIndex(index).build().getBeanDeployment();
+        BeanDeployment deployment = new BeanDeployment(index, null, null);
         deployment.registerCustomContexts(Collections.emptyList());
         deployment.registerBeans(Collections.emptyList());
         BeanInfo barBean = deployment.getBeans().stream().filter(b -> b.getTarget().get().equals(barClass)).findFirst().get();
@@ -66,7 +66,7 @@ public class BeanInfoInjectionsTest {
                 assertEquals(listStringType, injection.injectionPoints.get(1).getRequiredType());
                 assertEquals(fooType, injection.injectionPoints.get(0).getRequiredType());
             } else {
-                fail();
+                Assert.fail();
             }
 
         }

@@ -1,40 +1,34 @@
 package io.quarkus.arc.processor;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
-import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.IndexView;
-import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.ParameterizedType;
 import org.jboss.jandex.Type;
 import org.jboss.jandex.Type.Kind;
 import org.jboss.jandex.TypeVariable;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 public class TypesTest {
 
     @Test
     public void testGetTypeClosure() throws IOException {
-        IndexView index = Basics.index(Foo.class, Baz.class, Producer.class, Object.class, List.class, Collection.class,
-                Iterable.class);
+        IndexView index = Basics.index(Foo.class, Baz.class, Object.class);
         DotName bazName = DotName.createSimple(Baz.class.getName());
         DotName fooName = DotName.createSimple(Foo.class.getName());
-        DotName producerName = DotName.createSimple(Producer.class.getName());
         ClassInfo fooClass = index.getClassByName(fooName);
         Map<ClassInfo, Map<TypeVariable, Type>> resolvedTypeVariables = new HashMap<>();
 
         // Baz, Foo<String>, Object
-        Set<Type> bazTypes = Types.getTypeClosure(index.getClassByName(bazName), null,
+        Set<Type> bazTypes = Types.getTypeClosure(index.getClassByName(bazName),
                 Collections.emptyMap(),
                 new BeanDeployment(index, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
                         Collections.emptyList(), null,
@@ -64,23 +58,6 @@ public class TypesTest {
                 assertEquals(DotNames.OBJECT, fooType.arguments().get(0).asTypeVariable().bounds().get(0).name());
             }
         }
-        ClassInfo producerClass = index.getClassByName(producerName);
-        String producersName = "produce";
-        MethodInfo producerMethod = producerClass.method(producersName);
-        // Object is the sole type
-        Set<Type> producerMethodTypes = Types.getProducerMethodTypeClosure(producerMethod,
-                new BeanDeployment(index, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
-                        Collections.emptyList(), null,
-                        false, Collections.emptyList(), Collections.emptyMap(), Collections.emptyList()));
-        assertEquals(1, producerMethodTypes.size());
-
-        // Object is the sole type
-        FieldInfo producerField = producerClass.field(producersName);
-        Set<Type> producerFieldTypes = Types.getProducerFieldTypeClosure(producerField,
-                new BeanDeployment(index, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
-                        Collections.emptyList(), null,
-                        false, Collections.emptyList(), Collections.emptyMap(), Collections.emptyList()));
-        assertEquals(1, producerFieldTypes.size());
     }
 
     static class Foo<T> {
@@ -91,14 +68,5 @@ public class TypesTest {
 
     static class Baz extends Foo<String> {
 
-    }
-
-    static class Producer {
-
-        public List<? extends Number> produce() {
-            return null;
-        }
-
-        List<? extends Number> produce;
     }
 }

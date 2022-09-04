@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
@@ -32,15 +31,12 @@ import org.jboss.jandex.Type;
 import org.jboss.jandex.Type.Kind;
 import org.jboss.jandex.TypeVariable;
 import org.jboss.jandex.WildcardType;
-import org.jboss.logging.Logger;
 
 /**
  *
  * @author Martin Kouba
  */
 final class Types {
-
-    static final Logger LOGGER = Logger.getLogger(Types.class);
 
     private static final Type OBJECT_TYPE = Type.create(DotNames.OBJECT, Kind.CLASS);
 
@@ -152,9 +148,9 @@ final class Types {
                         "Producer method return type not found in index: " + producerMethod.returnType().name());
             }
             if (Kind.CLASS.equals(returnType.kind())) {
-                types = getTypeClosure(returnTypeClassInfo, producerMethod, Collections.emptyMap(), beanDeployment, null);
+                types = getTypeClosure(returnTypeClassInfo, Collections.emptyMap(), beanDeployment, null);
             } else if (Kind.PARAMETERIZED_TYPE.equals(returnType.kind())) {
-                types = getTypeClosure(returnTypeClassInfo, producerMethod,
+                types = getTypeClosure(returnTypeClassInfo,
                         buildResolvedMap(returnType.asParameterizedType().arguments(), returnTypeClassInfo.typeParameters(),
                                 Collections.emptyMap(), beanDeployment.getIndex()),
                         beanDeployment, null);
@@ -178,9 +174,9 @@ final class Types {
                 throw new IllegalArgumentException("Producer field type not found in index: " + producerField.type().name());
             }
             if (Kind.CLASS.equals(fieldType.kind())) {
-                types = getTypeClosure(fieldClassInfo, producerField, Collections.emptyMap(), beanDeployment, null);
+                types = getTypeClosure(fieldClassInfo, Collections.emptyMap(), beanDeployment, null);
             } else if (Kind.PARAMETERIZED_TYPE.equals(fieldType.kind())) {
-                types = getTypeClosure(fieldClassInfo, producerField,
+                types = getTypeClosure(fieldClassInfo,
                         buildResolvedMap(fieldType.asParameterizedType().arguments(), fieldClassInfo.typeParameters(),
                                 Collections.emptyMap(), beanDeployment.getIndex()),
                         beanDeployment, null);
@@ -195,16 +191,15 @@ final class Types {
         Set<Type> types;
         List<TypeVariable> typeParameters = classInfo.typeParameters();
         if (typeParameters.isEmpty()) {
-            types = getTypeClosure(classInfo, null, Collections.emptyMap(), beanDeployment, null);
+            types = getTypeClosure(classInfo, Collections.emptyMap(), beanDeployment, null);
         } else {
-            types = getTypeClosure(classInfo, null, buildResolvedMap(typeParameters, typeParameters,
+            types = getTypeClosure(classInfo, buildResolvedMap(typeParameters, typeParameters,
                     Collections.emptyMap(), beanDeployment.getIndex()), beanDeployment, null);
         }
         return restrictBeanTypes(types, beanDeployment.getAnnotations(classInfo));
     }
 
-    static Set<Type> getTypeClosure(ClassInfo classInfo, AnnotationTarget producerFieldOrMethod,
-            Map<TypeVariable, Type> resolvedTypeParameters,
+    static Set<Type> getTypeClosure(ClassInfo classInfo, Map<TypeVariable, Type> resolvedTypeParameters,
             BeanDeployment beanDeployment, BiConsumer<ClassInfo, Map<TypeVariable, Type>> resolvedTypeVariablesConsumer) {
         Set<Type> types = new HashSet<>();
         List<TypeVariable> typeParameters = classInfo.typeParameters();
@@ -215,19 +210,8 @@ final class Types {
         } else {
             // Canonical ParameterizedType with unresolved type variables
             Type[] typeParams = new Type[typeParameters.size()];
-            boolean skipThisType = false;
             for (int i = 0; i < typeParameters.size(); i++) {
                 typeParams[i] = resolvedTypeParameters.get(typeParameters.get(i));
-                // this should only be the case for producers; wildcard is not a legal bean type
-                // see https://docs.jboss.org/cdi/spec/2.0/cdi-spec.html#legal_bean_types
-                if (typeParams[i].kind().equals(Kind.WILDCARD_TYPE) && producerFieldOrMethod != null) {
-                    LOGGER.info("Producer " +
-                            (producerFieldOrMethod.kind().equals(AnnotationTarget.Kind.FIELD) ? "field " : "method ") +
-                            producerFieldOrMethod +
-                            " contains a parameterized typed with a wildcard. This type is not a legal bean type" +
-                            " according to CDI specification and will be ignored during bean resolution.");
-                    skipThisType = true;
-                }
             }
             if (resolvedTypeVariablesConsumer != null) {
                 Map<TypeVariable, Type> resolved = new HashMap<>();
@@ -236,9 +220,7 @@ final class Types {
                 }
                 resolvedTypeVariablesConsumer.accept(classInfo, resolved);
             }
-            if (!skipThisType) {
-                types.add(ParameterizedType.create(classInfo.name(), typeParams, null));
-            }
+            types.add(ParameterizedType.create(classInfo.name(), typeParams, null));
         }
         // Interfaces
         for (Type interfaceType : classInfo.interfaceTypes()) {
@@ -249,8 +231,7 @@ final class Types {
                     resolved = buildResolvedMap(interfaceType.asParameterizedType().arguments(),
                             interfaceClassInfo.typeParameters(), resolvedTypeParameters, beanDeployment.getIndex());
                 }
-                types.addAll(getTypeClosure(interfaceClassInfo, producerFieldOrMethod, resolved, beanDeployment,
-                        resolvedTypeVariablesConsumer));
+                types.addAll(getTypeClosure(interfaceClassInfo, resolved, beanDeployment, resolvedTypeVariablesConsumer));
             }
         }
         // Superclass
@@ -263,8 +244,7 @@ final class Types {
                             superClassInfo.typeParameters(),
                             resolvedTypeParameters, beanDeployment.getIndex());
                 }
-                types.addAll(getTypeClosure(superClassInfo, producerFieldOrMethod, resolved, beanDeployment,
-                        resolvedTypeVariablesConsumer));
+                types.addAll(getTypeClosure(superClassInfo, resolved, beanDeployment, resolvedTypeVariablesConsumer));
             }
         }
         return types;
@@ -273,7 +253,7 @@ final class Types {
     static Map<ClassInfo, Map<TypeVariable, Type>> resolvedTypeVariables(ClassInfo classInfo,
             BeanDeployment beanDeployment) {
         Map<ClassInfo, Map<TypeVariable, Type>> resolvedTypeVariables = new HashMap<>();
-        getTypeClosure(classInfo, null, Collections.emptyMap(), beanDeployment, resolvedTypeVariables::put);
+        getTypeClosure(classInfo, Collections.emptyMap(), beanDeployment, resolvedTypeVariables::put);
         return resolvedTypeVariables;
     }
 

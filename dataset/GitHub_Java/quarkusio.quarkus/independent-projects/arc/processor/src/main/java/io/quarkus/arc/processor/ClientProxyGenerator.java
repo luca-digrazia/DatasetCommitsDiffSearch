@@ -5,8 +5,8 @@ import static org.objectweb.asm.Opcodes.ACC_FINAL;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 
 import io.quarkus.arc.ClientProxy;
+import io.quarkus.arc.CreationalContextImpl;
 import io.quarkus.arc.InjectableBean;
-import io.quarkus.arc.impl.CreationalContextImpl;
 import io.quarkus.arc.processor.ResourceOutput.Resource;
 import io.quarkus.gizmo.AssignableResultHandle;
 import io.quarkus.gizmo.BytecodeCreator;
@@ -98,7 +98,7 @@ public class ClientProxyGenerator extends AbstractGenerator {
 
             // Exceptions
             for (Type exception : method.exceptions()) {
-                forward.addException(exception.toString());
+                forward.addException(exception.asClassType().toString());
             }
             // Method params
             ResultHandle[] params = new ResultHandle[method.parameters().size()];
