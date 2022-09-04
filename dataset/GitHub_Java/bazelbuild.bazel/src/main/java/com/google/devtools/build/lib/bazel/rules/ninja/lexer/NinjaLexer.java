@@ -19,7 +19,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.devtools.build.lib.bazel.rules.ninja.file.ByteBufferFragment;
+import com.google.devtools.build.lib.bazel.rules.ninja.file.FileFragment;
 import com.google.devtools.build.lib.util.Pair;
 import java.util.Arrays;
 import java.util.List;
@@ -39,15 +39,17 @@ public class NinjaLexer {
               NinjaToken.POOL)
           .collect(ImmutableMap.toImmutableMap(token -> token.getBytes()[0], nt -> nt));
 
-  private final ByteBufferFragment fragment;
+  private final FileFragment fragment;
   private NinjaLexerStep step;
   private final List<Pair<Integer, Integer>> ranges;
   private final List<NinjaToken> tokens;
-  /** Flag to give a hint that letters should be interpreted as text, not as identifier. */
-  private boolean expectTextUntilEol;
+  /** Flag to give a hint how letters should be interpreted (as text, identifier, path). */
+  private TextKind expectedTextKind = TextKind.IDENTIFIER;
+
+  private boolean interpretPoolAsVariable = false;
 
   /** @param fragment fragment to do the lexing on */
-  public NinjaLexer(ByteBufferFragment fragment) {
+  public NinjaLexer(FileFragment fragment) {
     this.fragment = fragment;
     step = new NinjaLexerStep(fragment, 0);
     ranges = Lists.newArrayList();
@@ -80,32 +82,52 @@ public class NinjaLexer {
       byte b = step.startByte();
       switch (b) {
         case ' ':
+        case '\t':
           step.skipSpaces();
           if (step.getPosition() == 0
               || NinjaToken.NEWLINE.equals(Iterables.getLast(tokens, null))) {
             return push(NinjaToken.INDENT);
           }
+          // Save trailing whitespace as text in case it is meaningful.
+          if (step.getEnd() == fragment.length()) {
+            return push(NinjaToken.TEXT);
+          }
+          // Also treat any whitespace before a new line as trailing whitespace, and save it.
+          if (step.getEnd() < fragment.length()) {
+            byte nextByte = fragment.byteAt(step.getEnd());
+            if (nextByte == '\r' || nextByte == '\n') {
+              return push(NinjaToken.TEXT);
+            }
+          }
           break;
-        case '\t':
-          step.forceError("Tabs are not allowed, use spaces.");
-          return push(NinjaToken.ERROR);
         case '\r':
-          expectTextUntilEol = false;
+          expectedTextKind = TextKind.IDENTIFIER;
           step.processLineFeedNewLine();
           return push(NinjaToken.NEWLINE);
         case '\n':
-          expectTextUntilEol = false;
+          expectedTextKind = TextKind.IDENTIFIER;
           return push(NinjaToken.NEWLINE);
         case '#':
           step.skipComment();
           break;
         case '=':
+          if (TextKind.TEXT.equals(expectedTextKind)) {
+            step.readText();
+            return push(NinjaToken.TEXT);
+          }
           return push(NinjaToken.EQUALS);
         case ':':
           return push(NinjaToken.COLON);
         case '|':
+          if (TextKind.TEXT.equals(expectedTextKind)) {
+            step.readText();
+            return push(NinjaToken.TEXT);
+          }
           if (step.tryReadDoublePipe()) {
             return push(NinjaToken.PIPE2);
+          }
+          if (step.tryReadPipeAt()) {
+            return push(NinjaToken.PIPE_AT);
           }
           return push(NinjaToken.PIPE);
         case '$':
@@ -116,28 +138,32 @@ public class NinjaLexer {
             return push(NinjaToken.VARIABLE);
           }
           if (step.tryReadEscapedLiteral()) {
-            return push(NinjaToken.TEXT);
-          }
-          if (expectTextUntilEol) {
-            return push(NinjaToken.TEXT);
+            return push(NinjaToken.ESCAPED_TEXT);
           }
           step.forceError("Bad $-escape (literal $ must be written as $$)");
           return push(NinjaToken.ERROR);
         default:
-          if (expectTextUntilEol) {
-            step.readText();
-            return push(NinjaToken.TEXT);
-          } else {
-            step.tryReadIdentifier();
-            if (step.getError() == null) {
-              byte[] bytes = step.getBytes();
-              NinjaToken keywordToken = KEYWORD_MAP.get(bytes[0]);
-              if (keywordToken != null && Arrays.equals(keywordToken.getBytes(), bytes)) {
-                return push(keywordToken);
+          switch (expectedTextKind) {
+            case TEXT:
+              step.readText();
+              return push(NinjaToken.TEXT);
+            case PATH:
+              step.readPath();
+              return push(NinjaToken.TEXT);
+            case IDENTIFIER:
+              step.tryReadIdentifier();
+              if (step.getError() == null) {
+                byte[] bytes = step.getBytes();
+                NinjaToken keywordToken = KEYWORD_MAP.get(bytes[0]);
+                if (keywordToken != null
+                    && !(interpretPoolAsVariable && NinjaToken.POOL.equals(keywordToken))
+                    && Arrays.equals(keywordToken.getBytes(), bytes)) {
+                  return push(keywordToken);
+                }
               }
-            }
-            return push(NinjaToken.IDENTIFIER);
+              return push(NinjaToken.IDENTIFIER);
           }
+          throw new IllegalStateException();
       }
       if (step.canAdvance()) {
         step.ensureEnd();
@@ -145,6 +171,7 @@ public class NinjaLexer {
         step = step.nextStep();
       }
     }
+    // Since we now capture trailing whitespace, this EOF may be unreachable.
     return push(NinjaToken.EOF);
   }
 
@@ -188,9 +215,14 @@ public class NinjaLexer {
     return Preconditions.checkNotNull(Iterables.getLast(ranges).getSecond());
   }
 
-  /** Give a hint that letters should be interpreted as text, not as identifier. */
-  public void expectTextUntilEol() {
-    this.expectTextUntilEol = true;
+  /** Give a hint how letters should be interpreted (as text, identifier, path). */
+  public void setExpectedTextKind(TextKind expectedTextKind) {
+    this.expectedTextKind = expectedTextKind;
+  }
+
+  /** When the keyword 'pool' is met, interpret it as identifier, not as a keyword. */
+  public void interpretPoolAsVariable() {
+    this.interpretPoolAsVariable = true;
   }
 
   /** Undo the previously read token. */
@@ -199,14 +231,24 @@ public class NinjaLexer {
     ranges.remove(ranges.size() - 1);
     tokens.remove(tokens.size() - 1);
     step = new NinjaLexerStep(fragment, ranges.isEmpty() ? 0 : getLastEnd());
-    expectTextUntilEol = false;
+    expectedTextKind = TextKind.IDENTIFIER;
   }
 
   public String getError() {
     return step.getError();
   }
 
-  public ByteBufferFragment getFragment() {
+  public FileFragment getFragment() {
     return fragment;
+  }
+
+  /**
+   * Enum with variants of text fragments parsing: as identifier (most restricted set of symbols),
+   * path (all spaces should be $-escaped, and | symbol has a special meaning), or text.
+   */
+  public enum TextKind {
+    IDENTIFIER,
+    PATH,
+    TEXT
   }
 }
