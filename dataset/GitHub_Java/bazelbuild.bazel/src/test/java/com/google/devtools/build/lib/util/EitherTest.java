@@ -14,14 +14,15 @@
 package com.google.devtools.build.lib.util;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.common.testing.EqualsTester;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import org.junit.Test;
@@ -85,5 +86,17 @@ public class EitherTest {
 
     verify(mockIntegerFunction, never()).apply(any());
     verify(mockStringFunction, times(1)).apply(eq("cat"));
+  }
+
+  @Test
+  public void equalsAndHashCode() {
+    new EqualsTester()
+        .addEqualityGroup(Either.ofLeft(null), Either.ofLeft(null))
+        .addEqualityGroup(Either.ofLeft(1), Either.ofLeft(1))
+        .addEqualityGroup(Either.ofLeft(2), Either.ofLeft(2))
+        .addEqualityGroup(Either.ofRight(1), Either.ofRight(1))
+        .addEqualityGroup(Either.ofRight("cat"), Either.ofRight("cat"))
+        .addEqualityGroup(Either.ofRight("dog"), Either.ofRight("dog"))
+        .testEquals();
   }
 }

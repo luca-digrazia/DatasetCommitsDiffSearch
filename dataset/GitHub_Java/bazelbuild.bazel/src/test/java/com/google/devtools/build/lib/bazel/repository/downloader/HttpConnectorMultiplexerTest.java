@@ -17,9 +17,9 @@ package com.google.devtools.build.lib.bazel.repository.downloader;
 import static com.google.common.io.ByteStreams.toByteArray;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.bazel.repository.downloader.DownloaderTestUtils.makeUrl;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -104,25 +104,13 @@ public class HttpConnectorMultiplexerTest {
     when(connector.connect(eq(URL2), any(Function.class))).thenReturn(connection2);
     when(connector.connect(eq(URL3), any(Function.class))).thenReturn(connection3);
     when(streamFactory.create(
-            same(connection1),
-            any(URL.class),
-            any(Optional.class),
-            any(Reconnector.class),
-            any(Optional.class)))
+            same(connection1), any(URL.class), any(Optional.class), any(Reconnector.class)))
         .thenReturn(stream1);
     when(streamFactory.create(
-            same(connection2),
-            any(URL.class),
-            any(Optional.class),
-            any(Reconnector.class),
-            any(Optional.class)))
+            same(connection2), any(URL.class), any(Optional.class), any(Reconnector.class)))
         .thenReturn(stream2);
     when(streamFactory.create(
-            same(connection3),
-            any(URL.class),
-            any(Optional.class),
-            any(Reconnector.class),
-            any(Optional.class)))
+            same(connection3), any(URL.class), any(Optional.class), any(Reconnector.class)))
         .thenReturn(stream3);
   }
 
@@ -169,11 +157,7 @@ public class HttpConnectorMultiplexerTest {
     verify(connector).connect(eq(URL1), any(Function.class));
     verify(streamFactory)
         .create(
-            any(URLConnection.class),
-            any(URL.class),
-            eq(DUMMY_CHECKSUM),
-            any(Reconnector.class),
-            any(Optional.class));
+            any(URLConnection.class), any(URL.class), eq(DUMMY_CHECKSUM), any(Reconnector.class));
     verifyNoMoreInteractions(sleeper, connector, streamFactory);
   }
 
@@ -206,11 +190,7 @@ public class HttpConnectorMultiplexerTest {
     verify(connector).connect(eq(URL2), any(Function.class));
     verify(streamFactory)
         .create(
-            any(URLConnection.class),
-            any(URL.class),
-            eq(DUMMY_CHECKSUM),
-            any(Reconnector.class),
-            any(Optional.class));
+            any(URLConnection.class), any(URL.class), eq(DUMMY_CHECKSUM), any(Reconnector.class));
     verify(sleeper).sleepMillis(anyLong());
     verifyNoMoreInteractions(sleeper, connector, streamFactory);
   }

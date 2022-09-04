@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.skyframe.serialization;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -23,12 +23,13 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 
-import com.google.common.collect.ImmutableClassToInstanceMap;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Before;
 import org.junit.Test;
@@ -49,7 +50,7 @@ public class ObjectCodecsTest {
     // We have to override the default explicitly here because Mockito can't delegate to default
     // methods on interfaces.
     @Override
-    public ImmutableList<Class<? extends Integer>> additionalEncodedClasses() {
+    public List<Class<? extends Integer>> additionalEncodedClasses() {
       return ImmutableList.of();
     }
 
@@ -66,7 +67,6 @@ public class ObjectCodecsTest {
     }
 
     /** Disables auto-registration. */
-    @SuppressWarnings("unused") // Used reflectively.
     private static class IntegerCodecRegisterer implements CodecRegisterer<IntegerCodec> {}
   }
 
@@ -79,8 +79,7 @@ public class ObjectCodecsTest {
     spyObjectCodec = spy(new IntegerCodec());
     this.underTest =
         new ObjectCodecs(
-            ObjectCodecRegistry.newBuilder().add(spyObjectCodec).build(),
-            ImmutableClassToInstanceMap.of());
+            ObjectCodecRegistry.newBuilder().add(spyObjectCodec).build(), ImmutableMap.of());
   }
 
   @Test
@@ -193,7 +192,7 @@ public class ObjectCodecsTest {
     ObjectCodecs underTest =
         new ObjectCodecs(
             ObjectCodecRegistry.newBuilder().setAllowDefaultCodec(false).build(),
-            ImmutableClassToInstanceMap.of());
+            ImmutableMap.of());
     SerializationException.NoCodecException expected =
         assertThrows(SerializationException.NoCodecException.class, () -> underTest.serialize("Y"));
     assertThat(expected)
@@ -207,14 +206,14 @@ public class ObjectCodecsTest {
     ObjectCodecs underTest =
         new ObjectCodecs(
             ObjectCodecRegistry.newBuilder().setAllowDefaultCodec(false).build(),
-            ImmutableClassToInstanceMap.of());
+            ImmutableMap.of());
     assertThrows(
         SerializationException.NoCodecException.class, () -> underTest.deserialize(serialized));
   }
 
   @Test
   public void testSerializeDeserialize() throws Exception {
-    ObjectCodecs underTest = new ObjectCodecs(AutoRegistry.get(), ImmutableClassToInstanceMap.of());
+    ObjectCodecs underTest = new ObjectCodecs(AutoRegistry.get(), ImmutableMap.of());
     assertThat((String) underTest.deserialize(underTest.serialize("hello"))).isEqualTo("hello");
     assertThat(underTest.deserialize(underTest.serialize(null))).isNull();
   }
@@ -226,7 +225,7 @@ public class ObjectCodecsTest {
     MyException exception = new MyException();
     // Force initialization of stack trace.
     StackTraceElement[] stackTrace = exception.getStackTrace();
-    ObjectCodecs underTest = new ObjectCodecs(AutoRegistry.get(), ImmutableClassToInstanceMap.of());
+    ObjectCodecs underTest = new ObjectCodecs(AutoRegistry.get(), ImmutableMap.of());
     assertThat(
             ((MyException) underTest.deserializeMemoized(underTest.serializeMemoized(exception)))
                 .getStackTrace())
