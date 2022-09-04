@@ -1,5 +1,7 @@
 package io.quarkus.deployment.pkg.steps;
 
+import static io.quarkus.deployment.pkg.steps.LinuxIDUtil.getLinuxID;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -10,6 +12,7 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
+import org.apache.commons.lang3.SystemUtils;
 import org.jboss.logging.Logger;
 
 import io.quarkus.deployment.pkg.NativeConfig;
@@ -30,10 +33,23 @@ public abstract class NativeImageBuildContainerRunner extends NativeImageBuildRu
         containerRuntime = nativeConfig.containerRuntime.orElseGet(NativeImageBuildContainerRunner::detectContainerRuntime);
         log.infof("Using %s to run the native image builder", containerRuntime.getExecutableName());
 
-        this.baseContainerRuntimeArgs = new String[] { "--env", "LANG=C" };
+        List<String> containerRuntimeArgs = new ArrayList<>();
+        Collections.addAll(containerRuntimeArgs, "--env", "LANG=C");
 
         outputPath = outputDir == null ? null : outputDir.toAbsolutePath().toString();
 
+        if (SystemUtils.IS_OS_LINUX) {
+            String uid = getLinuxID("-ur");
+            String gid = getLinuxID("-gr");
+            if (uid != null && gid != null && !uid.isEmpty() && !gid.isEmpty()) {
+                Collections.addAll(containerRuntimeArgs, "--user", uid + ":" + gid);
+                if (containerRuntime == NativeConfig.ContainerRuntime.PODMAN) {
+                    // Needed to avoid AccessDeniedExceptions
+                    containerRuntimeArgs.add("--userns=keep-id");
+                }
+            }
+        }
+        this.baseContainerRuntimeArgs = containerRuntimeArgs.toArray(new String[0]);
     }
 
     @Override
