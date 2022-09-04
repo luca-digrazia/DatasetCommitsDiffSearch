@@ -116,8 +116,6 @@ public final class AndroidRuleClasses {
       fromTemplates("%{name}_files/resource_files_shrunk.zip");
   public static final SafeImplicitOutputsFunction ANDROID_RESOURCE_SHRINKER_LOG =
       fromTemplates("%{name}_files/resource_shrinker.log");
-  public static final SafeImplicitOutputsFunction ANDROID_RESOURCE_PATH_SHORTENING_MAP =
-      fromTemplates("%{name}_files/resource_path_shortening.map");
   public static final SafeImplicitOutputsFunction ANDROID_INCREMENTAL_RESOURCES_APK =
       fromTemplates("%{name}_files/incremental.ap_");
   public static final SafeImplicitOutputsFunction ANDROID_BINARY_APK = fromTemplates("%{name}.apk");
@@ -858,9 +856,6 @@ public final class AndroidRuleClasses {
           .add(attr("manifest_values", STRING_DICT))
           /* <!-- #BLAZE_RULE(android_binary).ATTRIBUTE(aapt_version) -->
           Select the version of aapt for this rule.<br/>
-
-          This attribute only takes effect if you set `--android_aapt=auto`.<br/>
-
           Possible values:
           <ul>
               <li><code>aapt_version = "aapt"</code>: Use aapt (deprecated).</li>
