@@ -33,7 +33,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.spi.CDI;
@@ -82,27 +81,12 @@ public class QuarkusUnitTest
     private Consumer<Throwable> assertException;
     private Supplier<JavaArchive> archiveProducer;
     private Runnable afterUndeployListener;
-    private String logFileName;
-
-    private final RestAssuredURLManager restAssuredURLManager;
 
     public QuarkusUnitTest setExpectedException(Class<? extends Throwable> expectedException) {
         return assertException(t -> {
             assertEquals(expectedException,
                     t.getClass(), "Build failed with wrong exception");
         });
-    }
-
-    public QuarkusUnitTest() {
-        this(false);
-    }
-
-    public static QuarkusUnitTest withSecuredConnection() {
-        return new QuarkusUnitTest(true);
-    }
-
-    private QuarkusUnitTest(boolean useSecureConnection) {
-        this.restAssuredURLManager = new RestAssuredURLManager(useSecureConnection);
     }
 
     public QuarkusUnitTest assertException(Consumer<Throwable> assertException) {
@@ -116,11 +100,6 @@ public class QuarkusUnitTest
 
     public QuarkusUnitTest setArchiveProducer(Supplier<JavaArchive> archiveProducer) {
         this.archiveProducer = archiveProducer;
-        return this;
-    }
-
-    public QuarkusUnitTest setLogFileName(String logFileName) {
-        this.logFileName = logFileName;
         return this;
     }
 
@@ -166,10 +145,8 @@ public class QuarkusUnitTest
                     if (!exportDir.isDirectory()) {
                         throw new IllegalStateException("Export path is not a directory: " + exportPath);
                     }
-                    try (Stream<Path> stream = Files.walk(exportDir.toPath())) {
-                        stream.sorted(Comparator.reverseOrder()).map(Path::toFile)
-                                .forEach(File::delete);
-                    }
+                    Files.walk(exportDir.toPath()).sorted(Comparator.reverseOrder()).map(Path::toFile)
+                            .forEach(File::delete);
                 } else if (!exportDir.mkdirs()) {
                     throw new IllegalStateException("Export path could not be created: " + exportPath);
                 }
@@ -187,11 +164,7 @@ public class QuarkusUnitTest
             throw new RuntimeException("QuarkusUnitTest does not have archive producer set");
         }
 
-        if (logFileName != null) {
-            PropertyTestUtil.setLogFileProperty(logFileName);
-        } else {
-            PropertyTestUtil.setLogFileProperty();
-        }
+        PropertyTestUtil.setLogFileProperty();
         ExtensionContext.Store store = extensionContext.getRoot().getStore(ExtensionContext.Namespace.GLOBAL);
         if (store.get(TestResourceManager.class.getName()) == null) {
             TestResourceManager manager = new TestResourceManager(extensionContext.getRequiredTestClass());
@@ -328,12 +301,12 @@ public class QuarkusUnitTest
 
     @Override
     public void afterEach(ExtensionContext context) throws Exception {
-        restAssuredURLManager.clearURL();
+        RestAssuredURLManager.clearURL();
     }
 
     @Override
     public void beforeEach(ExtensionContext context) throws Exception {
-        restAssuredURLManager.setURL();
+        RestAssuredURLManager.setURL();
     }
 
     public Runnable getAfterUndeployListener() {

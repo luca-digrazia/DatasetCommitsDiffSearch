@@ -17,7 +17,6 @@
 package io.quarkus.arc.processor;
 
 import io.quarkus.arc.processor.InjectionPointInfo.TypeAndQualifiers;
-import io.quarkus.arc.processor.InjectionTargetInfo.TargetKind;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -347,18 +346,13 @@ final class Beans {
         return false;
     }
 
-    static void resolveInjectionPoint(BeanDeployment deployment, InjectionTargetInfo target, InjectionPointInfo injectionPoint,
+    static void resolveInjectionPoint(BeanDeployment deployment, BeanInfo bean, InjectionPointInfo injectionPoint,
             List<Throwable> errors) {
         BuiltinBean builtinBean = BuiltinBean.resolve(injectionPoint);
         if (builtinBean != null) {
             if (BuiltinBean.INJECTION_POINT.equals(builtinBean)
-                    && (target.kind() != TargetKind.BEAN || !BuiltinScope.DEPENDENT.is(target.asBean().getScope()))) {
+                    && (bean == null || !BuiltinScope.DEPENDENT.is(bean.getScope()))) {
                 errors.add(new DefinitionException("Only @Dependent beans can access metadata about an injection point: "
-                        + injectionPoint.getTargetInfo()));
-            }
-            if (BuiltinBean.EVENT_METADATA.equals(builtinBean)
-                    && target.kind() != TargetKind.OBSERVER) {
-                errors.add(new DefinitionException("EventMetadata can be only injected into an observer method: "
                         + injectionPoint.getTargetInfo()));
             }
             // Skip built-in beans
@@ -374,7 +368,7 @@ final class Beans {
             message.append("\n\t- java member: ");
             message.append(injectionPoint.getTargetInfo());
             message.append("\n\t- declared on ");
-            message.append(target);
+            message.append(bean);
             errors.add(new UnsatisfiedResolutionException(message.toString()));
         } else if (resolved.size() > 1) {
             // Try to resolve the ambiguity
@@ -387,7 +381,7 @@ final class Beans {
                 message.append("\n\t- java member: ");
                 message.append(injectionPoint.getTargetInfo());
                 message.append("\n\t- declared on ");
-                message.append(target);
+                message.append(bean);
                 message.append("\n\t- available beans:\n\t\t- ");
                 message.append(resolved.stream().map(Object::toString).collect(Collectors.joining("\n\t\t- ")));
                 errors.add(new AmbiguousResolutionException(message.toString()));
