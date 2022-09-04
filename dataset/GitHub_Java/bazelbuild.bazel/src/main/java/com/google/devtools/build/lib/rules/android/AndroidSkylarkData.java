@@ -131,9 +131,8 @@ public abstract class AndroidSkylarkData
       Location location,
       Environment env)
       throws EvalException, InterruptedException {
-    SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location);
-    try {
+    try (SkylarkErrorReporter errorReporter =
+        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location)) {
       return AndroidAssets.from(
               errorReporter,
               listFromNoneable(assets, ConfiguredTarget.class),
@@ -144,7 +143,7 @@ public abstract class AndroidSkylarkData
               getAndroidAaptVersionForLibrary(ctx))
           .toProvider();
     } catch (RuleErrorException e) {
-      throw handleRuleException(errorReporter, e);
+      throw new EvalException(Location.BUILTIN, e);
     }
   }
 
@@ -159,9 +158,8 @@ public abstract class AndroidSkylarkData
       Location location,
       Environment env)
       throws EvalException, InterruptedException {
-    SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location);
-    try {
+    try (SkylarkErrorReporter errorReporter =
+        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location)) {
       return AndroidResources.from(errorReporter, getFileProviders(resources), "resources")
           .process(
               ctx,
@@ -171,7 +169,7 @@ public abstract class AndroidSkylarkData
                   enableDataBinding, ctx.getActionConstructionContext(), ctx.getAndroidConfig()),
               getAndroidAaptVersionForLibrary(ctx));
     } catch (RuleErrorException e) {
-      throw handleRuleException(errorReporter, e);
+      throw new EvalException(Location.BUILTIN, e);
     }
   }
 
@@ -314,10 +312,9 @@ public abstract class AndroidSkylarkData
       Location location,
       Environment env)
       throws InterruptedException, EvalException {
-    SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location);
+    try (SkylarkErrorReporter errorReporter =
+        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location)) {
 
-    try {
       AndroidManifest rawManifest =
           AndroidManifest.from(
               ctx,
@@ -360,17 +357,8 @@ public abstract class AndroidSkylarkData
               resourceApk.toManifestInfo().get()));
       return SkylarkDict.copyOf(/* env = */ null, builder.build());
     } catch (RuleErrorException e) {
-      throw handleRuleException(errorReporter, e);
+      throw new EvalException(Location.BUILTIN, e);
     }
-  }
-
-  private static IllegalStateException handleRuleException(
-      SkylarkErrorReporter errorReporter, RuleErrorException exception) throws EvalException {
-    // The error reporter should have been notified of the rule error, and thus closing it will
-    // throw an EvalException.
-    errorReporter.close();
-    // It's a catastrophic state error if the errorReporter did not pick up the error.
-    throw new IllegalStateException("Unhandled RuleErrorException", exception);
   }
 
   @Override
@@ -385,23 +373,21 @@ public abstract class AndroidSkylarkData
       Environment env)
       throws EvalException {
 
-    SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location);
     AndroidAaptVersion aaptVersion;
-
-    try {
+    try (SkylarkErrorReporter errorReporter =
+        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location)) {
       aaptVersion =
           AndroidAaptVersion.chooseTargetAaptVersion(ctx, errorReporter, aaptVersionString);
-
-      return new BinaryDataSettings(
-          aaptVersion,
-          fromNoneableOrDefault(
-              shrinkResources, Boolean.class, ctx.getAndroidConfig().useAndroidResourceShrinking()),
-          ResourceFilterFactory.from(aaptVersion, resourceConfigurationFilters, densities),
-          noCompressExtensions.getImmutableList());
     } catch (RuleErrorException e) {
-      throw handleRuleException(errorReporter, e);
+      throw new EvalException(Location.BUILTIN, e);
     }
+
+    return new BinaryDataSettings(
+        aaptVersion,
+        fromNoneableOrDefault(
+            shrinkResources, Boolean.class, ctx.getAndroidConfig().useAndroidResourceShrinking()),
+        ResourceFilterFactory.from(aaptVersion, resourceConfigurationFilters, densities),
+        noCompressExtensions.getImmutableList());
   }
 
   @Override
@@ -461,10 +447,9 @@ public abstract class AndroidSkylarkData
       Location location,
       Environment env)
       throws InterruptedException, EvalException {
-    SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location);
+    try (SkylarkErrorReporter errorReporter =
+        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location)) {
 
-    try {
       BinaryDataSettings settings =
           fromNoneableOrDefault(
               maybeSettings,
@@ -532,7 +517,7 @@ public abstract class AndroidSkylarkData
           resourceApk.toManifestInfo().get());
 
     } catch (RuleErrorException e) {
-      throw handleRuleException(errorReporter, e);
+      throw new EvalException(location, e);
     }
   }
 
