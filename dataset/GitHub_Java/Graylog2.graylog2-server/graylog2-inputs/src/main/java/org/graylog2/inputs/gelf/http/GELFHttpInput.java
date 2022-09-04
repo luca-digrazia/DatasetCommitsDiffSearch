@@ -52,20 +52,12 @@ public class GELFHttpInput extends GELFInputBase {
     public void launch(Buffer processBuffer) throws MisfireException {
         // Register throughput counter gauges.
         for(Map.Entry<String,Gauge<Long>> gauge : throughputCounter.gauges().entrySet()) {
-            try {
-                metricRegistry.register(MetricRegistry.name(getUniqueReadableId(), gauge.getKey()), gauge.getValue());
-            } catch (IllegalArgumentException e) {
-                LOG.debug("Unable to register throughputCounter gauge: {}", e);
-            }
+            metricRegistry.register(MetricRegistry.name(getUniqueReadableId(), gauge.getKey()), gauge.getValue());
         }
 
         // Register connection counter gauges.
-        try {
-            metricRegistry.register(MetricRegistry.name(getUniqueReadableId(), "open_connections"), connectionCounter.gaugeCurrent());
-            metricRegistry.register(MetricRegistry.name(getUniqueReadableId(), "total_connections"), connectionCounter.gaugeTotal());
-        } catch (IllegalArgumentException e) {
-            LOG.debug("Unable to register gauge: {}", e);
-        }
+        metricRegistry.register(MetricRegistry.name(getUniqueReadableId(), "open_connections"), connectionCounter.gaugeCurrent());
+        metricRegistry.register(MetricRegistry.name(getUniqueReadableId(), "total_connections"), connectionCounter.gaugeTotal());
 
         final ExecutorService bossExecutor = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
