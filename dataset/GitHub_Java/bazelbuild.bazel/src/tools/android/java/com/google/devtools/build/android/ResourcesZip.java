@@ -14,11 +14,13 @@
 package com.google.devtools.build.android;
 
 import static com.google.common.base.Predicates.not;
+import static java.util.stream.Collectors.toMap;
 
+import com.android.SdkConstants;
 import com.android.annotations.VisibleForTesting;
 import com.android.build.gradle.tasks.ResourceUsageAnalyzer;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableListMultimap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.io.ByteStreams;
 import com.google.devtools.build.android.AndroidResourceOutputs.ZipBuilder;
 import com.google.devtools.build.android.AndroidResourceOutputs.ZipBuilderVisitorWithDirectories;
@@ -28,7 +30,6 @@ import com.google.devtools.build.android.aapt2.ProtoResourceUsageAnalyzer;
 import com.google.devtools.build.android.aapt2.ResourceCompiler;
 import com.google.devtools.build.android.aapt2.ResourceLinker;
 import com.google.devtools.build.android.proto.SerializeFormat.ToolAttributes;
-import com.google.protobuf.ExtensionRegistry;
 import java.io.Closeable;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -37,6 +38,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -142,7 +144,8 @@ public class ResourcesZip {
     // Expand resource files zip into working directory.
     final ZipFile zipFile = new ZipFile(resourcesZip.toFile());
 
-    zipFile.stream()
+    zipFile
+        .stream()
         .filter(not(ZipEntry::isDirectory))
         .forEach(
             entry -> {
@@ -199,7 +202,8 @@ public class ResourcesZip {
         if (apkZip.getEntry("assets/") == null) {
           zip.addEntry("assets/", new byte[0], compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
         }
-        apkZip.stream()
+        apkZip
+            .stream()
             .filter(entry -> entry.getName().startsWith("assets/"))
             .forEach(
                 entry -> {
@@ -286,25 +290,29 @@ public class ResourcesZip {
     final Path shrunkApkProto =
         workingDirectory.resolve("shrunk." + ResourceLinker.PROTO_EXTENSION);
     try (final ProtoApk apk = ProtoApk.readFrom(proto)) {
+      final Map<String, Set<String>> toolAttributes = toAttributes();
       // record resources and manifest
       final ProtoResourceUsageAnalyzer analyzer =
           new ProtoResourceUsageAnalyzer(packages, rTxt, proguardMapping, logFile);
 
-      ProtoApk shrink = analyzer.shrink(apk, classJar, shrunkApkProto, parseToolAttributes());
+      final ProtoApk shrink =
+          analyzer.shrink(
+              apk,
+              classJar,
+              shrunkApkProto,
+              toolAttributes.getOrDefault(SdkConstants.ATTR_KEEP, ImmutableSet.of()),
+              toolAttributes.getOrDefault(SdkConstants.ATTR_DISCARD, ImmutableSet.of()));
       return new ShrunkProtoApk(shrink, logFile, ids);
     }
   }
 
   @VisibleForTesting
-  ImmutableListMultimap<String, String> parseToolAttributes() throws IOException {
-    return ToolAttributes.parseFrom(
-            Files.readAllBytes(attributes), ExtensionRegistry.getEmptyRegistry())
+  public Map<String, Set<String>> toAttributes() throws IOException {
+    return ToolAttributes.parseFrom(Files.readAllBytes(attributes))
         .getAttributesMap()
         .entrySet()
         .stream()
-        .collect(
-            ImmutableListMultimap.flatteningToImmutableListMultimap(
-                Entry::getKey, e -> e.getValue().getValuesList().stream()));
+        .collect(toMap(Entry::getKey, e -> ImmutableSet.copyOf(e.getValue().getValuesList())));
   }
 
   public List<String> asPackages() throws IOException {
