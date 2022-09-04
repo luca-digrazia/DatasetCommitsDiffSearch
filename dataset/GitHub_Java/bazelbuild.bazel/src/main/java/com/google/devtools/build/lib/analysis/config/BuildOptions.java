@@ -676,8 +676,7 @@ public final class BuildOptions implements Cloneable, Serializable {
     private final List<String> extraFirstSkylarkOptions;
     private final Map<String, Object> extraSecondSkylarkOptions;
 
-    @VisibleForTesting
-    public OptionsDiffForReconstruction(
+    OptionsDiffForReconstruction(
         Map<Class<? extends FragmentOptions>, Map<String, Object>> differingOptions,
         ImmutableSet<Class<? extends FragmentOptions>> extraFirstFragmentClasses,
         ImmutableList<FragmentOptions> extraSecondFragments,

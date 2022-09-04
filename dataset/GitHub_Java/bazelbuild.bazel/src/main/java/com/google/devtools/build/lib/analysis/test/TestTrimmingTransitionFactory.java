@@ -15,12 +15,13 @@ package com.google.devtools.build.lib.analysis.test;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration.TestOptions;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.common.options.Options;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -28,7 +29,7 @@ import java.util.Set;
 /**
  * Trimming transition factory which removes the test config fragment when entering a non-test rule.
  */
-public final class TestTrimmingTransitionFactory implements TransitionFactory<Rule> {
+public final class TestTrimmingTransitionFactory implements RuleTransitionFactory {
 
   private static final Set<String> TEST_OPTIONS =
       ImmutableSet.copyOf(Options.getDefaults(TestOptions.class).asMap().keySet());
@@ -36,7 +37,7 @@ public final class TestTrimmingTransitionFactory implements TransitionFactory<Ru
   /**
    * Trimming transition which removes the test config fragment if --trim_test_configuration is on.
    */
-  public enum TestTrimmingTransition implements PatchTransition {
+  public static enum TestTrimmingTransition implements PatchTransition {
     INSTANCE;
 
     @Override
@@ -50,12 +51,18 @@ public final class TestTrimmingTransitionFactory implements TransitionFactory<Ru
         // nothing to do, trimming is disabled
         return originalOptions;
       }
-      return originalOptions.toBuilder().removeFragmentOptions(TestOptions.class).build();
+      BuildOptions.Builder builder = BuildOptions.builder();
+      for (FragmentOptions options : originalOptions.getNativeOptions()) {
+        if (!(options instanceof TestOptions)) {
+          builder.add(options);
+        }
+      }
+      return builder.build();
     }
   }
 
   @Override
-  public PatchTransition create(Rule rule) {
+  public PatchTransition buildTransitionFor(Rule rule) {
     RuleClass ruleClass = rule.getRuleClassObject();
     if (ruleClass
         .getConfigurationFragmentPolicy()
