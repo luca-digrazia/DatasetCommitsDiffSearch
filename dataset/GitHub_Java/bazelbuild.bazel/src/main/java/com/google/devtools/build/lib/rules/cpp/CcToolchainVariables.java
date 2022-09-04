@@ -27,15 +27,14 @@ import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionException;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainVariablesApi;
-import com.google.devtools.build.lib.syntax.EvalException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -157,7 +156,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
    *
    * <p>To get a literal percent character, "%%" can be used in the string.
    */
-  public static class StringValueParser {
+  static class StringValueParser {
 
     private final String value;
 
@@ -169,13 +168,13 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     private final ImmutableList.Builder<StringChunk> chunks = ImmutableList.builder();
     private final ImmutableSet.Builder<String> usedVariables = ImmutableSet.builder();
 
-    public StringValueParser(String value) throws EvalException {
+    StringValueParser(String value) throws InvalidConfigurationException {
       this.value = value;
       parse();
     }
 
     /** @return the parsed chunks for this string. */
-    public ImmutableList<StringChunk> getChunks() {
+    ImmutableList<StringChunk> getChunks() {
       return chunks.build();
     }
 
@@ -187,9 +186,9 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     /**
      * Parses the string.
      *
-     * @throws EvalException if there is a parsing error.
+     * @throws InvalidConfigurationException if there is a parsing error.
      */
-    private void parse() throws EvalException {
+    private void parse() throws InvalidConfigurationException {
       while (current < value.length()) {
         if (atVariableStart()) {
           parseVariableChunk();
@@ -234,9 +233,9 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     /**
      * Parses a variable to be expanded.
      *
-     * @throws EvalException if there is a parsing error.
+     * @throws InvalidConfigurationException if there is a parsing error.
      */
-    private void parseVariableChunk() throws EvalException {
+    private void parseVariableChunk() throws InvalidConfigurationException {
       current = current + 1;
       if (current >= value.length() || value.charAt(current) != '{') {
         abort("expected '{'");
@@ -253,24 +252,17 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     }
 
     /**
-     * @throws EvalException with the given error text, adding information about the current
-     *     position in the string.
+     * @throws InvalidConfigurationException with the given error text, adding information about
+     * the current position in the string.
      */
-    private void abort(String error) throws EvalException {
-      throw new EvalException(
-          Location.BUILTIN,
-          "Invalid toolchain configuration: "
-              + error
-              + " at position "
-              + current
-              + " while parsing a flag containing '"
-              + value
-              + "'");
+    private void abort(String error) throws InvalidConfigurationException {
+      throw new InvalidConfigurationException("Invalid toolchain configuration: " + error
+          + " at position " + current + " while parsing a flag containing '" + value + "'");
     }
   }
 
   /** A flag or flag group that can be expanded under a set of variables. */
-  public interface Expandable {
+  interface Expandable {
     /**
      * Expands the current expandable under the given {@code view}, adding new flags to {@code
      * commandLine}.
