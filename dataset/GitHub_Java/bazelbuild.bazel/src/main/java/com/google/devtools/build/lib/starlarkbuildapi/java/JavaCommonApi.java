@@ -38,6 +38,7 @@ public interface JavaCommonApi<
         FileT extends FileApi,
         JavaInfoT extends JavaInfoApi<FileT>,
         JavaToolchainT extends JavaToolchainStarlarkApiProviderApi,
+        JavaRuntimeT extends JavaRuntimeInfoApi,
         ConstraintValueT extends ConstraintValueInfoApi,
         starlarkRuleContextT extends StarlarkRuleContextApi<ConstraintValueT>,
         StarlarkActionFactoryT extends StarlarkActionFactoryApi>
@@ -181,20 +182,16 @@ public interface JavaCommonApi<
             name = "java_toolchain",
             positional = false,
             named = true,
+            type = Object.class,
             allowedTypes = {@ParamType(type = JavaToolchainStarlarkApiProviderApi.class)},
             doc = "A JavaToolchainInfo to be used for this compilation. Mandatory."),
         @Param(
             name = "host_javabase",
             positional = false,
             named = true,
+            type = Object.class,
             allowedTypes = {@ParamType(type = JavaRuntimeInfoApi.class)},
-            doc =
-                "Deprecated: You can drop this parameter (host_javabase is provided with "
-                    + "java_toolchain)",
-            noneable = true,
-            defaultValue = "None",
-            disableWithFlag = BuildLanguageOptions.INCOMPATIBLE_JAVA_COMMON_PARAMETERS,
-            valueWhenDisabled = "None"),
+            doc = "A JavaRuntimeInfo to be used for this compilation. Mandatory."),
         @Param(
             name = "sourcepath",
             positional = false,
@@ -233,7 +230,7 @@ public interface JavaCommonApi<
       Sequence<?> annotationProcessorAdditionalOutputs, // <FileT> expected.
       String strictDepsMode,
       JavaToolchainT javaToolchain,
-      Object hostJavabase,
+      JavaRuntimeT hostJavabase,
       Sequence<?> sourcepathEntries, // <FileT> expected.
       Sequence<?> resources, // <FileT> expected.
       Boolean neverlink,
@@ -275,6 +272,7 @@ public interface JavaCommonApi<
             name = "java_toolchain",
             positional = false,
             named = true,
+            type = Object.class,
             allowedTypes = {@ParamType(type = JavaToolchainStarlarkApiProviderApi.class)},
             doc = "A JavaToolchainInfo to used to find the ijar tool."),
       })
@@ -317,6 +315,7 @@ public interface JavaCommonApi<
             name = "java_toolchain",
             positional = false,
             named = true,
+            type = Object.class,
             allowedTypes = {@ParamType(type = JavaToolchainStarlarkApiProviderApi.class)},
             doc = "A JavaToolchainInfo to used to find the stamp_jar tool."),
       })
@@ -379,20 +378,16 @@ public interface JavaCommonApi<
             name = "java_toolchain",
             positional = false,
             named = true,
+            type = Object.class,
             allowedTypes = {@ParamType(type = JavaToolchainStarlarkApiProviderApi.class)},
             doc = "A JavaToolchainInfo to used to find the ijar tool."),
         @Param(
             name = "host_javabase",
             positional = false,
             named = true,
+            type = Object.class,
             allowedTypes = {@ParamType(type = JavaRuntimeInfoApi.class)},
-            doc =
-                "Deprecated: You can drop this parameter (host_javabase is provided with "
-                    + "java_toolchain)",
-            noneable = true,
-            defaultValue = "None",
-            disableWithFlag = BuildLanguageOptions.INCOMPATIBLE_JAVA_COMMON_PARAMETERS,
-            valueWhenDisabled = "None"),
+            doc = "A JavaRuntimeInfo to be used for packing sources."),
       },
       allowReturnNones = true)
   FileApi packSources(
@@ -402,7 +397,7 @@ public interface JavaCommonApi<
       Sequence<?> sourceFiles, // <FileT> expected.
       Sequence<?> sourceJars, // <FileT> expected.
       JavaToolchainT javaToolchain,
-      Object hostJavabase)
+      JavaRuntimeT hostJavabase)
       throws EvalException;
 
   @StarlarkMethod(
@@ -414,6 +409,7 @@ public interface JavaCommonApi<
             name = "java_toolchain",
             positional = false,
             named = true,
+            type = Object.class,
             allowedTypes = {@ParamType(type = JavaToolchainStarlarkApiProviderApi.class)},
             doc =
                 "A JavaToolchainInfo to be used for retrieving the ijar "

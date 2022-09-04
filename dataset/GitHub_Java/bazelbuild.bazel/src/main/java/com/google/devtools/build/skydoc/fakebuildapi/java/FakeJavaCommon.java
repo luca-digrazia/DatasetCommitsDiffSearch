@@ -36,6 +36,7 @@ public class FakeJavaCommon
         FileApi,
         FakeJavaInfo,
         FakeJavaToolchainStarlarkApiProviderApi,
+        FakeJavaRuntimeInfoApi,
         ConstraintValueInfoApi,
         StarlarkRuleContextApi<ConstraintValueInfoApi>,
         StarlarkActionFactoryApi> {
@@ -62,7 +63,7 @@ public class FakeJavaCommon
       Sequence<?> annotationProcessorAdditionalOutputs,
       String strictDepsMode,
       FakeJavaToolchainStarlarkApiProviderApi javaToolchain,
-      Object hostJavabase,
+      FakeJavaRuntimeInfoApi hostJavabase,
       Sequence<?> sourcepathEntries,
       Sequence<?> resources,
       Boolean neverlink,
@@ -96,7 +97,7 @@ public class FakeJavaCommon
       Sequence<?> sourceFiles,
       Sequence<?> sourceJars,
       FakeJavaToolchainStarlarkApiProviderApi javaToolchain,
-      Object hostJavabase) {
+      FakeJavaRuntimeInfoApi hostJavabase) {
     return null;
   }
 
