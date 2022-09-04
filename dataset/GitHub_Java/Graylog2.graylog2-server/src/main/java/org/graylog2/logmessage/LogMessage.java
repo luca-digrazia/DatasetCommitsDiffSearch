@@ -205,10 +205,6 @@ public class LogMessage {
         }
     }
 
-    public void removeAdditionalData(String key) {
-        this.additionalData.remove(key);
-    }
-
     public Map<String, Object> getAdditionalData() {
         return this.additionalData;
     }
