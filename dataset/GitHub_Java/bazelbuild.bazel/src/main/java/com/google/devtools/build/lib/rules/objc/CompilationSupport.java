@@ -227,18 +227,7 @@ public abstract class CompilationSupport {
   static final ImmutableList<String> DEFAULT_COMPILER_FLAGS = ImmutableList.of("-DOS_IOS");
 
   static final ImmutableList<String> DEFAULT_LINKER_FLAGS = ImmutableList.of("-ObjC");
-
-  /**
-   * Set of {@link com.google.devtools.build.lib.util.FileType} of source artifacts that are
-   * compatible with header thinning.
-   */
-  protected static final FileTypeSet SOURCES_FOR_HEADER_THINNING =
-      FileTypeSet.of(
-          CppFileTypes.OBJC_SOURCE,
-          CppFileTypes.OBJCPP_SOURCE,
-          CppFileTypes.CPP_SOURCE,
-          CppFileTypes.C_SOURCE);
-
+ 
   /**
    * Returns information about the given rule's compilation artifacts.
    */
@@ -1130,11 +1119,6 @@ public abstract class CompilationSupport {
       this.headersListFile = Preconditions.checkNotNull(headersListFile);
       this.arguments = Preconditions.checkNotNull(arguments);
     }
-
-    public ObjcHeaderThinningInfo(
-        Artifact sourceFile, Artifact headersListFile, Iterable<String> arguments) {
-      this(sourceFile, headersListFile, ImmutableList.copyOf(arguments));
-    }
   }
 
   /**
@@ -1158,10 +1142,6 @@ public abstract class CompilationSupport {
         .getProvider(FilesToRunProvider.class);
   }
 
-  /**
-   * Creates and registers ObjcHeaderScanning {@link SpawnAction}. Groups all the actions by their
-   * compilation command line arguments and creates a ObjcHeaderScanning action for each unique one.
-   */
   protected void registerHeaderScanningActions(
       ImmutableList<ObjcHeaderThinningInfo> headerThinningInfo,
       ObjcProvider objcProvider,
