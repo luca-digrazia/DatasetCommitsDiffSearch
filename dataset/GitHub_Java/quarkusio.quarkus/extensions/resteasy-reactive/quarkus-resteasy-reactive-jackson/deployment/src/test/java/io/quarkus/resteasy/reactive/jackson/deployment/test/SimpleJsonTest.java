@@ -246,8 +246,6 @@ public class SimpleJsonTest {
                 .then()
                 .statusCode(200)
                 .contentType("application/json")
-                .header("transfer-encoding", nullValue())
-                .header("content-length", notNullValue())
                 .body(containsString("Bob"))
                 .body(containsString("Builder"));
         // assert that our bi-function was created
@@ -262,8 +260,6 @@ public class SimpleJsonTest {
                 .then()
                 .statusCode(200)
                 .contentType("application/json")
-                .header("transfer-encoding", nullValue())
-                .header("content-length", notNullValue())
                 .body(containsString("Bob"))
                 .body(containsString("Builder"))
                 .body(containsString("Bob2"))
