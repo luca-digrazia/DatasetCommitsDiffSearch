@@ -2,6 +2,7 @@ package io.quarkus.it.main;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 
 import java.util.concurrent.TimeUnit;
 
@@ -49,6 +50,13 @@ public class MetricsTestCase {
         assertMetricExists(metricsPrefix + "MetricsResource_meter_one_min_rate_per_second");
         assertMetricExists(metricsPrefix + "MetricsResource_meter_five_min_rate_per_second");
         assertMetricExists(metricsPrefix + "MetricsResource_meter_fifteen_min_rate_per_second");
+    }
+
+    @Test
+    public void testSimpleTimer() {
+        invokeSimpleTimer();
+        assertMetricExactValue(metricsPrefix + "MetricsResource_simple_timer_metric_total", "1.0");
+        assertMetricExists(metricsPrefix + "MetricsResource_simple_timer_metric_elapsedTime_seconds");
     }
 
     @Test
@@ -108,7 +116,7 @@ public class MetricsTestCase {
     @Test
     public void testInvalidScopes() {
         RestAssured.when().get("/metrics/foo").then().statusCode(404)
-                .body(containsString("Bad scope requested"));
+                .body(containsString("Scope foo not found"));
         RestAssured.when().get("/metrics/vendor/foo").then().statusCode(404)
                 .body(containsString("Metric vendor/foo not found"));
     }
@@ -119,13 +127,13 @@ public class MetricsTestCase {
                 // the spaces at the end are there on purpose to make sure the metrics are named exactly this way
                 .body(containsString("base_classloader_loadedClasses_total "))
                 .body(containsString("base_cpu_systemLoadAverage "))
-                .body(containsString("base_thread_count_total "))
+                .body(containsString("base_thread_count "))
                 .body(containsString("base_classloader_loadedClasses_count "))
                 .body(containsString("base_jvm_uptime_seconds "))
-                .body(containsString("base_thread_max_count_total "))
+                .body(containsString("base_thread_max_count "))
                 .body(containsString("base_memory_committedHeap_bytes "))
                 .body(containsString("base_cpu_availableProcessors "))
-                .body(containsString("base_thread_daemon_count_total "))
+                .body(containsString("base_thread_daemon_count "))
                 .body(containsString("base_classloader_unloadedClasses_total "))
                 .body(containsString("base_memory_maxHeap_bytes "))
                 .body(containsString("base_memory_usedHeap_bytes "));
@@ -147,6 +155,33 @@ public class MetricsTestCase {
     public void testEndpointWithMetricsThrowingException() {
         RestAssured.when().get("/metricsresource/counter-throwing-not-found-exception").then()
                 .statusCode(404);
+    }
+
+    /**
+     * Verify that no metrics are created from SmallRye internal classes (for example the
+     * io.smallrye.metrics.interceptors package)
+     */
+    @Test
+    public void testNoMetricsFromSmallRyeInternalClasses() {
+        RestAssured.when().get("/metrics/application").then()
+                .body(not(containsString("io_smallrye_metrics")));
+    }
+
+    /**
+     * This is to verify that a Gauge works in native mode when its owning bean is annotated with RegisterForReflection.
+     */
+    @Test
+    public void testDummyGauge() {
+        assertMetricExactValue(metricsPrefix + "DummyGauge_dummyGauge", "42.0");
+    }
+
+    /**
+     * This is to verify that a Gauge works in native mode even if its owning bean is not
+     * explicitly annotated with RegisterForReflection.
+     */
+    @Test
+    public void testDummyGaugeNoReflectionAnnotation() {
+        assertMetricExactValue(metricsPrefix + "DummyGaugeNoReflectionAnnotation_dummyGauge", "1234.0");
     }
 
     private void assertMetricExactValue(String name, String val) {
@@ -176,6 +211,11 @@ public class MetricsTestCase {
 
     public void invokeMeter() {
         RestAssured.when().get("/metricsresource/meter").then()
+                .body(is("OK"));
+    }
+
+    public void invokeSimpleTimer() {
+        RestAssured.when().get("/metricsresource/simpletimer").then()
                 .body(is("OK"));
     }
 
