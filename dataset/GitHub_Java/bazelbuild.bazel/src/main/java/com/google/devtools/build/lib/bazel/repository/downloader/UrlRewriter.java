@@ -40,7 +40,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import javax.annotation.Nullable;
 
 /**
  * Helper class for taking URLs and converting them according to an optional config specified by
@@ -58,11 +57,10 @@ public class UrlRewriter {
   private final Consumer<String> log;
 
   @VisibleForTesting
-  UrlRewriter(Consumer<String> log, String filePathForErrorReporting, Reader reader)
-      throws UrlRewriterParseException {
+  UrlRewriter(Consumer<String> log, Reader reader) {
     this.log = Preconditions.checkNotNull(log);
     Preconditions.checkNotNull(reader, "UrlRewriterConfig source must be set");
-    this.config = new UrlRewriterConfig(filePathForErrorReporting, reader);
+    this.config = new UrlRewriterConfig(reader);
 
     this.rewriter = this::rewrite;
   }
@@ -70,19 +68,18 @@ public class UrlRewriter {
   /**
    * Obtain a new {@code UrlRewriter} configured with the specified config file.
    *
-   * @param configPath Path to the config file to use. May be null.
+   * @param downloaderConfig Path to the config file to use. May be null.
    * @param reporter Used for logging when URLs are rewritten.
    */
-  public static UrlRewriter getDownloaderUrlRewriter(String configPath, Reporter reporter)
-      throws UrlRewriterParseException {
+  public static UrlRewriter getDownloaderUrlRewriter(String downloaderConfig, Reporter reporter) {
     Consumer<String> log = str -> reporter.handle(Event.info(str));
 
-    if (Strings.isNullOrEmpty(configPath)) {
-      return new UrlRewriter(log, "", new StringReader(""));
+    if (Strings.isNullOrEmpty(downloaderConfig)) {
+      return new UrlRewriter(log, new StringReader(""));
     }
 
-    try (BufferedReader reader = Files.newBufferedReader(Paths.get(configPath))) {
-      return new UrlRewriter(log, configPath, reader);
+    try (BufferedReader reader = Files.newBufferedReader(Paths.get(downloaderConfig))) {
+      return new UrlRewriter(log, reader);
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
@@ -196,10 +193,5 @@ public class UrlRewriter {
               }
             })
         .collect(toImmutableList());
-  }
-
-  @Nullable
-  public String getAllBlockedMessage() {
-    return config.getAllBlockedMessage();
   }
 }
