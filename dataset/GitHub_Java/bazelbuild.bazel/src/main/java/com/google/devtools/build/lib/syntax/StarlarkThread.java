@@ -18,6 +18,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -28,10 +29,13 @@ import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.syntax.Mutability.Freezable;
 import com.google.devtools.build.lib.syntax.Mutability.MutabilityException;
 import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.util.Pair;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -96,11 +100,19 @@ import javax.annotation.Nullable;
 // Once the API is small and sound, we can start to represent all
 // the lexical frames within a single function using just an array,
 // indexed by a small integer computed during the validation pass.
-public final class StarlarkThread {
+public final class StarlarkThread implements Freezable {
 
   /**
-   * A mapping of bindings. The order of the bindings within a single {@link Frame} is deterministic
-   * but unspecified.
+   * A mapping of bindings, either mutable or immutable according to an associated {@link
+   * Mutability}. The order of the bindings within a single {@link Frame} is deterministic but
+   * unspecified.
+   *
+   * <p>Any non-frozen {@link Frame} must have the same {@link Mutability} as the current {@link
+   * StarlarkThread}, to avoid interference from other evaluation contexts. For example, a {@link
+   * StarlarkFunction} will close over the global frame of the {@link StarlarkThread} in which it
+   * was defined. When the function is called from other {@link StarlarkThread}s (possibly
+   * simultaneously), that global frame must already be frozen; a new local {@link Frame} is created
+   * to represent the lexical scope of the function.
    *
    * <p>A {@link Frame} can have an associated "parent" {@link Frame}, which is used in {@link #get}
    * and {@link #getTransitiveBindings()}
@@ -108,7 +120,7 @@ public final class StarlarkThread {
    * <p>TODO(laurentlb): "parent" should be named "universe" since it contains only the builtins.
    * The "get" method shouldn't look at the universe (so that "moduleLookup" works as expected)
    */
-  interface Frame {
+  interface Frame extends Freezable {
     /**
      * Gets a binding from this {@link Frame} or one of its transitive parents.
      *
@@ -132,7 +144,10 @@ public final class StarlarkThread {
      */
     void put(String varname, Object value) throws MutabilityException;
 
-    // TODO(laurentlb): Remove this method.
+    /**
+     * TODO(laurentlb): Remove this method when possible. It should probably not be part of the
+     * public interface.
+     */
     void remove(String varname) throws MutabilityException;
 
     /**
@@ -145,17 +160,64 @@ public final class StarlarkThread {
     Map<String, Object> getTransitiveBindings();
   }
 
-  private static final class LexicalFrame implements Frame {
-    private final Map<String, Object> bindings; // in creation order
+  interface LexicalFrame extends Frame {
+  }
 
-    // (Starlark functions)
-    private LexicalFrame(int initialCapacity) {
+  private static final class ImmutableEmptyLexicalFrame implements LexicalFrame {
+    private static final ImmutableEmptyLexicalFrame INSTANCE = new ImmutableEmptyLexicalFrame();
+
+    @Override
+    public Mutability mutability() {
+      return Mutability.IMMUTABLE;
+    }
+
+    @Nullable
+    @Override
+    public Object get(String varname) {
+      return null;
+    }
+
+    @Override
+    public void put(String varname, Object value) throws MutabilityException {
+      Mutability.checkMutable(this, mutability());
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public void remove(String varname) throws MutabilityException {
+      Mutability.checkMutable(this, mutability());
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public Map<String, Object> getTransitiveBindings() {
+      return ImmutableMap.of();
+    }
+
+    @Override
+    public String toString() {
+      return "<ImmutableEmptyLexicalFrame>";
+    }
+  }
+
+  private static final class MutableLexicalFrame implements LexicalFrame {
+    private final Mutability mutability;
+    /** Bindings are maintained in order of creation. */
+    private final LinkedHashMap<String, Object> bindings;
+
+    private MutableLexicalFrame(Mutability mutability, int initialCapacity) {
+      this.mutability = mutability;
       this.bindings = Maps.newLinkedHashMapWithExpectedSize(initialCapacity);
     }
 
-    // (Builtin functions)
-    private LexicalFrame() {
-      this.bindings = ImmutableMap.of();
+    private MutableLexicalFrame(Mutability mutability) {
+      this.mutability = mutability;
+      this.bindings = new LinkedHashMap<>();
+    }
+
+    @Override
+    public Mutability mutability() {
+      return mutability;
     }
 
     @Nullable
@@ -165,12 +227,14 @@ public final class StarlarkThread {
     }
 
     @Override
-    public void put(String varname, Object value) {
+    public void put(String varname, Object value) throws MutabilityException {
+      Mutability.checkMutable(this, mutability());
       bindings.put(varname, value);
     }
 
     @Override
-    public void remove(String varname) {
+    public void remove(String varname) throws MutabilityException {
+      Mutability.checkMutable(this, mutability());
       bindings.remove(varname);
     }
 
@@ -178,10 +242,14 @@ public final class StarlarkThread {
     public Map<String, Object> getTransitiveBindings() {
       return bindings;
     }
+
+    @Override
+    public String toString() {
+      return String.format("<MutableLexicalFrame%s>", mutability());
+    }
   }
 
-  // The mutability of the StarlarkThread comes from its initial module.
-  // TODO(adonovan): not every thread initializes a module.
+  // The mutability of the StarlarkThread comes from its initial global frame.
   private final Mutability mutability;
 
   private final Map<Class<?>, Object> threadLocals = new HashMap<>();
@@ -191,6 +259,7 @@ public final class StarlarkThread {
    * {@code key}, so that it can later be retrieved by {@code getThreadLocal(key)}.
    */
   public <T> void setThreadLocal(Class<T> key, T value) {
+    // The clazz parameter is redundant, but it makes the API clearer.
     threadLocals.put(key, value);
   }
 
@@ -206,15 +275,12 @@ public final class StarlarkThread {
   /** A CallFrame records information about an active function call. */
   // TODO(adonovan): merge LexicalFrame into CallFrame. Every function call should have a frame,
   // but only Starlark functions need local variables.
-  private static final class CallFrame implements Debug.Frame {
+  private static final class CallFrame {
     final StarlarkCallable fn; // the called function
 
     // Current PC location. Initially fn.getLocation(); for Starlark functions,
     // it is updated at key points when it may be observed: calls, breakpoints.
     Location loc;
-
-    // The lexicals of this frame (possibly equal to globals, for now).
-    Frame lexicals;
 
     // Note that the inherited design is off-by-one:
     // the following fields are logically facts about the _enclosing_ frame.
@@ -228,27 +294,6 @@ public final class StarlarkThread {
       this.fn = fn;
       this.savedLexicals = savedLexicals;
       this.savedModule = savedModule;
-    }
-
-    @Override
-    public StarlarkCallable getFunction() {
-      return fn;
-    }
-
-    @Override
-    public Location getLocation() {
-      return loc;
-    }
-
-    @Override
-    public ImmutableMap<String, Object> getLocals() {
-      // This is yet another hack related to the toplevel,
-      // for which the legacy behavior is to report no lexicals.
-      if (this.lexicals == this.savedModule) {
-        return ImmutableMap.of();
-      } else {
-        return ImmutableMap.copyOf(this.lexicals.getTransitiveBindings());
-      }
     }
 
     @Override
@@ -472,16 +517,14 @@ public final class StarlarkThread {
       // global vs local identifiers in the syntax tree.
       if (!sfn.isToplevel) {
         this.lexicalFrame =
-            new LexicalFrame(/*initialCapacity=*/ sfn.getSignature().numParameters());
-      } else {
-        this.lexicalFrame = sfn.getModule();
+            new MutableLexicalFrame(
+                this.mutability(), /*initialCapacity=*/ sfn.getSignature().numParameters());
       }
       this.globalFrame = sfn.getModule();
       taskKind = ProfilerTask.STARLARK_USER_FN;
     } else {
       // built-in function
-      this.lexicalFrame = new LexicalFrame();
-
+      this.lexicalFrame = DUMMY_LEXICAL_FRAME;
       // this.globalFrame is left as is.
       // For built-ins, thread.globals() returns the module
       // of the file from which the built-in was called.
@@ -489,7 +532,6 @@ public final class StarlarkThread {
       taskKind = ProfilerTask.STARLARK_BUILTIN_FN;
     }
 
-    fr.lexicals = this.lexicalFrame;
     fr.loc = fn.getLocation();
 
     // start profile span
@@ -517,8 +559,13 @@ public final class StarlarkThread {
     }
   }
 
+  // Builtins cannot create or modify variable bindings,
+  // so it's sufficient to use a shared instance.
+  private static final LexicalFrame DUMMY_LEXICAL_FRAME = ImmutableEmptyLexicalFrame.INSTANCE;
+
   private final String transitiveHashCode;
 
+  @Override
   public Mutability mutability() {
     return mutability;
   }
@@ -572,6 +619,18 @@ public final class StarlarkThread {
       }
     }
     return false;
+  }
+
+  /** Returns the call location and called function for the outermost call being evaluated. */
+  // TODO(adonovan): replace this by an API for walking the call stack, then move to lib.packages.
+  public Pair<Location, StarlarkCallable> getOutermostCall() {
+    // The stack must contain at least two entries:
+    // the outermost function (e.g. a BUILD file),
+    // and the function called by it (e.g. a "macro").
+    if (toplevel()) {
+      return null;
+    }
+    return new Pair<>(callstack.get(0).loc, callstack.get(1).fn);
   }
 
   /**
@@ -847,44 +906,31 @@ public final class StarlarkThread {
     return vars;
   }
 
-  // Implementation of Debug.getCallStack.
-  // Intentionally obscured to steer most users to the simpler getCallStack.
-  ImmutableList<Debug.Frame> getDebugCallStack() {
-    return ImmutableList.<Debug.Frame>copyOf(callstack);
-  }
+  /** Returns a copy of the current stack of call frames. (Debugger API) */
+  public ImmutableList<DebugFrame> listFrames() {
+    ImmutableList.Builder<DebugFrame> frameListBuilder = ImmutableList.builder();
 
-  /**
-   * A CallStackEntry describes the name and PC location of an active function call. See {@link
-   * #getCallStack}.
-   */
-  @Immutable
-  public static final class CallStackEntry {
-    public final String name;
-    public final Location location;
+    Frame lex = this.lexicalFrame;
+    for (CallFrame fr : Lists.reverse(callstack)) { // most recent call first
 
-    public CallStackEntry(String name, Location location) {
-      this.location = location;
-      this.name = name;
+      // This is yet another hack related to the toplevel,
+      // for which the legacy behavior is to report no lexicals.
+      ImmutableMap<String, Object> lexicals =
+          lex == fr.savedModule
+              ? ImmutableMap.of()
+              : ImmutableMap.copyOf(lex.getTransitiveBindings());
+
+      frameListBuilder.add(
+          DebugFrame.builder()
+              .setLexicalFrameBindings(lexicals)
+              // TODO(adonovan): getGlobals is wrong. It should be fr.fn.module.
+              .setGlobalBindings(ImmutableMap.copyOf(getGlobals().getTransitiveBindings()))
+              .setFunctionName(fr.fn.getName())
+              .setLocation(fr.loc)
+              .build());
+      lex = fr.savedLexicals;
     }
-
-    @Override
-    public String toString() {
-      return name + "@" + location;
-    }
-  }
-
-  /**
-   * Returns information about this thread's current stack of active function calls, outermost call
-   * first. For each function, it reports its name, and the location of its current program counter.
-   * The result is immutable and does not reference interpreter data structures, so it may retained
-   * indefinitely and safely shared with other threads.
-   */
-  public ImmutableList<CallStackEntry> getCallStack() {
-    ImmutableList.Builder<CallStackEntry> stack = ImmutableList.builder();
-    for (CallFrame fr : callstack) {
-      stack.add(new CallStackEntry(fr.fn.getName(), fr.loc));
-    }
-    return stack.build();
+    return frameListBuilder.build();
   }
 
   /**
@@ -897,7 +943,6 @@ public final class StarlarkThread {
    *
    * <p>A null return value indicates that no further pausing should occur.
    */
-  // TODO(adonovan): move to Debug.
   @Nullable
   public ReadyToPause stepControl(Stepping stepping) {
     final int depth = callstack.size();
@@ -917,14 +962,12 @@ public final class StarlarkThread {
   }
 
   /** See stepControl (Debugger API) */
-  // TODO(adonovan): move to Debug.
   public interface ReadyToPause extends Predicate<StarlarkThread> {}
 
   /**
    * Describes the stepping behavior that should occur when execution of a thread is continued.
    * (Debugger API)
    */
-  // TODO(adonovan): move to Debug.
   public enum Stepping {
     /** Continue execution without stepping. */
     NONE,

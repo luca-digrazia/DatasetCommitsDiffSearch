@@ -18,9 +18,11 @@ import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.events.EventCollector;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import com.google.devtools.build.lib.testutil.TestMode;
 import java.util.Collections;
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -29,9 +31,9 @@ import org.junit.runners.JUnit4;
 /** Test of evaluation behavior. (Implicitly uses lexer + parser.) */
 // TODO(adonovan): separate tests of parser, resolver, Starlark core evaluator,
 // and BUILD and .bzl features.
-// TODO(adonovan): make final. Requires changing SkylarkEvaluationTest.
 @RunWith(JUnit4.class)
 public class EvaluationTest extends EvaluationTestCase {
+
   @Before
   public final void setBuildMode() throws Exception {
     super.setMode(TestMode.BUILD);
@@ -150,7 +152,8 @@ public class EvaluationTest extends EvaluationTestCase {
     }
 
     @Override
-    public Object fastcall(StarlarkThread thread, Object[] positional, Object[] named) {
+    public Object fastcall(
+        StarlarkThread thread, Location loc, Object[] positional, Object[] named) {
       callCount++;
       if (positional.length > 0 && Starlark.truth(positional[0])) {
         Thread.currentThread().interrupt();
@@ -180,7 +183,7 @@ public class EvaluationTest extends EvaluationTestCase {
         .testExpression("123 + 456", 579)
         .testExpression("456 - 123", 333)
         .testExpression("8 % 3", 2)
-        .testIfErrorContains("unsupported binary operation: int % string", "3 % 'foo'")
+        .testIfErrorContains("unsupported operand type(s) for %: 'int' and 'string'", "3 % 'foo'")
         .testExpression("-5", -5)
         .testIfErrorContains("unsupported unary operation: -string", "-'foo'");
   }
@@ -238,7 +241,8 @@ public class EvaluationTest extends EvaluationTestCase {
           }
 
           @Override
-          public Object fastcall(StarlarkThread thread, Object[] positional, Object[] named) {
+          public Object fastcall(
+              StarlarkThread thread, Location loc, Object[] positional, Object[] named) {
             int sum = 0;
             for (Object arg : positional) {
               sum += (Integer) arg;
@@ -282,6 +286,7 @@ public class EvaluationTest extends EvaluationTestCase {
           @Override
           public Object call(
               StarlarkThread thread,
+              Location loc,
               Tuple<Object> args,
               Dict<String, Object> kwargs) {
             return kwargs;
@@ -336,7 +341,7 @@ public class EvaluationTest extends EvaluationTestCase {
         .testExpression("-7 // 2", -4)
         .testExpression("-7 // -2", 3)
         .testExpression("2147483647 // 2", 1073741823)
-        .testIfErrorContains("unsupported binary operation: string // int", "'str' // 2")
+        .testIfErrorContains("unsupported operand type(s) for //: 'string' and 'int'", "'str' // 2")
         .testIfExactError("integer division by zero", "5 // 0");
   }
 
@@ -380,7 +385,8 @@ public class EvaluationTest extends EvaluationTestCase {
     assertThat(x).isEqualTo(Tuple.of(1, 2, 3, 4));
     assertThat(EvalUtils.isImmutable(x)).isTrue();
 
-    checkEvalError("unsupported binary operation: tuple + list", "(1,2) + [3,4]");
+    checkEvalError("unsupported operand type(s) for +: 'tuple' and 'list'",
+        "(1,2) + [3,4]"); // list + tuple
   }
 
   @Test
@@ -566,8 +572,10 @@ public class EvaluationTest extends EvaluationTestCase {
     newTest()
         .testExpression("[1, 2] + [3, 4]", StarlarkList.of(thread.mutability(), 1, 2, 3, 4))
         .testExpression("(1, 2) + (3, 4)", Tuple.of(1, 2, 3, 4))
-        .testIfExactError("unsupported binary operation: list + tuple", "[1, 2] + (3, 4)")
-        .testIfExactError("unsupported binary operation: tuple + list", "(1, 2) + [3, 4]");
+        .testIfExactError(
+            "unsupported operand type(s) for +: 'list' and 'tuple'", "[1, 2] + (3, 4)")
+        .testIfExactError(
+            "unsupported operand type(s) for +: 'tuple' and 'list'", "(1, 2) + [3, 4]");
   }
 
   @Test
@@ -603,6 +611,33 @@ public class EvaluationTest extends EvaluationTestCase {
         .testExpression("10 * ()", Tuple.empty())
         .testExpression("0 * (1, 2)", Tuple.empty())
         .testExpression("-4 * (1, 2)", Tuple.empty());
+  }
+
+  @SuppressWarnings("unchecked")
+  @Test
+  public void testSelectorListConcatenation() throws Exception {
+    // TODO(fwe): cannot be handled by current testing suite
+    SelectorList x = (SelectorList) eval("select({'foo': ['FOO'], 'bar': ['BAR']}) + []");
+    List<Object> elements = x.getElements();
+    assertThat(elements).hasSize(2);
+    assertThat(elements.get(0)).isInstanceOf(SelectorValue.class);
+    assertThat((Iterable<Object>) elements.get(1)).isEmpty();
+  }
+
+  @Test
+  public void testAddSelectIncompatibleType() throws Exception {
+    newTest()
+        .testIfErrorContains(
+            "'+' operator applied to incompatible types (select of list, int)",
+            "select({'foo': ['FOO'], 'bar': ['BAR']}) + 1");
+  }
+
+  @Test
+  public void testAddSelectIncompatibleType2() throws Exception {
+    newTest()
+        .testIfErrorContains(
+            "'+' operator applied to incompatible types (select of list, select of int)",
+            "select({'foo': ['FOO']}) + select({'bar': 2})");
   }
 
   @Test
@@ -709,7 +744,7 @@ public class EvaluationTest extends EvaluationTestCase {
     newTest()
         .testIfErrorContains(
             "'in <string>' requires string as left operand, not 'int'", "1 in '123'")
-        .testIfErrorContains("unsupported binary operation: string in int", "'a' in 1");
+        .testIfErrorContains("'int' is not iterable. in operator only works on ", "'a' in 1");
   }
 
   @Test

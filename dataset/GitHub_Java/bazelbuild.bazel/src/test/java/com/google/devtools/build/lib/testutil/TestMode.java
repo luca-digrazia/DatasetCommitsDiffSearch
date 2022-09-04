@@ -20,8 +20,7 @@ import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
-import com.google.devtools.common.options.Options;
-import com.google.devtools.common.options.OptionsParsingException;
+import com.google.devtools.common.options.OptionsParser;
 import java.util.Map;
 
 /**
@@ -29,10 +28,12 @@ import java.util.Map;
  * to be created
  */
 public abstract class TestMode {
-
-  private static StarlarkSemantics parseSkylarkSemantics(String... options)
-      throws OptionsParsingException {
-    return Options.parse(StarlarkSemanticsOptions.class, options).getOptions().toSkylarkSemantics();
+  private static StarlarkSemantics parseSkylarkSemantics(String... skylarkOptions)
+      throws Exception {
+    OptionsParser parser =
+        OptionsParser.builder().optionsClasses(StarlarkSemanticsOptions.class).build();
+    parser.parse(skylarkOptions);
+    return parser.getOptions(StarlarkSemanticsOptions.class).toSkylarkSemantics();
   }
 
   public static final TestMode BUILD =

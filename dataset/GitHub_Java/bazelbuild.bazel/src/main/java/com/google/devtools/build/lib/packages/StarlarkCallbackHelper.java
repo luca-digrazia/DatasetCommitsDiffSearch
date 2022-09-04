@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.ClassObject;
@@ -62,7 +61,7 @@ public class StarlarkCallbackHelper {
   }
 
   public ImmutableList<String> getParameterNames() {
-    return callback.getParameterNames();
+    return callback.getSignature().getParameterNames();
   }
 
   // TODO(adonovan): opt: all current callers are forced to construct a temporary ClassObject.
@@ -74,7 +73,7 @@ public class StarlarkCallbackHelper {
           StarlarkThread.builder(mutability)
               .setSemantics(starlarkSemantics)
               .build();
-      thread.setPrintHandler(Event.makeDebugPrintHandler(eventHandler));
+      thread.setPrintHandler(StarlarkThread.makeDebugPrintHandler(eventHandler));
       context.storeInThread(thread);
       return Starlark.call(
           thread,

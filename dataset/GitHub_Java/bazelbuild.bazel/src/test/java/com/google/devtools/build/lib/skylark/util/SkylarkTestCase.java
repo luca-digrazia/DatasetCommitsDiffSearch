@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.SymbolGenerator;
 import com.google.devtools.build.lib.rules.platform.PlatformCommon;
 import com.google.devtools.build.lib.syntax.Module;
-import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
@@ -56,10 +55,9 @@ public abstract class SkylarkTestCase extends BuildViewTestCase {
     EvaluationTestCase ev =
         new EvaluationTestCase() {
           @Override
-          public StarlarkThread newStarlarkThread() {
-            Mutability mu = Mutability.create("test");
+          public StarlarkThread newStarlarkThread() throws Exception {
             StarlarkThread thread =
-                StarlarkThread.builder(mu)
+                StarlarkThread.builder(mutability)
                     .setSemantics(getSkylarkSemantics())
                     .setGlobals(
                         globals.withLabel(
