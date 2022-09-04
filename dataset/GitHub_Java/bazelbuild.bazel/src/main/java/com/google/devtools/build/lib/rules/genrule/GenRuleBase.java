@@ -141,22 +141,17 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
       return null;
     }
 
-    String baseCommand = ruleContext.attributes().get("cmd", Type.STRING);
-    // Expand template variables and functions.
-    String command = ruleContext
-        .getExpander(new CommandResolverContext(ruleContext, resolvedSrcs, filesToBuild))
-        .withExecLocations(commandHelper.getLabelMap())
-        .expand("cmd", baseCommand);
+    String baseCommand = commandHelper.resolveCommandAndHeuristicallyExpandLabels(
+        ruleContext.attributes().get("cmd", Type.STRING),
+        "cmd",
+        ruleContext.attributes().get("heuristic_label_expansion", Type.BOOLEAN));
 
-    // Heuristically expand things that look like labels.
-    if (ruleContext.attributes().get("heuristic_label_expansion", Type.BOOLEAN)) {
-      command = commandHelper.expandLabelsHeuristically(command);
-    }
-
-    // Add the genrule environment setup script before the actual shell command.
-    command = String.format("source %s; %s",
+    // Adds the genrule environment setup script before the actual shell command
+    String command = String.format("source %s; %s",
         ruleContext.getPrerequisiteArtifact("$genrule_setup", Mode.HOST).getExecPath(),
-        command);
+        baseCommand);
+
+    command = resolveCommand(command, ruleContext, resolvedSrcs, filesToBuild);
 
     String messageAttr = ruleContext.attributes().get("message", Type.STRING);
     String message = messageAttr.isEmpty() ? "Executing genrule" : messageAttr;
@@ -251,6 +246,19 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
       return Iterables.getOnlyElement(filesToBuild);
     }
     return null;
+  }
+
+  /**
+   * Resolves any variables, including make and genrule-specific variables, in the command and
+   * returns the expanded command.
+   *
+   * <p>GenRule implementations may override this method to perform additional expansions.
+   */
+  protected String resolveCommand(String command, final RuleContext ruleContext,
+      final NestedSet<Artifact> resolvedSrcs, final NestedSet<Artifact> filesToBuild) {
+    return ruleContext
+        .getExpander(new CommandResolverContext(ruleContext, resolvedSrcs, filesToBuild))
+        .expand("cmd", command);
   }
 
   /**
