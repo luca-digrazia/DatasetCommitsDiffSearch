@@ -109,7 +109,6 @@ import io.quarkus.hibernate.orm.PersistenceUnit;
 import io.quarkus.hibernate.orm.deployment.integration.HibernateOrmIntegrationBuildItem;
 import io.quarkus.hibernate.orm.deployment.integration.HibernateOrmIntegrationRuntimeConfiguredBuildItem;
 import io.quarkus.hibernate.orm.runtime.HibernateOrmRecorder;
-import io.quarkus.hibernate.orm.runtime.HibernateOrmRuntimeConfig;
 import io.quarkus.hibernate.orm.runtime.JPAConfig;
 import io.quarkus.hibernate.orm.runtime.JPAConfigSupport;
 import io.quarkus.hibernate.orm.runtime.PersistenceUnitUtil;
@@ -291,12 +290,10 @@ public final class HibernateOrmProcessor {
         for (PersistenceXmlDescriptorBuildItem persistenceXmlDescriptorBuildItem : persistenceXmlDescriptors) {
             persistenceUnitDescriptors
                     .produce(new PersistenceUnitDescriptorBuildItem(persistenceXmlDescriptorBuildItem.getDescriptor(),
-                            DataSourceUtil.DEFAULT_DATASOURCE_NAME,
                             getMultiTenancyStrategy(Optional.ofNullable(persistenceXmlDescriptorBuildItem.getDescriptor()
                                     .getProperties().getProperty(AvailableSettings.MULTI_TENANT))),
                             null,
-                            false,
-                            true));
+                            false));
         }
 
         if (impliedPU.shouldGenerateImpliedBlockingPersistenceUnit()) {
@@ -510,24 +507,11 @@ public final class HibernateOrmProcessor {
 
     @BuildStep
     @Record(RUNTIME_INIT)
-    public PersistenceProviderSetUpBuildItem setupPersistenceProvider(HibernateOrmRecorder recorder,
-            Capabilities capabilities,
-            HibernateOrmRuntimeConfig hibernateOrmRuntimeConfig) {
-        if (capabilities.isMissing(Capability.HIBERNATE_REACTIVE)) {
-            recorder.setupPersistenceProvider(hibernateOrmRuntimeConfig);
-        }
-
-        return new PersistenceProviderSetUpBuildItem();
-    }
-
-    @BuildStep
-    @Record(RUNTIME_INIT)
     public ServiceStartBuildItem startPersistenceUnits(HibernateOrmRecorder recorder, BeanContainerBuildItem beanContainer,
             List<JdbcDataSourceBuildItem> dataSourcesConfigured,
             JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels,
             List<HibernateOrmIntegrationRuntimeConfiguredBuildItem> integrationsRuntimeConfigured,
-            List<JdbcDataSourceSchemaReadyBuildItem> schemaReadyBuildItem,
-            List<PersistenceProviderSetUpBuildItem> persistenceProviderSetUp) throws Exception {
+            List<JdbcDataSourceSchemaReadyBuildItem> schemaReadyBuildItem) throws Exception {
         if (hasEntities(jpaEntities, nonJpaModels)) {
             recorder.startAllPersistenceUnits(beanContainer.getValue());
         }
@@ -769,6 +753,17 @@ public final class HibernateOrmProcessor {
                 namingStrategy -> descriptor.getProperties()
                         .setProperty(AvailableSettings.IMPLICIT_NAMING_STRATEGY, namingStrategy));
 
+        // Database
+        descriptor.getProperties().setProperty(AvailableSettings.HBM2DDL_DATABASE_ACTION,
+                persistenceUnitConfig.database.generation.generation);
+
+        descriptor.getProperties().setProperty(AvailableSettings.HBM2DDL_CREATE_SCHEMAS,
+                String.valueOf(persistenceUnitConfig.database.generation.createSchemas));
+
+        if (persistenceUnitConfig.database.generation.haltOnError) {
+            descriptor.getProperties().setProperty(AvailableSettings.HBM2DDL_HALT_ON_ERROR, "true");
+        }
+
         //charset
         descriptor.getProperties().setProperty(AvailableSettings.HBM2DDL_CHARSET_NAME,
                 persistenceUnitConfig.database.charset.name());
@@ -813,6 +808,20 @@ public final class HibernateOrmProcessor {
         persistenceUnitConfig.jdbc.statementBatchSize.ifPresent(
                 fetchSize -> descriptor.getProperties().setProperty(AvailableSettings.STATEMENT_BATCH_SIZE,
                         String.valueOf(fetchSize)));
+
+        // Logging
+        if (persistenceUnitConfig.log.sql) {
+            descriptor.getProperties().setProperty(AvailableSettings.SHOW_SQL, "true");
+
+            if (persistenceUnitConfig.log.formatSql) {
+                descriptor.getProperties().setProperty(AvailableSettings.FORMAT_SQL, "true");
+            }
+        }
+
+        if (persistenceUnitConfig.log.jdbcWarnings.isPresent()) {
+            descriptor.getProperties().setProperty(AvailableSettings.LOG_JDBC_WARNINGS,
+                    persistenceUnitConfig.log.jdbcWarnings.get().toString());
+        }
 
         // Statistics
         if (hibernateOrmConfig.metricsEnabled
@@ -878,7 +887,7 @@ public final class HibernateOrmProcessor {
                 new PersistenceUnitDescriptorBuildItem(descriptor, dataSource,
                         getMultiTenancyStrategy(persistenceUnitConfig.multitenant),
                         persistenceUnitConfig.multitenantSchemaDatasource.orElse(null),
-                        false, false));
+                        false));
     }
 
     public static Optional<String> guessDialect(String resolvedDbKind) {
