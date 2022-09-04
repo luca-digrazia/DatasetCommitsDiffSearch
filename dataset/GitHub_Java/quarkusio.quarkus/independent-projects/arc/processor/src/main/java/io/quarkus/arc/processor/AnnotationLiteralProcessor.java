@@ -16,11 +16,6 @@
 
 package io.quarkus.arc.processor;
 
-import io.quarkus.arc.ComputingCache;
-import io.quarkus.gizmo.BytecodeCreator;
-import io.quarkus.gizmo.ClassOutput;
-import io.quarkus.gizmo.MethodDescriptor;
-import io.quarkus.gizmo.ResultHandle;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -28,11 +23,17 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.MethodInfo;
+import io.quarkus.arc.ComputingCache;
+import org.jboss.protean.gizmo.BytecodeCreator;
+import org.jboss.protean.gizmo.ClassOutput;
+import org.jboss.protean.gizmo.MethodDescriptor;
+import org.jboss.protean.gizmo.ResultHandle;
 
 /**
  *
@@ -44,12 +45,11 @@ class AnnotationLiteralProcessor {
 
     AnnotationLiteralProcessor(boolean shared, Predicate<DotName> applicationClassPredicate) {
         this.cache = shared ? new ComputingCache<>(key -> {
-            return new Literal(AnnotationLiteralGenerator.generatedSharedName(key.annotationName),
-                    applicationClassPredicate.test(key.annotationName),
+            return new Literal(AnnotationLiteralGenerator.generatedSharedName(key.annotationName), applicationClassPredicate.test(key.annotationName), 
                     key.annotationClass.methods()
-                            .stream()
-                            .filter(m -> !m.name().equals(Methods.CLINIT) && !m.name().equals(Methods.INIT))
-                            .collect(Collectors.toList()));
+                    .stream()
+                    .filter(m -> !m.name().equals(Methods.CLINIT) && !m.name().equals(Methods.INIT))
+                    .collect(Collectors.toList()));
         }) : null;
     }
 
@@ -70,8 +70,7 @@ class AnnotationLiteralProcessor {
      * @param targetPackage Target package is only used if annotation literals are not shared
      * @return an annotation literal result handle
      */
-    ResultHandle process(BytecodeCreator bytecode, ClassOutput classOutput, ClassInfo annotationClass,
-            AnnotationInstance annotationInstance,
+    ResultHandle process(BytecodeCreator bytecode, ClassOutput classOutput, ClassInfo annotationClass, AnnotationInstance annotationInstance,
             String targetPackage) {
         Objects.requireNonNull(annotationClass, "Annotation class not available: " + annotationInstance);
         if (cache != null) {
@@ -96,14 +95,11 @@ class AnnotationLiteralProcessor {
             }
             return bytecode
                     .newInstance(MethodDescriptor.ofConstructor(literal.className,
-                            literal.constructorParams.stream().map(m -> m.returnType().name().toString()).toArray()),
-                            constructorParams);
+                            literal.constructorParams.stream().map(m -> m.returnType().name().toString()).toArray()), constructorParams);
         } else {
-            String literalClassName = AnnotationLiteralGenerator.generatedLocalName(targetPackage,
-                    DotNames.simpleName(annotationClass),
+            String literalClassName = AnnotationLiteralGenerator.generatedLocalName(targetPackage, DotNames.simpleName(annotationClass),
                     Hashes.sha1(annotationInstance.toString()));
-            AnnotationLiteralGenerator.createAnnotationLiteral(classOutput, annotationClass, annotationInstance,
-                    literalClassName);
+            AnnotationLiteralGenerator.createAnnotationLiteral(classOutput, annotationClass, annotationInstance, literalClassName);
             return bytecode.newInstance(MethodDescriptor.ofConstructor(literalClassName));
         }
     }
@@ -113,7 +109,7 @@ class AnnotationLiteralProcessor {
         final String className;
 
         final boolean isApplicationClass;
-
+        
         final List<MethodInfo> constructorParams;
 
         public Literal(String className, boolean isApplicationClass, List<MethodInfo> constructorParams) {
@@ -127,7 +123,7 @@ class AnnotationLiteralProcessor {
     static class Key {
 
         final DotName annotationName;
-
+        
         final ClassInfo annotationClass;
 
         public Key(DotName name, ClassInfo annotationClass) {
