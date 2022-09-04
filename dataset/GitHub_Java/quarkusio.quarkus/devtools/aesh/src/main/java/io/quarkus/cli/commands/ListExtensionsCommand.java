@@ -15,7 +15,6 @@ import io.quarkus.cli.commands.file.BuildFile;
 import io.quarkus.cli.commands.file.GradleBuildFile;
 import io.quarkus.cli.commands.file.MavenBuildFile;
 import io.quarkus.cli.commands.writer.FileProjectWriter;
-import io.quarkus.platform.tools.config.QuarkusPlatformConfig;
 
 /**
  * @author <a href="mailto:stalep@gmail.com">Ståle Pedersen</a>
@@ -55,8 +54,7 @@ public class ListExtensionsCommand implements Command<CommandInvocation> {
                         }
                     }
                 }
-                new ListExtensions(buildFile, QuarkusPlatformConfig.getGlobalDefault().getPlatformDescriptor())
-                        .listExtensions(all, format, searchPattern);
+                new ListExtensions(buildFile).listExtensions(all, format, searchPattern);
             } catch (IOException e) {
                 throw new CommandException("Unable to list extensions", e);
             }
