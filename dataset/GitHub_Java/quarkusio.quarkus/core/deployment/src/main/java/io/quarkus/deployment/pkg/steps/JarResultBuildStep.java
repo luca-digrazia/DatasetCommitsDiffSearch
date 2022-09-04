@@ -599,8 +599,7 @@ public class JarResultBuildStep {
                 Map<AppArtifactKey, List<String>> relativePaths = new HashMap<>();
                 for (Map.Entry<AppArtifactKey, List<Path>> e : copiedArtifacts.entrySet()) {
                     relativePaths.put(e.getKey(),
-                            e.getValue().stream().map(s -> buildDir.relativize(s).toString().replace("\\", "/"))
-                                    .collect(Collectors.toList()));
+                            e.getValue().stream().map(s -> buildDir.relativize(s).toString()).collect(Collectors.toList()));
                 }
 
                 //now we serialize the data needed to build up the reaugmentation class path
