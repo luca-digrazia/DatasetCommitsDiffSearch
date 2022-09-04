@@ -41,10 +41,11 @@ import org.graylog2.contentpacks.model.ContentPackInstallation;
 import org.graylog2.contentpacks.model.ContentPackUninstallDetails;
 import org.graylog2.contentpacks.model.ContentPackUninstallation;
 import org.graylog2.contentpacks.model.ContentPackV1;
-import org.graylog2.contentpacks.model.LegacyContentPack;
 import org.graylog2.contentpacks.model.ModelType;
 import org.graylog2.contentpacks.model.constraints.Constraint;
 import org.graylog2.contentpacks.model.constraints.ConstraintCheckResult;
+import org.graylog2.contentpacks.model.constraints.GraylogVersionConstraint;
+import org.graylog2.contentpacks.model.entities.EntitiesWithConstraints;
 import org.graylog2.contentpacks.model.entities.Entity;
 import org.graylog2.contentpacks.model.entities.EntityDescriptor;
 import org.graylog2.contentpacks.model.entities.EntityExcerpt;
@@ -53,6 +54,7 @@ import org.graylog2.contentpacks.model.entities.NativeEntity;
 import org.graylog2.contentpacks.model.entities.NativeEntityDescriptor;
 import org.graylog2.contentpacks.model.entities.references.ValueReference;
 import org.graylog2.contentpacks.model.entities.references.ValueType;
+import org.graylog2.contentpacks.model.entities.references.ValueTyped;
 import org.graylog2.contentpacks.model.parameters.Parameter;
 import org.graylog2.utilities.Graphs;
 import org.slf4j.Logger;
@@ -62,7 +64,6 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.time.Instant;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -401,8 +402,6 @@ public class ContentPackService {
     public Set<ConstraintCheckResult> checkConstraints(ContentPack contentPack) {
         if (contentPack instanceof ContentPackV1) {
             return checkConstraintsV1((ContentPackV1) contentPack);
-        } else if (contentPack instanceof LegacyContentPack) {
-            return Collections.emptySet();
         } else {
             throw new IllegalArgumentException("Unsupported content pack version: " + contentPack.version());
         }
@@ -427,7 +426,7 @@ public class ContentPackService {
         checkMissingParameters(parameters, contentPackParameterNames);
 
         final Map<String, ValueType> contentPackParameterValueTypes = contentPackParameters.stream()
-                .collect(Collectors.toMap(Parameter::name, Parameter::valueType));
+                .collect(Collectors.toMap(Parameter::name, ValueTyped::valueType));
         final Set<String> invalidParameters = parameters.entrySet().stream()
                 .filter(entry -> entry.getValue().valueType() != contentPackParameterValueTypes.get(entry.getKey()))
                 .map(Map.Entry::getKey)
