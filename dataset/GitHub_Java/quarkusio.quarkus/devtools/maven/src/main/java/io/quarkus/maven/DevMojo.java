@@ -259,12 +259,8 @@ public class DevMojo extends AbstractMojo {
                     if (Files.isDirectory(resourcesSourcesDir)) {
                         resourcePath = resourcesSourcesDir.toAbsolutePath().toString();
                     }
-                    DevModeContext.ModuleInfo moduleInfo = new DevModeContext.ModuleInfo(
-                            project.getArtifactId(),
-                            mavenProject.getBasedir().getPath(),
-                            sourcePaths,
-                            classesPath,
-                            resourcePath);
+                    DevModeContext.ModuleInfo moduleInfo = new DevModeContext.ModuleInfo(project.getArtifactId(), sourcePaths,
+                            classesPath, resourcePath);
                     devModeContext.getModules().add(moduleInfo);
                 }
 

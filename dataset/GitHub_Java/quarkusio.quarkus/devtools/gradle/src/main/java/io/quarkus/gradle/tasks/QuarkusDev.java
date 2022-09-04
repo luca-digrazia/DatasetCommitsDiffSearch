@@ -44,7 +44,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import org.gradle.api.GradleException;
-import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ResolvedDependency;
 import org.gradle.api.tasks.Input;
@@ -155,8 +154,7 @@ public class QuarkusDev extends QuarkusTask {
     @TaskAction
     public void startDev() {
 
-        Project project = getProject();
-        QuarkusPluginExtension extension = (QuarkusPluginExtension) project.getExtensions().findByName("quarkus");
+        QuarkusPluginExtension extension = (QuarkusPluginExtension) getProject().getExtensions().findByName("quarkus");
 
         if (!getSourceDir().isDirectory()) {
             throw new GradleException("The `src/main/java` directory is required, please create it.");
@@ -252,12 +250,9 @@ public class QuarkusDev extends QuarkusTask {
                 resources.append(file.getAbsolutePath());
                 res = file.getAbsolutePath();
             }
-            DevModeContext.ModuleInfo moduleInfo = new DevModeContext.ModuleInfo(
-                    project.getName(),
-                    project.getProjectDir().getAbsolutePath(),
+            DevModeContext.ModuleInfo moduleInfo = new DevModeContext.ModuleInfo(getProject().getName(),
                     Collections.singletonList(getSourceDir().getAbsolutePath()),
-                    extension.outputDirectory().getAbsolutePath(),
-                    res);
+                    extension.outputDirectory().getAbsolutePath(), res);
             context.getModules().add(moduleInfo);
 
             try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(tempFile))) {

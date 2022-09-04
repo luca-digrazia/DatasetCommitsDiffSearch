@@ -25,18 +25,18 @@ import javax.websocket.server.HandshakeRequest;
 import javax.websocket.server.ServerEndpoint;
 import javax.websocket.server.ServerEndpointConfig;
 
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.logging.Logger;
+import org.xnio.IoUtils;
 
 import io.quarkus.deployment.devmode.HotReplacementContext;
-import io.undertow.util.IoUtils;
 
 @ServerEndpoint(value = HotReplacementWebsocketEndpoint.QUARKUS_HOT_RELOAD, configurator = HotReplacementWebsocketEndpoint.ServerConfigurator.class)
 public class HotReplacementWebsocketEndpoint {
 
     static final String QUARKUS_HOT_RELOAD = "/quarkus/live-reload";
     static final String QUARKUS_SECURITY_KEY = "quarkus-security-key";
-    static final String QUARKUS_LIVE_RELOAD_PASSWORD = "quarkus.live-reload.password";
-    static final String QUARKUS_LIVE_RELOAD_PASSWORD_ENV = "QUARKUS_LIVE_RELOAD_PASSWORD";
+    static final String QUARKUS_HOT_RELOAD_PASSWORD = "quarkus.live-reload.password";
     private static Logger logger = Logger.getLogger(HotReplacementWebsocketEndpoint.class);
 
     private static final long MAX_WAIT_TIME = 15000;
