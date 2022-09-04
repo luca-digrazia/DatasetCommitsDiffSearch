@@ -315,10 +315,8 @@ public final class ApplicationManifest {
         proguardCfg,
         null, /* Artifact mainDexProguardCfg */
         null, /* Artifact manifestOut */
-        null, /* Artifact mergedResources */
-        null, /* Artifact dataBindingInfoZip */
-        null, /* featureOf */
-        null /* featureAfter */);
+        null /* Artifact mergedResources */,
+        null /* Artifact dataBindingInfoZip */);
   }
 
   /** Packages up the manifest with resource and assets from the LocalResourceContainer. */
@@ -359,13 +357,10 @@ public final class ApplicationManifest {
         null, /* Artifact mainDexProguardCfg */
         manifestOut,
         mergedResources,
-        null, /* Artifact dataBindingInfoZip */
-        null, /* Artifact featureOf */
-        null /* Artifact featureAfter */);
+        null /* Artifact dataBindingInfoZip */);
   }
 
   /** Packages up the manifest with resource and assets from the rule and dependent resources. */
-  // TODO(bazel-team): this method calls for some refactoring, 15+ params including some nullables.
   public ResourceApk packWithDataAndResources(
       @Nullable Artifact resourceApk,
       RuleContext ruleContext,
@@ -382,9 +377,7 @@ public final class ApplicationManifest {
       @Nullable Artifact mainDexProguardCfg,
       Artifact manifestOut,
       Artifact mergedResources,
-      Artifact dataBindingInfoZip,
-      @Nullable Artifact featureOf,
-      @Nullable Artifact featureAfter) throws InterruptedException {
+      Artifact dataBindingInfoZip) throws InterruptedException {
     LocalResourceContainer data = new LocalResourceContainer.Builder(ruleContext)
         .withAssets(
             AndroidCommon.getAssetDir(ruleContext),
@@ -421,10 +414,7 @@ public final class ApplicationManifest {
         proguardCfg,
         mainDexProguardCfg,
         manifestOut,
-        mergedResources,
-        dataBindingInfoZip,
-        featureOf,
-        featureAfter);
+        mergedResources, dataBindingInfoZip);
   }
 
   private ResourceApk createApk(
@@ -442,9 +432,7 @@ public final class ApplicationManifest {
       @Nullable Artifact mainDexProguardCfg,
       Artifact manifestOut,
       Artifact mergedResources,
-      Artifact dataBindingInfoZip,
-      @Nullable Artifact featureOf,
-      @Nullable Artifact featureAfter) throws InterruptedException {
+      Artifact dataBindingInfoZip) throws InterruptedException {
     ResourceContainer resourceContainer = checkForInlinedResources(
         maybeInlinedResourceContainer,
         resourceDeps.getResources(),  // TODO(bazel-team): Figure out if we really need to check
@@ -518,8 +506,6 @@ public final class ApplicationManifest {
               .setApplicationId(manifestValues.get("applicationId"))
               .setVersionCode(manifestValues.get("versionCode"))
               .setVersionName(manifestValues.get("versionName"));
-      builder.setFeatureOf(featureOf);
-      builder.setFeatureAfter(featureAfter);
       if (!incremental) {
         builder
             .setRTxtOut(resourceContainer.getRTxt())
