@@ -14,10 +14,8 @@
 
 package com.google.devtools.build.lib.testutil;
 
-import static com.google.devtools.build.lib.rules.cpp.CppRuleClasses.CROSSTOOL_LABEL;
-
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.packages.BuilderFactoryForTesting;
+import com.google.devtools.build.lib.packages.PackageFactory.BuilderFactoryForTesting;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 
@@ -25,7 +23,6 @@ import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
  * Various constants required by the tests.
  */
 public class TestConstants {
-
   private TestConstants() {
   }
 
@@ -61,9 +58,6 @@ public class TestConstants {
    * Directory where we can find bazel's Java tests, relative to a test's runfiles directory.
    */
   public static final String JAVATESTS_ROOT = "io_bazel/src/test/java/";
-
-  /** Location of the bazel repo relative to the workspace root */
-  public static final String BAZEL_REPO_PATH = "";
 
   /** Relative path to the {@code process-wrapper} tool. */
   public static final String PROCESS_WRAPPER_PATH =
@@ -113,22 +107,11 @@ public class TestConstants {
   public static final ImmutableList<String> OSX_CROSSTOOL_FLAGS =
       ImmutableList.of();
 
-  /**
-   * Flags that must be set for Bazel to work properly, if the default values are unusable for
-   * some reason.
-   */
-  public static final ImmutableList<String> PRODUCT_SPECIFIC_FLAGS =
-      ImmutableList.of();
+  public static final InvocationPolicy TEST_INVOCATION_POLICY =
+      InvocationPolicy.getDefaultInstance();
 
   public static final BuilderFactoryForTesting PACKAGE_FACTORY_BUILDER_FACTORY_FOR_TESTING =
       PackageFactoryBuilderFactoryForBazelUnitTests.INSTANCE;
-
-  /** Partial query to filter out implicit dependencies of C/C++ rules. */
-  public static final String CC_DEPENDENCY_CORRECTION =
-      " - deps(" + TOOLS_REPOSITORY + CROSSTOOL_LABEL + ")";
-
-  public static final String PLATFORM_LABEL =
-      "@bazel_tools//platforms:host_platform + @bazel_tools//platforms:target_platform";
 
   /** A choice of test execution mode, only varies internally. */
   public enum InternalTestExecutionMode {
