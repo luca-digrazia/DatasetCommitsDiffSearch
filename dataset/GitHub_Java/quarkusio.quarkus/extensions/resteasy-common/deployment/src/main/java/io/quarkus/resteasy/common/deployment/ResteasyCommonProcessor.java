@@ -91,8 +91,6 @@ public class ResteasyCommonProcessor {
     private static final DotName QUARKUS_JSONB_SERIALIZER = DotName
             .createSimple("io.quarkus.resteasy.common.runtime.jsonb.QuarkusJsonbSerializer");
 
-    private static final String[] WILDCARD_MEDIA_TYPE_ARRAY = { MediaType.WILDCARD };
-
     private ResteasyCommonConfig resteasyCommonConfig;
 
     @ConfigRoot(name = "resteasy")
@@ -529,12 +527,8 @@ public class ResteasyCommonProcessor {
                 return true;
             }
         }
-        String[] mediaTypes = WILDCARD_MEDIA_TYPE_ARRAY;
-        if (mediaTypeMethodAnnotationInstance.value() != null) {
-            mediaTypes = mediaTypeMethodAnnotationInstance.value().asStringArray();
-        }
         if (collectDeclaredProvidersForMediaTypeAnnotationInstance(providersToRegister, categorizedProviders,
-                mediaTypes, methodTarget)) {
+                mediaTypeMethodAnnotationInstance.value().asStringArray(), methodTarget)) {
             return true;
         }
 
