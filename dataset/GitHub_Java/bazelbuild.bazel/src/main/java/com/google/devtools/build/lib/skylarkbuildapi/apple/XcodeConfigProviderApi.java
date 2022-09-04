@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 
 /**
  * An interface for an info type containing the set of Apple versions computed from command line
@@ -26,12 +25,9 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
  */
 @SkylarkModule(
     name = "XcodeVersionConfig",
-    category = SkylarkModuleCategory.PROVIDER,
     doc = "The set of Apple versions computed from command line options and the xcode_config rule.")
-public interface XcodeConfigProviderApi<
-        ApplePlatformApiT extends ApplePlatformApi,
-        ApplePlatformTypeApiT extends ApplePlatformTypeApi>
-    extends StructApi {
+public interface XcodeConfigProviderApi<ApplePlatformApiT extends ApplePlatformApi,
+    ApplePlatformTypeApiT extends ApplePlatformTypeApi> extends StructApi {
 
   @SkylarkCallable(name = "xcode_version",
       doc = "Returns the Xcode version that is being used to build.<p>"
