@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationOptionDetails;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.TransitiveOptionDetails;
+import com.google.devtools.build.lib.analysis.featurecontrol.FeaturePolicyConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -86,6 +87,13 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
             .get(
                 ConfigSettingRule.FLAG_SETTINGS_ATTRIBUTE,
                 BuildType.LABEL_KEYED_STRING_DICT);
+
+    if (!userDefinedFlagSettings.isEmpty()) {
+      FeaturePolicyConfiguration.checkAvailable(
+          ruleContext,
+          ConfigFeatureFlag.POLICY_NAME,
+          "the " + ConfigSettingRule.FLAG_SETTINGS_ATTRIBUTE + " attribute");
+    }
 
     List<? extends TransitiveInfoCollection> flagValues =
         ruleContext.getPrerequisites(
