@@ -631,11 +631,12 @@ public class CppHelper {
       Artifact output,
       FeatureConfiguration featureConfiguration) {
     if (featureConfiguration.isEnabled(CppRuleClasses.NO_STRIPPING)) {
-      context.registerAction(SymlinkAction.toArtifact(
-          context.getActionOwner(),
-          input,
-          output,
-          "Symlinking original binary as stripped binary"));
+      context.registerAction(
+          new SymlinkAction(
+              context.getActionOwner(),
+              input,
+              output,
+              "Symlinking original binary as stripped binary"));
       return;
     }
 
