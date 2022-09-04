@@ -190,8 +190,7 @@ public class BeanDeployment {
         Set<MethodInfo> producerMethods = new HashSet<>();
         Set<MethodInfo> disposerMethods = new HashSet<>();
         Set<FieldInfo> producerFields = new HashSet<>();
-        Set<MethodInfo> syncObserverMethods = new HashSet<>();
-        Set<MethodInfo> asyncObserverMethods = new HashSet<>();
+        Set<MethodInfo> observerMethods = new HashSet<>();
 
         for (DotName beanDefiningAnnotation : beanDefiningAnnotations) {
             for (AnnotationInstance annotation : index.getAnnotations(beanDefiningAnnotation)) {
@@ -216,22 +215,15 @@ public class BeanDeployment {
 
                     for (MethodInfo method : beanClass.methods()) {
                         if (method.hasAnnotation(DotNames.PRODUCES)) {
-                            // Producers are not inherited
                             producerMethods.add(method);
                         } else if (method.hasAnnotation(DotNames.DISPOSES)) {
-                            // Disposers are not inherited
                             disposerMethods.add(method);
                         } else if (method.hasAnnotation(DotNames.OBSERVES)) {
-                            // TODO observers are inherited
-                            syncObserverMethods.add(method);
-                        } else if (method.hasAnnotation(DotNames.OBSERVES_ASYNC)) {
-                            // TODO observers are inherited
-                            asyncObserverMethods.add(method);
+                            observerMethods.add(method);
                         }
                     }
                     for (FieldInfo field : beanClass.fields()) {
                         if (field.annotations().stream().anyMatch(a -> a.name().equals(DotNames.PRODUCES))) {
-                            // Producer fields are not inherited
                             producerFields.add(field);
                         }
                     }
@@ -270,16 +262,10 @@ public class BeanDeployment {
             }
         }
 
-        for (MethodInfo observerMethod : syncObserverMethods) {
+        for (MethodInfo observerMethod : observerMethods) {
             BeanInfo declaringBean = beanClassToBean.get(observerMethod.declaringClass());
             if (declaringBean != null) {
-                observers.add(new ObserverInfo(declaringBean, observerMethod, Injection.forObserver(observerMethod, this), false));
-            }
-        }
-        for (MethodInfo observerMethod : asyncObserverMethods) {
-            BeanInfo declaringBean = beanClassToBean.get(observerMethod.declaringClass());
-            if (declaringBean != null) {
-                observers.add(new ObserverInfo(declaringBean, observerMethod, Injection.forObserver(observerMethod, this), true));
+                observers.add(new ObserverInfo(declaringBean, observerMethod, Injection.forObserver(observerMethod, this)));
             }
         }
 
