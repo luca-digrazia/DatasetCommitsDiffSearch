@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.system.shutdown;
 
 import com.google.common.util.concurrent.Uninterruptibles;
@@ -22,8 +25,8 @@ import org.graylog2.Configuration;
 import org.graylog2.initializers.BufferSynchronizerService;
 import org.graylog2.initializers.IndexerSetupService;
 import org.graylog2.plugin.lifecycles.Lifecycle;
-import org.graylog2.plugin.ProcessingPauseLockedException;
-import org.graylog2.plugin.ServerStatus;
+import org.graylog2.shared.ProcessingPauseLockedException;
+import org.graylog2.shared.ServerStatus;
 import org.graylog2.shared.initializers.InputSetupService;
 import org.graylog2.shared.initializers.PeriodicalsService;
 import org.graylog2.shared.initializers.RestApiService;
