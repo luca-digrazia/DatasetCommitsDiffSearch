@@ -37,6 +37,10 @@ public class FileSystemUtils {
 
   private FileSystemUtils() {}
 
+  /****************************************************************************
+   * Path and PathFragment functions.
+   */
+
   /**
    * Throws exceptions if {@code baseName} is not a valid base name. A valid
    * base name:
@@ -228,6 +232,10 @@ public class FileSystemUtils {
     }
   }
 
+  /****************************************************************************
+   * FileSystem property functions.
+   */
+
   /**
    * Return the current working directory as expressed by the System property
    * 'user.dir'.
@@ -243,6 +251,10 @@ public class FileSystemUtils {
   public static PathFragment getWorkingDirectory() {
     return PathFragment.create(System.getProperty("user.dir", "/"));
   }
+
+  /****************************************************************************
+   * Path FileSystem mutating operations.
+   */
 
   /**
    * "Touches" the file or directory specified by the path, following symbolic
@@ -618,6 +630,11 @@ public class FileSystemUtils {
     }
     return true;
   }
+
+  /****************************************************************************
+   * Whole-file I/O utilities for characters and bytes. These convenience
+   * methods are not efficient and should not be used for large amounts of data!
+   */
 
   /**
    * Decodes the given byte array assumed to be encoded with ISO-8859-1 encoding (isolatin1).
