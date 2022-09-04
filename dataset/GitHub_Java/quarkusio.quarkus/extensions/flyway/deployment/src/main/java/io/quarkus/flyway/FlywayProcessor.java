@@ -12,6 +12,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -32,8 +33,8 @@ import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.logging.Logger;
 
-import io.quarkus.agroal.spi.JdbcDataSourceBuildItem;
-import io.quarkus.agroal.spi.JdbcDataSourceSchemaReadyBuildItem;
+import io.quarkus.agroal.deployment.JdbcDataSourceBuildItem;
+import io.quarkus.agroal.deployment.JdbcDataSourceSchemaReadyBuildItem;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.arc.processor.DotNames;
@@ -94,7 +95,7 @@ class FlywayProcessor {
 
         Collection<String> dataSourceNames = getDataSourceNames(jdbcDataSourceBuildItems);
 
-        Collection<String> applicationMigrations = discoverApplicationMigrations(getMigrationLocations(dataSourceNames));
+        List<String> applicationMigrations = discoverApplicationMigrations(getMigrationLocations(dataSourceNames));
         recorder.setApplicationMigrationFiles(applicationMigrations);
 
         Set<Class<? extends JavaMigration>> javaMigrationClasses = new HashSet<>();
@@ -189,14 +190,16 @@ class FlywayProcessor {
         return migrationLocations;
     }
 
-    private Collection<String> discoverApplicationMigrations(Collection<String> locations)
-            throws IOException, URISyntaxException {
+    private List<String> discoverApplicationMigrations(Collection<String> locations) throws IOException, URISyntaxException {
         try {
-            LinkedHashSet<String> applicationMigrationResources = new LinkedHashSet<>();
+            List<String> applicationMigrationResources = new ArrayList<>();
             // Locations can be a comma separated list
             for (String location : locations) {
-                location = normalizeLocation(location);
-
+                // Strip any 'classpath:' protocol prefixes because they are assumed
+                // but not recognized by ClassLoader.getResources()
+                if (location != null && location.startsWith(CLASSPATH_APPLICATION_MIGRATIONS_PROTOCOL + ':')) {
+                    location = location.substring(CLASSPATH_APPLICATION_MIGRATIONS_PROTOCOL.length() + 1);
+                }
                 Enumeration<URL> migrations = Thread.currentThread().getContextClassLoader().getResources(location);
                 while (migrations.hasMoreElements()) {
                     URL path = migrations.nextElement();
@@ -226,33 +229,11 @@ class FlywayProcessor {
         }
     }
 
-    private String normalizeLocation(String location) {
-        if (location == null) {
-            throw new IllegalStateException("Flyway migration location may not be null.");
-        }
-
-        // Strip any 'classpath:' protocol prefixes because they are assumed
-        // but not recognized by ClassLoader.getResources()
-        if (location.startsWith(CLASSPATH_APPLICATION_MIGRATIONS_PROTOCOL + ':')) {
-            location = location.substring(CLASSPATH_APPLICATION_MIGRATIONS_PROTOCOL.length() + 1);
-            if (location.startsWith("/")) {
-                location = location.substring(1);
-            }
-        }
-        if (!location.endsWith("/")) {
-            location += "/";
-        }
-
-        return location;
-    }
-
     private Set<String> getApplicationMigrationsFromPath(final String location, final URL path)
             throws IOException, URISyntaxException {
-        Path rootPath = Paths.get(path.toURI());
-
-        try (final Stream<Path> pathStream = Files.walk(rootPath)) {
+        try (final Stream<Path> pathStream = Files.walk(Paths.get(path.toURI()))) {
             return pathStream.filter(Files::isRegularFile)
-                    .map(it -> Paths.get(location, rootPath.relativize(it).toString()).normalize().toString())
+                    .map(it -> Paths.get(location, it.getFileName().toString()).toString())
                     // we don't want windows paths here since the paths are going to be used as classpath paths anyway
                     .map(it -> it.replace('\\', '/'))
                     .peek(it -> LOGGER.debugf("Discovered path: %s", it))

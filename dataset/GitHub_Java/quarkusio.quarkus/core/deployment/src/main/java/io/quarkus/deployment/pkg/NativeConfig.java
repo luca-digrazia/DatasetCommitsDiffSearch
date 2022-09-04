@@ -50,6 +50,12 @@ public class NativeConfig {
     public boolean addAllCharsets;
 
     /**
+     * If all time zones should be added to the native image. This increases image size
+     */
+    @ConfigItem
+    public boolean includeAllTimeZones;
+
+    /**
      * The location of the Graal distribution
      */
     @ConfigItem(defaultValue = "${GRAALVM_HOME:}")
@@ -128,7 +134,7 @@ public class NativeConfig {
     /**
      * The docker image to use to do the image build
      */
-    @ConfigItem(defaultValue = "${platform.quarkus.native.builder-image}")
+    @ConfigItem(defaultValue = "quay.io/quarkus/ubi-quarkus-native-image:20.1.0-java11")
     public String builderImage;
 
     /**
@@ -136,7 +142,7 @@ public class NativeConfig {
      * a container build is always done.
      */
     @ConfigItem
-    public Optional<ContainerRuntime> containerRuntime;
+    public Optional<String> containerRuntime;
 
     /**
      * Options to pass to the container runtime
@@ -279,17 +285,5 @@ public class NativeConfig {
          */
         @ConfigItem
         public boolean enabled;
-    }
-
-    /**
-     * Supported Container runtimes
-     */
-    public static enum ContainerRuntime {
-        DOCKER,
-        PODMAN;
-
-        public String getExecutableName() {
-            return this.name().toLowerCase();
-        }
     }
 }
