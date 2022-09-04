@@ -1,49 +1,55 @@
-/*
- * Copyright 2013-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.dashboards;
 
-import com.google.common.collect.Lists;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
+import com.mongodb.BasicDBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.dashboards.widgets.DashboardWidget;
+import org.graylog2.dashboards.widgets.WidgetPosition;
 import org.graylog2.database.CollectionName;
 import org.graylog2.database.PersistedImpl;
 import org.graylog2.database.validators.DateValidator;
 import org.graylog2.database.validators.FilledStringValidator;
+import org.graylog2.database.validators.OptionalStringValidator;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.database.validators.Validator;
 import org.joda.time.DateTime;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
+import static com.google.common.base.Preconditions.checkNotNull;
+import static java.lang.Integer.parseInt;
+
 @CollectionName("dashboards")
 public class DashboardImpl extends PersistedImpl implements Dashboard {
-
-    private static final Logger LOG = LoggerFactory.getLogger(DashboardImpl.class);
-
+    public static final String FIELD_ID = "_id";
+    public static final String FIELD_TITLE = "title";
+    public static final String FIELD_DESCRIPTION = "description";
+    public static final String FIELD_CONTENT_PACK = "content_pack";
+    public static final String FIELD_CREATOR_USER_ID = "creator_user_id";
+    public static final String FIELD_CREATED_AT = "created_at";
     public static final String EMBEDDED_WIDGETS = "widgets";
+    public static final String EMBEDDED_POSITIONS = "positions";
 
     private Map<String, DashboardWidget> widgets = Maps.newHashMap();
 
@@ -56,13 +62,76 @@ public class DashboardImpl extends PersistedImpl implements Dashboard {
     }
 
     @Override
+    public String getTitle() {
+        return (String) fields.get(FIELD_TITLE);
+    }
+
+    @Override
     public void setTitle(String title) {
-        this.fields.put("title", title);
+        this.fields.put(FIELD_TITLE, title);
+    }
+
+    @Override
+    public String getDescription() {
+        return (String) fields.get(FIELD_DESCRIPTION);
     }
 
     @Override
     public void setDescription(String description) {
-        this.fields.put("description", description);
+        this.fields.put(FIELD_DESCRIPTION, description);
+    }
+
+    @Override
+    public List<WidgetPosition> getPositions() {
+        final BasicDBObject positions = (BasicDBObject) fields.get(DashboardImpl.EMBEDDED_POSITIONS);
+        if (positions == null) {
+            return Collections.emptyList();
+        }
+
+        final List<WidgetPosition> result = new ArrayList<>(positions.size());
+        for ( String positionId : positions.keySet() ) {
+            final BasicDBObject position = (BasicDBObject) positions.get(positionId);
+            final int width = parseInt(position.getString("width", "1"));
+            final int height = parseInt(position.getString("height", "1"));
+            final int col = parseInt(position.getString("col", "1"));
+            final int row = parseInt(position.getString("row","1"));
+            final WidgetPosition widgetPosition = WidgetPosition.builder()
+                    .id(positionId)
+                    .width(width)
+                    .height(height)
+                    .col(col)
+                    .row(row)
+                    .build();
+            result.add(widgetPosition);
+        }
+        return result;
+    }
+
+    @Override
+    public void setPositions(List<WidgetPosition> widgetPositions) {
+        checkNotNull(widgetPositions, "widgetPositions must be given");
+        final Map<String, Map<String, Integer>> positions = new HashMap<>(widgetPositions.size());
+        for (WidgetPosition widgetPosition : widgetPositions) {
+            Map<String, Integer> position = new HashMap<>(4);
+            position.put("width", widgetPosition.width());
+            position.put("height", widgetPosition.height());
+            position.put("col", widgetPosition.col());
+            position.put("row", widgetPosition.row());
+            positions.put(widgetPosition.id(), position);
+        }
+        Map<String, Object> fields = getFields();
+        checkNotNull(fields, "No fields found!");
+        fields.put(DashboardImpl.EMBEDDED_POSITIONS, positions);
+    }
+
+    @Override
+    public String getContentPack() {
+        return (String) fields.get(FIELD_CONTENT_PACK);
+    }
+
+    @Override
+    public void setContentPack(String contentPack) {
+        this.fields.put(FIELD_CONTENT_PACK, contentPack);
     }
 
     @Override
@@ -86,18 +155,24 @@ public class DashboardImpl extends PersistedImpl implements Dashboard {
     }
 
     @Override
+    public Map<String, DashboardWidget> getWidgets() {
+        return ImmutableMap.copyOf(widgets);
+    }
+
+    @Override
     public Map<String, Validator> getValidations() {
-        return new HashMap<String, Validator>() {{
-            put("title", new FilledStringValidator());
-            put("description", new FilledStringValidator());
-            put("creator_user_id", new FilledStringValidator());
-            put("created_at", new DateValidator());
-        }};
+        return ImmutableMap.<String, Validator>builder()
+                .put(FIELD_TITLE, new FilledStringValidator())
+                .put(FIELD_DESCRIPTION, new FilledStringValidator())
+                .put(FIELD_CONTENT_PACK, new OptionalStringValidator())
+                .put(FIELD_CREATOR_USER_ID, new FilledStringValidator())
+                .put(FIELD_CREATED_AT, new DateValidator())
+                .build();
     }
 
     @Override
     public Map<String, Validator> getEmbeddedValidations(String key) {
-        return Maps.newHashMap();
+        return Collections.emptyMap();
     }
 
     @Override
@@ -106,20 +181,19 @@ public class DashboardImpl extends PersistedImpl implements Dashboard {
         Map<String, Object> result = Maps.newHashMap(fields);
 
         // TODO this sucks and should be done somewhere globally.
-        result.remove("_id");
-        result.put("id", ((ObjectId) fields.get("_id")).toStringMongod());
-        result.remove("created_at");
-        result.put("created_at", (Tools.getISO8601String((DateTime) fields.get("created_at"))));
+        result.remove(FIELD_ID);
+        result.put("id", ((ObjectId) fields.get(FIELD_ID)).toHexString());
+        result.remove(FIELD_CREATED_AT);
+        result.put(FIELD_CREATED_AT, Tools.getISO8601String((DateTime) fields.get(FIELD_CREATED_AT)));
 
-        if (!result.containsKey("widgets")) {
-            result.put("widgets", Lists.newArrayList());
+        if (!result.containsKey(EMBEDDED_WIDGETS)) {
+            result.put(EMBEDDED_WIDGETS, Collections.emptyList());
         }
 
-        if (!result.containsKey("positions")) {
-            result.put("positions", Lists.newArrayList());
+        if (!result.containsKey(EMBEDDED_POSITIONS)) {
+            result.put(EMBEDDED_POSITIONS, Collections.emptyMap());
         }
 
         return result;
     }
-
 }
