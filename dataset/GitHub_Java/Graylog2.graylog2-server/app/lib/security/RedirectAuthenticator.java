@@ -1,31 +1,31 @@
 /*
- * Copyright 2012-2015 TORCH GmbH, 2015 Graylog, Inc.
+ * Copyright 2013 TORCH UG
  *
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package lib.security;
 
 import com.ning.http.util.Base64;
 import controllers.routes;
-import org.graylog2.rest.models.system.sessions.responses.SessionResponse;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.Graylog2ServerUnavailableException;
 import org.graylog2.restclient.models.SessionService;
 import org.graylog2.restclient.models.User;
 import org.graylog2.restclient.models.UserService;
+import org.graylog2.restclient.models.api.responses.SessionCreateResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.libs.Crypto;
@@ -156,8 +156,8 @@ public class RedirectAuthenticator extends Authenticator {
         final String password = credString[1];
 
         try {
-            SessionResponse session = sessionService.create(userName, password, request.remoteAddress());
-            return userService.retrieveUserWithSessionId(userName, session.sessionId());
+            SessionCreateResponse session = sessionService.create(userName, password, request.remoteAddress());
+            return userService.retrieveUserWithSessionId(userName, session.sessionId);
         } catch (IOException e) {
             log.error("Could not reach graylog2 server", e);
         } catch (APIException e) {
