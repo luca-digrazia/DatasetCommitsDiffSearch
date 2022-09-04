@@ -158,13 +158,10 @@ public class SerializedApplication {
                 }
                 directlyIndexedResourcesIndexMap.put(resource, matchingResources);
             }
-            RunnerClassLoader runnerClassLoader = new RunnerClassLoader(ClassLoader.getSystemClassLoader(),
-                    resourceDirectoryMap, parentFirstPackages,
-                    nonExistentResources, FULLY_INDEXED_PATHS, directlyIndexedResourcesIndexMap);
-            for (ClassLoadingResource classLoadingResource : allClassLoadingResources) {
-                classLoadingResource.init(runnerClassLoader);
-            }
-            return new SerializedApplication(runnerClassLoader, mainClass);
+            return new SerializedApplication(
+                    new RunnerClassLoader(ClassLoader.getSystemClassLoader(), resourceDirectoryMap, parentFirstPackages,
+                            nonExistentResources, FULLY_INDEXED_PATHS, directlyIndexedResourcesIndexMap),
+                    mainClass);
         }
     }
 
