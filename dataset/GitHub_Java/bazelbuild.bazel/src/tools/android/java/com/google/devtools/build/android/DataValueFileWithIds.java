@@ -14,6 +14,7 @@
 package com.google.devtools.build.android;
 
 import com.android.SdkConstants;
+import com.android.resources.ResourceType;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.android.ParsedAndroidData.KeyValueConsumer;
 import com.google.devtools.build.android.xml.IdXmlResourceValue;
@@ -31,8 +32,8 @@ import javax.xml.stream.events.StartElement;
 import javax.xml.stream.events.XMLEvent;
 
 /**
- * Parses an XML file for "@+id/foo" and creates {@link IdXmlResourceValue} from parsed IDs. This
- * can be a layout file, menu, drawable, etc.
+ * Parses an XML file for "@+id/foo" and creates {@link IdXmlResourceValue} from parsed IDs.
+ * This can be a layout file, menu, drawable, etc.
  */
 public class DataValueFileWithIds {
 
@@ -78,11 +79,13 @@ public class DataValueFileWithIds {
     } catch (RuntimeException e) {
       throw new RuntimeException("Error parsing " + source, e);
     }
+    ImmutableSet<String> idResources = newIds.build();
     overwritingConsumer.consume(fileKey, DataValueFile.of(source));
-    for (String id : newIds.build()) {
+    for (String id : idResources) {
       combiningConsumer.consume(
-          fqnFactory.parse("id/" + id),
+          fqnFactory.create(ResourceType.ID, id),
           DataResourceXml.createWithNoNamespace(source, IdXmlResourceValue.of()));
     }
   }
+
 }
