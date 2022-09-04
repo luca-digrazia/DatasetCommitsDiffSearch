@@ -58,11 +58,7 @@ public abstract class MessageInput {
         this.configuration = configuration;
     }
 
-    public abstract void checkConfiguration(Configuration configuration) throws ConfigurationException;
-
-    public void checkConfiguration() throws ConfigurationException {
-        checkConfiguration(getConfiguration());
-    }
+    public abstract void checkConfiguration() throws ConfigurationException;
 
     public abstract void launch(Buffer processBuffer) throws MisfireException;
     public abstract void stop();
