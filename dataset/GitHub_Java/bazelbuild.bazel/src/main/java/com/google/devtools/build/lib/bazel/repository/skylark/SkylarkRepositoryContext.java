@@ -32,7 +32,9 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
 import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
+import com.google.devtools.build.lib.skyframe.FileSymlinkException;
 import com.google.devtools.build.lib.skyframe.FileValue;
+import com.google.devtools.build.lib.skyframe.InconsistentFilesystemException;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -729,8 +731,9 @@ public class SkylarkRepositoryContext {
     SkyKey fileSkyKey = FileValue.key(rootedPath);
     FileValue fileValue = null;
     try {
-      fileValue = (FileValue) env.getValueOrThrow(fileSkyKey, IOException.class);
-    } catch (IOException e) {
+      fileValue = (FileValue) env.getValueOrThrow(fileSkyKey, IOException.class,
+          FileSymlinkException.class, InconsistentFilesystemException.class);
+    } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
       throw new EvalException(Location.BUILTIN, e);
     }
 
