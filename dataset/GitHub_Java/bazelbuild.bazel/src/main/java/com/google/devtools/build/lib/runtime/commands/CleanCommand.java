@@ -35,12 +35,12 @@ import com.google.devtools.build.lib.server.FailureDetails;
 import com.google.devtools.build.lib.server.FailureDetails.CleanCommand.Code;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.shell.CommandException;
-import com.google.devtools.build.lib.shell.CommandResult;
 import com.google.devtools.build.lib.util.CommandBuilder;
 import com.google.devtools.build.lib.util.InterruptedFailureDetails;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.ProcessUtils;
+import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
@@ -105,17 +105,6 @@ public final class CleanCommand implements BlazeCommand {
               + "in the background."
     )
     public boolean async;
-
-    @Option(
-        name = "remove_all_convenience_symlinks",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-        effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-        help =
-            "If true, all symlinks in the workspace with  the prefix symlink_prefix will be"
-                + " deleted. Without this flag, only symlinks with the predefined suffixes are"
-                + " cleaned.")
-    public boolean removeAllConvenienceSymlinks;
   }
 
   private final OS os;
@@ -162,13 +151,7 @@ public final class CleanCommand implements BlazeCommand {
           options
               .getOptions(BuildRequestOptions.class)
               .getSymlinkPrefix(env.getRuntime().getProductName());
-      return actuallyClean(
-          env,
-          env.getOutputBase(),
-          cleanOptions.expunge,
-          async,
-          symlinkPrefix,
-          cleanOptions.removeAllConvenienceSymlinks);
+      return actuallyClean(env, env.getOutputBase(), cleanOptions.expunge, async, symlinkPrefix);
     } catch (CleanException e) {
       env.getReporter().handle(Event.error(e.getMessage()));
       return BlazeCommandResult.failureDetail(e.getFailureDetail());
@@ -176,7 +159,8 @@ public final class CleanCommand implements BlazeCommand {
       String message = "clean interrupted";
       env.getReporter().handle(Event.error(message));
       return BlazeCommandResult.detailedExitCode(
-          InterruptedFailureDetails.detailedExitCode(message));
+          InterruptedFailureDetails.detailedExitCode(
+              message, FailureDetails.Interrupted.Code.CLEAN_COMMAND));
     }
   }
 
@@ -219,38 +203,29 @@ public final class CleanCommand implements BlazeCommand {
     env.getReporter()
         .handle(Event.info(null, pathItemName + " moved to " + tempPath + " for deletion"));
 
+    // Daemonize the shell and use the double-fork idiom to ensure that the shell
+    // exits even while the "rm -rf" command continues.
     String command =
         String.format(
-            "/usr/bin/find %s -type d -not -perm -u=rwx -exec /bin/chmod -f u=rwx {} +; /bin/rm"
-                + " -rf %s",
-            tempBaseName, tempBaseName);
-    logger.atInfo().log("Executing daemonic shell command %s", command);
+            "exec >&- 2>&- <&- && (/usr/bin/setsid /bin/rm -rf %s &)&",
+            ShellEscaper.escapeString(tempPath.getPathString()));
 
-    // Daemonize the shell to ensure that the shell exits even while the "rm
-    // -rf" command continues.
-    CommandResult result =
-        new CommandBuilder()
-            .addArg(
-                env.getBlazeWorkspace().getBinTools().getEmbeddedPath("daemonize").getPathString())
-            .addArgs("-l", "/dev/null")
-            .addArgs("-p", "/dev/null")
-            .addArg("--")
-            .addArgs("/bin/sh", "/bin/sh", "-c", command)
-            .setWorkingDir(tempPath.getParentDirectory())
-            .build()
-            .execute();
-    logger.atInfo().log("Shell command status: %s", result.getTerminationStatus());
+    logger.atInfo().log("Executing shell command %s", ShellEscaper.escapeString(command));
+
+    // Doesn't throw iff command exited and was successful.
+    new CommandBuilder()
+        .addArg(command)
+        .useShell(true)
+        .setWorkingDir(tempPath.getParentDirectory())
+        .build()
+        .execute();
   }
 
   private BlazeCommandResult actuallyClean(
-      CommandEnvironment env,
-      Path outputBase,
-      boolean expunge,
-      boolean async,
-      String symlinkPrefix,
-      boolean removeAllConvenienceSymlinks)
+      CommandEnvironment env, Path outputBase, boolean expunge, boolean async, String symlinkPrefix)
       throws CleanException, InterruptedException {
     BlazeRuntime runtime = env.getRuntime();
+    String workspaceDirectory = env.getWorkspace().getBaseName();
     if (env.getOutputService() != null) {
       try {
         env.getOutputService().clean();
@@ -293,7 +268,7 @@ public final class CleanCommand implements BlazeCommand {
       } catch (IOException e) {
         throw new CleanException(Code.OUTPUT_BASE_DELETE_FAILURE, e);
       }
-    } else if (expunge) {
+    } else if (expunge && async) {
       logger.atInfo().log("Expunging asynchronously...");
       runtime.prepareForAbruptShutdown();
       try {
@@ -329,12 +304,11 @@ public final class CleanCommand implements BlazeCommand {
     // remove convenience links
     OutputDirectoryLinksUtils.removeOutputDirectoryLinks(
         runtime.getRuleClassProvider().getSymlinkDefinitions(),
+        workspaceDirectory,
         env.getWorkspace(),
-        env.getOutputBase(),
         env.getReporter(),
         symlinkPrefix,
-        env.getRuntime().getProductName(),
-        removeAllConvenienceSymlinks);
+        env.getRuntime().getProductName());
 
     // shutdown on expunge cleans
     if (expunge) {
