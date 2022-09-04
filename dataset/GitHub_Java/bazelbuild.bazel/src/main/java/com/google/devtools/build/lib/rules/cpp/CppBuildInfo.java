@@ -45,11 +45,8 @@ public final class CppBuildInfo implements BuildInfoFactory {
       PathFragment.create("build-info-redacted.h");
 
   @Override
-  public BuildInfoCollection create(
-      BuildInfoContext buildInfoContext,
-      BuildConfiguration config,
-      Artifact buildInfo,
-      Artifact buildChangelist) {
+  public BuildInfoCollection create(BuildInfoContext buildInfoContext, BuildConfiguration config,
+      Artifact buildInfo, Artifact buildChangelist, RepositoryName repositoryName) {
     List<Action> actions = new ArrayList<>();
     WriteBuildInfoHeaderAction redactedInfo =
         getHeader(
@@ -58,7 +55,8 @@ public final class CppBuildInfo implements BuildInfoFactory {
             BUILD_INFO_REDACTED_HEADER_NAME,
             NestedSetBuilder.emptySet(Order.STABLE_ORDER),
             true,
-            true);
+            true,
+            repositoryName);
     WriteBuildInfoHeaderAction nonvolatileInfo =
         getHeader(
             buildInfoContext,
@@ -66,7 +64,8 @@ public final class CppBuildInfo implements BuildInfoFactory {
             BUILD_INFO_NONVOLATILE_HEADER_NAME,
             NestedSetBuilder.create(Order.STABLE_ORDER, buildInfo),
             false,
-            true);
+            true,
+            repositoryName);
     WriteBuildInfoHeaderAction volatileInfo =
         getHeader(
             buildInfoContext,
@@ -74,7 +73,8 @@ public final class CppBuildInfo implements BuildInfoFactory {
             BUILD_INFO_VOLATILE_HEADER_NAME,
             NestedSetBuilder.create(Order.STABLE_ORDER, buildChangelist),
             true,
-            false);
+            false,
+            repositoryName);
     actions.add(redactedInfo);
     actions.add(nonvolatileInfo);
     actions.add(volatileInfo);
@@ -90,8 +90,9 @@ public final class CppBuildInfo implements BuildInfoFactory {
       PathFragment headerName,
       NestedSet<Artifact> inputs,
       boolean writeVolatileInfo,
-      boolean writeNonVolatileInfo) {
-    ArtifactRoot outputPath = config.getIncludeDirectory(RepositoryName.MAIN);
+      boolean writeNonVolatileInfo,
+      RepositoryName repositoryName) {
+    ArtifactRoot outputPath = config.getIncludeDirectory(repositoryName);
     final Artifact header =
         buildInfoContext.getBuildInfoArtifact(
             headerName,

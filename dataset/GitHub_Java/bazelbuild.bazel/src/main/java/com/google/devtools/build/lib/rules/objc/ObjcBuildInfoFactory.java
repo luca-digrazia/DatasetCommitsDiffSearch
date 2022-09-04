@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoCollection;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.cmdline.RepositoryName;
 
 /**
  * Objc build info creation - passes on BuildInfo output file for consumption from Objc rules.
@@ -33,13 +34,12 @@ public class ObjcBuildInfoFactory implements BuildInfoFactory {
 
   public static final BuildInfoKey KEY = new BuildInfoKey("ObjC");
 
-  /** Returns no actions, exactly the one BuildInfo artifact, and no buildChangelist artifacts. */
+  /**
+   * Returns no actions, exactly the one BuildInfo artifact, and no buildChangelist artifacts.
+   */
   @Override
-  public BuildInfoCollection create(
-      BuildInfoContext context,
-      BuildConfiguration config,
-      Artifact buildInfo,
-      Artifact buildChangelist) {
+  public BuildInfoCollection create(BuildInfoContext context, BuildConfiguration config,
+      Artifact buildInfo, Artifact buildChangelist, RepositoryName repositoryName) {
     return new BuildInfoCollection(
         ImmutableList.<Action>of(),
         ImmutableList.of(buildInfo),

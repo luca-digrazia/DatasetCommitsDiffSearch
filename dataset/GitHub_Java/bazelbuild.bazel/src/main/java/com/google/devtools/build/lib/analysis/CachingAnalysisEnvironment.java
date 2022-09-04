@@ -358,7 +358,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public StarlarkSemantics getStarlarkSemantics() throws InterruptedException {
+  public StarlarkSemantics getSkylarkSemantics() throws InterruptedException {
     return PrecomputedValue.STARLARK_SEMANTICS.get(skyframeEnv);
   }
 
