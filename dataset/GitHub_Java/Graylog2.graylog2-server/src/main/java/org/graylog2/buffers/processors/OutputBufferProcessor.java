@@ -20,9 +20,7 @@
 
 package org.graylog2.buffers.processors;
 
-import com.google.common.collect.Lists;
 import com.lmax.disruptor.EventHandler;
-import java.util.List;
 import org.apache.log4j.Logger;
 import org.graylog2.GraylogServer;
 import org.graylog2.buffers.LogMessageEvent;
@@ -40,8 +38,6 @@ public class OutputBufferProcessor implements EventHandler<LogMessageEvent> {
 
     private GraylogServer server;
 
-    List<LogMessage> buffer = Lists.newArrayList();
-
     public OutputBufferProcessor(GraylogServer server) {
         this.server = server;
     }
@@ -49,24 +45,20 @@ public class OutputBufferProcessor implements EventHandler<LogMessageEvent> {
     @Override
     public void onEvent(LogMessageEvent event, long sequence, boolean endOfBatch) throws Exception {
         LogMessage msg = event.getMessage();
+
         LOG.debug("Processing message <" + msg.getId() + "> from OutputBuffer.");
 
-        buffer.add(msg);
+        String originalMsgId = msg.getId();
+        for (Class<? extends MessageOutput> outputType : server.getOutputs()) {
+            try {
+                // Always create a new instance of this filter.
+                MessageOutput output = outputType.newInstance();
 
-        if (endOfBatch || buffer.size() >= 5000) {
-            for (Class<? extends MessageOutput> outputType : server.getOutputs()) {
-                try {
-                    // Always create a new instance of this filter.
-                    MessageOutput output = outputType.newInstance();
+                LOG.debug("Writing message <" + msg.getId() + "> to [" + outputType.getSimpleName() + "]");
 
-                    LOG.debug("Writing message batch to [" + outputType.getSimpleName() + "]. Size <" + buffer.size() + ">");
-
-                    output.write(buffer, server);
-                } catch (Exception e) {
-                    LOG.error("Could not write message batchto output [" + outputType.getSimpleName() +"].", e);
-                } finally {
-                    buffer.clear();
-                }
+                output.write(msg, server);
+            } catch (Exception e) {
+                LOG.error("Could not write message <" + msg.getId() +"> to output [" + outputType.getSimpleName() +"].", e);
             }
         }
 
