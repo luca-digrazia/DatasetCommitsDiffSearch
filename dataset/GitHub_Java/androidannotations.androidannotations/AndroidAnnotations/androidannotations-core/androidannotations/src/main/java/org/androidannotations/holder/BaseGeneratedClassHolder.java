@@ -30,7 +30,6 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.Option;
 import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.internal.process.ProcessHolder;
 
@@ -41,8 +40,6 @@ import com.helger.jcodemodel.JDefinedClass;
 import com.helger.jcodemodel.JTypeVar;
 
 public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
-
-	public static final Option OPTION_GENERATE_FINAL_CLASSES = new Option("generateFinalClasses", "true");
 
 	protected final AndroidAnnotationsEnvironment environment;
 	protected JDefinedClass generatedClass;
@@ -67,18 +64,10 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 			Element enclosingElement = annotatedElement.getEnclosingElement();
 			GeneratedClassHolder enclosingHolder = environment.getGeneratedClassHolder(enclosingElement);
 			String generatedBeanSimpleName = annotatedElement.getSimpleName().toString() + classSuffix();
-			int modifier = PUBLIC | STATIC;
-			if (environment.getOptionBooleanValue(OPTION_GENERATE_FINAL_CLASSES)) {
-				modifier |= FINAL;
-			}
-			generatedClass = enclosingHolder.getGeneratedClass()._class(modifier, generatedBeanSimpleName, EClassType.CLASS);
+			generatedClass = enclosingHolder.getGeneratedClass()._class(PUBLIC | FINAL | STATIC, generatedBeanSimpleName, EClassType.CLASS);
 		} else {
 			String generatedClassQualifiedName = annotatedComponentQualifiedName + classSuffix();
-			int modifier = PUBLIC;
-			if (environment.getOptionBooleanValue(OPTION_GENERATE_FINAL_CLASSES)) {
-				modifier |= FINAL;
-			}
-			generatedClass = getCodeModel()._class(modifier, generatedClassQualifiedName, EClassType.CLASS);
+			generatedClass = getCodeModel()._class(PUBLIC | FINAL, generatedClassQualifiedName, EClassType.CLASS);
 		}
 		codeModelHelper.generify(generatedClass, annotatedElement);
 		setExtends();

@@ -15,11 +15,11 @@
  */
 package org.androidannotations.holder;
 
-import static com.sun.codemodel.JExpr._new;
-import static com.sun.codemodel.JExpr._null;
-import static com.sun.codemodel.JMod.PRIVATE;
-import static com.sun.codemodel.JMod.PUBLIC;
-import static com.sun.codemodel.JMod.STATIC;
+import static com.helger.jcodemodel.JExpr._new;
+import static com.helger.jcodemodel.JExpr._null;
+import static com.helger.jcodemodel.JMod.PRIVATE;
+import static com.helger.jcodemodel.JMod.PUBLIC;
+import static com.helger.jcodemodel.JMod.STATIC;
 import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import java.util.List;
@@ -30,11 +30,11 @@ import javax.lang.model.util.ElementFilter;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JVar;
+import com.helger.jcodemodel.AbstractJClass;
+import com.helger.jcodemodel.JBlock;
+import com.helger.jcodemodel.JFieldVar;
+import com.helger.jcodemodel.JMethod;
+import com.helger.jcodemodel.JVar;
 
 public class EBeanHolder extends EComponentWithViewSupportHolder {
 
@@ -50,7 +50,7 @@ public class EBeanHolder extends EComponentWithViewSupportHolder {
 
 	private void setConstructor() {
 		constructor = generatedClass.constructor(PRIVATE);
-		JVar constructorContextParam = constructor.param(classes().CONTEXT, "context");
+		JVar constructorContextParam = constructor.param(getClasses().CONTEXT, "context");
 		JBlock constructorBody = constructor.body();
 		List<ExecutableElement> constructors = ElementFilter.constructorsIn(annotatedElement.getEnclosedElements());
 		ExecutableElement superConstructor = constructors.get(0);
@@ -62,7 +62,7 @@ public class EBeanHolder extends EComponentWithViewSupportHolder {
 
 	public JFieldVar getContextField() {
 		if (contextField == null) {
-			contextField = generatedClass.field(PRIVATE, classes().CONTEXT, "context" + generationSuffix());
+			contextField = generatedClass.field(PRIVATE, getClasses().CONTEXT, "context" + generationSuffix());
 		}
 		return contextField;
 	}
@@ -74,7 +74,7 @@ public class EBeanHolder extends EComponentWithViewSupportHolder {
 
 	@Override
 	protected void setInit() {
-		init = generatedClass.method(PRIVATE, codeModel().VOID, "init" + generationSuffix());
+		init = generatedClass.method(PRIVATE, getCodeModel().VOID, "init" + generationSuffix());
 	}
 
 	public void invokeInitInConstructor() {
@@ -84,13 +84,13 @@ public class EBeanHolder extends EComponentWithViewSupportHolder {
 
 	public void createFactoryMethod(boolean hasSingletonScope) {
 
-		JClass narrowedGeneratedClass = codeModelHelper.narrowGeneratedClass(generatedClass, annotatedElement.asType());
+		AbstractJClass narrowedGeneratedClass = codeModelHelper.narrowGeneratedClass(generatedClass, annotatedElement.asType());
 
 		JMethod factoryMethod = generatedClass.method(PUBLIC | STATIC, narrowedGeneratedClass, GET_INSTANCE_METHOD_NAME);
 
-		codeModelHelper.generifyStaticHelper(factoryMethod, annotatedElement);
+		codeModelHelper.generify(factoryMethod, annotatedElement);
 
-		JVar factoryMethodContextParam = factoryMethod.param(classes().CONTEXT, "context");
+		JVar factoryMethodContextParam = factoryMethod.param(getClasses().CONTEXT, "context");
 
 		JBlock factoryMethodBody = factoryMethod.body();
 
@@ -116,8 +116,8 @@ public class EBeanHolder extends EComponentWithViewSupportHolder {
 	}
 
 	public void createRebindMethod() {
-		JMethod rebindMethod = generatedClass.method(PUBLIC, codeModel().VOID, "rebind");
-		JVar contextParam = rebindMethod.param(classes().CONTEXT, "context");
+		JMethod rebindMethod = generatedClass.method(PUBLIC, getCodeModel().VOID, "rebind");
+		JVar contextParam = rebindMethod.param(getClasses().CONTEXT, "context");
 		JBlock body = rebindMethod.body();
 		body.assign(getContextField(), contextParam);
 		body.invoke(getInit());
