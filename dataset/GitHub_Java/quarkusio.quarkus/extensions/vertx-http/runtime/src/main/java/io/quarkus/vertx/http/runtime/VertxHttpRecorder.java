@@ -138,7 +138,7 @@ public class VertxHttpRecorder {
         }
         VertxConfiguration vertxConfiguration = new VertxConfiguration();
         ConfigInstantiator.handleObject(vertxConfiguration);
-        Vertx vertx = VertxCoreRecorder.initialize(vertxConfiguration, null);
+        Vertx vertx = VertxCoreRecorder.initialize(vertxConfiguration);
 
         try {
             HttpConfiguration config = new HttpConfiguration();
