@@ -144,18 +144,17 @@ public class UsersController extends AuthenticatedController {
             return redirect(routes.UsersController.index());
         }
 
-        final List<String> roleNames = Lists.newArrayList();
-        if (Permissions.isPermitted(RestPermissions.ROLES_READ, username)) {
-            final Set<RoleResponse> roleResponses = rolesService.loadAll();
-            roleNames.addAll(Lists.newArrayList(Collections2.transform(roleResponses,
-                                                                  new Function<RoleResponse, String>() {
-                                                                      @Nullable
-                                                                      @Override
-                                                                      public String apply(@Nullable RoleResponse input) {
-                                                                          return input.name();
-                                                                      }
-                                                                  })));
-        }
+        final Set<RoleResponse> roleResponses = rolesService.loadAll();
+        final List<String> roleNames =
+                Lists.newArrayList(Collections2.transform(roleResponses,
+                                                          new Function<RoleResponse, String>() {
+                                                              @Nullable
+                                                              @Override
+                                                              public String apply(@Nullable RoleResponse input) {
+                                                                  return input.name();
+                                                              }
+                                                          }));
+
         final Form<ChangeUserRequestForm> form = changeUserForm.fill(new ChangeUserRequestForm(user));
         boolean requiresOldPassword = checkRequireOldPassword(username);
         try {
@@ -266,19 +265,16 @@ public class UsersController extends AuthenticatedController {
             final List<String> all = permissionsService.all();
             boolean requiresOldPassword = checkRequireOldPassword(username);
 
-            final List<String> roleNames = Lists.newArrayList();
-            if (Permissions.isPermitted(RestPermissions.ROLES_READ, username)) {
-                final Set<RoleResponse> roleResponses = rolesService.loadAll();
-                roleNames.addAll(Lists.newArrayList(Collections2.transform(roleResponses,
-                                                                           new Function<RoleResponse, String>() {
-                                                                               @Nullable
-                                                                               @Override
-                                                                               public String apply(@Nullable RoleResponse input) {
-                                                                                   return input.name();
-                                                                               }
-                                                                           })));
-            }
-            try {
+            final Set<RoleResponse> roleResponses = rolesService.loadAll();
+            final List<String> roleNames =
+                    Lists.newArrayList(Collections2.transform(roleResponses,
+                                                              new Function<RoleResponse, String>() {
+                                                                  @Nullable
+                                                                  @Override
+                                                                  public String apply(@Nullable RoleResponse input) {
+                                                                      return input.name();
+                                                                  }
+                                                              }));            try {
                 return badRequest(edit.render(
                         requestForm,
                         username,
