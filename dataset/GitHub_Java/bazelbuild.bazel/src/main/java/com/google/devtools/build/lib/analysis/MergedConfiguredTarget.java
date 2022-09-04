@@ -17,8 +17,6 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.packages.SkylarkClassObject;
-import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -87,23 +85,16 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
 
     // Merge output group providers.
     OutputGroupProvider mergedOutputGroupProvider =
-        OutputGroupProvider.merge(getAllOutputGroupProviders(base, aspects));
+        OutputGroupProvider.merge(getAllProviders(base, aspects, OutputGroupProvider.class));
 
     // Merge Skylark providers.
-    ImmutableMap<String, Object> premergedLegacyProviders =
+    ImmutableMap<String, Object> premergedProviders =
         mergedOutputGroupProvider == null
-            ? ImmutableMap.<String, Object>of()
-            : ImmutableMap.<String, Object>of(
-                OutputGroupProvider.SKYLARK_NAME, mergedOutputGroupProvider);
-
-    ImmutableMap<SkylarkClassObjectConstructor.Key, SkylarkClassObject> premergedProviders =
-        mergedOutputGroupProvider == null
-        ? ImmutableMap.<SkylarkClassObjectConstructor.Key, SkylarkClassObject>of()
-        : ImmutableMap.<SkylarkClassObjectConstructor.Key, SkylarkClassObject>of(
-            OutputGroupProvider.SKYLARK_CONSTRUCTOR.getKey(), mergedOutputGroupProvider);
+        ? ImmutableMap.<String, Object>of()
+        : ImmutableMap.<String, Object>of(
+            OutputGroupProvider.SKYLARK_NAME, mergedOutputGroupProvider);
     SkylarkProviders mergedSkylarkProviders =
         SkylarkProviders.merge(
-            premergedLegacyProviders,
             premergedProviders,
             getAllProviders(base, aspects, SkylarkProviders.class));
 
@@ -140,24 +131,6 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
       }
     }
     return new MergedConfiguredTarget(base, aspectProviders.build());
-  }
-
-  private static ImmutableList<OutputGroupProvider> getAllOutputGroupProviders(
-      ConfiguredTarget base, Iterable<ConfiguredAspect> aspects) {
-    OutputGroupProvider baseProvider = OutputGroupProvider.get(base);
-    ImmutableList.Builder<OutputGroupProvider> providers = ImmutableList.builder();
-    if (baseProvider != null) {
-      providers.add(baseProvider);
-    }
-
-    for (ConfiguredAspect configuredAspect : aspects) {
-      OutputGroupProvider aspectProvider = OutputGroupProvider.get(configuredAspect);;
-      if (aspectProvider == null) {
-        continue;
-      }
-      providers.add(aspectProvider);
-    }
-    return providers.build();
   }
 
   private static <T extends TransitiveInfoProvider> List<T> getAllProviders(
