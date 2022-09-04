@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import io.quarkus.hibernate.orm.runtime.customized.QuarkusConnectionProviderInitiator;
 import org.hibernate.boot.cfgxml.internal.CfgXmlAccessServiceInitiator;
 import org.hibernate.boot.cfgxml.internal.ConfigLoader;
 import org.hibernate.boot.cfgxml.spi.LoadedConfig;
@@ -23,6 +24,7 @@ import org.hibernate.engine.jdbc.cursor.internal.RefCursorSupportInitiator;
 import org.hibernate.engine.jdbc.dialect.internal.DialectResolverInitiator;
 import org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator;
 import org.hibernate.engine.jdbc.internal.JdbcServicesInitiator;
+import org.hibernate.engine.jndi.internal.JndiServiceInitiator;
 import org.hibernate.event.internal.EntityCopyObserverFactoryInitiator;
 import org.hibernate.hql.internal.QueryTranslatorFactoryInitiator;
 import org.hibernate.integrator.spi.Integrator;
@@ -41,8 +43,6 @@ import org.hibernate.tool.hbm2ddl.ImportSqlCommandExtractorInitiator;
 import org.hibernate.tool.schema.internal.SchemaManagementToolInitiator;
 
 import io.quarkus.hibernate.orm.runtime.boot.QuarkusEnvironment;
-import io.quarkus.hibernate.orm.runtime.customized.QuarkusConnectionProviderInitiator;
-import io.quarkus.hibernate.orm.runtime.customized.QuarkusJndiServiceInitiator;
 import io.quarkus.hibernate.orm.runtime.customized.QuarkusJtaPlatformInitiator;
 import io.quarkus.hibernate.orm.runtime.service.DialectFactoryInitiator;
 import io.quarkus.hibernate.orm.runtime.service.DisabledJMXInitiator;
@@ -106,9 +106,7 @@ public final class RecordableBootstrap extends StandardServiceRegistryBuilder {
         serviceInitiators.add(SchemaManagementToolInitiator.INSTANCE);
 
         serviceInitiators.add(JdbcEnvironmentInitiator.INSTANCE);
-
-        // Custom one!
-        serviceInitiators.add(QuarkusJndiServiceInitiator.INSTANCE);
+        serviceInitiators.add(JndiServiceInitiator.INSTANCE);
 
         // Custom one!
         serviceInitiators.add(DisabledJMXInitiator.INSTANCE);
