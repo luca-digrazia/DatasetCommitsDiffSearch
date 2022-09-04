@@ -32,7 +32,6 @@ import org.joda.time.DateTimeZone;
 import org.mongojack.DBQuery;
 import org.mongojack.DBSort;
 import org.mongojack.JacksonDBCollection;
-import org.mongojack.WriteResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -127,12 +126,5 @@ public class ClusterConfigServiceImpl implements ClusterConfigService {
         ClusterConfigChangedEvent event = ClusterConfigChangedEvent.create(
                 DateTime.now(DateTimeZone.UTC), nodeId.toString(), canonicalClassName);
         clusterEventBus.post(event);
-    }
-
-    @Override
-    public <T> int remove(Class<T> type) {
-        final String canonicalName = type.getCanonicalName();
-        final WriteResult<ClusterConfig, String> result = dbCollection.remove(DBQuery.is("type", canonicalName));
-        return result.getN();
     }
 }
