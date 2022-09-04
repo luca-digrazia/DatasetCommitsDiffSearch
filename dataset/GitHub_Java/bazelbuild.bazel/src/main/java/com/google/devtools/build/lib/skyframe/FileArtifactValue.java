@@ -58,6 +58,11 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
     }
 
     @Override
+    public boolean isFile() {
+      return false;
+    }
+
+    @Override
     public long getSize() {
       return 0;
     }
@@ -81,6 +86,11 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
 
     @Override
     public byte[] getDigest() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean isFile() {
       throw new UnsupportedOperationException();
     }
 
@@ -140,6 +150,11 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
     }
 
     @Override
+    public boolean isFile() {
+      return false;
+    }
+
+    @Override
     public String toString() {
       return MoreObjects.toStringHelper(this).add("mtime", mtime).toString();
     }
@@ -162,6 +177,11 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
     @Override
     public byte[] getDigest() {
       return digest;
+    }
+
+    @Override
+    public boolean isFile() {
+      return true;
     }
 
     @Override
@@ -242,7 +262,7 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
   }
 
   @Override
-  public abstract FileStateType getType();
+  public abstract boolean isFile();
 
   @Nullable
   @Override
@@ -269,7 +289,7 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
     if (getType() != m.getType()) {
       return false;
     }
-    if (getDigest() != null) {
+    if (isFile()) {
       return Arrays.equals(getDigest(), m.getDigest()) && getSize() == m.getSize();
     } else {
       return getModifiedTime() == m.getModifiedTime();
@@ -282,7 +302,7 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
       return System.identityHashCode(this);
     }
     // Hash digest by content, not reference.
-    if (getDigest() != null) {
+    if (isFile()) {
       return 37 * Long.hashCode(getSize()) + Arrays.hashCode(getDigest());
     } else {
       return Long.hashCode(getModifiedTime());
