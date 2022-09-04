@@ -77,7 +77,6 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.ApplicationClassPredicateBuildItem;
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
 import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
@@ -245,7 +244,6 @@ public class ResteasyReactiveProcessor {
             ExceptionMappersBuildItem exceptionMappersBuildItem,
             ParamConverterProvidersBuildItem paramConverterProvidersBuildItem,
             ContextResolversBuildItem contextResolversBuildItem,
-            List<ApplicationClassPredicateBuildItem> applicationClassPredicateBuildItems,
             List<MethodScannerBuildItem> methodScanners, ResteasyReactiveServerConfig serverConfig)
             throws NoSuchMethodException {
 
@@ -369,15 +367,7 @@ public class ResteasyReactiveProcessor {
                             return false;
                         }
                     })
-                    .setInitConverters(initConverters)
-                    .setApplicationClassPredicate(s -> {
-                        for (ApplicationClassPredicateBuildItem i : applicationClassPredicateBuildItems) {
-                            if (i.test(s)) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    });
+                    .setInitConverters(initConverters);
 
             if (!serverDefaultProducesHandlers.isEmpty()) {
                 List<DefaultProducesHandler> handlers = new ArrayList<>(serverDefaultProducesHandlers.size());
@@ -590,10 +580,10 @@ public class ResteasyReactiveProcessor {
         });
     }
 
-    private String determineApplicationPath(IndexView index, Optional<String> defaultPath) {
+    private String determineApplicationPath(IndexView index, String defaultPath) {
         Collection<AnnotationInstance> applicationPaths = index.getAnnotations(ResteasyReactiveDotNames.APPLICATION_PATH);
         if (applicationPaths.isEmpty()) {
-            return defaultPath.orElse("/");
+            return defaultPath;
         }
         // currently we only examine the first class that is annotated with @ApplicationPath so best
         // fail if the user code has multiple such annotations instead of surprising the user
