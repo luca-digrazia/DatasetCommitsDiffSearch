@@ -383,7 +383,7 @@ public final class LinkCommandLine extends CommandLine {
 
   @Override
   public List<String> arguments() {
-    return getRawLinkArgv();
+    return (getRawLinkArgv());
   }
 
   /** A builder for a {@link LinkCommandLine}. */
