@@ -380,7 +380,7 @@ public class SingularValueDecomposition {
         }
 
         @Override
-        public double apply(int i, int j) {
+        public ATA set(int i, int j, double x) {
             throw new UnsupportedOperationException();
         }
 

@@ -16,9 +16,6 @@
 
 package smile.regression;
 
-import java.util.Arrays;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import smile.math.Math;
 import smile.math.matrix.CholeskyDecomposition;
 import smile.math.matrix.SingularValueDecomposition;
@@ -73,7 +70,6 @@ import smile.math.special.Beta;
  * @author Haifeng Li
  */
 public class OLS implements Regression<double[]> {
-    private static final Logger logger = LoggerFactory.getLogger(OLS.class);
 
     /**
      * The dimensionality.
@@ -192,20 +188,8 @@ public class OLS implements Regression<double[]> {
             svd = SingularValueDecomposition.decompose(X);
             svd.solve(y, w1);
         } else {
-            try {
-                qr = new QRDecomposition(X, true);
-                qr.solve(y, w1);
-            } catch (RuntimeException e) {
-                logger.warn("Matrix is not of full rank, try SVD instead");
-                SVD = true;
-                Arrays.fill(w1, 0.0);
-                for (int i = 0; i < n; i++) {
-                    System.arraycopy(x[i], 0, X[i], 0, p);
-                    X[i][p] = 1.0;
-                }
-                svd = SingularValueDecomposition.decompose(X);
-                svd.solve(y, w1);
-            }
+            qr = new QRDecomposition(X, true);
+            qr.solve(y, w1);
         }
 
         b = w1[p];
