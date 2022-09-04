@@ -440,7 +440,7 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
         }
     }
 
-    private static class OverrideInfo {
+    private class OverrideInfo {
         private Map<String, JsonObject> extOverrides;
         private JsonObject theRest;
 
