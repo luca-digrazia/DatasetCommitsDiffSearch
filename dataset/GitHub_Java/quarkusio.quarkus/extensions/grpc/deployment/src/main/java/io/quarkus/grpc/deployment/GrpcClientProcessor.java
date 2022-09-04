@@ -32,7 +32,6 @@ import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.grpc.runtime.GrpcClientInterceptorContainer;
 import io.quarkus.grpc.runtime.annotations.GrpcService;
-import io.quarkus.grpc.runtime.supports.Channels;
 import io.quarkus.grpc.runtime.supports.GrpcClientConfigProvider;
 import io.quarkus.grpc.runtime.supports.IOThreadClientInterceptor;
 
@@ -133,8 +132,7 @@ public class GrpcClientProcessor {
                         public void accept(MethodCreator mc) {
                             GrpcClientProcessor.this.generateChannelProducer(mc, svc);
                         }
-                    })
-                    .destroyer(Channels.ChannelDestroyer.class);
+                    });
             channelProducer.done();
             beans.produce(new BeanRegistrationPhaseBuildItem.BeanConfiguratorBuildItem(channelProducer));
 

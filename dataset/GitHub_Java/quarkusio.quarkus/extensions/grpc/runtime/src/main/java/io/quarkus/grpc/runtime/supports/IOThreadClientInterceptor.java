@@ -23,19 +23,10 @@ public class IOThreadClientInterceptor implements ClientInterceptor, Prioritized
                 super.start(new ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
                     @Override
                     public void onMessage(RespT message) {
-                        runInContextIfNeed(() -> super.onMessage(message));
-                    }
-
-                    @Override
-                    public void onClose(Status status, Metadata trailers) {
-                        runInContextIfNeed(() -> super.onClose(status, trailers));
-                    }
-
-                    private void runInContextIfNeed(Runnable fun) {
                         if (context != null) {
-                            context.runOnContext(unused -> fun.run());
+                            context.runOnContext(unused -> super.onMessage(message));
                         } else {
-                            fun.run();
+                            super.onMessage(message);
                         }
                     }
                 }, headers);
