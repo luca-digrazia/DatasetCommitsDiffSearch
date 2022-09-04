@@ -93,8 +93,7 @@ public class BlazeJavacMain {
     Listener diagnostics = new Listener(context);
     BlazeJavaCompiler compiler;
 
-    try (JavacFileManager fileManager =
-        new ClassloaderMaskingFileManager(arguments.builtinProcessors())) {
+    try (JavacFileManager fileManager = new ClassloaderMaskingFileManager()) {
       JavacTask task =
           JavacTool.create()
               .getTask(
@@ -256,17 +255,14 @@ public class BlazeJavacMain {
   @Trusted
   private static class ClassloaderMaskingFileManager extends JavacFileManager {
 
-    private final ImmutableSet<String> builtinProcessors;
-
     private static Context getContext() {
       Context context = new Context();
       CacheFSInfo.preRegister(context);
       return context;
     }
 
-    public ClassloaderMaskingFileManager(ImmutableSet<String> builtinProcessors) {
+    public ClassloaderMaskingFileManager() {
       super(getContext(), false, UTF_8);
-      this.builtinProcessors = builtinProcessors;
     }
 
     @Override
@@ -282,8 +278,7 @@ public class BlazeJavacMain {
                   || name.startsWith("org.checkerframework.dataflow.")
                   || name.startsWith("com.sun.source.")
                   || name.startsWith("com.sun.tools.")
-                  || name.startsWith("com.google.devtools.build.buildjar.javac.statistics.")
-                  || builtinProcessors.contains(name)) {
+                  || name.startsWith("com.google.devtools.build.buildjar.javac.statistics.")) {
                 return Class.forName(name);
               }
               throw new ClassNotFoundException(name);
