@@ -13,20 +13,21 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
+import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
+import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -79,7 +80,7 @@ public class SkylarkFileContentHashTests extends BuildViewTestCase {
 
   @Test
   public void testHashInvariance() throws Exception {
-    assertThat(getHash("pkg", "foo1")).isEqualTo(getHash("pkg", "foo1"));
+    assertEquals(getHash("pkg", "foo1"), getHash("pkg", "foo1"));
   }
 
   @Test
@@ -91,12 +92,12 @@ public class SkylarkFileContentHashTests extends BuildViewTestCase {
         "",
         "bar1 = rule(implementation = rule_impl)");
     invalidatePackages();
-    assertThat(getHash("pkg", "bar1")).isEqualTo(bar1);
+    assertEquals(bar1, getHash("pkg", "bar1"));
   }
 
   @Test
   public void testHashSameForRulesDefinedInSameFile() throws Exception {
-    assertThat(getHash("pkg", "foo2")).isEqualTo(getHash("pkg", "foo1"));
+    assertEquals(getHash("pkg", "foo1"), getHash("pkg", "foo2"));
   }
 
   @Test
@@ -144,12 +145,12 @@ public class SkylarkFileContentHashTests extends BuildViewTestCase {
         "",
         "bar1 = rule(implementation = rule_impl)");
     invalidatePackages();
-    assertThat(getHash("pkg", "foo1")).isEqualTo(foo1);
-    assertThat(getHash("pkg", "foo2")).isEqualTo(foo2);
+    assertEquals(foo1, getHash("pkg", "foo1"));
+    assertEquals(foo2, getHash("pkg", "foo2"));
   }
 
   private void assertNotEquals(String hash, String hash2) {
-    assertThat(hash.equals(hash2)).isFalse();
+    assertFalse(hash.equals(hash2));
   }
 
   /**
@@ -163,10 +164,7 @@ public class SkylarkFileContentHashTests extends BuildViewTestCase {
     packageCacheOptions.globbingThreads = 7;
     getSkyframeExecutor()
         .preparePackageLoading(
-            new PathPackageLocator(
-                outputBase,
-                ImmutableList.of(rootDirectory),
-                BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
+            new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)),
             packageCacheOptions,
             Options.getDefaults(SkylarkSemanticsOptions.class),
             "",
@@ -178,7 +176,7 @@ public class SkylarkFileContentHashTests extends BuildViewTestCase {
     EvaluationResult<PackageValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), pkgLookupKey, /*keepGoing=*/ false, reporter);
-    assertThat(result.hasError()).isFalse();
+    assertFalse(result.hasError());
     Collection<Target> targets = result.get(pkgLookupKey).getPackage().getTargets().values();
     for (Target target : targets) {
       if (target.getName().equals(name)) {

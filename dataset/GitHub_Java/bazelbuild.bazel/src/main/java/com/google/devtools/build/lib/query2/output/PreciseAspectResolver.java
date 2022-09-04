@@ -32,7 +32,7 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
 import com.google.devtools.build.lib.util.BinaryPredicate;
 import java.util.LinkedHashSet;
-import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import javax.annotation.Nullable;
 
@@ -59,7 +59,7 @@ public class PreciseAspectResolver implements AspectResolver {
     if (target instanceof Rule) {
       Multimap<Attribute, Label> transitions =
           ((Rule) target).getTransitions(DependencyFilter.NO_NODEP_ATTRIBUTES);
-      for (Map.Entry<Attribute, Label> entry : transitions.entries()) {
+      for (Entry<Attribute, Label> entry : transitions.entries()) {
         Target toTarget;
         try {
           toTarget = packageProvider.getTarget(eventHandler, entry.getValue());
@@ -79,10 +79,10 @@ public class PreciseAspectResolver implements AspectResolver {
   }
 
   @Override
-  public Set<Label> computeBuildFileDependencies(Package pkg)
+  public Set<Label> computeBuildFileDependencies(Package pkg, BuildFileDependencyMode mode)
       throws InterruptedException {
     Set<Label> result = new LinkedHashSet<>();
-    result.addAll(pkg.getSkylarkFileDependencies());
+    result.addAll(mode.getDependencies(pkg));
 
     Set<PackageIdentifier> dependentPackages = new LinkedHashSet<>();
     // First compute with packages can possibly affect the aspect attributes of this package:
@@ -116,12 +116,12 @@ public class PreciseAspectResolver implements AspectResolver {
       }
     }
 
-    // Then add all the labels of all the bzl files loaded by the packages found.
+    // Then add all the subinclude labels of the packages thus found to the result.
     for (PackageIdentifier packageIdentifier : dependentPackages) {
       try {
         result.add(Label.create(packageIdentifier, "BUILD"));
         Package dependentPackage = packageProvider.getPackage(eventHandler, packageIdentifier);
-        result.addAll(dependentPackage.getSkylarkFileDependencies());
+        result.addAll(mode.getDependencies(dependentPackage));
       } catch (NoSuchPackageException e) {
         // If the package is not found, just add its BUILD file, which is already done above.
         // Hopefully this error is not raised when there is a syntax error in a subincluded file

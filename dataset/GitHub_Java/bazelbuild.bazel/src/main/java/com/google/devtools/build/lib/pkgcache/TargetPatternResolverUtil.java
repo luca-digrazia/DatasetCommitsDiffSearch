@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.pkgcache;
 
-import com.google.common.base.Function;
-import com.google.common.base.Functions;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
@@ -28,9 +26,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
  * Common utility methods for target pattern resolution.
  */
 public final class TargetPatternResolverUtil {
-
-  private static final Function<Target, Target> KEEP_ORIGINAL_TARGET = Functions.identity();
-
   private TargetPatternResolverUtil() {
     // Utility class.
   }
@@ -43,16 +38,12 @@ public final class TargetPatternResolverUtil {
     }
   }
 
-  public static ResolvedTargets<Target> resolvePackageTargets(Package pkg, FilteringPolicy policy) {
-    return resolvePackageTargets(pkg, policy, KEEP_ORIGINAL_TARGET);
-  }
-
-  public static ResolvedTargets<Target> resolvePackageTargets(
-      Package pkg, FilteringPolicy policy, Function<Target, Target> convertTarget) {
+  public static ResolvedTargets<Target> resolvePackageTargets(Package pkg,
+                                                              FilteringPolicy policy) {
     ResolvedTargets.Builder<Target> builder = ResolvedTargets.builder();
     for (Target target : pkg.getTargets().values()) {
       if (policy.shouldRetain(target, false)) {
-        builder.add(convertTarget.apply(target));
+        builder.add(target);
       }
     }
     return builder.build();
