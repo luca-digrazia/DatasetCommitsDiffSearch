@@ -59,11 +59,6 @@ public class PlatformProviderUtils {
     return target.get(ConstraintValueInfo.PROVIDER);
   }
 
-  /** Returns if a target provides {@link ConstraintValueInfo}. * */
-  public static boolean hasConstraintValue(ProviderCollection target) {
-    return target.get(ConstraintValueInfo.PROVIDER) != null;
-  }
-
   /** Retrieves and casts {@link ConstraintValueInfo} providers from the given targets. */
   public static Iterable<ConstraintValueInfo> constraintValues(
       Iterable<? extends ProviderCollection> targets) {
@@ -77,10 +72,5 @@ public class PlatformProviderUtils {
       return null;
     }
     return target.get(ToolchainInfo.PROVIDER);
-  }
-
-  /** Retrieves and casts the {@link ToolchainTypeInfo} provider from the given target. */
-  public static ToolchainTypeInfo toolchainType(ProviderCollection target) {
-    return target.get(ToolchainTypeInfo.PROVIDER);
   }
 }

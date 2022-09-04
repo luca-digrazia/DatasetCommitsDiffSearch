@@ -19,6 +19,7 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static java.util.stream.Collectors.joining;
 
 import com.google.auto.value.AutoValue;
+import com.google.common.base.Joiner;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableList;
@@ -30,7 +31,6 @@ import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformProviderUtils;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
-import com.google.devtools.build.lib.analysis.platform.ToolchainTypeInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -71,7 +71,7 @@ public class ToolchainResolver {
 
   // Optional data.
   private String targetDescription = "";
-  private ImmutableSet<Label> requiredToolchainTypeLabels = ImmutableSet.of();
+  private ImmutableSet<Label> requiredToolchainTypes = ImmutableSet.of();
   private ImmutableSet<Label> execConstraintLabels = ImmutableSet.of();
 
   // Determined during execution.
@@ -98,12 +98,9 @@ public class ToolchainResolver {
     return this;
   }
 
-  /**
-   * Sets the labels of the required toolchain types that this resolver needs to find toolchains
-   * for.
-   */
-  public ToolchainResolver setRequiredToolchainTypes(Set<Label> requiredToolchainTypeLabels) {
-    this.requiredToolchainTypeLabels = ImmutableSet.copyOf(requiredToolchainTypeLabels);
+  /** Sets the required toolchain types that this resolver needs to find toolchains for. */
+  public ToolchainResolver setRequiredToolchainTypes(Set<Label> requiredToolchainTypes) {
+    this.requiredToolchainTypes = ImmutableSet.copyOf(requiredToolchainTypes);
     return this;
   }
 
@@ -140,7 +137,9 @@ public class ToolchainResolver {
     try {
       UnloadedToolchainContext.Builder unloadedToolchainContext =
           UnloadedToolchainContext.builder();
-      unloadedToolchainContext.setTargetDescription(targetDescription);
+      unloadedToolchainContext
+          .setTargetDescription(targetDescription)
+          .setRequiredToolchainTypes(requiredToolchainTypes);
 
       // Determine the configuration being used.
       BuildConfigurationValue value =
@@ -279,24 +278,27 @@ public class ToolchainResolver {
 
   /** Returns {@code true} if the given platform has all of the constraints. */
   private boolean filterPlatform(PlatformInfo platformInfo, List<ConstraintValueInfo> constraints) {
-    ImmutableList<ConstraintValueInfo> missingConstraints =
-        platformInfo.constraints().findMissing(constraints);
-    if (debug) {
-      for (ConstraintValueInfo constraint : missingConstraints) {
+    for (ConstraintValueInfo filterConstraint : constraints) {
+      ConstraintValueInfo platformInfoConstraint =
+          platformInfo.constraints().get(filterConstraint.constraint());
+      if (platformInfoConstraint == null || !platformInfoConstraint.equals(filterConstraint)) {
         // The value for this setting is not present in the platform, or doesn't match the expected
         // value.
-        environment
-            .getListener()
-            .handle(
-                Event.info(
-                    String.format(
-                        "ToolchainResolver: Removed execution platform %s from"
-                            + " available execution platforms, it is missing constraint %s",
-                        platformInfo.label(), constraint.label())));
+        if (debug) {
+          environment
+              .getListener()
+              .handle(
+                  Event.info(
+                      String.format(
+                          "ToolchainResolver: Removed execution platform %s from"
+                              + " available execution platforms, it is missing constraint %s",
+                          platformInfo.label(), filterConstraint.label())));
         }
+        return false;
+      }
     }
 
-    return missingConstraints.isEmpty();
+    return true;
   }
 
   private void determineToolchainImplementations(
@@ -305,11 +307,11 @@ public class ToolchainResolver {
 
     // Find the toolchains for the required toolchain types.
     List<ToolchainResolutionValue.Key> registeredToolchainKeys = new ArrayList<>();
-    for (Label toolchainTypeLabel : requiredToolchainTypeLabels) {
+    for (Label toolchainType : requiredToolchainTypes) {
       registeredToolchainKeys.add(
           ToolchainResolutionValue.key(
               configurationKey,
-              toolchainTypeLabel,
+              toolchainType,
               platformKeys.targetPlatformKey(),
               platformKeys.executionPlatformKeys()));
     }
@@ -323,14 +325,14 @@ public class ToolchainResolver {
     boolean valuesMissing = false;
 
     // Determine the potential set of toolchains.
-    Table<ConfiguredTargetKey, ToolchainTypeInfo, Label> resolvedToolchains =
-        HashBasedTable.create();
-    ImmutableSet.Builder<ToolchainTypeInfo> requiredToolchainTypesBuilder = ImmutableSet.builder();
+    Table<ConfiguredTargetKey, Label, Label> resolvedToolchains = HashBasedTable.create();
     List<Label> missingToolchains = new ArrayList<>();
     for (Map.Entry<
             SkyKey, ValueOrException2<NoToolchainFoundException, InvalidToolchainLabelException>>
         entry : results.entrySet()) {
       try {
+        Label requiredToolchainType =
+            ((ToolchainResolutionValue.Key) entry.getKey().argument()).toolchainType();
         ValueOrException2<NoToolchainFoundException, InvalidToolchainLabelException>
             valueOrException = entry.getValue();
         ToolchainResolutionValue toolchainResolutionValue =
@@ -340,13 +342,11 @@ public class ToolchainResolver {
           continue;
         }
 
-        ToolchainTypeInfo requiredToolchainType = toolchainResolutionValue.toolchainType();
-        requiredToolchainTypesBuilder.add(requiredToolchainType);
         resolvedToolchains.putAll(
             findPlatformsAndLabels(requiredToolchainType, toolchainResolutionValue));
       } catch (NoToolchainFoundException e) {
         // Save the missing type and continue looping to check for more.
-        missingToolchains.add(e.missingToolchainTypeLabel());
+        missingToolchains.add(e.missingToolchainType());
       }
     }
 
@@ -358,11 +358,9 @@ public class ToolchainResolver {
       throw new ValueMissingException();
     }
 
-    ImmutableSet<ToolchainTypeInfo> requiredToolchainTypes = requiredToolchainTypesBuilder.build();
-
     // Find and return the first execution platform which has all required toolchains.
     Optional<ConfiguredTargetKey> selectedExecutionPlatformKey;
-    if (requiredToolchainTypeLabels.isEmpty()
+    if (requiredToolchainTypes.isEmpty()
         && platformKeys.executionPlatformKeys().contains(platformKeys.hostPlatformKey())) {
       // Fall back to the legacy behavior: use the host platform if it's available, otherwise the
       // first execution platform.
@@ -371,12 +369,12 @@ public class ToolchainResolver {
       // If there are no toolchains, this will return the first execution platform.
       selectedExecutionPlatformKey =
           findExecutionPlatformForToolchains(
-              requiredToolchainTypes, platformKeys.executionPlatformKeys(), resolvedToolchains);
+              platformKeys.executionPlatformKeys(), resolvedToolchains);
     }
 
     if (!selectedExecutionPlatformKey.isPresent()) {
       throw new NoMatchingPlatformException(
-          requiredToolchainTypeLabels,
+          requiredToolchainTypes,
           platformKeys.executionPlatformKeys(),
           platformKeys.targetPlatformKey());
     }
@@ -389,13 +387,11 @@ public class ToolchainResolver {
       throw new ValueMissingException();
     }
 
-    unloadedToolchainContext.setRequiredToolchainTypes(requiredToolchainTypes);
     unloadedToolchainContext.setExecutionPlatform(
         platforms.get(selectedExecutionPlatformKey.get()));
     unloadedToolchainContext.setTargetPlatform(platforms.get(platformKeys.targetPlatformKey()));
 
-    Map<ToolchainTypeInfo, Label> toolchains =
-        resolvedToolchains.row(selectedExecutionPlatformKey.get());
+    Map<Label, Label> toolchains = resolvedToolchains.row(selectedExecutionPlatformKey.get());
     unloadedToolchainContext.setToolchainTypeToResolved(ImmutableBiMap.copyOf(toolchains));
   }
 
@@ -403,11 +399,10 @@ public class ToolchainResolver {
    * Adds all of toolchain labels from{@code toolchainResolutionValue} to {@code
    * resolvedToolchains}.
    */
-  private static Table<ConfiguredTargetKey, ToolchainTypeInfo, Label> findPlatformsAndLabels(
-      ToolchainTypeInfo requiredToolchainType, ToolchainResolutionValue toolchainResolutionValue) {
+  private static Table<ConfiguredTargetKey, Label, Label> findPlatformsAndLabels(
+      Label requiredToolchainType, ToolchainResolutionValue toolchainResolutionValue) {
 
-    Table<ConfiguredTargetKey, ToolchainTypeInfo, Label> resolvedToolchains =
-        HashBasedTable.create();
+    Table<ConfiguredTargetKey, Label, Label> resolvedToolchains = HashBasedTable.create();
     for (Map.Entry<ConfiguredTargetKey, Label> entry :
         toolchainResolutionValue.availableToolchainLabels().entrySet()) {
       resolvedToolchains.put(entry.getKey(), requiredToolchainType, entry.getValue());
@@ -420,12 +415,10 @@ public class ToolchainResolver {
    * resolvedToolchains} and has all required toolchain types.
    */
   private Optional<ConfiguredTargetKey> findExecutionPlatformForToolchains(
-      ImmutableSet<ToolchainTypeInfo> requiredToolchainTypes,
       ImmutableList<ConfiguredTargetKey> availableExecutionPlatformKeys,
-      Table<ConfiguredTargetKey, ToolchainTypeInfo, Label> resolvedToolchains) {
+      Table<ConfiguredTargetKey, Label, Label> resolvedToolchains) {
     for (ConfiguredTargetKey executionPlatformKey : availableExecutionPlatformKeys) {
-      Map<ToolchainTypeInfo, Label> toolchains = resolvedToolchains.row(executionPlatformKey);
-
+      Map<Label, Label> toolchains = resolvedToolchains.row(executionPlatformKey);
       if (!toolchains.keySet().containsAll(requiredToolchainTypes)) {
         // Not all toolchains are present, keep going
         continue;
@@ -434,10 +427,7 @@ public class ToolchainResolver {
       if (debug) {
         String selectedToolchains =
             toolchains.entrySet().stream()
-                .map(
-                    e ->
-                        String.format(
-                            "type %s -> toolchain %s", e.getKey().typeLabel(), e.getValue()))
+                .map(e -> String.format("type %s -> toolchain %s", e.getKey(), e.getValue()))
                 .collect(joining(", "));
         environment
             .getListener()
@@ -477,10 +467,9 @@ public class ToolchainResolver {
       Builder setTargetPlatform(PlatformInfo targetPlatform);
 
       /** Sets the toolchain types that were requested. */
-      Builder setRequiredToolchainTypes(Set<ToolchainTypeInfo> requiredToolchainTypes);
+      Builder setRequiredToolchainTypes(Set<Label> requiredToolchainTypes);
 
-      Builder setToolchainTypeToResolved(
-          ImmutableBiMap<ToolchainTypeInfo, Label> toolchainTypeToResolved);
+      Builder setToolchainTypeToResolved(ImmutableBiMap<Label, Label> toolchainTypeToResolved);
 
       UnloadedToolchainContext build();
     }
@@ -495,10 +484,10 @@ public class ToolchainResolver {
     abstract PlatformInfo targetPlatform();
 
     /** Returns the toolchain types that were requested. */
-    abstract ImmutableSet<ToolchainTypeInfo> requiredToolchainTypes();
+    abstract ImmutableSet<Label> requiredToolchainTypes();
 
     /** The map of toolchain type to resolved toolchain to be used. */
-    abstract ImmutableBiMap<ToolchainTypeInfo, Label> toolchainTypeToResolved();
+    abstract ImmutableBiMap<Label, Label> toolchainTypeToResolved();
 
     /** Returns the labels of the specific toolchains being used. */
     public ImmutableSet<Label> resolvedToolchainLabels() {
@@ -528,15 +517,13 @@ public class ToolchainResolver {
                   attribute ->
                       attribute.getName().equals(PlatformSemantics.RESOLVED_TOOLCHAINS_ATTR))
               .findFirst();
-      ImmutableMap.Builder<ToolchainTypeInfo, ToolchainInfo> toolchains =
-          new ImmutableMap.Builder<>();
+      ImmutableMap.Builder<Label, ToolchainInfo> toolchains = new ImmutableMap.Builder<>();
       ImmutableList.Builder<TemplateVariableInfo> templateVariableProviders =
           new ImmutableList.Builder<>();
       if (toolchainAttribute.isPresent()) {
         for (ConfiguredTargetAndData target : prerequisiteMap.get(toolchainAttribute.get())) {
           Label discoveredLabel = target.getTarget().getLabel();
-          ToolchainTypeInfo toolchainType =
-              toolchainTypeToResolved().inverse().get(discoveredLabel);
+          Label toolchainType = toolchainTypeToResolved().inverse().get(discoveredLabel);
 
           // If the toolchainType hadn't been resolved to an actual toolchain, resolution would have
           // failed with an error much earlier. This null check is just for safety.
@@ -573,19 +560,17 @@ public class ToolchainResolver {
   /** Exception used when no execution platform can be found. */
   static final class NoMatchingPlatformException extends ToolchainException {
     NoMatchingPlatformException(
-        Set<Label> requiredToolchainTypeLabels,
+        Set<Label> requiredToolchains,
         ImmutableList<ConfiguredTargetKey> availableExecutionPlatformKeys,
         ConfiguredTargetKey targetPlatformKey) {
-      super(
-          formatError(
-              requiredToolchainTypeLabels, availableExecutionPlatformKeys, targetPlatformKey));
+      super(formatError(requiredToolchains, availableExecutionPlatformKeys, targetPlatformKey));
     }
 
     private static String formatError(
-        Set<Label> requiredToolchainTypeLabels,
+        Set<Label> requiredToolchains,
         ImmutableList<ConfiguredTargetKey> availableExecutionPlatformKeys,
         ConfiguredTargetKey targetPlatformKey) {
-      if (requiredToolchainTypeLabels.isEmpty()) {
+      if (requiredToolchains.isEmpty()) {
         return String.format(
             "Unable to find an execution platform for target platform %s"
                 + " from available execution platforms [%s]",
@@ -597,7 +582,7 @@ public class ToolchainResolver {
       return String.format(
           "Unable to find an execution platform for toolchains [%s] and target platform %s"
               + " from available execution platforms [%s]",
-          requiredToolchainTypeLabels.stream().map(Label::toString).collect(joining(", ")),
+          Joiner.on(", ").join(requiredToolchains),
           targetPlatformKey.getLabel(),
           availableExecutionPlatformKeys.stream()
               .map(key -> key.getLabel().toString())
@@ -611,7 +596,7 @@ public class ToolchainResolver {
       super(
           String.format(
               "no matching toolchains found for types %s",
-              missingToolchainTypes.stream().map(Label::toString).collect(joining(", "))));
+              Joiner.on(", ").join(missingToolchainTypes)));
     }
   }
 }
