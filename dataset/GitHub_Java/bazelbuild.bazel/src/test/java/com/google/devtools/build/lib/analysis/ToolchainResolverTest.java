@@ -468,8 +468,7 @@ public class ToolchainResolverTest extends ToolchainTestCase {
     ConfiguredTargetAndData toolchain =
         getConfiguredTargetAndData(
             Label.parseAbsoluteUnchecked("//extra:extra_toolchain_linux_impl"), targetConfig);
-    ResolvedToolchainContext toolchainContext =
-        unloadedToolchainContext.load(ImmutableList.of(toolchain));
+    ToolchainContext toolchainContext = unloadedToolchainContext.load(ImmutableList.of(toolchain));
     assertThat(toolchainContext).isNotNull();
     assertThat(toolchainContext.forToolchainType(testToolchainType)).isNotNull();
     assertThat(toolchainContext.forToolchainType(testToolchainType).hasField("data")).isTrue();
@@ -558,8 +557,7 @@ public class ToolchainResolverTest extends ToolchainTestCase {
     ConfiguredTargetAndData toolchain =
         getConfiguredTargetAndData(
             Label.parseAbsoluteUnchecked("//:variable_toolchain_impl"), targetConfig);
-    ResolvedToolchainContext toolchainContext =
-        unloadedToolchainContext.load(ImmutableList.of(toolchain));
+    ToolchainContext toolchainContext = unloadedToolchainContext.load(ImmutableList.of(toolchain));
     assertThat(toolchainContext).isNotNull();
     assertThat(toolchainContext.forToolchainType(variableToolchainType)).isNotNull();
     assertThat(toolchainContext.templateVariableProviders()).hasSize(1);
