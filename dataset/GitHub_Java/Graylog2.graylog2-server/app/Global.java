@@ -22,7 +22,6 @@ import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Module;
 import com.google.inject.name.Names;
-import com.typesafe.config.ConfigFactory;
 import lib.ApiClient;
 import lib.ServerNodesRefreshService;
 import lib.security.PlayAuthenticationListener;
@@ -47,7 +46,6 @@ import play.Application;
 import play.Configuration;
 import play.GlobalSettings;
 
-import java.io.File;
 import java.util.List;
 
 /**
@@ -60,15 +58,11 @@ public class Global extends GlobalSettings {
 
     @Override
 	public void onStart(Application app) {
-System.out.println("START");
+
         final String appSecret = app.configuration().getString("application.secret");
         if (appSecret == null || appSecret.isEmpty()) {
-            log.error("Please configure application.secret in your conf/graylog2-web-interface.conf");
+            log.error("Please configure application.secret in your application.conf");
             throw new IllegalStateException("No application.secret configured.");
-        }
-        if (appSecret.length() < 16) {
-            log.error("Please configure application.secret in your conf/graylog2-web-interface.conf to be longer than 16 characters. Suggested is using pwgen -s 96 or similar");
-            throw new IllegalStateException("application.secret is too short, use at least 16 characters! Suggested is to use pwgen -s 96 or similar");
         }
 
         final String graylog2ServerUris = app.configuration().getString("graylog2-server.uris", "");
@@ -131,14 +125,6 @@ System.out.println("START");
     @Override
     public <A> A getControllerInstance(Class<A> controllerClass) throws Exception {
         return injector.getInstance(controllerClass);
-    }
-
-    @Override
-    public Configuration onLoadConfig(Configuration configuration, File file, ClassLoader classLoader) {
-        return new Configuration(
-                ConfigFactory.parseFileAnySyntax(new File("conf/graylog2-web-interface.conf"))
-                        .withFallback(configuration.getWrappedConfiguration().underlying())
-        );
     }
 
     private void setupLocalUser(ApiClient api, SimpleAccountRealm realm, Application app) {
