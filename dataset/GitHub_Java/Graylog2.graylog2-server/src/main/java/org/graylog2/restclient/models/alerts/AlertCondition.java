@@ -26,6 +26,7 @@ import org.graylog2.restclient.models.UserService;
 import org.graylog2.restclient.models.api.responses.alerts.AlertConditionSummaryResponse;
 import org.joda.time.DateTime;
 
+import java.text.DecimalFormat;
 import java.util.Map;
 
 /**
@@ -49,8 +50,6 @@ public class AlertCondition {
     private final DateTime createdAt;
     private final User creatorUser;
 
-    private final UserService userService;
-
     @AssistedInject
     private AlertCondition(UserService userService, @Assisted AlertConditionSummaryResponse acsr) {
         this.id = acsr.id;
@@ -59,8 +58,6 @@ public class AlertCondition {
         this.inGrace = acsr.inGrace;
         this.createdAt = DateTime.parse(acsr.createdAt);
         this.creatorUser = userService.load(acsr.creatorUserId);
-
-        this.userService = userService;
     }
 
     public String getId() {
@@ -100,9 +97,9 @@ public class AlertCondition {
 
     public String getDescription() {
         StringBuilder sb = new StringBuilder();
-        int grace = (int) ((Double) parameters.get("grace")).longValue();
+        int grace = (int) ((Number) parameters.get("grace")).longValue();
         int backlog = (parameters.get("backlog") != null && parameters.get("backlog") instanceof Number) ?
-                (int) ((Double) parameters.get("backlog")).longValue() : 0;
+                (int) ((Number) parameters.get("backlog")).longValue() : 0;
 
 
         switch (type) {
@@ -141,8 +138,8 @@ public class AlertCondition {
 
     private String buildMessageCountDescription() {
         StringBuilder sb = new StringBuilder();
-        int threshold = (int) ((Double) parameters.get("threshold")).longValue();
-        int time = (int) ((Double) parameters.get("time")).longValue();
+        int threshold = (int) ((Number) parameters.get("threshold")).longValue();
+        int time = (int) ((Number) parameters.get("time")).longValue();
 
         sb.append("Alert is triggered when there");
 
@@ -186,8 +183,9 @@ public class AlertCondition {
 
     private String buildFieldValueDescription() {
         StringBuilder sb = new StringBuilder();
-        double threshold = (Double) parameters.get("threshold");
-        int time = (int) ((Double) parameters.get("time")).longValue();
+        double threshold = ((Number) parameters.get("threshold")).doubleValue();
+        String thresholdFormatted = new DecimalFormat("#.###").format(threshold);
+        int time = (int) ((Number) parameters.get("time")).longValue();
 
         sb.append("Alert is triggered when the field ")
                 .append(parameters.get("field")).append(" has a ")
@@ -203,7 +201,7 @@ public class AlertCondition {
             sb.append(parameters.get("type"));
         }
 
-        sb.append(" than ").append(threshold)
+        sb.append(" than ").append(thresholdFormatted)
             .append(" in the last ");
 
         if (time == 1) {
