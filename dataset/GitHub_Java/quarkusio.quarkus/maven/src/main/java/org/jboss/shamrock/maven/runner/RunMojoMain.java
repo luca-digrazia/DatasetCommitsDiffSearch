@@ -7,10 +7,9 @@ import java.lang.reflect.Constructor;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 
 import org.jboss.logging.Logger;
+import org.jboss.shamrock.deployment.ArchiveContextBuilder;
 import org.jboss.shamrock.runtime.Timing;
 
 /**
@@ -32,7 +31,6 @@ public class RunMojoMain {
 
     public static void main(String... args) throws Exception {
         Timing.staticInitStarted();
-        RuntimeCompilationSetup.setup();
         //the path that contains the compiled classes
         classesRoot = new File(args[0]);
         wiringDir = new File(args[1]);
@@ -67,8 +65,9 @@ public class RunMojoMain {
             try {
                 Thread.currentThread().setContextClassLoader(runtimeCl);
                 Class<?> runnerClass = runtimeCl.loadClass("org.jboss.shamrock.runner.RuntimeRunner");
-                Constructor ctor = runnerClass.getDeclaredConstructor(ClassLoader.class, Path.class, Path.class, Path.class, List.class);
-                Object runner = ctor.newInstance(runtimeCl, classesRoot.toPath(), wiringDir.toPath(), cacheDir.toPath(), new ArrayList<>());
+                ArchiveContextBuilder acb = new ArchiveContextBuilder();
+                Constructor ctor = runnerClass.getDeclaredConstructor(ClassLoader.class, Path.class, Path.class, Path.class, ArchiveContextBuilder.class);
+                Object runner = ctor.newInstance(runtimeCl, classesRoot.toPath(), wiringDir.toPath(), cacheDir.toPath(), acb);
                 ((Runnable) runner).run();
                 closeable = ((Closeable) runner);
                 deploymentProblem = null;
