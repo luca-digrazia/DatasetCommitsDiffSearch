@@ -20,8 +20,14 @@ public class SingleResultNode implements ResultNode {
         if (value != null) {
             String result = null;
             if (expressionNode != null) {
-                result = expressionNode.getEngine().mapResult(value, expressionNode.expression);
-            } else {
+                for (ResultMapper mapper : expressionNode.getEngine().getResultMappers()) {
+                    if (mapper.appliesTo(expressionNode.expression.getOrigin(), value)) {
+                        result = mapper.map(value, expressionNode.expression);
+                        break;
+                    }
+                }
+            }
+            if (result == null) {
                 result = value.toString();
             }
             consumer.accept(result);

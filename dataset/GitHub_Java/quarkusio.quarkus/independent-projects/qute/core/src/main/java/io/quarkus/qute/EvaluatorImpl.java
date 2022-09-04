@@ -19,11 +19,9 @@ class EvaluatorImpl implements Evaluator {
     private static final Logger LOGGER = Logger.getLogger(EvaluatorImpl.class);
 
     private final List<ValueResolver> resolvers;
-    private final List<NamespaceResolver> namespaceResolvers;
 
-    EvaluatorImpl(List<ValueResolver> valueResolvers, List<NamespaceResolver> namespaceResolvers) {
+    EvaluatorImpl(List<ValueResolver> valueResolvers) {
         this.resolvers = valueResolvers;
-        this.namespaceResolvers = namespaceResolvers;
     }
 
     @Override
@@ -31,13 +29,7 @@ class EvaluatorImpl implements Evaluator {
         Iterator<Part> parts;
         if (expression.hasNamespace()) {
             parts = expression.getParts().iterator();
-            NamespaceResolver resolver = null;
-            for (NamespaceResolver namespaceResolver : namespaceResolvers) {
-                if (namespaceResolver.getNamespace().equals(expression.getNamespace())) {
-                    resolver = namespaceResolver;
-                    break;
-                }
-            }
+            NamespaceResolver resolver = findNamespaceResolver(expression.getNamespace(), resolutionContext);
             if (resolver == null) {
                 LOGGER.errorf("No namespace resolver found for: %s", expression.getNamespace());
                 return Futures.failure(new TemplateException("No resolver for namespace: " + expression.getNamespace()));
@@ -59,6 +51,20 @@ class EvaluatorImpl implements Evaluator {
                 return resolveReference(true, resolutionContext.getData(), parts, resolutionContext);
             }
         }
+    }
+
+    private NamespaceResolver findNamespaceResolver(String namespace, ResolutionContext resolutionContext) {
+        if (resolutionContext == null) {
+            return null;
+        }
+        if (resolutionContext.getNamespaceResolvers() != null) {
+            for (NamespaceResolver resolver : resolutionContext.getNamespaceResolvers()) {
+                if (resolver.getNamespace().equals(namespace)) {
+                    return resolver;
+                }
+            }
+        }
+        return findNamespaceResolver(namespace, resolutionContext.getParent());
     }
 
     private CompletionStage<Object> resolveReference(boolean tryParent, Object ref, Iterator<Part> parts,
@@ -132,7 +138,7 @@ class EvaluatorImpl implements Evaluator {
     }
 
     @SuppressWarnings("unchecked")
-    private static CompletionStage<Object> toCompletionStage(Object result) {
+    private CompletionStage<Object> toCompletionStage(Object result) {
         if (result instanceof CompletionStage) {
             // If the result is a completion stage return it as is
             return (CompletionStage<Object>) result;
@@ -149,8 +155,6 @@ class EvaluatorImpl implements Evaluator {
         final Object base;
         final ResolutionContext resolutionContext;
         final PartImpl part;
-        final List<Expression> params;
-        final String name;
 
         EvalContextImpl(boolean tryParent, Object base, Part part, ResolutionContext resolutionContext) {
             this(tryParent, base, resolutionContext, part);
@@ -161,8 +165,6 @@ class EvaluatorImpl implements Evaluator {
             this.base = base;
             this.resolutionContext = resolutionContext;
             this.part = (PartImpl) part;
-            this.name = part.getName();
-            this.params = part.isVirtualMethod() ? part.asVirtualMethod().getParameters() : Collections.emptyList();
         }
 
         @Override
@@ -172,12 +174,12 @@ class EvaluatorImpl implements Evaluator {
 
         @Override
         public String getName() {
-            return name;
+            return part.getName();
         }
 
         @Override
         public List<Expression> getParams() {
-            return params;
+            return part.isVirtualMethod() ? part.asVirtualMethod().getParameters() : Collections.emptyList();
         }
 
         @Override
@@ -207,7 +209,7 @@ class EvaluatorImpl implements Evaluator {
         public String toString() {
             StringBuilder builder = new StringBuilder();
             builder.append("EvalContextImpl [tryParent=").append(tryParent).append(", base=").append(base).append(", name=")
-                    .append(getName()).append(", params=").append(getParams()).append("]");
+                    .append(getBase()).append(", params=").append(getParams()).append("]");
             return builder.toString();
         }
 

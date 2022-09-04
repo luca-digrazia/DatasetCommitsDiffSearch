@@ -45,8 +45,6 @@ public class SetSectionHelper implements SectionHelper {
 
     public static class Factory implements SectionHelperFactory<SetSectionHelper> {
 
-        public static final String HINT_PREFIX = "<set#";
-
         @Override
         public List<String> getDefaultAliases() {
             return ImmutableList.of(SET, LET);
@@ -70,11 +68,7 @@ public class SetSectionHelper implements SectionHelper {
                 Scope newScope = new Scope(previousScope);
                 for (Entry<String, String> entry : block.getParameters().entrySet()) {
                     Expression expr = block.addExpression(entry.getKey(), entry.getValue());
-                    if (expr.hasTypeInfo()) {
-                        newScope.putBinding(entry.getKey(), entry.getKey() + HINT_PREFIX + expr.getGeneratedId() + ">");
-                    } else {
-                        newScope.putBinding(entry.getKey(), null);
-                    }
+                    newScope.putBinding(entry.getKey(), expr.collectTypeInfo());
                 }
                 return newScope;
             } else {

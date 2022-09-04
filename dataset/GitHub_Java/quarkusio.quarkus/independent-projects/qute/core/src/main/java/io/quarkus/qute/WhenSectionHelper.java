@@ -306,13 +306,17 @@ public class WhenSectionHelper implements SectionHelper {
 
         CompletionStage<Boolean> resolve(SectionResolutionContext context, Object value) {
             if (params.isEmpty()) {
-                return CompletedStage.of(true);
+                return CompletableFuture.completedFuture(true);
             } else if (params.size() == 1) {
                 Expression paramExpr = params.get(0);
                 if (paramExpr.isLiteral()) {
-                    // A param is very often a literal, there's no need for async constructs
-                    return CompletedStage.of(
-                            caseOperator.evaluate(value, Collections.singletonList(paramExpr.getLiteral())));
+                    // A param is very often a literal.. no need for async constructs
+                    try {
+                        return CompletableFuture.completedFuture(
+                                caseOperator.evaluate(value, Collections.singletonList(paramExpr.getLiteralValue().get())));
+                    } catch (InterruptedException | ExecutionException e) {
+                        throw new IllegalStateException(e);
+                    }
                 }
                 return context.resolutionContext().evaluate(paramExpr)
                         .thenApply(p -> caseOperator.evaluate(value, Collections.singletonList(p)));
@@ -332,7 +336,7 @@ public class WhenSectionHelper implements SectionHelper {
                 }
                 if (results.isEmpty()) {
                     // Parameters are literals only
-                    return CompletedStage.of(caseOperator.evaluate(value,
+                    return CompletableFuture.completedFuture(caseOperator.evaluate(value,
                             Arrays.stream(allResults).map(t1 -> {
                                 try {
                                     return t1.get();
@@ -359,9 +363,6 @@ public class WhenSectionHelper implements SectionHelper {
         }
 
         boolean resolveEnum(SectionResolutionContext context, Object value) {
-            if (params.isEmpty()) {
-                return true;
-            }
             String enumValue = value.toString();
             if (params.size() == 1) {
                 // case enum value with the current value

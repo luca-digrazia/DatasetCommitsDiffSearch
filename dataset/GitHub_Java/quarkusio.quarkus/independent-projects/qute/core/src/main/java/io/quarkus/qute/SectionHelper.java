@@ -4,6 +4,8 @@ import java.util.concurrent.CompletionStage;
 
 /**
  * Defines the logic of a section node.
+ * 
+ * @see SectionHelperFactory
  */
 @FunctionalInterface
 public interface SectionHelper {
@@ -20,6 +22,10 @@ public interface SectionHelper {
      */
     public interface SectionResolutionContext {
 
+        /**
+         * 
+         * @return the current resolution context
+         */
         ResolutionContext resolutionContext();
 
         /**

@@ -97,9 +97,12 @@ class TemplateImpl implements Template {
 
         private CompletionStage<Void> renderData(Object data, Consumer<String> consumer) {
             CompletableFuture<Void> result = new CompletableFuture<>();
-            ResolutionContext rootContext = new ResolutionContextImpl(data,
+            DataNamespaceResolver dataResolver = new DataNamespaceResolver();
+            List<NamespaceResolver> namespaceResolvers = ImmutableList.<NamespaceResolver> builder()
+                    .addAll(engine.getNamespaceResolvers()).add(dataResolver).build();
+            ResolutionContext rootContext = new ResolutionContextImpl(data, namespaceResolvers,
                     engine.getEvaluator(), null, this);
-            setAttribute(DataNamespaceResolver.ROOT_CONTEXT, rootContext);
+            dataResolver.rootContext = rootContext;
             // Async resolution
             root.resolve(rootContext).whenComplete((r, t) -> {
                 if (t != null) {
@@ -121,15 +124,11 @@ class TemplateImpl implements Template {
 
     static class DataNamespaceResolver implements NamespaceResolver {
 
-        static final String ROOT_CONTEXT = "qute$rootContext";
+        ResolutionContext rootContext;
 
         @Override
         public CompletionStage<Object> resolve(EvalContext context) {
-            Object rootContext = context.getAttribute(ROOT_CONTEXT);
-            if (rootContext != null && rootContext instanceof ResolutionContext) {
-                return ((ResolutionContext) rootContext).evaluate(context.getName());
-            }
-            return Results.NOT_FOUND;
+            return rootContext.evaluate(context.getName());
         }
 
         @Override
