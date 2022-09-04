@@ -40,7 +40,7 @@ import com.google.devtools.build.lib.rules.cpp.LibraryToLink.CcLinkingContext;
 import com.google.devtools.build.lib.skylarkbuildapi.apple.ObjcProviderApi;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collections;
 import java.util.HashMap;
@@ -57,9 +57,6 @@ public final class ObjcProvider extends Info implements ObjcProviderApi<Artifact
 
   /** Skylark name for the ObjcProvider. */
   public static final String SKYLARK_NAME = "objc";
-
-  /** Expected suffix for a framework-containing directory. */
-  public static final String FRAMEWORK_SUFFIX = ".framework";
 
   /**
    * Represents one of the things this provider can provide transitively. Things are provided as
@@ -235,7 +232,11 @@ public final class ObjcProvider extends Info implements ObjcProviderApi<Artifact
   public static final Key<PathFragment> FRAMEWORK_SEARCH_PATH_ONLY =
       new Key<>(LINK_ORDER, "framework_search_paths", PathFragment.class);
 
-  /** The static library files of user-specified static frameworks. */
+
+  /**
+   * Files in {@code .framework} directories that should be included as inputs when compiling and
+   * linking.
+   */
   public static final Key<Artifact> STATIC_FRAMEWORK_FILE =
       new Key<>(STABLE_ORDER, "static_framework_file", Artifact.class);
 
@@ -248,7 +249,11 @@ public final class ObjcProvider extends Info implements ObjcProviderApi<Artifact
   public static final Key<PathFragment> DYNAMIC_FRAMEWORK_DIR =
       new Key<>(LINK_ORDER, "dynamic_framework_dir", PathFragment.class);
 
-  /** The dynamic library files of user-specified dynamic frameworks. */
+  /**
+   * Files in {@code .framework} directories belonging to a dynamically linked framework. They
+   * should be included as inputs when compiling and linking as well as copied into the final
+   * application bundle.
+   */
   public static final Key<Artifact> DYNAMIC_FRAMEWORK_FILE =
       new Key<>(STABLE_ORDER, "dynamic_framework_file", Artifact.class);
 
@@ -341,7 +346,7 @@ public final class ObjcProvider extends Info implements ObjcProviderApi<Artifact
     HAS_WATCH2_EXTENSION,
   }
 
-  private final StarlarkSemantics semantics;
+  private final SkylarkSemantics semantics;
   private final ImmutableMap<Key<?>, NestedSet<?>> items;
 
   // Items which should not be propagated to dependents.
@@ -659,7 +664,7 @@ public final class ObjcProvider extends Info implements ObjcProviderApi<Artifact
   public static final BuiltinProvider<ObjcProvider> SKYLARK_CONSTRUCTOR = new Constructor();
 
   private ObjcProvider(
-      StarlarkSemantics semantics,
+      SkylarkSemantics semantics,
       ImmutableMap<Key<?>, NestedSet<?>> items,
       ImmutableMap<Key<?>, NestedSet<?>> nonPropagatedItems,
       ImmutableMap<Key<?>, NestedSet<?>> strictDependencyItems) {
@@ -921,85 +926,17 @@ public final class ObjcProvider extends Info implements ObjcProviderApi<Artifact
   }
 
   /**
-   * Check whether that a path fragment is a framework directory (i.e. ends in FRAMEWORK_SUFFIX).
-   */
-  private static void checkIsFrameworkDirectory(PathFragment dir) {
-    Preconditions.checkState(dir.getBaseName().endsWith(FRAMEWORK_SUFFIX));
-  }
-
-  /** The input path must be of the form <path>/<name>.FRAMEWORK_SUFFIX. Return the names. */
-  private static String getFrameworkName(PathFragment frameworkPath) {
-    String segment = frameworkPath.getBaseName();
-    return segment.substring(0, segment.length() - FRAMEWORK_SUFFIX.length());
-  }
-
-  /** The input path must be of the form <path>/<name>.FRAMEWORK_SUFFIX. Return the paths. */
-  private static String getFrameworkPath(PathFragment frameworkPath) {
-    return frameworkPath.getParentDirectory().getSafePathString();
-  }
-
-  /**
-   * @param key either DYNAMIC_FRAMEWORK_FILE or STATIC_FRAMEWORK_FILE. Return the corresponding
-   *     framework names, i.e. for a given a file <path>/<name>.FRAMEWORK_SUFFIX/<name>, return
-   *     <name>.
-   */
-  private NestedSet<String> getFrameworkNames(Key<Artifact> key) {
-    NestedSetBuilder<String> names = new NestedSetBuilder<>(key.order);
-    for (Artifact file : get(key)) {
-      PathFragment frameworkDir = file.getExecPath().getParentDirectory();
-      checkIsFrameworkDirectory(frameworkDir);
-      names.add(getFrameworkName(frameworkDir));
-    }
-    return names.build();
-  }
-
-  /**
-   * @param key either DYNAMIC_FRAMEWORK_FILE or STATIC_FRAMEWORK_FILE. Return the corresponding
-   *     framework paths, i.e. for a given a file <path>/<name>.FRAMEWORK_SUFFIX/<name>, return
-   *     <path>.
-   */
-  private NestedSet<String> getFrameworkPaths(Key<Artifact> key) {
-    NestedSetBuilder<String> paths = new NestedSetBuilder<>(key.order);
-    for (Artifact file : get(key)) {
-      PathFragment frameworkDir = file.getExecPath().getParentDirectory();
-      checkIsFrameworkDirectory(frameworkDir);
-      paths.add(getFrameworkPath(frameworkDir));
-    }
-    return paths.build();
-  }
-
-  @Override
-  public NestedSet<String> dynamicFrameworkNames() {
-    return getFrameworkNames(DYNAMIC_FRAMEWORK_FILE);
-  }
-
-  @Override
-  public NestedSet<String> dynamicFrameworkPaths() {
-    return getFrameworkPaths(DYNAMIC_FRAMEWORK_FILE);
-  }
-
-  @Override
-  public NestedSet<String> staticFrameworkNames() {
-    return getFrameworkNames(STATIC_FRAMEWORK_FILE);
-  }
-
-  @Override
-  public NestedSet<String> staticFrameworkPaths() {
-    return getFrameworkPaths(STATIC_FRAMEWORK_FILE);
-  }
-
-  /**
    * A builder for this context with an API that is optimized for collecting information from
    * several transitive dependencies.
    */
   public static final class Builder {
-    private final StarlarkSemantics starlarkSemantics;
+    private final SkylarkSemantics skylarkSemantics;
     private final Map<Key<?>, NestedSetBuilder<?>> items = new HashMap<>();
     private final Map<Key<?>, NestedSetBuilder<?>> nonPropagatedItems = new HashMap<>();
     private final Map<Key<?>, NestedSetBuilder<?>> strictDependencyItems = new HashMap<>();
 
-    public Builder(StarlarkSemantics semantics) {
-      this.starlarkSemantics = semantics;
+    public Builder(SkylarkSemantics semantics) {
+      this.skylarkSemantics = semantics;
     }
 
     private static void maybeAddEmptyBuilder(Map<Key<?>, NestedSetBuilder<?>> set, Key<?> key) {
@@ -1199,10 +1136,8 @@ public final class ObjcProvider extends Info implements ObjcProviderApi<Artifact
         strictDependencyBuilder.put(typeEntry.getKey(), typeEntry.getValue().build());
       }
 
-      return new ObjcProvider(
-          starlarkSemantics,
-          propagatedBuilder.build(),
-          nonPropagatedBuilder.build(),
+      return new ObjcProvider(skylarkSemantics,
+          propagatedBuilder.build(), nonPropagatedBuilder.build(),
           strictDependencyBuilder.build());
     }
   }
