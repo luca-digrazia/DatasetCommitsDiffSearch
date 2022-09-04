@@ -17,7 +17,6 @@ package com.googlecode.androidannotations.processing;
 
 import static com.sun.codemodel.JExpr._this;
 import static com.sun.codemodel.JExpr.cast;
-import static com.sun.codemodel.JMod.PRIVATE;
 import static com.sun.codemodel.JMod.PUBLIC;
 
 import java.io.Serializable;
@@ -85,8 +84,11 @@ public class ExtraProcessor implements ElementProcessor {
 		}
 
 		if (holder.extras == null) {
-			
-			initExtras(holder, codeModel);
+			JClass bundleClass = holder.refClass("android.os.Bundle");
+			holder.extras = holder.initIfActivityBody.decl(bundleClass, "extras_");
+			holder.extras.init(holder.initActivityRef.invoke("getIntent").invoke("getExtras"));
+
+			holder.extrasNotNullBlock = holder.initIfActivityBody._if(holder.extras.ne(JExpr._null()))._then();
 		}
 
 		JBlock ifContainsKey = holder.extrasNotNullBlock._if(JExpr.invoke(holder.extras, "containsKey").arg(extraKey))._then();
@@ -146,58 +148,6 @@ public class ExtraProcessor implements ElementProcessor {
 			}
 		}
 
-	}
-
-	/**
-	 * Adds call to initExtras in onCreate and onNewIntent methods where applicable.
-	 * @param holder
-	 * @param codeModel
-	 */
-	private void initExtras(EBeanHolder holder, JCodeModel codeModel) {
-		
-			
-		JClass intentClass = holder.refClass("android.content.Intent");
-		JMethod initIntentMethod = holder.eBean.method(PRIVATE, codeModel.VOID, "initExtras");
-		JVar intentParam = initIntentMethod.param(intentClass, "intent");
-
-		addOnNewIntent(holder, codeModel, intentClass, initIntentMethod,
-				intentParam);
-		
-		
-		addCallToInitIntentInOnCreate(holder, intentClass, initIntentMethod);
-
-		
-		JClass bundleClass = holder.refClass("android.os.Bundle");
-		JBlock initIntentBody = initIntentMethod.body();
-		holder.extras = initIntentBody.decl(bundleClass, "extras_");
-		holder.extras.init(intentParam.invoke("getExtras"));
-
-		holder.extrasNotNullBlock = initIntentBody._if(holder.extras.ne(JExpr._null()))._then();
-	}
-
-	private void addCallToInitIntentInOnCreate(EBeanHolder holder, JClass intentClass,
-			JMethod initIntentMethod) {
-		JVar decl = holder.initIfActivityBody.decl(intentClass, "intent_");
-		decl.init(holder.initActivityRef.invoke("getIntent"));
-		holder.initIfActivityBody.invoke(initIntentMethod).arg(decl);
-	}
-
-	private void addOnNewIntent(EBeanHolder holder, JCodeModel codeModel,
-			JClass intentClass, JMethod initIntentMethod, JVar intentParam) {
-		if(holder.intentBuilderClass != null)
-		{
-			
-			JMethod onNewIntentMethod = holder.eBean.method(PUBLIC, codeModel.VOID, "onNewIntent");
-			onNewIntentMethod.annotate(Override.class);
-			JVar methodParam = onNewIntentMethod.param(intentClass, "intent");
-		
-			JBlock onNewIntentBody = onNewIntentMethod.body();
-
-			onNewIntentBody.invoke(initIntentMethod).arg(methodParam);
-
-			JInvocation superCall = onNewIntentBody.invoke(JExpr._super(), onNewIntentMethod);
-			superCall.arg(intentParam);
-		}
 	}
 
 }
