@@ -234,15 +234,11 @@ public abstract class NativeDepsHelper {
             featureConfiguration,
             cppSemantics);
     if (useDynamicRuntime) {
-      builder.setRuntimeInputs(
-          ArtifactCategory.DYNAMIC_LIBRARY,
-          toolchain.getDynamicRuntimeLinkMiddleman(featureConfiguration),
-          toolchain.getDynamicRuntimeLinkInputs(featureConfiguration));
+      builder.setRuntimeInputs(ArtifactCategory.DYNAMIC_LIBRARY,
+          toolchain.getDynamicRuntimeLinkMiddleman(), toolchain.getDynamicRuntimeLinkInputs());
     } else {
-      builder.setRuntimeInputs(
-          ArtifactCategory.STATIC_LIBRARY,
-          toolchain.getStaticRuntimeLinkMiddleman(featureConfiguration),
-          toolchain.getStaticRuntimeLinkInputs(featureConfiguration));
+      builder.setRuntimeInputs(ArtifactCategory.STATIC_LIBRARY,
+          toolchain.getStaticRuntimeLinkMiddleman(), toolchain.getStaticRuntimeLinkInputs());
     }
     ImmutableMap.Builder<Artifact, Artifact> ltoBitcodeFilesMap = new ImmutableMap.Builder<>();
     for (LibraryToLink lib : linkerInputs) {
@@ -271,8 +267,7 @@ public abstract class NativeDepsHelper {
 
     if (builder.hasLtoBitcodeInputs() && featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)) {
       builder.setLtoIndexing(true);
-      builder.setUsePicForLtoBackendActions(
-          CppHelper.usePicForDynamicLibraries(ruleContext, toolchain));
+      builder.setUsePicForLtoBackendActions(CppHelper.usePic(ruleContext, toolchain, false));
       CppLinkAction indexAction = builder.build();
       if (indexAction != null) {
         ruleContext.registerAction(indexAction);
@@ -292,8 +287,7 @@ public abstract class NativeDepsHelper {
       List<Artifact> runtimeSymlinks;
       if (useDynamicRuntime) {
         runtimeSymlinks = new LinkedList<>();
-        for (final Artifact runtimeInput :
-            toolchain.getDynamicRuntimeLinkInputs(featureConfiguration)) {
+        for (final Artifact runtimeInput : toolchain.getDynamicRuntimeLinkInputs()) {
           final Artifact runtimeSymlink =
               ruleContext.getPackageRelativeArtifact(
                   getRuntimeLibraryPath(ruleContext, runtimeInput), bindirIfShared);

@@ -98,7 +98,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       CcToolchainProvider toolchain,
       CcLinkingOutputs linkingOutputs,
       CcLinkingOutputs ccLibraryLinkingOutputs,
-      CcCompilationContextInfo ccCompilationContextInfo,
+      CcCompilationInfo ccCompilationInfo,
       LinkStaticness linkStaticness,
       NestedSet<Artifact> filesToBuild,
       Iterable<Artifact> fakeLinkerInputs,
@@ -152,12 +152,13 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         sourcesBuilder.add(cppSource.getSource());
       }
       builder.addSymlinksToArtifacts(sourcesBuilder.build());
-      builder.addSymlinksToArtifacts(ccCompilationContextInfo.getDeclaredIncludeSrcs());
+      builder.addSymlinksToArtifacts(ccCompilationInfo.getDeclaredIncludeSrcs());
       // Add additional files that are referenced from the compile command, like module maps
       // or header modules.
-      builder.addSymlinksToArtifacts(ccCompilationContextInfo.getAdditionalInputs());
+      builder.addSymlinksToArtifacts(ccCompilationInfo.getAdditionalInputs());
       builder.addSymlinksToArtifacts(
-          ccCompilationContextInfo.getTransitiveModules(usePic(context, toolchain)));
+          ccCompilationInfo.getTransitiveModules(
+              CppHelper.usePic(context, toolchain, !isLinkShared(context))));
     }
     return builder.build();
   }
@@ -234,8 +235,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             .setFake(fake)
             .addPrecompiledFiles(precompiledFiles);
     CompilationInfo compilationInfo = compilationHelper.compile();
-    CcCompilationContextInfo ccCompilationContextInfo =
-        compilationInfo.getCcCompilationContextInfo();
+    CcCompilationInfo ccCompilationInfo = compilationInfo.getCcCompilationInfo();
     CcCompilationOutputs ccCompilationOutputs = compilationInfo.getCcCompilationOutputs();
 
     // We currently only want link the dynamic library generated for test code separately.
@@ -270,7 +270,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
               .enableInterfaceSharedObjects();
       linkingHelper.setStaticLinkType(LinkTargetType.STATIC_LIBRARY);
       ccLinkingOutputs =
-          linkingHelper.link(ccCompilationOutputs, ccCompilationContextInfo).getCcLinkingOutputs();
+          linkingHelper.link(ccCompilationOutputs, ccCompilationInfo).getCcLinkingOutputs();
     }
 
     CcLinkParams linkParams =
@@ -289,7 +289,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             precompiledFiles,
             ccCompilationOutputs,
             ccLinkingOutputs,
-            ccCompilationContextInfo.getTransitiveCompilationPrerequisites(),
+            ccCompilationInfo.getTransitiveCompilationPrerequisites(),
             fake,
             binary,
             linkParams,
@@ -368,7 +368,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     // Store immutable context for use in other *_binary rules that are implemented by
     // linking the interpreter (Java, Python, etc.) together with native deps.
     CppLinkAction.Context linkContext = new CppLinkAction.Context(linkActionBuilder);
-    boolean usePic = usePic(ruleContext, ccToolchain);
+    boolean usePic = CppHelper.usePic(ruleContext, ccToolchain, !isLinkShared(ruleContext));
 
     if (linkActionBuilder.hasLtoBitcodeInputs()
         && featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)) {
@@ -469,7 +469,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             ccToolchain,
             linkingOutputs,
             ccLinkingOutputs,
-            ccCompilationContextInfo,
+            ccCompilationInfo,
             linkStaticness,
             filesToBuild,
             fakeLinkerInputs,
@@ -495,7 +495,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         ruleBuilder,
         filesToBuild,
         ccCompilationOutputs,
-        ccCompilationContextInfo,
+        ccCompilationInfo,
         linkingOutputs,
         dwoArtifacts,
         transitiveLipoInfo,
@@ -544,7 +544,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         .addProvider(
             LipoContextProvider.class,
             new LipoContextProvider(
-                ccCompilationContextInfo,
+                ccCompilationInfo,
                 ImmutableMap.copyOf(scannableMap),
                 ImmutableMap.copyOf(sourceFileMap)))
         .addProvider(CppLinkAction.Context.class, linkContext)
@@ -585,7 +585,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         builder.addLibrary(library);
       }
     } else {
-      boolean usePic = usePic(context, toolchain);
+      boolean usePic = CppHelper.usePic(context, toolchain, !isLinkShared(context));
       Iterable<Artifact> objectFiles = compilationOutputs.getObjectFiles(usePic);
 
       if (fake) {
@@ -687,7 +687,9 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       CcToolchainProvider toolchain,
       NestedSet<Artifact> picDwoArtifacts,
       NestedSet<Artifact> dwoArtifacts) {
-    return usePic(context, toolchain) ? picDwoArtifacts : dwoArtifacts;
+    return CppHelper.usePic(context, toolchain, !isLinkShared(context))
+        ? picDwoArtifacts
+        : dwoArtifacts;
   }
 
   /**
@@ -874,7 +876,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       RuleConfiguredTargetBuilder builder,
       NestedSet<Artifact> filesToBuild,
       CcCompilationOutputs ccCompilationOutputs,
-      CcCompilationContextInfo ccCompilationContextInfo,
+      CcCompilationInfo ccCompilationInfo,
       CcLinkingOutputs linkingOutputs,
       DwoArtifactsCollector dwoArtifacts,
       TransitiveLipoInfoProvider transitiveLipoInfo,
@@ -891,10 +893,10 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         ccCompilationOutputs.getFilesToCompile(
             cppConfiguration.isLipoContextCollector(),
             cppConfiguration.processHeadersInDependencies(),
-            CppHelper.usePicForDynamicLibraries(ruleContext, toolchain));
+            CppHelper.usePic(ruleContext, toolchain, false));
     builder
         .setFilesToBuild(filesToBuild)
-        .addNativeDeclaredProvider(ccCompilationContextInfo)
+        .addNativeDeclaredProvider(ccCompilationInfo)
         .addProvider(TransitiveLipoInfoProvider.class, transitiveLipoInfo)
         .addProvider(
             CcExecutionDynamicLibrariesProvider.class,
@@ -920,7 +922,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         .addOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL, headerTokens)
         .addOutputGroup(
             OutputGroupInfo.COMPILATION_PREREQUISITES,
-            CcCommon.collectCompilationPrerequisites(ruleContext, ccCompilationContextInfo));
+            CcCommon.collectCompilationPrerequisites(ruleContext, ccCompilationInfo));
 
     CppHelper.maybeAddStaticLinkMarkerProvider(builder, ruleContext);
   }
@@ -960,13 +962,5 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     return cppConfiguration.isLipoContextCollector()
         ? NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)
         : compilationOutputs.getTemps();
-  }
-
-  private static boolean usePic(RuleContext ruleContext, CcToolchainProvider ccToolchainProvider) {
-    if (isLinkShared(ruleContext)) {
-      return CppHelper.usePicForDynamicLibraries(ruleContext, ccToolchainProvider);
-    } else {
-      return CppHelper.usePicForBinaries(ruleContext, ccToolchainProvider);
-    }
   }
 }
