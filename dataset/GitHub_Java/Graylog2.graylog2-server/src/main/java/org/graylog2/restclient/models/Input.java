@@ -18,6 +18,7 @@
  */
 package org.graylog2.restclient.models;
 
+import com.google.common.base.Joiner;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.restclient.lib.APIException;
@@ -32,6 +33,8 @@ import org.graylog2.restclient.models.api.responses.metrics.GaugeResponse;
 import org.graylog2.restclient.models.api.responses.metrics.MetricsListResponse;
 import org.graylog2.restclient.models.api.responses.system.InputSummaryResponse;
 import org.graylog2.restclient.models.api.results.MessageResult;
+import org.graylog2.restroutes.generated.routes;
+import org.joda.time.DateTime;
 import org.slf4j.LoggerFactory;
 import play.mvc.Http;
 
@@ -59,6 +62,7 @@ public class Input {
     private final String persistId;
     private final String name;
     private final String title;
+    private final DateTime createdAt;
     private final User creatorUser;
     private final Boolean global;
     private final Map<String, Object> attributes;
@@ -84,6 +88,7 @@ public class Input {
         this.creatorUser = userService.load(is.creatorUserId);
         this.attributes = is.attributes;
         this.staticFields = is.staticFields;
+        this.createdAt = DateTime.parse(is.createdAt);
 
         // We might get a double parsed from JSON here. Make sure to round it to Integer. (would be .0 anyways)
         for (Map.Entry<String, Object> e : attributes.entrySet()) {
@@ -141,16 +146,14 @@ public class Input {
     }
 
     public void addStaticField(String key, String value) throws APIException, IOException {
-        api.post().clusterEntity(node)
-                .path("/system/inputs/{0}/staticfields", id)
+        api.path(routes.StaticFieldsResource().create(id)).clusterEntity(node)
                 .body(new AddStaticFieldRequest(key, value))
                 .expect(Http.Status.CREATED)
                 .execute();
     }
 
     public void removeStaticField(String key) throws APIException, IOException {
-        api.delete().clusterEntity(node)
-                .path("/system/inputs/{0}/staticfields/{1}", id, key)
+        api.path(routes.StaticFieldsResource().delete(key, id)).clusterEntity(node)
                 .expect(Http.Status.NO_CONTENT)
                 .execute();
     }
@@ -187,9 +190,8 @@ public class Input {
         final String written_bytes_total = qualifiedIOMetricName("written_bytes", true);
         request.metrics = new String[] { read_bytes, read_bytes_total, written_bytes, written_bytes_total };
         try {
-            final MetricsListResponse response = api.post(MetricsListResponse.class)
+            final MetricsListResponse response = api.path(routes.MetricsResource().multipleMetrics(), MetricsListResponse.class)
                     .clusterEntity(node)
-                    .path("/system/metrics/multiple")
                     .body(request)
                     .expect(200, 404)
                     .execute();
@@ -233,13 +235,12 @@ public class Input {
 
     private Long getGaugeValue(String name) {
         try {
-            GaugeResponse response = api.get(GaugeResponse.class)
+            GaugeResponse response = api.path(routes.MetricsResource().singleMetric(Joiner.on(".").join(type, id, name)), GaugeResponse.class)
                 .clusterEntity(node)
-                .path("/system/metrics/{0}.{1}.{2}", type, id, name)
                 .expect(200, 404)
                 .execute();
 
-            if (response == null) {
+            if (response == null || response.value == null) {
                 return -1L;
             } else {
                 return response.value;
@@ -259,6 +260,10 @@ public class Input {
 
     public Boolean getGlobal() {
         return global;
+    }
+
+    public DateTime getCreatedAt() {
+        return createdAt;
     }
 
     @Override

@@ -1,4 +1,6 @@
 /*
+ * Copyright 2013 TORCH UG
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -16,35 +18,38 @@
  */
 package org.graylog2.restclient.models.api.responses.system;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.gson.annotations.SerializedName;
 
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class InputSummaryResponse {
 
     public String type;
 
-    @JsonProperty("input_id")
+    @SerializedName("input_id")
     public String inputId;
 
-    @JsonProperty("persist_id")
+    @SerializedName("persist_id")
     public String persistId;
 
     public String name;
     public String title;
 
-    @JsonProperty("creator_user_id")
+    @SerializedName("creator_user_id")
     public String creatorUserId;
 
-    @JsonProperty("started_at")
+    @SerializedName("started_at")
     public String startedAt;
 
-    @JsonProperty("created_at")
+    @SerializedName("created_at")
     public String createdAt;
 
     public Boolean global;
 
-    @JsonProperty("static_fields")
+    @SerializedName("static_fields")
     public Map<String, String> staticFields;
 
     public Map<String, Object> attributes;
