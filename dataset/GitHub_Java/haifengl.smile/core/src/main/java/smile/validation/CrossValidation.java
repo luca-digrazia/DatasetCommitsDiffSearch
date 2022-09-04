@@ -112,8 +112,8 @@ public interface CrossValidation {
 
         // Shuffle every strata so that we can get different
         // splits in repeated cross validation.
-        for (int[] stratum : strata) {
-            MathEx.permutate(stratum);
+        for (int i = 0; i < m; i++) {
+            MathEx.permutate(strata[i]);
         }
 
         int[] chunk = new int[m];
