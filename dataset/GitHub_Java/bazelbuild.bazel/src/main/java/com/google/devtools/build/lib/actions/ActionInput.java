@@ -40,12 +40,4 @@ public interface ActionInput {
    * @return the relative path to the input file.
    */
   PathFragment getExecPath();
-
-  /**
-   * Returns if this input's file system path includes a digest of its content. See {@link
-   * com.google.devtools.build.lib.analysis.config.BuildConfiguration#useContentBasedOutputPaths}.
-   */
-  default boolean contentBasedPath() {
-    return false;
-  }
 }
