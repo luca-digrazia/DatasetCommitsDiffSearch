@@ -17,7 +17,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import javax.enterprise.event.Observes;
+import javax.annotation.PreDestroy;
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Produces;
 import javax.inject.Inject;
@@ -38,7 +38,6 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.Unremovable;
-import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.Startup;
 
 /**
@@ -52,7 +51,6 @@ import io.quarkus.runtime.Startup;
 public class KafkaStreamsProducer {
 
     private static final Logger LOGGER = Logger.getLogger(KafkaStreamsProducer.class.getName());
-    private static volatile boolean shutdown = false;
 
     private final ExecutorService executorService;
     private final KafkaStreams kafkaStreams;
@@ -102,8 +100,8 @@ public class KafkaStreamsProducer {
         return kafkaStreamsTopologyManager;
     }
 
-    void onStop(@Observes ShutdownEvent event) {
-        shutdown = true;
+    @PreDestroy
+    void close() {
         if (executorService != null) {
             executorService.shutdown();
         }
@@ -145,10 +143,8 @@ public class KafkaStreamsProducer {
                     Thread.currentThread().interrupt();
                     return;
                 }
-                if (!shutdown) {
-                    LOGGER.debug("Starting Kafka Streams pipeline");
-                    kafkaStreams.start();
-                }
+                LOGGER.debug("Starting Kafka Streams pipeline");
+                kafkaStreams.start();
             }
         });
 
@@ -261,7 +257,7 @@ public class KafkaStreamsProducer {
     private static void waitForTopicsToBeCreated(Admin adminClient, Collection<String> topicsToAwait)
             throws InterruptedException {
         Set<String> lastMissingTopics = null;
-        while (!shutdown) {
+        while (true) {
             try {
                 ListTopicsResult topics = adminClient.listTopics();
                 Set<String> existingTopics = topics.names().get(10, TimeUnit.SECONDS);
