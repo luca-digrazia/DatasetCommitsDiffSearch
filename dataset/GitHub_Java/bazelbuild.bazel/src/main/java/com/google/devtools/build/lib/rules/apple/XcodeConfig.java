@@ -38,12 +38,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Implementation for the {@code xcode_config} rule. */
+/**
+ * Implementation for the {@code xcode_config} rule.
+ */
 public class XcodeConfig implements RuleConfiguredTargetFactory {
   private static final DottedVersion MINIMUM_BITCODE_XCODE_VERSION =
       DottedVersion.fromStringUnchecked("7");
 
-  /** An exception that signals that an Xcode config setup was invalid. */
+  /**
+   * An exception that signals that an Xcode config setup was invalid.
+   */
   public static class XcodeConfigException extends Exception {
 
     XcodeConfigException(String reason) {
@@ -85,11 +89,7 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
         explicitVersions, explicitDefaultVersion, localVersions, remoteVersions, ruleContext)) {
       Map.Entry<XcodeVersionRuleData, Availability> xcode =
           resolveXcodeFromLocalAndRemote(
-              localVersions,
-              remoteVersions,
-              ruleContext,
-              appleOptions.xcodeVersion,
-              appleOptions.preferMutualXcode);
+              localVersions, remoteVersions, ruleContext, appleOptions.xcodeVersion);
       xcodeVersionProperties = xcode.getKey().getXcodeVersionProperties();
       availability = xcode.getValue();
     } else {
@@ -102,34 +102,23 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
         (appleOptions.iosSdkVersion != null)
             ? DottedVersion.maybeUnwrap(appleOptions.iosSdkVersion)
             : xcodeVersionProperties.getDefaultIosSdkVersion();
-    DottedVersion iosMinimumOsVersion =
-        (appleOptions.iosMinimumOs != null)
-            ? DottedVersion.maybeUnwrap(appleOptions.iosMinimumOs)
-            : iosSdkVersion;
-    DottedVersion watchosSdkVersion =
-        (appleOptions.watchOsSdkVersion != null)
-            ? DottedVersion.maybeUnwrap(appleOptions.watchOsSdkVersion)
-            : xcodeVersionProperties.getDefaultWatchosSdkVersion();
-    DottedVersion watchosMinimumOsVersion =
-        (appleOptions.watchosMinimumOs != null)
-            ? DottedVersion.maybeUnwrap(appleOptions.watchosMinimumOs)
-            : watchosSdkVersion;
-    DottedVersion tvosSdkVersion =
-        (appleOptions.tvOsSdkVersion != null)
-            ? DottedVersion.maybeUnwrap(appleOptions.tvOsSdkVersion)
-            : xcodeVersionProperties.getDefaultTvosSdkVersion();
-    DottedVersion tvosMinimumOsVersion =
-        (appleOptions.tvosMinimumOs != null)
-            ? DottedVersion.maybeUnwrap(appleOptions.tvosMinimumOs)
-            : tvosSdkVersion;
-    DottedVersion macosSdkVersion =
-        (appleOptions.macOsSdkVersion != null)
-            ? DottedVersion.maybeUnwrap(appleOptions.macOsSdkVersion)
-            : xcodeVersionProperties.getDefaultMacosSdkVersion();
-    DottedVersion macosMinimumOsVersion =
-        (appleOptions.macosMinimumOs != null)
-            ? DottedVersion.maybeUnwrap(appleOptions.macosMinimumOs)
-            : macosSdkVersion;
+    DottedVersion iosMinimumOsVersion = (appleOptions.iosMinimumOs != null)
+        ? DottedVersion.maybeUnwrap(appleOptions.iosMinimumOs) : iosSdkVersion;
+    DottedVersion watchosSdkVersion = (appleOptions.watchOsSdkVersion != null)
+        ? DottedVersion.maybeUnwrap(appleOptions.watchOsSdkVersion)
+        : xcodeVersionProperties.getDefaultWatchosSdkVersion();
+    DottedVersion watchosMinimumOsVersion = (appleOptions.watchosMinimumOs != null)
+        ? DottedVersion.maybeUnwrap(appleOptions.watchosMinimumOs) : watchosSdkVersion;
+    DottedVersion tvosSdkVersion = (appleOptions.tvOsSdkVersion != null)
+        ? DottedVersion.maybeUnwrap(appleOptions.tvOsSdkVersion)
+        : xcodeVersionProperties.getDefaultTvosSdkVersion();
+    DottedVersion tvosMinimumOsVersion = (appleOptions.tvosMinimumOs != null)
+        ? DottedVersion.maybeUnwrap(appleOptions.tvosMinimumOs) : tvosSdkVersion;
+    DottedVersion macosSdkVersion = (appleOptions.macOsSdkVersion != null)
+        ? DottedVersion.maybeUnwrap(appleOptions.macOsSdkVersion)
+        : xcodeVersionProperties.getDefaultMacosSdkVersion();
+    DottedVersion macosMinimumOsVersion = (appleOptions.macosMinimumOs != null)
+        ? DottedVersion.maybeUnwrap(appleOptions.macosMinimumOs) : macosSdkVersion;
 
     XcodeConfigInfo xcodeVersions =
         new XcodeConfigInfo(
@@ -149,10 +138,9 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
     if (bitcodeMode != AppleBitcodeMode.NONE
         && xcodeVersion != null
         && xcodeVersion.compareTo(MINIMUM_BITCODE_XCODE_VERSION) < 0) {
-      ruleContext.throwWithRuleError(
-          String.format(
-              "apple_bitcode mode '%s' is unsupported for xcode version '%s'",
-              bitcodeMode, xcodeVersion));
+      ruleContext.throwWithRuleError(String.format(
+          "apple_bitcode mode '%s' is unsupported for xcode version '%s'",
+          bitcodeMode, xcodeVersion));
     }
 
     return new RuleConfiguredTargetBuilder(ruleContext)
@@ -233,7 +221,8 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
     if (!Strings.isNullOrEmpty(versionOverrideFlag)) {
       // The version override flag is not necessarily an actual version - it may be a version
       // alias.
-      XcodeVersionRuleData explicitVersion = aliasesToVersionMap.get(versionOverrideFlag);
+      XcodeVersionRuleData explicitVersion =
+          aliasesToVersionMap.get(versionOverrideFlag);
       if (explicitVersion != null) {
         return explicitVersion.getXcodeVersionProperties();
       } else {
@@ -261,9 +250,9 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
       AvailableXcodesInfo localVersions,
       AvailableXcodesInfo remoteVersions,
       RuleContext ruleContext,
-      String versionOverrideFlag,
-      boolean preferMutualXcode)
+      String versionOverrideFlag)
       throws RuleErrorException {
+
 
     Map<String, XcodeVersionRuleData> localAliasesToVersionMap;
     Map<String, XcodeVersionRuleData> remoteAliasesToVersionMap;
@@ -328,7 +317,7 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
                 printableXcodeVersions(remoteVersions.getAvailableVersions())));
       }
     }
-    if (preferMutualXcode && !mutuallyAvailableVersions.isEmpty()) {
+    if (!mutuallyAvailableVersions.isEmpty()) {
       DottedVersion newestVersionNumber = DottedVersion.fromStringUnchecked("0.0");
       XcodeVersionRuleData defaultVersion = null;
       for (XcodeVersionRuleData versionRuleData : mutuallyAvailableVersions) {
@@ -340,10 +329,7 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
       // This should never occur. All input versions should be above 0.0.
       checkState(defaultVersion != null);
       return Maps.immutableEntry(defaultVersion, XcodeConfigInfo.Availability.BOTH);
-    }
-    // Select the local default.
-    Availability availability = null;
-    if (mutuallyAvailableVersions.isEmpty()) {
+    } else {
       ruleContext.ruleWarning(
           String.format(
               "Using a local Xcode version, '%s', since there are no"
@@ -352,17 +338,9 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
                   + " performance.",
               localVersions.getDefaultVersion().getVersion(),
               printableXcodeVersions(remoteVersions.getAvailableVersions())));
-      availability = Availability.LOCAL;
-    } else if (mutuallyAvailableVersions.contains(localVersions.getDefaultVersion())) {
-      availability = Availability.BOTH;
-    } else {
-      ruleContext.ruleWarning(
-          "You passed --experimental_prefer_mutual_xcode=false, which prevents Bazel from"
-              + " selecting an Xcode version that optimizes your performance. Please consider"
-              + " using --experimental_prefer_mutual_xcode=true.");
-      availability = Availability.LOCAL;
+      return Maps.immutableEntry(
+          localVersions.getDefaultVersion(), XcodeConfigInfo.Availability.LOCAL);
     }
-    return Maps.immutableEntry(localVersions.getDefaultVersion(), availability);
   }
 
   private static String printableXcodeVersions(Iterable<XcodeVersionRuleData> xcodeVersions) {
@@ -394,8 +372,8 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
       // aliases (in which case it would have just been added. This offers some leniency in target
       // definition, as it's silly to error if a version is aliased to its own version.
       if (!xcodeVersionRule.getAliases().contains(xcodeVersionRule.getVersion().toString())) {
-        if (aliasesToXcodeRules.put(xcodeVersionRule.getVersion().toString(), xcodeVersionRule)
-            != null) {
+        if (aliasesToXcodeRules.put(
+            xcodeVersionRule.getVersion().toString(), xcodeVersionRule) != null) {
           configErrorDuplicateAlias(xcodeVersionRule.getVersion().toString(), xcodeVersionRules);
         }
       }
@@ -419,8 +397,7 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
     }
 
     throw new XcodeConfigException(
-        String.format(
-            "'%s' is registered to multiple labels (%s) in a single xcode_config rule",
+        String.format("'%s' is registered to multiple labels (%s) in a single xcode_config rule",
             alias, Joiner.on(", ").join(labelsContainingAlias.build())));
   }
 
