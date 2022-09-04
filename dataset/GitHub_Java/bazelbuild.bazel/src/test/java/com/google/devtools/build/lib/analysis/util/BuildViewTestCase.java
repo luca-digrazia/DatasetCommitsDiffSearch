@@ -851,7 +851,10 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected final List<String> getGeneratingSpawnActionArgs(Artifact artifact)
       throws CommandLineExpansionException {
     SpawnAction a = getGeneratingSpawnAction(artifact);
-    return a.getArguments();
+    Iterable<String> paramFileArgs = paramFileArgsForAction(a);
+    return paramFileArgs != null
+        ? ImmutableList.copyOf(Iterables.concat(a.getArguments(), paramFileArgs))
+        : a.getArguments();
   }
 
   protected ActionsTestUtil actionsTestUtil() {
@@ -1964,11 +1967,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
     @Override
     public SpecialArtifact getTreeArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public SpecialArtifact getSymlinkArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
       throw new UnsupportedOperationException();
     }
 
