@@ -31,12 +31,6 @@ public class Util {
     }
   }
 
-  public static void throwIf(boolean condition) {
-    if (condition) {
-      throw new IllegalStateException();
-    }
-  }
-
   public static void throwIfNot(boolean condition) {
     if (!condition) {
       throw new IllegalStateException();
@@ -90,17 +84,6 @@ public class Util {
     while (true) {
       try {
         t.join();
-        return;
-      } catch (InterruptedException e) {
-        // Keep going...
-      }
-    }
-  }
-
-  public static void awaitUninterruptibly(CountDownLatch latch) {
-    while (true) {
-      try {
-        latch.await();
         return;
       } catch (InterruptedException e) {
         // Keep going...
