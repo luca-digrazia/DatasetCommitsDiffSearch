@@ -66,19 +66,14 @@ public class BeanProcessor {
 
     private BeanProcessor(String name, IndexView index, Collection<BeanDefiningAnnotation> additionalBeanDefiningAnnotations,
             ResourceOutput output,
-            boolean sharedAnnotationLiterals,
-            ReflectionRegistration reflectionRegistration,
+            boolean sharedAnnotationLiterals, ReflectionRegistration reflectionRegistration,
             List<AnnotationsTransformer> annotationTransformers,
             List<InjectionPointsTransformer> injectionPointsTransformers,
-            List<ObserverTransformer> observerTransformers,
-            Collection<DotName> resourceAnnotations,
-            List<BeanRegistrar> beanRegistrars,
+            Collection<DotName> resourceAnnotations, List<BeanRegistrar> beanRegistrars,
             List<ContextRegistrar> contextRegistrars,
-            List<BeanDeploymentValidator> beanDeploymentValidators,
-            Predicate<DotName> applicationClassPredicate,
+            List<BeanDeploymentValidator> beanDeploymentValidators, Predicate<DotName> applicationClassPredicate,
             boolean unusedBeansRemovalEnabled,
-            List<Predicate<BeanInfo>> unusedExclusions,
-            Map<DotName, Collection<AnnotationInstance>> additionalStereotypes,
+            List<Predicate<BeanInfo>> unusedExclusions, Map<DotName, Collection<AnnotationInstance>> additionalStereotypes,
             List<InterceptorBindingRegistrar> interceptorBindingRegistrars,
             boolean removeFinalForProxyableMethods) {
         this.reflectionRegistration = reflectionRegistration;
@@ -96,9 +91,7 @@ public class BeanProcessor {
         this.beanDeploymentValidators = initAndSort(beanDeploymentValidators, buildContext);
         this.beanDeployment = new BeanDeployment(index, additionalBeanDefiningAnnotations,
                 initAndSort(annotationTransformers, buildContext),
-                initAndSort(injectionPointsTransformers, buildContext),
-                initAndSort(observerTransformers, buildContext),
-                resourceAnnotations, buildContext,
+                initAndSort(injectionPointsTransformers, buildContext), resourceAnnotations, buildContext,
                 unusedBeansRemovalEnabled, unusedExclusions,
                 additionalStereotypes, interceptorBindingRegistrars, removeFinalForProxyableMethods);
     }
@@ -241,7 +234,6 @@ public class BeanProcessor {
 
         private final List<AnnotationsTransformer> annotationTransformers = new ArrayList<>();
         private final List<InjectionPointsTransformer> injectionPointTransformers = new ArrayList<>();
-        private final List<ObserverTransformer> observerTransformers = new ArrayList<>();
         private final List<BeanRegistrar> beanRegistrars = new ArrayList<>();
         private final List<ContextRegistrar> contextRegistrars = new ArrayList<>();
         private final List<InterceptorBindingRegistrar> additionalInterceptorBindingRegistrars = new ArrayList<>();
@@ -312,11 +304,6 @@ public class BeanProcessor {
             return this;
         }
 
-        public Builder addObserverTransformer(ObserverTransformer transformer) {
-            this.observerTransformers.add(transformer);
-            return this;
-        }
-
         public Builder addResourceAnnotations(Collection<DotName> resourceAnnotations) {
             this.resourceAnnotations.addAll(resourceAnnotations);
             return this;
@@ -382,8 +369,8 @@ public class BeanProcessor {
 
         public BeanProcessor build() {
             return new BeanProcessor(name, index, additionalBeanDefiningAnnotations, output, sharedAnnotationLiterals,
-                    reflectionRegistration, annotationTransformers, injectionPointTransformers, observerTransformers,
-                    resourceAnnotations, beanRegistrars, contextRegistrars, beanDeploymentValidators,
+                    reflectionRegistration, annotationTransformers, injectionPointTransformers, resourceAnnotations,
+                    beanRegistrars, contextRegistrars, beanDeploymentValidators,
                     applicationClassPredicate, removeUnusedBeans, removalExclusions, additionalStereotypes,
                     additionalInterceptorBindingRegistrars, removeFinalForProxyableMethods);
         }

@@ -3,7 +3,6 @@ package io.quarkus.arc.processor;
 import static io.quarkus.arc.processor.IndexClassLookupUtils.getClassByName;
 
 import io.quarkus.gizmo.DescriptorUtils;
-import io.quarkus.gizmo.Gizmo;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -28,7 +27,7 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
 /**
- *
+ * 
  * @author Martin Kouba
  * @author Michal Szynkiewicz, michal.l.szynkiewicz@gmail.com
  */
@@ -124,7 +123,7 @@ final class Methods {
     static Set<MethodInfo> addInterceptedMethodCandidates(BeanDeployment beanDeployment, ClassInfo classInfo,
             Map<MethodKey, Set<AnnotationInstance>> candidates,
             List<AnnotationInstance> classLevelBindings, Consumer<BytecodeTransformer> bytecodeTransformerConsumer,
-            boolean transformUnproxyableClasses) {
+            boolean removeFinalForProxyableMethods) {
 
         Set<NameAndDescriptor> methodsFromWhichToRemoveFinal = new HashSet<>();
         Set<MethodInfo> finalMethodsFoundAndNotChanged = new HashSet<>();
@@ -147,7 +146,7 @@ final class Methods {
             if (!merged.isEmpty()) {
                 boolean addToCandidates = true;
                 if (Modifier.isFinal(method.flags())) {
-                    if (transformUnproxyableClasses) {
+                    if (removeFinalForProxyableMethods) {
                         methodsFromWhichToRemoveFinal.add(NameAndDescriptor.fromMethodInfo(method));
                     } else {
                         addToCandidates = false;
@@ -164,7 +163,7 @@ final class Methods {
                     new BytecodeTransformer(classInfo.name().toString(), new BiFunction<String, ClassVisitor, ClassVisitor>() {
                         @Override
                         public ClassVisitor apply(String s, ClassVisitor classVisitor) {
-                            return new ClassVisitor(Gizmo.ASM_API_VERSION, classVisitor) {
+                            return new ClassVisitor(Opcodes.ASM7, classVisitor) {
                                 @Override
                                 public MethodVisitor visitMethod(int access, String name, String descriptor, String signature,
                                         String[] exceptions) {
@@ -183,15 +182,7 @@ final class Methods {
             ClassInfo superClassInfo = getClassByName(beanDeployment.getIndex(), classInfo.superName());
             if (superClassInfo != null) {
                 finalMethodsFoundAndNotChanged.addAll(addInterceptedMethodCandidates(beanDeployment, superClassInfo, candidates,
-                        classLevelBindings, bytecodeTransformerConsumer, transformUnproxyableClasses));
-            }
-        }
-        for (DotName i : classInfo.interfaceNames()) {
-            ClassInfo interfaceInfo = getClassByName(beanDeployment.getIndex(), i);
-            if (interfaceInfo != null) {
-                //interfaces can't have final methods
-                addInterceptedMethodCandidates(beanDeployment, interfaceInfo, candidates,
-                        classLevelBindings, bytecodeTransformerConsumer, transformUnproxyableClasses);
+                        classLevelBindings, bytecodeTransformerConsumer, removeFinalForProxyableMethods));
             }
         }
         return finalMethodsFoundAndNotChanged;

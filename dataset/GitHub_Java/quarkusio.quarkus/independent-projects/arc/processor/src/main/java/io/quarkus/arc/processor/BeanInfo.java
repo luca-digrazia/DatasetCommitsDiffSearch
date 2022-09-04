@@ -69,11 +69,9 @@ public class BeanInfo implements InjectionTargetInfo {
 
     private final String name;
 
-    private final boolean defaultBean;
+    private final boolean isDefaultBean;
 
-    // Following fields are only used by synthetic beans
-
-    private final boolean removable;
+    // Gizmo consumers are only used by synthetic beans
 
     private final Consumer<MethodCreator> creatorConsumer;
 
@@ -89,7 +87,7 @@ public class BeanInfo implements InjectionTargetInfo {
         this(null, null, target, beanDeployment, scope, types, qualifiers, injections, declaringBean, disposer,
                 alternativePriority,
                 stereotypes, name, isDefaultBean, null, null,
-                Collections.emptyMap(), true);
+                Collections.emptyMap());
     }
 
     BeanInfo(ClassInfo implClazz, Type providerType, AnnotationTarget target, BeanDeployment beanDeployment, ScopeInfo scope,
@@ -99,7 +97,7 @@ public class BeanInfo implements InjectionTargetInfo {
             List<StereotypeInfo> stereotypes,
             String name, boolean isDefaultBean, Consumer<MethodCreator> creatorConsumer,
             Consumer<MethodCreator> destroyerConsumer,
-            Map<String, Object> params, boolean isRemovable) {
+            Map<String, Object> params) {
         this.target = Optional.ofNullable(target);
         if (implClazz == null && target != null) {
             implClazz = initImplClazz(target, beanDeployment);
@@ -128,10 +126,9 @@ public class BeanInfo implements InjectionTargetInfo {
         this.alternativePriority = alternativePriority;
         this.stereotypes = stereotypes;
         this.name = name;
-        this.defaultBean = isDefaultBean;
+        this.isDefaultBean = isDefaultBean;
         this.creatorConsumer = creatorConsumer;
         this.destroyerConsumer = destroyerConsumer;
-        this.removable = isRemovable;
         this.params = params;
         // Identifier must be unique for a specific deployment
         this.identifier = Hashes.sha1(toString());
@@ -153,10 +150,6 @@ public class BeanInfo implements InjectionTargetInfo {
         return identifier;
     }
 
-    /**
-     * 
-     * @return the annotation target or an empty optional in case of synthetic beans
-     */
     public Optional<AnnotationTarget> getTarget() {
         return target;
     }
@@ -183,10 +176,6 @@ public class BeanInfo implements InjectionTargetInfo {
 
     public boolean isSynthetic() {
         return !target.isPresent();
-    }
-
-    public boolean isRemovable() {
-        return removable;
     }
 
     public DotName getBeanClass() {
@@ -270,10 +259,6 @@ public class BeanInfo implements InjectionTargetInfo {
         return !lifecycleInterceptors.isEmpty();
     }
 
-    public boolean hasAroundInvokeInterceptors() {
-        return !interceptedMethods.isEmpty();
-    }
-
     boolean isSubclassRequired() {
         return !interceptedMethods.isEmpty() || lifecycleInterceptors.containsKey(InterceptionType.PRE_DESTROY);
     }
@@ -338,7 +323,7 @@ public class BeanInfo implements InjectionTargetInfo {
     }
 
     public boolean isDefaultBean() {
-        return defaultBean;
+        return isDefaultBean;
     }
 
     Consumer<MethodCreator> getCreatorConsumer() {
@@ -384,7 +369,7 @@ public class BeanInfo implements InjectionTargetInfo {
 
         } else if (isProducerField() || isProducerMethod()) {
             ClassInfo returnTypeClass = getClassByName(beanDeployment.getIndex(),
-                    isProducerMethod() ? target.get().asMethod().returnType() : target.get().asField().type());
+                    (isProducerMethod() ? target.get().asMethod().returnType() : target.get().asField().type()).name());
             // can be null for primitive types
             if (returnTypeClass != null && scope.isNormal() && !Modifier.isInterface(returnTypeClass.flags())) {
                 String methodOrField = isProducerMethod() ? "method" : "field";
@@ -594,9 +579,19 @@ public class BeanInfo implements InjectionTargetInfo {
             case CLASS:
                 return target.asClass();
             case FIELD:
-                return getClassByName(beanDeployment.getIndex(), target.asField().type());
+                Type fieldType = target.asField().type();
+                if (fieldType.kind() != org.jboss.jandex.Type.Kind.PRIMITIVE
+                        && fieldType.kind() != org.jboss.jandex.Type.Kind.ARRAY) {
+                    return getClassByName(beanDeployment.getIndex(), fieldType.name());
+                }
+                break;
             case METHOD:
-                return getClassByName(beanDeployment.getIndex(), target.asMethod().returnType());
+                Type returnType = target.asMethod().returnType();
+                if (returnType.kind() != org.jboss.jandex.Type.Kind.PRIMITIVE
+                        && returnType.kind() != org.jboss.jandex.Type.Kind.ARRAY) {
+                    return getClassByName(beanDeployment.getIndex(), returnType.name());
+                }
+                break;
             default:
                 break;
         }
@@ -657,8 +652,6 @@ public class BeanInfo implements InjectionTargetInfo {
         private Consumer<MethodCreator> destroyerConsumer;
 
         private Map<String, Object> params;
-
-        private boolean removable = true;
 
         Builder() {
             injections = Collections.emptyList();
@@ -750,15 +743,11 @@ public class BeanInfo implements InjectionTargetInfo {
             return this;
         }
 
-        Builder removable(boolean val) {
-            this.removable = val;
-            return this;
-        }
-
         BeanInfo build() {
             return new BeanInfo(implClazz, providerType, target, beanDeployment, scope, types, qualifiers, injections,
-                    declaringBean, disposer, alternativePriority, stereotypes, name, isDefaultBean, creatorConsumer,
-                    destroyerConsumer, params, removable);
+                    declaringBean,
+                    disposer, alternativePriority,
+                    stereotypes, name, isDefaultBean, creatorConsumer, destroyerConsumer, params);
         }
 
     }

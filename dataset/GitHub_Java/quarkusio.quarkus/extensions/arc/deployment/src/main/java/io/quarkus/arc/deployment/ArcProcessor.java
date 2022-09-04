@@ -97,7 +97,6 @@ public class ArcProcessor {
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
             List<AnnotationsTransformerBuildItem> annotationTransformers,
             List<InjectionPointTransformerBuildItem> injectionPointTransformers,
-            List<ObserverTransformerBuildItem> observerTransformers,
             List<InterceptorBindingRegistrarBuildItem> interceptorBindingRegistrarBuildItems,
             List<AdditionalStereotypeBuildItem> additionalStereotypeBuildItems,
             List<ApplicationClassPredicateBuildItem> applicationClassPredicates,
@@ -173,16 +172,12 @@ public class ArcProcessor {
         builder.addResourceAnnotations(
                 resourceAnnotations.stream().map(ResourceAnnotationBuildItem::getName).collect(Collectors.toList()));
         // register all annotation transformers
-        for (AnnotationsTransformerBuildItem transformer : annotationTransformers) {
-            builder.addAnnotationTransformer(transformer.getAnnotationsTransformer());
+        for (AnnotationsTransformerBuildItem transformerItem : annotationTransformers) {
+            builder.addAnnotationTransformer(transformerItem.getAnnotationsTransformer());
         }
         // register all injection point transformers
-        for (InjectionPointTransformerBuildItem transformer : injectionPointTransformers) {
-            builder.addInjectionPointTransformer(transformer.getInjectionPointsTransformer());
-        }
-        // register all observer transformers
-        for (ObserverTransformerBuildItem transformer : observerTransformers) {
-            builder.addObserverTransformer(transformer.getInstance());
+        for (InjectionPointTransformerBuildItem transformerItem : injectionPointTransformers) {
+            builder.addInjectionPointTransformer(transformerItem.getInjectionPointsTransformer());
         }
         // register additional interceptor bindings
         for (InterceptorBindingRegistrarBuildItem bindingRegistrar : interceptorBindingRegistrarBuildItems) {
