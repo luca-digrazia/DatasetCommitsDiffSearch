@@ -1,9 +1,10 @@
 package io.dropwizard.jersey.validation;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import io.dropwizard.util.Lists;
-import io.dropwizard.util.Strings;
+import com.google.common.base.Joiner;
+import com.google.common.base.Strings;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.collect.Iterables;
 import io.dropwizard.validation.ValidationMethod;
 import io.dropwizard.validation.selfvalidating.SelfValidating;
 import org.apache.commons.lang3.StringUtils;
@@ -17,21 +18,16 @@ import javax.validation.ElementKind;
 import javax.validation.Path;
 import javax.validation.metadata.ConstraintDescriptor;
 import java.lang.reflect.Field;
-import java.time.Duration;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
-
-import static org.glassfish.jersey.model.Parameter.Source.BEAN_PARAM;
-import static org.glassfish.jersey.model.Parameter.Source.UNKNOWN;
+import java.util.concurrent.TimeUnit;
 
 public class ConstraintMessage {
 
     private static final Cache<Pair<Path, ? extends ConstraintDescriptor<?>>, String> PREFIX_CACHE =
-            Caffeine.newBuilder()
-            .expireAfterWrite(Duration.ofHours(1))
+            CacheBuilder.newBuilder()
+            .expireAfterWrite(1, TimeUnit.HOURS)
             .build();
 
     private ConstraintMessage() {
@@ -87,11 +83,7 @@ public class ConstraintMessage {
      * friendly string representation of where the error occurred (eg. "patient.name")
      */
     public static Optional<String> isRequestEntity(ConstraintViolation<?> violation, Invocable invocable) {
-        final Collection<Path.Node> propertyPath = Lists.of(violation.getPropertyPath());
-        final Path.Node parent = propertyPath.stream()
-                .skip(1L)
-                .findFirst()
-                .orElse(null);
+        final Path.Node parent = Iterables.get(violation.getPropertyPath(), 1, null);
         if (parent == null) {
             return Optional.empty();
         }
@@ -99,13 +91,8 @@ public class ConstraintMessage {
 
         if (parent.getKind() == ElementKind.PARAMETER) {
             final Parameter param = parameters.get(parent.as(Path.ParameterNode.class).getParameterIndex());
-            if (param.getSource().equals(UNKNOWN)) {
-                final String path = propertyPath.stream()
-                        .skip(2L)
-                        .map(Path.Node::toString)
-                        .collect(Collectors.joining("."));
-
-                return Optional.of(path);
+            if (param.getSource().equals(Parameter.Source.UNKNOWN)) {
+                return Optional.of(Joiner.on('.').join(Iterables.skip(violation.getPropertyPath(), 2)));
             }
         }
 
@@ -116,14 +103,13 @@ public class ConstraintMessage {
      * Gets a method parameter (or a parameter field) name, if the violation raised in it.
      */
     private static Optional<String> getMemberName(ConstraintViolation<?> violation, Invocable invocable) {
-        final List<Path.Node> propertyPath = Lists.of(violation.getPropertyPath());
-        final int size = propertyPath.size();
+        final int size = Iterables.size(violation.getPropertyPath());
         if (size < 2) {
             return Optional.empty();
         }
 
-        final Path.Node parent = propertyPath.get(size - 2);
-        final Path.Node member = propertyPath.get(size - 1);
+        final Path.Node parent = Iterables.get(violation.getPropertyPath(), size - 2);
+        final Path.Node member = Iterables.getLast(violation.getPropertyPath());
         switch (parent.getKind()) {
             case PARAMETER:
                 // Constraint violation most likely failed with a BeanParam
@@ -131,7 +117,7 @@ public class ConstraintMessage {
                 final Parameter param = parameters.get(parent.as(Path.ParameterNode.class).getParameterIndex());
 
                 // Extract the failing *Param annotation inside the Bean Param
-                if (param.getSource().equals(BEAN_PARAM)) {
+                if (param.getSource().equals(Parameter.Source.BEAN_PARAM)) {
                     final Field field = FieldUtils.getField(param.getRawType(), member.getName(), true);
                     return JerseyParameterNameProvider.getParameterNameFromAnnotations(field.getDeclaredAnnotations());
                 }
@@ -187,7 +173,7 @@ public class ConstraintMessage {
                         // Now determine if the parameter is the request entity
                         final int index = node.as(Path.ParameterNode.class).getParameterIndex();
                         final Parameter parameter = invocable.getParameters().get(index);
-                        return parameter.getSource().equals(UNKNOWN) ? 422 : 400;
+                        return parameter.getSource().equals(Parameter.Source.UNKNOWN) ? 422 : 400;
                     default:
                         continue;
                 }
