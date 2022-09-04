@@ -29,7 +29,6 @@ public class GelfLogHandlerRecorder {
         handler.setHost(config.host);
         handler.setPort(config.port);
         handler.setLevel(config.level);
-        handler.setMaximumMessageSize(config.maximumMessageSize);
 
         // handle additional fields
         if (!config.additionalField.isEmpty()) {

@@ -52,7 +52,7 @@ public class GelfConfig {
      * Negative throwable reference walk the exception chain from the root cause side: -1 will extract the root cause,
      * -2 the exception wrapping the root cause, ...
      */
-    @ConfigItem
+    @ConfigItem(defaultValue = "0")
     public int stackTraceThrowableReference;
 
     /**
@@ -96,6 +96,6 @@ public class GelfConfig {
     /**
      * Whether to include all fields from the MDC.
      */
-    @ConfigItem
+    @ConfigItem(defaultValue = "false")
     public boolean includeFullMdc;
 }
