@@ -24,9 +24,6 @@ import io.agroal.api.security.NamePrincipal;
 import io.agroal.api.security.SimplePassword;
 import io.agroal.api.transaction.TransactionIntegration;
 import io.agroal.narayana.NarayanaTransactionIntegration;
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.ArcContainer;
-import io.quarkus.vault.CredentialsProvider;
 
 public abstract class AbstractDataSourceProducer {
 
@@ -84,10 +81,7 @@ public abstract class AbstractDataSourceProducer {
 
         String url = dataSourceRuntimeConfig.url.get();
 
-        //TODO should we do such checks at build time only? All these are currently defined at build - but it could change
-        //depending on if and how we could do Driver auto-detection.
-        final io.quarkus.agroal.TransactionIntegration transactionIntegration = dataSourceBuildTimeConfig.transactions;
-        if (transactionIntegration == io.quarkus.agroal.TransactionIntegration.XA) {
+        if (dataSourceBuildTimeConfig.xa) {
             if (!XADataSource.class.isAssignableFrom(driver)) {
                 throw new RuntimeException("Driver is not an XA dataSource and XA has been configured");
             }
@@ -104,7 +98,6 @@ public abstract class AbstractDataSourceProducer {
                 .connectionFactoryConfiguration();
         agroalConnectionFactoryConfigurationSupplier.jdbcUrl(url);
         agroalConnectionFactoryConfigurationSupplier.connectionProviderClass(driver);
-        agroalConnectionFactoryConfigurationSupplier.trackJdbcResources(dataSourceRuntimeConfig.detectStatementLeaks);
 
         if (dataSourceRuntimeConfig.transactionIsolationLevel.isPresent()) {
             agroalConnectionFactoryConfigurationSupplier
@@ -112,11 +105,9 @@ public abstract class AbstractDataSourceProducer {
                             dataSourceRuntimeConfig.transactionIsolationLevel.get());
         }
 
-        if (transactionIntegration != io.quarkus.agroal.TransactionIntegration.DISABLED) {
-            TransactionIntegration txIntegration = new NarayanaTransactionIntegration(transactionManager,
-                    transactionSynchronizationRegistry);
-            poolConfiguration.transactionIntegration(txIntegration);
-        }
+        TransactionIntegration txIntegration = new NarayanaTransactionIntegration(transactionManager,
+                transactionSynchronizationRegistry);
+        poolConfiguration.transactionIntegration(txIntegration);
 
         // New connection SQL
         if (dataSourceRuntimeConfig.newConnectionSql.isPresent()) {
@@ -134,23 +125,6 @@ public abstract class AbstractDataSourceProducer {
         if (dataSourceRuntimeConfig.password.isPresent()) {
             agroalConnectionFactoryConfigurationSupplier
                     .credential(new SimplePassword(dataSourceRuntimeConfig.password.get()));
-        }
-
-        // Vault credentials provider
-        if (dataSourceRuntimeConfig.credentialsProvider.isPresent()) {
-            ArcContainer container = Arc.container();
-            String type = dataSourceRuntimeConfig.credentialsProviderType.orElse(null);
-            CredentialsProvider credentialsProvider = type != null
-                    ? (CredentialsProvider) container.instance(type).get()
-                    : container.instance(CredentialsProvider.class).get();
-
-            if (credentialsProvider == null) {
-                throw new RuntimeException("unable to find credentials provider of type " + (type == null ? "default" : type));
-            }
-
-            String name = dataSourceRuntimeConfig.credentialsProvider.get();
-            agroalConnectionFactoryConfigurationSupplier
-                    .credential(new AgroalVaultCredentialsProviderPassword(name, credentialsProvider));
         }
 
         // Pool size configuration:
@@ -193,9 +167,11 @@ public abstract class AbstractDataSourceProducer {
         }
 
         // Explicit reference to bypass reflection need of the ServiceLoader used by AgroalDataSource#from
-        AgroalDataSource dataSource = new io.agroal.pool.DataSource(dataSourceConfiguration.get(),
-                new AgroalListener(dataSourceName));
-        log.debugv("Started data source {0} connected to {1}", dataSource, url);
+        AgroalDataSource dataSource = new io.agroal.pool.DataSource(dataSourceConfiguration.get());
+
+        if (log.isDebugEnabled()) {
+            log.debug("Started data source " + dataSourceName + " connected to " + url);
+        }
 
         this.dataSources.add(dataSource);
 
