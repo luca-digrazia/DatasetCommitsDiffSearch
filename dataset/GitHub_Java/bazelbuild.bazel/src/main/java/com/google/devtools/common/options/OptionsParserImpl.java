@@ -100,10 +100,6 @@ class OptionsParserImpl {
     this.optionsData = optionsData;
   }
 
-  OptionsData getOptionsData() {
-    return optionsData;
-  }
-
   /**
    * Indicates whether or not the parser will allow long options with a
    * single-dash, instead of the usual double-dash, too, eg. -example instead of just --example.
@@ -348,8 +344,7 @@ class OptionsParserImpl {
 
     // Recurse to remove any implicit or expansion flags that this flag may have added when
     // originally parsed.
-    String[] expansion = optionsData.getEvaluatedExpansion(field);
-    for (String[] args : new String[][] {option.implicitRequirements(), expansion}) {
+    for (String[] args : new String[][] {option.implicitRequirements(), option.expansion()}) {
       Iterator<String> argsIterator = Iterators.forArray(args);
       while (argsIterator.hasNext()) {
         String arg = argsIterator.next();
@@ -487,8 +482,7 @@ class OptionsParserImpl {
       }
 
       // Handle expansion options.
-      String[] expansion = optionsData.getEvaluatedExpansion(field);
-      if (expansion.length > 0) {
+      if (option.expansion().length > 0) {
         Function<Object, String> expansionSourceFunction =
             Functions.constant(
                 "expanded from option --"
@@ -497,7 +491,7 @@ class OptionsParserImpl {
                     + sourceFunction.apply(originalName));
         maybeAddDeprecationWarning(field);
         List<String> unparsed = parse(priority, expansionSourceFunction, null, originalName,
-            ImmutableList.copyOf(expansion));
+            ImmutableList.copyOf(option.expansion()));
         if (!unparsed.isEmpty()) {
           // Throw an assertion, because this indicates an error in the code that specified the
           // expansion for the current option.

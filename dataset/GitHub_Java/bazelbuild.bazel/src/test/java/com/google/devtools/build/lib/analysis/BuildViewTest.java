@@ -162,7 +162,7 @@ public class BuildViewTest extends BuildViewTestBase {
         outputArtifact.getRoot());
     assertEquals(outputCT.getConfiguration().getBinFragment().getRelative("pkg/a.out"),
         outputArtifact.getExecPath());
-    assertEquals(PathFragment.create("pkg/a.out"), outputArtifact.getRootRelativePath());
+    assertEquals(new PathFragment("pkg/a.out"), outputArtifact.getRootRelativePath());
 
     Action action = getGeneratingAction(outputArtifact);
     assertSame(FailAction.class, action.getClass());
@@ -775,9 +775,9 @@ public class BuildViewTest extends BuildViewTestBase {
     Path cycles2BuildFilePath = scratch.file("cycles2/BUILD",
         "sh_library(name = 'cycles2', srcs = glob(['*.sh']))");
     cycles1BuildFilePath.getParentDirectory().getRelative("cycles1.sh").createSymbolicLink(
-        PathFragment.create("cycles1.sh"));
+        new PathFragment("cycles1.sh"));
     cycles2BuildFilePath.getParentDirectory().getRelative("cycles2.sh").createSymbolicLink(
-        PathFragment.create("cycles2.sh"));
+        new PathFragment("cycles2.sh"));
     reporter.removeHandler(failFastHandler);
     EventBus eventBus = new EventBus();
     LoadingFailureRecorder recorder = new LoadingFailureRecorder();
