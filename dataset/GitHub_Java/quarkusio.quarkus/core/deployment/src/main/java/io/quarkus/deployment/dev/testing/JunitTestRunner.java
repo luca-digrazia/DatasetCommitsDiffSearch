@@ -105,6 +105,7 @@ public class JunitTestRunner {
     private final Set<String> excludeTags;
     private final Pattern include;
     private final Pattern exclude;
+    private final boolean displayInConsole;
     private final boolean failingTestsOnly;
     private final TestType testType;
 
@@ -125,6 +126,7 @@ public class JunitTestRunner {
         this.excludeTags = new HashSet<>(builder.excludeTags);
         this.include = builder.include;
         this.exclude = builder.exclude;
+        this.displayInConsole = builder.displayInConsole;
         this.failingTestsOnly = builder.failingTestsOnly;
         this.testType = builder.testType;
     }
@@ -653,7 +655,7 @@ public class JunitTestRunner {
                             logOutput.add(logRecord);
                         }
                     }
-                    return TestSupport.instance().get().isDisplayTestOutput();
+                    return displayInConsole;
                 }
                 cl = cl.getParent();
             }
@@ -675,6 +677,7 @@ public class JunitTestRunner {
         private List<String> excludeTags = Collections.emptyList();
         private Pattern include;
         private Pattern exclude;
+        private boolean displayInConsole;
         private boolean failingTestsOnly;
 
         public Builder setRunId(long runId) {
@@ -739,6 +742,11 @@ public class JunitTestRunner {
 
         public Builder setExclude(Pattern exclude) {
             this.exclude = exclude;
+            return this;
+        }
+
+        public Builder setDisplayInConsole(boolean displayInConsole) {
+            this.displayInConsole = displayInConsole;
             return this;
         }
 
