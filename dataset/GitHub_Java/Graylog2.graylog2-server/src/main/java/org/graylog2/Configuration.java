@@ -26,6 +26,8 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.apache.log4j.Logger;
+import org.graylog2.messagehandlers.amqp.AMQPSubscribedQueue;
+import org.graylog2.messagehandlers.amqp.InvalidQueueTypeException;
 
 import com.github.joschi.jadconfig.Parameter;
 import com.github.joschi.jadconfig.ValidationException;
@@ -34,7 +36,6 @@ import com.github.joschi.jadconfig.converters.StringListConverter;
 import com.github.joschi.jadconfig.validators.InetPortValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.github.joschi.jadconfig.validators.PositiveLongValidator;
-import com.google.common.collect.Lists;
 import com.mongodb.ServerAddress;
 
 /**
@@ -69,7 +70,7 @@ public class Configuration {
     private boolean noRetention;
 
     @Parameter(value = "elasticsearch_config_file", required = true, validator = FilePresentValidator.class)
-    private String elasticSearchConfigFile = "/etc/graylog2-elasticsearch.yml";
+    private String elasticSearchConfigFile;
 
     @Parameter(value = "elasticsearch_index_name", required = true)
     private String elasticsearchIndexName = "graylog2";
@@ -100,6 +101,15 @@ public class Configuration {
 
     @Parameter(value = "messages_collection_size", required = true, validator = PositiveLongValidator.class)
     private long messagesCollectionSize = 50 * 1000 * 1000;
+
+    @Parameter(value = "mq_batch_size", required = true, validator = PositiveIntegerValidator.class)
+    private int mqBatchSize = 500;
+
+    @Parameter(value = "mq_poll_freq", required = true, validator = PositiveIntegerValidator.class)
+    private int mqPollFreq = 1;
+
+    @Parameter(value = "mq_max_size", required = false, validator = PositiveIntegerValidator.class)
+    private int mqMaxSize = 0;
 
     @Parameter(value = "use_gelf", required = true)
     private boolean useGELF = false;
@@ -151,10 +161,6 @@ public class Configuration {
 
     public boolean getForceSyslogRdns() {
         return forceSyslogRdns;
-    }
-
-    public void setForceSyslogRdns(boolean b) {
-        forceSyslogRdns = b;
     }
 
     public boolean getAllowOverrideSyslogDate() {
@@ -209,6 +215,18 @@ public class Configuration {
         return messagesCollectionSize;
     }
 
+    public int getMessageQueueBatchSize() {
+        return mqBatchSize;
+    }
+
+    public int getMessageQueuePollFrequency() {
+        return mqPollFreq;
+    }
+
+    public int getMessageQueueMaximumSize() {
+        return mqMaxSize;
+    }
+
     public boolean isUseGELF() {
         return useGELF;
     }
@@ -254,7 +272,7 @@ public class Configuration {
     }
 
     public List<ServerAddress> getMongoReplicaSet() {
-        List<ServerAddress> replicaServers = Lists.newArrayList();
+        List<ServerAddress> replicaServers = new ArrayList<ServerAddress>();
 
         List<String> rawSet = mongoReplicaSet;
 
@@ -284,7 +302,7 @@ public class Configuration {
         return replicaServers;
     }
 
-/*    public List<AMQPSubscribedQueue> getAmqpSubscribedQueues() {
+    public List<AMQPSubscribedQueue> getAmqpSubscribedQueues() {
         List<AMQPSubscribedQueue> queueList = new ArrayList<AMQPSubscribedQueue>();
 
         List<String> rawQueues = amqpSubscribedQueues;
@@ -311,7 +329,7 @@ public class Configuration {
         }
 
         return queueList;
-    }*/
+    }
 
     @ValidatorMethod
     public void validate() throws ValidationException {

@@ -20,17 +20,22 @@
 
 package org.graylog2.database;
 
+import java.util.Map;
+
 import org.apache.log4j.Logger;
 import org.graylog2.Tools;
+import org.graylog2.messagehandlers.gelf.GELFMessage;
 
 import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
-import java.util.Map;
-
+import com.mongodb.WriteConcern;
+import com.mongodb.WriteResult;
 
 /**
+ * MongoBridge.java: Apr 13, 2010 9:13:03 PM
+ *
  * Simple mapping methods to MongoDB.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
