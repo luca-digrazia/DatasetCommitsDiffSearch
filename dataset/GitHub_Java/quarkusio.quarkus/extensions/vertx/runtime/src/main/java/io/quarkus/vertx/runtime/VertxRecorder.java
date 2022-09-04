@@ -8,13 +8,11 @@ import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.jboss.logging.Logger;
 
-import io.netty.channel.EventLoopGroup;
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.RuntimeValue;
@@ -29,7 +27,6 @@ import io.vertx.core.eventbus.MessageCodec;
 import io.vertx.core.eventbus.MessageConsumer;
 import io.vertx.core.file.FileSystemOptions;
 import io.vertx.core.http.ClientAuth;
-import io.vertx.core.impl.VertxImpl;
 import io.vertx.core.net.JksOptions;
 import io.vertx.core.net.PemKeyCertOptions;
 import io.vertx.core.net.PemTrustOptions;
@@ -71,11 +68,7 @@ public class VertxRecorder {
         return new RuntimeValue<Vertx>(vertx);
     }
 
-    public static Vertx getVertx() {
-        return vertx;
-    }
-
-    public static void initialize(VertxConfiguration conf) {
+    void initialize(VertxConfiguration conf) {
         if (vertx != null) {
             return;
         }
@@ -117,7 +110,7 @@ public class VertxRecorder {
         messageConsumers = new ArrayList<>();
     }
 
-    private static VertxOptions convertToVertxOptions(VertxConfiguration conf) {
+    private VertxOptions convertToVertxOptions(VertxConfiguration conf) {
         VertxOptions options = new VertxOptions();
         // Order matters, as the cluster options modifies the event bus options.
         setEventBusOptions(conf, options);
@@ -168,7 +161,7 @@ public class VertxRecorder {
         }
     }
 
-    private static void initializeClusterOptions(VertxConfiguration conf, VertxOptions options) {
+    private void initializeClusterOptions(VertxConfiguration conf, VertxOptions options) {
         ClusterConfiguration cluster = conf.cluster;
         options.getEventBusOptions().setClustered(cluster.clustered);
         options.getEventBusOptions().setClusterPingReplyInterval(cluster.pingReplyInterval.toMillis());
@@ -185,7 +178,7 @@ public class VertxRecorder {
         }
     }
 
-    private static void setEventBusOptions(VertxConfiguration conf, VertxOptions options) {
+    private void setEventBusOptions(VertxConfiguration conf, VertxOptions options) {
         EventBusConfiguration eb = conf.eventbus;
         EventBusOptions opts = new EventBusOptions();
         opts.setAcceptBacklog(eb.acceptBacklog.orElse(-1));
@@ -338,7 +331,7 @@ public class VertxRecorder {
 
     private void registerCodec(Class<?> typeToAdd, Class<?> messageCodecClass) {
         try {
-            if (MessageCodec.class.isAssignableFrom(messageCodecClass)) {
+            if (messageCodecClass.isAssignableFrom(MessageCodec.class)) {
                 MessageCodec messageCodec = (MessageCodec) messageCodecClass.newInstance();
                 registerCodec(typeToAdd, messageCodec);
             } else {
@@ -352,23 +345,5 @@ public class VertxRecorder {
     private void registerCodec(Class<?> typeToAdd, MessageCodec codec) {
         EventBus eventBus = vertx.eventBus();
         eventBus.registerDefaultCodec(typeToAdd, codec);
-    }
-
-    public Supplier<EventLoopGroup> bossSupplier() {
-        return new Supplier<EventLoopGroup>() {
-            @Override
-            public EventLoopGroup get() {
-                return ((VertxImpl) vertx).getAcceptorEventLoopGroup();
-            }
-        };
-    }
-
-    public Supplier<EventLoopGroup> mainSupplier() {
-        return new Supplier<EventLoopGroup>() {
-            @Override
-            public EventLoopGroup get() {
-                return vertx.nettyEventLoopGroup();
-            }
-        };
     }
 }

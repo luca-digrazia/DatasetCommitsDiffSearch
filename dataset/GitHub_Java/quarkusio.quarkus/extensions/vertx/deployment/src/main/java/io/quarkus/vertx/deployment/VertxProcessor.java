@@ -64,7 +64,6 @@ import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.gizmo.TryBlock;
-import io.quarkus.netty.deployment.EventLoopSupplierBuildItem;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.vertx.ConsumeEvent;
 import io.quarkus.vertx.runtime.EventConsumerInvoker;
@@ -130,11 +129,6 @@ class VertxProcessor {
     @BuildStep
     AdditionalBeanBuildItem registerBean() {
         return AdditionalBeanBuildItem.unremovableOf(VertxProducer.class);
-    }
-
-    @Record(ExecutionTime.STATIC_INIT)
-    EventLoopSupplierBuildItem eventLoop(VertxRecorder recorder) {
-        return new EventLoopSupplierBuildItem(recorder.mainSupplier(), recorder.bossSupplier());
     }
 
     @BuildStep
