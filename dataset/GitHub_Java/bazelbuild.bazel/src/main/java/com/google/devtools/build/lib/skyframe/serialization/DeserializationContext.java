@@ -18,12 +18,10 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.skyframe.serialization.Memoizer.Deserializer;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec.MemoizationStrategy;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodecRegistry.CodecDescriptor;
 import com.google.protobuf.CodedInputStream;
 import java.io.IOException;
 import javax.annotation.CheckReturnValue;
-import javax.annotation.Nullable;
 
 /**
  * Stateful class for providing additional context to a single deserialization "session". This class
@@ -57,22 +55,8 @@ public class DeserializationContext {
   }
 
   // TODO(shahan): consider making codedIn a member of this class.
-  @SuppressWarnings({"TypeParameterUnusedInFormals"})
+  @SuppressWarnings({"TypeParameterUnusedInFormals", "unchecked"})
   public <T> T deserialize(CodedInputStream codedIn) throws IOException, SerializationException {
-    return deserializeInternal(codedIn, /*customMemoizationStrategy=*/ null);
-  }
-
-  @SuppressWarnings({"TypeParameterUnusedInFormals"})
-  public <T> T deserializeWithAdHocMemoizationStrategy(
-      CodedInputStream codedIn, MemoizationStrategy memoizationStrategy)
-      throws IOException, SerializationException {
-    return deserializeInternal(codedIn, memoizationStrategy);
-  }
-
-  @SuppressWarnings({"TypeParameterUnusedInFormals"})
-  private <T> T deserializeInternal(
-      CodedInputStream codedIn, @Nullable MemoizationStrategy customMemoizationStrategy)
-      throws IOException, SerializationException {
     int tag = codedIn.readSInt32();
     if (tag == 0) {
       return null;
@@ -89,14 +73,9 @@ public class DeserializationContext {
     if (deserializer == null) {
       return (T) codecDescriptor.deserialize(this, codedIn);
     } else {
-      @SuppressWarnings("unchecked")
-      ObjectCodec<T> castCodec = (ObjectCodec<T>) codecDescriptor.getCodec();
-      MemoizationStrategy memoizationStrategy =
-          customMemoizationStrategy != null ? customMemoizationStrategy : castCodec.getStrategy();
-      return deserializer.deserialize(this, castCodec, memoizationStrategy, codedIn);
+      return deserializer.deserialize(this, (ObjectCodec<T>) codecDescriptor.getCodec(), codedIn);
     }
   }
-
 
   /**
    * Register an initial value for the currently deserializing value, for use by child objects that
