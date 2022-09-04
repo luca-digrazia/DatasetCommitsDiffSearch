@@ -43,7 +43,6 @@ public class AsyncAppender extends AppenderBase<ILoggingEvent> implements Runnab
 
     @Override
     protected void append(ILoggingEvent eventObject) {
-        eventObject.prepareForDeferredProcessing();
         queue.add(eventObject);
     }
 
