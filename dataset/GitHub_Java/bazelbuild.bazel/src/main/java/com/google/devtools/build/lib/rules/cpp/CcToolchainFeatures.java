@@ -56,7 +56,6 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.Stack;
 import java.util.concurrent.ExecutionException;
-import javax.annotation.Nullable;
 
 /**
  * Provides access to features supported by a specific toolchain.
@@ -843,10 +842,6 @@ public class CcToolchainFeatures implements Serializable {
           .collect(ImmutableList.toImmutableList());
     }
 
-    public Variables getParent() {
-      return parent;
-    }
-
     /**
      * Value of a build variable exposed to the CROSSTOOL used for flag expansion.
      *
@@ -1356,14 +1351,12 @@ public class CcToolchainFeatures implements Serializable {
     public static class Builder {
       private final Map<String, VariableValue> variablesMap = new LinkedHashMap<>();
       private final Map<String, String> stringVariablesMap = new LinkedHashMap<>();
-      private final Variables parent;
 
-      public Builder() {
-        parent = null;
-      }
+      public Builder() {};
 
-      public Builder(@Nullable Variables parent) {
-        this.parent = parent;
+      public Builder(Variables variables) {
+        variablesMap.putAll(variables.variablesMap);
+        stringVariablesMap.putAll(variables.stringVariablesMap);
       }
 
       /** Add an integer variable that expands {@code name} to {@code value}. */
@@ -1478,11 +1471,8 @@ public class CcToolchainFeatures implements Serializable {
             !stringVariablesMap.containsKey(name), "Cannot overwrite variable '%s'", name);
       }
 
-      /**
-       * Adds all variables to this builder. Cannot override already added variables. Does not add
-       * variables defined in the {@code parent} variables.
-       */
-      public Builder addAllNonTransitive(Variables variables) {
+      /** Adds all variables to this builder. Note: cannot override already added variables. */
+      public Builder addAll(Variables variables) {
         SetView<String> intersection =
             Sets.intersection(variables.variablesMap.keySet(), variablesMap.keySet());
         SetView<String> stringIntersection =
@@ -1499,7 +1489,7 @@ public class CcToolchainFeatures implements Serializable {
 
       /**
        * Add all variables to this builder, possibly overriding variables already present in the
-       * builder. Use cautiously, prefer {@code addAllNonTransitive} if possible.
+       * builder. Use cautiously, prefer {@code addAll} if possible.
        * TODO(b/32893861) Clean 'module_files' to be registered only once and remove this method.
        */
       Builder addAndOverwriteAll(Variables overwrittenVariables) {
@@ -1511,7 +1501,7 @@ public class CcToolchainFeatures implements Serializable {
       /** @return a new {@Variables} object. */
       public Variables build() {
         return new Variables(
-            parent, ImmutableMap.copyOf(variablesMap), ImmutableMap.copyOf(stringVariablesMap));
+            ImmutableMap.copyOf(variablesMap), ImmutableMap.copyOf(stringVariablesMap));
       }
     }
     
@@ -1528,12 +1518,11 @@ public class CcToolchainFeatures implements Serializable {
     private final Variables parent;
 
     private Variables(
-        Variables parent,
         ImmutableMap<String, VariableValue> variablesMap,
         ImmutableMap<String, String> stringVariablesMap) {
       this.variablesMap = variablesMap;
       this.stringVariablesMap = stringVariablesMap;
-      this.parent = parent;
+      this.parent = null;
     }
 
     /**
