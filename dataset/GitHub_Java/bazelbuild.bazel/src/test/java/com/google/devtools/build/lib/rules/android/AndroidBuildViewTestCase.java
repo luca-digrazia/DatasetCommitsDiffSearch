@@ -115,12 +115,12 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
         .isNotNull();
   }
 
-  protected List<String> resourceArguments(ValidatedAndroidData resource)
+  protected List<String> resourceArguments(ResourceContainer resource)
       throws CommandLineExpansionException {
     return getGeneratingSpawnActionArgs(resource.getApk());
   }
 
-  protected SpawnAction resourceGeneratingAction(ValidatedAndroidData resource) {
+  protected SpawnAction resourceGeneratingAction(ResourceContainer resource) {
     return getGeneratingSpawnAction(resource.getApk());
   }
 
@@ -130,22 +130,15 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
 
   protected static ResourceContainer getResourceContainer(
       ConfiguredTarget target, boolean transitive) {
-    ValidatedAndroidData validated = getValidatedData(target, transitive);
-    assertThat(validated).isInstanceOf(ResourceContainer.class);
-    return (ResourceContainer) validated;
-  }
 
-  protected static ValidatedAndroidData getValidatedData(ConfiguredTarget target) {
-    return getValidatedData(target, /* transitive = */ false);
-  }
-
-  protected static ValidatedAndroidData getValidatedData(
-      ConfiguredTarget target, boolean transitive) {
     Preconditions.checkNotNull(target);
     final AndroidResourcesInfo info = target.get(AndroidResourcesInfo.PROVIDER);
     assertThat(info).named("No android resources exported from the target.").isNotNull();
-    return getOnlyElement(
-        transitive ? info.getTransitiveAndroidResources() : info.getDirectAndroidResources());
+    ValidatedAndroidData validated =
+        getOnlyElement(
+            transitive ? info.getTransitiveAndroidResources() : info.getDirectAndroidResources());
+    assertThat(validated).isInstanceOf(ResourceContainer.class);
+    return (ResourceContainer) validated;
   }
 
   protected Artifact getResourceClassJar(final ConfiguredTargetAndData target) {
@@ -238,11 +231,6 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
     // the last provider is the provider from the target.
     return Iterables.getLast(target.get(AndroidResourcesInfo.PROVIDER).getDirectAndroidResources())
         .getJavaClassJar();
-  }
-
-  // Returns an artifact that will be generated when a rule has assets that are processed seperately
-  static Artifact getDecoupledAssetArtifact(ConfiguredTarget target) {
-    return target.get(AndroidAssetsInfo.PROVIDER).getValidationResult();
   }
 
   protected static Set<Artifact> getNonToolInputs(Action action) {

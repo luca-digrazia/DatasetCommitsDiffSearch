@@ -13,39 +13,26 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import com.google.common.base.Function;
+import static com.google.common.collect.ImmutableList.toImmutableList;
+
 import com.google.common.base.Strings;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 
 /** Builder for the action that generates the R class for libraries. */
 public class LibraryRGeneratorActionBuilder {
-  static final Function<ResourceContainer, Artifact> TO_SYMBOL_ARTIFACT =
-      new Function<ResourceContainer, Artifact>() {
-        @Override
-        public Artifact apply(ResourceContainer input) {
-          return input.getSymbols();
-        }
-      };
-  static final Function<ResourceContainer, String> TO_SYMBOL_PATH =
-      new Function<ResourceContainer, String>() {
-        @Override
-        public String apply(ResourceContainer container) {
-          return container.getSymbols().getExecPathString();
-        }
-      };
-
   private String javaPackage;
-  private Iterable<ResourceContainer> deps = ImmutableList.<ResourceContainer>of();
+  private Iterable<ValidatedAndroidData> deps = ImmutableList.of();
   private ResourceContainer resourceContainer;
   private Artifact rJavaClassJar;
 
@@ -60,7 +47,7 @@ public class LibraryRGeneratorActionBuilder {
   }
 
   public LibraryRGeneratorActionBuilder withDependencies(ResourceDependencies resourceDeps) {
-    this.deps = resourceDeps.getResources();
+    this.deps = resourceDeps.getResourceContainers();
     return this;
   }
 
@@ -76,26 +63,26 @@ public class LibraryRGeneratorActionBuilder {
     NestedSetBuilder<Artifact> inputs = NestedSetBuilder.naiveLinkOrder();
     FilesToRunProvider executable =
         ruleContext.getExecutablePrerequisite("$android_resources_busybox", Mode.HOST);
-    inputs.addAll(executable.getRunfilesSupport().getRunfilesArtifactsWithoutMiddlemen());
+    inputs.addAll(executable.getRunfilesSupport().getRunfilesArtifacts());
 
     builder.add("--tool").add("GENERATE_LIBRARY_R").add("--");
 
     if (!Strings.isNullOrEmpty(javaPackage)) {
-      builder.add("--packageForR").add(javaPackage);
+      builder.add("--packageForR", javaPackage);
     }
 
-    FluentIterable<ResourceContainer> symbolProviders =
+    FluentIterable<ValidatedAndroidData> symbolProviders =
         FluentIterable.from(deps).append(resourceContainer);
 
-    builder.addJoinStrings(
-        "--symbols",
-        ruleContext.getConfiguration().getHostPathSeparator(),
-        symbolProviders.transform(TO_SYMBOL_PATH));
-    inputs.addTransitive(
-        NestedSetBuilder.wrap(
-            Order.NAIVE_LINK_ORDER, symbolProviders.transform(TO_SYMBOL_ARTIFACT)));
+    if (!symbolProviders.isEmpty()) {
+      ImmutableList<Artifact> symbols =
+          symbolProviders.stream().map(ValidatedAndroidData::getSymbols).collect(toImmutableList());
+      builder.addExecPaths("--symbols", symbols);
+      inputs.addTransitive(NestedSetBuilder.wrap(Order.NAIVE_LINK_ORDER, symbols));
+    }
 
     builder.addExecPath("--classJarOutput", rJavaClassJar);
+    builder.addLabel("--targetLabel", ruleContext.getLabel());
 
     builder.addExecPath("--androidJar", sdk.getAndroidJar());
     inputs.add(sdk.getAndroidJar());
@@ -104,12 +91,13 @@ public class LibraryRGeneratorActionBuilder {
     SpawnAction.Builder spawnActionBuilder = new SpawnAction.Builder();
     ruleContext.registerAction(
         spawnActionBuilder
+            .useDefaultShellEnvironment()
             .addTransitiveInputs(inputs.build())
             .addOutputs(ImmutableList.<Artifact>of(rJavaClassJar))
-            .useParameterFile(ParameterFileType.UNQUOTED)
-            .setCommandLine(builder.build())
+            .addCommandLine(
+                builder.build(), ParamFileInfo.builder(ParameterFileType.SHELL_QUOTED).build())
             .setExecutable(executable)
-            .setProgressMessage("Generating Library R Classes: " + ruleContext.getLabel())
+            .setProgressMessage("Generating Library R Classes: %s", ruleContext.getLabel())
             .setMnemonic("LibraryRClassGenerator")
             .build(ruleContext));
     return resourceContainer.toBuilder().setJavaClassJar(rJavaClassJar).build();

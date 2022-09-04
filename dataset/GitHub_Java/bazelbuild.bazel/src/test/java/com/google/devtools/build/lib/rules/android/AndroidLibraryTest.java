@@ -373,9 +373,9 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     useConfiguration("--strict_java_deps=ERROR");
 
     ConfiguredTarget a = getConfiguredTarget("//java/peach:a");
-    Iterable<String> compileTimeJars =
-        ActionsTestUtil.baseArtifactNames(
-            JavaInfo.getProvider(JavaCompilationArgsProvider.class, a).getDirectCompileTimeJars());
+    Iterable<String> compileTimeJars = ActionsTestUtil.baseArtifactNames(
+        JavaInfo.getProvider(JavaCompilationArgsProvider.class, a)
+            .getJavaCompilationArgs().getCompileTimeJars());
     assertThat(compileTimeJars).contains("libb-hjar.jar");
     assertThat(compileTimeJars).doesNotContain("libc-hjar.jar");
     assertNoEvents();
@@ -990,25 +990,23 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     JavaCompilationArgsProvider argsProvider =
         JavaInfo.getProvider(JavaCompilationArgsProvider.class, foo);
 
-    assertThat(argsProvider.getDirectCompileTimeJars())
-        .contains(
-            ActionsTestUtil.getFirstArtifactEndingWith(
-                actionsTestUtil().artifactClosureOf(neverLinkFilesToBuild),
-                "lib_neverlink_resources.jar"));
-    assertThat(argsProvider.getDirectCompileTimeJars())
-        .contains(
-            ActionsTestUtil.getFirstArtifactEndingWith(
-                actionsTestUtil().artifactClosureOf(libFilesToBuild), "lib_resources.jar"));
+    assertThat(argsProvider.getJavaCompilationArgs().getCompileTimeJars())
+        .contains(ActionsTestUtil.getFirstArtifactEndingWith(
+            actionsTestUtil().artifactClosureOf(neverLinkFilesToBuild),
+            "lib_neverlink_resources.jar"));
+    assertThat(argsProvider.getJavaCompilationArgs().getCompileTimeJars())
+        .contains(ActionsTestUtil.getFirstArtifactEndingWith(
+            actionsTestUtil().artifactClosureOf(libFilesToBuild),
+            "lib_resources.jar"));
 
-    assertThat(argsProvider.getRuntimeJars())
-        .doesNotContain(
-            ActionsTestUtil.getFirstArtifactEndingWith(
-                actionsTestUtil().artifactClosureOf(neverLinkFilesToBuild),
-                "lib_neverlink_resources.jar"));
-    assertThat(argsProvider.getRuntimeJars())
-        .contains(
-            ActionsTestUtil.getFirstArtifactEndingWith(
-                actionsTestUtil().artifactClosureOf(libFilesToBuild), "lib_resources.jar"));
+    assertThat(argsProvider.getJavaCompilationArgs().getRuntimeJars())
+        .doesNotContain(ActionsTestUtil.getFirstArtifactEndingWith(
+            actionsTestUtil().artifactClosureOf(neverLinkFilesToBuild),
+            "lib_neverlink_resources.jar"));
+    assertThat(argsProvider.getJavaCompilationArgs().getRuntimeJars())
+        .contains(ActionsTestUtil.getFirstArtifactEndingWith(
+            actionsTestUtil().artifactClosureOf(libFilesToBuild),
+            "lib_resources.jar"));
   }
 
   @Test
@@ -1700,12 +1698,16 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     assertThat(bClasspath).isEmpty();
     assertThat(cClasspath)
         .containsAllIn(
-            JavaInfo.getProvider(JavaCompilationArgsProvider.class, aTarget)
-                .getDirectCompileTimeJars());
+            JavaInfo
+                .getProvider(JavaCompilationArgsProvider.class, aTarget)
+                .getJavaCompilationArgs()
+                .getCompileTimeJars());
     assertThat(cClasspath)
         .containsAllIn(
-            JavaInfo.getProvider(JavaCompilationArgsProvider.class, bTarget)
-                .getDirectCompileTimeJars());
+            JavaInfo
+                .getProvider(JavaCompilationArgsProvider.class, bTarget)
+                .getJavaCompilationArgs()
+                .getCompileTimeJars());
     assertNoEvents();
   }
 

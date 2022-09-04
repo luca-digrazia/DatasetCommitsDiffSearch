@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.testutil.FakeAttributeMapper;
 import java.util.ArrayList;
 import java.util.List;
@@ -478,9 +477,8 @@ public class ResourceFilterFactoryTest extends ResourceTestBase {
       ImmutableList<String> densities,
       boolean filterInAnalysis) {
 
-    return ResourceFilterFactory.fromAttrs(
-        filterInAnalysis ? AndroidAaptVersion.AAPT : AndroidAaptVersion.AAPT2,
-        getAttributeMap(resourceConfigurationFilters, densities));
+    return ResourceFilterFactory.from(
+        filterInAnalysis, getAttributeMap(resourceConfigurationFilters, densities));
   }
 
   private AttributeMap getAttributeMap(
