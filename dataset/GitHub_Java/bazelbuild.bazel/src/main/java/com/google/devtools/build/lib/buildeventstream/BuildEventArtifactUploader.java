@@ -13,26 +13,90 @@
 // limitations under the License.
 package com.google.devtools.build.lib.buildeventstream;
 
-import com.google.devtools.build.lib.buildeventstream.PathConverter.FileUriPathConverter;
+import com.google.common.collect.Maps;
+import com.google.common.io.ByteStreams;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile;
+import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile.LocalFileType;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
-import java.util.Set;
+import java.io.OutputStream;
+import java.time.Duration;
+import java.util.Collection;
+import java.util.Map;
+import javax.annotation.Nullable;
 
 /** Uploads artifacts referenced by the Build Event Protocol (BEP). */
 public interface BuildEventArtifactUploader {
-  public static final BuildEventArtifactUploader LOCAL_FILES_UPLOADER =
-      new BuildEventArtifactUploader() {
-    @Override
-    public PathConverter upload(Set<Path> files) {
-      return new FileUriPathConverter();
-    }
-  };
+  /**
+   * Asynchronously uploads a set of files referenced by the protobuf representation of a {@link
+   * BuildEvent}. This method is expected to return quickly.
+   *
+   * <p>This method must not throw any exceptions.
+   *
+   * <p>Returns a future to a {@link PathConverter} that must provide a name for each uploaded file
+   * as it should appear in the BEP.
+   */
+  ListenableFuture<PathConverter> upload(Map<Path, LocalFile> files);
+
+  /** The timeout on individual file uploads, or null if none. */
+  @Nullable
+  default Duration timeout() {
+    return null;
+  }
+
+  /** The context associated with an in-flight remote upload. */
+  interface UploadContext {
+
+    /** The {@link OutputStream} to stream the file contents to. */
+    OutputStream getOutputStream();
+
+    /** The future URI of the completed upload. */
+    ListenableFuture<String> uriFuture();
+  }
+
+  /** Initiate a streaming upload to the remote storage. */
+  default UploadContext startUpload(LocalFileType type) {
+    return EMPTY_UPLOAD;
+  }
+
+  UploadContext EMPTY_UPLOAD =
+      new UploadContext() {
+        @Override
+        public OutputStream getOutputStream() {
+          return ByteStreams.nullOutputStream();
+        }
+
+        @Override
+        public ListenableFuture<String> uriFuture() {
+          return Futures.immediateFailedFuture(new IOException("No available uploader"));
+        }
+      };
 
   /**
-   * Uploads a set of files referenced by the protobuf representation of a {@link BuildEvent}.
-   *
-   * <p>Returns a {@link PathConverter} that must provide a name for each uploaded file as it should
-   * appear in the BEP.
+   * Shutdown any resources associated with the uploader.
    */
-  PathConverter upload(Set<Path> files) throws IOException, InterruptedException;
+  void shutdown();
+
+  /**
+   * Return true if the upload may be "slow". Examples of slowness include writes to remote storage.
+   */
+  boolean mayBeSlow();
+
+  /**
+   * Returns a {@link PathConverter} for the uploaded files, or {@code null} when the uploaded
+   * failed.
+   */
+  default ListenableFuture<PathConverter> uploadReferencedLocalFiles(
+      Collection<LocalFile> localFiles) {
+    Map<Path, LocalFile> localFileMap = Maps.newHashMapWithExpectedSize(localFiles.size());
+    for (LocalFile localFile : localFiles) {
+      // It is possible for targets to have duplicate artifacts (same path but different owners)
+      // in their output groups. Since they didn't trigger an artifact conflict they are the
+      // same file, so just skip either one
+      localFileMap.putIfAbsent(localFile.path, localFile);
+    }
+    return upload(localFileMap);
+  }
 }

@@ -15,22 +15,20 @@ package com.google.devtools.build.lib.buildeventstream;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableList;
-import com.google.common.flogger.GoogleLogger;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile.LocalFileCompression;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile.LocalFileType;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildEventId;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.protobuf.ByteString;
 import java.util.Collection;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /** Event reporting on statistics about the build. */
 public class BuildToolLogs implements BuildEventWithOrderConstraint {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
-
   /** These values are posted as byte strings to the BEP. */
   private final Collection<Pair<String, ByteString>> directValues;
   /** These values are posted as Future URIs to the BEP. */
@@ -40,6 +38,8 @@ public class BuildToolLogs implements BuildEventWithOrderConstraint {
    * process.
    */
   private final Collection<LogFileEntry> logFiles;
+
+  private static final Logger logger = Logger.getLogger(BuildToolLogs.class.getName());
 
   public BuildToolLogs(
       Collection<Pair<String, ByteString>> directValues,
@@ -52,7 +52,7 @@ public class BuildToolLogs implements BuildEventWithOrderConstraint {
 
   @Override
   public BuildEventId getEventId() {
-    return BuildEventIdUtil.buildToolLogs();
+    return BuildEventId.buildToolLogs();
   }
 
   @Override
@@ -93,18 +93,13 @@ public class BuildToolLogs implements BuildEventWithOrderConstraint {
       String name = directFuturePair.getFirst();
       ListenableFuture<String> directFuture = directFuturePair.getSecond();
       try {
-        String uri =
-            directFuture.isDone() && !directFuture.isCancelled()
-                ? Futures.getDone(directFuture)
-                : null;
-        if (uri != null) {
-          toolLogs.addLog(
-              BuildEventStreamProtos.File.newBuilder().setName(name).setUri(uri).build());
-        } else {
-          logger.atInfo().log("Dropped unfinished upload: %s (%s)", name, directFuture);
-        }
+        toolLogs.addLog(
+            BuildEventStreamProtos.File.newBuilder()
+                .setName(name)
+                .setUri(Futures.getDone(directFuture))
+                .build());
       } catch (ExecutionException e) {
-        logger.atWarning().withCause(e).log("Skipping build tool log upload %s", name);
+        logger.log(Level.WARNING, "Skipping build tool log upload " + name, e);
       }
     }
     for (LogFileEntry logFile : logFiles) {
@@ -119,7 +114,7 @@ public class BuildToolLogs implements BuildEventWithOrderConstraint {
 
   @Override
   public Collection<BuildEventId> postedAfter() {
-    return ImmutableList.of(BuildEventIdUtil.buildFinished());
+    return ImmutableList.of(BuildEventId.buildFinished());
   }
 
   /** A local log file. */

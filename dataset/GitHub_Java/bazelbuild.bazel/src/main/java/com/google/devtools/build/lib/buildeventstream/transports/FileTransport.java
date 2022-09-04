@@ -23,7 +23,6 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
@@ -41,10 +40,7 @@ import java.time.Instant;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -66,11 +62,6 @@ abstract class FileTransport implements BuildEventTransport {
   private final SequentialWriter writer;
   private final ArtifactGroupNamer namer;
 
-  private final ScheduledExecutorService timeoutExecutor =
-      MoreExecutors.listeningDecorator(
-          Executors.newSingleThreadScheduledExecutor(
-              new ThreadFactoryBuilder().setNameFormat("file-uploader-timeout-%d").build()));
-
   FileTransport(
       BufferedOutputStream outputStream,
       BuildEventProtocolOptions options,
@@ -78,8 +69,7 @@ abstract class FileTransport implements BuildEventTransport {
       ArtifactGroupNamer namer) {
     this.uploader = uploader;
     this.options = options;
-    this.writer =
-        new SequentialWriter(outputStream, this::serializeEvent, uploader, timeoutExecutor);
+    this.writer = new SequentialWriter(outputStream, this::serializeEvent, uploader);
     this.namer = namer;
   }
 
@@ -106,20 +96,18 @@ abstract class FileTransport implements BuildEventTransport {
     final BlockingQueue<ListenableFuture<BuildEventStreamProtos.BuildEvent>> pendingWrites =
         new LinkedBlockingDeque<>();
 
-    private ScheduledExecutorService timeoutExecutor;
-
     SequentialWriter(
         BufferedOutputStream outputStream,
         Function<BuildEventStreamProtos.BuildEvent, byte[]> serializeFunc,
-        BuildEventArtifactUploader uploader,
-        ScheduledExecutorService timeoutExecutor) {
+        BuildEventArtifactUploader uploader) {
+      checkNotNull(outputStream);
+      checkNotNull(serializeFunc);
       checkNotNull(uploader);
 
-      this.out = checkNotNull(outputStream);
+      this.out = outputStream;
       this.writerThread = new Thread(this, "bep-local-writer");
-      this.serializeFunc = checkNotNull(serializeFunc);
-      this.uploader = checkNotNull(uploader);
-      this.timeoutExecutor = checkNotNull(timeoutExecutor);
+      this.serializeFunc = serializeFunc;
+      this.uploader = uploader;
       writerThread.start();
     }
 
@@ -154,7 +142,6 @@ abstract class FileTransport implements BuildEventTransport {
             out.close();
           } finally {
             uploader.shutdown();
-            timeoutExecutor.shutdown();
           }
         } catch (IOException e) {
           logger.log(Level.SEVERE, "Failed to close BEP file output stream.", e);
@@ -229,13 +216,8 @@ abstract class FileTransport implements BuildEventTransport {
     if (writer.isClosed.get()) {
       return;
     }
-    try {
-      if (!writer.pendingWrites.add(asStreamProto(event, namer))) {
-        logger.log(Level.SEVERE, "Failed to add BEP event to the write queue");
-      }
-    } catch (RejectedExecutionException e) {
-      // If early shutdown races with this event, log but otherwise ignore.
-      logger.log(Level.WARNING, "Event upload started after shutdown");
+    if (!writer.pendingWrites.add(asStreamProto(event, namer))) {
+      logger.log(Level.SEVERE, "Failed to add BEP event to the write queue");
     }
   }
 
@@ -257,10 +239,8 @@ abstract class FileTransport implements BuildEventTransport {
 
     ListenableFuture<PathConverter> converterFuture =
         uploader.uploadReferencedLocalFiles(event.referencedLocalFiles());
-    ListenableFuture<?> remoteUploads =
-        uploader.waitForRemoteUploads(event.remoteUploads(), timeoutExecutor);
     return Futures.transform(
-        Futures.allAsList(converterFuture, remoteUploads),
+        Futures.allAsList(converterFuture, Futures.successfulAsList(event.remoteUploads())),
         results -> {
           BuildEventContext context =
               new BuildEventContext() {
