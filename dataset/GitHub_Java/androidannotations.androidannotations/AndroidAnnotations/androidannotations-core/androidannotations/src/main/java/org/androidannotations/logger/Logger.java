@@ -42,11 +42,15 @@ public class Logger {
 	}
 
 	public void warn(String message, Object... args) {
-		warn(null, message, args);
+		warn(message, null, null, args);
 	}
 
-	public void warn(Element element, String message, Object... args) {
-		log(Level.WARN, message, element, null, null, args);
+	public void warn(String message, Element element, Object... args) {
+		warn(message, element, null, args);
+	}
+
+	public void warn(String message, Element element, Throwable thr, Object... args) {
+		log(Level.WARN, message, element, null, thr, args);
 	}
 
 	public void warn(String message, Element element, AnnotationMirror annotationMirror) {
