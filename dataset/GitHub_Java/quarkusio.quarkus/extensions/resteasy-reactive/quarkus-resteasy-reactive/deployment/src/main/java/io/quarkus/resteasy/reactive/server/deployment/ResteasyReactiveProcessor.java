@@ -24,8 +24,6 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.MessageBodyWriter;
 
-import org.eclipse.microprofile.config.Config;
-import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
@@ -90,7 +88,6 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.MethodCreator;
-import io.quarkus.netty.deployment.MinNettyAllocatorMaxOrderBuildItem;
 import io.quarkus.resteasy.reactive.common.deployment.ApplicationResultBuildItem;
 import io.quarkus.resteasy.reactive.common.deployment.FactoryUtils;
 import io.quarkus.resteasy.reactive.common.deployment.QuarkusFactoryCreator;
@@ -102,7 +99,6 @@ import io.quarkus.resteasy.reactive.common.runtime.ResteasyReactiveConfig;
 import io.quarkus.resteasy.reactive.server.runtime.ResteasyReactiveInitialiser;
 import io.quarkus.resteasy.reactive.server.runtime.ResteasyReactiveRecorder;
 import io.quarkus.resteasy.reactive.server.runtime.ResteasyReactiveRuntimeRecorder;
-import io.quarkus.resteasy.reactive.server.runtime.ServerVertxAsyncFileMessageBodyWriter;
 import io.quarkus.resteasy.reactive.server.runtime.ServerVertxBufferMessageBodyWriter;
 import io.quarkus.resteasy.reactive.server.runtime.exceptionmappers.AuthenticationCompletionExceptionMapper;
 import io.quarkus.resteasy.reactive.server.runtime.exceptionmappers.AuthenticationFailedExceptionMapper;
@@ -131,7 +127,6 @@ import io.quarkus.vertx.http.runtime.HttpConfiguration;
 import io.quarkus.vertx.http.runtime.VertxHttpRecorder;
 import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
-import io.vertx.core.file.AsyncFile;
 import io.vertx.ext.web.RoutingContext;
 
 public class ResteasyReactiveProcessor {
@@ -148,36 +143,11 @@ public class ResteasyReactiveProcessor {
         return new CapabilityBuildItem(Capability.RESTEASY_REACTIVE);
     }
 
-    // This is required to get rid of netty exceptions when allocating direct buffers in tests running
-    // in IDEs, which have assertions enabled, otherwise we run into:
-    /*
-     * java.lang.AssertionError
-     * at io.netty.buffer.PoolChunk.calculateRunSize(PoolChunk.java:366)
-     * at io.netty.buffer.PoolChunk.allocateSubpage(PoolChunk.java:424)
-     * at io.netty.buffer.PoolChunk.allocate(PoolChunk.java:299)
-     * at io.netty.buffer.PoolArena.allocateNormal(PoolArena.java:205)
-     * at io.netty.buffer.PoolArena.tcacheAllocateSmall(PoolArena.java:174)
-     * at io.netty.buffer.PoolArena.allocate(PoolArena.java:136)
-     * at io.netty.buffer.PoolArena.allocate(PoolArena.java:128)
-     * at io.netty.buffer.PooledByteBufAllocator.newDirectBuffer(PooledByteBufAllocator.java:378)
-     * at io.netty.buffer.AbstractByteBufAllocator.directBuffer(AbstractByteBufAllocator.java:187)
-     * at io.netty.buffer.AbstractByteBufAllocator.directBuffer(AbstractByteBufAllocator.java:178)
-     * at io.vertx.core.net.impl.PartialPooledByteBufAllocator.directBuffer(PartialPooledByteBufAllocator.java:92)
-     */
-    @BuildStep
-    MinNettyAllocatorMaxOrderBuildItem setMinimalNettyMaxOrderSize() {
-        return new MinNettyAllocatorMaxOrderBuildItem(3);
-    }
-
     @BuildStep
     void vertxIntegration(BuildProducer<MessageBodyWriterBuildItem> writerBuildItemBuildProducer) {
         writerBuildItemBuildProducer.produce(new MessageBodyWriterBuildItem(ServerVertxBufferMessageBodyWriter.class.getName(),
                 Buffer.class.getName(), Collections.singletonList(MediaType.WILDCARD), RuntimeType.SERVER, true,
                 Priorities.USER));
-        writerBuildItemBuildProducer
-                .produce(new MessageBodyWriterBuildItem(ServerVertxAsyncFileMessageBodyWriter.class.getName(),
-                        AsyncFile.class.getName(), Collections.singletonList(MediaType.WILDCARD), RuntimeType.SERVER, true,
-                        Priorities.USER));
     }
 
     @BuildStep
@@ -271,7 +241,6 @@ public class ResteasyReactiveProcessor {
             List<ServerDefaultProducesHandlerBuildItem> serverDefaultProducesHandlers,
             Optional<RequestContextFactoryBuildItem> requestContextFactoryBuildItem,
             Optional<ClassLevelExceptionMappersBuildItem> classLevelExceptionMappers,
-            BuildProducer<ResteasyReactiveDeploymentInfoBuildItem> quarkusRestDeploymentInfoBuildItemBuildProducer,
             BuildProducer<ResteasyReactiveDeploymentBuildItem> quarkusRestDeploymentBuildItemBuildProducer,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
@@ -332,7 +301,6 @@ public class ResteasyReactiveProcessor {
         paramConverterProviders.initializeDefaultFactories(factoryFunction);
         paramConverterProviders.sort();
         interceptors.sort();
-        interceptors.getContainerRequestFilters().validateThreadModel();
 
         try (ClassCreator c = new ClassCreator(new GeneratedClassGizmoAdaptor(generatedClassBuildItemBuildProducer, true),
                 QUARKUS_INIT_CLASS, null, Object.class.getName(), ResteasyReactiveInitialiser.class.getName());
@@ -348,7 +316,8 @@ public class ResteasyReactiveProcessor {
                     .setBytecodeTransformerBuildProducer(bytecodeTransformerBuildItemBuildProducer)
                     .setReflectiveClassProducer(reflectiveClassBuildItemBuildProducer)
                     .setExistingConverters(existingConverters).setScannedResourcePaths(scannedResourcePaths)
-                    .setConfig(createRestReactiveConfig(config))
+                    .setConfig(new org.jboss.resteasy.reactive.common.ResteasyReactiveConfig(
+                            config.inputBufferSize.asLongValue(), config.singleDefaultProduces, config.defaultProduces))
                     .setAdditionalReaders(additionalReaders)
                     .setHttpAnnotationToMethod(result.getHttpAnnotationToMethod())
                     .setInjectableBeans(injectableBeans)
@@ -530,7 +499,7 @@ public class ResteasyReactiveProcessor {
             BeanFactory<ResteasyReactiveInitialiser> initClassFactory = recorder.factory(QUARKUS_INIT_CLASS,
                     beanContainerBuildItem.getValue());
 
-            String applicationPath = determineApplicationPath(index, getAppPath(serverConfig.path));
+            String applicationPath = determineApplicationPath(index, serverConfig.path);
             // spec allows the path contain encoded characters
             if ((applicationPath != null) && applicationPath.contains("%")) {
                 applicationPath = Encode.decodePath(applicationPath);
@@ -540,9 +509,10 @@ public class ResteasyReactiveProcessor {
             // Handler used for both the default and non-default deployment path (specified as application path or resteasyConfig.path)
             // Routes use the order VertxHttpRecorder.DEFAULT_ROUTE_ORDER + 1 to ensure the default route is called before the resteasy one
             Class<? extends Application> applicationClass = application == null ? Application.class : application.getClass();
-            DeploymentInfo deploymentInfo = new DeploymentInfo()
+            RuntimeValue<Deployment> deployment = recorder.createDeployment(new DeploymentInfo()
                     .setInterceptors(interceptors.sort())
-                    .setConfig(createRestReactiveConfig(config))
+                    .setConfig(new org.jboss.resteasy.reactive.common.ResteasyReactiveConfig(
+                            config.inputBufferSize.asLongValue(), config.singleDefaultProduces, config.defaultProduces))
                     .setExceptionMapping(exceptionMapping)
                     .setCtxResolvers(contextResolvers)
                     .setFeatures(feats)
@@ -554,11 +524,7 @@ public class ResteasyReactiveProcessor {
                     .setApplicationPath(applicationPath)
                     .setResourceClasses(resourceClasses)
                     .setLocatableResourceClasses(subResourceClasses)
-                    .setParamConverterProviders(paramConverterProviders);
-            quarkusRestDeploymentInfoBuildItemBuildProducer
-                    .produce(new ResteasyReactiveDeploymentInfoBuildItem(deploymentInfo));
-
-            RuntimeValue<Deployment> deployment = recorder.createDeployment(deploymentInfo,
+                    .setParamConverterProviders(paramConverterProviders),
                     beanContainerBuildItem.getValue(), shutdownContext, vertxConfig,
                     requestContextFactoryBuildItem.map(RequestContextFactoryBuildItem::getFactory).orElse(null),
                     initClassFactory);
@@ -582,24 +548,6 @@ public class ResteasyReactiveProcessor {
                         new RouteBuildItem(new BasicRoute(matchPath, VertxHttpRecorder.DEFAULT_ROUTE_ORDER + 1), handler));
             }
         }
-    }
-
-    private org.jboss.resteasy.reactive.common.ResteasyReactiveConfig createRestReactiveConfig(ResteasyReactiveConfig config) {
-        Config mpConfig = ConfigProvider.getConfig();
-
-        return new org.jboss.resteasy.reactive.common.ResteasyReactiveConfig(
-                getEffectivePropertyValue("input-buffer-size", config.inputBufferSize.asLongValue(), Long.class, mpConfig),
-                getEffectivePropertyValue("single-default-produces", config.singleDefaultProduces, Boolean.class, mpConfig),
-                getEffectivePropertyValue("default-produces", config.defaultProduces, Boolean.class, mpConfig));
-    }
-
-    private <T> T getEffectivePropertyValue(String legacyPropertyName, T newPropertyValue, Class<T> propertyType,
-            Config mpConfig) {
-        Optional<T> legacyPropertyValue = mpConfig.getOptionalValue("quarkus.rest." + legacyPropertyName, propertyType);
-        if (legacyPropertyValue.isPresent()) {
-            return legacyPropertyValue.get();
-        }
-        return newPropertyValue;
     }
 
     @BuildStep
@@ -646,15 +594,6 @@ public class ResteasyReactiveProcessor {
                 return Collections.singletonList(new SecurityContextOverrideHandler.Customizer());
             }
         });
-    }
-
-    private Optional<String> getAppPath(Optional<String> newPropertyValue) {
-        Optional<String> legacyProperty = ConfigProvider.getConfig().getOptionalValue("quarkus.rest.path", String.class);
-        if (legacyProperty.isPresent()) {
-            return legacyProperty;
-        }
-
-        return newPropertyValue;
     }
 
     private String determineApplicationPath(IndexView index, Optional<String> defaultPath) {
