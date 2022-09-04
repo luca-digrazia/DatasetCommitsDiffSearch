@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassNamePredicate;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
@@ -63,22 +62,23 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
 /**
- * Metadata of a rule attribute. Contains the attribute name and type, and an default value to be
- * used if none is provided in a rule declaration in a BUILD file. Attributes are immutable, and may
- * be shared by more than one rule (for example, <code>foo_binary</code> and <code>foo_library
- * </code> may share many attributes in common).
+ * Metadata of a rule attribute. Contains the attribute name and type, and an
+ * default value to be used if none is provided in a rule declaration in a BUILD
+ * file. Attributes are immutable, and may be shared by more than one rule (for
+ * example, <code>foo_binary</code> and <code>foo_library</code> may share many
+ * attributes in common).
  */
 @Immutable
-@AutoCodec
 public final class Attribute implements Comparable<Attribute> {
 
   public static final RuleClassNamePredicate ANY_RULE = RuleClassNamePredicate.unspecified();
 
   public static final RuleClassNamePredicate NO_RULE = RuleClassNamePredicate.only();
 
-  /** Wraps the information necessary to construct an Aspect. */
-  @VisibleForSerialization
-  abstract static class RuleAspect<C extends AspectClass> {
+  /**
+   * Wraps the information necessary to construct an Aspect.
+   */
+  private abstract static class RuleAspect<C extends AspectClass> {
     protected final C aspectClass;
     protected final Function<Rule, AspectParameters> parametersExtractor;
 
@@ -115,8 +115,7 @@ public final class Attribute implements Comparable<Attribute> {
     }
   }
 
-  @AutoCodec
-  static class SkylarkRuleAspect extends RuleAspect<SkylarkAspectClass> {
+  private static class SkylarkRuleAspect extends RuleAspect<SkylarkAspectClass> {
     private final SkylarkDefinedAspect aspect;
 
     public SkylarkRuleAspect(SkylarkDefinedAspect aspect) {
@@ -151,8 +150,7 @@ public final class Attribute implements Comparable<Attribute> {
     }
   }
 
-  @VisibleForSerialization
-  enum PropertyFlag {
+  private enum PropertyFlag {
     MANDATORY,
     EXECUTABLE,
     UNDOCUMENTED,
@@ -260,7 +258,6 @@ public final class Attribute implements Comparable<Attribute> {
     String checkValid(Rule from, Rule to);
   }
 
-  @AutoCodec
   public static final ValidityPredicate ANY_EDGE =
       new ValidityPredicate() {
         @Override
@@ -300,8 +297,9 @@ public final class Attribute implements Comparable<Attribute> {
     }
   }
 
-  /** A predicate class to check if the value of the attribute comes from a predefined set. */
-  @AutoCodec
+  /**
+   * A predicate class to check if the value of the attribute comes from a predefined set.
+   */
   public static class AllowedValueSet implements PredicateWithMessage<Object> {
 
     private final Set<Object> allowedValues;
@@ -314,12 +312,6 @@ public final class Attribute implements Comparable<Attribute> {
       Preconditions.checkNotNull(values);
       Preconditions.checkArgument(!Iterables.isEmpty(values));
       allowedValues = ImmutableSet.copyOf(values);
-    }
-
-    @AutoCodec.Instantiator
-    @VisibleForSerialization
-    AllowedValueSet(Set<Object> allowedValues) {
-      this.allowedValues = allowedValues;
     }
 
     @Override
@@ -1847,8 +1839,7 @@ public final class Attribute implements Comparable<Attribute> {
    * @param configTransition the configuration transition for this attribute (which must be of type
    *     LABEL, LABEL_LIST, NODEP_LABEL or NODEP_LABEL_LIST).
    */
-  @VisibleForSerialization
-  Attribute(
+  private Attribute(
       String name,
       Type<?> type,
       Set<PropertyFlag> propertyFlags,
