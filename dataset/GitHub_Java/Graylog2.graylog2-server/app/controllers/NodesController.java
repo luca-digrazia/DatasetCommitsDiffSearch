@@ -25,8 +25,14 @@ import lib.BreadcrumbList;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.ServerNodes;
-import org.graylog2.restclient.models.*;
-import play.Logger;
+import org.graylog2.restclient.models.BufferInfo;
+import org.graylog2.restclient.models.ClusterService;
+import org.graylog2.restclient.models.Node;
+import org.graylog2.restclient.models.NodeJVMStats;
+import org.graylog2.restclient.models.NodeService;
+import org.graylog2.restclient.models.Plugin;
+import org.graylog2.restclient.models.PluginService;
+import org.graylog2.restclient.models.Radio;
 import play.mvc.Result;
 
 import java.io.IOException;
@@ -63,21 +69,11 @@ public class NodesController extends AuthenticatedController {
 
         List<NodeJVMStats> serverJvmStats = isPermitted(JVMSTATS_READ) ? clusterService.getClusterJvmStats() : Collections.<NodeJVMStats>emptyList();
         Map<String, Node> nodes = serverNodes.asMap();
-        Map<String, Node> updatedNodes = Maps.newHashMap();
-
-        for (String nodeId : nodes.keySet()) {
-            try {
-                updatedNodes.put(nodeId, nodeService.loadNode(nodeId));
-            } catch (NodeService.NodeNotFoundException e) {
-                Logger.error("Could not load node information", e);
-            }
-        }
-
         Map<String, BufferInfo> bufferInfo = Maps.newHashMap();
 
         if (isPermitted(BUFFERS_READ)) {
             // Ask every node for buffer info.
-            for(Node node : updatedNodes.values()) {
+            for(Node node : nodes.values()) {
                 bufferInfo.put(node.getNodeId(), node.getBufferInfo());
             }
         }
@@ -92,7 +88,7 @@ public class NodesController extends AuthenticatedController {
             return status(504, views.html.errors.error.render(message, e, request()));
         }
 
-        return ok(views.html.system.nodes.index.render(currentUser(), bc, serverJvmStats, updatedNodes, radios, bufferInfo));
+        return ok(views.html.system.nodes.index.render(currentUser(), bc, serverJvmStats, nodes, radios, bufferInfo));
     }
 
     public Result node(String nodeId) {
