@@ -31,7 +31,7 @@ public class ManagedBuildEventServiceGrpcClient extends BuildEventServiceGrpcCli
   }
 
   @Override
-  public void shutdown() {
+  public void shutdown() throws InterruptedException {
     channel.shutdown();
   }
 }

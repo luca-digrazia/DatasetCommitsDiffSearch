@@ -41,20 +41,8 @@ public class BazelBuildEventServiceModule
         GoogleAuthUtils.newCallCredentials(authAndTLSOptions));
   }
 
-  private static final ImmutableSet<String> WHITELISTED_COMMANDS =
-      ImmutableSet.of(
-          "fetch",
-          "build",
-          "test",
-          "run",
-          "query",
-          "aquery",
-          "cquery",
-          "coverage",
-          "mobile-install");
-
   @Override
   protected Set<String> whitelistedCommands() {
-    return WHITELISTED_COMMANDS;
+    return ImmutableSet.of("fetch", "build", "test", "run", "query", "coverage", "mobile-install");
   }
 }

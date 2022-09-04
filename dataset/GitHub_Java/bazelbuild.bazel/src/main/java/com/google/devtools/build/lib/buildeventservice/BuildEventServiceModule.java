@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BuildEventStreamer;
+import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.SynchronizedOutputStream;
 import com.google.devtools.build.lib.util.AbruptExitException;
@@ -62,7 +63,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
   private Set<BuildEventTransport> transports = ImmutableSet.of();
 
   @Override
-  public Iterable<Class<? extends OptionsBase>> getCommonCommandOptions() {
+  public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
     return ImmutableList.of(optionsClass(), AuthAndTLSOptions.class, BuildEventStreamOptions.class);
   }
 

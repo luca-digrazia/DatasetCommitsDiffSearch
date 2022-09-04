@@ -28,7 +28,7 @@ public class UnmanagedBuildEventServiceGrpcClient extends BuildEventServiceGrpcC
   }
 
   @Override
-  public void shutdown() {
+  public void shutdown() throws InterruptedException {
     // Nothing to do. We handle an unmanaged channel so it's not our responsibility to shut it down.
   }
 }

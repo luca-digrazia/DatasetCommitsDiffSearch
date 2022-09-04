@@ -18,6 +18,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
+import com.google.common.base.Function;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
@@ -35,7 +36,6 @@ import io.grpc.stub.AbstractStub;
 import io.grpc.stub.StreamObserver;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import javax.annotation.Nullable;
 
 /** Implementation of BuildEventServiceClient that uploads data using gRPC. */
