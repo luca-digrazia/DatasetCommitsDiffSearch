@@ -802,10 +802,9 @@ public class CcToolchainFeatures implements Serializable {
         }
       }
       if (foundCategory == null) {
-        throw new InvalidConfigurationException(
+        throw new ExpansionException(
             String.format(
-                "Invalid toolchain configuration: Artifact category %s not recognized",
-                artifactNamePattern.getCategoryName()));
+                "Artifact category %s not recognized", artifactNamePattern.getCategoryName()));
       }
       this.artifactCategory = foundCategory;
       
@@ -2054,7 +2053,7 @@ public class CcToolchainFeatures implements Serializable {
   }
 
   /**
-   * @return the selectable with the given {@code name}.s
+   * @return the selectable with the given {@code name}.
    *
    * @throws InvalidConfigurationException if no selectable with the given name was configured.
    */
@@ -2075,14 +2074,13 @@ public class CcToolchainFeatures implements Serializable {
     }
     return featureNames;
   }
-
+  
   /**
-   * Returns the artifact selected by the toolchain for the given action type and action category.
-   *
-   * @throws InvalidConfigurationException if the category is not supported by the action config.
+   * Returns the artifact selected by the toolchain for the given action type and action category,
+   * or null if the category is not supported by the action config.
    */
   String getArtifactNameForCategory(ArtifactCategory artifactCategory, String outputName)
-      throws InvalidConfigurationException {
+      throws ExpansionException {
     PathFragment output = PathFragment.create(outputName);
 
     ArtifactNamePattern patternForCategory = null;
@@ -2092,7 +2090,7 @@ public class CcToolchainFeatures implements Serializable {
       }
     }
     if (patternForCategory == null) {
-      throw new InvalidConfigurationException(
+      throw new ExpansionException(
           String.format(
               MISSING_ARTIFACT_NAME_PATTERN_ERROR_TEMPLATE, artifactCategory.getCategoryName()));
     }

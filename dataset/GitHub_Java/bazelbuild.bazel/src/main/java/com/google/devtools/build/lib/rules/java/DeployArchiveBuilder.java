@@ -49,9 +49,6 @@ public class DeployArchiveBuilder {
    */
   private static final String SINGLEJAR_MAX_MEMORY = "-Xmx1600m";
 
-  private static final ResourceSet DEPLOY_ACTION_RESOURCE_SET =
-      ResourceSet.createWithRamCpuIo(/*memoryMb = */ 200.0, /*cpuUsage = */ .2, /*ioUsage=*/ .2);
-
   private final RuleContext ruleContext;
 
   private final IterablesChain.Builder<Artifact> runtimeJarsBuilder = IterablesChain.builder();
@@ -370,6 +367,8 @@ public class DeployArchiveBuilder {
     }
 
     List<String> jvmArgs = ImmutableList.of(SINGLEJAR_MAX_MEMORY);
+    ResourceSet resourceSet =
+        ResourceSet.createWithRamCpuIo(/*memoryMb = */200.0, /*cpuUsage = */.2, /*ioUsage=*/.2);
 
     if (!usingNativeSinglejar) {
       ruleContext.registerAction(
@@ -377,7 +376,7 @@ public class DeployArchiveBuilder {
               .addTransitiveInputs(inputs.build())
               .addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext))
               .addOutput(outputJar)
-              .setResources(DEPLOY_ACTION_RESOURCE_SET)
+              .setResources(resourceSet)
               .setJarExecutable(JavaCommon.getHostJavaExecutable(ruleContext), singlejar, jvmArgs)
               .addCommandLine(
                   commandLine,
@@ -391,7 +390,7 @@ public class DeployArchiveBuilder {
           new SpawnAction.Builder()
               .addTransitiveInputs(inputs.build())
               .addOutput(outputJar)
-              .setResources(DEPLOY_ACTION_RESOURCE_SET)
+              .setResources(resourceSet)
               .setExecutable(singlejar)
               .addCommandLine(
                   commandLine,
