@@ -39,7 +39,7 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.buildeventstream.AbortedEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.Aborted.AbortReason;
-import com.google.devtools.build.lib.buildtool.PostAnalysisQueryBuildTool.PostAnalysisQueryCommandLineException;
+import com.google.devtools.build.lib.buildtool.CqueryBuildTool.ConfiguredTargetQueryCommandLineException;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildInterruptedEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
@@ -61,6 +61,7 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.pkgcache.LoadingCallback;
 import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
+import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
 import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.Profiler;
@@ -130,10 +131,14 @@ public class BuildTool {
    * @param result the build result that is the mutable result of this build
    * @param validator target validator
    */
-  public void buildTargets(BuildRequest request, BuildResult result, TargetValidator validator)
+  public void buildTargets(
+      BuildRequest request,
+      BuildResult result,
+      TargetValidator validator)
       throws BuildFailedException, InterruptedException, ViewCreationFailedException,
           TargetParsingException, LoadingFailedException, AbruptExitException,
-          InvalidConfigurationException, TestExecException, PostAnalysisQueryCommandLineException {
+          InvalidConfigurationException, TestExecException,
+          ConfiguredTargetQueryCommandLineException {
     validateOptions(request);
     BuildOptions buildOptions = runtime.createBuildOptions(request);
     // Sync the package manager before sending the BuildStartingEvent in runLoadingPhase()
@@ -306,7 +311,8 @@ public class BuildTool {
       AnalysisResult analysisResult,
       BuildConfigurationCollection configurations)
       throws InterruptedException, ViewCreationFailedException,
-          PostAnalysisQueryCommandLineException {}
+          ConfiguredTargetQueryCommandLineException {
+  }
 
   private void reportExceptionError(Exception e) {
     if (e.getMessage() != null) {
@@ -370,7 +376,7 @@ public class BuildTool {
     } catch (TargetParsingException | LoadingFailedException | ViewCreationFailedException e) {
       exitCode = ExitCode.PARSING_FAILURE;
       reportExceptionError(e);
-    } catch (PostAnalysisQueryCommandLineException e) {
+    } catch (ConfiguredTargetQueryCommandLineException e) {
       exitCode = ExitCode.COMMAND_LINE_ERROR;
       reportExceptionError(e);
     } catch (TestExecException e) {
@@ -427,8 +433,11 @@ public class BuildTool {
       }
     };
 
+    LoadingPhaseRunner loadingPhaseRunner = env.getSkyframeExecutor().getLoadingPhaseRunner(
+        runtime.getPackageFactory().getRuleClassNames(),
+        request.getLoadingOptions().useSkyframeTargetPatternEvaluator);
     LoadingResult result =
-        env.getSkyframeExecutor().loadTargetPatterns(
+        loadingPhaseRunner.execute(
             getReporter(),
             request.getTargets(),
             env.getRelativeWorkingDirectory(),
