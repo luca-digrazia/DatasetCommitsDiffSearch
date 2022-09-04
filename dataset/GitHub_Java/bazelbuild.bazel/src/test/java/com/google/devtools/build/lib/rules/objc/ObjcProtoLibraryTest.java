@@ -297,8 +297,7 @@ public class ObjcProtoLibraryTest extends ObjcRuleTestCase {
             TestConstants.TOOLS_REPOSITORY_PATH_PREFIX + "tools/objc/protobuf_compiler_wrapper.sh",
             TestConstants.TOOLS_REPOSITORY_PATH_PREFIX + "tools/objc/protobuf_compiler_helper.py",
             TestConstants.TOOLS_REPOSITORY_PATH_PREFIX + "tools/objc/proto_support");
-    assertThat(Artifact.toRootRelativePaths(action.getInputs()))
-        .containsAtLeastElementsIn(protoInputs);
+    assertThat(Artifact.toRootRelativePaths(action.getInputs())).containsAllIn(protoInputs);
     assertThat(action.getInputs()).contains(inputFileList);
 
     FileWriteAction inputListAction = (FileWriteAction) getGeneratingAction(inputFileList);
@@ -321,8 +320,7 @@ public class ObjcProtoLibraryTest extends ObjcRuleTestCase {
         "package/file_a.proto",
         TestConstants.TOOLS_REPOSITORY_PATH_PREFIX + "objcproto/well_known_type.proto");
 
-    assertThat(Artifact.toRootRelativePaths(action.getInputs()))
-        .containsAtLeastElementsIn(protoInputs);
+    assertThat(Artifact.toRootRelativePaths(action.getInputs())).containsAllIn(protoInputs);
     assertThat(action.getInputs()).contains(inputFileList);
 
     FileWriteAction inputListAction = (FileWriteAction) getGeneratingAction(inputFileList);
@@ -463,7 +461,7 @@ public class ObjcProtoLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testCompilationAction() throws Exception {
-    useConfiguration("--apple_platform_type=ios", "--cpu=ios_i386");
+    useConfiguration("--cpu=ios_i386");
     ApplePlatform platform = ApplePlatform.IOS_SIMULATOR;
 
     // Because protos are linked/compiled within the apple_binary context, we need to traverse the
@@ -512,7 +510,7 @@ public class ObjcProtoLibraryTest extends ObjcRuleTestCase {
             .addAll(
                 ObjcLibraryTest.iquoteArgs(
                     providerForTarget("//package:opl_binary"),
-                    getAppleCrosstoolConfiguration()))
+                    getTargetConfiguration()))
             .add("-I")
             .add(sourceFile.getExecPath().getParentDirectory().getParentDirectory().toString())
             .add("-fno-objc-arc")
@@ -539,7 +537,7 @@ public class ObjcProtoLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testLibraryLinkAction() throws Exception {
-    useConfiguration("--apple_platform_type=ios", "--cpu=ios_armv7");
+    useConfiguration("--cpu=ios_armv7");
 
     // Because protos are linked within the apple_binary context, we need to traverse the action
     // graph to find the linked protos (.a).
@@ -558,7 +556,7 @@ public class ObjcProtoLibraryTest extends ObjcRuleTestCase {
     Artifact objListFile =
         ActionsTestUtil.getFirstArtifactEndingWith(linkedProtosAction.getInputs(), ".objlist");
     assertThat(linkedProtosAction.getArguments())
-        .containsAtLeastElementsIn(
+        .containsAllIn(
             ImmutableList.of(
                 "-static",
                 "-filelist",
