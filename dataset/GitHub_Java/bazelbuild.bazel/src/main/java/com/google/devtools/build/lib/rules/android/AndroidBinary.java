@@ -581,7 +581,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .setSigningLineageFile(signingLineage)
         .setV4Signature(v4Signature)
         .setZipalignApk(true)
-        .setDeterministicSigning(androidSemantics.deterministicSigning())
         .registerActions(ruleContext);
 
     filesBuilder.add(binaryJar);
