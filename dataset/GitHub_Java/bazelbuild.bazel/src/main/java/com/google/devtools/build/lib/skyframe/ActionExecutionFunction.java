@@ -1174,16 +1174,14 @@ public class ActionExecutionFunction implements SkyFunction {
     // some deps are still missing.
     boolean populateInputData = !env.valuesMissing();
     NestedSetBuilder<Cause> rootCauses = NestedSetBuilder.stableOrder();
-    ImmutableList<Artifact> allInputsList = allInputs.toList();
-    S inputArtifactData =
-        actionInputMapSinkFactory.apply(populateInputData ? allInputsList.size() : 0);
+    S inputArtifactData = actionInputMapSinkFactory.apply(populateInputData ? inputDeps.size() : 0);
     Map<Artifact, Collection<Artifact>> expandedArtifacts =
         new HashMap<>(populateInputData ? 128 : 0);
     Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetsInsideRunfiles = new HashMap<>();
     Map<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets = new HashMap<>();
 
     ActionExecutionException firstActionExecutionException = null;
-    for (Artifact input : allInputsList) {
+    for (Artifact input : allInputs.toList()) {
       ValueOrException2<IOException, ActionExecutionException> valueOrException =
           inputDeps.get(Artifact.key(input));
       if (valueOrException == null) {
