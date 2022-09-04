@@ -18,7 +18,6 @@ import static com.google.devtools.build.lib.syntax.Runtime.NONE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -41,6 +40,7 @@ import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
 import com.google.devtools.build.lib.syntax.Environment.GlobalFrame;
+import com.google.devtools.build.lib.syntax.Environment.Phase;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
@@ -50,8 +50,6 @@ import com.google.devtools.build.lib.syntax.Runtime.NoneType;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
-import com.google.devtools.build.lib.syntax.SkylarkUtils;
-import com.google.devtools.build.lib.syntax.SkylarkUtils.Phase;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.File;
 import java.util.HashMap;
@@ -103,7 +101,18 @@ public class WorkspaceFactory {
   // List of top level variable bindings
   private ImmutableMap<String, Object> variableBindings = ImmutableMap.of();
 
-  private final SkylarkSemantics skylarkSemantics;
+  /**
+   * @param builder a builder for the Workspace
+   * @param ruleClassProvider a provider for known rule classes
+   * @param mutability the Mutability for the current evaluation context
+   */
+  public WorkspaceFactory(
+      Package.Builder builder,
+      RuleClassProvider ruleClassProvider,
+      ImmutableList<EnvironmentExtension> environmentExtensions,
+      Mutability mutability) {
+    this(builder, ruleClassProvider, environmentExtensions, mutability, true, null, null, null);
+  }
 
   // TODO(bazel-team): document installDir
   /**
@@ -123,8 +132,7 @@ public class WorkspaceFactory {
       boolean allowOverride,
       @Nullable Path installDir,
       @Nullable Path workspaceDir,
-      @Nullable Path defaultSystemJavabaseDir,
-      SkylarkSemantics skylarkSemantics) {
+      @Nullable Path defaultSystemJavabaseDir) {
     this.builder = builder;
     this.mutability = mutability;
     this.installDir = installDir;
@@ -135,7 +143,6 @@ public class WorkspaceFactory {
     this.ruleFactory = new RuleFactory(ruleClassProvider, AttributeContainer::new);
     this.workspaceFunctions = WorkspaceFactory.createWorkspaceFunctions(
         allowOverride, ruleFactory);
-    this.skylarkSemantics = skylarkSemantics;
   }
 
   /**
@@ -201,8 +208,8 @@ public class WorkspaceFactory {
             .setGlobals(BazelLibrary.GLOBALS)
             .setEventHandler(localReporter)
             .setImportedExtensions(importMap)
+            .setPhase(Phase.WORKSPACE)
             .build();
-    SkylarkUtils.setPhase(workspaceEnv, Phase.WORKSPACE);
     addWorkspaceFunctions(workspaceEnv, localReporter);
     for (Map.Entry<String, Object> binding : parentVariableBindings.entrySet()) {
       try {
@@ -294,17 +301,18 @@ public class WorkspaceFactory {
   }
 
   @SkylarkSignature(
-      name = "workspace",
-      objectType = Object.class,
-      returnType = SkylarkList.class,
-      doc =
-          "Sets the name for this workspace. Workspace names should be a Java-package-style "
-              + "description of the project, using underscores as separators, e.g., "
-              + "github.com/bazelbuild/bazel should use com_github_bazelbuild_bazel. Names must "
-              + "start with a letter and can only contain letters, numbers, and underscores.",
-      parameters = {@Param(name = "name", type = String.class, doc = "the name of the workspace.")},
-      useAst = true,
-      useEnvironment = true)
+    name = "workspace",
+    objectType = Object.class,
+    returnType = SkylarkList.class,
+    doc =
+        "Sets the name for this workspace. Workspace names should be a Java-package-style "
+            + "description of the project, using underscores as separators, e.g., "
+            + "github.com/bazelbuild/bazel should use com_github_bazelbuild_bazel. Names must "
+            + "start with a letter and can only contain letters, numbers, and underscores.",
+    parameters = {@Param(name = "name", type = String.class, doc = "the name of the workspace.")},
+    useAst = true,
+    useEnvironment = true
+  )
   private static final BuiltinFunction.Factory newWorkspaceFunction =
       new BuiltinFunction.Factory("workspace") {
         public BuiltinFunction create(boolean allowOverride, final RuleFactory ruleFactory) {
@@ -335,14 +343,6 @@ public class WorkspaceFactory {
                       builder, localRepositoryRuleClass, bindRuleClass, kwargs, ast);
                 } catch (InvalidRuleException | NameConflictException | LabelSyntaxException e) {
                   throw new EvalException(ast.getLocation(), e.getMessage());
-                }
-                // Add entry in repository map from "@name" --> "@" to avoid issue where bazel
-                // treats references to @name as a separate external repo
-                if (env.getSemantics().experimentalRemapMainRepo()) {
-                  builder.addRepositoryMappingEntry(
-                      RepositoryName.MAIN,
-                      RepositoryName.createFromValidStrippedName(name),
-                      RepositoryName.MAIN);
                 }
                 return NONE;
               }
@@ -488,29 +488,17 @@ public class WorkspaceFactory {
                     + kwargs.get("name")
                     + "')");
           }
-          String externalRepoName = (String) kwargs.get("name");
-          // Add an entry in every repository from @<mainRepoName> to "@" to avoid treating
-          // @<mainRepoName> as a separate repository. This will be overridden if the main
-          // repository has a repo_mapping entry from <mainRepoName> to something.
-          if (env.getSemantics().experimentalRemapMainRepo()) {
-            if (!Strings.isNullOrEmpty(builder.pkg.getWorkspaceName())) {
-              builder.addRepositoryMappingEntry(
-                  RepositoryName.createFromValidStrippedName(externalRepoName),
-                  RepositoryName.createFromValidStrippedName(builder.pkg.getWorkspaceName()),
-                  RepositoryName.MAIN);
-            }
-          }
           if (env.getSemantics().experimentalEnableRepoMapping()) {
             if (kwargs.containsKey("repo_mapping")) {
               if (!(kwargs.get("repo_mapping") instanceof Map)) {
                 throw new EvalException(
                     ast.getLocation(),
-                    "Invalid value for 'repo_mapping': '"
-                        + kwargs.get("repo_mapping")
+                    "Invalid value for 'repo_mapping': '" + kwargs.get("repo_mapping")
                         + "'. Value must be a map.");
               }
               @SuppressWarnings("unchecked")
               Map<String, String> map = (Map<String, String>) kwargs.get("repo_mapping");
+              String externalRepoName = (String) kwargs.get("name");
               for (Map.Entry<String, String> e : map.entrySet()) {
                 builder.addRepositoryMappingEntry(
                     RepositoryName.createFromValidStrippedName(externalRepoName),
@@ -588,7 +576,11 @@ public class WorkspaceFactory {
         javaHome = javaHome.getParentFile();
       }
       workspaceEnv.update("DEFAULT_SERVER_JAVABASE", javaHome.toString());
-      workspaceEnv.update("DEFAULT_SYSTEM_JAVABASE", getDefaultSystemJavabase(javaHome));
+      workspaceEnv.update(
+          "DEFAULT_SYSTEM_JAVABASE",
+          defaultSystemJavabaseDir != null
+              ? defaultSystemJavabaseDir.toString()
+              : javaHome.toString());
 
       for (EnvironmentExtension extension : environmentExtensions) {
         extension.updateWorkspace(workspaceEnv);
@@ -599,19 +591,6 @@ public class WorkspaceFactory {
     } catch (EvalException e) {
       throw new AssertionError(e);
     }
-  }
-
-  private String getDefaultSystemJavabase(File embeddedJavabase) {
-    if (defaultSystemJavabaseDir != null) {
-      return defaultSystemJavabaseDir.toString();
-    }
-    if (skylarkSemantics.incompatibleNeverUseEmbeddedJDKForJavabase()) {
-      // --javabase is empty if there's no locally installed JDK
-      return "";
-    }
-    // legacy behaviour: fall back to using the embedded JDK as a --javabase
-    // TODO(cushon): delete this
-    return embeddedJavabase.toString();
   }
 
   private static ClassObject newNativeModule(
