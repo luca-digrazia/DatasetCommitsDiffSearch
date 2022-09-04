@@ -110,11 +110,11 @@ public class MLP extends MultilayerPerceptron implements OnlineClassifier<double
     /**
      * The number of classes.
      */
-    private final int k;
+    private int k;
     /**
      * The class label encoder.
      */
-    private final IntSet labels;
+    private IntSet labels;
 
     /**
      * Constructor.
@@ -125,9 +125,9 @@ public class MLP extends MultilayerPerceptron implements OnlineClassifier<double
     public MLP(int p, LayerBuilder... builders) {
         super(net(p, builders));
 
-        int outSize = output.getOutputSize();
-        this.k = outSize == 1 ? 2 : outSize;
-        this.labels = IntSet.of(k);
+        k = output.getOutputSize();
+        if (k == 1) k = 2;
+        labels = IntSet.of(k);
     }
 
     /**
@@ -139,8 +139,8 @@ public class MLP extends MultilayerPerceptron implements OnlineClassifier<double
     public MLP(IntSet labels, int p, LayerBuilder... builders) {
         super(net(p, builders));
 
-        int outSize = output.getOutputSize();
-        this.k = outSize == 1 ? 2 : outSize;
+        k = output.getOutputSize();
+        if (k == 1) k = 2;
         this.labels = labels;
     }
 
