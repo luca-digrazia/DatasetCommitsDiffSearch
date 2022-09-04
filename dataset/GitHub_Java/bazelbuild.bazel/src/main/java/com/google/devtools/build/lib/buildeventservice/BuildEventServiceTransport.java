@@ -165,11 +165,6 @@ public class BuildEventServiceTransport implements BuildEventTransport {
   }
 
   @Override
-  public BuildEventArtifactUploader getUploader() {
-    return besUploader.localFileUploader;
-  }
-
-  @Override
   public String name() {
     return "Build Event Service";
   }
