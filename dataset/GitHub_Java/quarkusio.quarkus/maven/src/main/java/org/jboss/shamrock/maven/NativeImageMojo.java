@@ -1,6 +1,8 @@
 package org.jboss.shamrock.maven;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -68,7 +70,6 @@ public class NativeImageMojo extends AbstractMojo {
             if (debugSymbols) {
                 command.add("-g");
             }
-            command.add("-H:+AllowVMInspection");
             System.out.println(command);
             Process process = Runtime.getRuntime().exec(command.toArray(new String[0]), null, outputDirectory);
             new Thread(new ProcessReader(process.getInputStream())).start();
@@ -83,4 +84,25 @@ public class NativeImageMojo extends AbstractMojo {
         }
     }
 
+    private static final class ProcessReader implements Runnable {
+
+        private final InputStream inputStream;
+
+        private ProcessReader(InputStream inputStream) {
+            this.inputStream = inputStream;
+        }
+
+        @Override
+        public void run() {
+            byte[] b = new byte[100];
+            int i;
+            try {
+                while ((i = inputStream.read(b)) > 0) {
+                    System.out.print(new String(b, 0, i));
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
 }
