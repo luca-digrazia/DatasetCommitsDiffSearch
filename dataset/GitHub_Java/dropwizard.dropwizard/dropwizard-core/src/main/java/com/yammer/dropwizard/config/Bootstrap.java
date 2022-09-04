@@ -14,7 +14,7 @@ import com.yammer.dropwizard.json.ObjectMapperFactory;
 import java.util.List;
 
 public class Bootstrap<T extends Configuration> {
-    private final Service<T> service;
+    private String name;
     private ConfigurationSourceProvider configurationProvider = new FileConfigurationSourceProvider();
     private final ObjectMapperFactory objectMapperFactory;
     private final List<Bundle> bundles;
@@ -22,15 +22,19 @@ public class Bootstrap<T extends Configuration> {
     private final List<Command> commands;
 
     public Bootstrap(Service<T> service) {
-        this.service = service;
+        this.name = service.getClass().getSimpleName();
         this.objectMapperFactory = new ObjectMapperFactory();
         this.bundles = Lists.newArrayList();
         this.configuredBundles = Lists.newArrayList();
         this.commands = Lists.newArrayList();
     }
 
-    public Service<T> getService() {
-        return service;
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     public ConfigurationSourceProvider getConfigurationProvider() {
