@@ -19,30 +19,31 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 import javax.annotation.Nullable;
 
-/** A configuration fragment for Objective C. */
+/**
+ * A configuration fragment for Objective C.
+ */
 @SkylarkModule(
-    name = "objc",
-    category = SkylarkModuleCategory.CONFIGURATION_FRAGMENT,
-    doc = "A configuration fragment for Objective-C.")
-public interface ObjcConfigurationApi<ApplePlatformTypeApiT extends ApplePlatformTypeApi>
-    extends StarlarkValue {
+  name = "objc",
+  category = SkylarkModuleCategory.CONFIGURATION_FRAGMENT,
+  doc = "A configuration fragment for Objective-C."
+)
+public interface ObjcConfigurationApi<ApplePlatformTypeApiT extends ApplePlatformTypeApi> {
 
   @SkylarkCallable(
       name = "ios_simulator_device",
       structField = true,
       allowReturnNones = true,
       doc = "The type of device (e.g. 'iPhone 6') to use when running on the simulator.")
-  String getIosSimulatorDevice();
+  public String getIosSimulatorDevice();
 
   @SkylarkCallable(
       name = "ios_simulator_version",
       structField = true,
       allowReturnNones = true,
       doc = "The SDK version of the iOS simulator to use when running on the simulator.")
-  DottedVersionApi<?> getIosSimulatorVersion();
+  public DottedVersionApi<?> getIosSimulatorVersion();
 
   @SkylarkCallable(
       name = "simulator_device_for_platform_type",
@@ -56,7 +57,7 @@ public interface ObjcConfigurationApi<ApplePlatformTypeApiT extends ApplePlatfor
             type = ApplePlatformTypeApi.class,
             doc = "The apple platform type."),
       })
-  String getSimulatorDeviceForPlatformType(ApplePlatformTypeApiT platformType);
+  public String getSimulatorDeviceForPlatformType(ApplePlatformTypeApiT platformType);
 
   @SkylarkCallable(
       name = "simulator_version_for_platform_type",
@@ -70,64 +71,50 @@ public interface ObjcConfigurationApi<ApplePlatformTypeApiT extends ApplePlatfor
             type = ApplePlatformTypeApi.class,
             doc = "The apple platform type."),
       })
-  DottedVersionApi<?> getSimulatorVersionForPlatformType(ApplePlatformTypeApiT platformType);
+  public DottedVersionApi<?> getSimulatorVersionForPlatformType(ApplePlatformTypeApiT platformType);
 
   @SkylarkCallable(
       name = "generate_dsym",
       doc = "Whether to generate debug symbol(.dSYM) artifacts.",
       structField = true)
-  boolean generateDsym();
+  public boolean generateDsym();
 
   @SkylarkCallable(
       name = "generate_linkmap",
       doc = "Whether to generate linkmap artifacts.",
       structField = true)
-  boolean generateLinkmap();
+  public boolean generateLinkmap();
 
   @SkylarkCallable(
-      name = "run_memleaks",
-      structField = true,
-      doc = "Returns a boolean indicating whether memleaks should be run during tests or not.")
-  boolean runMemleaks();
+    name = "run_memleaks",
+    structField = true,
+    doc = "Returns a boolean indicating whether memleaks should be run during tests or not."
+  )
+  public boolean runMemleaks();
 
-  @SkylarkCallable(
-      name = "copts_for_current_compilation_mode",
-      structField = true,
-      doc =
-          "Returns a list of default options to use for compiling Objective-C in the current "
-              + "mode.")
-  ImmutableList<String> getCoptsForCompilationMode();
+  @SkylarkCallable(name = "copts_for_current_compilation_mode", structField = true,
+      doc = "Returns a list of default options to use for compiling Objective-C in the current "
+      + "mode.")
+  public ImmutableList<String> getCoptsForCompilationMode();
 
-  @SkylarkCallable(
-      name = "copts",
-      structField = true,
-      doc =
-          "Returns a list of options to use for compiling Objective-C.These options are applied"
-              + " after any default options but before options specified in the attributes of the"
-              + " rule.")
-  ImmutableList<String> getCopts();
+  @SkylarkCallable(name = "copts", structField = true,
+      doc = "Returns a list of options to use for compiling Objective-C."
+      + "These options are applied after any default options but before options specified in the "
+      + "attributes of the rule.")
+  public ImmutableList<String> getCopts();
 
-  @SkylarkCallable(
-      name = "signing_certificate_name",
-      structField = true,
-      allowReturnNones = true,
-      doc =
-          "Returns the flag-supplied certificate name to be used in signing, or None if no such "
-              + "certificate was specified.")
+  @SkylarkCallable(name = "signing_certificate_name", structField = true, allowReturnNones = true,
+      doc = "Returns the flag-supplied certificate name to be used in signing, or None if no such "
+      + "certificate was specified.")
   @Nullable
-  String getSigningCertName();
+  public String getSigningCertName();
 
-  @SkylarkCallable(
-      name = "uses_device_debug_entitlements",
-      structField = true,
-      doc =
-          "Returns whether device debug entitlements should be included when signing an "
-              + "application.")
-  boolean useDeviceDebugEntitlements();
+  @SkylarkCallable(name = "uses_device_debug_entitlements", structField = true,
+      doc = "Returns whether device debug entitlements should be included when signing an "
+      + "application.")
+  public boolean useDeviceDebugEntitlements();
 
-  @SkylarkCallable(
-      name = "enable_apple_binary_native_protos",
-      structField = true,
+  @SkylarkCallable(name = "enable_apple_binary_native_protos", structField = true,
       doc = "Returns whether apple_binary should generate and link protos natively.")
-  boolean enableAppleBinaryNativeProtos();
+  public boolean enableAppleBinaryNativeProtos();
 }
