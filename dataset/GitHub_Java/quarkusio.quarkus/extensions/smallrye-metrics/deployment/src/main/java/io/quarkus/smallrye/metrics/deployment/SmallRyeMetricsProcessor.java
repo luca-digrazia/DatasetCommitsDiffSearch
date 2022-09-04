@@ -25,7 +25,6 @@ import java.util.Set;
 import org.eclipse.microprofile.metrics.annotation.Counted;
 import org.eclipse.microprofile.metrics.annotation.Gauge;
 import org.eclipse.microprofile.metrics.annotation.Metered;
-import org.eclipse.microprofile.metrics.annotation.Metric;
 import org.eclipse.microprofile.metrics.annotation.Timed;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationValue;
@@ -33,7 +32,6 @@ import org.jboss.jandex.DotName;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
-import io.quarkus.arc.deployment.AutoInjectAnnotationBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -118,11 +116,6 @@ public class SmallRyeMetricsProcessor {
                 }
             }
         }));
-    }
-
-    @BuildStep
-    AutoInjectAnnotationBuildItem autoInjectMetric() {
-        return new AutoInjectAnnotationBuildItem(DotName.createSimple(Metric.class.getName()));
     }
 
     @BuildStep
