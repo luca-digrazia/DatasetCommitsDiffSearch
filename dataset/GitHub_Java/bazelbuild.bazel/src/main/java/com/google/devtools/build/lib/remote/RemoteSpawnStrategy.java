@@ -199,21 +199,20 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
     EventHandler eventHandler = executor.getEventHandler();
 
     RemoteActionCache actionCache = null;
-    GrpcRemoteExecutor workExecutor = null;
+    RemoteWorkExecutor workExecutor = null;
     if (spawn.isRemotable()) {
       // Initialize remote cache and execution handlers. We use separate handlers for every
       // action to enable server-side parallelism (need a different gRPC channel per action).
       try {
-        if (SimpleBlobStoreFactory.isRemoteCacheOptions(options)) {
-          actionCache = new SimpleBlobStoreActionCache(SimpleBlobStoreFactory.create(options));
+        if (ConcurrentMapFactory.isRemoteCacheOptions(options)) {
+          actionCache = new ConcurrentMapActionCache(ConcurrentMapFactory.create(options));
         } else if (GrpcActionCache.isRemoteCacheOptions(options)) {
           actionCache = new GrpcActionCache(options);
         }
         // Otherwise actionCache remains null and remote caching/execution are disabled.
 
-        if (actionCache != null && GrpcRemoteExecutor.isRemoteExecutionOptions(options)) {
-          workExecutor = new GrpcRemoteExecutor(
-              RemoteUtils.createChannelLegacy(options.remoteWorker), options);
+        if (actionCache != null && RemoteWorkExecutor.isRemoteExecutionOptions(options)) {
+          workExecutor = new RemoteWorkExecutor(options);
         }
       } catch (InvalidConfigurationException e) {
         eventHandler.handle(Event.warn(e.toString()));
@@ -221,6 +220,10 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
     }
     if (!spawn.isRemotable() || actionCache == null) {
       standaloneStrategy.exec(spawn, actionExecutionContext);
+      return;
+    }
+    if (workExecutor == null) {
+      execLocally(spawn, actionExecutionContext, actionCache, actionKey);
       return;
     }
     if (executor.reportsSubcommands()) {
@@ -263,11 +266,6 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
         } catch (CacheNotFoundException e) {
           acceptCachedResult = false; // Retry the action remotely and invalidate the results.
         }
-      }
-
-      if (workExecutor == null) {
-        execLocally(spawn, actionExecutionContext, actionCache, actionKey);
-        return;
       }
 
       // Upload the command and all the inputs into the remote cache.

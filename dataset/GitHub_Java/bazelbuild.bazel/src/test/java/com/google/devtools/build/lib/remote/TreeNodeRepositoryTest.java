@@ -16,25 +16,20 @@ package com.google.devtools.build.lib.remote;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
-import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Root;
-import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
+import com.google.devtools.build.lib.remote.RemoteProtocol.ContentDigest;
+import com.google.devtools.build.lib.remote.RemoteProtocol.FileNode;
 import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
 import com.google.devtools.build.lib.testutil.Scratch;
+import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystem.HashFunction;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
-import com.google.devtools.remoteexecution.v1test.Digest;
-import com.google.devtools.remoteexecution.v1test.Directory;
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.SortedMap;
-import java.util.TreeMap;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -44,31 +39,21 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class TreeNodeRepositoryTest {
   private Scratch scratch;
-  private DigestUtil digestUtil;
-  private Path execRoot;
   private Root rootDir;
+  private Path rootPath;
 
   @Before
   public final void setRootDir() throws Exception {
-    digestUtil = new DigestUtil(HashFunction.SHA256);
-    scratch = new Scratch(new InMemoryFileSystem(BlazeClock.instance(), HashFunction.SHA256));
-    execRoot = scratch.getFileSystem().getPath("/exec/root");
-    rootDir = Root.asSourceRoot(scratch.dir("/exec/root"));
+    FileSystem.setDigestFunctionForTesting(HashFunction.SHA1);
+    scratch = new Scratch();
+    rootDir = Root.asDerivedRoot(scratch.dir("/exec/root"));
+    rootPath = rootDir.getPath();
   }
 
   private TreeNodeRepository createTestTreeNodeRepository() {
-    ActionInputFileCache inputFileCache =
-        new SingleBuildFileCache(execRoot.getPathString(), scratch.getFileSystem());
-    return new TreeNodeRepository(execRoot, inputFileCache, digestUtil);
-  }
-
-  private TreeNode buildFromActionInputs(TreeNodeRepository repo, ActionInput... inputs)
-      throws IOException {
-    TreeMap<PathFragment, ActionInput> sortedMap = new TreeMap<>();
-    for (ActionInput input : inputs) {
-      sortedMap.put(PathFragment.create(input.getExecPathString()), input);
-    }
-    return repo.buildFromActionInputs(sortedMap);
+    ActionInputFileCache inputFileCache = new SingleBuildFileCache(
+        rootPath.getPathString(), scratch.getFileSystem());
+    return new TreeNodeRepository(rootPath, inputFileCache);
   }
 
   @Test
@@ -79,8 +64,8 @@ public class TreeNodeRepositoryTest {
     Artifact bar = new Artifact(scratch.file("/exec/root/b/bar.txt"), rootDir);
     Artifact baz = new Artifact(scratch.file("/exec/root/c/baz.txt"), rootDir);
     TreeNodeRepository repo = createTestTreeNodeRepository();
-    TreeNode root1 = buildFromActionInputs(repo, fooCc, fooH, bar);
-    TreeNode root2 = buildFromActionInputs(repo, fooCc, fooH, baz);
+    TreeNode root1 = repo.buildFromActionInputs(ImmutableList.<ActionInput>of(fooCc, fooH, bar));
+    TreeNode root2 = repo.buildFromActionInputs(ImmutableList.<ActionInput>of(fooCc, fooH, baz));
     // Reusing same node for the "a" subtree.
     assertThat(
             root1.getChildEntries().get(0).getChild() == root2.getChildEntries().get(0).getChild())
@@ -92,32 +77,40 @@ public class TreeNodeRepositoryTest {
     Artifact foo = new Artifact(scratch.file("/exec/root/a/foo", "1"), rootDir);
     Artifact bar = new Artifact(scratch.file("/exec/root/a/bar", "11"), rootDir);
     TreeNodeRepository repo = createTestTreeNodeRepository();
-    TreeNode root = buildFromActionInputs(repo, foo, bar);
+    TreeNode root = repo.buildFromActionInputs(ImmutableList.<ActionInput>of(foo, bar));
     TreeNode aNode = root.getChildEntries().get(0).getChild();
     TreeNode fooNode = aNode.getChildEntries().get(1).getChild(); // foo > bar in sort order!
     TreeNode barNode = aNode.getChildEntries().get(0).getChild();
 
     repo.computeMerkleDigests(root);
-    ImmutableCollection<Digest> digests = repo.getAllDigests(root);
-    Digest rootDigest = repo.getMerkleDigest(root);
-    Digest aDigest = repo.getMerkleDigest(aNode);
-    Digest fooDigest = repo.getMerkleDigest(fooNode); // The contents digest.
-    Digest barDigest = repo.getMerkleDigest(barNode);
-    assertThat(digests).containsExactly(rootDigest, aDigest, barDigest, fooDigest);
+    ImmutableCollection<ContentDigest> digests = repo.getAllDigests(root);
+    ContentDigest rootDigest = repo.getMerkleDigest(root);
+    ContentDigest aDigest = repo.getMerkleDigest(aNode);
+    ContentDigest fooDigest = repo.getMerkleDigest(fooNode);
+    ContentDigest fooContentsDigest = ContentDigests.computeDigest(foo.getPath());
+    ContentDigest barDigest = repo.getMerkleDigest(barNode);
+    ContentDigest barContentsDigest = ContentDigests.computeDigest(bar.getPath());
+    assertThat(digests)
+        .containsExactly(
+            rootDigest, aDigest, barDigest, barContentsDigest, fooDigest, fooContentsDigest);
 
-    ArrayList<Directory> directories = new ArrayList<>();
+    ArrayList<FileNode> fileNodes = new ArrayList<>();
     ArrayList<ActionInput> actionInputs = new ArrayList<>();
-    repo.getDataFromDigests(digests, actionInputs, directories);
+    repo.getDataFromDigests(digests, actionInputs, fileNodes);
     assertThat(actionInputs).containsExactly(bar, foo);
-    assertThat(directories).hasSize(2);
-    Directory rootDirectory = directories.get(0);
-    assertThat(rootDirectory.getDirectories(0).getName()).isEqualTo("a");
-    assertThat(rootDirectory.getDirectories(0).getDigest()).isEqualTo(aDigest);
-    Directory aDirectory = directories.get(1);
-    assertThat(aDirectory.getFiles(0).getName()).isEqualTo("bar");
-    assertThat(aDirectory.getFiles(0).getDigest()).isEqualTo(barDigest);
-    assertThat(aDirectory.getFiles(1).getName()).isEqualTo("foo");
-    assertThat(aDirectory.getFiles(1).getDigest()).isEqualTo(fooDigest);
+    assertThat(fileNodes).hasSize(4);
+    FileNode rootFileNode = fileNodes.get(0);
+    assertThat(rootFileNode.getChild(0).getPath()).isEqualTo("a");
+    assertThat(rootFileNode.getChild(0).getDigest()).isEqualTo(aDigest);
+    FileNode aFileNode = fileNodes.get(1);
+    assertThat(aFileNode.getChild(0).getPath()).isEqualTo("bar");
+    assertThat(aFileNode.getChild(0).getDigest()).isEqualTo(barDigest);
+    assertThat(aFileNode.getChild(1).getPath()).isEqualTo("foo");
+    assertThat(aFileNode.getChild(1).getDigest()).isEqualTo(fooDigest);
+    FileNode barFileNode = fileNodes.get(2);
+    assertThat(barFileNode.getFileMetadata().getDigest()).isEqualTo(barContentsDigest);
+    FileNode fooFileNode = fileNodes.get(3);
+    assertThat(fooFileNode.getFileMetadata().getDigest()).isEqualTo(fooContentsDigest);
   }
 
   @Test
@@ -126,69 +119,9 @@ public class TreeNodeRepositoryTest {
     Artifact foo2 = new Artifact(scratch.file("/exec/root/b/foo", "1"), rootDir);
     Artifact foo3 = new Artifact(scratch.file("/exec/root/c/foo", "1"), rootDir);
     TreeNodeRepository repo = createTestTreeNodeRepository();
-    TreeNode root = buildFromActionInputs(repo, foo1, foo2, foo3);
+    TreeNode root = repo.buildFromActionInputs(ImmutableList.<ActionInput>of(foo1, foo2, foo3));
     repo.computeMerkleDigests(root);
-    // Reusing same node for the "foo" subtree: only need the root, root child, and foo contents:
-    assertThat(repo.getAllDigests(root)).hasSize(3);
-  }
-
-  @Test
-  public void testEmptyTree() throws Exception {
-    SortedMap<PathFragment, ActionInput> inputs = new TreeMap<>();
-    TreeNodeRepository repo = createTestTreeNodeRepository();
-    TreeNode root = repo.buildFromActionInputs(inputs);
-    repo.computeMerkleDigests(root);
-
-    assertThat(root.getChildEntries()).isEmpty();
-  }
-
-  @Test
-  public void testDirectoryInput() throws Exception {
-    Artifact foo = new Artifact(scratch.dir("/exec/root/a/foo"), rootDir);
-    scratch.file("/exec/root/a/foo/foo.h", "1");
-    ActionInput fooH = ActionInputHelper.fromPath("/exec/root/a/foo/foo.h");
-    scratch.file("/exec/root/a/foo/foo.cc", "2");
-    ActionInput fooCc = ActionInputHelper.fromPath("/exec/root/a/foo/foo.cc");
-    Artifact bar = new Artifact(scratch.file("/exec/root/a/bar.txt"), rootDir);
-    TreeNodeRepository repo = createTestTreeNodeRepository();
-
-    TreeNode root = buildFromActionInputs(repo, foo, bar);
-    TreeNode aNode = root.getChildEntries().get(0).getChild();
-    TreeNode fooNode = aNode.getChildEntries().get(1).getChild(); // foo > bar in sort order!
-    TreeNode barNode = aNode.getChildEntries().get(0).getChild();
-
-    TreeNode fooHNode =
-        fooNode.getChildEntries().get(1).getChild(); // foo.h > foo.cc in sort order!
-    TreeNode fooCcNode = fooNode.getChildEntries().get(0).getChild();
-
-    repo.computeMerkleDigests(root);
-    ImmutableCollection<Digest> digests = repo.getAllDigests(root);
-    Digest rootDigest = repo.getMerkleDigest(root);
-    Digest aDigest = repo.getMerkleDigest(aNode);
-    Digest fooDigest = repo.getMerkleDigest(fooNode);
-    Digest fooHDigest = repo.getMerkleDigest(fooHNode);
-    Digest fooCcDigest = repo.getMerkleDigest(fooCcNode);
-    Digest barDigest = repo.getMerkleDigest(barNode);
-    assertThat(digests)
-        .containsExactly(rootDigest, aDigest, barDigest, fooDigest, fooHDigest, fooCcDigest);
-
-    ArrayList<Directory> directories = new ArrayList<>();
-    ArrayList<ActionInput> actionInputs = new ArrayList<>();
-    repo.getDataFromDigests(digests, actionInputs, directories);
-    assertThat(actionInputs).containsExactly(bar, fooH, fooCc);
-    assertThat(directories).hasSize(3); // root, root/a and root/a/foo
-    Directory rootDirectory = directories.get(0);
-    assertThat(rootDirectory.getDirectories(0).getName()).isEqualTo("a");
-    assertThat(rootDirectory.getDirectories(0).getDigest()).isEqualTo(aDigest);
-    Directory aDirectory = directories.get(1);
-    assertThat(aDirectory.getFiles(0).getName()).isEqualTo("bar.txt");
-    assertThat(aDirectory.getFiles(0).getDigest()).isEqualTo(barDigest);
-    assertThat(aDirectory.getDirectories(0).getName()).isEqualTo("foo");
-    assertThat(aDirectory.getDirectories(0).getDigest()).isEqualTo(fooDigest);
-    Directory fooDirectory = directories.get(2);
-    assertThat(fooDirectory.getFiles(0).getName()).isEqualTo("foo.cc");
-    assertThat(fooDirectory.getFiles(0).getDigest()).isEqualTo(fooCcDigest);
-    assertThat(fooDirectory.getFiles(1).getName()).isEqualTo("foo.h");
-    assertThat(fooDirectory.getFiles(1).getDigest()).isEqualTo(fooHDigest);
+    // Reusing same node for the "foo" subtree: only need the root, root child, foo, and contents:
+    assertThat(repo.getAllDigests(root)).hasSize(4);
   }
 }
