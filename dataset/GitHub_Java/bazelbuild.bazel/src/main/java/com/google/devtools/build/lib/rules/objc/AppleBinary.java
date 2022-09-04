@@ -139,15 +139,13 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
     ApplePlatform platform = appleConfiguration.getMultiArchPlatform(platformType);
-    ImmutableListMultimap<String, TransitiveInfoCollection> cpuToDepsCollectionMap =
-        MultiArchBinarySupport.transformMap(
-            ruleContext.getPrerequisitesByConfiguration("deps", Mode.SPLIT));
-    ImmutableListMultimap<String, ConfiguredTargetAndData> cpuToCTATDepsCollectionMap =
-        MultiArchBinarySupport.transformMap(
-            ruleContext.getPrerequisiteCofiguredTargetAndTargetsByConfiguration(
-                "deps", Mode.SPLIT));
+    ImmutableListMultimap<BuildConfiguration, TransitiveInfoCollection> configToDepsCollectionMap =
+        ruleContext.getPrerequisitesByConfiguration("deps", Mode.SPLIT);
+    ImmutableListMultimap<BuildConfiguration, ConfiguredTargetAndData>
+        configToCTATDepsCollectionMap =
+            ruleContext.getPrerequisiteCofiguredTargetAndTargetsByConfiguration("deps", Mode.SPLIT);
 
-    ImmutableMap<BuildConfiguration, CcToolchainProvider> childConfigurationsAndToolchains =
+    ImmutableMap<BuildConfiguration, CcToolchainProvider> childConfigurations =
         MultiArchBinarySupport.getChildConfigurationsAndToolchains(ruleContext);
     Artifact outputArtifact =
         ObjcRuleClasses.intermediateArtifacts(ruleContext).combinedArchitectureBinary();
@@ -156,18 +154,19 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
 
     ImmutableSet<DependencySpecificConfiguration> dependencySpecificConfigurations =
         multiArchBinarySupport.getDependencySpecificConfigurations(
-            childConfigurationsAndToolchains,
-            cpuToDepsCollectionMap,
-            cpuToCTATDepsCollectionMap,
+            childConfigurations,
+            configToDepsCollectionMap,
+            configToCTATDepsCollectionMap,
             getDylibProviderTargets(ruleContext));
 
     Map<String, NestedSet<Artifact>> outputGroupCollector = new TreeMap<>();
     NestedSet<Artifact> binariesToLipo =
         multiArchBinarySupport.registerActions(
+            platform,
             getExtraLinkArgs(ruleContext),
             dependencySpecificConfigurations,
             getExtraLinkInputs(ruleContext),
-            cpuToDepsCollectionMap,
+            configToDepsCollectionMap,
             outputGroupCollector);
 
     new LipoSupport(ruleContext)
