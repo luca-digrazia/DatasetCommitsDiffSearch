@@ -23,8 +23,6 @@ import org.graylog.security.authservice.UserDetails;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.plugin.security.PasswordAlgorithm;
 import org.graylog2.security.PasswordAlgorithmFactory;
-import org.graylog2.security.encryption.EncryptedValue;
-import org.graylog2.security.encryption.EncryptedValueService;
 import org.graylog2.shared.users.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,15 +36,11 @@ public class MongoDBAuthServiceBackend implements AuthServiceBackend {
     private static final Logger LOG = LoggerFactory.getLogger(MongoDBAuthServiceBackend.class);
 
     private final UserService userService;
-    private final EncryptedValueService encryptedValueService;
     private final PasswordAlgorithmFactory passwordAlgorithmFactory;
 
     @Inject
-    public MongoDBAuthServiceBackend(UserService userService,
-                                     EncryptedValueService encryptedValueService,
-                                     PasswordAlgorithmFactory passwordAlgorithmFactory) {
+    public MongoDBAuthServiceBackend(UserService userService, PasswordAlgorithmFactory passwordAlgorithmFactory) {
         this.userService = userService;
-        this.encryptedValueService = encryptedValueService;
         this.passwordAlgorithmFactory = passwordAlgorithmFactory;
     }
 
@@ -90,12 +84,12 @@ public class MongoDBAuthServiceBackend implements AuthServiceBackend {
         return Optional.of(userDetails);
     }
 
-    private boolean isValidPassword(User user, EncryptedValue password) {
+    private boolean isValidPassword(User user, String password) {
         final PasswordAlgorithm passwordAlgorithm = passwordAlgorithmFactory.forPassword(user.getHashedPassword());
         if (passwordAlgorithm == null) {
             return false;
         }
-        return passwordAlgorithm.matches(user.getHashedPassword(), encryptedValueService.decrypt(password));
+        return passwordAlgorithm.matches(user.getHashedPassword(), password);
     }
 
     @Override
