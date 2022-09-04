@@ -1,18 +1,34 @@
 package io.quarkus.vertx.deployment;
 
-import static io.quarkus.vertx.deployment.VertxConstants.*;
+import static io.quarkus.vertx.deployment.VertxConstants.AXLE_MESSAGE;
+import static io.quarkus.vertx.deployment.VertxConstants.COMPLETION_STAGE;
+import static io.quarkus.vertx.deployment.VertxConstants.CONSUME_EVENT;
+import static io.quarkus.vertx.deployment.VertxConstants.LOCAL_EVENT_BUS_CODEC;
+import static io.quarkus.vertx.deployment.VertxConstants.MESSAGE;
+import static io.quarkus.vertx.deployment.VertxConstants.MUTINY_MESSAGE;
+import static io.quarkus.vertx.deployment.VertxConstants.RX_MESSAGE;
+import static io.quarkus.vertx.deployment.VertxConstants.UNI;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-import javax.inject.Inject;
-
-import org.jboss.jandex.*;
+import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget;
+import org.jboss.jandex.AnnotationValue;
+import org.jboss.jandex.DotName;
+import org.jboss.jandex.IndexView;
+import org.jboss.jandex.MethodInfo;
+import org.jboss.jandex.ParameterizedType;
+import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -21,13 +37,11 @@ public class EventBusCodecProcessor {
 
     private static final Logger LOGGER = Logger.getLogger(EventBusCodecProcessor.class.getName());
 
-    @Inject
-    BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
-
     @BuildStep
     public void registerCodecs(
             BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
-            BuildProducer<MessageCodecBuildItem> messageCodecs) {
+            BuildProducer<MessageCodecBuildItem> messageCodecs,
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
 
         final IndexView index = beanArchiveIndexBuildItem.getIndex();
         Collection<AnnotationInstance> consumeEventAnnotationInstances = index.getAnnotations(CONSUME_EVENT);
@@ -69,6 +83,7 @@ public class EventBusCodecProcessor {
 
             if (codecTargetFromReturnType != null && !hasBuiltInCodec(codecTargetFromReturnType)
                     && !codecByTypes.containsKey(codecTargetFromReturnType)) {
+
                 LOGGER.infof("Local Message Codec registered for type %s", codecTargetFromReturnType.toString());
                 codecByTypes.put(codecTargetFromReturnType, LOCAL_EVENT_BUS_CODEC);
             }
@@ -104,6 +119,7 @@ public class EventBusCodecProcessor {
 
             // Buffers classes
             Buffer.class.getName(),
+            io.vertx.mutiny.core.buffer.Buffer.class.getName(),
             io.vertx.axle.core.buffer.Buffer.class.getName(),
             io.vertx.reactivex.core.buffer.Buffer.class.getName());
 
@@ -113,7 +129,8 @@ public class EventBusCodecProcessor {
             return returnType;
         } else if (returnType.kind() == Type.Kind.PARAMETERIZED_TYPE) {
             ParameterizedType returnedParamType = returnType.asParameterizedType();
-            if (!returnedParamType.arguments().isEmpty() && (returnedParamType.name().equals(COMPLETION_STAGE))) {
+            if (!returnedParamType.arguments().isEmpty()
+                    && (returnedParamType.name().equals(COMPLETION_STAGE) || returnedParamType.name().equals(UNI))) {
                 return returnedParamType.arguments().get(0);
             } else {
                 return returnedParamType;
@@ -164,6 +181,7 @@ public class EventBusCodecProcessor {
     private static boolean isMessageClass(ParameterizedType type) {
         return type.name().equals(MESSAGE)
                 || type.name().equals(RX_MESSAGE)
-                || type.name().equals(AXLE_MESSAGE);
+                || type.name().equals(AXLE_MESSAGE)
+                || type.name().equals(MUTINY_MESSAGE);
     }
 }

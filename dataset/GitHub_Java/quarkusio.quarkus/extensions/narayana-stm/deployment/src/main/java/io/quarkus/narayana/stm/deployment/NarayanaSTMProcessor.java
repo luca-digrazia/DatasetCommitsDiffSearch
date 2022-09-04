@@ -18,7 +18,6 @@ import org.jboss.stm.annotations.Transactional;
 
 import com.arjuna.ats.internal.arjuna.coordinator.CheckedActionFactoryImple;
 import com.arjuna.ats.internal.arjuna.objectstore.ShadowNoFileLockStore;
-import com.arjuna.ats.internal.arjuna.utils.SocketProcessId;
 import com.arjuna.ats.txoj.Lock;
 
 import io.quarkus.deployment.Feature;
@@ -31,7 +30,6 @@ import io.quarkus.deployment.builditem.nativeimage.NativeImageProxyDefinitionBui
 import io.quarkus.deployment.builditem.nativeimage.NativeImageSystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
 import io.quarkus.narayana.stm.runtime.NarayanaSTMRecorder;
 
 class NarayanaSTMProcessor {
@@ -62,11 +60,8 @@ class NarayanaSTMProcessor {
     // so disable it at runtime
     @BuildStep()
     @Record(RUNTIME_INIT)
-    public void configureRuntimeProperties(NarayanaSTMRecorder recorder,
-            BuildProducer<RuntimeInitializedClassBuildItem> runtimeInit) {
+    public void configureRuntimeProperties(NarayanaSTMRecorder recorder) {
         recorder.disableTransactionStatusManager();
-        runtimeInit.produce(new RuntimeInitializedClassBuildItem(SocketProcessId.class.getName()));
-        runtimeInit.produce(new RuntimeInitializedClassBuildItem(Lock.class.getName()));
     }
 
     // register STM dynamic proxies
