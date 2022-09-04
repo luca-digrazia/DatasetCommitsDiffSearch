@@ -54,7 +54,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -97,14 +96,7 @@ public class CommandEnvironment {
   private Path workingDirectory;
   private String workspaceName;
   private boolean haveSetupPackageCache = false;
-
-  // This AtomicReference is set to:
-  //   - null, if neither BlazeModuleEnvironment#exit nor #precompleteCommand have been called
-  //   - Optional.of(e), if BlazeModuleEnvironment#exit has been called with value e
-  //   - Optional.empty(), if #precompleteCommand was called before any call to
-  //     BlazeModuleEnvironment#exit
-  private final AtomicReference<Optional<AbruptExitException>> pendingException =
-      new AtomicReference<>();
+  private AtomicReference<AbruptExitException> pendingException = new AtomicReference<>();
 
   private final Object fileCacheLock = new Object();
 
@@ -125,7 +117,7 @@ public class CommandEnvironment {
     public void exit(AbruptExitException exception) {
       Preconditions.checkNotNull(exception);
       Preconditions.checkNotNull(exception.getExitCode());
-      if (pendingException.compareAndSet(null, Optional.of(exception))) {
+      if (pendingException.compareAndSet(null, exception)) {
         // There was no exception, so we're the first one to ask for an exit. Interrupt the command.
         commandThread.interrupt();
       }
@@ -531,7 +523,7 @@ public class CommandEnvironment {
   private ExitCode finalizeExitCode() {
     // Set the pending exception so that further calls to exit(AbruptExitException) don't lead to
     // unwanted thread interrupts.
-    if (pendingException.compareAndSet(null, Optional.empty())) {
+    if (pendingException.compareAndSet(null, new AbruptExitException("", null))) {
       return null;
     }
     if (Thread.currentThread() == commandThread) {
@@ -553,9 +545,11 @@ public class CommandEnvironment {
     return finalizeExitCode();
   }
 
-  /** Returns the current exit code requested by modules, or null if no exit has been requested. */
+  /**
+   * Returns the current exit code requested by modules, or null if no exit has been requested.
+   */
   @Nullable
-  private ExitCode getPendingExitCode() {
+  public ExitCode getPendingExitCode() {
     AbruptExitException exception = getPendingException();
     return exception == null ? null : exception.getExitCode();
   }
@@ -565,10 +559,8 @@ public class CommandEnvironment {
    *
    * <p>Prefer getPendingExitCode or throwPendingException where appropriate.
    */
-  @Nullable
   public AbruptExitException getPendingException() {
-    Optional<AbruptExitException> abruptExitExceptionMaybe = pendingException.get();
-    return abruptExitExceptionMaybe == null ? null : abruptExitExceptionMaybe.orElse(null);
+    return pendingException.get();
   }
 
   /**

@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.skyframe;
 import static com.google.devtools.build.lib.concurrent.Uninterruptibles.callUninterruptibly;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
@@ -96,7 +97,6 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetExpander;
 import com.google.devtools.build.lib.concurrent.NamedForkJoinPool;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
@@ -397,8 +397,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       MutableArtifactFactorySupplier artifactResolverSupplier,
       @Nullable ConfiguredTargetProgressReceiver configuredTargetProgress,
       @Nullable NonexistentFileReceiver nonexistentFileReceiver,
-      @Nullable ManagedDirectoriesKnowledge managedDirectoriesKnowledge,
-      NestedSetExpander nestedSetExpander) {
+      @Nullable ManagedDirectoriesKnowledge managedDirectoriesKnowledge) {
     // Strictly speaking, these arguments are not required for initialization, but all current
     // callsites have them at hand, so we might as well set them during construction.
     this.skyframeExecutorConsumerOnInit = skyframeExecutorConsumerOnInit;
@@ -428,11 +427,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     this.defaultBuildOptions = defaultBuildOptions;
     this.skyframeActionExecutor =
         new SkyframeActionExecutor(
-            actionKeyContext,
-            statusReporterRef,
-            this::getPathEntries,
-            this::createSourceArtifact,
-            nestedSetExpander);
+            actionKeyContext, statusReporterRef, this::getPathEntries, this::createSourceArtifact);
     this.skyframeBuildView =
         new SkyframeBuildView(
             directories,
@@ -1264,20 +1259,23 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   protected Differencer.Diff getDiff(
       TimestampGranularityMonitor tsgm,
-      Collection<PathFragment> modifiedSourceFiles,
+      Iterable<PathFragment> modifiedSourceFiles,
       final Root pathEntry)
       throws InterruptedException {
-    if (modifiedSourceFiles.isEmpty()) {
+    if (Iterables.isEmpty(modifiedSourceFiles)) {
       return new ImmutableDiff(ImmutableList.<SkyKey>of(), ImmutableMap.<SkyKey, SkyValue>of());
     }
     // TODO(bazel-team): change ModifiedFileSet to work with RootedPaths instead of PathFragments.
-    Collection<SkyKey> dirtyFileStateSkyKeys =
-        Collections2.transform(
+    Iterable<SkyKey> dirtyFileStateSkyKeys =
+        Iterables.transform(
             modifiedSourceFiles,
-            pathFragment -> {
-              Preconditions.checkState(
-                  !pathFragment.isAbsolute(), "found absolute PathFragment: %s", pathFragment);
-              return FileStateValue.key(RootedPath.toRootedPath(pathEntry, pathFragment));
+            new Function<PathFragment, SkyKey>() {
+              @Override
+              public SkyKey apply(PathFragment pathFragment) {
+                Preconditions.checkState(
+                    !pathFragment.isAbsolute(), "found absolute PathFragment: %s", pathFragment);
+                return FileStateValue.key(RootedPath.toRootedPath(pathEntry, pathFragment));
+              }
             });
     // We only need to invalidate directory values when a file has been created or deleted or
     // changes type, not when it has merely been modified. Unfortunately we do not have that
@@ -1888,6 +1886,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         getConfigurations(eventHandler, ImmutableList.of(options), options, keepGoing));
   }
 
+  @VisibleForTesting
   public BuildConfiguration getConfiguration(
       ExtendedEventHandler eventHandler, BuildConfigurationValue.Key configurationKey) {
     if (configurationKey == null) {
