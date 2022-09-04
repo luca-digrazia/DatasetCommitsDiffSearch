@@ -21,7 +21,6 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.concurrent.locks.LockSupport;
 
 import org.jboss.logging.Logger;
 
@@ -84,8 +83,6 @@ public class DevModeMain {
                 }
             }
         }, "Quarkus Shutdown Thread"));
-
-        LockSupport.park();
     }
 
     private static synchronized void doStart() {
@@ -96,13 +93,12 @@ public class DevModeMain {
             //we can potentially throw away this class loader, and reload the app
             try {
                 Thread.currentThread().setContextClassLoader(runtimeCl);
-                RuntimeRunner.Builder builder = RuntimeRunner.builder()
+                RuntimeRunner runner = RuntimeRunner.builder()
                         .setLaunchMode(LaunchMode.DEVELOPMENT)
                         .setClassLoader(runtimeCl)
                         .setTarget(classesRoot.toPath())
                         .setFrameworkClassesPath(wiringDir.toPath())
-                        .setTransformerCache(cacheDir.toPath());
-                RuntimeRunner runner = builder
+                        .setTransformerCache(cacheDir.toPath())
                         .build();
                 runner.run();
                 closeable = runner;

@@ -24,13 +24,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -51,7 +49,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
     private final Map<String, Long> configFileTimestamps = new ConcurrentHashMap<>();
 
     private static final Logger log = Logger.getLogger(RuntimeUpdatesProcessor.class.getPackage().getName());
-    private final List<Runnable> preScanSteps = new CopyOnWriteArrayList<>();
 
     public RuntimeUpdatesProcessor(Path classesDir, Path sourcesDir, Path resourcesDir, ClassLoaderCompiler compiler) {
         this.classesDir = classesDir;
@@ -82,13 +79,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
 
     public boolean doScan() throws IOException {
         final long startNanoseconds = System.nanoTime();
-        for (Runnable i : preScanSteps) {
-            try {
-                i.run();
-            } catch (Throwable t) {
-                log.error("Pre Scan step failed", t);
-            }
-        }
 
         boolean classChanged = checkForChangedClasses();
         boolean configFileChanged = checkForConfigFileChange();
@@ -99,11 +89,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
             return true;
         }
         return false;
-    }
-
-    @Override
-    public void addPreScanStep(Runnable runnable) {
-        preScanSteps.add(runnable);
     }
 
     boolean checkForChangedClasses() throws IOException {
@@ -156,26 +141,24 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
     }
 
     private boolean checkForConfigFileChange() {
-        Path root = resourcesDir;
+        boolean ret = false;
         boolean doCopy = true;
-        boolean configFilesHaveChanged = false;
-
+        Path root = resourcesDir;
         if (root == null) {
             root = classesDir;
             doCopy = false;
         }
-
-        for (String configFilePath : configFilePaths) {
-            Path config = root.resolve(configFilePath);
+        for (String i : configFilePaths) {
+            Path config = root.resolve(i);
             if (Files.exists(config)) {
                 try {
                     long value = Files.getLastModifiedTime(config).toMillis();
-                    Long existing = configFileTimestamps.get(configFilePath);
+                    Long existing = configFileTimestamps.get(i);
                     if (value > existing) {
-                        configFilesHaveChanged = true;
+                        ret = true;
                         log.infof("Config file change detected: %s", config);
                         if (doCopy) {
-                            Path target = classesDir.resolve(configFilePath);
+                            Path target = classesDir.resolve(i);
                             byte[] data = CopyUtils.readFileContent(config);
                             try (FileOutputStream out = new FileOutputStream(target.toFile())) {
                                 out.write(data);
@@ -185,18 +168,9 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-            } else {
-                configFileTimestamps.remove(configFilePath);
-                Path target = classesDir.resolve(configFilePath);
-                try {
-                    Files.deleteIfExists(target);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
             }
         }
-
-        return configFilesHaveChanged;
+        return ret;
     }
 
     private boolean wasRecentlyModified(final Path p) {
@@ -221,6 +195,12 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    interface UpdateHandler {
+
+        void handle(Map<String, byte[]> changed);
+
     }
 
     public RuntimeUpdatesProcessor setConfigFilePaths(Set<String> configFilePaths) {
