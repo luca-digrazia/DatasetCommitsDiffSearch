@@ -16,6 +16,16 @@ public final class LogConfig {
 
     /**
      * The log level of the root category, which is used as the default log level for all categories.
+     *
+     * In addition to the standard JDK log level JBoss Logging also adds the following:
+     *
+     * {@link org.jboss.logmanager.Level#FATAL}
+     * {@link org.jboss.logmanager.Level#ERROR}
+     * {@link org.jboss.logmanager.Level#WARN}
+     * {@link org.jboss.logmanager.Level#INFO}
+     * {@link org.jboss.logmanager.Level#DEBUG}
+     * {@link org.jboss.logmanager.Level#TRACE}
+     *
      */
     @ConfigItem(defaultValue = "INFO")
     public Level level;
@@ -25,6 +35,30 @@ public final class LogConfig {
      */
     @ConfigItem(defaultValue = "INFO")
     public Level minLevel;
+
+    /**
+     * Console logging.
+     * <p>
+     * Console logging is enabled by default.
+     */
+    @ConfigDocSection
+    public ConsoleConfig console;
+
+    /**
+     * File logging.
+     * <p>
+     * Logging to a file is also supported but not enabled by default.
+     */
+    @ConfigDocSection
+    public FileConfig file;
+
+    /**
+     * Syslog logging.
+     * <p>
+     * Logging to a syslog is also supported but not enabled by default.
+     */
+    @ConfigDocSection
+    public SyslogConfig syslog;
 
     /**
      * Logging categories.
@@ -63,30 +97,6 @@ public final class LogConfig {
     @ConfigItem(name = "handler.syslog")
     @ConfigDocSection
     public Map<String, SyslogConfig> syslogHandlers;
-
-    /**
-     * Console logging.
-     * <p>
-     * Console logging is enabled by default.
-     */
-    @ConfigDocSection
-    public ConsoleConfig console;
-
-    /**
-     * File logging.
-     * <p>
-     * Logging to a file is also supported but not enabled by default.
-     */
-    @ConfigDocSection
-    public FileConfig file;
-
-    /**
-     * Syslog logging.
-     * <p>
-     * Logging to a syslog is also supported but not enabled by default.
-     */
-    @ConfigDocSection
-    public SyslogConfig syslog;
 
     /**
      * Log cleanup filters - internal use.
