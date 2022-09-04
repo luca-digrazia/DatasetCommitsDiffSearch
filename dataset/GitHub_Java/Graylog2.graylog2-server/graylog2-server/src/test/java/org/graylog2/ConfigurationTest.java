@@ -26,18 +26,11 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermissions;
+import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 
-import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
-import static java.nio.file.StandardOpenOption.WRITE;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.util.Files.newTemporaryFile;
 
 public class ConfigurationTest {
     @Rule
@@ -53,6 +46,88 @@ public class ConfigurationTest {
         validProperties.put("password_secret", "ipNUnWxmBLCxTEzXcyamrdy0Q3G7HxdKsAvyg30R9SCof0JydiZFiA3dLSkRsbLF");
         // SHA-256 of "admin"
         validProperties.put("root_password_sha2", "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918");
+    }
+
+    @Test
+    public void testRestListenUriIsRelativeURI() throws RepositoryException, ValidationException {
+        validProperties.put("rest_listen_uri", "/foo");
+
+        expectedException.expect(ValidationException.class);
+        expectedException.expectMessage("Parameter rest_listen_uri should be an absolute URI (found /foo)");
+
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+    }
+
+    @Test
+    public void testWebListenUriIsRelativeURI() throws RepositoryException, ValidationException {
+        validProperties.put("web_listen_uri", "/foo");
+
+        expectedException.expect(ValidationException.class);
+        expectedException.expectMessage("Parameter web_listen_uri should be an absolute URI (found /foo)");
+
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+    }
+
+    @Test
+    public void testRestListenUriIsAbsoluteURI() throws RepositoryException, ValidationException {
+        validProperties.put("rest_listen_uri", "http://www.example.com:12900/");
+
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        assertThat(configuration.getRestListenUri()).isEqualTo(URI.create("http://www.example.com:12900/"));
+    }
+
+    @Test
+    public void testWebListenUriIsAbsoluteURI() throws RepositoryException, ValidationException {
+        validProperties.put("web_listen_uri", "http://www.example.com:12900/web");
+
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        assertThat(configuration.getWebListenUri()).isEqualTo(URI.create("http://www.example.com:12900/web/"));
+    }
+
+    @Test
+    public void testRestListenUriWithHttpDefaultPort() throws RepositoryException, ValidationException {
+        validProperties.put("rest_listen_uri", "http://example.com/");
+
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        assertThat(configuration.getRestListenUri()).hasPort(80);
+    }
+
+    @Test
+    public void testRestListenUriWithCustomPort() throws RepositoryException, ValidationException {
+        validProperties.put("rest_listen_uri", "http://example.com:12900/");
+
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        assertThat(configuration.getRestListenUri()).hasPort(12900);
+    }
+
+    @Test
+    public void testWebListenUriWithHttpDefaultPort() throws RepositoryException, ValidationException {
+        validProperties.put("web_listen_uri", "http://example.com/");
+
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        assertThat(configuration.getWebListenUri()).hasPort(80);
+    }
+
+    @Test
+    public void testWebListenUriWithCustomPort() throws RepositoryException, ValidationException {
+        validProperties.put("web_listen_uri", "http://example.com:9000/");
+
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        assertThat(configuration.getWebListenUri()).hasPort(9000);
     }
 
     @Test
@@ -89,6 +164,30 @@ public class ConfigurationTest {
     }
 
     @Test
+    public void testApiListenerOnRootAndWebListenerOnSubPath() throws ValidationException, RepositoryException {
+        validProperties.put("rest_listen_uri", "http://0.0.0.0:12900/");
+        validProperties.put("web_listen_uri", "http://0.0.0.0:12900/web/");
+
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        assertThat(configuration.getRestListenUri()).isEqualTo(URI.create("http://0.0.0.0:12900/"));
+        assertThat(configuration.getWebListenUri()).isEqualTo(URI.create("http://0.0.0.0:12900/web/"));
+    }
+
+    @Test
+    public void testWebListenerOnRootAndApiListenerOnSubPath() throws ValidationException, RepositoryException {
+        validProperties.put("rest_listen_uri", "http://0.0.0.0:9000/api/");
+        validProperties.put("web_listen_uri", "http://0.0.0.0:9000/");
+
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        assertThat(configuration.getRestListenUri()).isEqualTo(URI.create("http://0.0.0.0:9000/api/"));
+        assertThat(configuration.getWebListenUri()).isEqualTo(URI.create("http://0.0.0.0:9000/"));
+    }
+
+    @Test
     public void testPasswordSecretIsValid() throws ValidationException, RepositoryException {
         validProperties.put("password_secret", "abcdefghijklmnopqrstuvwxyz");
 
@@ -99,56 +198,26 @@ public class ConfigurationTest {
     }
 
     @Test
-    public void testNodeIdFilePermissions() throws IOException, ValidationException {
-        final Path nonEmptyNodeIdPath = newTemporaryFile().toPath();
-        final Path emptyNodeIdPath = newTemporaryFile().toPath();
-        try {
-            // create a node-id file and write some id
-            Files.write(nonEmptyNodeIdPath, "test-node-id".getBytes(StandardCharsets.UTF_8), WRITE, TRUNCATE_EXISTING);
-            assertThat(nonEmptyNodeIdPath.toFile().length()).isGreaterThan(0);
+    public void testRestApiListeningOnWildcardOnSamePortAsWebInterface() throws ValidationException, RepositoryException {
+        validProperties.put("rest_listen_uri", "http://0.0.0.0:9000/api/");
+        validProperties.put("web_listen_uri", "http://127.0.0.1:9000/");
 
-            // make sure this file isn't accidentally present
-            final Path missingNodeIdPath = newTemporaryFile().toPath();
-            assertThat(missingNodeIdPath.toFile().delete()).isTrue();
+        expectedException.expect(ValidationException.class);
+        expectedException.expectMessage("Wildcard IP addresses cannot be used if the Graylog REST API and web interface listen on the same port.");
 
-            // read/write permissions should make the validation pass
-            assertThat(validateWithPermissions(nonEmptyNodeIdPath, "rw-------")).isTrue();
-            assertThat(validateWithPermissions(emptyNodeIdPath, "rw-------")).isTrue();
-
-            // existing, but not writable is ok if the file is not empty
-            assertThat(validateWithPermissions(nonEmptyNodeIdPath, "r--------")).isTrue();
-
-            // existing, but not writable is not ok if the file is empty
-            assertThat(validateWithPermissions(emptyNodeIdPath, "r--------")).isFalse();
-
-            // existing, but not readable is not ok
-            assertThat(validateWithPermissions(nonEmptyNodeIdPath, "-w-------")).isFalse();
-
-            // missing, but not writable is not ok
-            assertThat(validateWithPermissions(missingNodeIdPath, "r--------")).isFalse();
-        } finally {
-            Files.delete(nonEmptyNodeIdPath);
-            Files.delete(emptyNodeIdPath);
-        }
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
     }
 
-    /**
-     * Run the NodeIDFileValidator on a file with the given permissions.
-     * @param nodeFilePath the path to the node id file, can be missing
-     * @param permissions the posix permission to set the file to, if it exists, before running the validator
-     * @return true if the validation was successful, false otherwise
-     * @throws IOException if any file related problem occurred
-     */
-    private static boolean validateWithPermissions(Path nodeFilePath, String permissions) throws IOException {
-        try {
-            final Configuration.NodeIdFileValidator validator = new Configuration.NodeIdFileValidator();
-            if (nodeFilePath.toFile().exists()) {
-                Files.setPosixFilePermissions(nodeFilePath, PosixFilePermissions.fromString(permissions));
-            }
-            validator.validate("node-id", nodeFilePath.toString());
-        } catch (ValidationException ve) {
-            return false;
-        }
-        return true;
+    @Test
+    public void testWebInterfaceListeningOnWildcardOnSamePortAsRestApi() throws ValidationException, RepositoryException {
+        validProperties.put("rest_listen_uri", "http://127.0.0.1:9000/api/");
+        validProperties.put("web_listen_uri", "http://0.0.0.0:9000/");
+
+        expectedException.expect(ValidationException.class);
+        expectedException.expectMessage("Wildcard IP addresses cannot be used if the Graylog REST API and web interface listen on the same port.");
+
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
     }
 }
