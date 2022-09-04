@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleFunctionsApi;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
-import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
@@ -247,7 +246,7 @@ public class FakeSkylarkRuleFunctionsApi implements SkylarkRuleFunctionsApi<File
     private static int idCounter = 0;
 
     public RuleDefinitionIdentifier() {
-      super("RuleDefinitionIdentifier" + idCounter++, FunctionSignature.KWARGS);
+      super("RuleDefinitionIdentifier" + idCounter++);
     }
   }
 

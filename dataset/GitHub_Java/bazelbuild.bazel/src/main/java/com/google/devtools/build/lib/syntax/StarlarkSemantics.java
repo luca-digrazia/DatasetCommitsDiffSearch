@@ -164,6 +164,8 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleDisableDepsetItems();
 
+  public abstract boolean incompatibleDisallowDictPlus();
+
   public abstract boolean incompatibleDisallowEmptyGlob();
 
   public abstract boolean incompatibleDisallowOldStyleArgsAdd();
@@ -185,6 +187,8 @@ public abstract class StarlarkSemantics {
   public abstract boolean incompatibleNoSupportToolsInActionInputs();
 
   public abstract boolean incompatibleNoTargetOutputGroup();
+
+  public abstract boolean incompatibleNoTransitiveLoads();
 
   public abstract boolean incompatibleRemapMainRepo();
 
@@ -262,6 +266,7 @@ public abstract class StarlarkSemantics {
           .incompatibleDisableThirdPartyLicenseChecking(true)
           .incompatibleDisableDeprecatedAttrParams(true)
           .incompatibleDisableDepsetItems(false)
+          .incompatibleDisallowDictPlus(true)
           .incompatibleDisallowEmptyGlob(false)
           .incompatibleDisallowOldStyleArgsAdd(true)
           .incompatibleDisallowStructProviderSyntax(false)
@@ -273,6 +278,7 @@ public abstract class StarlarkSemantics {
           .incompatibleNoRuleOutputsParam(false)
           .incompatibleNoSupportToolsInActionInputs(true)
           .incompatibleNoTargetOutputGroup(true)
+          .incompatibleNoTransitiveLoads(true)
           .incompatibleRemapMainRepo(false)
           .incompatibleRemoveNativeMavenJar(false)
           .incompatibleRunShellCommandString(false)
@@ -329,6 +335,8 @@ public abstract class StarlarkSemantics {
 
     public abstract Builder incompatibleDisableDepsetItems(boolean value);
 
+    public abstract Builder incompatibleDisallowDictPlus(boolean value);
+
     public abstract Builder incompatibleDisallowEmptyGlob(boolean value);
 
     public abstract Builder incompatibleDisallowOldStyleArgsAdd(boolean value);
@@ -350,6 +358,8 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleNoSupportToolsInActionInputs(boolean value);
 
     public abstract Builder incompatibleNoTargetOutputGroup(boolean value);
+
+    public abstract Builder incompatibleNoTransitiveLoads(boolean value);
 
     public abstract Builder incompatibleRemapMainRepo(boolean value);
 
