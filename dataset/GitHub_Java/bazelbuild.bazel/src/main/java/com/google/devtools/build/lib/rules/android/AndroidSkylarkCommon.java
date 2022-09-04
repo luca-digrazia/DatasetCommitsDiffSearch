@@ -23,18 +23,22 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 /** Common utilities for Skylark rules related to Android. */
 @SkylarkModule(
   name = "android_common",
-  doc = "Common utilities and functionality related to Android rules."
+  doc = "Common utilities and fucntionality related to Android rules."
 )
 public class AndroidSkylarkCommon {
 
   @SkylarkCallable(
-    name = "create_device_broker_info",
-    doc = "",
-    documented = false,
-    parameters = {@Param(name = "type", type = String.class)}
+      name = "create_device_broker_info",
+      doc = "Create a device broker info",
+      parameters = {
+          @Param(
+              name = "type",
+              type = String.class
+          )
+      }
   )
-  public AndroidDeviceBrokerInfo createDeviceBrokerInfo(String deviceBrokerType) {
-    return new AndroidDeviceBrokerInfo(deviceBrokerType);
+  public DeviceBrokerInfo createDeviceBrokerInfo(String deviceBrokerType) {
+    return new DeviceBrokerInfo(deviceBrokerType);
   }
 
   @SkylarkCallable(

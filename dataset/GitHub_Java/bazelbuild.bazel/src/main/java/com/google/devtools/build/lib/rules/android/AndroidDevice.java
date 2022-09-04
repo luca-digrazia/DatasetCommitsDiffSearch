@@ -110,20 +110,16 @@ public class AndroidDevice implements RuleConfiguredTargetFactory {
     deviceAttributes.createStubScriptAction(metadata, images, executable, ruleContext);
     deviceAttributes.createBootAction(metadata, images);
 
-    FilesToRunProvider unifiedLauncher = deviceAttributes.getUnifiedLauncher();
-    Runfiles.Builder runfilesBuilder =
+    Runfiles runfiles =
         new Runfiles.Builder(ruleContext.getWorkspaceName())
             .addTransitiveArtifacts(filesToBuild)
             .addArtifacts(commonDependencyArtifacts)
-            .addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES);
-    if (unifiedLauncher.getRunfilesSupport() != null) {
-      runfilesBuilder
-          .merge(unifiedLauncher.getRunfilesSupport().getRunfiles())
-          .addLegacyExtraMiddleman(unifiedLauncher.getRunfilesSupport().getRunfilesMiddleman());
-    } else {
-      runfilesBuilder.addTransitiveArtifacts(unifiedLauncher.getFilesToRun());
-    }
-    Runfiles runfiles = runfilesBuilder.build();
+            .addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES)
+            .merge(
+                ruleContext
+                    .getExecutablePrerequisite("$unified_launcher", Mode.HOST)
+                    .getRunfilesSupport())
+            .build();
     RunfilesSupport runfilesSupport =
         RunfilesSupport.withExecutable(ruleContext, runfiles, executable);
     NestedSet<Artifact> extraFilesToRun =
@@ -269,6 +265,7 @@ public class AndroidDevice implements RuleConfiguredTargetFactory {
               .addAll(xvfbSupportFiles)
               .add(mksdcard)
               .add(snapshotFs)
+              .addAll(unifiedLauncher.getFilesToRun())
               .addAll(androidRuntestDeps)
               .addAll(testingShbaseDeps)
               .addAll(platformApks)
@@ -315,10 +312,6 @@ public class AndroidDevice implements RuleConfiguredTargetFactory {
       ruleContext.registerAction(
           new TemplateExpansionAction(
               ruleContext.getActionOwner(), executable, STUB_SCRIPT, arguments, true));
-    }
-
-    public FilesToRunProvider getUnifiedLauncher() {
-      return unifiedLauncher;
     }
 
     public void createBootAction(Artifact metadata, Artifact images) {

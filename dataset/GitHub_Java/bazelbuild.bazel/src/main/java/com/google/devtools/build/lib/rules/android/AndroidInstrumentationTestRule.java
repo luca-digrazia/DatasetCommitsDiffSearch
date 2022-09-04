@@ -35,7 +35,7 @@ public class AndroidInstrumentationTestRule implements RuleDefinition {
     return builder
         .setUndocumented()
         .add(
-            attr("test_app", LABEL)
+            attr("instrumentation", LABEL)
                 .mandatory()
                 .allowedFileTypes(FileTypeSet.NO_FILE)
                 .allowedRuleClasses("android_binary"))
