@@ -50,7 +50,6 @@ import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -239,7 +238,6 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
     String ccToolchainSuiteTemplate = getTemplate("android_ndk_cc_toolchain_suite_template.txt");
     String ccToolchainTemplate = getTemplate("android_ndk_cc_toolchain_template.txt");
     String stlFilegroupTemplate = getTemplate("android_ndk_stl_filegroup_template.txt");
-    String miscLibrariesTemplate = getTemplate("android_ndk_misc_libraries_template.txt");
 
     StringBuilder ccToolchainSuites = new StringBuilder();
     StringBuilder ccToolchainRules = new StringBuilder();
@@ -283,8 +281,7 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
         .replace("%ruleName%", ruleName)
         .replace("%ccToolchainSuites%", ccToolchainSuites)
         .replace("%ccToolchainRules%", ccToolchainRules)
-        .replace("%stlFilegroups%", stlFilegroups)
-        .replace("%miscLibraries%", miscLibrariesTemplate);
+        .replace("%stlFilegroups%", stlFilegroups);
   }
 
   static String createToolchainName(String stlName) {
@@ -366,8 +363,7 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
       env.getValueOrThrow(releaseFileKey, IOException.class, FileSymlinkException.class,
           InconsistentFilesystemException.class);
 
-      releaseFileContent = new String(FileSystemUtils.readContent(releaseFilePath),
-          StandardCharsets.UTF_8);
+      releaseFileContent = new String(FileSystemUtils.readContent(releaseFilePath));
     } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
       throw new RepositoryFunctionException(
           new IOException("Could not read " + releaseFilePath.getBaseName() + " in Android NDK: "
