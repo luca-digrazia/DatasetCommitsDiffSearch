@@ -171,21 +171,21 @@ public class QuartzScheduler implements Scheduler {
                                 .usingJobData(SchedulerDeploymentTemplate.INVOKER_KEY, entry.getKey());
                         ScheduleBuilder<?> scheduleBuilder;
 
-                        String cron = scheduled.cron().trim();
+                        String cron = scheduled.cron();
                         if (!cron.isEmpty()) {
                             try {
-                                if (ScheduledLiteral.isConfigValue(cron)) {
-                                    cron = config.getValue(ScheduledLiteral.getConfigProperty(cron), String.class);
+                                if (cron.startsWith("{") && cron.endsWith("}")) {
+                                    cron = config.getValue(cron.substring(1, cron.length() - 1), String.class);
                                 }
                                 scheduleBuilder = CronScheduleBuilder.cronSchedule(cron);
                             } catch (RuntimeException e) {
-                                // This should only happen for config-based expressions
-                                throw new IllegalStateException("Invalid cron() expression on: " + scheduled, e);
+                                LOGGER.warnf(e, "Invalid CRON expression: %s", cron);
+                                continue;
                             }
                         } else if (!scheduled.every().isEmpty()) {
-                            String every = scheduled.every().trim();
-                            if (ScheduledLiteral.isConfigValue(every)) {
-                                every = config.getValue(ScheduledLiteral.getConfigProperty(every), String.class);
+                            String every = scheduled.every();
+                            if (every.startsWith("{") && every.endsWith("}")) {
+                                every = config.getValue(every.substring(1, every.length() - 1), String.class);
                             }
                             if (Character.isDigit(every.charAt(0))) {
                                 every = "PT" + every;
@@ -194,8 +194,8 @@ public class QuartzScheduler implements Scheduler {
                             try {
                                 duration = Duration.parse(every);
                             } catch (Exception e) {
-                                // This should only happen for config-based expressions
-                                throw new IllegalStateException("Invalid every() expression on: " + scheduled, e);
+                                LOGGER.warnf(e, "Invalid period expression: %s", scheduled.every());
+                                continue;
                             }
                             scheduleBuilder = SimpleScheduleBuilder.simpleSchedule().withIntervalInMilliseconds(duration.toMillis()).repeatForever();
                         } else {
