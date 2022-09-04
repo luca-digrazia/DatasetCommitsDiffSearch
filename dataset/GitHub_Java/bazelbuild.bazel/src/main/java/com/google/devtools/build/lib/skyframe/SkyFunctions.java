@@ -138,8 +138,6 @@ public final class SkyFunctions {
       SkyFunctionName.createHermetic("TOOLCHAIN_RESOLUTION");
   public static final SkyFunctionName REPOSITORY_MAPPING =
       SkyFunctionName.createHermetic("REPOSITORY_MAPPING");
-  public static final SkyFunctionName RESOLVED_FILE =
-      SkyFunctionName.createHermetic("RESOLVED_FILE");
   public static final SkyFunctionName RESOLVED_HASH_VALUES =
       SkyFunctionName.createHermetic("RESOLVED_HASH_VALUES");
 
