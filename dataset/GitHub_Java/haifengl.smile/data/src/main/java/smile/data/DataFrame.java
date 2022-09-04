@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.data;
 
@@ -895,49 +895,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     }
 
     /**
-     * Returns the string representation of top rows.
-     * @param numRows Number of rows to show
-     */
-    default String[][] toStrings(int numRows) {
-        return toStrings(numRows, true);
-    }
-
-    /**
-     * Returns the string representation of top rows.
-     * @param numRows Number of rows to show
-     * @param truncate Whether truncate long strings.
-     */
-    default String[][] toStrings(final int numRows, final boolean truncate) {
-        String[] names = names();
-        int numCols = names.length;
-        int maxColWidth = 20;
-        switch (numCols) {
-            case 1: maxColWidth = 78; break;
-            case 2: maxColWidth = 38; break;
-            default: maxColWidth = 20;
-        }
-        // To be used in lambda.
-        final int maxColumnWidth = maxColWidth;
-
-        // Initialize the width of each column to a minimum value of '3'
-        int[] colWidths = new int[numCols];
-        for (int i = 0; i < numCols; i++) {
-            colWidths[i] = Math.max(names[i].length(), 3);
-        }
-
-        // For array values, replace Seq and Array with square brackets
-        // For cells that are beyond maxColumnWidth characters, truncate it with "..."
-        return stream().limit(numRows).map( row -> {
-            String[] cells = new String[numCols];
-            for (int i = 0; i < numCols; i++) {
-                String str = row.toString(i);
-                cells[i] = (truncate && str.length() > maxColumnWidth) ? str.substring(0, maxColumnWidth - 3) + "..." : str;
-            }
-            return cells;
-        }).toArray(String[][]::new);
-    }
-
-    /**
      * Creates a DataFrame from a set of vectors.
      * @param vectors The column vectors.
      */
@@ -1003,7 +960,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * Creates a DataFrame from a stream of tuples.
      * @param data The data stream.
      */
-    static DataFrame of(Stream<? extends Tuple> data) {
+    static DataFrame of(Stream<Tuple> data) {
         return new DataFrameImpl(data);
     }
 
@@ -1011,7 +968,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * Creates a DataFrame from a stream of tuples.
      * @param data The data stream.
      */
-    static DataFrame of(Stream<? extends Tuple> data, StructType schema) {
+    static DataFrame of(Stream<Tuple> data, StructType schema) {
         return new DataFrameImpl(data, schema);
     }
 
@@ -1019,7 +976,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * Creates a DataFrame from a set of tuples.
      * @param data The data collection.
      */
-    static DataFrame of(List<? extends Tuple> data) {
+    static DataFrame of(List<Tuple> data) {
         return new DataFrameImpl(data);
     }
 
@@ -1027,7 +984,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * Creates a DataFrame from a set of tuples.
      * @param data The data collection.
      */
-    static DataFrame of(List<? extends Tuple> data, StructType schema) {
+    static DataFrame of(List<Tuple> data, StructType schema) {
         return new DataFrameImpl(data, schema);
     }
 

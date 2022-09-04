@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
@@ -26,7 +26,6 @@ import smile.data.Tuple;
 import smile.data.formula.Formula;
 import smile.data.type.StructType;
 import smile.data.vector.BaseVector;
-import smile.feature.TreeSHAP;
 import smile.math.MathEx;
 import smile.util.IntSet;
 import smile.util.Strings;
@@ -62,12 +61,12 @@ import smile.util.Strings;
  * 
  * @author Haifeng Li
  */
-public class AdaBoost implements SoftClassifier<Tuple>, DataFrameClassifier, TreeSHAP {
+public class AdaBoost implements SoftClassifier<Tuple>, DataFrameClassifier {
     private static final long serialVersionUID = 2L;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AdaBoost.class);
 
     /**
-     * The model formula.
+     * Design matrix formula
      */
     private Formula formula;
     /**
@@ -175,7 +174,6 @@ public class AdaBoost implements SoftClassifier<Tuple>, DataFrameClassifier, Tre
             throw new IllegalArgumentException("Invalid number of trees: " + ntrees);
         }
 
-        formula = formula.expand(data.schema());
         DataFrame x = formula.x(data);
         BaseVector y = formula.y(data);
 
@@ -211,7 +209,7 @@ public class AdaBoost implements SoftClassifier<Tuple>, DataFrameClassifier, Tre
             }
 
             logger.info("Training {} tree", Strings.ordinal(t+1));
-            trees[t] = new DecisionTree(x, codec.y, y.field(), k, SplitRule.GINI, maxDepth, maxNodes, nodeSize, -1, samples, order);
+            trees[t] = new DecisionTree(x, codec.y, codec.field, k, SplitRule.GINI, maxDepth, maxNodes, nodeSize, -1, samples, order);
             
             for (int i = 0; i < n; i++) {
                 err[i] = trees[t].predict(x.get(i)) != y.getInt(i);

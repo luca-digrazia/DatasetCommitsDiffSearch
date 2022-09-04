@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
@@ -68,10 +68,10 @@ public class LogisticRegressionTest {
     public void testWeather() {
         System.out.println("Weather");
 
-        int[] prediction = LOOCV.classification(WeatherNominal.dummy, WeatherNominal.y, (x, y) -> LogisticRegression.fit(x, y));
+        int[] prediction = LOOCV.classification(WeatherNominal.x, WeatherNominal.y, (x, y) -> LogisticRegression.fit(x, y));
         int error = Error.of(WeatherNominal.y, prediction);
         System.out.println("Error = " + error);
-        assertEquals(4, error);
+        assertEquals(8, error);
     }
 
     @Test
@@ -95,7 +95,7 @@ public class LogisticRegressionTest {
         int error = Error.of(BreastCancer.y, prediction);
 
         System.out.println("Error = " + error);
-        assertEquals(26, error);
+        assertEquals(28, error);
     }
 
     @Test

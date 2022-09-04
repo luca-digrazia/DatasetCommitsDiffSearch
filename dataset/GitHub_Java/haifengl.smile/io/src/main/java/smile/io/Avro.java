@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,17 +13,16 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.io;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileStream;
@@ -85,27 +84,18 @@ public class Avro {
      * @param path an Apache Avro file path.
      */
     public DataFrame read(Path path) throws IOException {
-        return read(Files.newInputStream(path), Integer.MAX_VALUE);
-    }
-
-    /**
-     * Reads an avro file.
-     *
-     * @param path an Apache Avro file path or URI.
-     */
-    public DataFrame read(String path) throws IOException, URISyntaxException {
-        return read(HadoopInput.stream(path), Integer.MAX_VALUE);
+        return read(path, Integer.MAX_VALUE);
     }
 
     /**
      * Reads a limited number of records from an avro file.
      *
-     * @param input  an Apache Avro file input stream.
+     * @param path  an Apache Avro file path.
      * @param limit reads a limited number of records.
      */
-    public DataFrame read(InputStream input, int limit) throws IOException {
+    public DataFrame read(Path path, int limit) throws IOException {
         DatumReader<GenericRecord> datumReader = new GenericDatumReader<>(schema);
-        try (DataFileStream<GenericRecord> dataFileReader = new DataFileStream<>(input, datumReader)) {
+        try (DataFileStream<GenericRecord> dataFileReader = new DataFileStream<>(Files.newInputStream(path), datumReader)) {
             StructType struct = toSmileSchema(schema);
 
             List<Tuple> rows = new ArrayList<>();

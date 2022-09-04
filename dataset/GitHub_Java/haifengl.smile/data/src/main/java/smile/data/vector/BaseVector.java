@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,12 +13,14 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.data.vector;
 
 import java.io.Serializable;
+import java.util.Optional;
 import java.util.stream.BaseStream;
+
 import smile.data.measure.Measure;
 import smile.data.type.DataType;
 import smile.data.type.StructField;
@@ -41,13 +43,11 @@ public interface BaseVector<T, TS, S extends BaseStream<TS, S>> extends Serializ
     DataType type();
 
     /** Returns the (optional) level of measurements. Only valid for number types. */
-    default Measure measure() {
-        return null;
-    }
+    Optional<Measure> measure();
 
     /** Returns a struct field corresponding to this vector. */
     default StructField field() {
-        return new StructField(name(), type(), measure());
+        return new StructField(name(), type(), measure().orElse(null));
     }
 
     /** Number of elements in the vector. */

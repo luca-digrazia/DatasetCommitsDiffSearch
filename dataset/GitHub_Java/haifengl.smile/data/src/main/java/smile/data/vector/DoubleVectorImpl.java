@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,11 +13,11 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.data.vector;
 
-import smile.data.measure.CategoricalMeasure;
+import smile.data.measure.DiscreteMeasure;
 import smile.data.measure.Measure;
 import smile.data.type.StructField;
 
@@ -47,7 +47,7 @@ class DoubleVectorImpl implements DoubleVector {
 
     /** Constructor. */
     public DoubleVectorImpl(StructField field, double[] vector) {
-        if (field.measure instanceof CategoricalMeasure) {
+        if (field.measure instanceof DiscreteMeasure) {
             throw new IllegalArgumentException(String.format("Invalid measure %s for %s", field.measure, type()));
         }
 
@@ -96,7 +96,7 @@ class DoubleVectorImpl implements DoubleVector {
     public DoubleVector get(int... index) {
         double[] v = new double[index.length];
         for (int i = 0; i < index.length; i++) v[i] = vector[index[i]];
-        return new DoubleVectorImpl(field(), v);
+        return new DoubleVectorImpl(name, v);
     }
 
     @Override

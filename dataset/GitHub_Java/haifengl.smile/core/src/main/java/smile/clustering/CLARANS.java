@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.clustering;
 
@@ -73,7 +73,7 @@ public class CLARANS<T> extends CentroidClustering<T, T> {
     }
 
     @Override
-    protected double distance(T x, T y) {
+    public double distance(T x, T y) {
         return distance.d(x, y);
     }
 
@@ -86,8 +86,8 @@ public class CLARANS<T> extends CentroidClustering<T, T> {
      * @param k        the number of clusters.
      * @param distance the lambda of distance measure.
      */
-    public static <T> CLARANS<T> fit(T[] data, Distance<T> distance, int k) {
-        return fit(data, distance, k, (int) Math.round(0.0125 * k * (data.length - k)));
+    public static <T> CLARANS<T> fit(T[] data, int k, Distance<T> distance) {
+        return fit(data, k, (int) Math.round(0.0125 * k * (data.length - k)), distance);
     }
 
     /**
@@ -99,7 +99,7 @@ public class CLARANS<T> extends CentroidClustering<T, T> {
      *                    the random search of local minima.
      * @param distance    the lambda of distance measure.
      */
-    public static <T> CLARANS<T> fit(T[] data, Distance<T> distance, int k, int maxNeighbor) {
+    public static <T> CLARANS<T> fit(T[] data, int k, int maxNeighbor, Distance<T> distance) {
         if (maxNeighbor <= 0) {
             throw new IllegalArgumentException("Invalid maxNeighbors: " + maxNeighbor);
         }

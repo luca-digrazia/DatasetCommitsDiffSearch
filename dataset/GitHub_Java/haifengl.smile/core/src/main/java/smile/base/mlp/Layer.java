@@ -18,10 +18,9 @@
 package smile.base.mlp;
 
 import java.io.Serializable;
-import java.util.Arrays;
-import smile.math.MathEx;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.DenseMatrix;
+import smile.stat.distribution.GaussianDistribution;
 
 /**
  * A layer in the neural network.
@@ -49,17 +48,13 @@ public abstract class Layer implements Serializable {
      */
     protected DenseMatrix weight;
     /**
+     * The weight delta of current sample.
+     */
+    protected DenseMatrix delta;
+    /**
      * The weight update of mini batch or momentum.
      */
     protected DenseMatrix update;
-    /**
-     * The bias.
-     */
-    protected double[] bias;
-    /**
-     * The bias update of mini batch or momentum.
-     */
-    protected double[] updateBias;
 
     /**
      * Constructor.
@@ -69,16 +64,18 @@ public abstract class Layer implements Serializable {
     public Layer(int n, int p) {
         this.n = n;
         this.p = p;
+        weight = Matrix.zeros(n, p + 1);
+        delta  = Matrix.zeros(n, p + 1);
+        update = Matrix.zeros(n, p + 1);
 
         // Initialize random weights.
+        GaussianDistribution gaussian = GaussianDistribution.getInstance();
         double r = Math.sqrt(2.0 / p);
-        weight = Matrix.randn(n, p, 0.0, r);
-        bias = new double[n];
-        output = new double[n];
-        gradient = new double[n];
-
-        update = Matrix.zeros(n, p);
-        updateBias = new double[n];
+        for (int j = 0; j < p; j++) {
+            for (int i = 0; i < n; i++) {
+                weight.set(i, j, r * gaussian.rand());
+            }
+        }
     }
 
     /** Returns the dimension of output vector. */
@@ -106,8 +103,9 @@ public abstract class Layer implements Serializable {
      * @param x the lower layer signals.
      */
     public void propagate(double[] x) {
-        System.arraycopy(bias, 0, output, 0, n);
-        weight.axpy(x, output);
+        assert x[p] == 1.0 : "bias/intercept is not 1";
+
+        weight.ax(x, output);
         f(output);
     }
 
@@ -131,19 +129,14 @@ public abstract class Layer implements Serializable {
      * @param x the input vector.
      */
     public void computeUpdate(double eta, double alpha, double[] x) {
-        for (int j = 0; j < p; j++) {
+        for (int j = 0; j <= p; j++) {
             double xj = x[j];
             for (int i = 0; i < n; i++) {
                 double dw = eta * gradient[i] * xj;
+                delta.set(i, j, dw);
                 if (alpha > 0.0) dw += alpha * update.get(i, j);
                 update.set(i, j, dw);
             }
-        }
-
-        for (int i = 0; i < n; i++) {
-            double db = eta * gradient[i];
-            if (alpha > 0.0) db += alpha * updateBias[i];
-            updateBias[i] = db;
         }
     }
 
@@ -154,20 +147,22 @@ public abstract class Layer implements Serializable {
      */
     public void update(double alpha, double lambda) {
         weight.add(update);
-        MathEx.add(bias, updateBias);
 
         // Weight decay as the weights are multiplied
         // by a factor slightly less than 1. This prevents the weights
         // from growing too large, and can be seen as gradient descent
         // on a quadratic regularization term.
         if (lambda < 1.0) {
-            weight.mul(lambda);
+            for (int j = 0; j < p; j++) {
+                for (int i = 0; i < n; i++) {
+                    weight.mul(i, j, lambda);
+                }
+            }
         }
 
         // Clear update matrix after the mini-batch
         if (alpha == 1.0) {
             update.fill(0.0);
-            Arrays.fill(updateBias, 0.0);
         }
     }
 

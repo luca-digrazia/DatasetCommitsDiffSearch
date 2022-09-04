@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,11 +13,10 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.regression;
 
-import java.util.stream.IntStream;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -26,9 +25,10 @@ import org.junit.Test;
 import smile.data.*;
 import smile.data.formula.Formula;
 import smile.validation.CrossValidation;
-import smile.validation.RegressionValidations;
+import smile.validation.RMSE;
 import smile.validation.Validation;
-import smile.validation.metric.RMSE;
+
+import java.util.stream.IntStream;
 
 import static org.junit.Assert.assertEquals;
 
@@ -110,7 +110,7 @@ public class RLSTest {
     public void testOnlineLearn(String name, Formula formula, DataFrame data){
         System.out.println(name);
 
-        RegressionValidations<LinearModel> result = CrossValidation.regression(10, formula, data, (f, x) -> {
+        double[] prediction = CrossValidation.regression(10, formula, data, (f, x) -> {
             int n = x.size();
             DataFrame batch = x.of(IntStream.range(0, n/2).toArray());
             DataFrame online = x.of(IntStream.range(n/2, n).toArray());
@@ -118,8 +118,8 @@ public class RLSTest {
             model.update(online);
             return model;
         });
-
-        System.out.println(result.avg);
+        double rmse = RMSE.of(formula.y(data).toDoubleArray(), prediction);
+        System.out.format("10-CV RMSE = %.4f%n", rmse);
     }
     
     @Test

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.neighbor;
 
@@ -99,7 +99,7 @@ public class LinearSearch<T> implements NearestNeighborSearch<T,T>, KNNSearch<T,
         }
 
         if (k > data.length) {
-            throw new IllegalArgumentException("Neighbor array length is larger than the data size");
+            throw new IllegalArgumentException("Neighbor array length is larger than the dataset size");
         }
 
         double[] dist = Arrays.stream(data).parallel().mapToDouble(x -> distance.d(q, x)).toArray();

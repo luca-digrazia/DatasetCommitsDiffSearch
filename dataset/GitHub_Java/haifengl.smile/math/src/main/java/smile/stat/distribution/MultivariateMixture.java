@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.stat.distribution;
 
@@ -21,6 +21,7 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 import smile.math.MathEx;
+import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
 
 /**
@@ -122,13 +123,13 @@ public class MultivariateMixture implements MultivariateDistribution {
     }
 
     @Override
-    public Matrix cov() {
+    public DenseMatrix cov() {
         double w = components[0].priori;
-        Matrix v = components[0].distribution.cov();
+        DenseMatrix v = components[0].distribution.cov();
 
         int m = v.nrows();
         int n = v.ncols();
-        Matrix cov = new Matrix(m, n);
+        DenseMatrix cov = Matrix.zeros(m, n);
 
         for (int i = 0; i < m; i++) {
             for (int j = 0; j < n; j++) {

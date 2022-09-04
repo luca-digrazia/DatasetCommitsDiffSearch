@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,15 +13,17 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.data.formula;
 
 import java.util.Collections;
-import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import smile.data.Tuple;
+import smile.data.measure.Measure;
+import smile.data.type.DataType;
 import smile.data.type.StructField;
 import smile.data.type.StructType;
 
@@ -33,8 +35,14 @@ import smile.data.type.StructType;
  * @author Haifeng Li
  */
 final class Variable implements Term {
-    /** The variable name. */
+    /** Variable name. */
     private final String name;
+    /** Data type of variable. Only available after calling bind(). */
+    private DataType type;
+    /** The level of measurements. */
+    private Measure measure;
+    /** Column index after binding to a schema. */
+    private int index = -1;
 
     /**
      * Constructor.
@@ -45,7 +53,7 @@ final class Variable implements Term {
         this.name = name;
     }
 
-    /** Returns the variable name. */
+    /** Returns the name of variable. */
     public String name() {
         return name;
     }
@@ -53,6 +61,11 @@ final class Variable implements Term {
     @Override
     public String toString() {
         return name;
+    }
+
+    @Override
+    public boolean isVariable() {
+        return true;
     }
 
     @Override
@@ -74,49 +87,48 @@ final class Variable implements Term {
     }
 
     @Override
-    public List<Feature> bind(StructType schema) {
-        Feature feature = new Feature() {
-            /** The column index in the schema. */
-            private int index = schema.fieldIndex(name);
-            /** The struct field. */
-            private StructField field = schema.field(index);
+    public Object apply(Tuple o) {
+        return o.get(index);
+    }
 
-            @Override
-            public boolean isVariable() {
-                return true;
-            }
+    @Override
+    public int applyAsInt(Tuple o) {
+        return o.getInt(index);
+    }
 
-            @Override
-            public StructField field() {
-                return field;
-            }
+    @Override
+    public long applyAsLong(Tuple o) {
+        return o.getLong(index);
+    }
 
-            @Override
-            public Object apply(Tuple o) {
-                return o.get(index);
-            }
+    @Override
+    public float applyAsFloat(Tuple o) {
+        return o.getFloat(index);
+    }
 
-            @Override
-            public int applyAsInt(Tuple o) {
-                return o.getInt(index);
-            }
+    @Override
+    public double applyAsDouble(Tuple o) {
+        return o.getDouble(index);
+    }
 
-            @Override
-            public long applyAsLong(Tuple o) {
-                return o.getLong(index);
-            }
+    @Override
+    public DataType type() {
+        if (type == null)
+            throw new IllegalStateException(String.format("Column(%s) is not bound to a schema yet.", name));
 
-            @Override
-            public float applyAsFloat(Tuple o) {
-                return o.getFloat(index);
-            }
+        return type;
+    }
 
-            @Override
-            public double applyAsDouble(Tuple o) {
-                return o.getDouble(index);
-            }
-        };
+    @Override
+    public Optional<Measure> measure() {
+        return Optional.ofNullable(measure);
+    }
 
-        return Collections.singletonList(feature);
+    @Override
+    public void bind(StructType schema) {
+        index = schema.fieldIndex(name);
+        StructField field = schema.field(index);
+        type = field.type;
+        measure = field.measure;
     }
 }

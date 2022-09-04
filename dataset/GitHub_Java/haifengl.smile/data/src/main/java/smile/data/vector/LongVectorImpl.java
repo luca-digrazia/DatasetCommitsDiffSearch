@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,11 +13,11 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.data.vector;
 
-import smile.data.measure.NumericalMeasure;
+import smile.data.measure.ContinuousMeasure;
 import smile.data.measure.Measure;
 import smile.data.type.StructField;
 
@@ -47,7 +47,7 @@ class LongVectorImpl implements LongVector {
 
     /** Constructor. */
     public LongVectorImpl(StructField field, long[] vector) {
-        if (field.measure instanceof NumericalMeasure) {
+        if (field.measure instanceof ContinuousMeasure) {
             throw new IllegalArgumentException(String.format("Invalid measure %s for %s", field.measure, type()));
         }
 
@@ -91,7 +91,7 @@ class LongVectorImpl implements LongVector {
     public LongVector get(int... index) {
         long[] v = new long[index.length];
         for (int i = 0; i < index.length; i++) v[i] = vector[index[i]];
-        return new LongVectorImpl(field(), v);
+        return new LongVectorImpl(name, v);
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
@@ -56,26 +56,27 @@ public class KNNTest {
     public void tearDown() {
     }
 
+
     @Test
     public void testWeather() {
         System.out.println("Weather");
 
-        int[] prediction = LOOCV.classification(WeatherNominal.onehot, WeatherNominal.y, (x, y) -> KNN.fit(x, y));
+        int[] prediction = LOOCV.classification(WeatherNominal.x, WeatherNominal.y, (x, y) -> KNN.fit(x, y));
         int error = Error.of(WeatherNominal.y, prediction);
         System.out.println("1-NN Error = " + error);
         assertEquals(7, error);
 
-        prediction = LOOCV.classification(WeatherNominal.onehot, WeatherNominal.y, (x, y) -> KNN.fit(x, y, 3));
+        prediction = LOOCV.classification(WeatherNominal.x, WeatherNominal.y, (x, y) -> KNN.fit(x, y, 3));
         error = Error.of(WeatherNominal.y, prediction);
         System.out.println("3-NN Error = " + error);
-        assertEquals(5, error);
-
-        prediction = LOOCV.classification(WeatherNominal.onehot, WeatherNominal.y, (x, y) -> KNN.fit(x, y, 5));
-        error = Error.of(WeatherNominal.y, prediction);
-        System.out.println("5-NN Error = " + error);
         assertEquals(4, error);
 
-        prediction = LOOCV.classification(WeatherNominal.onehot, WeatherNominal.y, (x, y) -> KNN.fit(x, y,7));
+        prediction = LOOCV.classification(WeatherNominal.x, WeatherNominal.y, (x, y) -> KNN.fit(x, y, 5));
+        error = Error.of(WeatherNominal.y, prediction);
+        System.out.println("5-NN Error = " + error);
+        assertEquals(5, error);
+
+        prediction = LOOCV.classification(WeatherNominal.x, WeatherNominal.y, (x, y) -> KNN.fit(x, y,7));
         error = Error.of(WeatherNominal.y, prediction);
         System.out.println("7-NN Error = " + error);
         assertEquals(5, error);

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
@@ -71,7 +71,7 @@ public class FLDTest {
         int[] prediction = LOOCV.classification(Iris.x, Iris.y, (x, y) -> FLD.fit(x, y));
         int error = Error.of(Iris.y, prediction);
         System.out.println("Error = " + error);
-        assertEquals(3, error);
+        assertEquals(5, error);
     }
 
     @Test
@@ -83,7 +83,7 @@ public class FLDTest {
         int error = Error.of(PenDigits.y, prediction);
 
         System.out.println("Error = " + error);
-        assertEquals(921, error);
+        assertEquals(1502, error);
     }
 
     @Test
@@ -95,7 +95,7 @@ public class FLDTest {
         int error = Error.of(BreastCancer.y, prediction);
 
         System.out.println("Error = " + error);
-        assertEquals(20, error);
+        assertEquals(64, error);
     }
 
     @Test(expected = Test.None.class)
@@ -104,18 +104,14 @@ public class FLDTest {
 
         FLD model = FLD.fit(USPS.x, USPS.y);
 
-        int error = Error.of(USPS.testy, Validation.test(model, USPS.testx));
+        int[] prediction = Validation.test(model, USPS.testx);
+        int error = Error.of(USPS.testy, prediction);
+
         System.out.println("Error = " + error);
-        assertEquals(262, error);
+        assertEquals(561, error);
 
         java.nio.file.Path temp = smile.data.Serialize.write(model);
-        System.out.println(temp);
-        model = (FLD) smile.data.Serialize.read(temp);
-
-        Validation.test(model, USPS.testx);
-        error = Error.of(USPS.testy, Validation.test(model, USPS.testx));
-        System.out.println("Error = " + error);
-        assertEquals(262, error);
+        smile.data.Serialize.read(temp);
     }
 
     @Test(expected = Test.None.class)

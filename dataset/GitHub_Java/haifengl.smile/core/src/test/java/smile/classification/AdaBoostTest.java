@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
@@ -165,25 +165,6 @@ public class AdaBoostTest {
         int[][] test = model.test(USPS.test);
         for (int i = 0; i < test.length; i++) {
             System.out.format("Accuracy with %3d trees: %.4f%n", i+1, Accuracy.of(USPS.testy, test[i]));
-        }
-    }
-
-    @Test
-    public void testShap() {
-        MathEx.setSeed(19650218); // to get repeatable results.
-        AdaBoost model = AdaBoost.fit(Iris.formula, Iris.data, 200, 20, 4, 5);
-        String[] fields = java.util.Arrays.stream(model.schema().fields()).map(field -> field.name).toArray(String[]::new);
-        double[] importance = model.importance();
-        double[] shap = model.shap(Iris.data);
-
-        System.out.println("----- importance -----");
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", fields[i], importance[i]);
-        }
-
-        System.out.println("----- SHAP -----");
-        for (int i = 0; i < fields.length; i++) {
-            System.out.format("%-15s %.4f    %.4f    %.4f%n", fields[i], shap[2*i], shap[2*i+1], shap[2*i+2]);
         }
     }
 }

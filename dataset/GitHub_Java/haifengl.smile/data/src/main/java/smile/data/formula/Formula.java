@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.data.formula;
 
@@ -21,39 +21,17 @@ import java.io.Serializable;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import smile.data.CategoricalEncoder;
+
 import smile.data.DataFrame;
 import smile.data.Tuple;
 import smile.data.type.*;
 import smile.data.vector.*;
+import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
 
 /**
- * The model fitting formula in a compact symbolic form.
- * An expression of the form y ~ model is interpreted as a specification that
- * the response y is modelled by a linear predictor specified symbolically by
- * model. Such a model consists of a series of terms separated by + operators.
- * The terms themselves consist of variable and factor names separated by
- * :: operators. Such a term is interpreted as the interaction of all the
- * variables and factors appearing in the term. The special term "." means
- * all columns not otherwise in the formula in the context of a data frame.
- * <p>
- * In addition to + and ::, a number of other operators are useful in model
- * formulae. The && operator denotes factor crossing: a && b interpreted as
- * a+b+a::b. The ^ operator indicates crossing to the specified degree.
- * For example (a+b+c)^2 is identical to (a+b+c)*(a+b+c) which in turn
- * expands to a formula containing the main effects for a, b and c together
- * with their second-order interactions. The - operator removes the specified
- * terms, so that (a+b+c)^2 - a::b is identical to a + b + c + b::c + a::c.
- * It can also used to remove the intercept term: when fitting a linear model
- * y ~ x - 1 specifies a line through the origin. A model with no intercept
- * can be also specified as y ~ x + 0 or y ~ 0 + x.
- * <p>
- * While formulae usually involve just variable and factor names, they
- * can also involve arithmetic expressions. The formula log(y) ~ a + log(x)
- * is quite legal.
- * <p>
- * Note that the operators ~, +, ::, ^ are only available in Scala API.
+ * A formula extracts the variables from a context
+ * (e.g. Java Class or DataFrame).
  *
  * @author Haifeng Li
  */
@@ -82,17 +60,16 @@ public class Formula implements Serializable {
     }
 
     /**
-     * Constructor. The right-hand-side (predictors/independent variables)
-     * is all the rest columns in the data frame.
+     * Constructor.
      * @param response the response formula, i.e. dependent variable.
      */
     public Formula(Term response) {
         this.response = response;
-        this.predictors = new HyperTerm[] { new Dot() };
+        this.predictors = new HyperTerm[] { new All() };
     }
 
     /**
-     * Constructor. No left-hand-side (dependent variable).
+     * Constructor.
      * @param predictors the right-hand side of formula, i.e. independent/predictor variables.
      */
     public Formula(HyperTerm[] predictors) {
@@ -164,12 +141,8 @@ public class Formula implements Serializable {
     public static Formula rhs(String... predictors) {
         return new Formula(
                 Arrays.stream(predictors)
-                        .map(predictor -> {
-                            if (predictor.equals(".")) return new Dot();
-                            if (predictor.equals("1")) return new Intercept(true);
-                            if (predictor.equals("0")) return new Intercept(false);
-                            return new Variable(predictor);
-                        }).toArray(Term[]::new)
+                        .map(predictor -> new Variable(predictor))
+                        .toArray(Term[]::new)
         );
     }
 
@@ -221,42 +194,10 @@ public class Formula implements Serializable {
     }
 
     /**
-     * Returns the schema of predictors.
+     * Returns the schema of design matrix.
      */
     public StructType xschema() {
         return xschema;
-    }
-
-    /**
-     * Expands the 'all' term on the given schema.
-     * @param inputSchema the schema to expand on
-     */
-    public Formula expand(StructType inputSchema) {
-        if (!Arrays.stream(predictors).anyMatch(predictor -> predictor instanceof Dot)) {
-            return this;
-        }
-
-        Set<String> columns = new HashSet<>();
-        if (response != null) columns.addAll(response.variables());
-        Arrays.stream(predictors)
-                .filter(term -> term instanceof FactorCrossing || term instanceof Variable)
-                .forEach(term -> columns.addAll(term.variables()));
-
-        List<Variable> all = Arrays.stream(inputSchema.fields())
-                .filter(field -> !columns.contains(field.name))
-                .map(field -> new Variable(field.name))
-                .collect(Collectors.toList());
-
-        List<HyperTerm> expanded = new ArrayList<>();
-        for (HyperTerm predictor : predictors) {
-            if (predictor instanceof Dot) {
-                expanded.addAll(all);
-            } else {
-                expanded.add(predictor);
-            }
-        }
-
-        return of(response, expanded.toArray(new HyperTerm[expanded.size()]));
     }
 
     /** Binds the formula to a schema and returns the output schema of formula. */
@@ -281,8 +222,10 @@ public class Formula implements Serializable {
         Set<String> columns = new HashSet<>();
         if (response != null) columns.addAll(response.variables());
         Arrays.stream(predictors)
-                .filter(term -> term instanceof FactorCrossing || term instanceof Variable)
-                .forEach(term -> columns.addAll(term.variables()));
+                .filter((predictor -> !(predictor instanceof All)))
+                .flatMap(predictor -> predictor.terms().stream())
+                .filter(term -> term instanceof Variable)
+                .forEach(term -> columns.add(term.name()));
 
         List<Term> factors = new ArrayList<>();
         if (response != null) factors.add(response);
@@ -292,7 +235,7 @@ public class Formula implements Serializable {
                 .flatMap(term -> {
                     if (term instanceof Delete) {
                         return Stream.empty();
-                    } else if (term instanceof Dot) {
+                    } else if (term instanceof All) {
                         return term.terms().stream().filter(t -> !columns.contains(t.name()));
                     } else {
                         return term.terms().stream();
@@ -417,18 +360,15 @@ public class Formula implements Serializable {
     /**
      * Returns the real values of predictors.
      */
-    /*
     public double[] xarray(Tuple t) {
         return Arrays.stream(x).mapToDouble(term -> term.applyAsDouble(t)).toArray();
     }
-
-     */
 
     /**
      * Returns a data frame of predictors and response variable
      * @param df The input DataFrame.
      */
-    public DataFrame frame(DataFrame df) {
+    public DataFrame apply(DataFrame df) {
         bind(df.schema(), true);
         BaseVector[] vectors = Arrays.stream(xy).map(term -> term.apply(df)).toArray(BaseVector[]::new);
         return DataFrame.of(vectors);
@@ -445,36 +385,76 @@ public class Formula implements Serializable {
     }
 
     /**
-     * Returns the design matrix of predictors.
-     * All categorical variables will be dummy encoded.
-     * If the formula doesn't has an Intercept term, the bias
-     * column will be included. Otherwise, it is based on the
-     * setting of Intercept term.
-     *
+     * Creates a design matrix of predictors without bias column.
      * @param df The input DataFrame.
      */
-    public Matrix matrix(DataFrame df) {
-        boolean bias = true;
-        Optional<Intercept> intercept = Arrays.stream(predictors)
-                .filter(term -> term instanceof Intercept)
-                .map(term -> (Intercept) term)
-                .findAny();
-
-        if (intercept.isPresent()) {
-            bias = intercept.get().isInclulded();
-        }
-
-        return matrix(df, bias);
+    public DenseMatrix matrix(DataFrame df) {
+        return matrix(df, false);
     }
 
     /**
-     * Returns the design matrix of predictors.
-     * All categorical variables will be dummy encoded.
+     * Creates a design matrix of predictors.
      * @param df The input DataFrame.
-     * @param bias If true, include the bias column.
+     * @param bias If true, the design matrix includes an all-one column for intercept.
      */
-    public Matrix matrix(DataFrame df, boolean bias) {
-        return x(df).toMatrix(bias, CategoricalEncoder.DUMMY, null);
+    public DenseMatrix matrix(DataFrame df, boolean bias) {
+        bind(df.schema(), true);
+
+        int nrows = df.nrows();
+        int ncols = x.length;
+
+        ncols += bias ? 1 : 0;
+        DenseMatrix m = Matrix.of(nrows, ncols, 0.0);
+        if (bias) for (int i = 0; i < nrows; i++) m.set(i, ncols-1, 1.0);
+
+        for (int j = 0; j < x.length; j++) {
+            BaseVector v = x[j].apply(df);
+            DataType type = x[j].type();
+            switch (type.id()) {
+                case Double:
+                case Integer:
+                case Float:
+                case Long:
+                case Boolean:
+                case Byte:
+                case Short:
+                case Char: {
+                    for (int i = 0; i < nrows; i++) m.set(i, j, v.getDouble(i));
+                    break;
+                }
+
+                case String: {
+                    for (int i = 0; i < nrows; i++) {
+                        String s = (String) v.get(i);
+                        m.set(i, j, s == null ? Double.NaN : Double.valueOf(s));
+                    }
+                    break;
+                }
+
+                case Object: {
+                    Class clazz = ((ObjectType) type).getObjectClass();
+                    if (clazz == Boolean.class) {
+                        for (int i = 0; i < nrows; i++) {
+                            Boolean b = (Boolean) v.get(i);
+                            if (b != null)
+                                m.set(i, j, b.booleanValue() ? 1 : 0);
+                            else
+                                m.set(i, j, Double.NaN);
+                        }
+                    } else if (Number.class.isAssignableFrom(clazz)) {
+                        for (int i = 0; i < nrows; i++) m.set(i, j, v.getDouble(i));
+                    } else {
+                        throw new UnsupportedOperationException(String.format("DataFrame.toMatrix() doesn't support type %s", type));
+                    }
+                    break;
+                }
+
+                default:
+                    throw new UnsupportedOperationException(String.format("DataFrame.toMatrix() doesn't support type %s", type));
+            }
+        }
+
+        return m;
     }
 
     /**

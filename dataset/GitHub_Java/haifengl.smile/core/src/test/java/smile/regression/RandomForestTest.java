@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,11 +13,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.regression;
 
 import java.util.Arrays;
+import java.util.Optional;
 import org.junit.*;
 import smile.data.*;
 import smile.data.formula.Formula;
@@ -27,7 +28,6 @@ import smile.validation.LOOCV;
 import smile.validation.RMSE;
 import smile.validation.Validation;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -95,7 +95,7 @@ public class RandomForestTest {
         System.out.println("longley");
 
         MathEx.setSeed(19650218); // to get repeatable results for cross validation.
-        RandomForest model = RandomForest.fit(Longley.formula, Longley.data, 100, 3, 20, 10, 3, 1.0, Arrays.stream(seeds));
+        RandomForest model = RandomForest.fit(Longley.formula, Longley.data, 100, 3, 20, 10, 3, 1.0, Optional.of(Arrays.stream(seeds)));
 
         double[] importance = model.importance();
         System.out.println("----- importance -----");
@@ -116,7 +116,7 @@ public class RandomForestTest {
             System.out.format("RMSE with %3d trees: %.4f%n", i+1, RMSE.of(Longley.y, test[i]));
         }
 
-        double[] prediction = LOOCV.regression(Longley.formula, Longley.data, (f, x) -> RandomForest.fit(f, x, 100, 3, 20, 10, 3, 1.0, Arrays.stream(seeds)));
+        double[] prediction = LOOCV.regression(Longley.formula, Longley.data, (f, x) -> RandomForest.fit(f, x, 100, 3, 20, 10, 3, 1.0, Optional.of(Arrays.stream(seeds))));
         double rmse = RMSE.of(Longley.y, prediction);
 
         System.out.println("LOOCV RMSE = " + rmse);
@@ -130,7 +130,7 @@ public class RandomForestTest {
         System.out.println(name);
 
         MathEx.setSeed(19650218); // to get repeatable results for cross validation.
-        double[] prediction = CrossValidation.regression(3, formula, data, (f, x) -> RandomForest.fit(f, x, 100, 3, 20, 100, 5, 1.0, Arrays.stream(seeds)));
+        double[] prediction = CrossValidation.regression(3, formula, data, (f, x) -> RandomForest.fit(f, x, 100, 3, 20, 100, 5, 1.0, Optional.of(Arrays.stream(seeds))));
         double rmse = RMSE.of(formula.y(data).toDoubleArray(), prediction);
         System.out.format("10-CV RMSE = %.4f%n", rmse);
         assertEquals(expected, rmse, 1E-4);
@@ -160,8 +160,8 @@ public class RandomForestTest {
     public void testRandomForestMerging() throws Exception {
         System.out.println("Random forest merging");
 
-        RandomForest forest1 = RandomForest.fit(Abalone.formula, Abalone.train, 50, 3, 20, 100, 5, 1.0, Arrays.stream(seeds));
-        RandomForest forest2 = RandomForest.fit(Abalone.formula, Abalone.train, 50, 3, 20, 100, 5, 1.0, Arrays.stream(seeds).skip(50));
+        RandomForest forest1 = RandomForest.fit(Abalone.formula, Abalone.train, 50, 3, 20, 100, 5, 1.0, Optional.of(Arrays.stream(seeds)));
+        RandomForest forest2 = RandomForest.fit(Abalone.formula, Abalone.train, 50, 3, 20, 100, 5, 1.0, Optional.of(Arrays.stream(seeds).skip(50)));
         RandomForest forest = forest1.merge(forest2);
         double rmse1 = RMSE.of(Abalone.testy, Validation.test(forest1, Abalone.test));
         double rmse2 = RMSE.of(Abalone.testy, Validation.test(forest2, Abalone.test));
@@ -172,30 +172,5 @@ public class RandomForestTest {
         assertEquals(2.0858, rmse1, 1E-4);
         assertEquals(2.0630, rmse2, 1E-4);
         assertEquals(2.0691, rmse,  1E-4);
-    }
-
-    @Test
-    public void testShap() {
-        MathEx.setSeed(19650218); // to get repeatable results.
-        RandomForest model = RandomForest.fit(BostonHousing.formula, BostonHousing.data,100, 3, 20, 100, 5, 1.0);
-        double[] importance = model.importance();
-        double[] shap = model.shap(BostonHousing.data.stream().parallel());
-
-        System.out.println("----- importance -----");
-        String[] fields = java.util.Arrays.stream(model.schema().fields()).map(field -> field.name).toArray(String[]::new);
-        smile.sort.QuickSort.sort(importance, fields);
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", fields[i], importance[i]);
-        }
-
-        System.out.println("----- SHAP -----");
-        fields = java.util.Arrays.stream(model.schema().fields()).map(field -> field.name).toArray(String[]::new);
-        smile.sort.QuickSort.sort(shap, fields);
-        for (int i = 0; i < shap.length; i++) {
-            System.out.format("%-15s %.4f%n", fields[i], shap[i]);
-        }
-
-        String[] expected = {"CHAS", "RAD", "ZN", "B", "AGE", "TAX", "DIS", "CRIM", "INDUS", "NOX", "PTRATIO", "RM", "LSTAT"};
-        assertArrayEquals(expected, fields);
     }
 }

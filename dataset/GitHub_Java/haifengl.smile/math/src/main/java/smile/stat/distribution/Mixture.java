@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.stat.distribution;
 
@@ -23,8 +23,8 @@ import java.util.stream.Collectors;
 import smile.math.MathEx;
 
 /**
- * A finite mixture model is a probabilistic model for density estimation
- * using a mixture distribution. A mixture model can be regarded as a type of
+ * A finite mixture model is a probabilistic model for density estimation using a
+ * mixture distribution. A mixture model can be regarded as a type of
  * unsupervised learning or clustering.
  * <p>
  * The Expectation-maximization algorithm can be used to compute the

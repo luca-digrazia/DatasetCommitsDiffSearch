@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
@@ -25,7 +25,7 @@ import org.junit.Test;
 import smile.data.*;
 import smile.math.MathEx;
 import smile.validation.*;
-import smile.validation.metric.Error;
+import smile.validation.Error;
 
 import static org.junit.Assert.*;
 
@@ -58,10 +58,10 @@ public class LDATest {
     public void testIris() {
         System.out.println("Iris");
 
-        ClassificationMetrics metrics = LOOCV.classification(Iris.x, Iris.y, (x, y) -> LDA.fit(x, y));
-
-        System.out.println(metrics);
-        assertEquals(22, metrics.accuracy);
+        int[] prediction = LOOCV.classification(Iris.x, Iris.y, (x, y) -> LDA.fit(x, y));
+        int error = Error.of(Iris.y, prediction);
+        System.out.println("Error = " + error);
+        assertEquals(22, error);
     }
 
     @Test
@@ -69,11 +69,11 @@ public class LDATest {
         System.out.println("Pen Digits");
 
         MathEx.setSeed(19650218); // to get repeatable results.
-        ClassificationValidations<LDA> result = CrossValidation.classification(10, PenDigits.x, PenDigits.y,
-                (x, y) -> LDA.fit(x, y));
+        int[] prediction = CrossValidation.classification(10, PenDigits.x, PenDigits.y, (x, y) -> LDA.fit(x, y));
+        int error = Error.of(PenDigits.y, prediction);
 
-        System.out.println(result);
-        assertEquals(884, result.avg.accuracy);
+        System.out.println("Error = " + error);
+        assertEquals(884, error);
     }
 
     @Test
@@ -81,11 +81,11 @@ public class LDATest {
         System.out.println("Breast Cancer");
 
         MathEx.setSeed(19650218); // to get repeatable results.
-        ClassificationValidations<LDA> result = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y,
-                (x, y) -> LDA.fit(x, y));
+        int[] prediction = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y, (x, y) -> LDA.fit(x, y));
+        int error = Error.of(BreastCancer.y, prediction);
 
-        System.out.println(result);
-        assertEquals(42, result.avg.accuracy);
+        System.out.println("Error = " + error);
+        assertEquals(42, error);
     }
 
     @Test(expected = Test.None.class)

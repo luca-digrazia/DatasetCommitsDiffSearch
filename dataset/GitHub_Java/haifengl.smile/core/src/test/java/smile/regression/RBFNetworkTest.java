@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.regression;
 
@@ -27,9 +27,7 @@ import smile.data.*;
 import smile.math.MathEx;
 import smile.validation.CrossValidation;
 import smile.validation.LOOCV;
-import smile.validation.RegressionMetrics;
-import smile.validation.RegressionValidations;
-import smile.validation.metric.RMSE;
+import smile.validation.RMSE;
 
 import static org.junit.Assert.assertEquals;
 
@@ -66,11 +64,10 @@ public class RBFNetworkTest {
 
         double[][] x = MathEx.clone(Longley.x);
         MathEx.standardize(x);
-        RegressionMetrics metrics = LOOCV.regression(x, Longley.y,
-                (xi, yi) -> RBFNetwork.fit(xi, yi, RBF.fit(xi, 10, 5.0)));
-
-        System.out.println(metrics);
-        assertEquals(4.922188709128203, metrics.rmse, 1E-4);
+        double[] prediction = LOOCV.regression(x, Longley.y, (xi, yi) -> RBFNetwork.fit(xi, yi, RBF.fit(xi, 10, 5.0)));
+        double rmse = RMSE.of(Longley.y, prediction);
+        System.out.println("RMSE = " + rmse);
+        assertEquals(4.922188709128203, rmse, 1E-4);
 
         RBFNetwork<double[]> model = RBFNetwork.fit(Longley.x, Longley.y, RBF.fit(Longley.x, 10, 5.0));
         java.nio.file.Path temp = smile.data.Serialize.write(model);
@@ -85,11 +82,10 @@ public class RBFNetworkTest {
 
         double[][] x = MathEx.clone(CPU.x);
         MathEx.standardize(x);
-        RegressionValidations<RBFNetwork> result = CrossValidation.regression(10, x, CPU.y,
-                (xi, yi) -> RBFNetwork.fit(xi, yi, RBF.fit(xi, 20, 5.0)));
-
-        System.out.println(result);
-        assertEquals(24.967181232853843, result.avg.rmse, 1E-4);
+        double[] prediction = CrossValidation.regression(10, x, CPU.y, (xi, yi) -> RBFNetwork.fit(xi, yi, RBF.fit(xi, 20, 5.0)));
+        double rmse = RMSE.of(CPU.y, prediction);
+        System.out.println("RMSE = " + rmse);
+        assertEquals(24.967181232853843, rmse, 1E-4);
     }
 
     @Test
@@ -98,11 +94,10 @@ public class RBFNetworkTest {
 
         MathEx.setSeed(19650218); // to get repeatable results.
 
-        RegressionValidations<RBFNetwork> result = CrossValidation.regression(10, Planes.x, Planes.y,
-                (xi, yi) -> RBFNetwork.fit(xi, yi, RBF.fit(xi, 20, 5.0)));
-
-        System.out.println(result);
-        assertEquals(1.7161562336830596, result.avg.rmse, 1E-4);
+        double[] prediction = CrossValidation.regression(10, Planes.x, Planes.y, (xi, yi) -> RBFNetwork.fit(xi, yi, RBF.fit(xi, 20, 5.0)));
+        double rmse = RMSE.of(Planes.y, prediction);
+        System.out.println("RMSE = " + rmse);
+        assertEquals(1.7161562336830596, rmse, 1E-4);
     }
 
     @Test
@@ -113,11 +108,10 @@ public class RBFNetworkTest {
 
         double[][] x = MathEx.clone(Ailerons.x);
         MathEx.standardize(x);
-        RegressionValidations<RBFNetwork> result = CrossValidation.regression(10, x, Ailerons.y,
-                (xi, yi) -> RBFNetwork.fit(xi, yi, RBF.fit(xi, 20, 5.0)));
-
-        System.out.println(result);
-        assertEquals(2.440061343792136E-4, result.avg.rmse, 1E-4);
+        double[] prediction = CrossValidation.regression(10, x, Ailerons.y, (xi, yi) -> RBFNetwork.fit(xi, yi, RBF.fit(xi, 20, 5.0)));
+        double rmse = RMSE.of(Ailerons.y, prediction);
+        System.out.println("RMSE = " + rmse);
+        assertEquals(2.440061343792136E-4, rmse, 1E-4);
     }
 
     @Test
@@ -128,10 +122,9 @@ public class RBFNetworkTest {
 
         double[][] x = MathEx.clone(Bank32nh.x);
         MathEx.standardize(x);
-        RegressionValidations<RBFNetwork> result = CrossValidation.regression(10, x, Bank32nh.y,
-                (xi, yi) -> RBFNetwork.fit(xi, yi, RBF.fit(xi, 20, 5.0)));
-
-        System.out.println(result);
-        assertEquals(0.08711993434501915, result.avg.rmse, 1E-4);
+        double[] prediction = CrossValidation.regression(10, x, Bank32nh.y, (xi, yi) -> RBFNetwork.fit(xi, yi, RBF.fit(xi, 20, 5.0)));
+        double rmse = RMSE.of(Bank32nh.y, prediction);
+        System.out.println("RMSE = " + rmse);
+        assertEquals(0.08711993434501915, rmse, 1E-4);
     }
 }

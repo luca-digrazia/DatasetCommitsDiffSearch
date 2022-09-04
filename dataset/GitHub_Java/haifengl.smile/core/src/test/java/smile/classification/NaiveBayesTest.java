@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
@@ -107,10 +107,10 @@ public class NaiveBayesTest {
     public void testWeather() {
         System.out.println("Weather");
 
-        int p = WeatherNominal.level[0].length;
+        int p = WeatherNominal.x[0].length;
         int k = MathEx.max(WeatherNominal.y) + 1;
 
-        int[] prediction = LOOCV.classification(WeatherNominal.level, WeatherNominal.y, (x, y) -> {
+        int[] prediction = LOOCV.classification(WeatherNominal.x, WeatherNominal.y, (x, y) -> {
             int n = x.length;
             double[] priori = new double[k];
             Distribution[][] condprob = new Distribution[k][p];

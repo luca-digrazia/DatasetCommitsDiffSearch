@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.data.vector;
 
@@ -25,7 +25,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 
-import smile.data.measure.CategoricalMeasure;
+import smile.data.measure.ContinuousMeasure;
+import smile.data.measure.DiscreteMeasure;
 import smile.data.measure.NominalScale;
 import smile.data.type.DataTypes;
 import smile.data.type.StructField;
@@ -55,7 +56,7 @@ class StringVectorImpl extends VectorImpl<String> implements StringVector {
     public StringVector get(int... index) {
         String[] v = new String[index.length];
         for (int i = 0; i < index.length; i++) v[i] = get(index[i]);
-        return new StringVectorImpl(field(), v);
+        return new StringVectorImpl(name(), v);
     }
 
     @Override
@@ -99,7 +100,7 @@ class StringVectorImpl extends VectorImpl<String> implements StringVector {
     }
 
     @Override
-    public BaseVector factorize(CategoricalMeasure scale) {
+    public BaseVector factorize(DiscreteMeasure scale) {
         switch (scale.type().id()) {
             case Byte: {
                 byte[] data = new byte[size()];
@@ -114,7 +115,7 @@ class StringVectorImpl extends VectorImpl<String> implements StringVector {
                 short[] data = new short[size()];
                 for (int i = 0; i < data.length; i++) {
                     String s = get(i);
-                    data[i] = s == null ? (short) -1 : scale.valueOf(s).shortValue();
+                    data[i] = s == null ? (byte) -1 : scale.valueOf(s).shortValue();
                 }
 
                 return new ShortVectorImpl(new StructField(name(), DataTypes.ShortType, scale), data);
@@ -123,7 +124,7 @@ class StringVectorImpl extends VectorImpl<String> implements StringVector {
                 int[] data = new int[size()];
                 for (int i = 0; i < data.length; i++) {
                     String s = get(i);
-                    data[i] = s == null ? -1 : scale.valueOf(s).intValue();
+                    data[i] = s == null ? (byte) -1 : scale.valueOf(s).intValue();
                 }
 
                 return new IntVectorImpl(new StructField(name(), DataTypes.IntegerType, scale), data);

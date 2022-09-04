@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,14 +13,15 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.classification;
 
 import java.io.IOException;
 import smile.data.Hyphen;
 import smile.data.Protein;
-import smile.validation.metric.Error;
+import smile.validation.Error;
+import smile.validation.Validation;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -60,7 +61,7 @@ public class MaxentTest {
 
         Maxent model = Maxent.fit(Protein.p, Protein.x, Protein.y);
 
-        int[] prediction = model.predict(Protein.testx);
+        int[] prediction = Validation.test(model, Protein.testx);
         int error = Error.of(prediction, Protein.testy);
 
         System.out.format("The error is %d of %d%n", error, Protein.testx.length);
@@ -76,7 +77,7 @@ public class MaxentTest {
 
         Maxent model = Maxent.fit(Hyphen.p, Hyphen.x, Hyphen.y);
 
-        int[] prediction = model.predict(Hyphen.testx);
+        int[] prediction = Validation.test(model, Hyphen.testx);
         int error = Error.of(prediction, Hyphen.testy);
 
         System.out.format("The error is %d of %d%n", error, Hyphen.testx.length);

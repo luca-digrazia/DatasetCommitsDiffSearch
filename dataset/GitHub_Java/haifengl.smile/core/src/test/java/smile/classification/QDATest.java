@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
@@ -25,10 +25,9 @@ import org.junit.Test;
 import smile.data.BreastCancer;
 import smile.data.Iris;
 import smile.math.MathEx;
-import smile.validation.ClassificationValidations;
 import smile.validation.CrossValidation;
+import smile.validation.Error;
 import smile.validation.LOOCV;
-import smile.validation.ClassificationMetrics;
 
 import static org.junit.Assert.*;
 
@@ -61,10 +60,10 @@ public class QDATest {
     public void testIris() throws Exception {
         System.out.println("Iris");
 
-        ClassificationMetrics metrics = LOOCV.classification(Iris.x, Iris.y, (x, y) -> QDA.fit(x, y));
-
-        System.out.println(metrics);
-        assertEquals(4, metrics.accuracy);
+        int[] prediction = LOOCV.classification(Iris.x, Iris.y, (x, y) -> QDA.fit(x, y));
+        int error = Error.of(Iris.y, prediction);
+        System.out.println("Error = " + error);
+        assertEquals(4, error);
 
         QDA model = QDA.fit(Iris.x, Iris.y);
         java.nio.file.Path temp = smile.data.Serialize.write(model);
@@ -76,10 +75,10 @@ public class QDATest {
         System.out.println("Breast Cancer");
 
         MathEx.setSeed(19650218); // to get repeatable results.
-        ClassificationValidations<QDA> result = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y,
-                (x, y) -> QDA.fit(x, y));
+        int[] prediction = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y, (x, y) -> QDA.fit(x, y));
+        int error = Error.of(BreastCancer.y, prediction);
 
-        System.out.println(result);
-        assertEquals(24, result.avg.accuracy);
+        System.out.println("Error = " + error);
+        assertEquals(24, error);
     }
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.regression;
 
@@ -73,13 +73,13 @@ public class OLSTest {
         assertEquals(4.42579E-9, model.pvalue(), 1E-14);
 
         double[][] ttest = {
-                {2946.85636, 5647.97658,   0.522,   0.6144},
                 {   0.26353,    0.10815,   2.437,   0.0376},
                 {   0.03648,    0.03024,   1.206,   0.2585},
                 {   0.01116,    0.01545,   0.722,   0.4885},
                 {  -1.73703,    0.67382,  -2.578,   0.0298},
                 {  -1.41880,    2.94460,  -0.482,   0.6414},
-                {   0.23129,    1.30394,   0.177,   0.8631}
+                {   0.23129,    1.30394,   0.177,   0.8631},
+                {2946.85636, 5647.97658,   0.522,   0.6144}
         };
 
         double[] residuals = {

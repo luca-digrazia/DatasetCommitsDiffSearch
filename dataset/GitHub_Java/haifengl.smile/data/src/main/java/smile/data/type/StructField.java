@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,15 +13,13 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.data.type;
 
 import java.io.Serializable;
-import java.util.Objects;
-
-import smile.data.measure.CategoricalMeasure;
-import smile.data.measure.NumericalMeasure;
+import smile.data.measure.ContinuousMeasure;
+import smile.data.measure.DiscreteMeasure;
 import smile.data.measure.Measure;
 import smile.data.measure.NominalScale;
 
@@ -51,11 +49,11 @@ public class StructField implements Serializable {
      * Constructor.
      */
     public StructField(String name, DataType type, Measure measure) {
-        if (measure instanceof NumericalMeasure && !type.isFloating()) {
+        if (measure instanceof ContinuousMeasure && !type.isFloating()) {
             throw new IllegalArgumentException(String.format("%s values cannot be of measure %s", type, measure));
         }
 
-        if (measure instanceof CategoricalMeasure && !type.isIntegral()) {
+        if (measure instanceof DiscreteMeasure && !type.isIntegral()) {
             throw new IllegalArgumentException(String.format("%s values cannot be of measure %s", type, measure));
         }
 
@@ -93,7 +91,7 @@ public class StructField implements Serializable {
     public boolean equals(Object o) {
         if (o instanceof StructField) {
             StructField f = (StructField) o;
-            return name.equals(f.name) && type.equals(f.type) && Objects.equals(measure, f.measure);
+            return name.equals(f.name) && type.equals(f.type);
         }
 
         return false;

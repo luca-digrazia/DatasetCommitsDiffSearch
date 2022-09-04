@@ -42,6 +42,10 @@ public abstract class MultilayerPerceptron implements Serializable {
      */
     protected int p;
     /**
+     * The input layer with bias.
+     */
+    protected double[] x1;
+    /**
      * The output layer.
      */
     protected OutputLayer output;
@@ -91,6 +95,9 @@ public abstract class MultilayerPerceptron implements Serializable {
         this.output = (OutputLayer) net[net.length - 1];
         this.net = Arrays.copyOf(net, net.length - 1);
         this.p = net[0].getInputSize();
+
+        x1 = new double[p+1];
+        x1[p] = 1.0;
 
         target = new double[output.getOutputSize()];
     }
@@ -164,7 +171,13 @@ public abstract class MultilayerPerceptron implements Serializable {
      * Propagates the signals through the neural network.
      */
     protected void propagate(double[] x) {
-        double[] input = x;
+        if (x.length != x1.length - 1) {
+            throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x.length, x1.length-1));
+        }
+
+        System.arraycopy(x, 0, x1, 0, x.length);
+
+        double[] input = x1;
         for (int i = 0; i < net.length; i++) {
             net[i].propagate(input);
             input = net[i].output();
@@ -175,7 +188,7 @@ public abstract class MultilayerPerceptron implements Serializable {
     /**
      * Propagates the errors back through the network.
      */
-    protected void backpropagate(double[] x) {
+    protected void backpropagate() {
         output.computeError(target, 1.0);
 
         Layer upper = output;
@@ -187,6 +200,7 @@ public abstract class MultilayerPerceptron implements Serializable {
         // first hidden layer
         upper.backpropagate(null);
 
+        double[] x = x1;
         for (Layer layer : net) {
             layer.computeUpdate(eta, alpha, x);
             x = layer.output();
