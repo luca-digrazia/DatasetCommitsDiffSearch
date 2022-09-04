@@ -1,30 +1,23 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.periodical;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
 import org.graylog2.indexer.cluster.Cluster;
-import org.graylog2.indexer.cluster.health.AbsoluteValueWatermarkSettings;
-import org.graylog2.indexer.cluster.health.ClusterAllocationDiskSettings;
-import org.graylog2.indexer.cluster.health.NodeDiskUsageStats;
-import org.graylog2.indexer.cluster.health.NodeFileDescriptorStats;
-import org.graylog2.indexer.cluster.health.PercentageWatermarkSettings;
-import org.graylog2.indexer.cluster.health.WatermarkSettings;
+import org.graylog2.indexer.cluster.NodeFileDescriptorStats;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.periodical.Periodical;
@@ -32,10 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
@@ -56,17 +45,12 @@ public class IndexerClusterCheckerThread extends Periodical {
 
     @Override
     public void doRun() {
-        if (!cluster.health().isPresent()) {
-            LOG.info("Indexer not fully initialized yet. Skipping periodic cluster check.");
+        if (!notificationService.isFirst(Notification.Type.ES_OPEN_FILES)) {
             return;
         }
-        checkOpenFiles();
-        checkDiskUsage();
-    }
 
-    @VisibleForTesting
-    void checkOpenFiles() {
-        if (notificationExists(Notification.Type.ES_OPEN_FILES)) {
+        if (!cluster.health().isPresent()) {
+            LOG.info("Indexer not fully initialized yet. Skipping periodic cluster check.");
             return;
         }
 
@@ -102,91 +86,6 @@ public class IndexerClusterCheckerThread extends Periodical {
             Notification notification = notificationService.build().addType(Notification.Type.ES_OPEN_FILES);
             notificationService.fixed(notification);
         }
-    }
-
-    @VisibleForTesting()
-    void checkDiskUsage() {
-        final Map<Notification.Type, List<String>> notificationTypePerNodeIdentifier = new HashMap<>();
-        try {
-            ClusterAllocationDiskSettings settings = cluster.getClusterAllocationDiskSettings();
-            if (settings.ThresholdEnabled()) {
-                final Set<NodeDiskUsageStats> diskUsageStats = cluster.getDiskUsageStats();
-
-                for (NodeDiskUsageStats nodeDiskUsageStats : diskUsageStats) {
-                    Notification.Type currentNodeNotificationType = null;
-                    WatermarkSettings<?> watermarkSettings = settings.watermarkSettings();
-                    if (watermarkSettings instanceof PercentageWatermarkSettings) {
-                        currentNodeNotificationType = getDiskUsageNotificationTypeByPercentage((PercentageWatermarkSettings) watermarkSettings, nodeDiskUsageStats);
-                    } else if (watermarkSettings instanceof AbsoluteValueWatermarkSettings) {
-                        currentNodeNotificationType = getDiskUsageNotificationTypeByAbsoluteValues((AbsoluteValueWatermarkSettings) watermarkSettings, nodeDiskUsageStats);
-                    }
-                    if (currentNodeNotificationType != null) {
-                        String nodeIdentifier = firstNonNull(nodeDiskUsageStats.host(), nodeDiskUsageStats.ip());
-                        notificationTypePerNodeIdentifier.merge(currentNodeNotificationType, Collections.singletonList(nodeIdentifier), (prev, cur) -> ImmutableList.<String>builder()
-                                .addAll(prev)
-                                .addAll(cur)
-                                .build());
-                    }
-                }
-
-                if (notificationTypePerNodeIdentifier.isEmpty()) {
-                    fixAllDiskUsageNotifications();
-                } else {
-                    publishDiskUsageNotifications(notificationTypePerNodeIdentifier);
-                }
-            }
-        } catch (Exception e) {
-            LOG.error("Error while trying to check Elasticsearch disk usage.Details: " + e.getMessage());
-        }
-    }
-
-    private Notification.Type getDiskUsageNotificationTypeByPercentage(PercentageWatermarkSettings settings, NodeDiskUsageStats nodeDiskUsageStats) {
-        if (settings.floodStage() != null && nodeDiskUsageStats.diskUsedPercent() >= settings.floodStage()) {
-            return Notification.Type.ES_NODE_DISK_WATERMARK_FLOOD_STAGE;
-        } else if (nodeDiskUsageStats.diskUsedPercent() >= settings.high()) {
-            return Notification.Type.ES_NODE_DISK_WATERMARK_HIGH;
-        } else if (nodeDiskUsageStats.diskUsedPercent() >= settings.low()) {
-            return Notification.Type.ES_NODE_DISK_WATERMARK_LOW;
-        }
-        return null;
-    }
-
-    private Notification.Type getDiskUsageNotificationTypeByAbsoluteValues(AbsoluteValueWatermarkSettings settings, NodeDiskUsageStats nodeDiskUsageStats) {
-        if (settings.floodStage() != null && nodeDiskUsageStats.diskAvailable().getBytes() <= settings.floodStage().getBytes()) {
-            return Notification.Type.ES_NODE_DISK_WATERMARK_FLOOD_STAGE;
-        } else if (nodeDiskUsageStats.diskAvailable().getBytes() <= settings.high().getBytes()) {
-            return Notification.Type.ES_NODE_DISK_WATERMARK_HIGH;
-        } else if (nodeDiskUsageStats.diskAvailable().getBytes() <= settings.low().getBytes()) {
-            return Notification.Type.ES_NODE_DISK_WATERMARK_LOW;
-        }
-        return null;
-    }
-
-    private void fixAllDiskUsageNotifications() {
-        notificationService.fixed(Notification.Type.ES_NODE_DISK_WATERMARK_FLOOD_STAGE);
-        notificationService.fixed(Notification.Type.ES_NODE_DISK_WATERMARK_HIGH);
-        notificationService.fixed(Notification.Type.ES_NODE_DISK_WATERMARK_LOW);
-    }
-
-    private void publishDiskUsageNotifications(Map<Notification.Type, List<String>> notificationTypePerNodeIdentifier) {
-        for (Map.Entry<Notification.Type, List<String>> entry : notificationTypePerNodeIdentifier.entrySet()) {
-            if (!notificationExists(entry.getKey())) {
-                Notification notification = notificationService.buildNow()
-                        .addType(entry.getKey())
-                        .addSeverity(Notification.Severity.URGENT)
-                        .addDetail("nodes", String.join(", ", entry.getValue()));
-                notificationService.publishIfFirst(notification);
-                for (String node: entry.getValue()) {
-                    LOG.warn("Elasticsearch node [{}] triggered [{}] due to low free disk space",
-                            node,
-                            entry.getKey());
-                }
-            }
-        }
-    }
-
-    private boolean notificationExists(Notification.Type type) {
-        return !notificationService.isFirst(type);
     }
 
     @Override

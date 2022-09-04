@@ -21,13 +21,9 @@ import com.github.joschi.jadconfig.util.Duration;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.searchbox.core.Cat;
 import io.searchbox.core.CatResult;
-import org.graylog.testing.elasticsearch.ElasticsearchBaseTest;
+import org.graylog2.ElasticsearchBase;
 import org.graylog2.indexer.IndexSetRegistry;
-import org.graylog2.indexer.cluster.health.ClusterAllocationDiskSettings;
-import org.graylog2.indexer.cluster.health.NodeDiskUsageStats;
-import org.graylog2.indexer.cluster.health.NodeFileDescriptorStats;
-import org.graylog2.indexer.cluster.health.WatermarkSettings;
-import org.graylog2.indexer.indices.HealthStatus;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -43,7 +39,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-public abstract class ClusterIT extends ElasticsearchBaseTest {
+public class ClusterIT extends ElasticsearchBase {
     private static final String INDEX_NAME = "cluster_it_" + System.nanoTime();
     private static final String ALIAS_NAME = "cluster_it_alias_" + System.nanoTime();
 
@@ -55,77 +51,65 @@ public abstract class ClusterIT extends ElasticsearchBaseTest {
 
     private Cluster cluster;
 
-    protected abstract ClusterAdapter clusterAdapter(Duration timeout);
-
     @Before
     public void setUp() throws Exception {
-        client().createIndex(INDEX_NAME, 1, 0);
-        client().addAliasMapping(INDEX_NAME, ALIAS_NAME);
-        client().waitForGreenStatus(INDEX_NAME, ALIAS_NAME);
-
+        createIndex(INDEX_NAME, 1, 0);
+        addAliasMapping(INDEX_NAME, ALIAS_NAME);
+        waitForGreenStatus(INDEX_NAME, ALIAS_NAME);
+        
         final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(
                 new ThreadFactoryBuilder().setNameFormat("cluster-it-%d").build()
         );
-        final Duration requestTimeout = Duration.seconds(1L);
-        cluster = new Cluster(indexSetRegistry, scheduler, requestTimeout, clusterAdapter(requestTimeout));
+        cluster = new Cluster(client(), indexSetRegistry, scheduler, Duration.seconds(1L));
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        removeAliasMapping(INDEX_NAME, ALIAS_NAME);
+        deleteIndex(INDEX_NAME);
     }
 
     @Test
-    public void getFileDescriptorStats() {
+    public void getFileDescriptorStats() throws Exception {
         final Set<NodeFileDescriptorStats> fileDescriptorStats = cluster.getFileDescriptorStats();
         assertThat(fileDescriptorStats).isNotEmpty();
     }
 
     @Test
-    public void getDiskUsageStats() {
-        final Set<NodeDiskUsageStats> diskUsageStats = cluster.getDiskUsageStats();
-        assertThat(diskUsageStats).isNotEmpty();
-    }
-
-    @Test
-    public void getClusterAllocationDiskSettings() throws Exception{
-        final ClusterAllocationDiskSettings clusterAllocationDiskSettings = cluster.getClusterAllocationDiskSettings();
-
-        //Default Elasticsearch settings in Elasticsearch 5.6
-        assertThat(clusterAllocationDiskSettings.ThresholdEnabled()).isTrue();
-        assertThat(clusterAllocationDiskSettings.watermarkSettings().type()).isEqualTo(WatermarkSettings.SettingsType.PERCENTAGE);
-        assertThat(clusterAllocationDiskSettings.watermarkSettings().low()).isEqualTo(85D);
-        assertThat(clusterAllocationDiskSettings.watermarkSettings().high()).isEqualTo(90D);
-        assertThat(clusterAllocationDiskSettings.watermarkSettings().floodStage()).isNull();
-    }
-
-    @Test
     public void health() throws Exception {
-        final String index = client().createRandomIndex("cluster_it_");
+        final String index = createRandomIndex("cluster_it_");
         when(indexSetRegistry.getIndexWildcards()).thenReturn(new String[]{index});
 
-        final Optional<HealthStatus> health = cluster.health();
-        assertThat(health)
-                .isPresent()
-                .hasValueSatisfying(status -> assertThat(status).isEqualTo(HealthStatus.Green));
-
+        try {
+            final Optional<JsonNode> health = cluster.health();
+            assertThat(health)
+                    .isPresent()
+                    .hasValueSatisfying(json -> assertThat(json.path("status").asText()).isEqualTo("green"));
+        } finally {
+            deleteIndex(index);
+        }
     }
 
     @Test
-    public void health_returns_empty_with_missing_index() {
+    public void health_returns_empty_with_missing_index() throws Exception {
         when(indexSetRegistry.getIndexWildcards()).thenReturn(new String[]{"does_not_exist"});
-        final Optional<HealthStatus> health = cluster.health();
+        final Optional<JsonNode> health = cluster.health();
         assertThat(health).isEmpty();
     }
 
     @Test
-    public void deflectorHealth() {
+    public void deflectorHealth() throws Exception {
         when(indexSetRegistry.getWriteIndexAliases()).thenReturn(new String[]{ALIAS_NAME});
-        final Optional<HealthStatus> deflectorHealth = cluster.deflectorHealth();
+        final Optional<JsonNode> deflectorHealth = cluster.deflectorHealth();
         assertThat(deflectorHealth)
                 .isPresent()
-                .hasValueSatisfying(status -> assertThat(status).isEqualTo(HealthStatus.Green));
+                .hasValueSatisfying(json -> assertThat(json.path("status").asText()).isEqualTo("green"));
     }
 
     @Test
-    public void deflectorHealth_returns_empty_with_missing_index() {
+    public void deflectorHealth_returns_empty_with_missing_index() throws Exception {
         when(indexSetRegistry.getWriteIndexAliases()).thenReturn(new String[]{"does_not_exist"});
-        final Optional<HealthStatus> deflectorHealth = cluster.deflectorHealth();
+        final Optional<JsonNode> deflectorHealth = cluster.deflectorHealth();
         assertThat(deflectorHealth).isEmpty();
     }
 
@@ -136,7 +120,7 @@ public abstract class ClusterIT extends ElasticsearchBaseTest {
                 .setParameter("format", "json")
                 .setParameter("full_id", "true")
                 .build();
-        final CatResult catResult = jestClient().execute(nodesInfo);
+        final CatResult catResult = client().execute(nodesInfo);
         final JsonNode result = catResult.getJsonObject().path("result");
         assertThat(result).isNotEmpty();
 
@@ -151,7 +135,7 @@ public abstract class ClusterIT extends ElasticsearchBaseTest {
     }
 
     @Test
-    public void nodeIdToName_returns_empty_with_invalid_node_id() {
+    public void nodeIdToName_returns_empty_with_invalid_node_id() throws Exception {
         final Optional<String> name = cluster.nodeIdToName("invalid-node-id");
         assertThat(name).isEmpty();
     }
@@ -163,7 +147,7 @@ public abstract class ClusterIT extends ElasticsearchBaseTest {
                 .setParameter("format", "json")
                 .setParameter("full_id", "true")
                 .build();
-        final CatResult catResult = jestClient().execute(nodesInfo);
+        final CatResult catResult = client().execute(nodesInfo);
         final JsonNode result = catResult.getJsonObject().path("result");
         assertThat(result).isNotEmpty();
 
@@ -180,28 +164,31 @@ public abstract class ClusterIT extends ElasticsearchBaseTest {
     }
 
     @Test
-    public void nodeIdToHostName_returns_empty_with_invalid_node_id() {
+    public void nodeIdToHostName_returns_empty_with_invalid_node_id() throws Exception {
         final Optional<String> hostName = cluster.nodeIdToHostName("invalid-node-id");
         assertThat(hostName).isEmpty();
     }
 
     @Test
-    public void isConnected() {
+    public void isConnected() throws Exception {
         assertThat(cluster.isConnected()).isTrue();
     }
 
     @Test
     public void isHealthy() throws Exception {
-        final String index = client().createRandomIndex("cluster_it_");
+        final String index = createRandomIndex("cluster_it_");
         when(indexSetRegistry.getIndexWildcards()).thenReturn(new String[]{index});
         when(indexSetRegistry.isUp()).thenReturn(true);
 
-        assertThat(cluster.isHealthy()).isTrue();
-
+        try {
+            assertThat(cluster.isHealthy()).isTrue();
+        } finally {
+            deleteIndex(index);
+        }
     }
 
     @Test
-    public void isHealthy_returns_false_with_missing_index() {
+    public void isHealthy_returns_false_with_missing_index() throws Exception {
         when(indexSetRegistry.getIndexWildcards()).thenReturn(new String[]{"does-not-exist"});
         when(indexSetRegistry.isUp()).thenReturn(true);
         assertThat(cluster.isHealthy()).isFalse();
@@ -209,22 +196,26 @@ public abstract class ClusterIT extends ElasticsearchBaseTest {
 
     @Test
     public void isHealthy_returns_false_with_missing_write_aliases() throws Exception {
-        client().createRandomIndex("cluster_it_");
+        final String index = createRandomIndex("cluster_it_");
         when(indexSetRegistry.getIndexWildcards()).thenReturn(new String[]{INDEX_NAME});
         when(indexSetRegistry.isUp()).thenReturn(false);
 
-        assertThat(cluster.isHealthy()).isFalse();
+        try {
+            assertThat(cluster.isHealthy()).isFalse();
+        } finally {
+            deleteIndex(index);
+        }
     }
 
     @Test
-    public void isDeflectorHealthy() {
+    public void isDeflectorHealthy() throws Exception {
         when(indexSetRegistry.getWriteIndexAliases()).thenReturn(new String[]{ALIAS_NAME});
         when(indexSetRegistry.isUp()).thenReturn(true);
         assertThat(cluster.isDeflectorHealthy()).isTrue();
     }
 
     @Test
-    public void isDeflectorHealthy_returns_false_with_missing_aliases() {
+    public void isDeflectorHealthy_returns_false_with_missing_aliases() throws Exception {
         when(indexSetRegistry.getWriteIndexAliases()).thenReturn(new String[]{"does-not-exist"});
         when(indexSetRegistry.isUp()).thenReturn(true);
         assertThat(cluster.isDeflectorHealthy()).isFalse();
