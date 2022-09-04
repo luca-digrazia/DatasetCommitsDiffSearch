@@ -125,9 +125,8 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
                   : null,
               null, /* featureOfArtifact */
               null /* featureAfterArtifact */);
+      attributesBuilder.addRuntimeClassPathEntry(resourceApk.getResourceJavaClassJar());
     }
-
-    attributesBuilder.addRuntimeClassPathEntry(resourceApk.getResourceJavaClassJar());
 
     // Exclude the Rs from the library from the runtime classpath.
     NestedSet<Artifact> excludedRuntimeArtifacts = getLibraryResourceJars(ruleContext);
