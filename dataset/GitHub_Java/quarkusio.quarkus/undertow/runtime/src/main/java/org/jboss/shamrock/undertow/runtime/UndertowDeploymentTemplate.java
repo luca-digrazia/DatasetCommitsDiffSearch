@@ -11,7 +11,6 @@ import javax.servlet.MultipartConfigElement;
 import javax.servlet.Servlet;
 import javax.servlet.ServletException;
 
-import org.jboss.shamrock.runtime.ConfiguredValue;
 import org.jboss.shamrock.runtime.ContextObject;
 import org.jboss.shamrock.runtime.InjectionInstance;
 import org.jboss.shamrock.runtime.StartupContext;
@@ -125,25 +124,20 @@ public class UndertowDeploymentTemplate {
         info.addInitParameter(name, value);
     }
 
-    public void startUndertow(StartupContext startupContext, @ContextObject("servletHandler") HttpHandler handler, ConfiguredValue port) throws ServletException {
+    public void startUndertow(StartupContext startupContext, @ContextObject("servletHandler") HttpHandler handler, String port) throws ServletException {
         if (undertow == null) {
-            try {
-                log.log(Level.INFO, "Starting Undertow on port " + port);
-                undertow = Undertow.builder()
-                      .addHttpListener(Integer.parseInt(port.getValue()), "localhost")
-                      .setHandler(new CanonicalPathHandler(ROOT_HANDLER))
-                      .build();
-                undertow.start();
-            }
-            catch (Exception e) {
-                log.log(Level.SEVERE, "Failed to start Undertow", e);
-            }
+            log.log(Level.INFO, "Starting Undertow on port " + port);
+            undertow = Undertow.builder()
+                    .addHttpListener(Integer.parseInt(port), "localhost")
+                    .setHandler(new CanonicalPathHandler(ROOT_HANDLER))
+                    .build();
+            undertow.start();
         }
         currentRoot = handler;
 //        startupContext.addCloseable(new Closeable() {
 //            @Override
 //            public void close() throws IOException {
-//                undertow.stop();
+//                val.stop();
 //            }
 //        });
     }
