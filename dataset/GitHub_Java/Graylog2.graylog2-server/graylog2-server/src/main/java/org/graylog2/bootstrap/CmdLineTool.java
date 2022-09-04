@@ -159,10 +159,6 @@ public abstract class CmdLineTool implements CliCommand {
 
     protected abstract List<Object> getCommandConfigurationBeans();
 
-    /**
-     * Things that have to run before the {@link #startCommand()} method is being called.
-     */
-    protected void beforeStart() {}
 
     @Override
     public void run() {
@@ -184,8 +180,6 @@ public abstract class CmdLineTool implements CliCommand {
             LOG.error("Validating configuration file failed - exiting.");
             System.exit(1);
         }
-
-        beforeStart();
 
         final List<String> arguments = ManagementFactory.getRuntimeMXBean().getInputArguments();
         LOG.info("Running with JVM arguments: {}", Joiner.on(' ').join(arguments));
@@ -295,7 +289,6 @@ public abstract class CmdLineTool implements CliCommand {
             final PluginMetaData metadata = plugin.metadata();
             if (capabilities().containsAll(metadata.getRequiredCapabilities())) {
                 if (version.sameOrHigher(metadata.getRequiredVersion())) {
-                    LOG.info("Loaded plugin: {}", plugin);
                     plugins.add(plugin);
                 } else {
                     LOG.error("Plugin \"" + metadata.getName() + "\" requires version " + metadata.getRequiredVersion() + " - not loading!");
@@ -307,6 +300,7 @@ public abstract class CmdLineTool implements CliCommand {
             }
         }
 
+        LOG.info("Loaded plugins: " + plugins);
         return plugins;
     }
 
@@ -342,6 +336,11 @@ public abstract class CmdLineTool implements CliCommand {
 
         LOG.debug("Loading configuration from config file: {}", configFile);
         processConfiguration(jadConfig);
+
+        if (configuration.getRestTransportUri() == null) {
+            configuration.setRestTransportUri(configuration.getDefaultRestTransportUri());
+            LOG.debug("No rest_transport_uri set. Using default [{}].", configuration.getRestTransportUri());
+        }
 
         return new NamedConfigParametersModule(jadConfig.getConfigurationBeans());
     }
