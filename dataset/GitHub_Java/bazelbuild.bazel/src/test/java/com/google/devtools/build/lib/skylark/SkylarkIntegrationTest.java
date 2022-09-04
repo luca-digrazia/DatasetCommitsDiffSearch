@@ -2139,11 +2139,18 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         (AnalysisFailureInfo) target.get(AnalysisFailureInfo.SKYLARK_CONSTRUCTOR.getKey());
 
     Correspondence<AnalysisFailure, AnalysisFailure> correspondence =
-        Correspondence.from(
-            (actual, expected) ->
-                actual.getLabel().equals(expected.getLabel())
-                    && actual.getMessage().contains(expected.getMessage()),
-            "is equivalent to");
+        new Correspondence<AnalysisFailure, AnalysisFailure>() {
+          @Override
+          public boolean compare(AnalysisFailure actual, AnalysisFailure expected) {
+            return actual.getLabel().equals(expected.getLabel())
+                && actual.getMessage().contains(expected.getMessage());
+          }
+
+          @Override
+          public String toString() {
+            return "is equivalent to";
+          }
+        };
 
     AnalysisFailure expectedOne =
         new AnalysisFailure(
@@ -2584,8 +2591,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:my_rule");
     assertContainsEvent(
-        " _whitelist_function_transition attribute (//test:my_other_rule) does not have the"
-            + " expected value");
+        "_whitelist_function_transition attribute does not have the expected value");
   }
 
   @Test

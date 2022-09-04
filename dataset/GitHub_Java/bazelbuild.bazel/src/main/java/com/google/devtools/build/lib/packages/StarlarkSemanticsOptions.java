@@ -154,15 +154,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
   public boolean experimentalStarlarkConfigTransitions;
 
   @Option(
-      name = "experimental_starlark_unused_inputs_list",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.CHANGES_INPUTS},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      help = "If set to true, enables use of 'unused_inputs_list' in starlark action.run().")
-  public boolean experimentalStarlarkUnusedInputsList;
-
-  @Option(
       name = "incompatible_bzl_disallow_load_after_statement",
       defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
@@ -207,7 +198,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
 
   @Option(
       name = "incompatible_disable_deprecated_attr_params",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
       metadataTags = {
@@ -262,19 +253,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
       },
       help = "If set to true, the `+` becomes disabled for dicts.")
   public boolean incompatibleDisallowDictPlus;
-
-  @Option(
-      name = "incompatible_disallow_empty_glob",
-      defaultValue = "false",
-      category = "incompatible changes",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "If set to true, the default value of the `allow_empty` argument of glob() is False.")
-  public boolean incompatibleDisallowEmptyGlob;
 
   @Option(
       name = "incompatible_disallow_filetype",
@@ -354,7 +332,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
 
   @Option(
       name = "incompatible_string_join_requires_strings",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
       metadataTags = {
@@ -412,7 +390,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
 
   @Option(
       name = "incompatible_new_actions_api",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
       metadataTags = {
@@ -494,7 +472,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
 
   @Option(
       name = "incompatible_no_kwargs_in_build_files",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
       metadataTags = {
@@ -557,7 +535,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
 
   @Option(
       name = "incompatible_do_not_split_linking_cmdline",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
       metadataTags = {
@@ -628,7 +606,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             experimentalJavaCommonCreateProviderEnabledPackages)
         .experimentalPlatformsApi(experimentalPlatformsApi)
         .experimentalStarlarkConfigTransitions(experimentalStarlarkConfigTransitions)
-        .experimentalStarlarkUnusedInputsList(experimentalStarlarkUnusedInputsList)
         .incompatibleBzlDisallowLoadAfterStatement(incompatibleBzlDisallowLoadAfterStatement)
         .incompatibleDepsetIsNotIterable(incompatibleDepsetIsNotIterable)
         .incompatibleDepsetUnion(incompatibleDepsetUnion)
@@ -636,7 +613,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
         .incompatibleDisableDeprecatedAttrParams(incompatibleDisableDeprecatedAttrParams)
         .incompatibleDisableObjcProviderResources(incompatibleDisableObjcProviderResources)
         .incompatibleDisallowDictPlus(incompatibleDisallowDictPlus)
-        .incompatibleDisallowEmptyGlob(incompatibleDisallowEmptyGlob)
         .incompatibleDisallowFileType(incompatibleDisallowFileType)
         .incompatibleDisallowLegacyJavaInfo(incompatibleDisallowLegacyJavaInfo)
         .incompatibleDisallowLegacyJavaProvider(incompatibleDisallowLegacyJavaProvider)

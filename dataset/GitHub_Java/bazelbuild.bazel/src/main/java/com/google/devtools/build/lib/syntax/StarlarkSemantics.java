@@ -47,8 +47,6 @@ public abstract class StarlarkSemantics {
     EXPERIMENTAL_PLATFORM_API(StarlarkSemantics::experimentalPlatformsApi),
     EXPERIMENTAL_STARLARK_CONFIG_TRANSITION(
         StarlarkSemantics::experimentalStarlarkConfigTransitions),
-    EXPERIMENTAL_STARLARK_UNUSED_INPUTS_LIST(
-        StarlarkSemantics::experimentalStarlarkUnusedInputsList),
     INCOMPATIBLE_DISABLE_OBJC_PROVIDER_RESOURCES(
         StarlarkSemantics::incompatibleDisableObjcProviderResources),
     INCOMPATIBLE_NO_OUTPUT_ATTR_DEFAULT(StarlarkSemantics::incompatibleNoOutputAttrDefault),
@@ -135,8 +133,6 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean experimentalStarlarkConfigTransitions();
 
-  public abstract boolean experimentalStarlarkUnusedInputsList();
-
   public abstract boolean incompatibleBzlDisallowLoadAfterStatement();
 
   public abstract boolean incompatibleDepsetIsNotIterable();
@@ -150,8 +146,6 @@ public abstract class StarlarkSemantics {
   public abstract boolean incompatibleDisableObjcProviderResources();
 
   public abstract boolean incompatibleDisallowDictPlus();
-
-  public abstract boolean incompatibleDisallowEmptyGlob();
 
   public abstract boolean incompatibleDisallowFileType();
 
@@ -226,15 +220,13 @@ public abstract class StarlarkSemantics {
           .experimentalJavaCommonCreateProviderEnabledPackages(ImmutableList.of())
           .experimentalPlatformsApi(false)
           .experimentalStarlarkConfigTransitions(false)
-          .experimentalStarlarkUnusedInputsList(false)
           .incompatibleBzlDisallowLoadAfterStatement(true)
           .incompatibleDepsetIsNotIterable(false)
           .incompatibleDepsetUnion(true)
           .incompatibleDisableThirdPartyLicenseChecking(true)
-          .incompatibleDisableDeprecatedAttrParams(true)
+          .incompatibleDisableDeprecatedAttrParams(false)
           .incompatibleDisableObjcProviderResources(true)
           .incompatibleDisallowDictPlus(true)
-          .incompatibleDisallowEmptyGlob(false)
           .incompatibleDisallowFileType(true)
           .incompatibleDisallowLegacyJavaProvider(false)
           .incompatibleDisallowLegacyJavaInfo(false)
@@ -244,9 +236,9 @@ public abstract class StarlarkSemantics {
           .incompatibleDisallowRuleExecutionPlatformConstraintsAllowed(false)
           .incompatibleDisallowStructProviderSyntax(false)
           .incompatibleExpandDirectories(true)
-          .incompatibleNewActionsApi(true)
+          .incompatibleNewActionsApi(false)
           .incompatibleNoAttrLicense(true)
-          .incompatibleNoKwargsInBuildFiles(true)
+          .incompatibleNoKwargsInBuildFiles(false)
           .incompatibleNoOutputAttrDefault(true)
           .incompatibleNoSupportToolsInActionInputs(false)
           .incompatibleNoTargetOutputGroup(false)
@@ -256,9 +248,9 @@ public abstract class StarlarkSemantics {
           .incompatibleRemoveNativeMavenJar(false)
           .incompatibleRestrictNamedParams(false)
           .incompatibleStaticNameResolutionInBuildFiles(true)
-          .incompatibleStringJoinRequiresStrings(true)
+          .incompatibleStringJoinRequiresStrings(false)
           .internalSkylarkFlagTestCanary(false)
-          .incompatibleDoNotSplitLinkingCmdline(true)
+          .incompatibleDoNotSplitLinkingCmdline(false)
           .incompatibleDepsetForLibrariesToLinkGetter(false)
           .build();
 
@@ -283,8 +275,6 @@ public abstract class StarlarkSemantics {
 
     public abstract Builder experimentalStarlarkConfigTransitions(boolean value);
 
-    public abstract Builder experimentalStarlarkUnusedInputsList(boolean value);
-
     public abstract Builder incompatibleBzlDisallowLoadAfterStatement(boolean value);
 
     public abstract Builder incompatibleDepsetIsNotIterable(boolean value);
@@ -300,8 +290,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleDisallowDictPlus(boolean value);
 
     public abstract Builder incompatibleDisallowFileType(boolean value);
-
-    public abstract Builder incompatibleDisallowEmptyGlob(boolean value);
 
     public abstract Builder incompatibleDisallowLegacyJavaProvider(boolean value);
 

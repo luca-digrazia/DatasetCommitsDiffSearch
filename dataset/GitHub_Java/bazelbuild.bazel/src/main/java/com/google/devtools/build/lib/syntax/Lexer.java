@@ -32,12 +32,12 @@ import java.util.Stack;
 
 /**
  * A tokenizer for the BUILD language.
- *
- * <p>See: <a href="https://docs.python.org/2/reference/lexical_analysis.html"/>for some details.
- *
+ * <p>
+ * See: <a href="https://docs.python.org/2/reference/lexical_analysis.html"/>
+ * for some details.
  * <p>
  */
-final class Lexer {
+public final class Lexer {
 
   // Characters that can come immediately prior to an '=' character to generate
   // a different token
@@ -52,9 +52,6 @@ final class Lexer {
           .put('*', TokenKind.STAR_EQUALS)
           .put('/', TokenKind.SLASH_EQUALS)
           .put('%', TokenKind.PERCENT_EQUALS)
-          .put('^', TokenKind.CARET_EQUALS)
-          .put('&', TokenKind.AMPERSAND_EQUALS)
-          .put('|', TokenKind.PIPE_EQUALS)
           .build();
 
   private final EventHandler eventHandler;
@@ -107,14 +104,6 @@ final class Lexer {
   private int dents; // number of saved INDENT (>0) or OUTDENT (<0) tokens to return
 
   /**
-   * StringEscapeEvents contains the errors related to invalid escape sequences like "\a". This is
-   * not handled by the normal eventHandler. Instead, it is passed to the parser and then the AST.
-   * During the evaluation, we can decide to show the events based on a flag in StarlarkSemantics.
-   * This code is temporary, during the migration.
-   */
-  private final List<Event> stringEscapeEvents = new ArrayList<>();
-
-  /**
    * Constructs a lexer which tokenizes the contents of the specified InputBuffer. Any errors during
    * lexing are reported on "handler".
    */
@@ -138,10 +127,6 @@ final class Lexer {
 
   List<Comment> getComments() {
     return comments;
-  }
-
-  List<Event> getStringEscapeEvents() {
-    return stringEscapeEvents;
   }
 
   /**
@@ -472,18 +457,10 @@ final class Lexer {
             case 'v':
             case 'x':
               // exists in Python but not implemented in Blaze => error
-              error("invalid escape sequence: \\" + c, literalStartPos, pos);
+              error("escape sequence not implemented: \\" + c, literalStartPos, pos);
               break;
             default:
               // unknown char escape => "\literal"
-              stringEscapeEvents.add(
-                  Event.error(
-                      createLocation(pos - 1, pos),
-                      "invalid escape sequence: \\"
-                          + c
-                          + ". You can enable unknown escape sequences by passing the flag "
-                          + "--incompatible_restrict_string_escapes=false"));
-
               literal.append('\\');
               literal.append(c);
               break;
@@ -812,26 +789,10 @@ final class Lexer {
           popParen();
           break;
         case '>':
-          if (lookaheadIs(0, '>') && lookaheadIs(1, '=')) {
-            setToken(TokenKind.GREATER_GREATER_EQUALS, pos - 1, pos + 2);
-            pos += 2;
-          } else if (lookaheadIs(0, '>')) {
-            setToken(TokenKind.GREATER_GREATER, pos - 1, pos + 1);
-            pos += 1;
-          } else {
-            setToken(TokenKind.GREATER, pos - 1, pos);
-          }
+          setToken(TokenKind.GREATER, pos - 1, pos);
           break;
         case '<':
-          if (lookaheadIs(0, '<') && lookaheadIs(1, '=')) {
-            setToken(TokenKind.LESS_LESS_EQUALS, pos - 1, pos + 2);
-            pos += 2;
-          } else if (lookaheadIs(0, '<')) {
-            setToken(TokenKind.LESS_LESS, pos - 1, pos + 1);
-            pos += 1;
-          } else {
-            setToken(TokenKind.LESS, pos - 1, pos);
-          }
+          setToken(TokenKind.LESS, pos - 1, pos);
           break;
         case ':':
           setToken(TokenKind.COLON, pos - 1, pos);
@@ -853,15 +814,6 @@ final class Lexer {
           break;
         case '%':
           setToken(TokenKind.PERCENT, pos - 1, pos);
-          break;
-        case '~':
-          setToken(TokenKind.TILDE, pos - 1, pos);
-          break;
-        case '&':
-          setToken(TokenKind.AMPERSAND, pos - 1, pos);
-          break;
-        case '^':
-          setToken(TokenKind.CARET, pos - 1, pos);
           break;
         case '/':
           if (lookaheadIs(0, '/') && lookaheadIs(1, '=')) {
