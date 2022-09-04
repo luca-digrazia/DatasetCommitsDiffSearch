@@ -16,8 +16,14 @@
 
 package com.tencent.angel.master.yarn.util;
 
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Vector;
+
 import com.tencent.angel.conf.AngelConf;
 import com.tencent.angel.ps.PSAttemptId;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -29,11 +35,6 @@ import org.apache.hadoop.yarn.api.ApplicationConstants.Environment;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.util.Apps;
-
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Vector;
 
 /**
  * Ps JVM command utils
@@ -139,7 +140,8 @@ public class ParameterServerJVM {
             .append(" -XX:+UseCMSCompactAtFullCollection").append(" -verbose:gc")
             .append(" -XX:+PrintGCDateStamps").append(" -XX:+PrintGCDetails")
             .append(" -XX:+PrintCommandLineFlags").append(" -XX:+PrintTenuringDistribution")
-            .append(" -XX:+PrintAdaptiveSizePolicy").append(" -Xloggc:<LOG_DIR>/gc.log").toString();;
+            .append(" -XX:+PrintAdaptiveSizePolicy").append(" -Xloggc:/tmp/").append("angelgc-")
+            .append(appid).append("-").append(psAttemptId).append(".log").toString();
 
     return ret;
   }
