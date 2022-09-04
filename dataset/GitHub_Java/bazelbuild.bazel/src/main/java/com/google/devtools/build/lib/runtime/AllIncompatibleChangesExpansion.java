@@ -16,13 +16,11 @@ package com.google.devtools.build.lib.runtime;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.common.options.Converter;
-import com.google.devtools.common.options.ExpansionContext;
 import com.google.devtools.common.options.ExpansionFunction;
 import com.google.devtools.common.options.IsolatedOptionsData;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.proto.OptionFilters.OptionMetadataTag;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Map;
@@ -134,11 +132,6 @@ public class AllIncompatibleChangesExpansion implements ExpansionFunction {
     if (!annotation.category().equals(INCOMPATIBLE_CATEGORY)) {
       throw new IllegalArgumentException(prefix + "must have category \"incompatible changes\"");
     }
-    if (!ImmutableList.copyOf(annotation.metadataTags())
-        .contains(OptionMetadataTag.INCOMPATIBLE_CHANGE)) {
-      throw new IllegalArgumentException(
-          prefix + "must have metadata tag \"OptionMetadataTag.INCOMPATIBLE_CHANGE\"");
-    }
     if (!IsolatedOptionsData.isExpansionOption(annotation)) {
       if (!field.getType().equals(Boolean.TYPE)) {
         throw new IllegalArgumentException(
@@ -154,11 +147,11 @@ public class AllIncompatibleChangesExpansion implements ExpansionFunction {
   }
 
   @Override
-  public ImmutableList<String> getExpansion(ExpansionContext context) {
+  public ImmutableList<String> getExpansion(IsolatedOptionsData optionsData) {
     // Grab all registered options that are identified as incompatible changes by either name or
     // by category. Ensure they satisfy our requirements.
     ArrayList<String> incompatibleChanges = new ArrayList<>();
-    for (Map.Entry<String, Field> entry : context.getOptionsData().getAllNamedFields()) {
+    for (Map.Entry<String, Field> entry : optionsData.getAllNamedFields()) {
       Field field = entry.getValue();
       Option annotation = field.getAnnotation(Option.class);
       if (annotation.name().startsWith(INCOMPATIBLE_NAME_PREFIX)

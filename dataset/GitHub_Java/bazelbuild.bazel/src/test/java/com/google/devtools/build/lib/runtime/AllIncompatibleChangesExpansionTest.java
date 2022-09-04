@@ -18,19 +18,16 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.flags.InvocationPolicyEnforcer;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.UseDefault;
 import com.google.devtools.common.options.Converters;
-import com.google.devtools.common.options.ExpansionContext;
 import com.google.devtools.common.options.ExpansionFunction;
-import com.google.devtools.common.options.InvocationPolicyEnforcer;
+import com.google.devtools.common.options.IsolatedOptionsData;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
-import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
-import com.google.devtools.common.options.proto.OptionFilters.OptionMetadataTag;
 import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -47,35 +44,20 @@ public class AllIncompatibleChangesExpansionTest {
   public static class ExampleOptions extends OptionsBase {
     @Option(
       name = "all",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "null",
       expansionFunction = AllIncompatibleChangesExpansion.class
     )
     public Void all;
 
-    @Option(
-      name = "X",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "false"
-    )
+    @Option(name = "X", defaultValue = "false")
     public boolean x;
 
-    @Option(
-      name = "Y",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "true"
-    )
+    @Option(name = "Y", defaultValue = "true")
     public boolean y;
 
     @Option(
       name = "incompatible_A",
       category = "incompatible changes",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "false",
       help = "Migrate to A"
     )
@@ -84,9 +66,6 @@ public class AllIncompatibleChangesExpansionTest {
     @Option(
       name = "incompatible_B",
       category = "incompatible changes",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "false",
       help = "Migrate to B"
     )
@@ -98,9 +77,6 @@ public class AllIncompatibleChangesExpansionTest {
     @Option(
       name = "incompatible_expX",
       category = "incompatible changes",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "null",
       expansion = {"--X"},
       help = "Start using X"
@@ -110,7 +86,7 @@ public class AllIncompatibleChangesExpansionTest {
     /** Dummy comment (linter suppression) */
     public static class YExpansion implements ExpansionFunction {
       @Override
-      public ImmutableList<String> getExpansion(ExpansionContext context) {
+      public ImmutableList<String> getExpansion(IsolatedOptionsData optionsData) {
         return ImmutableList.of("--noY");
       }
     }
@@ -118,9 +94,6 @@ public class AllIncompatibleChangesExpansionTest {
     @Option(
       name = "incompatible_expY",
       category = "incompatible changes",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "null",
       expansionFunction = YExpansion.class,
       help = "Stop using Y"
@@ -223,9 +196,6 @@ public class AllIncompatibleChangesExpansionTest {
     @Option(
       name = "badname",
       category = "incompatible changes",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "false",
       help = "nohelp"
     )
@@ -240,19 +210,9 @@ public class AllIncompatibleChangesExpansionTest {
             + "starting with \"incompatible_\"");
   }
 
-  /**
-   * Option with the right prefix and tag, but the wrong "category." The category is deprecated and
-   * this test will be deleted when the option field is removed.
-   */
+  /** Dummy comment (linter suppression) */
   public static class BadCategoryOptions extends OptionsBase {
-    @Option(
-      name = "incompatible_bad",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "false",
-      help = "nohelp"
-    )
+    @Option(name = "incompatible_bad", category = "badcat", defaultValue = "false", help = "nohelp")
     public boolean bad;
   }
 
@@ -261,34 +221,11 @@ public class AllIncompatibleChangesExpansionTest {
     assertBadness(BadCategoryOptions.class, "must have category \"incompatible changes\"");
   }
 
-  /** Option with the right prefix and "category," but the wrong metadata tag. */
-  public static class BadTagOptions extends OptionsBase {
-    @Option(
-      name = "incompatible_bad",
-      category = "incompatible changes",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "false",
-      help = "nohelp"
-    )
-    public boolean bad;
-  }
-
-  @Test
-  public void badTag() {
-    assertBadness(
-        BadTagOptions.class,
-        "must have metadata tag \"OptionMetadataTag.INCOMPATIBLE_CHANGE\"");
-  }
-
   /** Dummy comment (linter suppression) */
   public static class BadTypeOptions extends OptionsBase {
     @Option(
       name = "incompatible_bad",
       category = "incompatible changes",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "0",
       help = "nohelp"
     )
@@ -302,14 +239,7 @@ public class AllIncompatibleChangesExpansionTest {
 
   /** Dummy comment (linter suppression) */
   public static class BadHelpOptions extends OptionsBase {
-    @Option(
-      name = "incompatible_bad",
-      category = "incompatible changes",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "false"
-    )
+    @Option(name = "incompatible_bad", category = "incompatible changes", defaultValue = "false")
     public boolean bad;
   }
 
@@ -323,9 +253,6 @@ public class AllIncompatibleChangesExpansionTest {
     @Option(
       name = "incompatible_bad",
       category = "incompatible changes",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "false",
       help = "nohelp",
       abbrev = 'x'
@@ -343,9 +270,6 @@ public class AllIncompatibleChangesExpansionTest {
     @Option(
       name = "incompatible_bad",
       category = "incompatible changes",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "false",
       help = "nohelp",
       valueHelp = "x"
@@ -363,9 +287,6 @@ public class AllIncompatibleChangesExpansionTest {
     @Option(
       name = "incompatible_bad",
       category = "incompatible changes",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "false",
       help = "nohelp",
       converter = Converters.BooleanConverter.class
@@ -383,9 +304,6 @@ public class AllIncompatibleChangesExpansionTest {
     @Option(
       name = "incompatible_bad",
       category = "incompatible changes",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "null",
       help = "nohelp",
       allowMultiple = true
@@ -403,9 +321,6 @@ public class AllIncompatibleChangesExpansionTest {
     @Option(
       name = "incompatible_bad",
       category = "incompatible changes",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "false",
       help = "nohelp",
       implicitRequirements = "--x"
@@ -424,9 +339,6 @@ public class AllIncompatibleChangesExpansionTest {
     @Option(
       name = "incompatible_bad",
       category = "incompatible changes",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "false",
       help = "nohelp",
       oldName = "x"
@@ -444,9 +356,6 @@ public class AllIncompatibleChangesExpansionTest {
     @Option(
       name = "incompatible_bad",
       category = "incompatible changes",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "false",
       help = "nohelp",
       wrapperOption = true
