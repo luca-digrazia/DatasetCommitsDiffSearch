@@ -133,6 +133,9 @@ public class ServerBindings extends Graylog2Module {
         install(new FactoryModuleBuilder().build(SetIndexReadOnlyAndCalculateRangeJob.Factory.class));
 
         install(new FactoryModuleBuilder().build(LdapSettingsImpl.Factory.class));
+        install(new FactoryModuleBuilder().build(FieldValueAlertCondition.Factory.class));
+        install(new FactoryModuleBuilder().build(MessageCountAlertCondition.Factory.class));
+        install(new FactoryModuleBuilder().build(FieldContentValueAlertCondition.Factory.class));
         install(new FactoryModuleBuilder().build(WidgetCacheTime.Factory.class));
         install(new FactoryModuleBuilder().build(UserImpl.Factory.class));
     }
