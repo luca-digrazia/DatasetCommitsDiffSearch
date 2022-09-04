@@ -60,8 +60,8 @@ import com.google.devtools.build.lib.pkgcache.PackageProvider;
 import com.google.devtools.build.lib.pkgcache.TargetPatternPreloader;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
+import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.QueryEnvironmentFactory;
-import com.google.devtools.build.lib.query2.common.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryException;
@@ -70,7 +70,6 @@ import com.google.devtools.build.lib.query2.engine.QueryUtil;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.SkyframeRestartQueryException;
 import com.google.devtools.build.lib.query2.query.output.OutputFormatter;
-import com.google.devtools.build.lib.query2.query.output.OutputFormatters;
 import com.google.devtools.build.lib.query2.query.output.QueryOptions;
 import com.google.devtools.build.lib.query2.query.output.QueryOptions.OrderOutput;
 import com.google.devtools.build.lib.query2.query.output.QueryOutputUtils;
@@ -330,14 +329,13 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       Set<Setting> settings = queryOptions.toSettings();
 
       formatter =
-          OutputFormatters.getFormatter(
-              OutputFormatters.getDefaultFormatters(), queryOptions.outputFormat);
+          OutputFormatter.getFormatter(
+              OutputFormatter.getDefaultFormatters(), queryOptions.outputFormat);
       if (formatter == null) {
-        ruleContext.ruleError(
-            String.format(
-                "Invalid output format '%s'. Valid values are: %s",
-                queryOptions.outputFormat,
-                OutputFormatters.formatterNames(OutputFormatters.getDefaultFormatters())));
+        ruleContext.ruleError(String.format(
+            "Invalid output format '%s'. Valid values are: %s",
+            queryOptions.outputFormat,
+            OutputFormatter.formatterNames(OutputFormatter.getDefaultFormatters())));
         return null;
       }
       AbstractBlazeQueryEnvironment<Target> queryEnvironment =

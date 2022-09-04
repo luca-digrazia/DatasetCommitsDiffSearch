@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.query.output;
 
-import com.google.devtools.build.lib.query2.common.CommonQueryOptions;
+import com.google.devtools.build.lib.query2.CommonQueryOptions;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
@@ -89,17 +89,10 @@ public class QueryOptions extends CommonQueryOptions {
 
   /** Whether and how output should be ordered. */
   public enum OrderOutput {
-    /** Make no effort to order output besides that required by output formatter. */
-    NO,
-
-    /** Output in dependency order when compatible with output formatter. */
-    DEPS,
-
-    /** Same as full unless formatter is proto, minrank, maxrank, or graph, then deps. */
-    AUTO,
-
-    /** Output in dependency order, breaking ties with alphabetical order when needed. */
-    FULL
+    NO, /** Make no effort to order output besides that required by output formatter. */
+    DEPS, /** Output in dependency order when compatible with output formatter. */
+    AUTO, /** Same as full unless formatter is proto, minrank, maxrank, or graph, then deps. */
+    FULL /** Output in dependency order, breaking ties with alphabetical order when needed. */
   }
 
   @Option(
