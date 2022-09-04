@@ -1362,7 +1362,9 @@ public final class CcCompilationHelper {
                 // The source action does not generate dwo when it has bitcode
                 // output (since it isn't generating a native object with debug
                 // info). In that case the LtoBackendAction will generate the dwo.
-                ccToolchain.shouldCreatePerObjectDebugInfo(featureConfiguration) && !bitcodeOutput,
+                CppHelper.shouldCreatePerObjectDebugInfo(
+                        cppConfiguration, ccToolchain, featureConfiguration)
+                    && !bitcodeOutput,
                 isGenerateDotdFile(sourceArtifact));
             break;
         }
@@ -1526,6 +1528,7 @@ public final class CcCompilationHelper {
         gcnoFile,
         dwoFile,
         ltoIndexingFile,
+        ccCompilationContextInfo,
         ImmutableList.of(),
         userCompileFlags.build(),
         cppModuleMap,
@@ -1534,12 +1537,7 @@ public final class CcCompilationHelper {
         CppHelper.getFdoBuildStamp(ruleContext, fdoSupport.getFdoSupport()),
         dotdFileExecPath,
         ImmutableList.copyOf(variablesExtensions),
-        allAdditionalBuildVariables.build(),
-        ccCompilationContextInfo.getDirectModuleMaps(),
-        ccCompilationContextInfo.getIncludeDirs(),
-        ccCompilationContextInfo.getQuoteIncludeDirs(),
-        ccCompilationContextInfo.getSystemIncludeDirs(),
-        ccCompilationContextInfo.getDefines());
+        allAdditionalBuildVariables.build());
   }
 
   /**
@@ -1598,7 +1596,9 @@ public final class CcCompilationHelper {
             ? CppHelper.getCompileOutputArtifact(ruleContext, gcnoFileName, configuration)
             : null;
 
-    boolean generateDwo = ccToolchain.shouldCreatePerObjectDebugInfo(featureConfiguration);
+    boolean generateDwo =
+        CppHelper.shouldCreatePerObjectDebugInfo(
+            cppConfiguration, ccToolchain, featureConfiguration);
     Artifact dwoFile = generateDwo ? getDwoFile(builder.getOutputFile()) : null;
     // TODO(tejohnson): Add support for ThinLTO if needed.
     boolean bitcodeOutput =
