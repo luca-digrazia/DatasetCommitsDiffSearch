@@ -180,11 +180,6 @@ public final class MockProtoSupport {
         "licenses(['notice'])",
         "java_library(name = 'jsr250_source_annotations',",
         "           srcs = [ 'Generated.java' ])");
-    config.create(
-        "third_party/golang/grpc/metadata/BUILD",
-        "package(default_visibility=['//visibility:public'])",
-        "licenses(['notice'])",
-        "exports_files(['metadata'])");
   }
 
   /**
