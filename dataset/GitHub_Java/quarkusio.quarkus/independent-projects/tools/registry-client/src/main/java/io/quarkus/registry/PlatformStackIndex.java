@@ -2,11 +2,7 @@ package io.quarkus.registry;
 
 import io.quarkus.registry.union.UnionVersion;
 
-public class PlatformStackIndex implements UnionVersion {
-
-    public static PlatformStackIndex initial() {
-        return new PlatformStackIndex(0, 0, 0);
-    }
+class PlatformStackIndex implements UnionVersion {
 
     private final int platformPriority;
     private final int streamPriority;

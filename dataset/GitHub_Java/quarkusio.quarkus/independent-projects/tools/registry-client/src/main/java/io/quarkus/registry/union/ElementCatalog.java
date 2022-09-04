@@ -32,11 +32,4 @@ public interface ElementCatalog<T> {
      * @return true if the catalog does not contain any elements, otherwise - false
      */
     boolean isEmpty();
-
-    /**
-     * Unions present in this catalog.
-     *
-     * @return unions present in the catalog
-     */
-    Collection<Union<T>> unions();
 }

@@ -172,10 +172,6 @@ public class ElementCatalogBuilder<M> {
             this.catalogBuilder = catalogBuilder;
         }
 
-        public UnionVersion version() {
-            return version;
-        }
-
         public MemberBuilder<T> getOrCreateMember(Object memberKey, Object memberVersion) {
             return getOrCreateMember(memberKey, memberVersion, null);
         }
@@ -340,6 +336,7 @@ public class ElementCatalogBuilder<M> {
     }
 
     public static <T> List<T> getMembersForElements(ElementCatalog<T> elementCatalog, Collection<String> elementKeys) {
+
         final Map<UnionVersion, Map<Object, Member<T>>> unionVersions = new TreeMap<>(UnionVersion::compareTo);
         for (Object elementKey : elementKeys) {
             final Element<T> e = elementCatalog.get(elementKey);
