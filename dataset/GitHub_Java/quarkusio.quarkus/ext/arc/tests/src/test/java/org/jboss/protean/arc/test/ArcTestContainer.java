@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.protean.arc.test;
 
 import java.io.File;
@@ -29,7 +13,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import org.jboss.jandex.DotName;
@@ -109,7 +92,7 @@ public class ArcTestContainer implements TestRule {
             Collections.addAll(this.beanDeploymentValidators, validators);
             return this;
         }
-        
+
         public ArcTestContainer build() {
             return new ArcTestContainer(resourceReferenceProviders, beanClasses, resourceAnnotations, beanRegistrars, annotationsTransformers,
                     deploymentEnhancers, beanDeploymentValidators);
@@ -130,8 +113,6 @@ public class ArcTestContainer implements TestRule {
     private final List<DeploymentEnhancer> deploymentEnhancers;
 
     private final List<BeanDeploymentValidator> beanDeploymentValidators;
-    
-    private final AtomicReference<Throwable> buildFailure;
 
     public ArcTestContainer(Class<?>... beanClasses) {
         this(Collections.emptyList(), Arrays.asList(beanClasses), Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
@@ -148,7 +129,6 @@ public class ArcTestContainer implements TestRule {
         this.annotationsTransformers = annotationsTransformers;
         this.deploymentEnhancers = deploymentEnhancers;
         this.beanDeploymentValidators = beanDeploymentValidators;
-        this.buildFailure = new AtomicReference<Throwable>(null);
     }
 
     @Override
@@ -167,10 +147,6 @@ public class ArcTestContainer implements TestRule {
         };
     }
 
-    public Throwable getFailure() {
-        return buildFailure.get();
-    }
-    
     private void shutdown() {
         Arc.shutdown();
     }
@@ -188,105 +164,87 @@ public class ArcTestContainer implements TestRule {
             throw new IllegalStateException("Failed to create index", e);
         }
 
-        ClassLoader old = Thread.currentThread()
-                .getContextClassLoader();
+        File generatedSourcesDirectory = new File("target/generated-arc-sources");
+        File testOutputDirectory = new File("target/test-classes");
+        File componentsProviderFile = new File(generatedSourcesDirectory + "/" + nameToPath(testClass.getPackage().getName()),
+                ComponentsProvider.class.getSimpleName());
+
+        File resourceReferenceProviderFile = new File(generatedSourcesDirectory + "/" + nameToPath(testClass.getPackage().getName()),
+                ResourceReferenceProvider.class.getSimpleName());
+
+        if (!resourceReferenceProviders.isEmpty()) {
+            try {
+                resourceReferenceProviderFile.getParentFile().mkdirs();
+                Files.write(resourceReferenceProviderFile.toPath(), resourceReferenceProviders.stream().map(c -> c.getName()).collect(Collectors.toList()));
+            } catch (IOException e) {
+                throw new IllegalStateException("Error generating resource reference providers", e);
+            }
+        }
+
+        BeanProcessor.Builder beanProcessorBuilder = BeanProcessor.builder().setName(testClass.getSimpleName()).setIndex(index);
+        if (!resourceAnnotations.isEmpty()) {
+            beanProcessorBuilder.addResourceAnnotations(resourceAnnotations.stream().map(c -> DotName.createSimple(c.getName())).collect(Collectors.toList()));
+        }
+        for (BeanRegistrar registrar : beanRegistrars) {
+            beanProcessorBuilder.addBeanRegistrar(registrar);
+        }
+        for (AnnotationsTransformer annotationsTransformer : annotationsTransformers) {
+            beanProcessorBuilder.addAnnotationTransformer(annotationsTransformer);
+        }
+        for (DeploymentEnhancer enhancer : deploymentEnhancers) {
+            beanProcessorBuilder.addDeploymentEnhancer(enhancer);
+        }
+        for (BeanDeploymentValidator validator : beanDeploymentValidators) {
+            beanProcessorBuilder.addBeanDeploymentValidator(validator);
+        }
+        beanProcessorBuilder.setOutput(new ResourceOutput() {
+
+            @Override
+            public void writeResource(Resource resource) throws IOException {
+                switch (resource.getType()) {
+                    case JAVA_CLASS:
+                        resource.writeTo(testOutputDirectory);
+                        break;
+                    case SERVICE_PROVIDER:
+                        if (resource.getName().endsWith(ComponentsProvider.class.getName())) {
+                            componentsProviderFile.getParentFile().mkdirs();
+                            try (FileOutputStream out = new FileOutputStream(componentsProviderFile)) {
+                                out.write(resource.getData());
+                            }
+                        }
+                        break;
+                    default:
+                        throw new IllegalArgumentException();
+                }
+            }
+        });
+
+        BeanProcessor beanProcessor = beanProcessorBuilder.build();
 
         try {
-            File generatedSourcesDirectory = new File("target/generated-arc-sources");
-            File testOutputDirectory = new File("target/test-classes");
-            File componentsProviderFile = new File(generatedSourcesDirectory + "/" + nameToPath(testClass.getPackage()
-                    .getName()), ComponentsProvider.class.getSimpleName());
-
-            File resourceReferenceProviderFile = new File(generatedSourcesDirectory + "/" + nameToPath(testClass.getPackage()
-                    .getName()), ResourceReferenceProvider.class.getSimpleName());
-
-            if (!resourceReferenceProviders.isEmpty()) {
-                try {
-                    resourceReferenceProviderFile.getParentFile()
-                            .mkdirs();
-                    Files.write(resourceReferenceProviderFile.toPath(), resourceReferenceProviders.stream()
-                            .map(c -> c.getName())
-                            .collect(Collectors.toList()));
-                } catch (IOException e) {
-                    throw new IllegalStateException("Error generating resource reference providers", e);
-                }
-            }
-
-            BeanProcessor.Builder beanProcessorBuilder = BeanProcessor.builder()
-                    .setName(testClass.getSimpleName())
-                    .setIndex(index);
-            if (!resourceAnnotations.isEmpty()) {
-                beanProcessorBuilder.addResourceAnnotations(resourceAnnotations.stream()
-                        .map(c -> DotName.createSimple(c.getName()))
-                        .collect(Collectors.toList()));
-            }
-            for (BeanRegistrar registrar : beanRegistrars) {
-                beanProcessorBuilder.addBeanRegistrar(registrar);
-            }
-            for (AnnotationsTransformer annotationsTransformer : annotationsTransformers) {
-                beanProcessorBuilder.addAnnotationTransformer(annotationsTransformer);
-            }
-            for (DeploymentEnhancer enhancer : deploymentEnhancers) {
-                beanProcessorBuilder.addDeploymentEnhancer(enhancer);
-            }
-            for (BeanDeploymentValidator validator : beanDeploymentValidators) {
-                beanProcessorBuilder.addBeanDeploymentValidator(validator);
-            }
-            beanProcessorBuilder.setOutput(new ResourceOutput() {
-
-                @Override
-                public void writeResource(Resource resource) throws IOException {
-                    switch (resource.getType()) {
-                        case JAVA_CLASS:
-                            resource.writeTo(testOutputDirectory);
-                            break;
-                        case SERVICE_PROVIDER:
-                            if (resource.getName()
-                                    .endsWith(ComponentsProvider.class.getName())) {
-                                componentsProviderFile.getParentFile()
-                                        .mkdirs();
-                                try (FileOutputStream out = new FileOutputStream(componentsProviderFile)) {
-                                    out.write(resource.getData());
-                                }
-                            }
-                            break;
-                        default:
-                            throw new IllegalArgumentException();
-                    }
-                }
-            });
-
-            BeanProcessor beanProcessor = beanProcessorBuilder.build();
-
-            try {
-                beanProcessor.process();
-            } catch (IOException e) {
-                throw new IllegalStateException("Error generating resources", e);
-            }
-
-            ClassLoader testClassLoader = new URLClassLoader(new URL[] {}, old) {
-                @Override
-                public Enumeration<URL> getResources(String name) throws IOException {
-                    if (("META-INF/services/" + ComponentsProvider.class.getName()).equals(name)) {
-                        // return URL that points to the correct test bean provider
-                        return Collections.enumeration(Collections.singleton(componentsProviderFile.toURI()
-                                .toURL()));
-                    } else if (("META-INF/services/" + ResourceReferenceProvider.class.getName()).equals(name) && !resourceReferenceProviders.isEmpty()) {
-                        return Collections.enumeration(Collections.singleton(resourceReferenceProviderFile.toURI()
-                                .toURL()));
-                    }
-                    return super.getResources(name);
-                }
-            };
-            Thread.currentThread()
-                    .setContextClassLoader(testClassLoader);
-
-            // Now we are ready to initialize Arc
-            Arc.initialize();
-
-        } catch (Throwable e) {
-            buildFailure.set(e);
+            beanProcessor.process();
+        } catch (IOException e) {
+            throw new IllegalStateException("Error generating resources", e);
         }
+
+        ClassLoader old = Thread.currentThread().getContextClassLoader();
+        ClassLoader testClassLoader = new URLClassLoader(new URL[] {}, old) {
+            @Override
+            public Enumeration<URL> getResources(String name) throws IOException {
+                if (("META-INF/services/" + ComponentsProvider.class.getName()).equals(name)) {
+                    // return URL that points to the correct test bean provider
+                    return Collections.enumeration(Collections.singleton(componentsProviderFile.toURI().toURL()));
+                } else if (("META-INF/services/" + ResourceReferenceProvider.class.getName()).equals(name) && !resourceReferenceProviders.isEmpty()) {
+                    return Collections.enumeration(Collections.singleton(resourceReferenceProviderFile.toURI().toURL()));
+                }
+                return super.getResources(name);
+            }
+        };
+        Thread.currentThread().setContextClassLoader(testClassLoader);
+
+        // Now we are ready to initialize Arc
+        Arc.initialize();
+
         return old;
     }
 

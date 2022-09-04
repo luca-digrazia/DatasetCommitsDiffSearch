@@ -7,7 +7,7 @@ import org.jboss.protean.arc.InjectableBean;
  *
  * @author Martin Kouba
  */
-public interface BeanRegistrar extends BuildProcessor {
+public interface BeanRegistrar extends BuildExtension {
 
     /**
      *
@@ -16,14 +16,16 @@ public interface BeanRegistrar extends BuildProcessor {
     void register(RegistrationContext registrationContext);
 
 
-    interface RegistrationContext {
+    interface RegistrationContext extends BuildContext {
 
         /**
          *
-         * @param implementationClass
+         * @param beanClass
          * @return a new synthetic bean builder
          */
-        <T> BeanConfigurator<T> configure(Class<T> implementationClass);
+        <T> BeanConfigurator<T> configure(Class<?> beanClass);
+
+        // TODO add synthetic observer?
 
     }
 

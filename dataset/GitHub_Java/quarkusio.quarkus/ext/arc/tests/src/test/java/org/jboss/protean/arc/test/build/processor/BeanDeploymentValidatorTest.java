@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.protean.arc.test.build.processor;
 
 import static org.junit.Assert.assertTrue;
@@ -62,21 +46,20 @@ public class BeanDeploymentValidatorTest {
 
     static class TestValidator implements BeanDeploymentValidator {
 
+        private BuildContext buildContext;
+
         @Override
-        public void validate(ValidationContext validationContext) {
-            assertTrue(validationContext.get(Key.BEANS)
-                    .stream()
-                    .anyMatch(b -> b.isClassBean() && b.getBeanClass()
-                            .toString()
-                            .equals(Alpha.class.getName())));
-            assertTrue(validationContext.get(Key.BEANS)
-                    .stream()
-                    .anyMatch(b -> b.isSynthetic() && b.getTypes()
-                            .contains(EmptyStringListCreator.listStringType())));
-            assertTrue(validationContext.get(Key.OBSERVERS)
-                    .stream()
-                    .anyMatch(o -> o.getObservedType()
-                            .equals(Type.create(DotName.createSimple(Object.class.getName()), Kind.CLASS))));
+        public boolean initialize(BuildContext buildContext) {
+            this.buildContext = buildContext;
+            return true;
+        }
+
+        @Override
+        public void validate() {
+            assertTrue(buildContext.get(Key.BEANS).stream().anyMatch(b -> b.isClassBean() && b.getBeanClass().toString().equals(Alpha.class.getName())));
+            assertTrue(buildContext.get(Key.BEANS).stream().anyMatch(b -> b.isSynthetic() && b.getTypes().contains(EmptyStringListCreator.listStringType())));
+            assertTrue(buildContext.get(Key.OBSERVERS).stream()
+                    .anyMatch(o -> o.getObservedType().equals(Type.create(DotName.createSimple(Object.class.getName()), Kind.CLASS))));
             // We do not test a validation problem - ArcTestContainer rule would fail
         }
 

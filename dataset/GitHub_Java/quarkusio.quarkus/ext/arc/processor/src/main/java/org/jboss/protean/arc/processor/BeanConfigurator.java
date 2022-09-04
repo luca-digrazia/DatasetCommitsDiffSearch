@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.protean.arc.processor;
 
 import java.util.Collections;
@@ -59,8 +43,6 @@ public final class BeanConfigurator<T> {
     private ScopeInfo scope;
 
     private Integer alternativePriority;
-    
-    private String name;
 
     private Consumer<MethodCreator> creatorConsumer;
 
@@ -86,7 +68,6 @@ public final class BeanConfigurator<T> {
         this.qualifiers = new HashSet<>();
         this.scope = ScopeInfo.DEPENDENT;
         this.params = new HashMap<>();
-        this.name = null;
     }
 
     public BeanConfigurator<T> param(String name, Class<?> value) {
@@ -142,11 +123,6 @@ public final class BeanConfigurator<T> {
         this.scope = scope;
         return this;
     }
-    
-    public BeanConfigurator<T> name(String name) {
-        this.name = name;
-        return this;
-    }
 
     public BeanConfigurator<T> alternativePriority(int priority) {
         this.alternativePriority = priority;
@@ -199,7 +175,7 @@ public final class BeanConfigurator<T> {
     public void done() {
         // TODO sanity checks
         beanConsumer.accept(new BeanInfo.Builder().implClazz(implClass).beanDeployment(beanDeployment).scope(scope).types(types).qualifiers(qualifiers)
-                .alternativePriority(alternativePriority).name(name).creator(creatorConsumer).destroyer(destroyerConsumer).params(params).build());
+                .alternativePriority(alternativePriority).creator(creatorConsumer).destroyer(destroyerConsumer).params(params).build());
     }
 
     @SuppressWarnings("unchecked")
