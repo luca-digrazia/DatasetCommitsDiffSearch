@@ -1,5 +1,7 @@
 package io.quarkus.cli.commands.file;
 
+import static io.quarkus.maven.utilities.MojoUtils.getPluginVersion;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -14,8 +16,7 @@ import org.apache.maven.model.Dependency;
 import io.quarkus.cli.commands.writer.ProjectWriter;
 import io.quarkus.dependencies.Extension;
 import io.quarkus.generators.BuildTool;
-import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
-import io.quarkus.platform.tools.ToolsUtils;
+import io.quarkus.maven.utilities.MojoUtils;
 
 public class GradleBuildFile extends BuildFile {
 
@@ -30,6 +31,11 @@ public class GradleBuildFile extends BuildFile {
     }
 
     @Override
+    public String getPlatformBomVersionExpression() {
+        return MojoUtils.getBomVersion();
+    }
+
+    @Override
     public void close() throws IOException {
         write(SETTINGS_GRADLE_PATH, getModel().getSettingsContent());
         write(BUILD_GRADLE_PATH, getModel().getBuildContent());
@@ -40,25 +46,34 @@ public class GradleBuildFile extends BuildFile {
     }
 
     @Override
-    public void completeFile(String groupId, String artifactId, String version, QuarkusPlatformDescriptor platform, Properties props) throws IOException {
+    public void completeFile(String groupId, String artifactId, String version) throws IOException {
         completeSettingsContent(artifactId);
-        completeBuildContent(groupId, version, platform, props);
-        completeProperties(platform);
+        completeBuildContent(groupId, version);
+        completeProperties();
     }
 
-    private void completeBuildContent(String groupId, String version, QuarkusPlatformDescriptor platform, Properties props) throws IOException {
+    private void completeBuildContent(String groupId, String version) throws IOException {
         final String buildContent = getModel().getBuildContent();
         StringBuilder res = new StringBuilder(buildContent);
-        if (!buildContent.contains("id 'io.quarkus'")) {
-            res.append("plugins {");
-            res.append(System.lineSeparator()).append("    id 'java'").append(System.lineSeparator());
-            res.append(System.lineSeparator()).append("    id 'io.quarkus'").append(System.lineSeparator());
-            res.append("}");
+        if (!buildContent.contains("io.quarkus:quarkus-gradle-plugin")) {
+            res.append(System.lineSeparator());
+            res.append("buildscript {").append(System.lineSeparator());
+            res.append("    repositories {").append(System.lineSeparator());
+            res.append("        mavenLocal()").append(System.lineSeparator());
+            res.append("    }").append(System.lineSeparator());
+            res.append("    dependencies {").append(System.lineSeparator());
+            res.append("        classpath \"io.quarkus:quarkus-gradle-plugin:").append(getPluginVersion()).append("\"")
+                    .append(System.lineSeparator());
+            res.append("    }").append(System.lineSeparator());
+            res.append("}").append(System.lineSeparator());
         }
-        if (!containsBOM(platform.getBomGroupId(), platform.getBomArtifactId())) {
+        if (!buildContent.contains("apply plugin: 'io.quarkus'") && !buildContent.contains("id 'io.quarkus'")) {
+            res.append(System.lineSeparator()).append("apply plugin: 'io.quarkus'").append(System.lineSeparator());
+        }
+        if (!containsBOM()) {
             res.append(System.lineSeparator());
             res.append("dependencies {").append(System.lineSeparator());
-            res.append("    implementation enforcedPlatform(\"${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}\")")
+            res.append("    implementation enforcedPlatform(\"${quarkusPlatformBomGroupId}:${quarkusPlatformBomArtifactId}:${quarkusPlatformBomVersion}\")")
                     .append(System.lineSeparator());
             res.append("    implementation 'io.quarkus:quarkus-resteasy'").append(System.lineSeparator());
             res.append("    testImplementation 'io.quarkus:quarkus-junit5'").append(System.lineSeparator());
@@ -81,8 +96,8 @@ public class GradleBuildFile extends BuildFile {
 
     private void completeSettingsContent(String artifactId) throws IOException {
         final String settingsContent = getModel().getSettingsContent();
-        final StringBuilder res = new StringBuilder();
-        if (!settingsContent.contains("id 'io.quarkus'")) {
+        final StringBuilder res = new StringBuilder(settingsContent);
+        if (!settingsContent.contains("io.quarkus:quarkus-gradle-plugin")) {
             res.append(System.lineSeparator());
             res.append("pluginManagement {").append(System.lineSeparator());
             res.append("    repositories {").append(System.lineSeparator());
@@ -90,8 +105,13 @@ public class GradleBuildFile extends BuildFile {
             res.append("        mavenCentral()").append(System.lineSeparator());
             res.append("        gradlePluginPortal()").append(System.lineSeparator());
             res.append("    }").append(System.lineSeparator());
-            res.append("    plugins {").append(System.lineSeparator());
-            res.append("        id 'io.quarkus' version \"${quarkusPluginVersion}\"").append(System.lineSeparator());
+            res.append("    resolutionStrategy {").append(System.lineSeparator());
+            res.append("        eachPlugin {").append(System.lineSeparator());
+            res.append("            if (requested.id.id == 'io.quarkus') {").append(System.lineSeparator());
+            res.append("                useModule(\"io.quarkus:quarkus-gradle-plugin:${quarkusVersion}\")")
+                    .append(System.lineSeparator());
+            res.append("            }").append(System.lineSeparator());
+            res.append("        }").append(System.lineSeparator());
             res.append("    }").append(System.lineSeparator());
             res.append("}").append(System.lineSeparator());
         }
@@ -99,23 +119,22 @@ public class GradleBuildFile extends BuildFile {
             res.append(System.lineSeparator()).append("rootProject.name='").append(artifactId).append("'")
                     .append(System.lineSeparator());
         }
-        res.append(settingsContent);
         getModel().setSettingsContent(res.toString());
     }
 
-    private void completeProperties(QuarkusPlatformDescriptor platform) throws IOException {
+    private void completeProperties() throws IOException {
         Properties props = getModel().getPropertiesContent();
-        if (props.getProperty("quarkusPluginVersion") == null) {
-            props.setProperty("quarkusPluginVersion", ToolsUtils.getPluginVersion(ToolsUtils.readQuarkusProperties(platform)));
+        if (props.getProperty("quarkusVersion") == null) {
+            props.setProperty("quarkusVersion", getPluginVersion());
         }
-        if(props.getProperty("quarkusPlatformGroupId") == null) {
-            props.setProperty("quarkusPlatformGroupId", platform.getBomGroupId());
+        if(props.getProperty("quarkusPlatformBomGroupId") == null) {
+            props.setProperty("quarkusPlatformBomGroupId", MojoUtils.getBomGroupId());
         }
-        if(props.getProperty("quarkusPlatformArtifactId") == null) {
-            props.setProperty("quarkusPlatformArtifactId", platform.getBomArtifactId());
+        if(props.getProperty("quarkusPlatformBomArtifactId") == null) {
+            props.setProperty("quarkusPlatformBomArtifactId", MojoUtils.getBomArtifactId());
         }
-        if(props.getProperty("quarkusPlatformVersion") == null) {
-            props.setProperty("quarkusPlatformVersion", platform.getBomVersion());
+        if(props.getProperty("quarkusPlatformBomVersion") == null) {
+            props.setProperty("quarkusPlatformBomVersion", MojoUtils.getBomVersion());
         }
     }
 
@@ -172,10 +191,8 @@ public class GradleBuildFile extends BuildFile {
     }
 
     @Override
-    protected boolean containsBOM(String groupId, String artifactId) throws IOException {
-        String buildContent = getModel().getBuildContent();
-        return buildContent.contains("enforcedPlatform(\"${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:")
-                || buildContent.contains("enforcedPlatform(\"" + groupId + ":" + artifactId + ":");
+    protected boolean containsBOM() throws IOException {
+        return getModel().getBuildContent().contains("enforcedPlatform(\"${quarkusPlatformBomGroupId}:${quarkusPlatformBomArtifactId}:");
     }
 
     @Override
@@ -224,7 +241,7 @@ public class GradleBuildFile extends BuildFile {
         return getModel().getBuildContent();
     }
 
-    private static class Model {
+    private class Model {
         private String settingsContent;
         private String buildContent;
         private Properties propertiesContent;

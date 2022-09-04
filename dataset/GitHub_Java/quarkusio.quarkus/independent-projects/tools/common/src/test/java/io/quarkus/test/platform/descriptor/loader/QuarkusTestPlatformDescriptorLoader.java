@@ -1,11 +1,5 @@
 package io.quarkus.test.platform.descriptor.loader;
 
-import io.quarkus.dependencies.Category;
-import io.quarkus.dependencies.Extension;
-import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
-import io.quarkus.platform.descriptor.ResourceInputStreamConsumer;
-import io.quarkus.platform.descriptor.loader.QuarkusPlatformDescriptorLoader;
-import io.quarkus.platform.descriptor.loader.QuarkusPlatformDescriptorLoaderContext;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -16,10 +10,17 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+
 import org.apache.maven.model.Dependency;
 
-public class QuarkusTestPlatformDescriptorLoader
-        implements QuarkusPlatformDescriptorLoader<QuarkusPlatformDescriptor, QuarkusPlatformDescriptorLoaderContext> {
+import io.quarkus.dependencies.Category;
+import io.quarkus.dependencies.Extension;
+import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
+import io.quarkus.platform.descriptor.ResourceInputStreamConsumer;
+import io.quarkus.platform.descriptor.loader.QuarkusPlatformDescriptorLoader;
+import io.quarkus.platform.descriptor.loader.QuarkusPlatformDescriptorLoaderContext;
+
+public class QuarkusTestPlatformDescriptorLoader implements QuarkusPlatformDescriptorLoader<QuarkusPlatformDescriptor, QuarkusPlatformDescriptorLoaderContext> {
 
     private static final List<Extension> extensions = new ArrayList<>();
     private static final List<Dependency> bomDeps = new ArrayList<>();
@@ -55,7 +56,7 @@ public class QuarkusTestPlatformDescriptorLoader
             throw new IllegalStateException("Failed to load quarkus.properties", e);
         }
         quarkusVersion = quarkusProps.getProperty("plugin-version");
-        if (quarkusVersion == null) {
+        if(quarkusVersion == null) {
             throw new IllegalStateException("plugin-version property is missing from quarkus.properties");
         }
 
@@ -66,7 +67,7 @@ public class QuarkusTestPlatformDescriptorLoader
         addExtension("quarkus-hibernate-validator", "Hibernate Validator");
         addExtension("quarkus-jdbc-postgresql", "JDBC PostreSQL");
         addExtension("quarkus-jdbc-h2", "JDBC H2");
-        addExtension("quarkus-resteasy", "RESTEasy", "https://quarkus.io/guides/rest-json");
+        addExtension("quarkus-resteasy", "RESTEasy", "https://quarkus.io/guides/rest-json-guide");
 
         addExtension("quarkus-smallrye-reactive-messaging", "SmallRye Reactive Messaging");
         addExtension("quarkus-smallrye-reactive-streams-operators", "SmallRye Reactive Streams Operators");
@@ -95,7 +96,7 @@ public class QuarkusTestPlatformDescriptorLoader
 
             @Override
             public String getBomArtifactId() {
-                return "quarkus-bom";
+                return"quarkus-bom";
             }
 
             @Override
@@ -123,10 +124,10 @@ public class QuarkusTestPlatformDescriptorLoader
                 try {
                     return loadResource(name, is -> {
                         final StringWriter writer = new StringWriter();
-                        try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
-                                BufferedWriter bw = new BufferedWriter(writer)) {
+                        try(BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+                            BufferedWriter bw = new BufferedWriter(writer)) {
                             String line;
-                            while ((line = reader.readLine()) != null) {
+                            while((line = reader.readLine()) != null) {
                                 bw.write(line);
                                 bw.newLine();
                             }
@@ -143,16 +144,15 @@ public class QuarkusTestPlatformDescriptorLoader
                 return loadStaticResource(name, consumer);
             }
 
-            @Override
-            public List<Category> getCategories() {
-                return new ArrayList<Category>();
-            }
-        };
+			@Override
+			public List<Category> getCategories() {
+				return new ArrayList<Category>();
+			}};
     }
 
     private static <T> T loadStaticResource(String name, ResourceInputStreamConsumer<T> consumer) throws IOException {
         final InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream(name);
-        if (is == null) {
+        if(is == null) {
             throw new IOException("Failed to locate resource " + name + " on the classpath");
         }
         try {
