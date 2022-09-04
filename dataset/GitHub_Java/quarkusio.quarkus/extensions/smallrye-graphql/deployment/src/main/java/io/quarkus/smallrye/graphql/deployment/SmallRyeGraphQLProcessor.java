@@ -135,8 +135,6 @@ public class SmallRyeGraphQLProcessor {
         additionalBeanProducer.produce(AdditionalBeanBuildItem.builder()
                 .addBeanClass(GraphQLConfig.class)
                 .addBeanClass(GraphQLProducer.class)
-                // TODO - MP4 - Require GraphQL Update
-                //.addBeanClass(SmallRyeContextAccessorProxy.class)
                 .setUnremovable().build());
     }
 
@@ -532,17 +530,15 @@ public class SmallRyeGraphQLProcessor {
         if (shouldInclude(launchMode, graphQLConfig)) {
             Handler<RoutingContext> handler = recorder.uiHandler(smallRyeGraphQLBuildItem.getGraphqlUiFinalDestination(),
                     smallRyeGraphQLBuildItem.getGraphqlUiPath(), runtimeConfig);
-            routeProducer.produce(new RouteBuildItem.Builder()
-                    .nonApplicationRoute(true)
+            routeProducer.produce(nonApplicationRootPathBuildItem.routeBuilder()
                     .route(graphQLConfig.ui.rootPath)
                     .routeConfigKey("quarkus.smallrye-graphql.ui.root-path")
                     .displayOnNotFoundPage("MicroProfile GraphQL UI")
                     .handler(handler)
                     .requiresLegacyRedirect()
                     .build());
-            routeProducer.produce(new RouteBuildItem.Builder()
-                    .nonApplicationRoute(true)
-                    .route(graphQLConfig.ui.rootPath + "*")
+            routeProducer.produce(nonApplicationRootPathBuildItem.routeBuilder()
+                    .route(graphQLConfig.ui.rootPath + "/*")
                     .handler(handler)
                     .requiresLegacyRedirect()
                     .build());
