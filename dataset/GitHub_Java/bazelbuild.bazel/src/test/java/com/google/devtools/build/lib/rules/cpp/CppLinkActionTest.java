@@ -144,8 +144,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
             "gcc_tool",
             "ar_tool",
             "strip_tool",
-            /* supportsInterfaceSharedLibraries= */ false,
-            /* existingActionConfigNames= */ ImmutableSet.of());
+            /* supportsInterfaceSharedLibraries= */ false);
 
     return CcToolchainFeaturesTest.buildFeatures(features, actionConfigs)
         .getFeatureConfiguration(

@@ -377,7 +377,7 @@ public final class RuleContext extends TargetContext
 
   @Override
   public boolean hasErrors() {
-    return reporter.hasErrors();
+    return getAnalysisEnvironment().hasErrors();
   }
 
   /**

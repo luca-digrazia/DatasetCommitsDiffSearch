@@ -27,6 +27,7 @@ import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoCollection;
+import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
@@ -303,15 +304,6 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public SpecialArtifact getSymlinkArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
-    Preconditions.checkState(enabled);
-    return (SpecialArtifact)
-        dedupAndTrackArtifactAndOrigin(
-            artifactFactory.getSymlinkArtifact(rootRelativePath, root, getOwner()),
-            extendedSanityChecks ? new Throwable() : null);
-  }
-
-  @Override
   public Artifact.DerivedArtifact getFilesetArtifact(
       PathFragment rootRelativePath, ArtifactRoot root) {
     Preconditions.checkState(enabled);
@@ -358,21 +350,28 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
 
   @Override
   public Artifact getStableWorkspaceStatusArtifact() throws InterruptedException {
-    return getWorkspaceStatusValue().getStableArtifact();
+    return ((WorkspaceStatusValue) skyframeEnv.getValue(WorkspaceStatusValue.BUILD_INFO_KEY))
+        .getStableArtifact();
   }
 
   @Override
   public Artifact getVolatileWorkspaceStatusArtifact() throws InterruptedException {
-    return getWorkspaceStatusValue().getVolatileArtifact();
+    return ((WorkspaceStatusValue) skyframeEnv.getValue(WorkspaceStatusValue.BUILD_INFO_KEY))
+        .getVolatileArtifact();
   }
 
-  private WorkspaceStatusValue getWorkspaceStatusValue() throws InterruptedException {
-    WorkspaceStatusValue workspaceStatusValue =
-        ((WorkspaceStatusValue) skyframeEnv.getValue(WorkspaceStatusValue.BUILD_INFO_KEY));
-    if (workspaceStatusValue == null) {
-      throw new MissingDepException("Restart due to missing build info");
-    }
-    return workspaceStatusValue;
+  // See SkyframeBuildView#getWorkspaceStatusValues for the code that this method is attempting to
+  // verify.
+  private NullPointerException collectDebugInfoAndCrash(BuildInfoKey key, BuildConfiguration config)
+      throws InterruptedException {
+    String debugInfo = key + " " + config;
+    Preconditions.checkState(skyframeEnv.valuesMissing(), debugInfo);
+    Map<BuildInfoKey, BuildInfoFactory> buildInfoFactories = Preconditions.checkNotNull(
+        PrecomputedValue.BUILD_INFO_FACTORIES.get(skyframeEnv), debugInfo);
+    BuildInfoFactory buildInfoFactory =
+        Preconditions.checkNotNull(buildInfoFactories.get(key), debugInfo);
+    Preconditions.checkState(buildInfoFactory.isEnabled(config), debugInfo);
+    throw new NullPointerException("BuildInfoCollectionValue shouldn't have been null");
   }
 
   @Override
@@ -381,24 +380,14 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
     BuildInfoCollectionValue collectionValue =
         (BuildInfoCollectionValue) skyframeEnv.getValue(BuildInfoCollectionValue.key(key, config));
     if (collectionValue == null) {
-      throw new MissingDepException(
-          String.format("Restart due to missing BuildInfoCollectionValue (%s %s)", key, config));
+      throw collectDebugInfoAndCrash(key, config);
     }
     BuildInfoCollection collection = collectionValue.getCollection();
-    return stamp ? collection.getStampedBuildInfo() : collection.getRedactedBuildInfo();
+   return stamp ? collection.getStampedBuildInfo() : collection.getRedactedBuildInfo();
   }
 
   @Override
   public ActionLookupValue.ActionLookupKey getOwner() {
     return owner;
-  }
-
-  /** Thrown in case of a missing build info key. */
-  // TODO(ulfjack): It would be better for this to be a checked exception, which requires updating
-  // all callers to pass the exception through.
-  public static class MissingDepException extends RuntimeException {
-    MissingDepException(String msg) {
-      super(msg);
-    }
   }
 }
