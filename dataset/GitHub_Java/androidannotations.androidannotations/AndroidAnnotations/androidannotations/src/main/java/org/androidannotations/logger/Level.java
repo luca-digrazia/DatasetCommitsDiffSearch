@@ -15,21 +15,36 @@
  */
 package org.androidannotations.logger;
 
-import junit.framework.Assert;
+public enum Level {
+	TRACE(1, "TRACE"), //
+	DEBUG(2, "DEBUG"), //
+	INFO(3, "INFO "), //
+	WARN(4, "WARN "), //
+	ERROR(5, "ERROR");
 
-import org.junit.Test;
+	public final int weight;
+	public final String name;
 
-public class LoggerTest {
+	private Level(int weight, String name) {
+		this.weight = weight;
+		this.name = name;
+	}
 
-	@Test
-	public void testIsLoggable() throws Exception {
-		LoggerContext loggerContext = LoggerContext.getInstance();
-		loggerContext.setCurrentLevel(Level.INFO);
-		Logger logger = new Logger(loggerContext, getClass().getName());
+	public boolean isGreaterOrEquals(Level l) {
+		return weight >= l.weight;
+	}
 
-		Assert.assertFalse(logger.isLoggable(Level.DEBUG));
-		Assert.assertTrue(logger.isLoggable(Level.INFO));
-		Assert.assertTrue(logger.isLoggable(Level.WARN));
+	public boolean isSmaller(Level l) {
+		return weight < l.weight;
+	}
+
+	public static Level parse(String name) {
+		for (Level level : values()) {
+			if (level.name().equalsIgnoreCase(name)) {
+				return level;
+			}
+		}
+		throw new IllegalArgumentException("Can't find Level matching " + name);
 	}
 
 }
