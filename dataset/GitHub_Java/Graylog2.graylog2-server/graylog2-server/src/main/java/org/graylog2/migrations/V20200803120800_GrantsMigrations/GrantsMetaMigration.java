@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.migrations.V20200803120800_GrantsMigrations;
 
@@ -22,12 +22,12 @@ import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import org.apache.shiro.authz.permission.WildcardPermission;
 import org.graylog.grn.GRNRegistry;
 import org.graylog.grn.GRNType;
 import org.graylog.plugins.views.search.views.ViewService;
 import org.graylog.security.Capability;
 import org.graylog.security.DBGrantService;
-import org.graylog.security.permissions.CaseSensitiveWildcardPermission;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.migrations.Migration;
 import org.graylog2.plugin.cluster.ClusterConfigService;
@@ -45,6 +45,7 @@ import java.util.Set;
 
 import static org.graylog.grn.GRNTypes.DASHBOARD;
 import static org.graylog.grn.GRNTypes.EVENT_DEFINITION;
+import static org.graylog.grn.GRNTypes.SEARCH;
 import static org.graylog.grn.GRNTypes.STREAM;
 import static org.graylog.plugins.views.search.rest.ViewsRestPermissions.VIEW_EDIT;
 import static org.graylog.plugins.views.search.rest.ViewsRestPermissions.VIEW_READ;
@@ -95,8 +96,8 @@ public class GrantsMetaMigration extends Migration {
             .put(ImmutableSet.of(DASHBOARDS_READ), new GRNTypeCapability(DASHBOARD, Capability.VIEW))
             .put(ImmutableSet.of(STREAMS_READ, STREAMS_EDIT), new GRNTypeCapability(STREAM, Capability.MANAGE))
             .put(ImmutableSet.of(STREAMS_READ), new GRNTypeCapability(STREAM, Capability.VIEW))
-            .put(ImmutableSet.of(VIEW_READ, VIEW_EDIT), new GRNTypeCapability(null, Capability.MANAGE))
-            .put(ImmutableSet.of(VIEW_READ), new GRNTypeCapability(null, Capability.VIEW))
+            .put(ImmutableSet.of(VIEW_READ, VIEW_EDIT), new GRNTypeCapability(SEARCH, Capability.MANAGE))
+            .put(ImmutableSet.of(VIEW_READ), new GRNTypeCapability(SEARCH, Capability.VIEW))
             .put(ImmutableSet.of(EVENT_DEFINITIONS_READ, EVENT_DEFINITIONS_EDIT), new GRNTypeCapability(EVENT_DEFINITION, Capability.MANAGE))
             .put(ImmutableSet.of(EVENT_DEFINITIONS_READ), new GRNTypeCapability(EVENT_DEFINITION, Capability.VIEW))
             .build();
@@ -111,7 +112,7 @@ public class GrantsMetaMigration extends Migration {
         new ViewSharingToGrantsMigration(mongoConnection, dbGrantService, userService, roleService, rootUsername, viewService, grnRegistry).upgrade();
         new RolesToGrantsMigration(roleService, userService, dbGrantService, grnRegistry, rootUsername).upgrade();
         new ViewOwnerShipToGrantsMigration(userService, dbGrantService, rootUsername, viewService, grnRegistry).upgrade();
-        new UserPermissionsToGrantsMigration(userService, dbGrantService, grnRegistry, viewService, rootUsername).upgrade();
+        new UserPermissionsToGrantsMigration(userService, dbGrantService, grnRegistry, rootUsername).upgrade();
 
         this.clusterConfigService.write(MigrationCompleted.create());
     }
@@ -127,7 +128,7 @@ public class GrantsMetaMigration extends Migration {
     }
 
     // only needed to access protected getParts() method from WildcardPermission
-    public static class MigrationWildcardPermission extends CaseSensitiveWildcardPermission {
+    public static class MigrationWildcardPermission extends WildcardPermission {
         public MigrationWildcardPermission(String wildcardString) {
             super(wildcardString);
         }
