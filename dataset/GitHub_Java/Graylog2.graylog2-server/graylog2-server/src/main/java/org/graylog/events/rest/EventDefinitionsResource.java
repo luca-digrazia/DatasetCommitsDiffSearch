@@ -42,8 +42,6 @@ import org.graylog2.search.SearchQueryField;
 import org.graylog2.search.SearchQueryParser;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.validation.Valid;
@@ -53,7 +51,6 @@ import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.DefaultValue;
-import javax.ws.rs.ForbiddenException;
 import javax.ws.rs.GET;
 import javax.ws.rs.InternalServerErrorException;
 import javax.ws.rs.NotFoundException;
@@ -65,8 +62,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Api(value = "Events/Definitions", description = "Event definition management")
 @Path("/events/definitions")
@@ -74,8 +69,6 @@ import java.util.stream.Collectors;
 @Consumes(MediaType.APPLICATION_JSON)
 @RequiresAuthentication
 public class EventDefinitionsResource extends RestResource implements PluginRestResource {
-    private static final Logger LOG = LoggerFactory.getLogger(EventDefinitionsResource.class);
-
     private static final ImmutableMap<String, SearchQueryField> SEARCH_FIELD_MAPPING = ImmutableMap.<String, SearchQueryField>builder()
             .put("id", SearchQueryField.create(EventDefinitionDto.FIELD_ID))
             .put("title", SearchQueryField.create(EventDefinitionDto.FIELD_TITLE))
@@ -123,10 +116,8 @@ public class EventDefinitionsResource extends RestResource implements PluginRest
     @ApiOperation("Create new event definition")
     @AuditEvent(type = EventsAuditEventTypes.EVENT_DEFINITION_CREATE)
     @RequiresPermissions(RestPermissions.EVENT_DEFINITIONS_CREATE)
-    public Response create(@ApiParam(name = "JSON Body") EventDefinitionDto dto) {
-        checkEventDefinitionPermissions(dto, "create");
-
-        final ValidationResult result = dto.validate();
+    public Response create(EventDefinitionDto dto) {
+        final ValidationResult result = dto.config().validate();
         if (result.failed()) {
             return Response.status(Response.Status.BAD_REQUEST).entity(result).build();
         }
@@ -138,13 +129,12 @@ public class EventDefinitionsResource extends RestResource implements PluginRest
     @ApiOperation("Update existing event definition")
     @AuditEvent(type = EventsAuditEventTypes.EVENT_DEFINITION_UPDATE)
     public Response update(@ApiParam(name = "definitionId") @PathParam("definitionId") @NotBlank String definitionId,
-                           @ApiParam(name = "JSON Body") EventDefinitionDto dto) {
+                           EventDefinitionDto dto) {
         checkPermission(RestPermissions.EVENT_DEFINITIONS_EDIT, definitionId);
-        checkEventDefinitionPermissions(dto, "update");
         dbService.get(definitionId)
                 .orElseThrow(() -> new NotFoundException("Event definition <" + definitionId + "> doesn't exist"));
 
-        final ValidationResult result = dto.validate();
+        final ValidationResult result = dto.config().validate();
         if (!definitionId.equals(dto.id())) {
             result.addError("id", "Event definition IDs don't match");
         }
@@ -190,16 +180,5 @@ public class EventDefinitionsResource extends RestResource implements PluginRest
     public ValidationResult validate(@ApiParam(name = "JSON body", required = true)
                                      @Valid @NotNull EventDefinitionDto toValidate) {
         return toValidate.config().validate();
-    }
-
-    private void checkEventDefinitionPermissions(EventDefinitionDto dto, String action) {
-        final Set<String> missingPermissions = dto.requiredPermissions().stream()
-            .filter(permission -> !isPermitted(permission))
-            .collect(Collectors.toSet());
-
-        if (!missingPermissions.isEmpty()) {
-            LOG.info("Not authorized to {} event definition. User <{}> is missing permissions: {}", action, getSubject().getPrincipal(), missingPermissions);
-            throw new ForbiddenException("Not authorized");
-        }
     }
 }
