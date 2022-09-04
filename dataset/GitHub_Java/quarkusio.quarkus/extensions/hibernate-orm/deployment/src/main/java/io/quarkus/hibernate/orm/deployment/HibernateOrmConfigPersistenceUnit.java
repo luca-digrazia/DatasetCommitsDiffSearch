@@ -74,24 +74,18 @@ public class HibernateOrmConfigPersistenceUnit {
      * The size of the batches used when loading entities and collections.
      *
      * `-1` means batch loading is disabled. This is the default.
-     * 
-     * @deprecated {@link #fetch} should be used to configure fetching properties.
+     *
      * @asciidoclet
      */
     @ConfigItem(defaultValue = "-1")
-    @Deprecated
     public int batchFetchSize;
 
     /**
      * The maximum depth of outer join fetch tree for single-ended associations (one-to-one, many-to-one).
      *
      * A `0` disables default outer join fetching.
-     * 
-     * @deprecated {@link #fetch} should be used to configure fetching properties.
-     * @asciidoclet
      */
     @ConfigItem
-    @Deprecated
     public OptionalInt maxFetchDepth;
 
     /**
@@ -137,13 +131,6 @@ public class HibernateOrmConfigPersistenceUnit {
     @ConfigItem
     @ConfigDocSection
     public HibernateOrmConfigPersistenceUnitLog log;
-
-    /**
-     * Fetching logic configuration.
-     */
-    @ConfigItem
-    @ConfigDocSection
-    public HibernateOrmConfigPersistenceUnitFetch fetch;
 
     /**
      * Caching configuration
@@ -195,8 +182,7 @@ public class HibernateOrmConfigPersistenceUnit {
                 !cache.isEmpty() ||
                 !secondLevelCachingEnabled ||
                 multitenant.isPresent() ||
-                multitenantSchemaDatasource.isPresent() ||
-                fetch.isAnyPropertySet();
+                multitenantSchemaDatasource.isPresent();
     }
 
     @ConfigGroup
@@ -266,10 +252,20 @@ public class HibernateOrmConfigPersistenceUnit {
         private static final String DEFAULT_CHARSET = "UTF-8";
 
         /**
-         * Schema generation configuration.
+         * Select whether the database schema is generated or not.
+         *
+         * `drop-and-create` is awesome in development mode.
+         *
+         * Accepted values: `none`, `create`, `drop-and-create`, `drop`, `update`.
          */
-        @ConfigItem
-        public HibernateOrmConfigPersistenceUnitDatabaseGeneration generation;
+        @ConfigItem(defaultValue = "none")
+        public String generation;
+
+        /**
+         * Whether we should stop on the first error when applying the schema.
+         */
+        @ConfigItem(name = "generation.halt-on-error")
+        public boolean generationHaltOnError;
 
         /**
          * The default catalog to use for the database objects.
@@ -298,43 +294,10 @@ public class HibernateOrmConfigPersistenceUnit {
         public boolean globallyQuotedIdentifiers;
 
         public boolean isAnyPropertySet() {
-            return generation.isAnyPropertySet()
-                    || defaultCatalog.isPresent()
-                    || defaultSchema.isPresent()
+            return !"none".equals(generation) || defaultCatalog.isPresent() || defaultSchema.isPresent()
+                    || generationHaltOnError
                     || !DEFAULT_CHARSET.equals(charset.name())
                     || globallyQuotedIdentifiers;
-        }
-    }
-
-    @ConfigGroup
-    public static class HibernateOrmConfigPersistenceUnitDatabaseGeneration {
-
-        /**
-         * Select whether the database schema is generated or not.
-         *
-         * `drop-and-create` is awesome in development mode.
-         *
-         * Accepted values: `none`, `create`, `drop-and-create`, `drop`, `update`.
-         */
-        @ConfigItem(name = ConfigItem.PARENT, defaultValue = "none")
-        public String generation;
-
-        /**
-         * If Hibernate ORM should create the schemas automatically (for databases supporting them).
-         */
-        @ConfigItem
-        public boolean createSchemas;
-
-        /**
-         * Whether we should stop on the first error when applying the schema.
-         */
-        @ConfigItem
-        public boolean haltOnError;
-
-        public boolean isAnyPropertySet() {
-            return !"none".equals(generation)
-                    || createSchemas
-                    || haltOnError;
         }
     }
 
@@ -417,33 +380,5 @@ public class HibernateOrmConfigPersistenceUnit {
          */
         @ConfigItem
         public OptionalLong objectCount;
-    }
-
-    @ConfigGroup
-    public static class HibernateOrmConfigPersistenceUnitFetch {
-        /**
-         * The size of the batches used when loading entities and collections.
-         *
-         * `-1` means batch loading is disabled. This is the default.
-         *
-         * @asciidoclet
-         */
-        @ConfigItem(defaultValue = "-1")
-        public int batchSize;
-
-        /**
-         * The maximum depth of outer join fetch tree for single-ended associations (one-to-one, many-to-one).
-         *
-         * A `0` disables default outer join fetching.
-         * 
-         * @asciidoclet
-         */
-        @ConfigItem
-        public OptionalInt maxDepth;
-
-        public boolean isAnyPropertySet() {
-            return batchSize > 0 || maxDepth.isPresent();
-        }
-
     }
 }

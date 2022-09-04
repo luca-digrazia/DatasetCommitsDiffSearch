@@ -23,17 +23,15 @@ public final class QuarkusPersistenceUnitDefinition {
     private final String dataSource;
     private final MultiTenancyStrategy multitenancyStrategy;
     private final boolean isReactive;
-    private final boolean fromPersistenceXml;
 
     public QuarkusPersistenceUnitDefinition(PersistenceUnitDescriptor persistenceUnitDescriptor, String dataSource,
-            MultiTenancyStrategy multitenancyStrategy, boolean isReactive, boolean fromPersistenceXml) {
+            MultiTenancyStrategy multitenancyStrategy, boolean isReactive) {
         Objects.requireNonNull(persistenceUnitDescriptor);
         Objects.requireNonNull(multitenancyStrategy);
         this.actualHibernateDescriptor = LightPersistenceXmlDescriptor.validateAndReadFrom(persistenceUnitDescriptor);
         this.dataSource = dataSource;
         this.multitenancyStrategy = multitenancyStrategy;
         this.isReactive = isReactive;
-        this.fromPersistenceXml = fromPersistenceXml;
     }
 
     /**
@@ -42,8 +40,7 @@ public final class QuarkusPersistenceUnitDefinition {
     private QuarkusPersistenceUnitDefinition(LightPersistenceXmlDescriptor persistenceUnitDescriptor,
             String dataSource,
             MultiTenancyStrategy multitenancyStrategy,
-            boolean isReactive,
-            boolean fromPersistenceXml) {
+            boolean isReactive) {
         Objects.requireNonNull(persistenceUnitDescriptor);
         Objects.requireNonNull(dataSource);
         Objects.requireNonNull(multitenancyStrategy);
@@ -51,7 +48,6 @@ public final class QuarkusPersistenceUnitDefinition {
         this.dataSource = dataSource;
         this.multitenancyStrategy = multitenancyStrategy;
         this.isReactive = isReactive;
-        this.fromPersistenceXml = fromPersistenceXml;
     }
 
     public PersistenceUnitDescriptor getActualHibernateDescriptor() {
@@ -75,10 +71,6 @@ public final class QuarkusPersistenceUnitDefinition {
         return isReactive;
     }
 
-    public boolean isFromPersistenceXml() {
-        return fromPersistenceXml;
-    }
-
     /**
      * This includes the state of both the QuarkusPersistenceUnitDefinition
      * and its more complex field of type LightPersistenceXmlDescriptor
@@ -88,7 +80,6 @@ public final class QuarkusPersistenceUnitDefinition {
         private String dataSource;
         private MultiTenancyStrategy multitenancyStrategy;
         private boolean isReactive;
-        private boolean fromPersistenceXml;
         private String puName;
         private String puProviderClassName;
         private boolean puUseQuotedIdentifiers;
@@ -130,14 +121,6 @@ public final class QuarkusPersistenceUnitDefinition {
 
         public void setReactive(boolean reactive) {
             isReactive = reactive;
-        }
-
-        public boolean isFromPersistenceXml() {
-            return fromPersistenceXml;
-        }
-
-        public void setFromPersistenceXml(boolean fromPersistenceXml) {
-            this.fromPersistenceXml = fromPersistenceXml;
         }
 
         public String getPuProviderClassName() {
@@ -215,7 +198,6 @@ public final class QuarkusPersistenceUnitDefinition {
             s.setDataSource(obj.getDataSource());
             s.setMultitenancyStrategy(obj.getMultitenancyStrategy());
             s.setReactive(obj.isReactive);
-            s.setFromPersistenceXml(obj.isFromPersistenceXml());
             return s;
         }
 
@@ -226,7 +208,7 @@ public final class QuarkusPersistenceUnitDefinition {
                     obj.puValidationMode, obj.puSharedCachemode, obj.puManagedClassNames, obj.puProperties);
 
             return new QuarkusPersistenceUnitDefinition(xmlDescriptor, obj.getDataSource(), obj.getMultitenancyStrategy(),
-                    obj.isReactive(), obj.isFromPersistenceXml());
+                    obj.isReactive());
         }
     }
 

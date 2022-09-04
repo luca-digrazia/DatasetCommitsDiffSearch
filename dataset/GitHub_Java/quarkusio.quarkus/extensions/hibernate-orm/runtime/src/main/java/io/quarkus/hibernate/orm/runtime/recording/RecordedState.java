@@ -23,13 +23,11 @@ public final class RecordedState {
     private final ProxyDefinitions proxyClassDefinitions;
     private final MultiTenancyStrategy multiTenancyStrategy;
     private final boolean isReactive;
-    private final boolean fromPersistenceXml;
 
     public RecordedState(Dialect dialect, PrevalidatedQuarkusMetadata metadata,
             BuildTimeSettings settings, Collection<Integrator> integrators,
             Collection<ProvidedService> providedServices, IntegrationSettings integrationSettings,
-            ProxyDefinitions classDefinitions, String dataSource, MultiTenancyStrategy strategy, boolean isReactive,
-            boolean fromPersistenceXml) {
+            ProxyDefinitions classDefinitions, String dataSource, MultiTenancyStrategy strategy, boolean isReactive) {
         this.dialect = dialect;
         this.metadata = metadata;
         this.settings = settings;
@@ -40,7 +38,6 @@ public final class RecordedState {
         this.dataSource = dataSource;
         this.multiTenancyStrategy = strategy;
         this.isReactive = isReactive;
-        this.fromPersistenceXml = fromPersistenceXml;
     }
 
     public Dialect getDialect() {
@@ -81,9 +78,5 @@ public final class RecordedState {
 
     public boolean isReactive() {
         return isReactive;
-    }
-
-    public boolean isFromPersistenceXml() {
-        return fromPersistenceXml;
     }
 }

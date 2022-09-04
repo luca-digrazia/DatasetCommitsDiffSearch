@@ -2,8 +2,6 @@ package io.quarkus.hibernate.orm.runtime.tenant;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.Locale;
-import java.util.Optional;
 
 import javax.enterprise.inject.Default;
 
@@ -31,7 +29,7 @@ public class DataSourceTenantConnectionResolver implements TenantConnectionResol
 
     private String persistenceUnitName;
 
-    private Optional<String> dataSourceName;
+    private String dataSourceName;
 
     private MultiTenancyStrategy multiTenancyStrategy;
 
@@ -40,7 +38,7 @@ public class DataSourceTenantConnectionResolver implements TenantConnectionResol
     public DataSourceTenantConnectionResolver() {
     }
 
-    public DataSourceTenantConnectionResolver(String persistenceUnitName, Optional<String> dataSourceName,
+    public DataSourceTenantConnectionResolver(String persistenceUnitName, String dataSourceName,
             MultiTenancyStrategy multiTenancyStrategy, String multiTenancySchemaDataSourceName) {
         this.persistenceUnitName = persistenceUnitName;
         this.dataSourceName = dataSourceName;
@@ -57,7 +55,7 @@ public class DataSourceTenantConnectionResolver implements TenantConnectionResol
                 multiTenancySchemaDataSourceName);
         if (dataSource == null) {
             throw new IllegalStateException(
-                    String.format(Locale.ROOT, "No instance of datasource found for persistence unit '%1$s' and tenant '%2$s'",
+                    String.format("No instance of datasource found for persistence unit '%1$s' and tenant '%2$s'",
                             persistenceUnitName, tenantId));
         }
         if (multiTenancyStrategy == MultiTenancyStrategy.SCHEMA) {
@@ -82,16 +80,14 @@ public class DataSourceTenantConnectionResolver implements TenantConnectionResol
         }
     }
 
-    private static AgroalDataSource tenantDataSource(Optional<String> dataSourceName, String tenantId,
-            MultiTenancyStrategy strategy, String multiTenancySchemaDataSourceName) {
+    private static AgroalDataSource tenantDataSource(String dataSourceName, String tenantId, MultiTenancyStrategy strategy,
+            String multiTenancySchemaDataSourceName) {
         if (strategy != MultiTenancyStrategy.SCHEMA) {
             return Arc.container().instance(AgroalDataSource.class, new DataSource.DataSourceLiteral(tenantId)).get();
         }
 
         if (multiTenancySchemaDataSourceName == null) {
-            // The datasource name should always be present when using SCHEMA multi-tenancy;
-            // we perform checks in HibernateOrmProcessor during the build.
-            AgroalDataSource dataSource = getDataSource(dataSourceName.get());
+            AgroalDataSource dataSource = getDataSource(dataSourceName);
             return createFrom(dataSource.getConfiguration());
         }
 

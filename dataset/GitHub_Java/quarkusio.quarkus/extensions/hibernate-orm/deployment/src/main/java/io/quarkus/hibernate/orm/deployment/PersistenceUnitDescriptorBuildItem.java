@@ -22,27 +22,42 @@ public final class PersistenceUnitDescriptorBuildItem extends MultiBuildItem {
     private final MultiTenancyStrategy multiTenancyStrategy;
     private final String multiTenancySchemaDataSource;
     private final boolean isReactive;
-    private final boolean fromPersistenceXml;
 
-    public PersistenceUnitDescriptorBuildItem(ParsedPersistenceXmlDescriptor descriptor, boolean isReactive,
-            boolean fromPersistenceXml) {
+    public PersistenceUnitDescriptorBuildItem(ParsedPersistenceXmlDescriptor descriptor, boolean isReactive) {
         this.descriptor = descriptor;
         this.dataSource = DataSourceUtil.DEFAULT_DATASOURCE_NAME;
         this.multiTenancyStrategy = MultiTenancyStrategy.NONE;
         this.multiTenancySchemaDataSource = null;
         this.isReactive = isReactive;
-        this.fromPersistenceXml = fromPersistenceXml;
+    }
+
+    public PersistenceUnitDescriptorBuildItem(ParsedPersistenceXmlDescriptor descriptor,
+            MultiTenancyStrategy multiTenancyStrategy,
+            String multiTenancySchemaDataSource,
+            boolean isReactive) {
+        this.descriptor = descriptor;
+        this.dataSource = DataSourceUtil.DEFAULT_DATASOURCE_NAME;
+        this.multiTenancyStrategy = multiTenancyStrategy;
+        this.multiTenancySchemaDataSource = multiTenancySchemaDataSource;
+        this.isReactive = isReactive;
     }
 
     public PersistenceUnitDescriptorBuildItem(ParsedPersistenceXmlDescriptor descriptor, String dataSource,
-            MultiTenancyStrategy multiTenancyStrategy, String multiTenancySchemaDataSource, boolean isReactive,
-            boolean fromPersistenceXml) {
+            boolean isReactive) {
+        this.descriptor = descriptor;
+        this.dataSource = dataSource;
+        this.multiTenancyStrategy = MultiTenancyStrategy.NONE;
+        this.multiTenancySchemaDataSource = null;
+        this.isReactive = isReactive;
+    }
+
+    public PersistenceUnitDescriptorBuildItem(ParsedPersistenceXmlDescriptor descriptor, String dataSource,
+            MultiTenancyStrategy multiTenancyStrategy, String multiTenancySchemaDataSource, boolean isReactive) {
         this.descriptor = descriptor;
         this.dataSource = dataSource;
         this.multiTenancyStrategy = multiTenancyStrategy;
         this.multiTenancySchemaDataSource = multiTenancySchemaDataSource;
         this.isReactive = isReactive;
-        this.fromPersistenceXml = fromPersistenceXml;
     }
 
     public Collection<String> getManagedClassNames() {
@@ -70,7 +85,6 @@ public final class PersistenceUnitDescriptorBuildItem extends MultiBuildItem {
     }
 
     public QuarkusPersistenceUnitDefinition asOutputPersistenceUnitDefinition() {
-        return new QuarkusPersistenceUnitDefinition(descriptor, dataSource, multiTenancyStrategy, isReactive,
-                fromPersistenceXml);
+        return new QuarkusPersistenceUnitDefinition(descriptor, dataSource, multiTenancyStrategy, isReactive);
     }
 }
