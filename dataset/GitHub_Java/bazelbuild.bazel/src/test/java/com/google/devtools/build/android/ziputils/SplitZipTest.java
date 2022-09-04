@@ -21,7 +21,6 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableSet;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Date;
 import org.junit.Before;
@@ -424,17 +423,15 @@ public class SplitZipTest {
       String classFileList = "pkg1/test1.class\npkg2/test2.class\n";
       fileSystem.addFile("main_dex_list.txt", classFileList);
 
-      try (InputStream mainDex = fileSystem.getInputStream("main_dex_list.txt")) {
-        new SplitZip()
-            .addOutput(new ZipOut(fileSystem.getOutputChannel("out/shard1.jar", false),
-                "out/shard1.jar"))
-            .addOutput(new ZipOut(fileSystem.getOutputChannel("out/shard2.jar", false),
-                "out/shard2.jar"))
-            .setMainClassListStreamForTesting(mainDex)
-            .addInput(new ZipIn(fileSystem.getInputChannel("input.jar"), "input.jar"))
-            .run()
-            .close();
-      }
+      new SplitZip()
+          .addOutput(new ZipOut(fileSystem.getOutputChannel("out/shard1.jar", false),
+              "out/shard1.jar"))
+          .addOutput(new ZipOut(fileSystem.getOutputChannel("out/shard2.jar", false),
+              "out/shard2.jar"))
+          .setMainClassListFile(fileSystem.getInputStream("main_dex_list.txt"))
+          .addInput(new ZipIn(fileSystem.getInputChannel("input.jar"), "input.jar"))
+          .run()
+          .close();
 
       new ZipFileBuilder()
           .add("pkg1/test1.class", "hello world")
@@ -534,22 +531,20 @@ public class SplitZipTest {
     String classFileList = "pkg1/test1.class\npkg2/test2.class\n";
     fileSystem.addFile("main_dex_list.txt", classFileList);
 
-    try (InputStream mainDex = fileSystem.getInputStream("main_dex_list.txt")) {
-      new SplitZip()
-          .addOutput(new ZipOut(fileSystem.getOutputChannel("out/shard1.jar", false),
-              "out/shard1.jar"))
-          .addOutput(new ZipOut(fileSystem.getOutputChannel("out/shard2.jar", false),
-              "out/shard2.jar"))
-          .setVerbose(true)
-          .setMainClassListStreamForTesting(mainDex)
-          .addInput(new ZipIn(fileSystem.getInputChannel("input.jar"), "input.jar"))
-          .setInputFilter(
-              Predicates.in(
-                  ImmutableSet.of("pkg1/test1.class", "pkg2/test1.class", "pkg3/test1.class")))
-          .setSplitDexedClasses(true)
-          .run()
-          .close();
-    }
+    new SplitZip()
+        .addOutput(new ZipOut(fileSystem.getOutputChannel("out/shard1.jar", false),
+            "out/shard1.jar"))
+        .addOutput(new ZipOut(fileSystem.getOutputChannel("out/shard2.jar", false),
+            "out/shard2.jar"))
+        .setVerbose(true)
+        .setMainClassListFile(fileSystem.getInputStream("main_dex_list.txt"))
+        .addInput(new ZipIn(fileSystem.getInputChannel("input.jar"), "input.jar"))
+        .setInputFilter(
+            Predicates.in(
+                ImmutableSet.of("pkg1/test1.class", "pkg2/test1.class", "pkg3/test1.class")))
+        .setSplitDexedClasses(true)
+        .run()
+        .close();
 
     // 1st shard contains only main dex list classes also in the filter
     new ZipFileBuilder()
