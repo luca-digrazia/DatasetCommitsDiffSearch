@@ -303,8 +303,8 @@ public class ProtoCompileActionBuilder {
     // Add include maps
     addIncludeMapArguments(
         result,
-        areDepsStrict ? protoSourcesProvider.getStrictImportableProtoSources() : null,
-        protoSourcesProvider.getStrictImportableProtoSourceRoots(),
+        areDepsStrict ? protoSourcesProvider.getProtosInDirectDeps() : null,
+        protoSourcesProvider.getDirectProtoSourceRoots(),
         protoSourcesProvider.getTransitiveProtoSources());
 
     if (areDepsStrict) {
@@ -321,7 +321,7 @@ public class ProtoCompileActionBuilder {
       result.add("--disallow_services");
     }
     if (checkStrictImportPublic) {
-      NestedSet<Artifact> protosInExports = protoSourcesProvider.getExportedProtoSources();
+      NestedSet<Artifact> protosInExports = protoSourcesProvider.getProtosInExports();
       if (protosInExports.isEmpty()) {
         // This line is necessary to trigger the check.
         result.add("--allowed_public_imports=");
@@ -571,8 +571,8 @@ public class ProtoCompileActionBuilder {
     // Add include maps
     addIncludeMapArguments(
         cmdLine,
-        strictDeps == Deps.STRICT ? protoProvider.getStrictImportableProtoSources() : null,
-        protoProvider.getStrictImportableProtoSourceRoots(),
+        strictDeps == Deps.STRICT ? protoProvider.getProtosInDirectDeps() : null,
+        protoProvider.getDirectProtoSourceRoots(),
         protoProvider.getTransitiveProtoSources());
 
     if (strictDeps == Deps.STRICT) {
@@ -580,14 +580,14 @@ public class ProtoCompileActionBuilder {
     }
 
     if (useExports == Exports.USE) {
-      if (protoProvider.getExportedProtoSources().isEmpty()) {
+      if (protoProvider.getProtosInExports().isEmpty()) {
         // This line is necessary to trigger the check.
         cmdLine.add("--allowed_public_imports=");
       } else {
         cmdLine.addAll(
             "--allowed_public_imports",
             VectorArg.join(":")
-                .each(protoProvider.getExportedProtoSources())
+                .each(protoProvider.getProtosInExports())
                 .mapped(new ExpandToPathFn(protoProvider.getExportedProtoSourceRoots())));
       }
     }
@@ -649,28 +649,13 @@ public class ProtoCompileActionBuilder {
      */
     @Override
     public void expandToCommandLine(Artifact proto, Consumer<String> args) {
-      boolean repositoryPathAdded = false;
-      String pathIgnoringRepository = getPathIgnoringRepository(proto);
-
       for (String directProtoSourceRoot : directProtoSourceRoots) {
-        // TODO(lberki): Instead of guesswork like this, we should track which proto belongs to
-        // which source root. Unfortunately, that's a non-trivial migration since
-        // ProtoSourcesProvider is on the Starlark API.
-        PathFragment sourceRootPath = PathFragment.create(directProtoSourceRoot);
-        if (proto.getRootRelativePath().startsWith(sourceRootPath)) {
-          String arg = proto.getRootRelativePath().relativeTo(sourceRootPath).getPathString();
-          if (arg.equals(pathIgnoringRepository)) {
-            repositoryPathAdded = true;
-          }
-
-          args.accept("-I" + arg + "=" + proto.getExecPathString());
+        String path = getPathIgnoringSourceRoot(proto, directProtoSourceRoot);
+        if (path != null) {
+          args.accept("-I" + path + "=" + proto.getExecPathString());
         }
       }
-
-      // TODO(lberki): This should really be removed. It's only there for backward compatibility.
-      if (!repositoryPathAdded) {
-        args.accept("-I" + getPathIgnoringRepository(proto) + "=" + proto.getExecPathString());
-      }
+      args.accept("-I" + getPathIgnoringRepository(proto) + "=" + proto.getExecPathString());
     }
   }
 
@@ -685,27 +670,13 @@ public class ProtoCompileActionBuilder {
 
     @Override
     public void expandToCommandLine(Artifact proto, Consumer<String> args) {
-      boolean repositoryPathAdded = false;
-      String pathIgnoringRepository = getPathIgnoringRepository(proto);
-
       for (String directProtoSourceRoot : directProtoSourceRoots) {
-        PathFragment sourceRootPath = PathFragment.create(directProtoSourceRoot);
-        // TODO(lberki): Instead of guesswork like this, we should track which proto belongs to
-        // which source root. Unfortunately, that's a non-trivial migration since
-        // ProtoSourcesProvider is on the Starlark API.
-        if (proto.getRootRelativePath().startsWith(sourceRootPath)) {
-          String arg = proto.getRootRelativePath().relativeTo(sourceRootPath).getPathString();
-          if (arg.equals(pathIgnoringRepository)) {
-            repositoryPathAdded = true;
-          }
-          args.accept(arg);
+        String path = getPathIgnoringSourceRoot(proto, directProtoSourceRoot);
+        if (path != null) {
+          args.accept(path);
         }
       }
-
-      // TODO(lberki): This should really be removed. It's only there for backward compatibility.
-      if (!repositoryPathAdded) {
-        args.accept(pathIgnoringRepository);
-      }
+      args.accept(getPathIgnoringRepository(proto));
     }
   }
 
@@ -722,6 +693,27 @@ public class ProtoCompileActionBuilder {
         .relativeTo(
             artifact.getOwnerLabel().getPackageIdentifier().getRepository().getPathUnderExecRoot())
         .toString();
+  }
+
+  /**
+   * Gets the artifact's path relative to the proto source root, ignoring the external repository
+   * the artifact is at. For example, <code>
+   * //a/b/c:d.proto with proto source root a/b --> c/d.proto
+   * {@literal @}foo//a/b/c:d.proto with proto source root a/b --> c/d.proto
+   * </code>
+   */
+  private static String getPathIgnoringSourceRoot(Artifact artifact, String directProtoSourceRoot) {
+    // TODO(bazel-team): IAE is caught here because every artifact is relativized against every
+    // directProtoSourceRoot. Instead of catching the exception, a check should be performed
+    // to see if the artifact has the root as a substring before relativizing.
+    try {
+      return PathFragment.createAlreadyNormalized(getPathIgnoringRepository(artifact))
+          .relativeTo(directProtoSourceRoot)
+          .toString();
+    } catch (IllegalArgumentException exception) {
+      // do nothing
+    }
+    return null;
   }
 
   /**

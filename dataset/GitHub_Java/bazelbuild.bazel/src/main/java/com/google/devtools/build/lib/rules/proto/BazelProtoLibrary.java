@@ -38,62 +38,61 @@ public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
       throws InterruptedException, RuleErrorException, ActionConflictException {
     ImmutableList<Artifact> protoSources =
         ruleContext.getPrerequisiteArtifacts("srcs", TARGET).list();
-    NestedSet<Artifact> strictImportableProtosForDependents =
-        ProtoCommon.computeStrictImportableProtosForDependents(ruleContext, protoSources);
+    NestedSet<Artifact> checkDepsProtoSources =
+        ProtoCommon.getCheckDepsProtoSources(ruleContext, protoSources);
     ProtoCommon.checkSourceFilesAreInSamePackage(ruleContext);
 
     NestedSet<Artifact> transitiveProtoSources =
         ProtoCommon.collectTransitiveProtoSources(ruleContext, protoSources);
-    NestedSet<Artifact> strictImportableProtos =
-        ProtoCommon.computeStrictImportableProtos(ruleContext);
+    NestedSet<Artifact> protosInDirectDeps = ProtoCommon.computeProtosInDirectDeps(ruleContext);
 
-    NestedSet<Artifact> exportedProtos = ProtoCommon.computeExportedProtos(ruleContext);
+    NestedSet<Artifact> protosInExports = ProtoCommon.computeProtosInExportedDeps(ruleContext);
 
     String protoSourceRoot = ProtoCommon.getProtoSourceRoot(ruleContext);
-    NestedSet<String> strictImportableProtoSourceRoots =
-        ProtoCommon.computeStrictImportableProtoSourceRoots(ruleContext, protoSourceRoot);
+    NestedSet<String> directProtoSourceRoots =
+        ProtoCommon.getProtoSourceRootsOfDirectDependencies(ruleContext, protoSourceRoot);
     NestedSet<String> exportedProtoSourceRoots =
-        ProtoCommon.computeExportedProtoSourceRoots(ruleContext, protoSourceRoot);
-    NestedSet<String> transitiveProtoSourceRoots =
-        ProtoCommon.computeTransitiveProtoSourceRoots(ruleContext, protoSourceRoot);
+        ProtoCommon.getProtoSourceRootsOfExportedDependencies(ruleContext, protoSourceRoot);
+    NestedSet<String> protoPathFlags =
+        ProtoCommon.collectTransitiveProtoPathFlags(ruleContext, protoSourceRoot);
 
-    Artifact directDescriptorSet =
+    Artifact descriptorSetOutput =
         ruleContext.getGenfilesArtifact(
             ruleContext.getLabel().getName() + "-descriptor-set.proto.bin");
     NestedSet<Artifact> dependenciesDescriptorSets =
         ProtoCommon.collectDependenciesDescriptorSets(ruleContext);
     NestedSet<Artifact> transitiveDescriptorSetOutput =
-        NestedSetBuilder.fromNestedSet(dependenciesDescriptorSets).add(directDescriptorSet).build();
+        NestedSetBuilder.fromNestedSet(dependenciesDescriptorSets).add(descriptorSetOutput).build();
 
     ProtoSourcesProvider protoProvider =
         ProtoSourcesProvider.create(
-            protoSources,
-            protoSourceRoot,
             transitiveProtoSources,
-            transitiveProtoSourceRoots,
-            strictImportableProtosForDependents,
-            strictImportableProtos,
-            strictImportableProtoSourceRoots,
-            exportedProtos,
-            exportedProtoSourceRoots,
-            directDescriptorSet,
-            transitiveDescriptorSetOutput);
+            protoSources,
+            checkDepsProtoSources,
+            protosInDirectDeps,
+            descriptorSetOutput,
+            transitiveDescriptorSetOutput,
+            protoSourceRoot,
+            directProtoSourceRoots,
+            protoPathFlags,
+            protosInExports,
+            exportedProtoSourceRoots);
 
     ProtoCompileActionBuilder.writeDescriptorSet(
         ruleContext,
-        directDescriptorSet.getExecPathString(),
+        descriptorSetOutput.getExecPathString(),
         protoProvider,
-        directDescriptorSet,
+        descriptorSetOutput,
         Services.ALLOW,
         dependenciesDescriptorSets);
 
     Runfiles dataRunfiles =
         ProtoCommon.createDataRunfilesProvider(transitiveProtoSources, ruleContext)
-            .addArtifact(directDescriptorSet)
+            .addArtifact(descriptorSetOutput)
             .build();
 
     return new RuleConfiguredTargetBuilder(ruleContext)
-        .setFilesToBuild(NestedSetBuilder.create(STABLE_ORDER, directDescriptorSet))
+        .setFilesToBuild(NestedSetBuilder.create(STABLE_ORDER, descriptorSetOutput))
         .addProvider(RunfilesProvider.withData(Runfiles.EMPTY, dataRunfiles))
         .addProvider(ProtoSourcesProvider.class, protoProvider)
         .addSkylarkTransitiveInfo(ProtoSourcesProvider.SKYLARK_NAME, protoProvider)
