@@ -22,6 +22,7 @@ import org.hibernate.id.UUIDGenerator;
 import org.hibernate.id.UUIDHexGenerator;
 import org.hibernate.id.enhanced.SequenceStyleGenerator;
 import org.hibernate.id.enhanced.TableGenerator;
+import org.hibernate.id.factory.internal.DefaultIdentifierGeneratorFactory;
 import org.hibernate.id.factory.spi.MutableIdentifierGeneratorFactory;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
@@ -39,18 +40,21 @@ import org.hibernate.type.Type;
 final class QuarkusSimplifiedIdentifierGeneratorFactory
         implements MutableIdentifierGeneratorFactory, ServiceRegistryAwareService {
 
-    private static final CoreMessageLogger LOG = CoreLogging.messageLogger(QuarkusSimplifiedIdentifierGeneratorFactory.class);
+    private static final CoreMessageLogger LOG = CoreLogging.messageLogger(DefaultIdentifierGeneratorFactory.class);
 
     private ServiceRegistry serviceRegistry;
     private Dialect dialect;
 
-    private ConcurrentHashMap<String, Class> generatorStrategyToClassNameMap = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<String, Class> generatorStrategyToClassNameMap = new ConcurrentHashMap<String, Class>();
 
+    /**
+     * Constructs a new DefaultIdentifierGeneratorFactory.
+     */
     public QuarkusSimplifiedIdentifierGeneratorFactory() {
         register("uuid2", UUIDGenerator.class);
-        register("guid", GUIDGenerator.class);
-        register("uuid", UUIDHexGenerator.class);
-        register("uuid.hex", UUIDHexGenerator.class);
+        register("guid", GUIDGenerator.class); // can be done with UUIDGenerator + strategy
+        register("uuid", UUIDHexGenerator.class); // "deprecated" for new use
+        register("uuid.hex", UUIDHexGenerator.class); // uuid.hex is deprecated
         register("assigned", Assigned.class);
         register("identity", IdentityGenerator.class);
         register("select", SelectGenerator.class);
@@ -81,19 +85,17 @@ final class QuarkusSimplifiedIdentifierGeneratorFactory
         //This is all commented out in the original code in Hibernate ORM as well
     }
 
-    @Override
     public IdentifierGenerator createIdentifierGenerator(String strategy, Type type, Properties config) {
         try {
             Class clazz = getIdentifierGeneratorClass(strategy);
-            IdentifierGenerator identifierGenerator = (IdentifierGenerator) clazz.getDeclaredConstructor()
-                    .newInstance();
+            IdentifierGenerator identifierGenerator = (IdentifierGenerator) clazz.getDeclaredConstructor().newInstance();
             if (identifierGenerator instanceof Configurable) {
                 ((Configurable) identifierGenerator).configure(type, config, serviceRegistry);
             }
             return identifierGenerator;
         } catch (Exception e) {
             final String entityName = config.getProperty(IdentifierGenerator.ENTITY_NAME);
-            throw new MappingException("Could not instantiate id generator [entity-name=" + entityName + "]", e);
+            throw new MappingException(String.format("Could not instantiate id generator [entity-name=%s]", entityName), e);
         }
     }
 
@@ -111,7 +113,7 @@ final class QuarkusSimplifiedIdentifierGeneratorFactory
                 generatorClass = cls.classForName(resolvedStrategy);
             }
         } catch (ClassLoadingException e) {
-            throw new MappingException("Could not interpret id generator strategy [" + strategy + "]");
+            throw new MappingException(String.format("Could not interpret id generator strategy [%s]", strategy));
         }
         return generatorClass;
     }
