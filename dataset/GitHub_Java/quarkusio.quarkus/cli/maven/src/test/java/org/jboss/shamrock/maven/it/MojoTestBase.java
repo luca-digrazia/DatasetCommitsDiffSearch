@@ -29,13 +29,9 @@ public class MojoTestBase {
     @BeforeAll
     public static void init() {
         VARIABLES = ImmutableMap.of(
-                "@project.groupId@", MojoUtils.SHAMROCK_GROUP_ID,
-                "@project.artifactId@", MojoUtils.SHAMROCK_PLUGIN_ARTIFACT_ID,
-                "@project.version@", MojoUtils.SHAMROCK_VERSION);
-    }
-
-    static File initProject(String name) {
-        return initProject(name, name);
+                "@project.groupId@", MojoUtils.getPluginGroupId(),
+                "@project.artifactId@", MojoUtils.getPluginArtifactId(),
+                "@project.version@", MojoUtils.getPluginVersion());
     }
 
     static File initEmptyProject(String name) {
@@ -89,18 +85,18 @@ public class MojoTestBase {
     }
 
     public static void installPluginToLocalRepository(File local) {
-        File repo = new File(local, MojoUtils.SHAMROCK_GROUP_ID.replace(".", "/") + "/"
-                                    + MojoUtils.SHAMROCK_PLUGIN_ARTIFACT_ID + "/" + MojoUtils.SHAMROCK_VERSION);
+        File repo = new File(local, MojoUtils.getPluginGroupId().replace(".", "/") + "/"
+                                    + MojoUtils.getPluginArtifactId() + "/" + MojoUtils.getPluginVersion());
         if (!repo.isDirectory()) {
             boolean mkdirs = repo.mkdirs();
             Logger.getLogger(MojoTestBase.class.getName())
                     .log(Level.FINE, repo.getAbsolutePath() + " created? " + mkdirs);
         }
 
-        File plugin = new File("target", MojoUtils.SHAMROCK_PLUGIN_ARTIFACT_ID + "-" + MojoUtils.SHAMROCK_VERSION + ".jar");
+        File plugin = new File("target", MojoUtils.getPluginArtifactId() + "-" + MojoUtils.getPluginVersion() + ".jar");
         if (!plugin.isFile()) {
             File[] files = new File("target").listFiles(
-                    file -> file.getName().startsWith(MojoUtils.SHAMROCK_PLUGIN_ARTIFACT_ID) && file.getName().endsWith(".jar"));
+                    file -> file.getName().startsWith(MojoUtils.getPluginArtifactId()) && file.getName().endsWith(".jar"));
             if (files != null && files.length != 0) {
                 plugin = files[0];
             }
@@ -108,39 +104,11 @@ public class MojoTestBase {
 
         try {
             FileUtils.copyFileToDirectory(plugin, repo);
-            String installedPomName = MojoUtils.SHAMROCK_PLUGIN_ARTIFACT_ID + "-" + MojoUtils.SHAMROCK_VERSION + ".pom";
+            String installedPomName = MojoUtils.getPluginArtifactId() + "-" + MojoUtils.getPluginVersion() + ".pom";
             FileUtils.copyFile(new File("pom.xml"), new File(repo, installedPomName));
         } catch (IOException e) {
             throw new RuntimeException("Cannot copy the plugin jar, or the pom file, to the local repository", e);
         }
-    }
-
-    static void installJarToLocalRepository(String local, String name, File jar) {
-        File repo = new File(local, "org/acme/" + name + "/1.0");
-        if (!repo.isDirectory()) {
-            boolean mkdirs = repo.mkdirs();
-            Logger.getLogger(MojoTestBase.class.getName())
-                    .log(Level.FINE, repo.getAbsolutePath() + " created? " + mkdirs);
-        }
-
-        try {
-            FileUtils.copyFileToDirectory(jar, repo);
-            String installedPomName = name + "-1.0.pom";
-            FileUtils.write(new File(repo, installedPomName), "<project>\n" +
-                    "  <modelVersion>4.0.0</modelVersion>\n" +
-                    "  <groupId>org.acme</groupId>\n" +
-                    "  <artifactId>" + name + "</artifactId>\n" +
-                    "  <version>1.0</version>\n" +
-                    "</project>", "UTF-8");
-        } catch (IOException e) {
-            throw new RuntimeException("Cannot copy the jar, or the pom file, to the local repository", e);
-        }
-    }
-
-    static void prepareProject(File testDir) throws IOException {
-        File pom = new File(testDir, "pom.xml");
-        assertThat(pom).isFile();
-        filter(pom, VARIABLES);
     }
 
     static void filter(File input, Map<String, String> variables) throws IOException {
