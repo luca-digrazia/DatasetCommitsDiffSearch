@@ -144,6 +144,10 @@ public class MemoizingEvaluatorTest {
     return true;
   }
 
+  protected boolean rootCausesStored() {
+    return true;
+  }
+
   protected boolean cyclesDetected() {
     return true;
   }
@@ -280,7 +284,9 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate("otherValue1").setConstantValue(new StringValue("otherVal1"));
 
     EvaluationResult<SkyValue> result = tester.eval(false, "top");
-    assertThatEvaluationResult(result).hasSingletonErrorThat(toSkyKey("top"));
+    assertThat(result.hasError()).isTrue();
+    assertThat(result.getError().getRootCauses().toList()).containsExactly(toSkyKey("badValue"));
+    assertThat(result.keyNames()).isEmpty();
   }
 
   @Test
@@ -568,15 +574,14 @@ public class MemoizingEvaluatorTest {
     for (int i = 0; i < 2; i++) {
       initializeReporter();
       EvaluationResult<StringValue> result = tester.eval(false, "top");
-      assertThatEvaluationResult(result)
-          .hasSingletonErrorThat(topKey)
-          .hasExceptionThat()
+      assertThat(result.hasError()).isTrue();
+      if (rootCausesStored()) {
+        assertThat(result.getError(topKey).getRootCauses().toList()).containsExactly(topKey);
+      }
+      assertThat(result.getError(topKey).getException())
           .hasMessageThat()
           .isEqualTo(topKey.toString());
-      assertThatEvaluationResult(result)
-          .hasSingletonErrorThat(topKey)
-          .hasExceptionThat()
-          .isInstanceOf(SomeErrorException.class);
+      assertThat(result.getError(topKey).getException()).isInstanceOf(SomeErrorException.class);
       if (i == 0 || eventsStored()) {
         assertThatEvents(eventCollector).containsExactly("warn-dep");
       }
@@ -590,15 +595,14 @@ public class MemoizingEvaluatorTest {
     for (int i = 0; i < 2; i++) {
       initializeReporter();
       EvaluationResult<StringValue> result = tester.eval(false, "top");
-      assertThatEvaluationResult(result)
-          .hasSingletonErrorThat(topKey)
-          .hasExceptionThat()
+      assertThat(result.hasError()).isTrue();
+      if (rootCausesStored()) {
+        assertThat(result.getError(topKey).getRootCauses().toList()).containsExactly(topKey);
+      }
+      assertThat(result.getError(topKey).getException())
           .hasMessageThat()
           .isEqualTo(topKey.toString());
-      assertThatEvaluationResult(result)
-          .hasSingletonErrorThat(topKey)
-          .hasExceptionThat()
-          .isInstanceOf(SomeErrorException.class);
+      assertThat(result.getError(topKey).getException()).isInstanceOf(SomeErrorException.class);
       if (i == 0 || eventsStored()) {
         assertThatEvents(eventCollector).containsExactly("warning msg");
       }
@@ -612,15 +616,14 @@ public class MemoizingEvaluatorTest {
     for (int i = 0; i < 2; i++) {
       initializeReporter();
       EvaluationResult<StringValue> result = tester.eval(i == 0, "top");
-      assertThatEvaluationResult(result)
-          .hasSingletonErrorThat(topKey)
-          .hasExceptionThat()
+      assertThat(result.hasError()).isTrue();
+      if (rootCausesStored()) {
+        assertThat(result.getError(topKey).getRootCauses().toList()).containsExactly(topKey);
+      }
+      assertThat(result.getError(topKey).getException())
           .hasMessageThat()
           .isEqualTo(topKey.toString());
-      assertThatEvaluationResult(result)
-          .hasSingletonErrorThat(topKey)
-          .hasExceptionThat()
-          .isInstanceOf(SomeErrorException.class);
+      assertThat(result.getError(topKey).getException()).isInstanceOf(SomeErrorException.class);
       if (i == 0 || eventsStored()) {
         assertThatEvents(eventCollector).containsExactly("warning msg");
       }
@@ -761,11 +764,15 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(errorKey).setHasError(true);
     tester.getOrCreate(topKey).addDependency(errorKey).setComputedValue(CONCATENATE);
     EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/ true, topKey);
-    assertThatEvaluationResult(result).hasSingletonErrorThat(topKey);
+    assertThatEvaluationResult(result)
+        .hasErrorEntryForKeyThat(topKey)
+        .rootCauseOfExceptionIs(errorKey);
     tester.getOrCreate(topKey, /*markAsModified=*/ true);
     tester.invalidate();
     result = tester.eval(/*keepGoing=*/ false, topKey);
-    assertThatEvaluationResult(result).hasSingletonErrorThat(topKey);
+    assertThatEvaluationResult(result)
+        .hasErrorEntryForKeyThat(topKey)
+        .rootCauseOfExceptionIs(errorKey);
   }
 
   @Test
@@ -1367,6 +1374,7 @@ public class MemoizingEvaluatorTest {
       assertThat(errorInfo.getException())
           .hasMessageThat()
           .isEqualTo(NODE_TYPE.getName() + ":errorKey");
+      assertThat(errorInfo.getRootCauseOfException()).isEqualTo(errorKey);
     } else {
       // When errors are not stored alongside values, transient errors that are recovered from do
       // not make the parent transient
@@ -1751,7 +1759,7 @@ public class MemoizingEvaluatorTest {
     // slowKey starts -> errorKey finishes, written to graph -> slowKey finishes & (Visitor aborts)
     // -> topKey builds.
     EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/false, topKey);
-    assertThatEvaluationResult(result).hasSingletonErrorThat(topKey);
+    assertThat(result.getError().getRootCauses().toList()).containsExactly(errorKey);
     // Make sure midKey didn't finish building.
     assertThat(tester.getExistingValue(midKey)).isNull();
     // Give slowKey a nice ordinary builder.
@@ -1791,7 +1799,7 @@ public class MemoizingEvaluatorTest {
     // slowKey starts -> errorKey finishes, written to graph -> slowKey finishes & (Visitor aborts)
     // -> topKey builds.
     EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/false, topKey);
-    assertThatEvaluationResult(result).hasSingletonErrorThat(topKey);
+    assertThat(result.getError().getRootCauses().toList()).containsExactly(errorKey);
     // Make sure midKey didn't finish building.
     assertThat(tester.getExistingValue(midKey)).isNull();
     // Give slowKey a nice ordinary builder.
@@ -1827,7 +1835,9 @@ public class MemoizingEvaluatorTest {
     } else {
       result = tester.eval(/*keepGoing=*/ false, slowFailKey, successKey);
     }
-    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(slowFailKey);
+    assertThatEvaluationResult(result)
+        .hasErrorEntryForKeyThat(slowFailKey)
+        .rootCauseOfExceptionIs(slowFailKey);
     assertThat(result.values()).containsExactly(new StringValue("yippee"));
   }
 
@@ -1869,7 +1879,7 @@ public class MemoizingEvaluatorTest {
     // slowKey starts -> errorKey finishes, written to graph -> slowKey finishes & (Visitor aborts)
     // -> topKey builds.
     EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/false, topKey);
-    assertThatEvaluationResult(result).hasSingletonErrorThat(topKey);
+    assertThat(result.getError().getRootCauses().toList()).containsExactly(errorKey);
     // Make sure midKey didn't finish building.
     assertThat(tester.getExistingValue(midKey)).isNull();
     // Give slowKey a nice ordinary builder.
@@ -1931,10 +1941,13 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(parentKey).addErrorDependency(errorKey, new StringValue("recovered"))
         .setHasError(true);
     // Prime the graph by putting the error value in it beforehand.
-    assertThat(tester.evalAndGetError(/*keepGoing=*/ true, errorKey)).isNotNull();
+    assertThat(tester.evalAndGetError(/*keepGoing=*/ true, errorKey).getRootCauses().toList())
+        .containsExactly(errorKey);
+    EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/false, parentKey);
     // Request the parent.
-    EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/ false, parentKey);
-    assertThatEvaluationResult(result).hasSingletonErrorThat(parentKey);
+    assertThat(result.getError(parentKey).getRootCauses().toList())
+        .containsExactly(parentKey)
+        .inOrder();
     // Change the error value to no longer throw.
     tester.set(errorKey, new StringValue("reformed")).setHasError(false);
     tester.getOrCreate(parentKey, /*markAsModified=*/false).setHasError(false)
@@ -1970,11 +1983,15 @@ public class MemoizingEvaluatorTest {
     SkyKey topKey = GraphTester.toSkyKey("top");
     tester.getOrCreate(topKey).addDependency(leafKey).setHasError(true);
     // Build top -- it has an error.
-    tester.evalAndGetError(/*keepGoing=*/ true, topKey);
+    assertThat(tester.evalAndGetError(/*keepGoing=*/ true, topKey).getRootCauses().toList())
+        .containsExactly(topKey)
+        .inOrder();
     // Invalidate top via leaf, and rebuild.
     tester.set(leafKey, new StringValue("leaf2"));
     tester.invalidate();
-    tester.evalAndGetError(/*keepGoing=*/ true, topKey);
+    assertThat(tester.evalAndGetError(/*keepGoing=*/ true, topKey).getRootCauses().toList())
+        .containsExactly(topKey)
+        .inOrder();
   }
 
   /** Regression test for crash bug. */
@@ -2008,10 +2025,11 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(parentKey).addErrorDependency(midKey, new StringValue("don't use this"))
         .setComputedValue(COPY);
     // Prime the graph by evaluating the mid-level value. It shouldn't be stored in the graph
-    // because it was only called during the bubbling-up phase.
-    EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/ false, midKey);
+    // because
+    // it was only called during the bubbling-up phase.
+    EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/false, midKey);
     assertThat(result.get(midKey)).isNull();
-    assertThatEvaluationResult(result).hasSingletonErrorThat(midKey);
+    assertThat(result.getError().getRootCauses().toList()).containsExactly(errorKey);
     // In a keepGoing build, midKey should be re-evaluated.
     assertThat(((StringValue) tester.evalAndGet(/*keepGoing=*/ true, parentKey)).getValue())
         .isEqualTo("recovered");
@@ -2062,7 +2080,7 @@ public class MemoizingEvaluatorTest {
     // Assert that build fails and "error" really is in error.
     EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/false, topKey);
     assertThat(result.hasError()).isTrue();
-    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(topKey);
+    assertThat(result.getError(topKey).getRootCauses().toList()).containsExactly(errorKey);
 
     // Ensure that evaluation succeeds if errorKey does not throw an error.
     tester.getOrCreate(errorKey).setBuilder(null);
@@ -2108,10 +2126,16 @@ public class MemoizingEvaluatorTest {
             });
 
     EvaluationResult<SkyValue> evaluationResult = tester.eval(/*keepGoing=*/ true, groupDepA, depC);
+    assertThat(evaluationResult.hasError()).isTrue();
     assertThat(((SkyKeyValue) evaluationResult.get(groupDepA)).key).isEqualTo(depC);
-    assertThatEvaluationResult(evaluationResult).hasErrorEntryForKeyThat(depC);
+    assertThat(evaluationResult.getError(depC).getRootCauses().toList())
+        .containsExactly(depC)
+        .inOrder();
     evaluationResult = tester.eval(/*keepGoing=*/false, topKey);
-    assertThatEvaluationResult(evaluationResult).hasErrorEntryForKeyThat(topKey);
+    assertThat(evaluationResult.hasError()).isTrue();
+    assertThat(evaluationResult.getError(topKey).getRootCauses().toList())
+        .containsExactly(topKey)
+        .inOrder();
 
     tester.set(groupDepA, new SkyKeyValue(groupDepB));
     tester.getOrCreate(depC, /*markAsModified=*/true);
@@ -2268,17 +2292,18 @@ public class MemoizingEvaluatorTest {
     delayTopSignaling.set(true);
     result = tester.eval(/*keepGoing=*/ false, top, otherTop);
     if (throwError) {
-      assertThatEvaluationResult(result).hasError();
+      assertThat(result.hasError()).isTrue();
       assertThat(result.keyNames()).isEmpty(); // No successfully evaluated values.
-      assertThatEvaluationResult(result).hasErrorEntryForKeyThat(top);
+      ErrorInfo errorInfo = result.getError(top);
+      assertThat(errorInfo.getRootCauses().toList()).containsExactly(firstKey);
       assertWithMessage(
               "on the incremental build, top's builder should have only been used in error "
                   + "bubbling")
           .that(numTopInvocations.get())
           .isEqualTo(3);
     } else {
-      assertThatEvaluationResult(result).hasEntryThat(top).isEqualTo(new StringValue("top"));
-      assertThatEvaluationResult(result).hasNoError();
+      assertThat(result.get(top)).isEqualTo(new StringValue("top"));
+      assertThat(result.hasError()).isFalse();
       assertWithMessage(
               "on the incremental build, top's builder should have only been executed once in "
                   + "normal evaluation")
@@ -3492,7 +3517,11 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(top, /*markAsModified=*/false).setHasError(true);
     tester.invalidate();
     EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/false, top);
-    assertThatEvaluationResult(result).hasSingletonErrorThat(top);
+    assertWithMessage("value should not have completed evaluation").that(result.get(top)).isNull();
+    assertWithMessage(
+            "The error thrown by leaf should have been swallowed by the error thrown by top")
+        .that(result.getError().getRootCauses().toList())
+        .containsExactly(top);
   }
 
   @Test
@@ -3515,7 +3544,11 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(top, /*markAsModified=*/false).setHasError(true);
     tester.invalidate();
     EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/false, top);
-    assertThatEvaluationResult(result).hasSingletonErrorThat(top);
+    assertWithMessage("value should not have completed evaluation").that(result.get(top)).isNull();
+    assertWithMessage(
+            "The error thrown by leaf should have been swallowed by the error thrown by top")
+        .that(result.getError().getRootCauses().toList())
+        .containsExactly(top);
   }
 
   @Test
@@ -3539,14 +3572,14 @@ public class MemoizingEvaluatorTest {
     SkyKey topKey = GraphTester.toSkyKey("top");
     tester.getOrCreate(topKey).addDependency(error).setComputedValue(COPY);
     EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/false, topKey);
-    assertThatEvaluationResult(result).hasSingletonErrorThat(topKey);
+    assertThat(result.getError(topKey).getRootCauses().toList()).containsExactly(error);
     tester.getOrCreate(error).setHasError(false);
     StringValue val = new StringValue("reformed");
     tester.set(error, val);
     tester.invalidate();
     result = tester.eval(/*keepGoing=*/false, topKey);
-    assertThatEvaluationResult(result).hasEntryThat(topKey).isEqualTo(val);
-    assertThatEvaluationResult(result).hasNoError();
+    assertThat(result.get(topKey)).isEqualTo(val);
+    assertThat(result.hasError()).isFalse();
   }
 
   /** Regression test for crash bug. */
@@ -3574,7 +3607,7 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(topKey).setBuilder(errorFunction);
     EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/false, topKey);
     tester.invalidateTransientErrors();
-    assertThatEvaluationResult(result).hasSingletonErrorThat(topKey);
+    assertThat(result.getError(topKey).getRootCauses().toList()).containsExactly(topKey);
     tester.getOrCreate(error).setHasTransientError(false);
     StringValue reformed = new StringValue("reformed");
     tester.set(error, reformed);
@@ -3586,8 +3619,8 @@ public class MemoizingEvaluatorTest {
     tester.invalidate();
     tester.invalidateTransientErrors();
     result = tester.eval(/*keepGoing=*/false, topKey);
-    assertThatEvaluationResult(result).hasEntryThat(topKey).isEqualTo(reformed);
-    assertThatEvaluationResult(result).hasNoError();
+    assertThat(result.get(topKey)).isEqualTo(reformed);
+    assertThat(result.hasError()).isFalse();
   }
 
   /**
@@ -3672,15 +3705,15 @@ public class MemoizingEvaluatorTest {
     };
     tester.getOrCreate(topKey).setBuilder(recoveryErrorFunction);
     EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/false, topKey);
-    assertThatEvaluationResult(result).hasSingletonErrorThat(topKey);
+    assertThat(result.getError(topKey).getRootCauses().toList()).containsExactly(topKey);
     tester.getOrCreate(error).setHasError(false);
     StringValue reformed = new StringValue("reformed");
     tester.set(error, reformed);
     tester.getOrCreate(topKey).setBuilder(null).addDependency(error).setComputedValue(COPY);
     tester.invalidate();
     result = tester.eval(/*keepGoing=*/false, topKey);
-    assertThatEvaluationResult(result).hasEntryThat(topKey).isEqualTo(reformed);
-    assertThatEvaluationResult(result).hasNoError();
+    assertThat(result.get(topKey)).isEqualTo(reformed);
+    assertThat(result.hasError()).isFalse();
   }
 
   /**
@@ -3696,11 +3729,13 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(midKey).addDependency(badKey).setComputedValue(CONCATENATE);
     tester.getOrCreate(badKey).setHasError(true);
     EvaluationResult<SkyValue> result = tester.eval(/*keepGoing=*/ false, topKey, midKey);
-    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(midKey);
+    assertThat(result.getError(midKey).getRootCauses().toList()).containsExactly(badKey);
     // Do it again with keepGoing.  We should also see an error for the top key this time.
     result = tester.eval(/*keepGoing=*/ true, topKey, midKey);
-    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(midKey);
-    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(topKey);
+    if (rootCausesStored()) {
+      assertThat(result.getError(midKey).getRootCauses().toList()).containsExactly(badKey);
+      assertThat(result.getError(topKey).getRootCauses().toList()).containsExactly(badKey);
+    }
   }
 
   @Test
@@ -3715,14 +3750,13 @@ public class MemoizingEvaluatorTest {
     // When the error value throws, the propagation will cause an interrupted exception in parent.
     EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/ false, parentKey);
     assertThat(result.keyNames()).isEmpty();
-    assertThatEvaluationResult(result).hasErrorMapThat().hasSize(1);
-    assertThatEvaluationResult(result).hasErrorMapThat().containsKey(parentKey);
+    Map.Entry<SkyKey, ErrorInfo> error = Iterables.getOnlyElement(result.errorMap().entrySet());
+    assertThat(error.getKey()).isEqualTo(parentKey);
+    assertThat(error.getValue().getRootCauses().toList()).containsExactly(errorKey);
     assertThat(Thread.interrupted()).isFalse();
     result = tester.eval(/*keepGoing=*/ true, parentKey);
-    assertThatEvaluationResult(result).hasNoError();
-    assertThatEvaluationResult(result)
-        .hasEntryThat(parentKey)
-        .isEqualTo(new StringValue("recovered"));
+    assertThat(result.errorMap()).isEmpty();
+    assertThat(result.get(parentKey).getValue()).isEqualTo("recovered");
   }
 
   /**
@@ -3774,13 +3808,21 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(midKey).addDependency(badKey).setComputedValue(CONCATENATE);
     tester.getOrCreate(badKey).setHasError(true);
     EvaluationResult<SkyValue> result = tester.eval(/*keepGoing=*/ false, topKey, midKey);
-    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(midKey);
+    assertThat(result.getError(midKey).getRootCauses().toList()).containsExactly(badKey);
     waitForSecondCall.set(true);
     result = tester.eval(/*keepGoing=*/ true, topKey, midKey);
     assertThat(firstThread.get()).isNotNull();
     assertThat(otherThreadWinning.getCount()).isEqualTo(0);
-    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(midKey);
-    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(topKey);
+    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(midKey).isNotNull();
+    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(topKey).isNotNull();
+    if (rootCausesStored()) {
+      assertThatEvaluationResult(result)
+          .hasErrorEntryForKeyThat(midKey)
+          .rootCauseOfExceptionIs(badKey);
+      assertThatEvaluationResult(result)
+          .hasErrorEntryForKeyThat(topKey)
+          .rootCauseOfExceptionIs(badKey);
+    }
   }
 
   @Test
@@ -3795,12 +3837,13 @@ public class MemoizingEvaluatorTest {
         .setComputedValue(CONCATENATE)
         .addDependency("after");
     EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/ false, parentKey);
-    assertThatEvaluationResult(result).hasSingletonErrorThat(parentKey);
+    assertThat(result.keyNames()).isEmpty();
+    Map.Entry<SkyKey, ErrorInfo> error = Iterables.getOnlyElement(result.errorMap().entrySet());
+    assertThat(error.getKey()).isEqualTo(parentKey);
+    assertThat(error.getValue().getRootCauses().toList()).containsExactly(errorKey);
     result = tester.eval(/*keepGoing=*/ true, parentKey);
-    assertThatEvaluationResult(result).hasNoError();
-    assertThatEvaluationResult(result)
-        .hasEntryThat(parentKey)
-        .isEqualTo(new StringValue("recoveredafter"));
+    assertThat(result.errorMap()).isEmpty();
+    assertThat(result.get(parentKey).getValue()).isEqualTo("recoveredafter");
   }
 
   @Test
@@ -3892,8 +3935,9 @@ public class MemoizingEvaluatorTest {
     EvaluationResult<StringValue> result =
         tester.eval(/*keepGoing=*/ false, errorKey, otherErrorKey);
 
-    // Then the result reports that an error occurred,
+    // Then the result reports that an error occurred because of errorKey,
     assertThat(result.hasError()).isTrue();
+    assertThat(result.getError().getRootCauseOfException()).isEqualTo(errorKey);
 
     // And no value is committed for otherErrorKey,
     assertThat(tester.driver.getExistingErrorForTesting(otherErrorKey)).isNull();
@@ -3927,7 +3971,8 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(newParent).addDependency(errorKey).setComputedValue(CONCATENATE);
     tester.invalidate();
     EvaluationResult<StringValue> result = tester.eval(/*keepGoing=*/false, newParent);
-    assertThatEvaluationResult(result).hasSingletonErrorThat(newParent);
+    ErrorInfo error = result.getError(newParent);
+    assertThat(error.getRootCauses().toList()).containsExactly(errorKey);
   }
 
   @Test
@@ -3954,11 +3999,14 @@ public class MemoizingEvaluatorTest {
     tester
         .getOrCreate(parent)
         .addDependency(child)
-        .setComputedValue(
-            (deps, env) -> {
-              parentEvaluated.incrementAndGet();
-              return new StringValue(val);
-            });
+        .setComputedValue(new ValueComputer() {
+          @Override
+          public SkyValue compute(Map<SkyKey, SkyValue> deps, Environment env)
+              throws InterruptedException {
+            parentEvaluated.incrementAndGet();
+            return new StringValue(val);
+          }
+        });
     assertStringValue(val, tester.evalAndGet( /*keepGoing=*/false, parent));
     assertThat(parentEvaluated.get()).isEqualTo(1);
     if (hasEvent) {
@@ -4161,11 +4209,13 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(errorKey).setHasTransientError(true);
     ErrorInfo errorInfo = tester.evalAndGetError(/*keepGoing=*/ true, errorKey);
     assertThat(errorInfo).isNotNull();
+    assertThat(errorInfo.getRootCauses().toList()).containsExactly(errorKey);
     // Re-evaluates to same thing when errors are invalidated
     tester.invalidateTransientErrors();
     errorInfo = tester.evalAndGetError(/*keepGoing=*/ true, errorKey);
     assertThat(errorInfo).isNotNull();
     StringValue value = new StringValue("reformed");
+    assertThat(errorInfo.getRootCauses().toList()).containsExactly(errorKey);
     tester.getOrCreate(errorKey, /*markAsModified=*/false).setHasTransientError(false)
         .setConstantValue(value);
     tester.invalidateTransientErrors();
@@ -4789,6 +4839,9 @@ public class MemoizingEvaluatorTest {
         .hasErrorEntryForKeyThat(topKey)
         .hasExceptionThat()
         .isNotNull();
+    assertThatEvaluationResult(result2)
+        .hasErrorEntryForKeyThat(topKey)
+        .rootCauseOfExceptionIs(errorKey);
   }
 
   @Test
@@ -5353,8 +5406,9 @@ public class MemoizingEvaluatorTest {
 
     public ErrorInfo evalAndGetError(boolean keepGoing, SkyKey key) throws InterruptedException {
       EvaluationResult<StringValue> evaluationResult = eval(keepGoing, key);
-      assertThatEvaluationResult(evaluationResult).hasErrorEntryForKeyThat(key);
-      return evaluationResult.getError(key);
+      ErrorInfo result = evaluationResult.getError(key);
+      assertWithMessage(evaluationResult.toString()).that(result).isNotNull();
+      return result;
     }
 
     public ErrorInfo evalAndGetError(boolean keepGoing, String key) throws InterruptedException {
