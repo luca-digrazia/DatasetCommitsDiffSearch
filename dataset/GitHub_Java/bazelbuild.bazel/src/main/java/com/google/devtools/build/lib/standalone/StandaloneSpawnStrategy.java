@@ -45,7 +45,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.util.SortedMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Strategy that uses subprocessing to execute a process.
@@ -53,21 +52,19 @@ import java.util.concurrent.atomic.AtomicInteger;
 @ExecutionStrategy(name = { "standalone", "local" }, contextType = SpawnActionContext.class)
 public class StandaloneSpawnStrategy implements SpawnActionContext {
   private final boolean verboseFailures;
-  private final ActionInputPrefetcher actionInputPrefetcher;
   private final LocalSpawnRunner localSpawnRunner;
-  private final AtomicInteger execCount = new AtomicInteger();
 
   public StandaloneSpawnStrategy(
       Path execRoot, ActionInputPrefetcher actionInputPrefetcher,
       LocalExecutionOptions localExecutionOptions, boolean verboseFailures, String productName,
       ResourceManager resourceManager) {
-    this.actionInputPrefetcher = actionInputPrefetcher;
     this.verboseFailures = verboseFailures;
     LocalEnvProvider localEnvProvider = OS.getCurrent() == OS.DARWIN
         ? new XCodeLocalEnvProvider()
         : LocalEnvProvider.UNMODIFIED;
     this.localSpawnRunner = new LocalSpawnRunner(
         execRoot,
+        actionInputPrefetcher,
         localExecutionOptions,
         resourceManager,
         productName,
@@ -83,20 +80,6 @@ public class StandaloneSpawnStrategy implements SpawnActionContext {
     final int timeoutSeconds = Spawns.getTimeoutSeconds(spawn);
     final EventBus eventBus = actionExecutionContext.getEventBus();
     SpawnExecutionPolicy policy = new SpawnExecutionPolicy() {
-      private final int id = execCount.incrementAndGet();
-
-      @Override
-      public int getId() {
-        return id;
-      }
-
-      @Override
-      public void prefetchInputs(Iterable<ActionInput> inputs) throws IOException {
-        if (Spawns.shouldPrefetchInputsForLocalExecution(spawn)) {
-          actionInputPrefetcher.prefetchFiles(inputs);
-        }
-      }
-
       @Override
       public ActionInputFileCache getActionInputFileCache() {
         return actionExecutionContext.getActionInputFileCache();
@@ -133,10 +116,12 @@ public class StandaloneSpawnStrategy implements SpawnActionContext {
       }
 
       @Override
-      public void report(ProgressStatus state, String name) {
+      public void report(ProgressStatus state) {
         switch (state) {
           case EXECUTING:
-            eventBus.post(ActionStatusMessage.runningStrategy(spawn.getResourceOwner(), name));
+            String strategyName = "local";
+            eventBus.post(
+                ActionStatusMessage.runningStrategy(spawn.getResourceOwner(), strategyName));
             break;
           case SCHEDULING:
             eventBus.post(ActionStatusMessage.schedulingStrategy(spawn.getResourceOwner()));

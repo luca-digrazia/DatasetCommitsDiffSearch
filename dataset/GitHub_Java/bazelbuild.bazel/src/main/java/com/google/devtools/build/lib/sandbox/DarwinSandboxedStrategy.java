@@ -33,12 +33,9 @@ final class DarwinSandboxedStrategy extends SandboxStrategy {
       BuildRequest buildRequest,
       Path sandboxBase,
       boolean verboseFailures,
-      String productName,
-      int timeoutGraceSeconds)
-      throws IOException {
+      String productName) throws IOException {
     super(
         verboseFailures,
-        new DarwinSandboxedSpawnRunner(
-            cmdEnv, buildRequest, sandboxBase, productName, timeoutGraceSeconds));
+        new DarwinSandboxedSpawnRunner(cmdEnv, buildRequest, sandboxBase, productName));
   }
 }

@@ -35,25 +35,18 @@ public final class LinuxSandboxedStrategy extends SandboxStrategy {
       Path sandboxBase,
       boolean verboseFailures,
       Path inaccessibleHelperFile,
-      Path inaccessibleHelperDir,
-      int timeoutGraceSeconds) {
+      Path inaccessibleHelperDir) {
     super(
         verboseFailures,
         new LinuxSandboxedSpawnRunner(
-            cmdEnv,
-            buildRequest,
-            sandboxBase,
-            inaccessibleHelperFile,
-            inaccessibleHelperDir,
-            timeoutGraceSeconds));
+            cmdEnv, buildRequest, sandboxBase, inaccessibleHelperFile, inaccessibleHelperDir));
   }
 
   static LinuxSandboxedStrategy create(
       CommandEnvironment cmdEnv,
       BuildRequest buildRequest,
       Path sandboxBase,
-      boolean verboseFailures,
-      int timeoutGraceSeconds)
+      boolean verboseFailures)
       throws IOException {
     Path inaccessibleHelperFile = sandboxBase.getRelative("inaccessibleHelperFile");
     FileSystemUtils.touchFile(inaccessibleHelperFile);
@@ -73,7 +66,6 @@ public final class LinuxSandboxedStrategy extends SandboxStrategy {
         sandboxBase,
         verboseFailures,
         inaccessibleHelperFile,
-        inaccessibleHelperDir,
-        timeoutGraceSeconds);
+        inaccessibleHelperDir);
   }
 }
