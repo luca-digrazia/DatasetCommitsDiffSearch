@@ -14,11 +14,10 @@ public class InterceptedBeanMetadataProvider implements InjectableReferenceProvi
 
     @Override
     public Contextual<?> get(CreationalContext<Contextual<?>> creationalContext) {
-        // First attempt to obtain the creational context of the interceptor bean and then the creational context of the intercepted bean
         CreationalContextImpl<?> parent = unwrap(creationalContext).getParent();
         if (parent != null) {
-            parent = parent.getParent();
-            return parent != null ? parent.getContextual() : null;
+            // Intercepted bean creational context
+            return parent.getContextual();
         }
         return null;
     }
