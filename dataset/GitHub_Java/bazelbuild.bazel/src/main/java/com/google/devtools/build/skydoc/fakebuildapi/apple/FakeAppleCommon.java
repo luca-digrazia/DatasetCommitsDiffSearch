@@ -37,7 +37,6 @@ import com.google.devtools.build.skydoc.fakebuildapi.FakeStructApi;
 import com.google.devtools.build.skydoc.fakebuildapi.apple.FakeAppleStaticLibraryInfo.FakeAppleStaticLibraryInfoProvider;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.StarlarkInt;
 import net.starlark.java.eval.StarlarkThread;
 
 /** Fake implementation of {@link AppleCommonApi}. */
@@ -125,7 +124,6 @@ public class FakeAppleCommon
       StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
       Sequence<?> extraLinkopts,
       Sequence<?> extraLinkInputs,
-      StarlarkInt stamp,
       StarlarkThread thread) {
     return new FakeStructApi();
   }
