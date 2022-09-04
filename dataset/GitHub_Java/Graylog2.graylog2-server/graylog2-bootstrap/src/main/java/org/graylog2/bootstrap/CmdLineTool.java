@@ -47,7 +47,6 @@ import org.graylog2.plugin.Plugin;
 import org.graylog2.plugin.PluginConfigBean;
 import org.graylog2.plugin.PluginLoaderConfig;
 import org.graylog2.plugin.PluginModule;
-import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.Version;
 import org.graylog2.plugin.system.NodeIdPersistenceException;
@@ -65,7 +64,6 @@ import org.slf4j.bridge.SLF4JBridgeHandler;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -222,15 +220,11 @@ public abstract class CmdLineTool implements Runnable {
 
     private PluginBindings installPluginConfigAndBindings(String pluginPath) {
         final Set<Plugin> plugins = loadPlugins(pluginPath);
-        final PluginBindings pluginBindings = new PluginBindings(plugins, capabilities());
+        final PluginBindings pluginBindings = new PluginBindings(plugins);
         for (final Plugin plugin : plugins) {
-            if(capabilities().containsAll(plugin.metadata().getRequiredCapabilities())) {
-                for (final PluginModule pluginModule : plugin.modules()) {
-                    for (final PluginConfigBean configBean : pluginModule.getConfigBeans()) {
-                        jadConfig.addConfigurationBean(configBean);
-                    }
-                }
-            }
+            for (final PluginModule pluginModule : plugin.modules())
+                for (final PluginConfigBean configBean : pluginModule.getConfigBeans())
+                    jadConfig.addConfigurationBean(configBean);
         }
         return pluginBindings;
     }
@@ -364,9 +358,5 @@ public abstract class CmdLineTool implements Runnable {
                 LOG.error("Guice error: {}", message.getMessage());
             }
         }
-    }
-
-    protected Set<ServerStatus.Capability> capabilities() {
-        return Collections.emptySet();
     }
 }
