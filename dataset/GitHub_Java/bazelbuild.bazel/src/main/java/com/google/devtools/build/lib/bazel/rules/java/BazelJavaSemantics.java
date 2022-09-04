@@ -177,11 +177,10 @@ public class BazelJavaSemantics implements JavaSemantics {
       }
       mainClass = JavaCommon.determinePrimaryClass(ruleContext, sources);
       if (mainClass == null) {
-        ruleContext.ruleError(
-            String.format(
-                "main_class was not provided and cannot be inferred: source path doesn't include"
-                    + " a known root (%s)",
-                Joiner.on(", ").join(JavaUtil.KNOWN_SOURCE_ROOTS)));
+        ruleContext.ruleError("cannot determine main class for launching "
+                  + "(found neither a source file '" + ruleContext.getTarget().getName()
+                  + ".java', nor a main_class attribute, and package name "
+                  + "doesn't include 'java' or 'javatests')");
       }
     }
   }
