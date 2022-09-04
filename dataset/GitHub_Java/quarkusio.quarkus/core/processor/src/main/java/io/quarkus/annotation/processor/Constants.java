@@ -30,6 +30,7 @@ final public class Constants {
     public static final String DEPLOYMENT = "deployment";
 
     public static final Pattern CLASS_NAME_PATTERN = Pattern.compile("^.+[\\.$](\\w+)$");
+    public static final Pattern CONFIG_ROOT_PATTERN = Pattern.compile("^(\\w+)Config(uration)?");
     public static final Pattern PKG_PATTERN = Pattern.compile("^io\\.quarkus\\.(\\w+)\\.?(\\w+)?\\.?(\\w+)?");
 
     public static final String INSTANCE_SYM = "__instance";
@@ -90,7 +91,7 @@ final public class Constants {
             "\n" +
             "You can also provide duration values starting with a number.\n" +
             "In this case, if the value consists only of a number, the converter treats the value as seconds.\n" +
-            "Otherwise, `PT` is implicitly prepended to the value to obtain a standard `java.time.Duration` format.\n" +
+            "Otherwise, `PT` is implicitly appended to the value to obtain a standard `java.time.Duration` format.\n" +
             "====\n";
 
     public static final String MEMORY_SIZE_FORMAT_NOTE = "\n[NOTE]" +
