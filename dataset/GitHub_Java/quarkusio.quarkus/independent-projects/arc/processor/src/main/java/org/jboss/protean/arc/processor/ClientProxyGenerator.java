@@ -204,8 +204,7 @@ public class ClientProxyGenerator extends AbstractGenerator {
             MethodInfo producerMethod = bean.getTarget().get().asMethod();
             Map<TypeVariable, Type> resolved = Collections.emptyMap();
             ClassInfo returnTypeClass = bean.getDeployment().getIndex().getClassByName(producerMethod.returnType().name());
-            if (!returnTypeClass.typeParameters().isEmpty() && !Modifier.isInterface(returnTypeClass.flags())) {
-                // Build the resolved map iff the return type is a parameterized class
+            if (!returnTypeClass.typeParameters().isEmpty()) {
                 resolved = Types.buildResolvedMap(producerMethod.returnType().asParameterizedType().arguments(), returnTypeClass.typeParameters(),
                         Collections.emptyMap());
             }

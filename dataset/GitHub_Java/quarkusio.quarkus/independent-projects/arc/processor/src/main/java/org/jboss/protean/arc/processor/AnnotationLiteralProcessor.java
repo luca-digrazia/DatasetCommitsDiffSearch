@@ -96,7 +96,7 @@ class AnnotationLiteralProcessor {
                     .newInstance(MethodDescriptor.ofConstructor(literal.className,
                             literal.constructorParams.stream().map(m -> m.returnType().name().toString()).toArray()), constructorParams);
         } else {
-            String literalClassName = AnnotationLiteralGenerator.generatedLocalName(targetPackage, DotNames.simpleName(annotationClass),
+            String literalClassName = AnnotationLiteralGenerator.generatedLocalName(targetPackage, DotNames.simpleName(annotationClass.name()),
                     Hashes.sha1(annotationInstance.toString()));
             AnnotationLiteralGenerator.createAnnotationLiteral(classOutput, annotationClass, annotationInstance, literalClassName);
             return bytecode.newInstance(MethodDescriptor.ofConstructor(literalClassName));
