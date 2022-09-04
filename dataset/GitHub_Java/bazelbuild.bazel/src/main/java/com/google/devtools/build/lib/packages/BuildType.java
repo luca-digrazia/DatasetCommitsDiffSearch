@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.packages.Type.ListType;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.Printer.BasePrinter;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
 import java.util.ArrayList;
@@ -324,7 +325,7 @@ public final class BuildType {
         convertedFrom.computeIfAbsent(label, k -> new ArrayList<Object>());
         convertedFrom.get(label).add(original);
       }
-      Printer errorMessage = new Printer();
+      BasePrinter errorMessage = Printer.getPrinter();
       errorMessage.append("duplicate labels");
       if (what != null) {
         errorMessage.append(" in ").append(what.toString());
