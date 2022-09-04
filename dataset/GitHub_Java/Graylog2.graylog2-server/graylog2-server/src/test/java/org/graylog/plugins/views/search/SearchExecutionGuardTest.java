@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog.plugins.views.search;
 
@@ -21,7 +21,6 @@ import org.graylog.plugins.views.search.engine.BackendQuery;
 import org.graylog.plugins.views.search.errors.MissingCapabilitiesException;
 import org.graylog.plugins.views.search.filter.OrFilter;
 import org.graylog.plugins.views.search.filter.StreamFilter;
-import org.graylog.plugins.views.search.searchtypes.events.EventList;
 import org.graylog.plugins.views.search.views.PluginMetadataSummary;
 import org.graylog2.plugin.PluginMetaData;
 import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
@@ -30,6 +29,7 @@ import org.graylog2.shared.rest.exceptions.MissingStreamPermissionException;
 import org.junit.Before;
 import org.junit.Test;
 
+import javax.ws.rs.ForbiddenException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -115,13 +115,6 @@ public class SearchExecutionGuardTest {
         final Query query = Query.builder()
                 .id("")
                 .timerange(mock(TimeRange.class))
-                .searchTypes(
-                        ImmutableSet.of(
-                                EventList.builder()
-                                        .id("event-list")
-                                        .streams(ImmutableSet.copyOf(streamIds))
-                                        .build())
-                )
                 .query(new BackendQuery.Fallback())
                 .filter(OrFilter.or(filters))
                 .build();
