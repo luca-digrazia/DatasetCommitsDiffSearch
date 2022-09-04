@@ -15,36 +15,40 @@
  */
 package org.androidannotations.holder;
 
-import static com.helger.jcodemodel.JExpr._this;
-import static com.helger.jcodemodel.JExpr.cast;
-import static com.helger.jcodemodel.JExpr.invoke;
-import static com.helger.jcodemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JExpr._this;
+import static com.sun.codemodel.JExpr.cast;
+import static com.sun.codemodel.JExpr.invoke;
+import static com.sun.codemodel.JMod.PUBLIC;
 
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 
+import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.CanonicalNameConstants;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JFieldRef;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldRef;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JVar;
 
 public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponentWithViewSupportHolder> implements HasPreferences {
+
+	private APTCodeModelHelper codeModelHelper;
 
 	protected JBlock addPreferencesFromResourceBlock;
 
 	private boolean usingSupportV7Preference = false;
-	private AbstractJClass basePreferenceClass;
+	private JClass basePreferenceClass;
 
 	public PreferencesDelegate(EComponentWithViewSupportHolder holder) {
 		super(holder);
+		codeModelHelper = new APTCodeModelHelper(holder.getEnvironment());
 		Elements elementUtils = holder.getEnvironment().getProcessingEnvironment().getElementUtils();
 		Types typeUtils = holder.getEnvironment().getProcessingEnvironment().getTypeUtils();
 
@@ -86,12 +90,12 @@ public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponent
 	}
 
 	@Override
-	public void assignFindPreferenceByKey(JFieldRef idRef, AbstractJClass preferenceClass, JFieldRef fieldRef) {
-		String idRefString = idRef.name();
+	public void assignFindPreferenceByKey(JFieldRef idRef, JClass preferenceClass, JFieldRef fieldRef) {
+		String idRefString = codeModelHelper.getIdStringFromIdFieldRef(idRef);
 		FoundPreferenceHolder foundViewHolder = (FoundPreferenceHolder) holder.foundHolders.get(idRefString);
 
 		JBlock block = getAddPreferencesFromResourceBlock();
-		IJExpression assignExpression;
+		JExpression assignExpression;
 
 		if (foundViewHolder != null) {
 			assignExpression = foundViewHolder.getOrCastRef(preferenceClass);
@@ -107,8 +111,8 @@ public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponent
 	}
 
 	@Override
-	public FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, AbstractJClass preferenceClass) {
-		String idRefString = idRef.name();
+	public FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, JClass preferenceClass) {
+		String idRefString = codeModelHelper.getIdStringFromIdFieldRef(idRef);
 		FoundPreferenceHolder foundPreferenceHolder = (FoundPreferenceHolder) holder.foundHolders.get(idRefString);
 		if (foundPreferenceHolder == null) {
 			foundPreferenceHolder = createFoundPreferenceAndIfNotNullBlock(idRef, preferenceClass);
@@ -122,14 +126,13 @@ public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponent
 		return usingSupportV7Preference;
 	}
 
-	@Override
-	public AbstractJClass getBasePreferenceClass() {
+	public JClass getBasePreferenceClass() {
 		return basePreferenceClass;
 	}
 
-	private FoundPreferenceHolder createFoundPreferenceAndIfNotNullBlock(JFieldRef idRef, AbstractJClass preferenceClass) {
-		IJExpression findPreferenceExpression = findPreferenceByKey(idRef);
-		JBlock block = getAddPreferencesFromResourceBlock().blockSimple();
+	private FoundPreferenceHolder createFoundPreferenceAndIfNotNullBlock(JFieldRef idRef, JClass preferenceClass) {
+		JExpression findPreferenceExpression = findPreferenceByKey(idRef);
+		JBlock block = getAddPreferencesFromResourceBlock().block();
 
 		if (preferenceClass == null) {
 			preferenceClass = basePreferenceClass;

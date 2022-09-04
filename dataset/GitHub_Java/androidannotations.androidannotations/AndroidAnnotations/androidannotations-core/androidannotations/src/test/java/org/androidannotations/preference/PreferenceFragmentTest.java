@@ -15,8 +15,8 @@
  */
 package org.androidannotations.preference;
 
-import org.androidannotations.AndroidAnnotationProcessor;
-import org.androidannotations.utils.AAProcessorTestHelper;
+import org.androidannotations.internal.AndroidAnnotationProcessor;
+import org.androidannotations.testutils.AAProcessorTestHelper;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -41,6 +41,11 @@ public class PreferenceFragmentTest extends AAProcessorTestHelper {
 	@Test
 	public void machinariusPreferenceFragmentCompiles() {
 		assertCompilationSuccessful(compileFiles(MachinariusSettingsFragment.class));
+	}
+
+	@Test
+	public void supportV7PreferenceFragmentCompiles() {
+		assertCompilationSuccessful(compileFiles(SupportV7SettingsFragment.class));
 	}
 
 }
