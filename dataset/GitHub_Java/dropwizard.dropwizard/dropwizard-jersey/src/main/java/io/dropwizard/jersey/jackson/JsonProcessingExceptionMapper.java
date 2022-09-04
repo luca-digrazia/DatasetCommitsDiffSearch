@@ -14,15 +14,6 @@ import javax.ws.rs.ext.Provider;
 @Provider
 public class JsonProcessingExceptionMapper implements ExceptionMapper<JsonProcessingException> {
     private static final Logger LOGGER = LoggerFactory.getLogger(JsonProcessingExceptionMapper.class);
-    private final boolean showDetails;
-
-    public JsonProcessingExceptionMapper() {
-        this(false);
-    }
-
-    public JsonProcessingExceptionMapper(boolean showDetails) {
-        this.showDetails = showDetails;
-    }
 
     @Override
     public Response toResponse(JsonProcessingException exception) {
@@ -49,11 +40,9 @@ public class JsonProcessingExceptionMapper implements ExceptionMapper<JsonProces
          * Otherwise, it's those pesky users.
          */
         LOGGER.debug("Unable to process JSON", exception);
-        final ErrorMessage errorMessage = new ErrorMessage(Response.Status.BAD_REQUEST.getStatusCode(),
-                "Unable to process JSON", showDetails ? message : null);
         return Response.status(Response.Status.BAD_REQUEST)
                 .type(MediaType.APPLICATION_JSON_TYPE)
-                .entity(errorMessage)
+                .entity(new ErrorMessage(Response.Status.BAD_REQUEST.getStatusCode(), "Unable to process JSON"))
                 .build();
     }
 }
