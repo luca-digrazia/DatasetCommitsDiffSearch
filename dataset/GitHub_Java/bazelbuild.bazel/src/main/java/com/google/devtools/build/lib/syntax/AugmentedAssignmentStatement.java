@@ -25,7 +25,7 @@ public final class AugmentedAssignmentStatement extends Statement {
   private final Expression rhs;
 
   /** Constructs an augmented assignment. */
-  AugmentedAssignmentStatement(TokenKind op, Expression lhs, Expression rhs) {
+  public AugmentedAssignmentStatement(TokenKind op, Expression lhs, Expression rhs) {
     this.lhs = lhs;
     this.op = op;
     this.rhs = rhs;

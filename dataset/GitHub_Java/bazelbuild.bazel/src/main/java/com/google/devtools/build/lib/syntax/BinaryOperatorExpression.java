@@ -50,23 +50,23 @@ public final class BinaryOperatorExpression extends Expression {
           TokenKind.PIPE,
           TokenKind.STAR);
 
-  BinaryOperatorExpression(Expression x, TokenKind op, Expression y) {
+  public BinaryOperatorExpression(Expression x, TokenKind op, Expression y) {
     this.x = x;
     this.op = op;
     this.y = y;
   }
 
-  /** Returns the left operand. */
+  /** getX returns the left operand. */
   public Expression getX() {
     return x;
   }
 
-  /** Returns the operator. */
+  /** getOperator returns the operator. */
   public TokenKind getOperator() {
     return op;
   }
 
-  /** Returns the right operand. */
+  /** getY returns the right operand. */
   public Expression getY() {
     return y;
   }
@@ -113,7 +113,7 @@ public final class BinaryOperatorExpression extends Expression {
               + "Use --incompatible_depset_is_not_iterable=false to temporarily disable "
               + "this check.");
     } else if (y instanceof SkylarkQueryable) {
-      return ((SkylarkQueryable) y).containsKey(x, location, env);
+      return ((SkylarkQueryable) y).containsKey(x, location, env.getStarlarkContext());
     } else if (y instanceof String) {
       if (x instanceof String) {
         return ((String) y).contains((String) x);
@@ -188,18 +188,6 @@ public final class BinaryOperatorExpression extends Expression {
 
         case PIPE:
           return pipe(x, y, env, location);
-
-        case AMPERSAND:
-          return and(x, y, location);
-
-        case CARET:
-          return xor(x, y, location);
-
-        case GREATER_GREATER:
-          return rightShift(x, y, location);
-
-        case LESS_LESS:
-          return leftShift(x, y, location);
 
         case MINUS:
           return minus(x, y, location);
@@ -358,9 +346,7 @@ public final class BinaryOperatorExpression extends Expression {
   /** Implements 'x | y'. */
   private static Object pipe(Object x, Object y, Environment env, Location location)
       throws EvalException {
-    if (x instanceof Integer && y instanceof Integer) {
-      return ((Integer) x) | ((Integer) y);
-    } else if (x instanceof SkylarkNestedSet) {
+    if (x instanceof SkylarkNestedSet) {
       if (env.getSemantics().incompatibleDepsetUnion()) {
         throw new EvalException(
             location,
@@ -459,50 +445,6 @@ public final class BinaryOperatorExpression extends Expression {
       }
     }
     throw typeException(x, y, TokenKind.PERCENT, location);
-  }
-
-  /** Implements 'x & y'. */
-  private static Object and(Object x, Object y, Location location) throws EvalException {
-    if (x instanceof Integer && y instanceof Integer) {
-      return (Integer) x & (Integer) y;
-    }
-    throw typeException(x, y, TokenKind.AMPERSAND, location);
-  }
-
-  /** Implements 'x ^ y'. */
-  private static Object xor(Object x, Object y, Location location) throws EvalException {
-    if (x instanceof Integer && y instanceof Integer) {
-      return (Integer) x ^ (Integer) y;
-    }
-    throw typeException(x, y, TokenKind.CARET, location);
-  }
-
-  /** Implements 'x >> y'. */
-  private static Object rightShift(Object x, Object y, Location location) throws EvalException {
-    if (x instanceof Integer && y instanceof Integer) {
-      if ((Integer) y < 0) {
-        throw new EvalException(location, "negative shift count: " + y);
-      } else if ((Integer) y >= Integer.SIZE) {
-        return ((Integer) x < 0) ? -1 : 0;
-      }
-      return (Integer) x >> (Integer) y;
-    }
-    throw typeException(x, y, TokenKind.GREATER_GREATER, location);
-  }
-
-  /** Implements 'x << y'. */
-  private static Object leftShift(Object x, Object y, Location location) throws EvalException {
-    if (x instanceof Integer && y instanceof Integer) {
-      if ((Integer) y < 0) {
-        throw new EvalException(location, "negative shift count: " + y);
-      }
-      Integer result = (Integer) x << (Integer) y;
-      if (!rightShift(result, y, location).equals(x)) {
-        throw new ArithmeticException("integer overflow");
-      }
-      return result;
-    }
-    throw typeException(x, y, TokenKind.LESS_LESS, location);
   }
 
   /** Throws an exception signifying incorrect types for the given operator. */
