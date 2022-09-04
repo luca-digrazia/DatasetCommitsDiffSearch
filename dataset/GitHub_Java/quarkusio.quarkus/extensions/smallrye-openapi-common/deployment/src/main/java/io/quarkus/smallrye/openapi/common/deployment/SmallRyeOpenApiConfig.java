@@ -22,12 +22,6 @@ public final class SmallRyeOpenApiConfig {
     public Optional<Path> storeSchemaDirectory;
 
     /**
-     * Do not run the filter only at startup, but every time the document is requested (dynamic).
-     */
-    @ConfigItem(defaultValue = "false")
-    public boolean alwaysRunFilter;
-
-    /**
      * Add a certain SecurityScheme with config
      */
     public Optional<SecurityScheme> securityScheme;
@@ -86,82 +80,10 @@ public final class SmallRyeOpenApiConfig {
     @ConfigItem
     public Optional<String> oauth2ImplicitTokenUrl;
 
-    /**
-     * Override the openapi version in the Schema document
-     */
-    @ConfigItem
-    public Optional<String> openApiVersion;
-
-    /**
-     * Set the title in Info tag in the Schema document
-     */
-    @ConfigItem
-    public Optional<String> infoTitle;
-
-    /**
-     * Set the version in Info tag in the Schema document
-     */
-    @ConfigItem
-    public Optional<String> infoVersion;
-
-    /**
-     * Set the description in Info tag in the Schema document
-     */
-    @ConfigItem
-    public Optional<String> infoDescription;
-
-    /**
-     * Set the terms of the service in Info tag in the Schema document
-     */
-    @ConfigItem
-    public Optional<String> infoTermsOfService;
-
-    /**
-     * Set the contact email in Info tag in the Schema document
-     */
-    @ConfigItem
-    public Optional<String> infoContactEmail;
-
-    /**
-     * Set the contact name in Info tag in the Schema document
-     */
-    @ConfigItem
-    public Optional<String> infoContactName;
-
-    /**
-     * Set the contact url in Info tag in the Schema document
-     */
-    @ConfigItem
-    public Optional<String> infoContactUrl;
-
-    /**
-     * Set the license name in Info tag in the Schema document
-     */
-    @ConfigItem
-    public Optional<String> infoLicenseName;
-
-    /**
-     * Set the license url in Info tag in the Schema document
-     */
-    @ConfigItem
-    public Optional<String> infoLicenseUrl;
-
-    /**
-     * Set the strategy to automatically create an operation Id
-     */
-    @ConfigItem
-    public Optional<OperationIdStrategy> operationIdStrategy;
-
     public enum SecurityScheme {
         basic,
         jwt,
         oidc,
         oauth2Implicit
-    }
-
-    public enum OperationIdStrategy {
-        METHOD,
-        CLASS_METHOD,
-        PACKAGE_CLASS_METHOD
     }
 }
