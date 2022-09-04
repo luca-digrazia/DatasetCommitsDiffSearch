@@ -2,7 +2,6 @@ package io.quarkus.hibernate.orm.deployment;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.RUNTIME_INIT;
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
-import static io.quarkus.hibernate.orm.deployment.HibernateConfigUtil.firstPresent;
 import static org.hibernate.cfg.AvailableSettings.JPA_SHARED_CACHE_MODE;
 import static org.hibernate.cfg.AvailableSettings.USE_DIRECT_REFERENCE_CACHE_ENTRIES;
 import static org.hibernate.cfg.AvailableSettings.USE_QUERY_CACHE;
@@ -80,6 +79,7 @@ import io.quarkus.deployment.builditem.AdditionalApplicationArchiveMarkerBuildIt
 import io.quarkus.deployment.builditem.AdditionalIndexedClassesBuildItem;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
+import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
@@ -138,6 +138,11 @@ public final class HibernateOrmProcessor {
     private static final Logger LOG = Logger.getLogger(HibernateOrmProcessor.class);
 
     private static final String INTEGRATOR_SERVICE_FILE = "META-INF/services/org.hibernate.integrator.spi.Integrator";
+
+    @BuildStep
+    CapabilityBuildItem capability() {
+        return new CapabilityBuildItem(Capability.HIBERNATE_ORM);
+    }
 
     @BuildStep
     void checkTransactionsSupport(Capabilities capabilities) {
@@ -807,12 +812,10 @@ public final class HibernateOrmProcessor {
         }
 
         // Query
-        int batchSize = firstPresent(persistenceUnitConfig.fetch.batchSize, persistenceUnitConfig.batchFetchSize)
-                .orElse(16);
-        if (batchSize > 0) {
-            descriptor.getProperties().setProperty(AvailableSettings.DEFAULT_BATCH_FETCH_SIZE,
-                    Integer.toString(batchSize));
-            descriptor.getProperties().setProperty(AvailableSettings.BATCH_FETCH_STYLE, BatchFetchStyle.PADDED.toString());
+        if (persistenceUnitConfig.fetch.batchSize > 0) {
+            setBatchFetchSize(descriptor, persistenceUnitConfig.fetch.batchSize);
+        } else if (persistenceUnitConfig.batchFetchSize > 0) {
+            setBatchFetchSize(descriptor, persistenceUnitConfig.batchFetchSize);
         }
 
         if (persistenceUnitConfig.fetch.maxDepth.isPresent()) {
@@ -912,6 +915,12 @@ public final class HibernateOrmProcessor {
 
     private static void setMaxFetchDepth(ParsedPersistenceXmlDescriptor descriptor, OptionalInt maxFetchDepth) {
         descriptor.getProperties().setProperty(AvailableSettings.MAX_FETCH_DEPTH, String.valueOf(maxFetchDepth.getAsInt()));
+    }
+
+    private static void setBatchFetchSize(ParsedPersistenceXmlDescriptor descriptor, int batchFetchSize) {
+        descriptor.getProperties().setProperty(AvailableSettings.DEFAULT_BATCH_FETCH_SIZE,
+                Integer.toString(batchFetchSize));
+        descriptor.getProperties().setProperty(AvailableSettings.BATCH_FETCH_STYLE, BatchFetchStyle.PADDED.toString());
     }
 
     private void enhanceEntities(final JpaEntitiesBuildItem domainObjects,
