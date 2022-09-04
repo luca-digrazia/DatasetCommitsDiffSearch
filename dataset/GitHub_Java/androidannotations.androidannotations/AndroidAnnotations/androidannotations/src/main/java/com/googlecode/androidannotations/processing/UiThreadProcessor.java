@@ -36,50 +36,48 @@ import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JVar;
 
 public class UiThreadProcessor implements ElementProcessor {
-
+	
 	private final APTCodeModelHelper helper = new APTCodeModelHelper();
 
-	@Override
-	public Class<? extends Annotation> getTarget() {
-		return UiThread.class;
-	}
+    @Override
+    public Class<? extends Annotation> getTarget() {
+        return UiThread.class;
+    }
 
-	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws JClassAlreadyExistsException {
+    @Override
+    public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws JClassAlreadyExistsException {
 
-		EBeanHolder holder = activitiesHolder.getEnclosingActivityHolder(element);
+        EBeanHolder holder = activitiesHolder.getEnclosingActivityHolder(element);
 
-		// Method
-		ExecutableElement executableElement = (ExecutableElement) element;
-		JMethod method = helper.overrideAnnotatedMethod(executableElement, holder);
-		
-		JBlock previousMethodBody = helper.removeBody(method);
+        // Method
+        ExecutableElement executableElement = (ExecutableElement) element;
+        JMethod method = helper.overrideAnnotatedMethod(executableElement, holder);
 
-		JDefinedClass anonymousRunnableClass = codeModel.anonymousClass(Runnable.class);
+        JDefinedClass anonymousRunnableClass = codeModel.anonymousClass(Runnable.class);
 
-		JMethod runMethod = anonymousRunnableClass.method(JMod.PUBLIC, codeModel.VOID, "run");
-		runMethod.annotate(Override.class);
+        JMethod runMethod = anonymousRunnableClass.method(JMod.PUBLIC, codeModel.VOID, "run");
+        runMethod.annotate(Override.class);
 
-		JBlock runMethodBody = runMethod.body();
-		JTryBlock runTry = runMethodBody._try();
-		
-		 runTry.body().add(previousMethodBody);
+        JBlock runMethodBody = runMethod.body();
+        JTryBlock runTry = runMethodBody._try();
 
-		JCatchBlock runCatch = runTry._catch(holder.refClass(RuntimeException.class));
-		JVar exceptionParam = runCatch.param("e");
+        helper.callSuperMethod(method, codeModel, holder, runTry.body());
+        
+        JCatchBlock runCatch = runTry._catch(holder.refClass(RuntimeException.class));
+        JVar exceptionParam = runCatch.param("e");
 
-		JClass logClass = holder.refClass("android.util.Log");
+        JClass logClass = holder.refClass("android.util.Log");
 
-		JInvocation errorInvoke = logClass.staticInvoke("e");
+        JInvocation errorInvoke = logClass.staticInvoke("e");
 
-		errorInvoke.arg(holder.eBean.name());
-		errorInvoke.arg("A runtime exception was thrown while executing code in the ui thread");
-		errorInvoke.arg(exceptionParam);
+        errorInvoke.arg(holder.eBean.name());
+        errorInvoke.arg("A runtime exception was thrown while executing code in the ui thread");
+        errorInvoke.arg(exceptionParam);
 
-		runCatch.body().add(errorInvoke);
+        runCatch.body().add(errorInvoke);
 
-		method.body().invoke("runOnUiThread").arg(JExpr._new(anonymousRunnableClass));
+        method.body().invoke("runOnUiThread").arg(JExpr._new(anonymousRunnableClass));
 
-	}
+    }
 
 }
