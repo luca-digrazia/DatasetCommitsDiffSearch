@@ -110,14 +110,9 @@ public class ArcAnnotationProcessor implements ResourceProcessor {
                         case JAVA_CLASS:
                             // TODO a better way to identify app classes
                             boolean isAppClass = true;
-
-                            if(!resource.getFullyQualifiedName().contains("$$APP$$")) {
-                                //horrible hack, we really need to look into into
-                                //app vs framework classes cause big problems for the runtime runner
-                                for (String frameworkPackage : frameworkPackages) {
-                                    if (resource.getFullyQualifiedName().startsWith(frameworkPackage)) {
-                                        isAppClass = false;
-                                    }
+                            for (String frameworkPackage : frameworkPackages) {
+                                if (resource.getFullyQualifiedName().startsWith(frameworkPackage)) {
+                                    isAppClass = false;
                                 }
                             }
                             System.out.println("Add " + (isAppClass ? "APP" : "FWK") + " class: " + resource.getFullyQualifiedName());

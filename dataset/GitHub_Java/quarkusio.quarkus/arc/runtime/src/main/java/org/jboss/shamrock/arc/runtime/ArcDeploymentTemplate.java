@@ -7,7 +7,6 @@ import java.lang.annotation.Annotation;
 import org.jboss.protean.arc.Arc;
 import org.jboss.protean.arc.ArcContainer;
 import org.jboss.protean.arc.InstanceHandle;
-import org.jboss.protean.arc.ManagedContext;
 import org.jboss.shamrock.runtime.BeanContainer;
 import org.jboss.shamrock.runtime.ContextObject;
 import org.jboss.shamrock.runtime.InjectionFactory;
@@ -57,7 +56,7 @@ public class ArcDeploymentTemplate {
     }
 
     public void setupRequestScope(@ContextObject("deploymentInfo") DeploymentInfo deploymentInfo, @ContextObject("arc.container") ArcContainer arcContainer) {
-        if(deploymentInfo == null) {
+        if (deploymentInfo == null) {
             return;
         }
         deploymentInfo.addThreadSetupAction(new ThreadSetupHandler() {
@@ -66,12 +65,11 @@ public class ArcDeploymentTemplate {
                 return new Action<T, C>() {
                     @Override
                     public T call(HttpServerExchange exchange, C context) throws Exception {
-                        ManagedContext requestContext = arcContainer.requestContext();
-                        requestContext.activate();
+                        arcContainer.requestContext().activate();
                         try {
                             return action.call(exchange, context);
                         } finally {
-                            requestContext.terminate();
+                            arcContainer.requestContext().deactivate();
                         }
                     }
                 };
@@ -112,6 +110,10 @@ public class ArcDeploymentTemplate {
             }
         });
 
+    }
+
+    public void fireStartupEvent(@ContextObject("bean.container") BeanContainer beanContainer) {
+        beanContainer.instance(StartupEventRunner.class).fireEvent();
     }
 
 }
