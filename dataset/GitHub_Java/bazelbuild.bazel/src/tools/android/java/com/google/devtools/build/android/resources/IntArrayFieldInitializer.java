@@ -16,6 +16,7 @@ package com.google.devtools.build.android.resources;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.android.DependencyInfo;
 import java.io.IOException;
@@ -24,7 +25,6 @@ import java.util.Objects;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.FieldVisitor;
-import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.InstructionAdapter;
 
@@ -34,28 +34,22 @@ public final class IntArrayFieldInitializer implements FieldInitializer {
   private static final String DESC = "[I";
 
   private final DependencyInfo dependencyInfo;
-  private final Visibility visibility;
   private final String fieldName;
-  private final ImmutableList<Integer> values;
+  private final ImmutableCollection<Integer> values;
 
   private IntArrayFieldInitializer(
-      DependencyInfo dependencyInfo,
-      Visibility visibility,
-      String fieldName,
-      ImmutableList<Integer> values) {
+      DependencyInfo dependencyInfo, String fieldName, ImmutableCollection<Integer> values) {
     this.dependencyInfo = dependencyInfo;
-    this.visibility = visibility;
     this.fieldName = fieldName;
     this.values = values;
   }
 
-  public static FieldInitializer of(
-      DependencyInfo dependencyInfo, Visibility visibility, String fieldName, String value) {
+  public static FieldInitializer of(DependencyInfo dependencyInfo, String fieldName, String value) {
     Preconditions.checkArgument(value.startsWith("{ "), "Expected list starting with { ");
     Preconditions.checkArgument(value.endsWith(" }"), "Expected list ending with } ");
     // Check for an empty list, which is "{ }".
     if (value.length() < 4) {
-      return of(dependencyInfo, visibility, fieldName, ImmutableList.of());
+      return of(dependencyInfo, fieldName, ImmutableList.<Integer>of());
     }
     ImmutableList.Builder<Integer> intValues = ImmutableList.builder();
     String trimmedValue = value.substring(2, value.length() - 2);
@@ -63,27 +57,17 @@ public final class IntArrayFieldInitializer implements FieldInitializer {
     for (String valueString : valueStrings) {
       intValues.add(Integer.decode(valueString));
     }
-    return of(dependencyInfo, visibility, fieldName, intValues.build());
+    return of(dependencyInfo, fieldName, intValues.build());
   }
 
   public static IntArrayFieldInitializer of(
-      DependencyInfo dependencyInfo,
-      Visibility visibility,
-      String fieldName,
-      ImmutableList<Integer> values) {
-    return new IntArrayFieldInitializer(dependencyInfo, visibility, fieldName, values);
+      DependencyInfo dependencyInfo, String fieldName, ImmutableCollection<Integer> values) {
+    return new IntArrayFieldInitializer(dependencyInfo, fieldName, values);
   }
 
   @Override
   public boolean writeFieldDefinition(
-      ClassWriter cw, boolean isFinal, boolean annotateTransitiveFields) {
-    int accessLevel = Opcodes.ACC_STATIC;
-    if (visibility != Visibility.PRIVATE) {
-      accessLevel |= Opcodes.ACC_PUBLIC;
-    }
-    if (isFinal) {
-      accessLevel |= Opcodes.ACC_FINAL;
-    }
+      ClassWriter cw, int accessLevel, boolean isFinal, boolean annotateTransitiveFields) {
     FieldVisitor fv = cw.visitField(accessLevel, fieldName, DESC, null, null);
     if (annotateTransitiveFields
         && dependencyInfo.dependencyType() == DependencyInfo.DependencyType.TRANSITIVE) {
@@ -130,11 +114,8 @@ public final class IntArrayFieldInitializer implements FieldInitializer {
 
     writer.write(
         String.format(
-            "        %s static %sint[] %s = { %s };\n",
-            visibility != Visibility.PRIVATE ? "public" : "",
-            finalFields ? "final " : "",
-            fieldName,
-            builder));
+            "        public static %sint[] %s = { %s };\n",
+            finalFields ? "final " : "", fieldName, builder.toString()));
   }
 
   @Override
@@ -156,9 +137,7 @@ public final class IntArrayFieldInitializer implements FieldInitializer {
   public boolean equals(Object obj) {
     if (obj instanceof IntArrayFieldInitializer) {
       IntArrayFieldInitializer other = (IntArrayFieldInitializer) obj;
-      return Objects.equals(dependencyInfo, other.dependencyInfo)
-          && Objects.equals(fieldName, other.fieldName)
-          && Objects.equals(values, other.values);
+      return Objects.equals(values, other.values);
     }
     return false;
   }

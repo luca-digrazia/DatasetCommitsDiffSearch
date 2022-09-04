@@ -177,10 +177,15 @@ public class RClassGenerator {
         writeInnerClassHeader(fullyQualifiedOuterClass, innerClass, innerClassWriter);
 
     List<FieldInitializer> deferredInitializers = new ArrayList<>();
+    int fieldAccessLevel = Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC;
+    if (finalFields) {
+      fieldAccessLevel |= Opcodes.ACC_FINAL;
+    }
     for (FieldInitializer init : initializers) {
       JavaIdentifierValidator.validate(
           init.getFieldName(), "in class:", fullyQualifiedInnerClass, "and package:", packageDir);
-      if (init.writeFieldDefinition(innerClassWriter, finalFields, annotateTransitiveFields)) {
+      if (init.writeFieldDefinition(
+          innerClassWriter, fieldAccessLevel, finalFields, annotateTransitiveFields)) {
         deferredInitializers.add(init);
       }
     }

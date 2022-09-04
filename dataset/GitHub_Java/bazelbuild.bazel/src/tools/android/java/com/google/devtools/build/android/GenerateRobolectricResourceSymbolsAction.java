@@ -26,36 +26,38 @@ import com.google.devtools.build.android.Converters.PathConverter;
 import com.google.devtools.build.android.resources.RClassGenerator;
 import com.google.devtools.build.android.resources.ResourceSymbols;
 import com.google.devtools.common.options.Option;
+import com.google.devtools.common.options.OptionDocumentationCategory;
+import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
+import com.google.devtools.common.options.ShellQuotedParamsFilePreProcessor;
 import java.io.Closeable;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/**
- * This action generates consistant ids R.class files for use in robolectric tests.
- */
+/** This action generates consistent ids R.class files for use in robolectric tests. */
 public class GenerateRobolectricResourceSymbolsAction {
 
   private static final Logger logger =
       Logger.getLogger(GenerateRobolectricResourceSymbolsAction.class.getName());
 
   private static final class WriteLibraryRClass implements Callable<Boolean> {
-    private final Entry<String, ListenableFuture<ResourceSymbols>> librarySymbolEntry;
+    private final Map.Entry<String, Collection<ListenableFuture<ResourceSymbols>>>
+        librarySymbolEntry;
     private final RClassGenerator generator;
 
     private WriteLibraryRClass(
-        Entry<String, ListenableFuture<ResourceSymbols>> librarySymbolEntry,
+        Map.Entry<String, Collection<ListenableFuture<ResourceSymbols>>> librarySymbolEntry,
         RClassGenerator generator) {
       this.librarySymbolEntry = librarySymbolEntry;
       this.generator = generator;
@@ -63,8 +65,14 @@ public class GenerateRobolectricResourceSymbolsAction {
 
     @Override
     public Boolean call() throws Exception {
+      List<ResourceSymbols> resourceSymbolsList = new ArrayList<>();
+      for (final ListenableFuture<ResourceSymbols> resourceSymbolsReader :
+          librarySymbolEntry.getValue()) {
+        resourceSymbolsList.add(resourceSymbolsReader.get());
+      }
+
       generator.write(
-          librarySymbolEntry.getKey(), librarySymbolEntry.getValue().get().asInitializers());
+          librarySymbolEntry.getKey(), ResourceSymbols.merge(resourceSymbolsList).asInitializers());
       return true;
     }
   }
@@ -77,6 +85,8 @@ public class GenerateRobolectricResourceSymbolsAction {
       defaultValue = "",
       converter = DependencyAndroidDataListConverter.class,
       category = "input",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Data dependencies. The expected format is "
               + DependencyAndroidData.EXPECTED_FORMAT
@@ -89,17 +99,41 @@ public class GenerateRobolectricResourceSymbolsAction {
       defaultValue = "null",
       converter = PathConverter.class,
       category = "output",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Path for the generated java class jar."
     )
     public Path classJarOutput;
+
+    @Option(
+      name = "targetLabel",
+      defaultValue = "null",
+      category = "input",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "A label to add to the output jar's manifest as 'Target-Label'"
+    )
+    public String targetLabel;
+
+    @Option(
+      name = "injectingRuleKind",
+      defaultValue = "null",
+      category = "input",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "A string to add to the output jar's manifest as 'Injecting-Rule-Kind'"
+    )
+    public String injectingRuleKind;
   }
 
   public static void main(String[] args) throws Exception {
 
     final Stopwatch timer = Stopwatch.createStarted();
     OptionsParser optionsParser =
-        OptionsParser.newOptionsParser(Options.class, AaptConfigOptions.class);
-    optionsParser.enableParamsFileSupport(FileSystems.getDefault());
+        OptionsParser.builder()
+            .optionsClasses(Options.class, AaptConfigOptions.class)
+            .argsPreProcessor(new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()))
+            .build();
     optionsParser.parseAndExitUponError(args);
     AaptConfigOptions aaptConfigOptions = optionsParser.getOptions(AaptConfigOptions.class);
     Options options = optionsParser.getOptions(Options.class);
@@ -121,13 +155,17 @@ public class GenerateRobolectricResourceSymbolsAction {
         final PlaceholderIdFieldInitializerBuilder robolectricIds =
             PlaceholderIdFieldInitializerBuilder.from(aaptConfigOptions.androidJar);
         ParsedAndroidData.loadedFrom(
-                options.data, executorService, AndroidDataDeserializer.create())
+                DependencyInfo.DependencyType.UNKNOWN,
+                options.data,
+                executorService,
+                AndroidParsedDataDeserializer.create())
             .writeResourcesTo(
                 new AndroidResourceSymbolSink() {
 
                   @Override
-                  public void acceptSimpleResource(ResourceType type, String name) {
-                    robolectricIds.addSimpleResource(type, name);
+                  public void acceptSimpleResource(
+                      DependencyInfo dependencyInfo, ResourceType type, String name) {
+                    robolectricIds.addSimpleResource(dependencyInfo, type, name);
                   }
 
                   @Override
@@ -138,13 +176,16 @@ public class GenerateRobolectricResourceSymbolsAction {
 
                   @Override
                   public void acceptStyleableResource(
-                      FullyQualifiedName key, Map<FullyQualifiedName, Boolean> attrs) {
-                    robolectricIds.addStyleableResource(key, attrs);
+                      DependencyInfo dependencyInfo,
+                      FullyQualifiedName key,
+                      Map<FullyQualifiedName, Boolean> attrs) {
+                    robolectricIds.addStyleableResource(dependencyInfo, key, attrs);
                   }
                 });
 
         final RClassGenerator generator =
-            RClassGenerator.with(generatedSources, robolectricIds.build(), false);
+            RClassGenerator.with(
+                options.targetLabel, generatedSources, robolectricIds.build(), false, false);
 
         List<SymbolFileProvider> libraries = new ArrayList<>();
         for (DependencyAndroidData dataDep : options.data) {
@@ -152,8 +193,9 @@ public class GenerateRobolectricResourceSymbolsAction {
           libraries.add(library);
         }
         List<ListenableFuture<Boolean>> writeSymbolsTask = new ArrayList<>();
-        for (final Entry<String, ListenableFuture<ResourceSymbols>> librarySymbolEntry :
-            ResourceSymbols.loadFrom(libraries, executorService, null).entries()) {
+        for (final Map.Entry<String, Collection<ListenableFuture<ResourceSymbols>>>
+            librarySymbolEntry :
+                ResourceSymbols.loadFrom(libraries, executorService, null).asMap().entrySet()) {
           writeSymbolsTask.add(
               executorService.submit(new WriteLibraryRClass(librarySymbolEntry, generator)));
         }
@@ -163,8 +205,8 @@ public class GenerateRobolectricResourceSymbolsAction {
 
       logger.fine(String.format("Merging finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
-      AndroidResourceOutputs.createClassJar(generatedSources, options.classJarOutput);
-      System.out.println(options.classJarOutput);
+      AndroidResourceOutputs.createClassJar(
+          generatedSources, options.classJarOutput, options.targetLabel, options.injectingRuleKind);
       logger.fine(
           String.format("Create classJar finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
