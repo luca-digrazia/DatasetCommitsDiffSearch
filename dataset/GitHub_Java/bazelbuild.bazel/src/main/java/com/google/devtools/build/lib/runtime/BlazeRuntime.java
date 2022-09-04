@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
+import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
@@ -37,7 +38,6 @@ import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.OutputFilter;
-import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
@@ -93,7 +93,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -396,13 +395,10 @@ public final class BlazeRuntime {
       // Instead of logEvent() we're calling the low level function to pass the timings we took in
       // the launcher. We're setting the INIT phase marker so that it follows immediately the LAUNCH
       // phase.
-      profiler.logSimpleTaskDuration(
-          execStartTimeNanos - startupTimeNanos,
-          Duration.ZERO,
-          ProfilerTask.PHASE,
+      profiler.logSimpleTaskDuration(execStartTimeNanos - startupTimeNanos, 0, ProfilerTask.PHASE,
           ProfilePhase.LAUNCH.description);
-      profiler.logSimpleTaskDuration(
-          execStartTimeNanos, Duration.ZERO, ProfilerTask.PHASE, ProfilePhase.INIT.description);
+      profiler.logSimpleTaskDuration(execStartTimeNanos, 0, ProfilerTask.PHASE,
+          ProfilePhase.INIT.description);
     }
 
     if (options.memoryProfilePath != null) {
@@ -855,6 +851,7 @@ public final class BlazeRuntime {
       Runnable prepareForAbruptShutdown = () -> rpcServer[0].prepareForAbruptShutdown();
       BlazeRuntime runtime = newRuntime(modules, Arrays.asList(args), prepareForAbruptShutdown);
       BlazeCommandDispatcher dispatcher = new BlazeCommandDispatcher(runtime);
+      CommandExecutor commandExecutor = new CommandExecutor(dispatcher);
       BlazeServerStartupOptions startupOptions =
           runtime.getStartupOptionsProvider().getOptions(BlazeServerStartupOptions.class);
       try {
@@ -863,7 +860,7 @@ public final class BlazeRuntime {
         Class<?> factoryClass = Class.forName(
             "com.google.devtools.build.lib.server.GrpcServerImpl$Factory");
         RPCServer.Factory factory = (RPCServer.Factory) factoryClass.getConstructor().newInstance();
-        rpcServer[0] = factory.create(dispatcher, runtime.getClock(),
+        rpcServer[0] = factory.create(commandExecutor, runtime.getClock(),
             startupOptions.commandPort,
             runtime.getWorkspace().getWorkspace(),
             runtime.getServerDirectory(),

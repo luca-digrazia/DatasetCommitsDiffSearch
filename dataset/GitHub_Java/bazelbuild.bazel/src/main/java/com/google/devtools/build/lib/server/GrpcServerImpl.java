@@ -25,10 +25,10 @@ import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher;
 import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.LockingMode;
 import com.google.devtools.build.lib.runtime.BlazeCommandResult;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
+import com.google.devtools.build.lib.runtime.CommandExecutor;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.server.CommandProtos.CancelRequest;
 import com.google.devtools.build.lib.server.CommandProtos.CancelResponse;
@@ -152,10 +152,10 @@ public class GrpcServerImpl implements RPCServer {
    */
   public static class Factory implements RPCServer.Factory {
     @Override
-    public RPCServer create(BlazeCommandDispatcher dispatcher, Clock clock, int port,
+    public RPCServer create(CommandExecutor commandExecutor, Clock clock, int port,
       Path workspace, Path serverDirectory, int maxIdleSeconds) throws IOException {
       return new GrpcServerImpl(
-          dispatcher, clock, port, workspace, serverDirectory, maxIdleSeconds);
+          commandExecutor, clock, port, workspace, serverDirectory, maxIdleSeconds);
     }
   }
 
@@ -497,7 +497,7 @@ public class GrpcServerImpl implements RPCServer {
 
   @GuardedBy("runningCommands")
   private final Map<String, RunningCommand> runningCommands = new HashMap<>();
-  private final BlazeCommandDispatcher dispatcher;
+  private final CommandExecutor commandExecutor;
   private final ExecutorService streamExecutorPool;
   private final ExecutorService commandExecutorPool;
   private final Clock clock;
@@ -517,7 +517,7 @@ public class GrpcServerImpl implements RPCServer {
   private IdleServerTasks idleServerTasks;
   boolean serving;
 
-  public GrpcServerImpl(BlazeCommandDispatcher dispatcher, Clock clock, int port,
+  public GrpcServerImpl(CommandExecutor commandExecutor, Clock clock, int port,
       Path workspace, Path serverDirectory, int maxIdleSeconds) throws IOException {
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
@@ -533,7 +533,7 @@ public class GrpcServerImpl implements RPCServer {
     pidInFile = new String(FileSystemUtils.readContentAsLatin1(pidFile));
     deleteAtExit(pidFile);
 
-    this.dispatcher = dispatcher;
+    this.commandExecutor = commandExecutor;
     this.clock = clock;
     this.serverDirectory = serverDirectory;
     this.workspace = workspace;
@@ -555,13 +555,13 @@ public class GrpcServerImpl implements RPCServer {
 
     pidFileWatcherThread = new PidFileWatcherThread();
     pidFileWatcherThread.start();
-    idleServerTasks = new IdleServerTasks();
+    idleServerTasks = new IdleServerTasks(workspace);
     idleServerTasks.idle();
   }
 
   private void idle() {
     Preconditions.checkState(idleServerTasks == null);
-    idleServerTasks = new IdleServerTasks();
+    idleServerTasks = new IdleServerTasks(workspace);
     idleServerTasks.idle();
   }
 
@@ -852,7 +852,7 @@ public class GrpcServerImpl implements RPCServer {
         InvocationPolicy policy = InvocationPolicyParser.parsePolicy(request.getInvocationPolicy());
         logger.info(BlazeRuntime.getRequestLogString(args));
         result =
-            dispatcher.exec(
+            commandExecutor.exec(
                 policy,
                 args,
                 rpcOutErr,

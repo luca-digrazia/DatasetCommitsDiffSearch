@@ -489,7 +489,7 @@ public class BlazeCommandDispatcher {
       int numericExitCode = result.getExitCode() == null
           ? 0
           : result.getExitCode().getNumericExitCode();
-      numericExitCode = runtime.afterCommand(env, numericExitCode);
+      runtime.afterCommand(env, numericExitCode);
       // Swallow IOException, as we are already in a finally clause
       Flushables.flushQuietly(outErr.getOutputStream());
       Flushables.flushQuietly(outErr.getErrorStream());
