@@ -925,48 +925,68 @@ public class Math {
 
     /** Merges multiple vectors into one. */
     public static int[] c(int[]... list) {
-        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
-        int[] y = new int[n];
-        int pos = 0;
+        int n = 0;
         for (int[] x: list) {
-            System.arraycopy(x, 0, y, pos, x.length);
-            pos += x.length;
+            n += x.length;
+        }
+
+        int[] y = new int[n];
+        int i = 0;
+        for (int[] x: list) {
+            for (int xi: x) {
+                y[i++] = xi;
+            }
         }
         return y;
     }
 
     /** Merges multiple vectors into one. */
     public static float[] c(float[]... list) {
-        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
-        float[] y = new float[n];
-        int pos = 0;
+        int n = 0;
         for (float[] x: list) {
-            System.arraycopy(x, 0, y, pos, x.length);
-            pos += x.length;
+            n += x.length;
+        }
+
+        float[] y = new float[n];
+        int i = 0;
+        for (float[] x: list) {
+            for (float xi: x) {
+                y[i++] = xi;
+            }
         }
         return y;
     }
 
     /** Merges multiple vectors into one. */
     public static double[] c(double[]... list) {
-        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
-        double[] y = new double[n];
-        int pos = 0;
+        int n = 0;
         for (double[] x: list) {
-            System.arraycopy(x, 0, y, pos, x.length);
-            pos += x.length;
+            n += x.length;
+        }
+
+        double[] y = new double[n];
+        int i = 0;
+        for (double[] x: list) {
+            for (double xi: x) {
+                y[i++] = xi;
+            }
         }
         return y;
     }
 
     /** Concatenates multiple vectors into one array of strings. */
     public static String[] c(String[]... list) {
-        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
-        String[] y = new String[n];
-        int pos = 0;
+        int n = 0;
         for (String[] x: list) {
-            System.arraycopy(x, 0, y, pos, x.length);
-            pos += x.length;
+            n += x.length;
+        }
+
+        String[] y = new String[n];
+        int i = 0;
+        for (String[] x: list) {
+            for (String xi: x) {
+                y[i++] = xi;
+            }
         }
         return y;
     }
