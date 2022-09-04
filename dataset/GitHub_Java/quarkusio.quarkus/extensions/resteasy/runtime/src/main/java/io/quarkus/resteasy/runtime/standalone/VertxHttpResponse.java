@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.NewCookie;
@@ -20,7 +18,6 @@ import io.vertx.core.http.HttpHeaders;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
-import io.vertx.ext.web.RoutingContext;
 
 public class VertxHttpResponse implements HttpResponse {
     private int status = 200;
@@ -33,11 +30,9 @@ public class VertxHttpResponse implements HttpResponse {
     private ResteasyProviderFactory providerFactory;
     private final HttpMethod method;
     private final VertxOutput output;
-    private final RoutingContext routingContext;
 
     public VertxHttpResponse(HttpServerRequest request, ResteasyProviderFactory providerFactory,
-            final HttpMethod method, BufferAllocator allocator, VertxOutput output, RoutingContext routingContext) {
-        this.routingContext = routingContext;
+            final HttpMethod method, BufferAllocator allocator, VertxOutput output) {
         outputHeaders = new MultivaluedMapImpl<String, Object>();
         this.method = method;
         os = (method == null || !method.equals(HttpMethod.HEAD)) ? new VertxOutputStream(this, allocator)
@@ -143,7 +138,7 @@ public class VertxHttpResponse implements HttpResponse {
                 committed = true;
                 response.setStatusCode(getStatus());
                 transformHeaders(this, response, providerFactory);
-                routingContext.addHeadersEndHandler(h -> {
+                response.headersEndHandler(h -> {
                     response.headers().remove(HttpHeaders.CONTENT_LENGTH);
                     response.headers().set(HttpHeaders.CONNECTION, HttpHeaders.KEEP_ALIVE);
                 });
@@ -164,22 +159,6 @@ public class VertxHttpResponse implements HttpResponse {
 
     public void writeBlocking(ByteBuf buffer, boolean finished) throws IOException {
         checkException();
-        prepareWrite(buffer, finished);
-        output.write(buffer, finished);
-    }
-
-    public CompletionStage<Void> writeNonBlocking(ByteBuf buffer, boolean finished) {
-        try {
-            prepareWrite(buffer, finished);
-        } catch (IOException e) {
-            CompletableFuture<Void> ret = new CompletableFuture<>();
-            ret.completeExceptionally(e);
-            return ret;
-        }
-        return output.writeNonBlocking(buffer, finished);
-    }
-
-    private void prepareWrite(ByteBuf buffer, boolean finished) throws IOException {
         if (!isCommitted()) {
             committed = true;
             response.setStatusCode(getStatus());
@@ -197,6 +176,7 @@ public class VertxHttpResponse implements HttpResponse {
         }
         if (finished)
             this.finished = true;
+        output.write(buffer, finished);
     }
 
 }
