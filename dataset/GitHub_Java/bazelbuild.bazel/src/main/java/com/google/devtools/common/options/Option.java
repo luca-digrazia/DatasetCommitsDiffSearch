@@ -160,17 +160,12 @@ public @interface Option {
   Class<? extends ExpansionFunction> expansionFunction() default ExpansionFunction.class;
 
   /**
-   * Additional options that need to be implicitly added for this option.
+   * If the option requires that additional options be implicitly appended, this field will contain
+   * the additional options. Implicit dependencies are parsed at the end of each {@link
+   * OptionsParser#parse} invocation, and override options specified in the same call. However, they
+   * can be overridden by options specified in a later call or by options with a higher priority.
    *
-   * <p>Nothing guarantees that these options are not overridden by later or higher-priority values
-   * for the same options, so if this is truly a requirement, the user should check that the correct
-   * set of options is set.
-   *
-   * <p>These requirements are added for ANY mention of this option, so may not work as intended: in
-   * the case where a user is trying to explicitly turn off a flag (say, by setting a boolean flag
-   * to its default value of false), the mention will still turn on its requirements. For this
-   * reason, it is best not to use this feature, and rely on expansion flags if multi-flag groupings
-   * are needed.
+   * @see OptionPriority
    */
   String[] implicitRequirements() default {};
 
@@ -186,4 +181,22 @@ public @interface Option {
    * that the old name is deprecated and the new name should be used.
    */
   String oldName() default "";
+
+  /**
+   * Indicates that this option is a wrapper for other options, and will be unwrapped when parsed.
+   * For example, if foo is a wrapper option, then "--foo=--bar=baz" will be parsed as the flag
+   * "--bar=baz" (rather than --foo taking the value "--bar=baz"). A wrapper option should have the
+   * type {@link Void} (if it is something other than Void, the parser will not assign a value to
+   * it). The {@link Option#implicitRequirements()}, {@link Option#expansion()}, {@link
+   * Option#converter()} attributes will not be processed. Wrapper options are implicitly repeatable
+   * (i.e., as though {@link Option#allowMultiple()} is true regardless of its value in the
+   * annotation).
+   *
+   * <p>Wrapper options are provided only for transitioning flags which appear as values to other
+   * flags, to top-level flags. Wrapper options should not be used in Invocation Policy, as
+   * expansion flags to other flags, or as implicit requirements to other flags. Use the inner flags
+   * instead.
+   */
+  @Deprecated
+  boolean wrapperOption() default false;
 }
