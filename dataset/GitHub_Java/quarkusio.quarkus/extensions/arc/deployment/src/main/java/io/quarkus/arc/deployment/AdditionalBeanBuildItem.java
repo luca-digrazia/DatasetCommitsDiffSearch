@@ -23,9 +23,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.jboss.builder.item.MultiBuildItem;
 import org.jboss.jandex.DotName;
-
-import io.quarkus.builder.item.MultiBuildItem;
 
 /**
  * This build item is used to specify one or more additional bean classes to be analyzed.
@@ -47,16 +46,6 @@ public final class AdditionalBeanBuildItem extends MultiBuildItem {
      */
     public static AdditionalBeanBuildItem unremovableOf(Class<?> beanClass) {
         return new AdditionalBeanBuildItem(Collections.singletonList(beanClass.getName()), false, null);
-    }
-
-    /**
-     * Convenient factory method to create an unremovable build item for a single bean class.
-     *
-     * @param beanClass
-     * @return a new build item
-     */
-    public static AdditionalBeanBuildItem unremovableOf(String beanClass) {
-        return new AdditionalBeanBuildItem(Collections.singletonList(beanClass), false, null);
     }
 
     private final List<String> beanClasses;
