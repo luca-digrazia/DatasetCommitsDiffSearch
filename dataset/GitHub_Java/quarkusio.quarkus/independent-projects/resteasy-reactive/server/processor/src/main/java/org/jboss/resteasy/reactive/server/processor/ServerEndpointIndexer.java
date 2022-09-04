@@ -8,7 +8,6 @@ import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNa
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.JSONP_JSON_STRING;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.JSONP_JSON_STRUCTURE;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.JSONP_JSON_VALUE;
-import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.MULTI_VALUED_MAP;
 
 import io.quarkus.gizmo.MethodCreator;
 import java.util.Collections;
@@ -85,9 +84,6 @@ public class ServerEndpointIndexer
             additionalReaders.add(ServerJsonObjectHandler.class, APPLICATION_JSON, javax.json.JsonObject.class);
         } else if (dotName.equals(JSONP_JSON_STRUCTURE)) {
             additionalReaders.add(ServerJsonStructureHandler.class, APPLICATION_JSON, javax.json.JsonStructure.class);
-        } else if (dotName.equals(MULTI_VALUED_MAP)) {
-            additionalReaders.add(ServerFormUrlEncodedProvider.class, APPLICATION_FORM_URLENCODED,
-                    MultivaluedMap.class);
         }
     }
 
@@ -207,6 +203,11 @@ public class ServerEndpointIndexer
             ServerIndexedParameter builder, String elementType) {
         builder.setConverter(extractConverter(elementType, index,
                 existingConverters, errorLocation, hasRuntimeConverters));
+    }
+
+    protected void handleMultiMapParam(AdditionalReaders additionalReaders, ServerIndexedParameter builder) {
+        additionalReaders.add(ServerFormUrlEncodedProvider.class, APPLICATION_FORM_URLENCODED,
+                MultivaluedMap.class);
     }
 
     protected void handleSortedSetParam(Map<String, String> existingConverters, String errorLocation,

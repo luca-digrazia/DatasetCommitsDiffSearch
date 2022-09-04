@@ -14,7 +14,6 @@ import java.util.Map;
 
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
-import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.resteasy.reactive.common.model.InjectableBean;
 import org.jboss.resteasy.reactive.common.model.MethodParameter;
@@ -64,7 +63,7 @@ public class ClientEndpointIndexer
     }
 
     @Override
-    protected ResourceMethod createResourceMethod(MethodInfo info, Map<String, Object> methodContext) {
+    protected ResourceMethod createResourceMethod() {
         return new ResourceMethod();
     }
 
