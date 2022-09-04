@@ -49,7 +49,7 @@ import static com.shuyu.gsyvideoplayer.utils.CommonUtil.hideNavKey;
 public class StandardGSYVideoPlayer extends GSYVideoPlayer {
 
 
-    protected Timer mDismissControlViewTimer;
+    protected Timer DISSMISS_CONTROL_VIEW_TIMER;
 
     protected ProgressBar mBottomProgressBar;
 
@@ -197,9 +197,9 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
                 mTitleTextView.setText(objects[0].toString());
             }
             if (mIfCurrentIsFullscreen) {
-                mFullscreenButton.setImageResource(getShrinkImageRes());
+                mFullscreenButton.setImageResource(R.drawable.video_shrink);
             } else {
-                mFullscreenButton.setImageResource(getEnlargeImageRes());
+                mFullscreenButton.setImageResource(R.drawable.video_enlarge);
                 mBackButton.setVisibility(View.GONE);
             }
             return true;
@@ -218,7 +218,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         switch (mCurrentState) {
             case CURRENT_STATE_NORMAL:
                 changeUiToNormal();
-                cancelDismissControlViewTimer();
                 break;
             case CURRENT_STATE_PREPAREING:
                 changeUiToPrepareingShow();
@@ -449,10 +448,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mTopContainer.setVisibility(View.INVISIBLE);
         mBottomContainer.setVisibility(View.INVISIBLE);
         mStartButton.setVisibility(View.INVISIBLE);
-        mLoadingProgressBar.setVisibility(View.INVISIBLE);
-        if (mLoadingProgressBar instanceof ENDownloadView) {
-            ((ENDownloadView) mLoadingProgressBar).reset();
-        }
         mThumbImageViewLayout.setVisibility(View.INVISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
         mCoverImageView.setVisibility(View.VISIBLE);
@@ -634,7 +629,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
     }
 
     @Override
-    @SuppressWarnings("ResourceType")
     protected void showProgressDialog(float deltaX, String seekTime, int seekTimePosition, String totalTime, int totalTimeDuration) {
         super.showProgressDialog(deltaX, seekTime, seekTimePosition, totalTime, totalTimeDuration);
         if (mProgressDialog == null) {
@@ -822,17 +816,9 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         GSYBaseVideoPlayer gsyBaseVideoPlayer = super.showSmallVideo(size, actionBar, statusBar);
         if (gsyBaseVideoPlayer != null) {
             StandardGSYVideoPlayer gsyVideoPlayer = (StandardGSYVideoPlayer) gsyBaseVideoPlayer;
-            gsyVideoPlayer.setIsTouchWiget(false);//小窗口不能点击
             gsyVideoPlayer.setStandardVideoAllCallBack(mStandardVideoAllCallBack);
         }
         return gsyBaseVideoPlayer;
-    }
-
-    @Override
-    protected void setSmallVideoTextureView(View.OnTouchListener onTouchListener) {
-        super.setSmallVideoTextureView(onTouchListener);
-        //小窗口播放停止了也可以移动
-        mThumbImageViewLayout.setOnTouchListener(onTouchListener);
     }
 
     /**
@@ -889,19 +875,17 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
 
     private void startDismissControlViewTimer() {
         cancelDismissControlViewTimer();
-        mDismissControlViewTimer = new Timer();
+        DISSMISS_CONTROL_VIEW_TIMER = new Timer();
         mDismissControlViewTimerTask = new DismissControlViewTimerTask();
-        mDismissControlViewTimer.schedule(mDismissControlViewTimerTask, 2500);
+        DISSMISS_CONTROL_VIEW_TIMER.schedule(mDismissControlViewTimerTask, 2500);
     }
 
     private void cancelDismissControlViewTimer() {
-        if (mDismissControlViewTimer != null) {
-            mDismissControlViewTimer.cancel();
-            mDismissControlViewTimer = null;
+        if (DISSMISS_CONTROL_VIEW_TIMER != null) {
+            DISSMISS_CONTROL_VIEW_TIMER.cancel();
         }
         if (mDismissControlViewTimerTask != null) {
             mDismissControlViewTimerTask.cancel();
-            mDismissControlViewTimerTask = null;
         }
 
     }
