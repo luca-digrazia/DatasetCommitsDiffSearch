@@ -27,6 +27,7 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
+import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
@@ -87,7 +88,7 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
         loadingMock
             .getPackageFactoryForTesting()
             .create(ruleClassProvider, null, getEnvironmentExtensions(), scratch.getFileSystem());
-    skyframeExecutor = createSkyframeExecutor();
+    skyframeExecutor = createSkyframeExecutor(getPreprocessorFactorySupplier());
     setUpSkyframe(parsePackageCacheOptions());
   }
 
@@ -96,7 +97,8 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
     return ImmutableList.of();
   }
 
-  private SkyframeExecutor createSkyframeExecutor() {
+  private SkyframeExecutor createSkyframeExecutor(
+      Preprocessor.Factory.Supplier preprocessorFactorySupplier) {
     SkyframeExecutor skyframeExecutor =
         SequencedSkyframeExecutor.create(
             packageFactory,
@@ -107,6 +109,7 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
             ruleClassProvider.getBuildInfoFactories(),
             ImmutableList.<DiffAwareness.Factory>of(),
             Predicates.<PathFragment>alwaysFalse(),
+            preprocessorFactorySupplier,
             ImmutableMap.<SkyFunctionName, SkyFunction>of(),
             ImmutableList.<PrecomputedValue.Injected>of(),
             ImmutableList.<SkyValueDirtinessChecker>of(),
@@ -120,6 +123,10 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
     return ImmutableList.<EnvironmentExtension>of();
   }
 
+  protected Preprocessor.Factory.Supplier getPreprocessorFactorySupplier() {
+    return Preprocessor.Factory.Supplier.NullSupplier.INSTANCE;
+  }
+
   protected void setUpSkyframe(RuleVisibility defaultVisibility, String defaultsPackageContents) {
     PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
     packageCacheOptions.defaultVisibility = defaultVisibility;
@@ -130,7 +137,6 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
         packageCacheOptions,
         defaultsPackageContents,
         UUID.randomUUID(),
-        ImmutableMap.<String, String>of(),
         ImmutableMap.<String, String>of(),
         new TimestampGranularityMonitor(BlazeClock.instance()));
   }
@@ -145,7 +151,6 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
         packageCacheOptions,
         loadingMock.getDefaultsPackageContent(),
         UUID.randomUUID(),
-        ImmutableMap.<String, String>of(),
         ImmutableMap.<String, String>of(),
         new TimestampGranularityMonitor(BlazeClock.instance()));
     skyframeExecutor.setDeletedPackages(

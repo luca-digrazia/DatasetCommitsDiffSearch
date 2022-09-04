@@ -261,8 +261,8 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
     scratch.file("x/y/BUILD", "sh_library(name = 'z')");
     syncPackages(
         ModifiedFileSet.builder()
-            .modify(PathFragment.create("x/y"))
-            .modify(PathFragment.create("x/y/BUILD"))
+            .modify(new PathFragment("x/y"))
+            .modify(new PathFragment("x/y/BUILD"))
             .build());
 
     reporter.removeHandler(failFastHandler); // expect errors
@@ -281,7 +281,7 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
     assertContainsEvent("Label '//x:y/z' crosses boundary of subpackage 'x/y'");
 
     scratch.deleteFile("x/y/BUILD");
-    syncPackages(ModifiedFileSet.builder().modify(PathFragment.create("x/y/BUILD")).build());
+    syncPackages(ModifiedFileSet.builder().modify(new PathFragment("x/y/BUILD")).build());
 
     reporter.addHandler(failFastHandler); // don't expect errors
     assertLabelsVisited(
@@ -415,7 +415,6 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
             loadingMock.getDefaultsPackageContent(),
             UUID.randomUUID(),
             ImmutableMap.<String, String>of(),
-            ImmutableMap.<String, String>of(),
             new TimestampGranularityMonitor(BlazeClock.instance()));
     this.visitor = getSkyframeExecutor().pkgLoader();
     scratch.file("pkg/BUILD", "sh_library(name = 'x', deps = ['z'])", "sh_library(name = 'z')");
@@ -463,7 +462,6 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
             loadingMock.getDefaultsPackageContent(),
             UUID.randomUUID(),
             ImmutableMap.<String, String>of(),
-            ImmutableMap.<String, String>of(),
             new TimestampGranularityMonitor(BlazeClock.instance()));
     this.visitor = getSkyframeExecutor().pkgLoader();
     scratch.file("a/BUILD", "subinclude('//b:c/d/foo')");
@@ -474,14 +472,14 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
         ImmutableSet.of("//a:a"), ImmutableSet.of("//a:a"), !EXPECT_ERROR, !KEEP_GOING);
 
     Path subpackageBuildFile = scratch.file("b/c/BUILD", "exports_files(['foo'])");
-    syncPackages(ModifiedFileSet.builder().modify(PathFragment.create("b/c/BUILD")).build());
+    syncPackages(ModifiedFileSet.builder().modify(new PathFragment("b/c/BUILD")).build());
 
     reporter.removeHandler(failFastHandler); // expect errors
     assertLabelsVisitedWithErrors(ImmutableSet.of("//a:a"), ImmutableSet.of("//a:a"));
     assertContainsEvent("Label '//b:c/d/foo' crosses boundary of subpackage 'b/c'");
 
     subpackageBuildFile.delete();
-    syncPackages(ModifiedFileSet.builder().modify(PathFragment.create("b/c/BUILD")).build());
+    syncPackages(ModifiedFileSet.builder().modify(new PathFragment("b/c/BUILD")).build());
 
     assertLabelsVisited(
         ImmutableSet.of("//a:a"), ImmutableSet.of("//a:a"), !EXPECT_ERROR, !KEEP_GOING);

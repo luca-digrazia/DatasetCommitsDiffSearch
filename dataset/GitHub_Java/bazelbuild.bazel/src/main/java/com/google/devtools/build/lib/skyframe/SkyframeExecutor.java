@@ -146,13 +146,10 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -353,7 +350,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     ImmutableMap.Builder<SkyFunctionName, SkyFunction> map = ImmutableMap.builder();
     map.put(SkyFunctions.PRECOMPUTED, new PrecomputedFunction());
     map.put(SkyFunctions.CLIENT_ENVIRONMENT_VARIABLE, new ClientEnvironmentFunction(clientEnv));
-    map.put(SkyFunctions.ACTION_ENVIRONMENT_VARIABLE, new ActionEnvironmentFunction());
     map.put(SkyFunctions.FILE_STATE, new FileStateFunction(tsgm, externalFilesHelper));
     map.put(SkyFunctions.DIRECTORY_LISTING_STATE,
         new DirectoryListingStateFunction(externalFilesHelper));
@@ -417,7 +413,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         configurationFactory, ruleClassProvider));
     map.put(SkyFunctions.CONFIGURATION_FRAGMENT, new ConfigurationFragmentFunction(
         configurationFragments, ruleClassProvider));
-    map.put(SkyFunctions.WORKSPACE_NAME, new WorkspaceNameFunction());
     map.put(SkyFunctions.WORKSPACE_AST, new WorkspaceASTFunction(ruleClassProvider));
     map.put(
         SkyFunctions.WORKSPACE_FILE,
@@ -945,7 +940,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       String defaultsPackageContents,
       UUID commandId,
       Map<String, String> clientEnv,
-      Map<String, String> actionEnv,
       TimestampGranularityMonitor tsgm) {
     Preconditions.checkNotNull(pkgLocator);
     Preconditions.checkNotNull(tsgm);
@@ -954,7 +948,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     this.tsgm.set(tsgm);
     maybeInjectPrecomputedValuesForAnalysis();
     setCommandId(commandId);
-    PrecomputedValue.ACTION_ENV.set(injectable(), actionEnv);
     this.clientEnv.set(clientEnv);
     setBlacklistedPackagePrefixesFile(getBlacklistedPackagePrefixesFile());
     setShowLoadingProgress(packageCacheOptions.showLoadingProgress);
@@ -1683,6 +1676,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
           "package must be absolute: %s", packageName);
       return deletedPackages.get().contains(packageName);
     }
+
+    /** Same as {@link PackageManager#partiallyClear}. */
+    void partiallyClear() {
+      packageFunctionCache.invalidateAll();
+    }
   }
 
   @VisibleForTesting
@@ -1701,14 +1699,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       TimestampGranularityMonitor tsgm,
       OptionsClassProvider options)
       throws InterruptedException, AbruptExitException {
-    // ImmutableMap does not support null values, so use a LinkedHashMap instead.
-    LinkedHashMap<String, String> actionEnvironment = new LinkedHashMap<>();
-    BuildConfiguration.Options opt = options.getOptions(BuildConfiguration.Options.class);
-    if (opt != null) {
-      for (Entry<String, String> v : opt.actionEnvironment) {
-        actionEnvironment.put(v.getKey(), v.getValue());
-      }
-    }
     preparePackageLoading(
         createPackageLocator(
             eventHandler,
@@ -1720,7 +1710,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         defaultsPackageContents,
         commandId,
         clientEnv,
-        Collections.unmodifiableMap(actionEnvironment),
         tsgm);
     setDeletedPackages(packageCacheOptions.getDeletedPackages());
 
