@@ -94,7 +94,7 @@ public class GranteeSharesService {
 
         final PaginatedList<EntityDescriptor> paginatedList = new PaginatedList<>(
                 entityDescriptors,
-                targets.size(),
+                entityDescriptors.size(),
                 paginationParameters.getPage(),
                 paginationParameters.getPerPage()
         );
