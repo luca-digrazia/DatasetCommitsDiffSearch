@@ -24,12 +24,12 @@ import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -244,41 +244,16 @@ public abstract class ProguardHelper {
    */
   public static ImmutableList<Artifact> collectTransitiveProguardSpecs(
       RuleContext ruleContext, Iterable<Artifact> specsToInclude) {
-    return collectTransitiveProguardSpecs(
-        ruleContext,
-        Iterables.concat(
-            specsToInclude,
-            ruleContext.getPrerequisiteArtifacts(":extra_proguard_specs", Mode.TARGET).list()),
-        ruleContext.attributes().has(PROGUARD_SPECS, BuildType.LABEL_LIST)
-            ? ruleContext.getPrerequisiteArtifacts(PROGUARD_SPECS, Mode.TARGET).list()
-            : ImmutableList.<Artifact>of(),
-        ruleContext.getPrerequisites("deps", Mode.TARGET, ProguardSpecProvider.class));
-  }
-
-  /**
-   * Retrieves the full set of proguard specs that should be applied to this binary, including the
-   * specs passed in, if Proguard should run on the given rule.
-   *
-   * <p>Unlike {@link #collectTransitiveProguardSpecs(RuleContext, Iterable)}, this method requires
-   * values to be passed in explicitly, and does not extract them from rule attributes.
-   *
-   * <p>If Proguard shouldn't be applied, or the legacy link mode is used and there are no
-   * proguard_specs on this rule, an empty list will be returned, regardless of any given specs or
-   * specs from dependencies. {@link
-   * com.google.devtools.build.lib.rules.android.AndroidBinary#createAndroidBinary} relies on that
-   * behavior.
-   */
-  public static ImmutableList<Artifact> collectTransitiveProguardSpecs(
-      RuleContext ruleContext,
-      Iterable<Artifact> specsToInclude,
-      ImmutableList<Artifact> localProguardSpecs,
-      Iterable<ProguardSpecProvider> proguardDeps) {
     JavaOptimizationMode optMode = getJavaOptimizationMode(ruleContext);
     if (optMode == JavaOptimizationMode.NOOP) {
       return ImmutableList.of();
     }
 
-    if (optMode == JavaOptimizationMode.LEGACY && localProguardSpecs.isEmpty()) {
+    ImmutableList<Artifact> proguardSpecs =
+        ruleContext.attributes().has(PROGUARD_SPECS, BuildType.LABEL_LIST)
+            ? ruleContext.getPrerequisiteArtifacts(PROGUARD_SPECS, Mode.TARGET).list()
+            : ImmutableList.<Artifact>of();
+    if (optMode == JavaOptimizationMode.LEGACY && proguardSpecs.isEmpty()) {
       return ImmutableList.of();
     }
 
@@ -286,9 +261,12 @@ public abstract class ProguardHelper {
     // flags since those flags would override the desired optMode
     ImmutableSortedSet.Builder<Artifact> builder =
         ImmutableSortedSet.orderedBy(Artifact.EXEC_PATH_COMPARATOR)
-            .addAll(localProguardSpecs)
-            .addAll(specsToInclude);
-    for (ProguardSpecProvider dep : proguardDeps) {
+            .addAll(proguardSpecs)
+            .addAll(specsToInclude)
+            .addAll(
+                ruleContext.getPrerequisiteArtifacts(":extra_proguard_specs", Mode.TARGET).list());
+    for (ProguardSpecProvider dep :
+        ruleContext.getPrerequisites("deps", Mode.TARGET, ProguardSpecProvider.class)) {
       builder.addAll(dep.getTransitiveProguardSpecs());
     }
 
@@ -456,7 +434,7 @@ public abstract class ProguardHelper {
       proguardAction
           .setProgressMessage("Trimming binary with Proguard")
           .addOutput(proguardOutputJar);
-      proguardAction.addCommandLine(commandLine.build());
+      proguardAction.setCommandLine(commandLine.build());
       ruleContext.registerAction(proguardAction.build(ruleContext));
     } else {
       // Optimization passes have been specified, so run proguard in multiple phases.
@@ -485,7 +463,7 @@ public abstract class ProguardHelper {
           .setProgressMessage("Trimming binary with Proguard: Verification/Shrinking Pass")
           .addOutput(lastStageOutput);
       initialCommandLine.add("-runtype INITIAL").addExecPath("-nextstageoutput", lastStageOutput);
-      initialAction.addCommandLine(initialCommandLine.build());
+      initialAction.setCommandLine(initialCommandLine.build());
       ruleContext.registerAction(initialAction.build(ruleContext));
 
       for (int i = 1; i <= optimizationPasses; i++) {
@@ -539,7 +517,7 @@ public abstract class ProguardHelper {
               .add("-runtype OPTIMIZATION")
               .addExecPath("-laststageoutput", lastStageOutput)
               .addExecPath("-nextstageoutput", optimizationOutput);
-          optimizationAction.addCommandLine(optimizationCommandLine.build());
+          optimizationAction.setCommandLine(optimizationCommandLine.build());
           ruleContext.registerAction(optimizationAction.build(ruleContext));
           lastStageOutput = optimizationOutput;
         }
@@ -568,7 +546,7 @@ public abstract class ProguardHelper {
           .addInput(lastStageOutput)
           .addOutput(proguardOutputJar);
       finalCommandLine.add("-runtype FINAL").addExecPath("-laststageoutput", lastStageOutput);
-      finalAction.addCommandLine(finalCommandLine.build());
+      finalAction.setCommandLine(finalCommandLine.build());
       ruleContext.registerAction(finalAction.build(ruleContext));
     }
 
