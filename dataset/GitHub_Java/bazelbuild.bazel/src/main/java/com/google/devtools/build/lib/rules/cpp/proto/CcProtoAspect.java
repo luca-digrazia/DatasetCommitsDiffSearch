@@ -162,7 +162,6 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
       depsBuilder.addAll(ruleContext.getPrerequisites("deps", TARGET));
       ImmutableList<TransitiveInfoCollection> deps = depsBuilder.build();
 
-      CppHelper.checkProtoLibrariesInDeps(ruleContext, deps);
       CcCompilationHelper compilationHelper =
           initializeCompilationHelper(featureConfiguration, deps);
 
@@ -298,17 +297,14 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
       CcToolchainProvider toolchain = ccToolchain(ruleContext);
       CcCompilationHelper helper =
           new CcCompilationHelper(
-                  ruleContext,
-                  cppSemantics,
-                  featureConfiguration,
-                  toolchain,
-                  toolchain.getFdoContext())
-              .addCcCompilationContexts(CppHelper.getCompilationContextsFromDeps(deps))
-              .addCcCompilationContexts(
-                  ImmutableList.of(CcCompilationHelper.getStlCcCompilationContext(ruleContext)))
-              .addQuoteIncludeDirs(cppSemantics.getQuoteIncludes(ruleContext));
+              ruleContext,
+              cppSemantics,
+              featureConfiguration,
+              toolchain,
+              toolchain.getFdoContext());
+      helper.addDeps(deps);
       // Don't instrument the generated C++ files even when --collect_code_coverage is set.
-      helper.setCodeCoverageEnabled(false);
+      helper.setAllowCoverageInstrumentation(false);
       return helper;
     }
 
