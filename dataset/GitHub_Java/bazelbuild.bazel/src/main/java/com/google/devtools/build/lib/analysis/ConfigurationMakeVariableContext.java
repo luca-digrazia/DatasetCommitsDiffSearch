@@ -36,8 +36,7 @@ public class ConfigurationMakeVariableContext implements MakeVariableExpander.Co
   private final String platform;
 
   // TODO(b/37567440): Remove when Skylark callers can be updated to get this from
-  // CcToolchainProvider. We should use CcCommon.CC_TOOLCHAIN_ATTRIBUTE_NAME, but we didn't want to
-  // pollute core with C++ specific constant.
+  // CcToolchainProvider.
   private static final ImmutableList<String> defaultMakeVariableAttributes =
       ImmutableList.of(":cc_toolchain");
 

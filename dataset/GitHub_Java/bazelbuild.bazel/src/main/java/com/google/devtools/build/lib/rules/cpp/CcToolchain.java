@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
-import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -285,15 +284,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       coverage = crosstool;
     }
 
-    PathFragment sysroot = calculateSysroot(ruleContext);
-
-    ImmutableList<PathFragment> builtInIncludeDirectories = null;
-    try {
-      builtInIncludeDirectories = cppConfiguration.getBuiltInIncludeDirectories(sysroot);
-    } catch (InvalidConfigurationException e) {
-      ruleContext.ruleError(e.getMessage());
-    }
-
     CcToolchainProvider ccProvider =
         new CcToolchainProvider(
             cppConfiguration,
@@ -320,8 +310,9 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             coverageEnvironment.build(),
             ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool", Mode.HOST),
             getEnvironment(ruleContext),
-            builtInIncludeDirectories,
-            sysroot);
+            cppConfiguration.getBuiltInIncludeDirectories());
+
+    PathFragment sysroot = cppConfiguration.getSysroot();
 
     MakeVariableProvider makeVariableProvider =
         createMakeVariableProvider(cppConfiguration, sysroot);
@@ -385,7 +376,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
   }
 
   private NestedSet<Artifact> inputsForLibc(RuleContext ruleContext) {
-    TransitiveInfoCollection libc = ruleContext.getPrerequisite(":libc_top", Mode.TARGET);
+    TransitiveInfoCollection libc = ruleContext.getPrerequisite(":libc_top", Mode.HOST);
     return libc != null
         ? libc.getProvider(FileProvider.class).getFilesToBuild()
         : NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER);
@@ -395,7 +386,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       NestedSet<Artifact> crosstoolMiddleman) {
     return NestedSetBuilder.<Artifact>stableOrder()
         .addTransitive(crosstoolMiddleman)
-        .addTransitive(AnalysisUtils.getMiddlemanFor(ruleContext, ":libc_top", Mode.TARGET))
+        .addTransitive(AnalysisUtils.getMiddlemanFor(ruleContext, ":libc_top"))
         .build();
   }
 
@@ -407,7 +398,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       RuleContext ruleContext, NestedSet<Artifact> link) {
     return NestedSetBuilder.<Artifact>stableOrder()
         .addTransitive(link)
-        .addTransitive(AnalysisUtils.getMiddlemanFor(ruleContext, ":libc_top", Mode.TARGET))
+        .addTransitive(AnalysisUtils.getMiddlemanFor(ruleContext, ":libc_top"))
         .add(ruleContext.getPrerequisiteArtifact("$interface_library_builder", Mode.HOST))
         .add(ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool", Mode.HOST))
         .build();
@@ -489,17 +480,5 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
    */
   protected ImmutableMap<String, String> getEnvironment(RuleContext ruleContext) {
     return ImmutableMap.<String, String>of();
-  }
-
-  private PathFragment calculateSysroot(RuleContext ruleContext) {
-
-    TransitiveInfoCollection sysrootTarget = ruleContext.getPrerequisite(":libc_top", Mode.TARGET);
-    if (sysrootTarget == null) {
-      CppConfiguration cppConfiguration =
-          Preconditions.checkNotNull(ruleContext.getFragment(CppConfiguration.class));
-      return cppConfiguration.getDefaultSysroot();
-    }
-
-    return sysrootTarget.getLabel().getPackageFragment();
   }
 }

@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.rules.AliasProvider;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
-import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.java.JavaHelper;
 import com.google.devtools.build.lib.syntax.Type;
@@ -192,8 +191,7 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
     if (requiresCrosstool(baseCommand)) {
       // If cc is used, silently throw in the crosstool filegroup as a dependency.
       inputs.addTransitive(
-          CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext)
-              .getCrosstoolMiddleman());
+          CppHelper.getToolchain(ruleContext, ":cc_toolchain").getCrosstoolMiddleman());
     }
     if (requiresJdk(baseCommand)) {
       // If javac is used, silently throw in the jdk filegroup as a dependency.
@@ -292,7 +290,7 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
     private final NestedSet<Artifact> filesToBuild;
 
     private static final ImmutableList<String> makeVariableAttributes =
-        ImmutableList.of(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, "toolchains");
+        ImmutableList.of(":cc_toolchain", "toolchains");
 
     public CommandResolverContext(
         RuleContext ruleContext,

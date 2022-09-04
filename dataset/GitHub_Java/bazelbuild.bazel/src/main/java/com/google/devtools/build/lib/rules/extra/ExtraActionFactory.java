@@ -13,7 +13,6 @@
 // limitations under the License.
 
 package com.google.devtools.build.lib.rules.extra;
-
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -21,16 +20,16 @@ import com.google.devtools.build.lib.actions.CompositeRunfilesSupplier;
 import com.google.devtools.build.lib.analysis.CommandHelper;
 import com.google.devtools.build.lib.analysis.ConfigurationMakeVariableContext;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.MakeVariableExpander;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.extra.ExtraActionSpec;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.syntax.Type;
 import java.util.List;
 
@@ -64,9 +63,16 @@ public final class ExtraActionFactory implements RuleConfiguredTargetFactory {
     command = command.replace("$(ACTION_ID)", "$$(ACTION_ID)");
     command = command.replace("$(OWNER_LABEL_DIGEST)", "$$(OWNER_LABEL_DIGEST)");
     command = command.replace("$(output ", "$$(output ");
-    ConfigurationMakeVariableContext makeVariableContext = new ConfigurationMakeVariableContext(
-        context, context.getTarget().getPackage(), context.getConfiguration());
-    command = context.getExpander(makeVariableContext).expand("cmd", command);
+    try {
+      command =
+          MakeVariableExpander.expand(
+              command,
+              new ConfigurationMakeVariableContext(
+                  context, context.getTarget().getPackage(), context.getConfiguration()));
+    } catch (MakeVariableExpander.ExpansionException e) {
+      context.ruleError(String.format("Unable to expand make variables: %s",
+          e.getMessage()));
+    }
 
     boolean requiresActionOutput =
         context.attributes().get("requires_action_output", Type.BOOLEAN);
