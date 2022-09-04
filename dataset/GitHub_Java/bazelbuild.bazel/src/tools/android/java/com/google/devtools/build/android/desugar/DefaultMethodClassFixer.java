@@ -24,8 +24,8 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.TreeMap;
 import javax.annotation.Nullable;
@@ -52,7 +52,7 @@ public class DefaultMethodClassFixer extends ClassVisitor {
   private final ClassLoader targetLoader;
   private final DependencyCollector depsCollector;
   @Nullable private final CoreLibrarySupport coreLibrarySupport;
-  private final LinkedHashSet<String> instanceMethods = new LinkedHashSet<>();
+  private final HashSet<String> instanceMethods = new HashSet<>();
 
   private boolean isInterface;
   private String internalName;
@@ -372,7 +372,7 @@ public class DefaultMethodClassFixer extends ClassVisitor {
       // interfaces we would normally record later.  That ensures we generate a stub when a default
       // method is available in the base class but needs to be overridden due to an overriding
       // default method in a sub-interface not implemented by the base class.
-      LinkedHashSet<String> allSeen = new LinkedHashSet<>();
+      HashSet<String> allSeen = new HashSet<>();
       for (Class<?> itf : interfacesToStub) {
         boolean willBeInBaseClass = itf.isAssignableFrom(newSuperName);
         for (Method m : itf.getDeclaredMethods()) {
@@ -423,7 +423,7 @@ public class DefaultMethodClassFixer extends ClassVisitor {
   private ImmutableList<String> collectOrderedCompanionsToTriggerInterfaceClinit(
       ImmutableList<String> interfaces) {
     ImmutableList.Builder<String> companionCollector = ImmutableList.builder();
-    LinkedHashSet<String> visitedInterfaces = new LinkedHashSet<>();
+    HashSet<String> visitedInterfaces = new HashSet<>();
     for (String anInterface : interfaces) {
       collectOrderedCompanionsToTriggerInterfaceClinit(
           anInterface, visitedInterfaces, companionCollector);
@@ -433,7 +433,7 @@ public class DefaultMethodClassFixer extends ClassVisitor {
 
   private void collectOrderedCompanionsToTriggerInterfaceClinit(
       String anInterface,
-      LinkedHashSet<String> visitedInterfaces,
+      HashSet<String> visitedInterfaces,
       ImmutableList.Builder<String> companionCollector) {
     if (!visitedInterfaces.add(anInterface)) {
       return;
