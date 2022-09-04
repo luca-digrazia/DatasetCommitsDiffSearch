@@ -23,7 +23,6 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -36,7 +35,6 @@ import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.bootstrap.util.IoUtils;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageSystemPropertyBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.RuntimeReinitializedClassBuildItem;
 import io.quarkus.deployment.pkg.NativeConfig;
 import io.quarkus.deployment.pkg.PackageConfig;
 import io.quarkus.deployment.pkg.builditem.ArtifactResultBuildItem;
@@ -647,14 +645,6 @@ public class NativeImageBuildStep {
                 process.destroy();
             }
         }
-    }
-
-    //https://github.com/quarkusio/quarkus/issues/11573
-    //https://github.com/oracle/graal/issues/1610
-    @BuildStep
-    List<RuntimeReinitializedClassBuildItem> graalVmWorkaround() {
-        return Arrays.asList(new RuntimeReinitializedClassBuildItem(ThreadLocalRandom.class.getName()),
-                new RuntimeReinitializedClassBuildItem("java.lang.Math$RandomNumberGeneratorHolder"));
     }
 
     protected static final class GraalVM {
