@@ -40,6 +40,7 @@ public class FunctionTest extends EvaluationTestCase {
     assertThat(stmt).isNotNull();
     assertThat(stmt.getName()).isEqualTo("func");
     assertThat(stmt.getSignature().numMandatoryPositionals()).isEqualTo(3);
+    assertThat(stmt.getStatements()).hasSize(2);
   }
 
   @Test
