@@ -601,7 +601,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
       throw new IOException("Could not query server log location", e);
     }
 
-    return loggerFilePath.map((p) -> fileSystem.getPath(p.toAbsolutePath().toString()));
+    return loggerFilePath.map((p) -> fileSystem.getPath(p.toString()));
   }
 
   // Make sure we keep a strong reference to this logger, so that the
