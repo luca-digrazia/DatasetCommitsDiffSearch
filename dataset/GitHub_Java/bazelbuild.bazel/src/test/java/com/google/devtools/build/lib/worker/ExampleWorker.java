@@ -86,7 +86,6 @@ public final class ExampleWorker {
         if (request == null) {
           break;
         }
-
         currentRequest = request;
         inputs.clear();
         for (Input input : request.getInputsList()) {
@@ -95,17 +94,11 @@ public final class ExampleWorker {
         if (poisoned && workerOptions.hardPoison) {
           throw new IllegalStateException("I'm a very poisoned worker and will just crash.");
         }
-        if (request.getCancel()) {
-          respondToCancelRequest(request);
+        if (request.getRequestId() != 0) {
+          Thread t = createResponseThread(request);
+          t.start();
         } else {
-          try {
-            startResponseThread(request);
-          } catch (InterruptedException e) {
-            // We don't expect interrupts at this level, only inside the individual request
-            // handling threads, so here we just abort on interrupt.
-            e.printStackTrace();
-            return;
-          }
+          respondToRequest(request, new RequestInfo());
         }
         if (workerOptions.exitAfter > 0 && workUnitCounter > workerOptions.exitAfter) {
           System.exit(0);
@@ -191,9 +184,6 @@ public final class ExampleWorker {
         }
       } else {
         try {
-          if (currentRequest.getVerbosity() > 0) {
-            originalStdErr.println("VERBOSE: Pretending to do work.");
-          }
           parseOptionsAndLog(args);
         } catch (Exception e) {
           e.printStackTrace();
