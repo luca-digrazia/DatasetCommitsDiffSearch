@@ -457,6 +457,7 @@ public final class Profiler {
       long execStartTimeNanos,
       boolean enabledCpuUsageProfiling,
       boolean slimProfile,
+      boolean enableActionCountProfile,
       boolean includePrimaryOutput)
       throws IOException {
     Preconditions.checkState(!isActive(), "Profiler already active");
@@ -464,9 +465,11 @@ public final class Profiler {
 
     this.profiledTasks = profiledTasks;
     this.clock = clock;
-    this.actionCountStartTime = clock.nanoTime();
-    this.actionCountTimeSeries =
-        new TimeSeries(Duration.ofNanos(actionCountStartTime).toMillis(), ACTION_COUNT_BUCKET_MS);
+    if (enableActionCountProfile) {
+      this.actionCountStartTime = clock.nanoTime();
+      this.actionCountTimeSeries =
+          new TimeSeries(Duration.ofNanos(actionCountStartTime).toMillis(), ACTION_COUNT_BUCKET_MS);
+    }
 
     // sanity check for current limitation on the number of supported types due
     // to using enum.ordinal() to store them instead of EnumSet for performance reasons.
