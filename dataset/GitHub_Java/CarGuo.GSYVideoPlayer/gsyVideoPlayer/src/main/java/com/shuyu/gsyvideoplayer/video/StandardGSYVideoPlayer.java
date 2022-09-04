@@ -30,9 +30,6 @@ import com.shuyu.gsyvideoplayer.utils.CommonUtil;
 import java.util.Timer;
 import java.util.TimerTask;
 
-import moe.codeest.enviews.ENDownloadView;
-import moe.codeest.enviews.ENPlayView;
-
 /**
  * 标准播放器
  * Created by shuyu on 2016/11/11.
@@ -43,9 +40,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
 
     protected static Timer DISSMISS_CONTROL_VIEW_TIMER;
 
-    protected ProgressBar mBottomProgressBar;
-
-    private ENDownloadView mLoadingProgressBar;
+    protected ProgressBar mBottomProgressBar, mLoadingProgressBar;
 
     protected TextView mTitleTextView; //title
 
@@ -94,7 +89,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mTitleTextView = (TextView) findViewById(R.id.title);
         mThumbImageViewLayout = (RelativeLayout) findViewById(R.id.thumb);
         mCoverImageView = (ImageView) findViewById(R.id.cover);
-        mLoadingProgressBar = (ENDownloadView) findViewById(R.id.loading);
+        mLoadingProgressBar = (ProgressBar) findViewById(R.id.loading);
 
         mThumbImageViewLayout.setVisibility(GONE);
         mThumbImageViewLayout.setOnClickListener(this);
@@ -256,8 +251,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         startDismissControlViewTimer();
     }
 
-    @Override
-    protected void onClickUiToggle() {
+    private void onClickUiToggle() {
         if (mCurrentState == CURRENT_STATE_PREPAREING) {
             if (mBottomContainer.getVisibility() == View.VISIBLE) {
                 changeUiToPrepareingClear();
@@ -311,7 +305,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.INVISIBLE);
         mStartButton.setVisibility(View.VISIBLE);
         mLoadingProgressBar.setVisibility(View.INVISIBLE);
-        mLoadingProgressBar.reset();
         mThumbImageViewLayout.setVisibility(View.VISIBLE);
         mCoverImageView.setVisibility(View.VISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -323,7 +316,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.VISIBLE);
         mStartButton.setVisibility(View.INVISIBLE);
         mLoadingProgressBar.setVisibility(View.VISIBLE);
-        mLoadingProgressBar.start();
         mThumbImageViewLayout.setVisibility(View.INVISIBLE);
         mCoverImageView.setVisibility(View.VISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -343,7 +335,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.VISIBLE);
         mStartButton.setVisibility(View.VISIBLE);
         mLoadingProgressBar.setVisibility(View.INVISIBLE);
-        mLoadingProgressBar.reset();
         mThumbImageViewLayout.setVisibility(View.INVISIBLE);
         mCoverImageView.setVisibility(View.INVISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -360,7 +351,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.VISIBLE);
         mStartButton.setVisibility(View.VISIBLE);
         mLoadingProgressBar.setVisibility(View.INVISIBLE);
-        mLoadingProgressBar.reset();
         mThumbImageViewLayout.setVisibility(View.INVISIBLE);
         mCoverImageView.setVisibility(View.INVISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -377,7 +367,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.VISIBLE);
         mStartButton.setVisibility(View.INVISIBLE);
         mLoadingProgressBar.setVisibility(View.VISIBLE);
-        mLoadingProgressBar.start();
         mThumbImageViewLayout.setVisibility(View.INVISIBLE);
         mCoverImageView.setVisibility(View.INVISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -388,7 +377,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.INVISIBLE);
         mStartButton.setVisibility(View.INVISIBLE);
         mLoadingProgressBar.setVisibility(View.VISIBLE);
-        mLoadingProgressBar.start();
         mThumbImageViewLayout.setVisibility(View.INVISIBLE);
         mCoverImageView.setVisibility(View.INVISIBLE);
         mBottomProgressBar.setVisibility(View.VISIBLE);
@@ -400,7 +388,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.INVISIBLE);
         mStartButton.setVisibility(View.INVISIBLE);
         mLoadingProgressBar.setVisibility(View.INVISIBLE);
-        mLoadingProgressBar.reset();
         mThumbImageViewLayout.setVisibility(View.INVISIBLE);
         mCoverImageView.setVisibility(View.INVISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -411,7 +398,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.VISIBLE);
         mStartButton.setVisibility(View.VISIBLE);
         mLoadingProgressBar.setVisibility(View.INVISIBLE);
-        mLoadingProgressBar.reset();
         mThumbImageViewLayout.setVisibility(View.VISIBLE);
         mCoverImageView.setVisibility(View.INVISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -423,7 +409,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.INVISIBLE);
         mStartButton.setVisibility(View.VISIBLE);
         mLoadingProgressBar.setVisibility(View.INVISIBLE);
-        mLoadingProgressBar.reset();
         mThumbImageViewLayout.setVisibility(View.VISIBLE);
         mCoverImageView.setVisibility(View.INVISIBLE);
         mBottomProgressBar.setVisibility(View.VISIBLE);
@@ -435,7 +420,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.INVISIBLE);
         mStartButton.setVisibility(View.VISIBLE);
         mLoadingProgressBar.setVisibility(View.INVISIBLE);
-        mLoadingProgressBar.reset();
         mThumbImageViewLayout.setVisibility(View.INVISIBLE);
         mCoverImageView.setVisibility(View.VISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -443,17 +427,12 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
     }
 
     private void updateStartImage() {
-        ENPlayView enPlayView = (ENPlayView) mStartButton;
-        enPlayView.setDuration(500);
         if (mCurrentState == CURRENT_STATE_PLAYING) {
-            enPlayView.play();
-            //mStartButton.setImageResource(R.drawable.video_click_pause_selector);
+            mStartButton.setImageResource(R.drawable.video_click_pause_selector);
         } else if (mCurrentState == CURRENT_STATE_ERROR) {
-            enPlayView.pause();
-            //mStartButton.setImageResource(R.drawable.video_click_error_selector);
+            mStartButton.setImageResource(R.drawable.video_click_error_selector);
         } else {
-            enPlayView.pause();
-            //mStartButton.setImageResource(R.drawable.video_click_play_selector);
+            mStartButton.setImageResource(R.drawable.video_click_play_selector);
         }
     }
 
@@ -473,8 +452,8 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
             mProgressDialog.getWindow().addFlags(16);
             mProgressDialog.getWindow().setLayout(-2, -2);
             WindowManager.LayoutParams localLayoutParams = mProgressDialog.getWindow().getAttributes();
-            localLayoutParams.gravity = Gravity.CENTER;
-            //localLayoutParams.y = getResources().getDimensionPixelOffset(R.dimen.video_progress_dialog_margin_top);
+            localLayoutParams.gravity = 49;
+            localLayoutParams.y = getResources().getDimensionPixelOffset(R.dimen.video_progress_dialog_margin_top);
             mProgressDialog.getWindow().setAttributes(localLayoutParams);
         }
         if (!mProgressDialog.isShowing()) {
@@ -544,8 +523,8 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
             mBrightnessDialog.getWindow().addFlags(16);
             mBrightnessDialog.getWindow().setLayout(-2, -2);
             WindowManager.LayoutParams localLayoutParams = mBrightnessDialog.getWindow().getAttributes();
-            localLayoutParams.gravity = Gravity.CENTER | Gravity.RIGHT;
-            localLayoutParams.x = ViewGroup.LayoutParams.MATCH_PARENT;
+            localLayoutParams.gravity = Gravity.CENTER;
+            localLayoutParams.x = ViewGroup.LayoutParams.WRAP_CONTENT;
             mBrightnessDialog.getWindow().setAttributes(localLayoutParams);
         }
         if (!mBrightnessDialog.isShowing()) {
