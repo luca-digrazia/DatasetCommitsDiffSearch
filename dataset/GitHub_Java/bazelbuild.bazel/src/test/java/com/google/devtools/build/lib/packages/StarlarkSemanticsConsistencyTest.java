@@ -155,14 +155,13 @@ public class StarlarkSemanticsConsistencyTest {
         "--incompatible_no_implicit_file_export=" + rand.nextBoolean(),
         "--incompatible_no_rule_outputs_param=" + rand.nextBoolean(),
         "--incompatible_no_support_tools_in_action_inputs=" + rand.nextBoolean(),
-        "--incompatible_objc_provider_remove_compile_info=" + rand.nextBoolean(),
         "--incompatible_run_shell_command_string=" + rand.nextBoolean(),
         "--incompatible_string_replace_count=" + rand.nextBoolean(),
         "--incompatible_visibility_private_attributes_at_definition=" + rand.nextBoolean(),
         "--incompatible_require_linker_input_cc_api=" + rand.nextBoolean(),
         "--incompatible_restrict_string_escapes=" + rand.nextBoolean(),
         "--incompatible_use_cc_configure_from_rules_cc=" + rand.nextBoolean(),
-        "--internal_starlark_flag_test_canary=" + rand.nextBoolean(),
+        "--internal_skylark_flag_test_canary=" + rand.nextBoolean(),
         "--max_computation_steps=" + rand.nextLong(),
         "--record_rule_instantiation_callstack=" + rand.nextBoolean());
   }
@@ -208,7 +207,6 @@ public class StarlarkSemanticsConsistencyTest {
         .incompatibleNoImplicitFileExport(rand.nextBoolean())
         .incompatibleNoRuleOutputsParam(rand.nextBoolean())
         .incompatibleNoSupportToolsInActionInputs(rand.nextBoolean())
-        .incompatibleObjcProviderRemoveCompileInfo(rand.nextBoolean())
         .incompatibleRunShellCommandString(rand.nextBoolean())
         .incompatibleStringReplaceCount(rand.nextBoolean())
         .incompatibleVisibilityPrivateAttributesAtDefinition(rand.nextBoolean())

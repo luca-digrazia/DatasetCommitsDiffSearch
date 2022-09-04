@@ -545,7 +545,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
 
   /** Used in an integration test to confirm that flags are visible to the interpreter. */
   @Option(
-      name = "internal_starlark_flag_test_canary",
+      name = "internal_skylark_flag_test_canary",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.UNKNOWN})
@@ -620,18 +620,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
           "If set to true the default linkopts in the default toolchain are passed as linklibs "
               + "instead of linkopts to cc_toolchain_config")
   public boolean incompatibleLinkoptsToLinkLibs;
-
-  @Option(
-      name = "incompatible_objc_provider_remove_compile_info",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "If set to true, the ObjcProvider's APIs for compile info/merge_zip will be removed.")
-  public boolean incompatibleObjcProviderRemoveCompileInfo;
 
   @Option(
       name = "max_computation_steps",
@@ -709,7 +697,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .incompatibleRequireLinkerInputCcApi(incompatibleRequireLinkerInputCcApi)
             .incompatibleRestrictStringEscapes(incompatibleRestrictStringEscapes)
             .incompatibleLinkoptsToLinkLibs(incompatibleLinkoptsToLinkLibs)
-            .incompatibleObjcProviderRemoveCompileInfo(incompatibleObjcProviderRemoveCompileInfo)
             .maxComputationSteps(maxComputationSteps)
             .recordRuleInstantiationCallstack(recordRuleInstantiationCallstack)
             .build();
