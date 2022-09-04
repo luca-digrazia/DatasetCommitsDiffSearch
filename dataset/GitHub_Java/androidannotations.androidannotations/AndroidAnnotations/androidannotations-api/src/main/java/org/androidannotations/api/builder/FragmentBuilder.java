@@ -1,14 +1,29 @@
+/**
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed To in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package org.androidannotations.api.builder;
+
+import java.io.Serializable;
+import java.util.ArrayList;
 
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.util.SparseArray;
 
-import java.io.Serializable;
-import java.util.ArrayList;
-
 @SuppressWarnings("unchecked")
-public class FragmentBuilder<I extends FragmentBuilder<I>> extends Builder {
+public abstract class FragmentBuilder<I extends FragmentBuilder<I, F>, F> extends Builder {
 
 	protected Bundle args;
 
@@ -16,143 +31,149 @@ public class FragmentBuilder<I extends FragmentBuilder<I>> extends Builder {
 		args = new Bundle();
 	}
 
-	public I putAll(Bundle map) {
+	public abstract F build();
+
+	public I arg(Bundle map) {
 		args.putAll(map);
 		return (I) this;
 	}
 
-	public I putBoolean(String key, boolean value) {
+	public I arg(String key, boolean value) {
 		args.putBoolean(key, value);
 		return (I) this;
 	}
 
-	public I putByte(String key, byte value) {
+	public I arg(String key, byte value) {
 		args.putByte(key, value);
 		return (I) this;
 	}
 
-	public I putChar(String key, char value) {
+	public I arg(String key, char value) {
 		args.putChar(key, value);
 		return (I) this;
 	}
 
-	public I putShort(String key, short value) {
+	public I arg(String key, short value) {
 		args.putShort(key, value);
 		return (I) this;
 	}
 
-	public I putInt(String key, int value) {
+	public I arg(String key, int value) {
 		args.putInt(key, value);
 		return (I) this;
 	}
 
-	public I putLong(String key, long value) {
+	public I arg(String key, long value) {
 		args.putLong(key, value);
 		return (I) this;
 	}
 
-	public I putFloat(String key, float value) {
+	public I arg(String key, float value) {
 		args.putFloat(key, value);
 		return (I) this;
 	}
 
-	public I putDouble(String key, double value) {
+	public I arg(String key, double value) {
 		args.putDouble(key, value);
 		return (I) this;
 	}
 
-	public I putString(String key, String value) {
+	public I arg(String key, String value) {
 		args.putString(key, value);
 		return (I) this;
 	}
 
-	public I putCharSequence(String key, CharSequence value) {
+	public I arg(String key, CharSequence value) {
 		args.putCharSequence(key, value);
 		return (I) this;
 	}
 
-	public I putParcelable(String key, Parcelable value) {
+	public I arg(String key, Parcelable value) {
 		args.putParcelable(key, value);
 		return (I) this;
 	}
 
-	public I putParcelableArray(String key, Parcelable[] value) {
+	public I arg(String key, Parcelable[] value) {
 		args.putParcelableArray(key, value);
 		return (I) this;
 	}
 
-	public I putParcelableArrayList(String key, ArrayList<? extends Parcelable> value) {
+	public I parcelableArrayListArg(String key, ArrayList<? extends Parcelable> value) {
 		args.putParcelableArrayList(key, value);
 		return (I) this;
 	}
 
-	public I putSparseParcelableArray(String key, SparseArray<? extends Parcelable> value) {
+	public I arg(String key, SparseArray<? extends Parcelable> value) {
 		args.putSparseParcelableArray(key, value);
 		return (I) this;
 	}
 
-	public I putIntegerArrayList(String key, ArrayList<Integer> value) {
+	public I integerArrayListArg(String key, ArrayList<Integer> value) {
 		args.putIntegerArrayList(key, value);
 		return (I) this;
 	}
 
-	public I putStringArrayList(String key, ArrayList<String> value) {
+	public I stringArrayListArg(String key, ArrayList<String> value) {
 		args.putStringArrayList(key, value);
 		return (I) this;
 	}
 
-	public I putSerializable(String key, Serializable value) {
+	public I arg(String key, Serializable value) {
 		args.putSerializable(key, value);
 		return (I) this;
 	}
 
-	public I putBooleanArray(String key, boolean[] value) {
+	public I arg(String key, boolean[] value) {
 		args.putBooleanArray(key, value);
 		return (I) this;
 	}
 
-	public I putByteArray(String key, byte[] value) {
+	public I arg(String key, byte[] value) {
 		args.putByteArray(key, value);
 		return (I) this;
 	}
 
-	public I putShortArray(String key, short[] value) {
+	public I arg(String key, short[] value) {
 		args.putShortArray(key, value);
 		return (I) this;
 	}
 
-	public I putCharArray(String key, char[] value) {
+	public I arg(String key, char[] value) {
 		args.putCharArray(key, value);
 		return (I) this;
 	}
 
-	public I putIntArray(String key, int[] value) {
+	public I arg(String key, int[] value) {
 		args.putIntArray(key, value);
 		return (I) this;
 	}
 
-	public I putLongArray(String key, long[] value) {
+	public I arg(String key, long[] value) {
 		args.putLongArray(key, value);
 		return (I) this;
 	}
 
-	public I putFloatArray(String key, float[] value) {
+	public I arg(String key, float[] value) {
 		args.putFloatArray(key, value);
 		return (I) this;
 	}
 
-	public I putDoubleArray(String key, double[] value) {
+	public I arg(String key, double[] value) {
 		args.putDoubleArray(key, value);
 		return (I) this;
 	}
 
-	public I putStringArray(String key, String[] value) {
+	public I arg(String key, String[] value) {
 		args.putStringArray(key, value);
 		return (I) this;
 	}
 
-	public I putBundle(String key, Bundle value) {
+	public I arg(String key, Bundle value) {
 		args.putBundle(key, value);
 		return (I) this;
+	}
+
+	public Bundle args() {
+		return args;
 	}
 }
