@@ -234,8 +234,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
 
   public static ConfiguredTarget init(CppSemantics semantics, RuleContext ruleContext, boolean fake)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    CppHelper.checkAllowedDeps(ruleContext);
-
     ruleContext.checkSrcsSamePackage(true);
 
     CcCommon common = new CcCommon(ruleContext);
@@ -916,11 +914,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     List<Artifact> instrumentedObjectFiles = new ArrayList<>();
     instrumentedObjectFiles.addAll(ccCompilationOutputs.getObjectFiles(false));
     instrumentedObjectFiles.addAll(ccCompilationOutputs.getObjectFiles(true));
-    InstrumentedFilesProvider instrumentedFilesProvider =
-        common.getInstrumentedFilesProvider(
-            instrumentedObjectFiles,
-            !TargetUtils.isTestRule(ruleContext.getRule()) && !fake,
-            ccCompilationContext.getVirtualToOriginalHeaders());
+    InstrumentedFilesProvider instrumentedFilesProvider = common.getInstrumentedFilesProvider(
+        instrumentedObjectFiles, !TargetUtils.isTestRule(ruleContext.getRule()) && !fake);
 
     NestedSet<Artifact> headerTokens =
         CcCompilationHelper.collectHeaderTokens(ruleContext, ccCompilationOutputs);

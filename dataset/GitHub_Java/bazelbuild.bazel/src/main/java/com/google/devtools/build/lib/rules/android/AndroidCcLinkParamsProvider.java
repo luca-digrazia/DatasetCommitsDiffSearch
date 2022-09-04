@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.android;
 
-import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
@@ -25,15 +24,15 @@ import com.google.devtools.build.lib.syntax.EvalException;
 /** A target that provides C++ libraries to be linked into Android targets. */
 @Immutable
 public final class AndroidCcLinkParamsProvider extends NativeInfo
-    implements AndroidCcLinkParamsProviderApi<Artifact, CcInfo> {
-
+    implements AndroidCcLinkParamsProviderApi<CcInfo> {
+  public static final String PROVIDER_NAME = "AndroidCcLinkParamsInfo";
   public static final Provider PROVIDER = new Provider();
 
   private final CcInfo ccInfo;
 
   public AndroidCcLinkParamsProvider(CcInfo ccInfo) {
     super(PROVIDER);
-    this.ccInfo = CcInfo.builder().setCcLinkingContext(ccInfo.getCcLinkingContext()).build();
+    this.ccInfo = CcInfo.builder().setCcLinkingInfo(ccInfo.getCcLinkingInfo()).build();
   }
 
   @Override
@@ -43,14 +42,13 @@ public final class AndroidCcLinkParamsProvider extends NativeInfo
 
   /** Provider class for {@link AndroidCcLinkParamsProvider} objects. */
   public static class Provider extends BuiltinProvider<AndroidCcLinkParamsProvider>
-      implements AndroidCcLinkParamsProviderApi.Provider<Artifact, CcInfo> {
+      implements AndroidCcLinkParamsProviderApi.Provider<CcInfo> {
     private Provider() {
-      super(NAME, AndroidCcLinkParamsProvider.class);
+      super(PROVIDER_NAME, AndroidCcLinkParamsProvider.class);
     }
 
     @Override
-    public AndroidCcLinkParamsProviderApi<Artifact, CcInfo> createInfo(CcInfo ccInfo)
-        throws EvalException {
+    public AndroidCcLinkParamsProviderApi<CcInfo> createInfo(CcInfo ccInfo) throws EvalException {
       return new AndroidCcLinkParamsProvider(ccInfo);
     }
   }

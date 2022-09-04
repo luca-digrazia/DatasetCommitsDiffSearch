@@ -40,11 +40,13 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Tests Skylark API for Java rules. */
+/**
+ * Tests Skylark API for Java rules.
+ */
 @RunWith(JUnit4.class)
 public class JavaSkylarkApiTest extends BuildViewTestCase {
-  private static final String HOST_JAVA_RUNTIME_LABEL =
-      TestConstants.TOOLS_REPOSITORY + "//tools/jdk:current_host_java_runtime";
+  private static final String HOST_JAVA_RUNTIME_LABEL = TestConstants.TOOLS_REPOSITORY
+      + "//tools/jdk:current_host_java_runtime";
 
   @Test
   public void testJavaRuntimeProviderJavaAbsolute() throws Exception {
@@ -164,14 +166,12 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
   public void testInvalidHostJavabase() throws Exception {
     writeBuildFileForJavaToolchain();
 
-    scratch.file(
-        "a/BUILD",
+    scratch.file("a/BUILD",
         "load(':rule.bzl', 'jrule')",
         "filegroup(name='fg')",
         "jrule(name='r', srcs=['S.java'])");
 
-    scratch.file(
-        "a/rule.bzl",
+    scratch.file("a/rule.bzl",
         "def _impl(ctx):",
         "  output_jar = ctx.actions.declare_file('lib' + ctx.label.name + '.jar')",
         "  java_common.compile(",
@@ -229,10 +229,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
     ConfiguredTarget configuredTarget = getConfiguredTarget("//java/test:my");
     StructImpl info =
-        (StructImpl)
-            configuredTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//java/test:extension.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) configuredTarget.get(
+            new SkylarkKey(
+                Label.parseAbsolute("//java/test:extension.bzl", ImmutableMap.of()), "result"));
 
     SkylarkNestedSet transitiveRuntimeJars =
         ((SkylarkNestedSet) info.getValue("transitive_runtime_jars"));
@@ -327,10 +326,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
     ConfiguredTarget configuredTarget = getConfiguredTarget("//java/test:my");
     StructImpl info =
-        (StructImpl)
-            configuredTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//java/test:extension.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) configuredTarget.get(
+            new SkylarkKey(
+                Label.parseAbsolute("//java/test:extension.bzl", ImmutableMap.of()), "result"));
 
     JavaRuleOutputJarsProvider outputs = ((JavaRuleOutputJarsProvider) info.getValue("outputs"));
     assertThat(outputs.getOutputJars()).hasSize(1);
@@ -441,11 +439,11 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     ConfiguredTarget configuredTarget = getConfiguredTarget("//java/test:custom");
     JavaInfo info = configuredTarget.get(JavaInfo.PROVIDER);
     JavaCompilationInfoProvider compilationInfo = info.getCompilationInfoProvider();
-    assertThat(prettyArtifactNames(compilationInfo.getCompilationClasspath().toList()))
-        .containsExactly("java/test/libdep-hjar.jar");
+    assertThat(prettyArtifactNames(compilationInfo.getCompilationClasspath().toList())).
+        containsExactly("java/test/libdep-hjar.jar");
 
-    assertThat(prettyArtifactNames(compilationInfo.getRuntimeClasspath().toList()))
-        .containsExactly("java/test/libdep.jar", "java/test/libcustom.jar");
+    assertThat(prettyArtifactNames(compilationInfo.getRuntimeClasspath().toList())).
+        containsExactly("java/test/libdep.jar", "java/test/libcustom.jar");
   }
 
   @Test
@@ -504,7 +502,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     assertThat(artifactFilesNames(transitiveSourceJars))
         .containsExactly("libdep-src.jar", "libcustom-src.jar");
 
-    assertThat(getGeneratingAction(configuredTarget, "java/test/libcustom-src.jar")).isNotNull();
+   assertThat(getGeneratingAction(configuredTarget, "java/test/libcustom-src.jar")).isNotNull();
   }
 
   @Test
@@ -569,8 +567,8 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     JavaInfo info = configuredTarget.get(JavaInfo.PROVIDER);
     SkylarkList<Artifact> sourceJars = info.getSourceJars();
     NestedSet<Artifact> transitiveSourceJars = info.getTransitiveSourceJars();
-    assertThat(artifactFilesNames(sourceJars))
-        .containsExactly("amazing-src.jar", "wonderful-src.jar");
+    assertThat(artifactFilesNames(sourceJars)).containsExactly(
+        "amazing-src.jar", "wonderful-src.jar");
     assertThat(artifactFilesNames(transitiveSourceJars))
         .containsExactly("libdep-src.jar", "amazing-src.jar", "wonderful-src.jar");
   }
@@ -794,10 +792,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
     ConfiguredTarget configuredTarget = getConfiguredTarget("//java/test:my");
     StructImpl info =
-        (StructImpl)
-            configuredTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//java/test:extension.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) configuredTarget.get(
+            new SkylarkKey(
+                Label.parseAbsolute("//java/test:extension.bzl", ImmutableMap.of()), "result"));
 
     SkylarkNestedSet sourceJars = ((SkylarkNestedSet) info.getValue("source_jars"));
     SkylarkNestedSet transitiveDeps = ((SkylarkNestedSet) info.getValue("transitive_deps"));
@@ -838,9 +835,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
   }
 
   /**
-   * Tests that JavaInfo's java_annotation_processing looks as expected with a target that's assumed
-   * to use annotation processing itself and has a dep and an export that likewise use annotation
-   * processing.
+   * Tests that JavaInfo's java_annotation_processing looks as expected with a target that's
+   * assumed to use annotation processing itself and has a dep and an export that likewise use
+   * annotation processing.
    */
   private void testAnnotationProcessingInfoIsSkylarkAccessible(
       String toBeProcessedRuleName, String extraLoad) throws Exception {
@@ -860,33 +857,33 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "          )]",
         "my_rule = rule(impl, attrs = { 'dep' : attr.label() })");
     scratch.file(
-        "java/test/BUILD",
-        "load(':extension.bzl', 'my_rule')",
-        "java_library(name = 'plugin_dep',",
-        "    srcs = [ 'ProcessorDep.java'])",
-        "java_plugin(name = 'plugin',",
-        "    srcs = ['AnnotationProcessor.java'],",
-        "    processor_class = 'com.google.process.stuff',",
-        "    deps = [ ':plugin_dep' ])",
-        extraLoad,
-        toBeProcessedRuleName + "(",
-        "    name = 'to_be_processed',",
-        "    plugins = [':plugin'],",
-        "    srcs = ['ToBeProcessed.java'],",
-        "    deps = [':dep'],",
-        "    exports = [':export'],",
-        ")",
-        "java_library(",
-        "  name = 'dep',",
-        "  srcs = ['Dep.java'],",
-        "  plugins = [':plugin']",
-        ")",
-        "java_library(",
-        "  name = 'export',",
-        "  srcs = ['Export.java'],",
-        "  plugins = [':plugin']",
-        ")",
-        "my_rule(name = 'my', dep = ':to_be_processed')");
+      "java/test/BUILD",
+      "load(':extension.bzl', 'my_rule')",
+      "java_library(name = 'plugin_dep',",
+      "    srcs = [ 'ProcessorDep.java'])",
+      "java_plugin(name = 'plugin',",
+      "    srcs = ['AnnotationProcessor.java'],",
+      "    processor_class = 'com.google.process.stuff',",
+      "    deps = [ ':plugin_dep' ])",
+      extraLoad,
+      toBeProcessedRuleName + "(",
+      "    name = 'to_be_processed',",
+      "    plugins = [':plugin'],",
+      "    srcs = ['ToBeProcessed.java'],",
+      "    deps = [':dep'],",
+      "    exports = [':export'],",
+      ")",
+      "java_library(",
+      "  name = 'dep',",
+      "  srcs = ['Dep.java'],",
+      "  plugins = [':plugin']",
+      ")",
+      "java_library(",
+      "  name = 'export',",
+      "  srcs = ['Export.java'],",
+      "  plugins = [':plugin']",
+      ")",
+      "my_rule(name = 'my', dep = ':to_be_processed')");
 
     // Assert that java_annotation_processing for :to_be_processed looks as expected:
     // the target itself uses :plugin as the processor, and transitive information includes
@@ -894,10 +891,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     // two targets also use annotation processing.
     ConfiguredTarget configuredTarget = getConfiguredTarget("//java/test:my");
     StructImpl info =
-        (StructImpl)
-            configuredTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//java/test:extension.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) configuredTarget.get(
+            new SkylarkKey(
+                Label.parseAbsolute("//java/test:extension.bzl", ImmutableMap.of()), "result"));
 
     assertThat(info.getValue("enabled")).isEqualTo(Boolean.TRUE);
     assertThat(info.getValue("class_jar")).isNotNull();
@@ -955,10 +951,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
     // Extract out the information from skylark rule
     StructImpl info =
-        (StructImpl)
-            myConfiguredTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//java/test:extension.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) myConfiguredTarget.get(
+            new SkylarkKey(
+                Label.parseAbsolute("//java/test:extension.bzl", ImmutableMap.of()), "result"));
 
     SkylarkNestedSet rawMyCompileJars = (SkylarkNestedSet) (info.getValue("compile_jars"));
     SkylarkNestedSet rawMyTransitiveRuntimeJars =
@@ -1005,8 +1000,11 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     ConfiguredTarget myConfiguredTarget = getConfiguredTarget("//java/test:my");
     ConfiguredTarget javaLibraryTarget = getConfiguredTarget("//java/test:jl");
 
-    assertThat(myConfiguredTarget.get("java")).isSameAs(javaLibraryTarget.get("java"));
+    assertThat(myConfiguredTarget.get("java")).isSameAs(
+        javaLibraryTarget.get("java")
+    );
   }
+
 
   @Test
   public void javaProviderFieldsAreCorrectAfterCreatingProvider() throws Exception {
@@ -1169,8 +1167,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "})");
     scratch.file("foo/liba.jar");
     scratch.file("foo/libb.jar");
-    scratch.file(
-        "foo/BUILD",
+    scratch.file("foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
         "java_library(name = 'java_dep',",
         "    srcs = ['A.java'])",
@@ -1178,7 +1175,8 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "    compile_time_jars = ['liba.jar'],",
         "    runtime_jars = ['libb.jar'],",
         "    deps = [':java_dep']",
-        ")");
+        ")"
+    );
     ConfiguredTarget target = getConfiguredTarget("//foo:myrule");
     JavaCompilationArgsProvider provider =
         JavaInfo.getProvider(JavaCompilationArgsProvider.class, target);
@@ -1206,8 +1204,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "})");
     scratch.file("foo/liba.jar");
     scratch.file("foo/libb.jar");
-    scratch.file(
-        "foo/BUILD",
+    scratch.file("foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
         "my_rule(name = 'myrule',",
         "    transitive_compile_time_jars = ['liba.jar'],",
@@ -1216,7 +1213,8 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "java_library(name = 'java_lib',",
         "    srcs = ['C.java'],",
         "    deps = [':myrule']",
-        ")");
+        ")"
+    );
     ConfiguredTarget target = getConfiguredTarget("//foo:java_lib");
     JavaCompilationArgsProvider provider =
         JavaInfo.getProvider(JavaCompilationArgsProvider.class, target);
@@ -1397,12 +1395,11 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     assertNoEvents();
     ConfiguredTarget myRuleTarget = getConfiguredTarget("//foo:my_skylark_rule");
     StructImpl info =
-        (StructImpl)
-            myRuleTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
-    @SuppressWarnings("unchecked")
-    SkylarkList<Artifact> sourceJars = (SkylarkList<Artifact>) (info.getValue("source_jars"));
+        (StructImpl) myRuleTarget.get(
+            new SkylarkKey(
+                Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
+    @SuppressWarnings("unchecked") SkylarkList<Artifact> sourceJars =
+        (SkylarkList<Artifact>) (info.getValue("source_jars"));
     assertThat(prettyArtifactNames(sourceJars)).containsExactly("foo/libmy_java_lib_a-src.jar");
 
     assertThat(prettyArtifactNames(sourceJars)).doesNotContain("foo/libmy_java_lib_b-src.jar");
@@ -1427,10 +1424,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     assertNoEvents();
     ConfiguredTarget myRuleTarget = getConfiguredTarget("//foo:my_skylark_rule");
     StructImpl info =
-        (StructImpl)
-            myRuleTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) myRuleTarget.get(
+            new SkylarkKey(
+                Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
 
     @SuppressWarnings("unchecked")
     SkylarkNestedSet sourceJars = (SkylarkNestedSet) info.getValue("property");
@@ -1461,10 +1457,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     assertNoEvents();
     ConfiguredTarget myRuleTarget = getConfiguredTarget("//foo:my_skylark_rule");
     StructImpl info =
-        (StructImpl)
-            myRuleTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) myRuleTarget.get(
+            new SkylarkKey(
+                Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
 
     @SuppressWarnings("unchecked")
     SkylarkNestedSet sourceJars = (SkylarkNestedSet) info.getValue("property");
@@ -1495,10 +1490,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     assertNoEvents();
     ConfiguredTarget myRuleTarget = getConfiguredTarget("//foo:my_skylark_rule");
     StructImpl info =
-        (StructImpl)
-            myRuleTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) myRuleTarget.get(
+            new SkylarkKey(
+                Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
 
     @SuppressWarnings("unchecked")
     SkylarkNestedSet sourceJars = (SkylarkNestedSet) info.getValue("property");
@@ -1507,6 +1501,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         .containsExactly(
             "foo/libmy_java_lib_a.jar", "foo/libmy_java_lib_b.jar", "foo/libmy_java_lib_c.jar");
   }
+
 
   @Test
   public void testJavaInfoGetTransitiveExports() throws Exception {
@@ -1529,17 +1524,17 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     assertNoEvents();
     ConfiguredTarget myRuleTarget = getConfiguredTarget("//foo:my_skylark_rule");
     StructImpl info =
-        (StructImpl)
-            myRuleTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) myRuleTarget.get(
+            new SkylarkKey(
+                Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
 
-    @SuppressWarnings("unchecked")
-    SkylarkNestedSet exports = (SkylarkNestedSet) (info.getValue("property"));
+    @SuppressWarnings("unchecked") SkylarkNestedSet exports =
+        (SkylarkNestedSet) (info.getValue("property"));
 
     assertThat(exports.getSet(Label.class))
         .containsExactly(Label.parseAbsolute("//foo:my_java_lib_b", ImmutableMap.of()));
   }
+
 
   @Test
   public void testJavaInfoGetGenJarsProvider() throws Exception {
@@ -1559,10 +1554,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     assertNoEvents();
     ConfiguredTarget myRuleTarget = getConfiguredTarget("//foo:my_skylark_rule");
     StructImpl info =
-        (StructImpl)
-            myRuleTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) myRuleTarget.get(
+            new SkylarkKey(
+                Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
 
     JavaGenJarsProvider javaGenJarsProvider = (JavaGenJarsProvider) info.getValue("property");
 
@@ -1571,6 +1565,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     assertThat(javaGenJarsProvider.getGenSourceJar().getFilename())
         .isEqualTo("libmy_java_lib_a-gensrc.jar");
   }
+
 
   @Test
   public void javaInfoGetCompilationInfoProvider() throws Exception {
@@ -1589,10 +1584,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     assertNoEvents();
     ConfiguredTarget myRuleTarget = getConfiguredTarget("//foo:my_skylark_rule");
     StructImpl info =
-        (StructImpl)
-            myRuleTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) myRuleTarget.get(
+            new SkylarkKey(
+                Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
 
     JavaCompilationInfoProvider javaCompilationInfoProvider =
         (JavaCompilationInfoProvider) info.getValue("property");
@@ -1678,13 +1672,15 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "    'strict_deps': attr.bool()",
         "  },",
         "  implementation = _impl",
-        ")");
+        ")"
+    );
     scratch.file(
         "foo/BUILD",
         "load(':custom_library.bzl', 'custom_library')",
         "custom_library(name = 'custom', deps = [':a'], strict_deps = True)",
         "java_library(name = 'a', srcs = ['java/A.java'], deps = [':b'])",
-        "java_library(name = 'b', srcs = ['java/B.java'])");
+        "java_library(name = 'b', srcs = ['java/B.java'])"
+    );
 
     ConfiguredTarget myRuleTarget = getConfiguredTarget("//foo:custom");
     JavaCompilationArgsProvider javaCompilationArgsProvider =
@@ -1709,13 +1705,15 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "    'strict_deps': attr.bool()",
         "  },",
         "  implementation = _impl",
-        ")");
+        ")"
+    );
     scratch.file(
         "foo/BUILD",
         "load(':custom_library.bzl', 'custom_library')",
         "custom_library(name = 'custom', deps = [':a'], strict_deps = False)",
         "java_library(name = 'a', srcs = ['java/A.java'], deps = [':b'])",
-        "java_library(name = 'b', srcs = ['java/B.java'])");
+        "java_library(name = 'b', srcs = ['java/B.java'])"
+    );
 
     ConfiguredTarget myRuleTarget = getConfiguredTarget("//foo:custom");
     JavaCompilationArgsProvider javaCompilationArgsProvider =
@@ -1727,20 +1725,24 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
   @Test
   public void strictJavaDepsFlagExposed_default() throws Exception {
     scratch.file(
-        "foo/rule.bzl",
-        "result = provider()",
-        "def _impl(ctx):",
-        "  return [result(strict_java_deps=ctx.fragments.java.strict_java_deps)]",
-        "myrule = rule(",
-        "  implementation=_impl,",
-        "  fragments = ['java']",
-        ")");
-    scratch.file("foo/BUILD", "load(':rule.bzl', 'myrule')", "myrule(name='myrule')");
+      "foo/rule.bzl",
+      "result = provider()",
+      "def _impl(ctx):",
+      "  return [result(strict_java_deps=ctx.fragments.java.strict_java_deps)]",
+      "myrule = rule(",
+      "  implementation=_impl,",
+      "  fragments = ['java']",
+      ")"
+    );
+    scratch.file(
+        "foo/BUILD",
+        "load(':rule.bzl', 'myrule')",
+        "myrule(name='myrule')"
+    );
     ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:myrule");
     StructImpl info =
-        (StructImpl)
-            configuredTarget.get(
-                new SkylarkKey(Label.parseAbsolute("//foo:rule.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) configuredTarget.get(
+            new SkylarkKey(Label.parseAbsolute("//foo:rule.bzl", ImmutableMap.of()), "result"));
     assertThat(((String) info.getValue("strict_java_deps"))).isEqualTo("default");
   }
 
@@ -1754,14 +1756,18 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "myrule = rule(",
         "  implementation=_impl,",
         "  fragments = ['java']",
-        ")");
-    scratch.file("foo/BUILD", "load(':rule.bzl', 'myrule')", "myrule(name='myrule')");
+        ")"
+    );
+    scratch.file(
+        "foo/BUILD",
+        "load(':rule.bzl', 'myrule')",
+        "myrule(name='myrule')"
+    );
     useConfiguration("--strict_java_deps=ERROR");
     ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:myrule");
     StructImpl info =
-        (StructImpl)
-            configuredTarget.get(
-                new SkylarkKey(Label.parseAbsolute("//foo:rule.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) configuredTarget.get(
+            new SkylarkKey(Label.parseAbsolute("//foo:rule.bzl", ImmutableMap.of()), "result"));
     assertThat(((String) info.getValue("strict_java_deps"))).isEqualTo("error");
   }
 
@@ -1777,17 +1783,18 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "  implementation=_impl,",
         "  fragments = ['java'],",
         "  attrs = { '_java_toolchain': attr.label(default=Label('//foo:alias')) }",
-        ")");
+        ")"
+    );
     scratch.file(
         "foo/BUILD",
         "load(':rule.bzl', 'myrule')",
         "java_toolchain_alias(name='alias')",
-        "myrule(name='myrule')");
+        "myrule(name='myrule')"
+    );
     ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:myrule");
     StructImpl info =
-        (StructImpl)
-            configuredTarget.get(
-                new SkylarkKey(Label.parseAbsolute("//foo:rule.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) configuredTarget.get(
+            new SkylarkKey(Label.parseAbsolute("//foo:rule.bzl", ImmutableMap.of()), "result"));
     Label javaToolchainLabel = ((Label) info.getValue("java_toolchain_label"));
     assertThat(javaToolchainLabel.toString()).endsWith("jdk:toolchain");
   }
@@ -1804,18 +1811,19 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "  implementation=_impl,",
         "  fragments = ['java'],",
         "  attrs = { '_java_toolchain': attr.label(default=Label('//foo:alias')) }",
-        ")");
+        ")"
+    );
     scratch.file(
         "foo/BUILD",
         "load(':rule.bzl', 'myrule')",
         "java_toolchain_alias(name='alias')",
-        "myrule(name='myrule')");
+        "myrule(name='myrule')"
+    );
     useConfiguration("--java_toolchain=//java/com/google/test:toolchain");
     ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:myrule");
     StructImpl info =
-        (StructImpl)
-            configuredTarget.get(
-                new SkylarkKey(Label.parseAbsolute("//foo:rule.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) configuredTarget.get(
+            new SkylarkKey(Label.parseAbsolute("//foo:rule.bzl", ImmutableMap.of()), "result"));
     Label javaToolchainLabel = ((Label) info.getValue("java_toolchain_label"));
     assertThat(javaToolchainLabel.toString()).isEqualTo("//java/com/google/test:toolchain");
   }
@@ -1839,43 +1847,12 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     checkError(
         "java/test",
         "custom",
-        "java_common.create_provider is deprecated and cannot be used when "
-            + "--incompatible_disallow_legacy_javainfo is set.",
+        "create_provider is deprecated and cannot be used when "
+            + "--incompatible_disallow_legacy_javainfo is set. ",
         "load(':custom_rule.bzl', 'java_custom_library')",
         "java_custom_library(",
         "  name = 'custom',",
         ")");
-  }
-
-  @Test
-  public void testIncompatibleDisallowLegacyJavaInfoWithFlag() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_disallow_legacy_javainfo");
-    setSkylarkSemanticsOptions(
-        "--experimental_java_common_create_provider_enabled_packages=java/test");
-    scratch.file(
-        "java/test/custom_rule.bzl",
-        "def _impl(ctx):",
-        "  jar = ctx.file.jar",
-        "  java_common.create_provider(",
-        "      compile_time_jars = [jar],",
-        "      transitive_compile_time_jars = [jar],",
-        "      runtime_jars = [jar],",
-        "      use_ijar = False,",
-        "  )",
-        "java_custom_library = rule(",
-        "  implementation = _impl,",
-        "  attrs = {",
-        "    'jar': attr.label(allow_files = True, single_file = True),",
-        "  }",
-        ")");
-    scratch.file(
-        "java/test/BUILD",
-        "load(':custom_rule.bzl', 'java_custom_library')",
-        "java_custom_library(",
-        "  name = 'custom',",
-        "  jar = 'lib.jar'",
-        ")");
-    assertThat(getConfiguredTarget("//java/test:custom")).isNotNull();
   }
 
   private static boolean javaCompilationArgsHaveTheSameParent(
@@ -2104,30 +2081,5 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     OutputJar output = outputs.getOutputJars().get(0);
     assertThat(output.getClassJar().getFilename()).isEqualTo("libc.jar");
     assertThat(output.getIJar()).isNull();
-  }
-
-  @Test
-  public void testDisallowLegacyJavaProvider() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_disallow_legacy_java_provider");
-    scratch.file(
-        "foo/custom_rule.bzl",
-        "def _impl(ctx):",
-        "  ctx.attr.java_lib.java.source_jars",
-        "java_custom_library = rule(",
-        "  implementation = _impl,",
-        "  attrs = {",
-        "    'java_lib': attr.label(),",
-        "   },",
-        ")");
-
-    scratch.file(
-        "foo/BUILD",
-        "load(':custom_rule.bzl', 'java_custom_library')",
-        "java_library(name = 'java_lib', srcs = ['java/A.java'])",
-        "java_custom_library(name = 'custom_lib', java_lib = ':java_lib')");
-    checkError(
-        "//foo:custom_lib",
-        "The .java provider is deprecated and cannot be used "
-            + "when --incompatible_disallow_legacy_java_provider is set.");
   }
 }

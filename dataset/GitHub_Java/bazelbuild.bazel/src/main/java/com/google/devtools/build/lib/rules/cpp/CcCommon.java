@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
@@ -225,7 +224,7 @@ public final class CcCommon {
     throw new EvalException(
         location,
         String.format(
-            "the C++ Starlark API is for the time being only allowed for rules in '%s'; "
+            "the C++ Skylark API is for the time being only allowed for rules in '%s'; "
                 + "but this is defined in '%s'. You can try it out by passing "
                 + "--experimental_cc_skylark_api_enabled_packages=<list of packages>. Beware that "
                 + "we will be making breaking changes to this API without prior warning.",
@@ -671,8 +670,7 @@ public final class CcCommon {
    */
   public Artifact getDynamicLibrarySymlink(Artifact library, boolean preserveName) {
     return SolibSymlinkAction.getDynamicLibrarySymlink(
-        /* actionRegistry= */ ruleContext,
-        /* actionConstructionContext= */ ruleContext,
+        ruleContext,
         ccToolchain.getSolibDirectory(),
         library,
         preserveName,
@@ -694,21 +692,11 @@ public final class CcCommon {
     return ruleContext.getPrerequisiteArtifact("win_def_file", Mode.TARGET);
   }
 
-  /** Provides support for instrumentation. */
-  public InstrumentedFilesProvider getInstrumentedFilesProvider(
-      Iterable<Artifact> files,
+  /**
+   * Provides support for instrumentation.
+   */
+  public InstrumentedFilesProvider getInstrumentedFilesProvider(Iterable<Artifact> files,
       boolean withBaselineCoverage) {
-    return getInstrumentedFilesProvider(
-        files,
-        withBaselineCoverage,
-        /* virtualToOriginalHeaders= */ NestedSetBuilder.create(Order.STABLE_ORDER)
-        );
-  }
-
-  public InstrumentedFilesProvider getInstrumentedFilesProvider(
-      Iterable<Artifact> files,
-      boolean withBaselineCoverage,
-      NestedSet<Pair<String, String>> virtualToOriginalHeaders) {
     return InstrumentedFilesCollector.collect(
         ruleContext,
         CppRuleClasses.INSTRUMENTATION_SPEC,
@@ -716,8 +704,7 @@ public final class CcCommon {
         files,
         CppHelper.getGcovFilesIfNeeded(ruleContext, ccToolchain),
         CppHelper.getCoverageEnvironmentIfNeeded(ruleContext, ccToolchain),
-        withBaselineCoverage,
-        virtualToOriginalHeaders);
+        withBaselineCoverage);
   }
 
   public static ImmutableList<String> getCoverageFeatures(CcToolchainProvider toolchain) {

@@ -66,7 +66,7 @@ public final class JavaCompileActionBuilder {
   private static final String JACOCO_INSTRUMENTATION_PROCESSOR = "jacoco";
 
   private static final ResourceSet LOCAL_RESOURCES =
-      ResourceSet.createWithRamCpu(/* memoryMb= */ 750, /* cpuUsage= */ 1);
+      ResourceSet.createWithRamCpuIo(750 /*MB*/, 0.5 /*CPU*/, 0.0 /*IO*/);
 
   /** Environment variable that sets the UTF-8 charset. */
   static final ImmutableMap<String, String> UTF8_ENVIRONMENT =
@@ -282,8 +282,7 @@ public final class JavaCompileActionBuilder {
     builder.setProgressMessage(getProgressMessage());
     builder.setMnemonic(MNEMONIC);
     builder.setResources(LOCAL_RESOURCES);
-    builder.setEnvironment(
-        ruleContext.getConfiguration().getActionEnvironment().addFixedVariables(UTF8_ENVIRONMENT));
+    builder.setEnvironment(UTF8_ENVIRONMENT);
     builder.setExecutionInfo(executionInfo);
 
     builder.setExtraActionInfo(

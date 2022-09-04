@@ -45,8 +45,8 @@ import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.TriState;
+import com.google.devtools.build.lib.rules.android.DataBinding.DataBindingContext;
 import com.google.devtools.build.lib.rules.android.ZipFilterBuilder.CheckHashMismatchMode;
-import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
@@ -87,10 +87,8 @@ public class AndroidCommon {
 
   private static final ImmutableSet<String> TRANSITIVE_ATTRIBUTES =
       ImmutableSet.of("deps", "exports");
-
-  private static final int DEX_THREADS = 5;
   private static final ResourceSet DEX_RESOURCE_SET =
-      ResourceSet.createWithRamCpu(/* memoryMb= */ 4096.0, /* cpuUsage= */ DEX_THREADS);
+      ResourceSet.createWithRamCpuIo(4096.0, 5.0, 0.0);
 
   public static final <T extends TransitiveInfoProvider> Iterable<T> getTransitivePrerequisites(
       RuleContext ruleContext, Mode mode, final Class<T> classType) {
@@ -181,21 +179,23 @@ public class AndroidCommon {
   public static NestedSet<Artifact> collectTransitiveNeverlinkLibraries(
       RuleContext ruleContext,
       Iterable<? extends TransitiveInfoCollection> deps,
-      NestedSet<Artifact> runtimeJars) {
-    NestedSetBuilder<Artifact> neverlinkedRuntimeJars = NestedSetBuilder.naiveLinkOrder();
+      ImmutableList<Artifact> runtimeJars) {
+    NestedSetBuilder<Artifact> builder = NestedSetBuilder.naiveLinkOrder();
+
     for (AndroidNeverLinkLibrariesProvider provider :
         AnalysisUtils.getProviders(deps, AndroidNeverLinkLibrariesProvider.class)) {
-      neverlinkedRuntimeJars.addTransitive(provider.getTransitiveNeverLinkLibraries());
+      builder.addTransitive(provider.getTransitiveNeverLinkLibraries());
     }
 
     if (JavaCommon.isNeverLink(ruleContext)) {
-      neverlinkedRuntimeJars.addTransitive(runtimeJars);
+      builder.addAll(runtimeJars);
       for (JavaCompilationArgsProvider provider :
           JavaInfo.getProvidersFromListOfTargets(JavaCompilationArgsProvider.class, deps)) {
-        neverlinkedRuntimeJars.addTransitive(provider.getRuntimeJars());
+        builder.addTransitive(provider.getRuntimeJars());
       }
     }
-    return neverlinkedRuntimeJars.build();
+
+    return builder.build();
   }
 
   /**
@@ -217,7 +217,7 @@ public class AndroidCommon {
       // Multithreaded dex tends to run faster, but only up to about 5 threads (at which point the
       // law of diminishing returns kicks in). This was determined experimentally, with 5-thread dex
       // performing about 25% faster than 1-thread dex.
-      commandLine.add("--num-threads=" + DEX_THREADS);
+      commandLine.add("--num-threads=5");
     }
 
     commandLine.addAll(dexOptions);
@@ -239,7 +239,6 @@ public class AndroidCommon {
             .setProgressMessage("Converting %s to dex format", jarToDex.getExecPathString())
             .setMnemonic("AndroidDexer")
             .addCommandLine(commandLine.build())
-            // TODO(ulfjack): Use 1 CPU if multidex is true?
             .setResources(DEX_RESOURCE_SET);
     if (mainDexList != null) {
       builder.addInput(mainDexList);
@@ -660,9 +659,7 @@ public class AndroidCommon {
         collectTransitiveNeverlinkLibraries(
             ruleContext,
             javaCommon.getDependencies(),
-            NestedSetBuilder.<Artifact>naiveLinkOrder()
-                .addAll(javaCommon.getJavaCompilationArtifacts().getRuntimeJars())
-                .build());
+            javaCommon.getJavaCompilationArtifacts().getRuntimeJars());
     if (collectJavaCompilationArgs) {
       boolean hasSources = attributes.hasSources();
       this.javaCompilationArgs = collectJavaCompilationArgs(asNeverLink, hasSources);
@@ -878,17 +875,10 @@ public class AndroidCommon {
       JavaSemantics semantics,
       DataBindingContext dataBindingContext,
       boolean isLibrary) {
-
-    ImmutableList<Artifact> ruleSources =
-        ruleContext.getPrerequisiteArtifacts("srcs", RuleConfiguredTarget.Mode.TARGET).list();
-
-    ImmutableList<Artifact> dataBindingSources =
-        dataBindingContext.getAnnotationSourceFiles(ruleContext);
-
-    ImmutableList<Artifact> srcs = ImmutableList.<Artifact>builder()
-        .addAll(ruleSources)
-        .addAll(dataBindingSources)
-        .build();
+    ImmutableList<Artifact> srcs =
+        dataBindingContext.addAnnotationFileToSrcs(
+            ruleContext.getPrerequisiteArtifacts("srcs", RuleConfiguredTarget.Mode.TARGET).list(),
+            ruleContext);
 
     ImmutableList<TransitiveInfoCollection> compileDeps;
     ImmutableList<TransitiveInfoCollection> runtimeDeps;
