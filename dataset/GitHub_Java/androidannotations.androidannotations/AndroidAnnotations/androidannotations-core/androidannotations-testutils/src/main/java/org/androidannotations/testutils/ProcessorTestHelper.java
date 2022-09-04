@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -264,15 +263,16 @@ public class ProcessorTestHelper {
 	}
 
 	/**
-	 * Attempts to compile the given compilation units using the Java Compiler API.
+	 * Attempts to compile the given compilation units using the Java Compiler
+	 * API.
 	 * <p>
-	 * The compilation units and all their dependencies are expected to be on the
-	 * classpath.
+	 * The compilation units and all their dependencies are expected to be on
+	 * the classpath.
 	 *
 	 * @param compilationUnits
 	 *            the classes to compile
-	 * @return the {@link Diagnostic diagnostics} returned by the compilation, as
-	 *         demonstrated in the documentation for {@link JavaCompiler}
+	 * @return the {@link Diagnostic diagnostics} returned by the compilation,
+	 *         as demonstrated in the documentation for {@link JavaCompiler}
 	 */
 	public CompileResult compileFiles(Type... compilationUnits) {
 		assert compilationUnits != null;
@@ -293,10 +293,6 @@ public class ProcessorTestHelper {
 				addCollection(files, (Type) element);
 			} else if (element instanceof String) {
 				files.add(new File((String) element));
-			} else if (element instanceof String[]) {
-				for (String subElement : (String[]) element) {
-					files.add(new File(subElement));
-				}
 			}
 		}
 		return compileFiles(files);
