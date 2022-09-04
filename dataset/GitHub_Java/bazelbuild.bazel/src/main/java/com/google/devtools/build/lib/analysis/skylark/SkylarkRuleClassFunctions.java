@@ -86,11 +86,11 @@ import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Identifier;
+import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.FileTypeSet;
@@ -326,7 +326,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       builder.setExecutableSkylark();
     }
 
-    if (implicitOutputs != Starlark.NONE) {
+    if (implicitOutputs != Runtime.NONE) {
       if (implicitOutputs instanceof StarlarkFunction) {
         StarlarkCallbackHelper callback =
             new StarlarkCallbackHelper(
@@ -364,15 +364,15 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
             ast.getLocation(),
             bazelContext.getRepoMapping()));
 
-    if (!buildSetting.equals(Starlark.NONE) && !cfg.equals(Starlark.NONE)) {
+    if (!buildSetting.equals(Runtime.NONE) && !cfg.equals(Runtime.NONE)) {
       throw new EvalException(
           ast.getLocation(),
           "Build setting rules cannot use the `cfg` param to apply transitions to themselves.");
     }
-    if (!buildSetting.equals(Starlark.NONE)) {
+    if (!buildSetting.equals(Runtime.NONE)) {
       builder.setBuildSetting((BuildSetting) buildSetting);
     }
-    if (!cfg.equals(Starlark.NONE)) {
+    if (!cfg.equals(Runtime.NONE)) {
       if (!(cfg instanceof StarlarkDefinedConfigTransition)) {
         throw new EvalException(
             ast.getLocation(),
@@ -420,7 +420,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       Object attrs, Location loc) throws EvalException {
     ImmutableList.Builder<Pair<String, Descriptor>> attributes = ImmutableList.builder();
 
-    if (attrs != Starlark.NONE) {
+    if (attrs != Runtime.NONE) {
       for (Map.Entry<String, Descriptor> attr :
           castMap(attrs, String.class, Descriptor.class, "attrs").entrySet()) {
         Descriptor attrDescriptor = attr.getValue();
@@ -670,7 +670,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
         }
         RuleFactory.createAndAddRule(
             pkgContext, ruleClass, attributeValues, loc, thread, new AttributeContainer(ruleClass));
-        return Starlark.NONE;
+        return Runtime.NONE;
       } catch (InvalidRuleException | NameConflictException e) {
         throw new EvalException(loc, e.getMessage());
       }
@@ -700,7 +700,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
         if (attr.hasAnalysisTestTransition()) {
           if (!builder.isAnalysisTest()) {
             throw new EvalException(
-                getLocation(),
+                location,
                 "Only rule definitions with analysis_test=True may have attributes with "
                     + "analysis_test_transition transitions");
           }
@@ -711,12 +711,11 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
         if (name.equals(FunctionSplitTransitionWhitelist.WHITELIST_ATTRIBUTE_NAME)) {
           if (!BuildType.isLabelType(attr.getType())) {
             throw new EvalException(
-                getLocation(), "_whitelist_function_transition attribute must be a label type");
+                location, "_whitelist_function_transition attribute must be a label type");
           }
           if (attr.getDefaultValueUnchecked() == null) {
             throw new EvalException(
-                getLocation(),
-                "_whitelist_function_transition attribute must have a default value");
+                location, "_whitelist_function_transition attribute must have a default value");
           }
           Label defaultLabel = (Label) attr.getDefaultValueUnchecked();
           // Check the label value for package and target name, to make sure this works properly
@@ -728,7 +727,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
                   .getName()
                   .equals(FunctionSplitTransitionWhitelist.WHITELIST_LABEL.getName())) {
             throw new EvalException(
-                getLocation(),
+                location,
                 "_whitelist_function_transition attribute ("
                     + defaultLabel
                     + ") does not have the expected value "
@@ -743,7 +742,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       if (hasStarlarkDefinedTransition) {
         if (!hasFunctionTransitionWhitelist) {
           throw new EvalException(
-              getLocation(),
+              location,
               String.format(
                   "Use of Starlark transition without whitelist: %s %s",
                   builder.getRuleDefinitionEnvironmentLabel(), builder.getType()));
@@ -751,7 +750,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       } else {
         if (hasFunctionTransitionWhitelist) {
           throw new EvalException(
-              getLocation(),
+              location,
               String.format(
                   "Unused function-based split transition whitelist: %s %s",
                   builder.getRuleDefinitionEnvironmentLabel(), builder.getType()));
@@ -761,7 +760,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       try {
         this.ruleClass = builder.build(ruleClassName, skylarkLabel + "%" + ruleClassName);
       } catch (IllegalArgumentException | IllegalStateException ex) {
-        throw new EvalException(getLocation(), ex);
+        throw new EvalException(location, ex);
       }
 
       this.builder = null;

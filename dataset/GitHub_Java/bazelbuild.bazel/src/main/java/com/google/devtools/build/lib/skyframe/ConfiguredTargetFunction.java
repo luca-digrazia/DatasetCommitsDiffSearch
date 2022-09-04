@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Streams;
 import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
@@ -79,6 +80,7 @@ import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -89,6 +91,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
@@ -137,6 +140,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
   private final Semaphore cpuBoundSemaphore;
   private final BuildOptions defaultBuildOptions;
   @Nullable private final ConfiguredTargetProgressReceiver configuredTargetProgress;
+  private final Supplier<BigInteger> nonceVersion;
 
   /**
    * Indicates whether the set of packages transitively loaded for a given {@link
@@ -154,7 +158,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       boolean storeTransitivePackagesForPackageRootResolution,
       boolean shouldUnblockCpuWorkWhenFetchingDeps,
       BuildOptions defaultBuildOptions,
-      @Nullable ConfiguredTargetProgressReceiver configuredTargetProgress) {
+      @Nullable ConfiguredTargetProgressReceiver configuredTargetProgress,
+      Supplier<BigInteger> nonceVersion) {
     this.buildViewProvider = buildViewProvider;
     this.ruleClassProvider = ruleClassProvider;
     this.cpuBoundSemaphore = cpuBoundSemaphore;
@@ -163,6 +168,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     this.shouldUnblockCpuWorkWhenFetchingDeps = shouldUnblockCpuWorkWhenFetchingDeps;
     this.defaultBuildOptions = defaultBuildOptions;
     this.configuredTargetProgress = configuredTargetProgress;
+    this.nonceVersion = nonceVersion;
   }
 
   private void acquireWithLogging(SkyKey key) throws InterruptedException {
@@ -241,7 +247,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
           GeneratingActions.EMPTY,
           transitivePackagesForPackageRootResolution == null
               ? null
-              : transitivePackagesForPackageRootResolution.build());
+              : transitivePackagesForPackageRootResolution.build(),
+          nonceVersion.get());
     }
 
     // This line is only needed for accurate error messaging. Say this target has a circular
@@ -357,7 +364,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
         if (unloadedToolchainContext != null) {
           UnloadedToolchainContext finalUnloadedToolchainContext = unloadedToolchainContext;
           Set<Label> toolchainDependencyErrors =
-              cvce.getRootCauses().toList().stream()
+              Streams.stream(cvce.getRootCauses())
                   .map(Cause::getLabel)
                   .filter(l -> finalUnloadedToolchainContext.resolvedToolchainLabels().contains(l))
                   .collect(ImmutableSet.toImmutableSet());
@@ -944,7 +951,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
           ruleConfiguredTarget,
           transitivePackagesForPackageRootResolution == null
               ? null
-              : transitivePackagesForPackageRootResolution.build());
+              : transitivePackagesForPackageRootResolution.build(),
+          nonceVersion.get());
     } else {
       GeneratingActions generatingActions;
       // Check for conflicting actions within this configured target (that indicates a bug in the
@@ -964,7 +972,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
           generatingActions,
           transitivePackagesForPackageRootResolution == null
               ? null
-              : transitivePackagesForPackageRootResolution.build());
+              : transitivePackagesForPackageRootResolution.build(),
+          nonceVersion.get());
     }
   }
 

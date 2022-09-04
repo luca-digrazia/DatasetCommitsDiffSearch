@@ -47,20 +47,19 @@ import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
 import com.google.devtools.build.lib.syntax.ClassObject;
-import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
-import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.SyntaxError;
-import com.google.devtools.build.lib.syntax.Tuple;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import java.util.Collection;
-import javax.annotation.Nullable;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -1275,19 +1274,20 @@ public final class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
     return StructProvider.STRUCT.create(ImmutableMap.of(field, value), "no field '%'");
   }
 
-  private static StructImpl makeBigStruct(@Nullable Mutability mu) {
+  private static StructImpl makeBigStruct(StarlarkThread thread) {
     // struct(a=[struct(x={1:1}), ()], b=(), c={2:2})
     return StructProvider.STRUCT.create(
         ImmutableMap.<String, Object>of(
             "a",
-                StarlarkList.<Object>of(
-                    mu,
+                MutableList.<Object>of(
+                    thread,
                     StructProvider.STRUCT.create(
-                        ImmutableMap.<String, Object>of("x", Dict.<Object, Object>of(mu, 1, 1)),
+                        ImmutableMap.<String, Object>of(
+                            "x", SkylarkDict.<Object, Object>of(thread, 1, 1)),
                         "no field '%s'"),
                     Tuple.of()),
             "b", Tuple.of(),
-            "c", Dict.<Object, Object>of(mu, 2, 2)),
+            "c", SkylarkDict.<Object, Object>of(thread, 2, 2)),
         "no field '%s'");
   }
 
@@ -1296,8 +1296,8 @@ public final class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
     assertThat(EvalUtils.isImmutable(makeStruct("a", 1))).isTrue();
   }
 
-  private static StarlarkList<Object> makeList(@Nullable Mutability mu) {
-    return StarlarkList.<Object>of(mu, 1, 2, 3);
+  private static MutableList<Object> makeList(StarlarkThread thread) {
+    return MutableList.<Object>of(thread, 1, 2, 3);
   }
 
   @Test
@@ -1306,10 +1306,9 @@ public final class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
     assertThat(EvalUtils.isImmutable(makeStruct("a", makeList(null)))).isTrue();
     assertThat(EvalUtils.isImmutable(makeBigStruct(null))).isTrue();
 
-    Mutability mu = ev.getStarlarkThread().mutability();
-    assertThat(EvalUtils.isImmutable(Tuple.<Object>of(makeList(mu)))).isFalse();
-    assertThat(EvalUtils.isImmutable(makeStruct("a", makeList(mu)))).isFalse();
-    assertThat(EvalUtils.isImmutable(makeBigStruct(mu))).isFalse();
+    assertThat(EvalUtils.isImmutable(Tuple.<Object>of(makeList(ev.getStarlarkThread())))).isFalse();
+    assertThat(EvalUtils.isImmutable(makeStruct("a", makeList(ev.getStarlarkThread())))).isFalse();
+    assertThat(EvalUtils.isImmutable(makeBigStruct(ev.getStarlarkThread()))).isFalse();
   }
 
   @Test
@@ -1753,7 +1752,7 @@ public final class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
     invalidatePackages();
     SkylarkRuleContext context = createRuleContext("//test:check");
     @SuppressWarnings("unchecked")
-    StarlarkList<Object> params = (StarlarkList<Object>) context.getAttr().getValue("params");
+    MutableList<Object> params = (MutableList<Object>) context.getAttr().getValue("params");
     assertThat(params.get(0)).isEqualTo("NoneType");
     assertThat(params.get(1)).isEqualTo("NoneType");
   }
