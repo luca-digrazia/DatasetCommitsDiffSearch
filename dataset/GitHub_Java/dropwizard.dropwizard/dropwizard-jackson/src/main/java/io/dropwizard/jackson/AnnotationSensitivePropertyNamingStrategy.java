@@ -26,9 +26,7 @@ public class AnnotationSensitivePropertyNamingStrategy extends PropertyNamingStr
     public String nameForConstructorParameter(MapperConfig<?> config,
                                               AnnotatedParameter ctorParam,
                                               String defaultName) {
-        if (ctorParam == null) {
-            return defaultName;
-        } else if (ctorParam.getDeclaringClass().isAnnotationPresent(JsonSnakeCase.class)) {
+        if (ctorParam.getDeclaringClass().isAnnotationPresent(JsonSnakeCase.class)) {
             return snakeCase.nameForConstructorParameter(config, ctorParam, defaultName);
         }
         return super.nameForConstructorParameter(config, ctorParam, defaultName);
@@ -38,9 +36,7 @@ public class AnnotationSensitivePropertyNamingStrategy extends PropertyNamingStr
     public String nameForField(MapperConfig<?> config,
                                AnnotatedField field,
                                String defaultName) {
-        if (field == null) {
-            return defaultName;
-        } else if (field.getDeclaringClass().isAnnotationPresent(JsonSnakeCase.class)) {
+        if (field.getDeclaringClass().isAnnotationPresent(JsonSnakeCase.class)) {
             return snakeCase.nameForField(config, field, defaultName);
         }
 
@@ -51,9 +47,7 @@ public class AnnotationSensitivePropertyNamingStrategy extends PropertyNamingStr
     public String nameForGetterMethod(MapperConfig<?> config,
                                       AnnotatedMethod method,
                                       String defaultName) {
-        if (method == null) {
-            return defaultName;
-        } else if (method.getDeclaringClass().isAnnotationPresent(JsonSnakeCase.class)) {
+        if (method.getDeclaringClass().isAnnotationPresent(JsonSnakeCase.class)) {
             return snakeCase.nameForGetterMethod(config, method, defaultName);
         }
         return super.nameForGetterMethod(config, method, defaultName);
@@ -63,9 +57,7 @@ public class AnnotationSensitivePropertyNamingStrategy extends PropertyNamingStr
     public String nameForSetterMethod(MapperConfig<?> config,
                                       AnnotatedMethod method,
                                       String defaultName) {
-        if (method == null) {
-            return defaultName;
-        } else if (method.getDeclaringClass().isAnnotationPresent(JsonSnakeCase.class)) {
+        if (method.getDeclaringClass().isAnnotationPresent(JsonSnakeCase.class)) {
             return snakeCase.nameForSetterMethod(config, method, defaultName);
         }
         return super.nameForSetterMethod(config, method, defaultName);
