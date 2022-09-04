@@ -685,18 +685,31 @@ public class CppOptions extends FragmentOptions {
   public boolean useLLVMCoverageMapFormat;
 
   @Option(
-      name = "incompatible_disable_legacy_crosstool_fields",
-      oldName = "experimental_disable_legacy_crosstool_fields",
+      name = "experimental_disable_linking_mode_flags",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
+      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+      help = "If true, Bazel will not read crosstool flags from linking_mode_flags field.")
+  public boolean disableLinkingModeFlags;
+
+  @Option(
+      name = "experimental_disable_compilation_mode_flags",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
+      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
+      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+      help = "If true, Bazel will not read crosstool flags from compilation_mode_flags field.")
+  public boolean disableCompilationModeFlags;
+
+  @Option(
+      name = "experimental_disable_legacy_crosstool_fields",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
+      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
+      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
       help =
-          "If true, Bazel will not read crosstool flags from legacy crosstool fields "
-              + "(see https://github.com/bazelbuild/bazel/issues/6861 for migration instructions).")
+          "If true, Bazel will not read crosstool flags from legacy crosstool fields (see #5187).")
   public boolean disableLegacyCrosstoolFields;
 
   @Option(
