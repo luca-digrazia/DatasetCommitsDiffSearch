@@ -676,15 +676,10 @@ public class BuildEventServiceTransport implements BuildEventTransport {
                 } catch (InterruptedException | TimeoutException e) {
                   closeOnTimeout();
                 } catch (ExecutionException e) {
-                  if (e.getCause() instanceof TimeoutException) {
-                    // This is likely due to an internal timeout doing the local file uploading.
-                    closeOnTimeout();
-                  } else {
-                    // This code only cares about calling closeOnTimeout() if the closeFuture does
-                    // not complete within closeTimeout.
-                    logError(e, "closeTimeout failure");
-                    LoggingUtil.logToRemote(Level.SEVERE, "closeTimeout failure", e);
-                  }
+                  // This code only cares about calling closeOnTimeout() if the closeFuture does not
+                  // complete within closeTimeout.
+                  logError(e, "closeTimeout failure");
+                  LoggingUtil.logToRemote(Level.SEVERE, "closeTimeout failure", e);
                 }
               },
               "bes-uploader-close-timer");
