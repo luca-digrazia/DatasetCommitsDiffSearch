@@ -123,6 +123,7 @@ public class VertxHttpRecorder {
     private static volatile int actualHttpPort = -1;
     private static volatile int actualHttpsPort = -1;
 
+    public static final String GET = "GET";
     private static final Handler<HttpServerRequest> ACTUAL_ROOT = new Handler<HttpServerRequest>() {
         @Override
         public void handle(HttpServerRequest httpServerRequest) {
@@ -135,7 +136,10 @@ public class VertxHttpRecorder {
             //as it is possible filters such as the auth filter can do blocking tasks
             //as the underlying handler has not had a chance to install a read handler yet
             //and data that arrives while the blocking task is being processed will be lost
-            httpServerRequest.pause();
+            if (!httpServerRequest.rawMethod().equals(GET)) {
+                //we don't pause for GET requests, as there is no data
+                httpServerRequest.pause();
+            }
             Handler<HttpServerRequest> rh = VertxHttpRecorder.rootHandler;
             if (rh != null) {
                 rh.handle(httpServerRequest);
@@ -187,15 +191,10 @@ public class VertxHttpRecorder {
             ConfigInstantiator.handleObject(buildConfig);
             HttpConfiguration config = new HttpConfiguration();
             ConfigInstantiator.handleObject(config);
-            if (config.host == null) {
-                //HttpHostConfigSource does not come into play here
-                config.host = "localhost";
-            }
             Router router = Router.router(vertx);
             if (hotReplacementHandler != null) {
                 router.route().order(Integer.MIN_VALUE).blockingHandler(hotReplacementHandler);
             }
-
             Handler<HttpServerRequest> root = router;
             LiveReloadConfig liveReloadConfig = new LiveReloadConfig();
             ConfigInstantiator.handleObject(liveReloadConfig);
