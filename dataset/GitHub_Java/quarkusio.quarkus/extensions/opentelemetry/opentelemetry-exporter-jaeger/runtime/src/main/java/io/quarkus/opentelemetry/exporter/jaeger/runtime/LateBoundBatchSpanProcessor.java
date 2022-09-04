@@ -60,7 +60,7 @@ public class LateBoundBatchSpanProcessor implements SpanProcessor {
     public boolean isEndRequired() {
         if (delegate == null) {
             logDelegateNotFound();
-            return false;
+            return true;
         }
         return delegate.isEndRequired();
     }
@@ -105,7 +105,7 @@ public class LateBoundBatchSpanProcessor implements SpanProcessor {
      */
     private void logDelegateNotFound() {
         if (!warningLogged) {
-            log.warn("No delegate specified, no action taken.");
+            log.warn("No BatchSpanProcessor delegate specified, no action taken.");
             warningLogged = true;
         }
     }
