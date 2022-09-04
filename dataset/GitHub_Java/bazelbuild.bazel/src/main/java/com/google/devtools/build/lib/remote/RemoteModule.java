@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.AsynchronousFileOutputStream;
 import com.google.devtools.build.lib.vfs.DigestHashFunction;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParsingResult;
@@ -109,11 +110,6 @@ public final class RemoteModule extends BlazeModule {
         return true; // if *all* > 0 violations have type MISSING
       };
 
-  /** Returns whether remote execution should be available. */
-  public static boolean shouldEnableRemoteExecution(RemoteOptions options) {
-    return !Strings.isNullOrEmpty(options.remoteExecutor);
-  }
-
   @Override
   public void beforeCommand(CommandEnvironment env) throws AbruptExitException {
     RemoteOptions remoteOptions = env.getOptions().getOptions(RemoteOptions.class);
@@ -127,9 +123,14 @@ public final class RemoteModule extends BlazeModule {
 
     boolean enableRestCache = SimpleBlobStoreFactory.isRestUrlOptions(remoteOptions);
     boolean enableDiskCache = SimpleBlobStoreFactory.isDiskCache(remoteOptions);
+    if (enableRestCache && enableDiskCache) {
+      throw new AbruptExitException(
+          "Cannot enable HTTP-based and local disk cache simultaneously",
+          ExitCode.COMMAND_LINE_ERROR);
+    }
     boolean enableBlobStoreCache = enableRestCache || enableDiskCache;
     boolean enableGrpcCache = GrpcRemoteCache.isRemoteCacheOptions(remoteOptions);
-    boolean enableRemoteExecution = shouldEnableRemoteExecution(remoteOptions);
+    boolean enableRemoteExecution = !Strings.isNullOrEmpty(remoteOptions.remoteExecutor);
     if (enableBlobStoreCache && enableRemoteExecution) {
       throw new AbruptExitException(
           "Cannot combine gRPC based remote execution with local disk or HTTP-based caching",
@@ -242,6 +243,12 @@ public final class RemoteModule extends BlazeModule {
       }
 
       if (enableBlobStoreCache) {
+        Retrier retrier =
+            new Retrier(
+                () -> Retrier.RETRIES_DISABLED,
+                (e) -> false,
+                retryScheduler,
+                Retrier.ALLOW_ALL_CALLS);
         executeRetrier = null;
         cache =
             new SimpleBlobStoreActionCache(
@@ -250,6 +257,7 @@ public final class RemoteModule extends BlazeModule {
                     remoteOptions,
                     GoogleAuthUtils.newCredentials(authAndTlsOptions),
                     env.getWorkingDirectory()),
+                retrier,
                 digestUtil);
       }
 
@@ -291,7 +299,7 @@ public final class RemoteModule extends BlazeModule {
     try {
       // Clean out old logs files.
       if (logDir.exists()) {
-        logDir.deleteTree();
+        FileSystemUtils.deleteTree(logDir);
       }
       logDir.createDirectory();
     } catch (IOException e) {
@@ -323,8 +331,6 @@ public final class RemoteModule extends BlazeModule {
 
   @Override
   public void afterCommand() {
-    buildEventArtifactUploaderFactoryDelegate.reset();
-    actionContextProvider = null;
     if (rpcLogFile != null) {
       try {
         rpcLogFile.close();
@@ -334,6 +340,7 @@ public final class RemoteModule extends BlazeModule {
         rpcLogFile = null;
       }
     }
+    buildEventArtifactUploaderFactoryDelegate.reset();
   }
 
   @Override
