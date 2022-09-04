@@ -177,7 +177,7 @@ public abstract class DependencyResolver {
    *     This is needed to support {@link LateBoundDefault#useHostConfiguration()}.
    * @param aspect the aspect applied to this target (if any)
    * @param configConditions resolver for config_setting labels
-   * @param toolchainContext the toolchain context for this target
+   * @param toolchainLabels required toolchain labels
    * @param trimmingTransitionFactory the transition factory used to trim rules (note: this is a
    *     temporary feature; see the corresponding methods in ConfiguredRuleClassProvider)
    * @return a mapping of each attribute in this rule or aspects to its dependent nodes
@@ -187,7 +187,7 @@ public abstract class DependencyResolver {
       BuildConfiguration hostConfig,
       @Nullable Aspect aspect,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      @Nullable ToolchainContext toolchainContext,
+      ImmutableSet<Label> toolchainLabels,
       @Nullable TransitionFactory<Rule> trimmingTransitionFactory)
       throws EvalException, InterruptedException, InconsistentAspectOrderException {
     NestedSetBuilder<Cause> rootCauses = NestedSetBuilder.stableOrder();
@@ -197,7 +197,7 @@ public abstract class DependencyResolver {
             hostConfig,
             aspect != null ? ImmutableList.of(aspect) : ImmutableList.<Aspect>of(),
             configConditions,
-            toolchainContext,
+            toolchainLabels,
             rootCauses,
             trimmingTransitionFactory);
     if (!rootCauses.isEmpty()) {
@@ -231,7 +231,7 @@ public abstract class DependencyResolver {
    *     This is needed to support {@link LateBoundDefault#useHostConfiguration()}.
    * @param aspects the aspects applied to this target (if any)
    * @param configConditions resolver for config_setting labels
-   * @param toolchainContext the toolchain context for this target
+   * @param toolchainLabels required toolchain labels
    * @param trimmingTransitionFactory the transition factory used to trim rules (note: this is a
    *     temporary feature; see the corresponding methods in ConfiguredRuleClassProvider)
    * @param rootCauses collector for dep labels that can't be (loading phase) loaded
@@ -242,7 +242,7 @@ public abstract class DependencyResolver {
       BuildConfiguration hostConfig,
       Iterable<Aspect> aspects,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      @Nullable ToolchainContext toolchainContext,
+      ImmutableSet<Label> toolchainLabels,
       NestedSetBuilder<Cause> rootCauses,
       @Nullable TransitionFactory<Rule> trimmingTransitionFactory)
       throws EvalException, InterruptedException, InconsistentAspectOrderException {
@@ -260,7 +260,7 @@ public abstract class DependencyResolver {
     } else if (target instanceof EnvironmentGroup) {
       visitTargetVisibility(node, outgoingLabels);
     } else if (target instanceof Rule) {
-      visitRule(node, hostConfig, aspects, configConditions, toolchainContext, outgoingLabels);
+      visitRule(node, hostConfig, aspects, configConditions, toolchainLabels, outgoingLabels);
     } else if (target instanceof PackageGroup) {
       outgoingLabels.putAll(VISIBILITY_DEPENDENCY, ((PackageGroup) target).getIncludes());
     } else {
@@ -400,7 +400,7 @@ public abstract class DependencyResolver {
       BuildConfiguration hostConfig,
       Iterable<Aspect> aspects,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      @Nullable ToolchainContext toolchainContext,
+      ImmutableSet<Label> toolchainLabels,
       OrderedSetMultimap<DependencyKind, Label> outgoingLabels)
       throws EvalException {
     Preconditions.checkArgument(node.getTarget() instanceof Rule, node);
@@ -454,9 +454,7 @@ public abstract class DependencyResolver {
           rule.getPackage().getDefaultRestrictedTo());
     }
 
-    if (toolchainContext != null) {
-      outgoingLabels.putAll(TOOLCHAIN_DEPENDENCY, toolchainContext.resolvedToolchainLabels());
-    }
+    outgoingLabels.putAll(TOOLCHAIN_DEPENDENCY, toolchainLabels);
   }
 
   private void resolveAttributes(

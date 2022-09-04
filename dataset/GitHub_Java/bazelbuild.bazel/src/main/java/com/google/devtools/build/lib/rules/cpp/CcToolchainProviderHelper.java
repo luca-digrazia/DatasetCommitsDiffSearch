@@ -76,7 +76,7 @@ public class CcToolchainProviderHelper {
     CToolchain toolchain = null;
     CrosstoolRelease crosstoolFromCrosstoolFile = null;
 
-    if (attributes.getCcToolchainConfigInfo() == null) {
+    if (cppConfiguration.disableCrosstool() && attributes.getCcToolchainConfigInfo() == null) {
       ruleContext.ruleError(
           "cc_toolchain.toolchain_config attribute must be specified. See "
               + "https://github.com/bazelbuild/bazel/issues/7320 for details.");
@@ -110,6 +110,7 @@ public class CcToolchainProviderHelper {
     CppToolchainInfo toolchainInfo =
         getCppToolchainInfo(
             ruleContext,
+            cppConfiguration.disableGenruleCcToolchainDependency(),
             cppConfiguration.getTransformedCpuFromOptions(),
             cppConfiguration.getCompilerFromOptions(),
             attributes,
@@ -374,6 +375,7 @@ public class CcToolchainProviderHelper {
   /** Finds an appropriate {@link CppToolchainInfo} for this target. */
   private static CppToolchainInfo getCppToolchainInfo(
       RuleContext ruleContext,
+      boolean disableGenruleCcToolchainDependency,
       String cpuFromOptions,
       String compilerFromOptions,
       CcToolchainAttributesProvider attributes,
@@ -386,7 +388,10 @@ public class CcToolchainProviderHelper {
 
     if (configInfo != null) {
       try {
-        return CppToolchainInfo.create(ruleContext.getLabel(), configInfo);
+        return CppToolchainInfo.create(
+            ruleContext.getLabel(),
+            configInfo,
+            disableGenruleCcToolchainDependency);
       } catch (EvalException e) {
         throw ruleContext.throwWithRuleError(e.getMessage());
       }
@@ -416,7 +421,10 @@ public class CcToolchainProviderHelper {
                   .incompatibleDoNotSplitLinkingCmdline(),
               CppToolchainInfo.getToolsDirectory(attributes.getCcToolchainLabel()));
       CcToolchainConfigInfo ccToolchainConfigInfo = CcToolchainConfigInfo.fromToolchain(toolchain);
-      return CppToolchainInfo.create(attributes.getCcToolchainLabel(), ccToolchainConfigInfo);
+      return CppToolchainInfo.create(
+          attributes.getCcToolchainLabel(),
+          ccToolchainConfigInfo,
+          disableGenruleCcToolchainDependency);
     } catch (EvalException e) {
       throw ruleContext.throwWithRuleError(e.getMessage());
     }
