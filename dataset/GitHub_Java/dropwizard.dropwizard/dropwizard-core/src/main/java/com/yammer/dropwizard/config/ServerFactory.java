@@ -3,11 +3,9 @@ package com.yammer.dropwizard.config;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.yammer.dropwizard.jetty.BiDiGzipHandler;
-import com.yammer.dropwizard.jetty.InstrumentedSslSelectChannelConnector;
-import com.yammer.dropwizard.jetty.InstrumentedSslSocketConnector;
 import com.yammer.dropwizard.jetty.UnbrandedErrorHandler;
+import com.yammer.dropwizard.logging.Log;
 import com.yammer.dropwizard.servlets.ThreadNameFilter;
 import com.yammer.dropwizard.tasks.TaskServlet;
 import com.yammer.dropwizard.util.Duration;
@@ -15,7 +13,7 @@ import com.yammer.dropwizard.util.Size;
 import com.yammer.metrics.HealthChecks;
 import com.yammer.metrics.core.HealthCheck;
 import com.yammer.metrics.jetty.*;
-import com.yammer.metrics.reporting.AdminServlet;
+import com.yammer.metrics.servlet.AdminServlet;
 import com.yammer.metrics.util.DeadlockHealthCheck;
 import org.eclipse.jetty.security.ConstraintMapping;
 import org.eclipse.jetty.security.ConstraintSecurityHandler;
@@ -34,17 +32,14 @@ import org.eclipse.jetty.server.ssl.SslConnector;
 import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.util.resource.Resource;
 import org.eclipse.jetty.util.security.Constraint;
 import org.eclipse.jetty.util.security.Credential;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ThreadPool;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.servlet.DispatcherType;
-import java.io.File;
-import java.net.URI;
 import java.security.KeyStore;
 import java.util.EnumSet;
 import java.util.EventListener;
@@ -54,7 +49,7 @@ import java.util.Map;
 // TODO: 11/7/11 <coda> -- document ServerFactory
 
 public class ServerFactory {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ServerFactory.class);
+    private static final Log LOG = Log.forClass(ServerFactory.class);
 
     private final HttpConfiguration config;
     private final RequestLogHandlerFactory requestLogHandlerFactory;
@@ -66,13 +61,13 @@ public class ServerFactory {
     }
 
     public Server buildServer(Environment env) throws ConfigurationException {
-        HealthChecks.defaultRegistry().register(new DeadlockHealthCheck());
+        HealthChecks.register(new DeadlockHealthCheck());
         for (HealthCheck healthCheck : env.getHealthChecks()) {
-            HealthChecks.defaultRegistry().register(healthCheck);
+            HealthChecks.register(healthCheck);
         }
 
         if (env.getHealthChecks().isEmpty()) {
-            LOGGER.warn('\n' +
+            LOG.warn('\n' +
                              "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" +
                              "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" +
                              "!    THIS SERVICE HAS NO HEALTHCHECKS. THIS MEANS YOU WILL NEVER KNOW IF IT    !\n" +
@@ -96,8 +91,7 @@ public class ServerFactory {
 
         server.addConnector(createExternalConnector());
 
-        // if we're dynamically allocating ports, no worries if they are the same (i.e. 0)
-        if (config.getAdminPort() == 0 || (config.getAdminPort() != config.getPort()) ) {
+        if (config.getAdminPort() != config.getPort() ) {
             server.addConnector(createInternalConnector());
         }
 
@@ -120,7 +114,7 @@ public class ServerFactory {
 
         connector.setHost(config.getBindHost().orNull());
 
-        connector.setAcceptors(config.getAcceptorThreads());
+        connector.setAcceptors(config.getAcceptorThreadCount());
 
         connector.setForwarded(config.useForwardedHeaders());
 
@@ -160,19 +154,19 @@ public class ServerFactory {
     private AbstractConnector createConnector(int port) {
         final AbstractConnector connector;
         switch (config.getConnectorType()) {
-            case BLOCKING:
+            case BLOCKING_CHANNEL:
                 connector = new InstrumentedBlockingChannelConnector(port);
                 break;
-            case LEGACY:
+            case SOCKET:
                 connector = new InstrumentedSocketConnector(port);
                 break;
-            case LEGACY_SSL:
+            case SOCKET_SSL:
                 connector = new InstrumentedSslSocketConnector(port);
                 break;
-            case NONBLOCKING:
+            case SELECT_CHANNEL:
                 connector = new InstrumentedSelectChannelConnector(port);
                 break;
-            case NONBLOCKING_SSL:
+            case SELECT_CHANNEL_SSL:
                 connector = new InstrumentedSslSelectChannelConnector(port);
                 break;
             default:
@@ -195,104 +189,39 @@ public class ServerFactory {
     }
 
     private void configureSslContext(SslContextFactory factory) {
-        final SslConfiguration sslConfig = config.getSslConfiguration();
-
-        for (File keyStore : sslConfig.getKeyStore().asSet()) {
-            factory.setKeyStorePath(keyStore.getAbsolutePath());
+        for (String path : config.getSslConfiguration().getKeyStorePath().asSet()) {
+            factory.setKeyStorePath(path);
         }
 
-        for (String password : sslConfig.getKeyStorePassword().asSet()) {
+        for (String password : config.getSslConfiguration().getKeyStorePassword().asSet()) {
             factory.setKeyStorePassword(password);
         }
 
-        for (String password : sslConfig.getKeyManagerPassword().asSet()) {
+        for (String password : config.getSslConfiguration().getKeyManagerPassword().asSet()) {
             factory.setKeyManagerPassword(password);
         }
 
-        for (String certAlias : sslConfig.getCertAlias().asSet()) {
+        for (String certAlias : config.getSslConfiguration().getCertAlias().asSet()) {
             factory.setCertAlias(certAlias);
         }
 
-        final String keyStoreType = sslConfig.getKeyStoreType();
-        if (keyStoreType.startsWith("Windows-")) {
-            try {
-                final KeyStore keyStore = KeyStore.getInstance(keyStoreType);
+        for (String type : config.getSslConfiguration().getKeyStoreType().asSet()) {
+            if (type.startsWith("Windows-")) {
+                try {
+                    final KeyStore keyStore = KeyStore.getInstance(type);
 
-                keyStore.load(null, null);
-                factory.setKeyStore(keyStore);
+                    keyStore.load(null, null);
+                    factory.setKeyStore(keyStore);
 
-            } catch (Exception e) {
-                throw new IllegalStateException("Windows key store not supported", e);
+                } catch (Exception e) {
+                    throw new IllegalStateException("Windows key store not supported", e);
+                }
+            } else {
+                factory.setKeyStoreType(type);
             }
-        } else {
-            factory.setKeyStoreType(keyStoreType);
         }
 
-        for (File trustStore : sslConfig.getTrustStore().asSet()) {
-            factory.setTrustStore(trustStore.getAbsolutePath());
-        }
-
-        for (String password : sslConfig.getTrustStorePassword().asSet()) {
-            factory.setTrustStorePassword(password);
-        }
-
-        final String trustStoreType = sslConfig.getTrustStoreType();
-        if (trustStoreType.startsWith("Windows-")) {
-            try {
-                final KeyStore keyStore = KeyStore.getInstance(trustStoreType);
-
-                keyStore.load(null, null);
-                factory.setTrustStore(keyStore);
-
-            } catch (Exception e) {
-                throw new IllegalStateException("Windows key store not supported", e);
-            }
-        } else {
-            factory.setTrustStoreType(trustStoreType);
-        }
-
-        for (Boolean needClientAuth : sslConfig.getNeedClientAuth().asSet()) {
-            factory.setNeedClientAuth(needClientAuth);
-        }
-
-        for (Boolean wantClientAuth : sslConfig.getWantClientAuth().asSet()) {
-            factory.setWantClientAuth(wantClientAuth);
-        }
-
-        for (Boolean allowRenegotiate : sslConfig.getAllowRenegotiate().asSet()) {
-            factory.setAllowRenegotiate(allowRenegotiate);
-        }
-
-        for (File crlPath : sslConfig.getCrlPath().asSet()) {
-            factory.setCrlPath(crlPath.getAbsolutePath());
-        }
-
-        for (Boolean enable : sslConfig.getEnableCRLDP().asSet()) {
-            factory.setEnableCRLDP(enable);
-        }
-
-        for (Boolean enable : sslConfig.getEnableOCSP().asSet()) {
-            factory.setEnableOCSP(enable);
-        }
-
-        for (Integer length : sslConfig.getMaxCertPathLength().asSet()) {
-            factory.setMaxCertPathLength(length);
-        }
-
-        for (URI uri : sslConfig.getOcspResponderUrl().asSet()) {
-            factory.setOcspResponderURL(uri.toASCIIString());
-        }
-
-        for (String provider : sslConfig.getJceProvider().asSet()) {
-            factory.setProvider(provider);
-        }
-
-        for (Boolean validate : sslConfig.getValidatePeers().asSet()) {
-            factory.setValidatePeerCerts(validate);
-        }
-
-        factory.setIncludeProtocols(Iterables.toArray(sslConfig.getSupportedProtocols(),
-                                                      String.class));
+        factory.setIncludeProtocols(config.getSslConfiguration().getSupportedProtocols());
     }
 
 
@@ -356,11 +285,7 @@ public class ServerFactory {
     private Handler createExternalServlet(Environment env) {
         final ServletContextHandler handler = new ServletContextHandler();
         handler.addFilter(ThreadNameFilter.class, "/*", EnumSet.of(DispatcherType.REQUEST));
-        handler.setBaseResource(env.getBaseResource());
-
-        if(!env.getProtectedTargets().isEmpty()) {
-            handler.setProtectedTargets(env.getProtectedTargets().toArray(new String[env.getProtectedTargets().size()]));
-        }
+        handler.setBaseResource(Resource.newClassPathResource("."));
 
         for (ImmutableMap.Entry<String, ServletHolder> entry : env.getServlets().entrySet()) {
             handler.addServlet(entry.getValue(), entry.getKey());
