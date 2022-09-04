@@ -174,12 +174,15 @@ public final class JavaLibraryHelper {
    *
    * @param semantics implementation specific java rules semantics
    * @param javaToolchainProvider used for retrieving misc java tools
+   * @param hostJavabase the target of the host javabase used to retrieve the java executable and
+   *     its necessary inputs
    * @param outputJarsBuilder populated with the outputs of the created actions
    * @param outputSourceJar if not-null, the output of an source jar action that will be created
    */
   public JavaCompilationArtifacts build(
       JavaSemantics semantics,
       JavaToolchainProvider javaToolchainProvider,
+      JavaRuntimeInfo hostJavabase,
       JavaRuleOutputJarsProvider.Builder outputJarsBuilder,
       boolean createOutputSourceJar,
       @Nullable Artifact outputSourceJar)
@@ -187,6 +190,7 @@ public final class JavaLibraryHelper {
     return build(
         semantics,
         javaToolchainProvider,
+        hostJavabase,
         outputJarsBuilder,
         createOutputSourceJar,
         outputSourceJar,
@@ -199,6 +203,7 @@ public final class JavaLibraryHelper {
   public JavaCompilationArtifacts build(
       JavaSemantics semantics,
       JavaToolchainProvider javaToolchainProvider,
+      JavaRuntimeInfo hostJavabase,
       JavaRuleOutputJarsProvider.Builder outputJarsBuilder,
       boolean createOutputSourceJar,
       @Nullable Artifact outputSourceJar,
@@ -241,6 +246,7 @@ public final class JavaLibraryHelper {
             javacOpts,
             attributes,
             javaToolchainProvider,
+            hostJavabase,
             additionalJavaBaseInputs);
     helper.addLocalClassPathEntries(localClassPathEntries);
     JavaCompileOutputs<Artifact> outputs = helper.createOutputs(output);
@@ -254,7 +260,8 @@ public final class JavaLibraryHelper {
     }
 
     if (createOutputSourceJar) {
-      helper.createSourceJarAction(outputSourceJar, outputs.genSource(), javaToolchainProvider);
+      helper.createSourceJarAction(
+          outputSourceJar, outputs.genSource(), javaToolchainProvider, hostJavabase);
     }
     ImmutableList<Artifact> outputSourceJars =
         outputSourceJar == null ? ImmutableList.of() : ImmutableList.of(outputSourceJar);
@@ -270,7 +277,7 @@ public final class JavaLibraryHelper {
               javaArtifacts,
               attributes.build(),
               neverlink,
-              javaToolchainProvider.getBootclasspath());
+              JavaCompilationHelper.getBootClasspath(javaToolchainProvider));
 
       javaInfoBuilder.addProvider(
           JavaCompilationInfoProvider.class,

@@ -42,7 +42,6 @@ import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.Clas
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import java.util.ArrayList;
@@ -153,7 +152,8 @@ final class JavaInfoBuildHelper {
       List<Artifact> sourceFiles,
       List<Artifact> sourceJars,
       JavaToolchainProvider javaToolchain,
-      JavaRuntimeInfo hostJavabase)
+      JavaRuntimeInfo hostJavabase,
+      Location location)
       throws EvalException {
     // No sources to pack, return None
     if (sourceFiles.isEmpty() && sourceJars.isEmpty()) {
@@ -163,7 +163,7 @@ final class JavaInfoBuildHelper {
     if (sourceFiles.isEmpty() && sourceJars.size() == 1) {
       return sourceJars.get(0);
     }
-    ActionRegistry actionRegistry = actions.asActionRegistry(actions);
+    ActionRegistry actionRegistry = actions.asActionRegistry(location, actions);
     if (outputSourceJar == null) {
       outputSourceJar = getDerivedSourceJar(actions.getActionConstructionContext(), outputJar);
     }
@@ -236,6 +236,7 @@ final class JavaInfoBuildHelper {
       List<Artifact> resources,
       Boolean neverlink,
       JavaSemantics javaSemantics,
+      Location location,
       StarlarkThread thread)
       throws EvalException, InterruptedException {
 
@@ -243,7 +244,8 @@ final class JavaInfoBuildHelper {
         && sourceFiles.isEmpty()
         && exports.isEmpty()
         && exportedPlugins.isEmpty()) {
-      throw Starlark.errorf(
+      throw new EvalException(
+          location,
           "source_jars, sources, exports and exported_plugins cannot be simultaneously empty");
     }
 
@@ -266,7 +268,7 @@ final class JavaInfoBuildHelper {
                     .addAll(
                         JavaCommon.computePerPackageJavacOpts(
                             skylarkRuleContext.getRuleContext(), toolchainProvider))
-                    .addAll(tokenize(javacOpts))
+                    .addAll(tokenize(location, javacOpts))
                     .build());
 
     streamProviders(deps, JavaCompilationArgsProvider.class).forEach(helper::addDep);
@@ -333,13 +335,13 @@ final class JavaInfoBuildHelper {
         .build();
   }
 
-  private static List<String> tokenize(List<String> input) throws EvalException {
+  private static List<String> tokenize(Location location, List<String> input) throws EvalException {
     List<String> output = new ArrayList<>();
     for (String token : input) {
       try {
         ShellUtils.tokenize(output, token);
       } catch (ShellUtils.TokenizationException e) {
-        throw Starlark.errorf("%s", e.getMessage());
+        throw new EvalException(location, e.getMessage());
       }
     }
     return output;
@@ -349,10 +351,11 @@ final class JavaInfoBuildHelper {
       SkylarkActionFactory actions,
       Artifact inputJar,
       @Nullable Label targetLabel,
-      JavaToolchainProvider javaToolchain)
+      JavaToolchainProvider javaToolchain,
+      Location location)
       throws EvalException {
     String ijarBasename = FileSystemUtils.removeExtension(inputJar.getFilename()) + "-ijar.jar";
-    Artifact interfaceJar = actions.declareFile(ijarBasename, inputJar);
+    Artifact interfaceJar = actions.declareFile(ijarBasename, inputJar, location);
     FilesToRunProvider ijarTarget = javaToolchain.getIjar();
     CustomCommandLine.Builder commandLine =
         CustomCommandLine.builder().addExecPath(inputJar).addExecPath(interfaceJar);
@@ -368,7 +371,7 @@ final class JavaInfoBuildHelper {
             .addCommandLine(commandLine.build())
             .useDefaultShellEnvironment()
             .setMnemonic("JavaIjar");
-    actions.registerAction(actionBuilder.build(actions.getActionConstructionContext()));
+    actions.registerAction(location, actionBuilder.build(actions.getActionConstructionContext()));
     return interfaceJar;
   }
 
@@ -376,10 +379,11 @@ final class JavaInfoBuildHelper {
       SkylarkActionFactory actions,
       Artifact inputJar,
       Label targetLabel,
-      JavaToolchainProvider javaToolchain)
+      JavaToolchainProvider javaToolchain,
+      Location location)
       throws EvalException {
     String basename = FileSystemUtils.removeExtension(inputJar.getFilename()) + "-stamped.jar";
-    Artifact outputJar = actions.declareFile(basename, inputJar);
+    Artifact outputJar = actions.declareFile(basename, inputJar, location);
     // ijar doubles as a stamping tool
     FilesToRunProvider ijarTarget = (javaToolchain).getIjar();
     CustomCommandLine.Builder commandLine =
@@ -397,7 +401,7 @@ final class JavaInfoBuildHelper {
             .addCommandLine(commandLine.build())
             .useDefaultShellEnvironment()
             .setMnemonic("JavaIjar");
-    actions.registerAction(actionBuilder.build(actions.getActionConstructionContext()));
+    actions.registerAction(location, actionBuilder.build(actions.getActionConstructionContext()));
     return outputJar;
   }
 

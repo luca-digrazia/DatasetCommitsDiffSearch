@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkActionFactory;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.java.JavaCommonApi;
@@ -73,6 +74,7 @@ public class JavaSkylarkCommon
       Sequence<?> sourcepathEntries, // <Artifact> expected
       Sequence<?> resources, // <Artifact> expected
       Boolean neverlink,
+      Location location,
       StarlarkThread thread)
       throws EvalException, InterruptedException {
 
@@ -101,6 +103,7 @@ public class JavaSkylarkCommon
             resources.getContents(Artifact.class, "resources"),
             neverlink,
             javaSemantics,
+            location,
             thread);
   }
 
@@ -109,11 +112,16 @@ public class JavaSkylarkCommon
       SkylarkActionFactory actions,
       Artifact jar,
       Object targetLabel,
-      JavaToolchainProvider javaToolchain)
+      JavaToolchainProvider javaToolchain,
+      Location location)
       throws EvalException {
     return JavaInfoBuildHelper.getInstance()
         .buildIjar(
-            actions, jar, targetLabel != Starlark.NONE ? (Label) targetLabel : null, javaToolchain);
+            actions,
+            jar,
+            targetLabel != Starlark.NONE ? (Label) targetLabel : null,
+            javaToolchain,
+            location);
   }
 
   @Override
@@ -121,9 +129,11 @@ public class JavaSkylarkCommon
       SkylarkActionFactory actions,
       Artifact jar,
       Label targetLabel,
-      JavaToolchainProvider javaToolchain)
+      JavaToolchainProvider javaToolchain,
+      Location location)
       throws EvalException {
-    return JavaInfoBuildHelper.getInstance().stampJar(actions, jar, targetLabel, javaToolchain);
+    return JavaInfoBuildHelper.getInstance()
+        .stampJar(actions, jar, targetLabel, javaToolchain, location);
   }
 
   @Override
@@ -133,7 +143,8 @@ public class JavaSkylarkCommon
       Sequence<?> sourceFiles, // <Artifact> expected.
       Sequence<?> sourceJars, // <Artifact> expected.
       JavaToolchainProvider javaToolchain,
-      JavaRuntimeInfo hostJavabase)
+      JavaRuntimeInfo hostJavabase,
+      Location location)
       throws EvalException {
     return JavaInfoBuildHelper.getInstance()
         .packSourceFiles(
@@ -143,14 +154,15 @@ public class JavaSkylarkCommon
             sourceFiles.getContents(Artifact.class, "sources"),
             sourceJars.getContents(Artifact.class, "source_jars"),
             javaToolchain,
-            hostJavabase);
+            hostJavabase,
+            location);
   }
 
   @Override
   // TODO(b/78512644): migrate callers to passing explicit javacopts or using custom toolchains, and
   // delete
-  public ImmutableList<String> getDefaultJavacOpts(JavaToolchainProvider javaToolchain)
-      throws EvalException {
+  public ImmutableList<String> getDefaultJavacOpts(
+      JavaToolchainProvider javaToolchain, Location location) throws EvalException {
     // We don't have a rule context if the default_javac_opts.java_toolchain parameter is set
     return ((JavaToolchainProvider) javaToolchain).getJavacOptions(/* ruleContext= */ null);
   }
@@ -230,8 +242,8 @@ public class JavaSkylarkCommon
   }
 
   @Override
-  public Label getJavaToolchainLabel(JavaToolchainSkylarkApiProviderApi toolchain)
-      throws EvalException {
+  public Label getJavaToolchainLabel(
+      JavaToolchainSkylarkApiProviderApi toolchain, Location location) throws EvalException {
     // No implementation in Bazel. This method not callable in Starlark except through
     // (discouraged) use of --experimental_google_legacy_api.
     return null;
