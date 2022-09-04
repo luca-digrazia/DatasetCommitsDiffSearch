@@ -17,6 +17,7 @@
 package org.graylog2.shared.initializers;
 
 import com.codahale.metrics.InstrumentedExecutorService;
+import com.codahale.metrics.InstrumentedThreadFactory;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -55,7 +56,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.inject.Named;
 import javax.inject.Singleton;
 import javax.net.ssl.SSLException;
 import javax.ws.rs.Path;
@@ -90,7 +90,6 @@ public class RestApiService extends AbstractIdleService {
     private final Map<String, Set<PluginRestResource>> pluginRestResources;
 
     private final ServerBootstrap bootstrap;
-    private final String[] restControllerPackages;
 
     @Inject
     public RestApiService(BaseConfiguration configuration,
@@ -99,13 +98,11 @@ public class RestApiService extends AbstractIdleService {
                           Set<Class<? extends DynamicFeature>> dynamicFeatures,
                           Set<Class<? extends ContainerResponseFilter>> containerResponseFilters,
                           Set<Class<? extends ExceptionMapper>> exceptionMappers,
-                          Map<String, Set<PluginRestResource>> pluginRestResources,
-                          @Named("RestControllerPackages") String[] restControllerPackages) {
+                          Map<String, Set<PluginRestResource>> pluginRestResources) {
         this(configuration, metricRegistry, securityContextFactory, dynamicFeatures, containerResponseFilters,
                 exceptionMappers, pluginRestResources,
                 instrumentedExecutor("restapi-boss-%d", metricRegistry),
-                instrumentedExecutor("restapi-worker-%d", metricRegistry),
-                restControllerPackages);
+                instrumentedExecutor("restapi-worker-%d", metricRegistry));
     }
 
     private RestApiService(final BaseConfiguration configuration,
@@ -116,10 +113,9 @@ public class RestApiService extends AbstractIdleService {
                            final Set<Class<? extends ExceptionMapper>> exceptionMappers,
                            final Map<String, Set<PluginRestResource>> pluginRestResources,
                            final ExecutorService bossExecutor,
-                           final ExecutorService workerExecutor,
-                           final String[] restControllerPackages) {
+                           final ExecutorService workerExecutor) {
         this(configuration, metricRegistry, securityContextFactory, dynamicFeatures, containerResponseFilters,
-                exceptionMappers, pluginRestResources, buildServerBootStrap(bossExecutor, workerExecutor), restControllerPackages);
+                exceptionMappers, pluginRestResources, buildServerBootStrap(bossExecutor, workerExecutor));
     }
 
     private RestApiService(final BaseConfiguration configuration,
@@ -129,8 +125,7 @@ public class RestApiService extends AbstractIdleService {
                            final Set<Class<? extends ContainerResponseFilter>> containerResponseFilters,
                            final Set<Class<? extends ExceptionMapper>> exceptionMappers,
                            final Map<String, Set<PluginRestResource>> pluginRestResources,
-                           final ServerBootstrap bootstrap,
-                           final String[] restControllerPackages) {
+                           final ServerBootstrap bootstrap) {
         this.configuration = configuration;
         this.metricRegistry = metricRegistry;
         this.securityContextFactory = securityContextFactory;
@@ -139,12 +134,16 @@ public class RestApiService extends AbstractIdleService {
         this.exceptionMappers = exceptionMappers;
         this.pluginRestResources = pluginRestResources;
         this.bootstrap = bootstrap;
-        this.restControllerPackages = restControllerPackages;
     }
 
     private static ExecutorService instrumentedExecutor(final String nameFormat, final MetricRegistry metricRegistry) {
-        final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat(nameFormat).build();
-        return new InstrumentedExecutorService(Executors.newCachedThreadPool(threadFactory), metricRegistry);
+        return new InstrumentedExecutorService(
+                Executors.newCachedThreadPool(threadFactory(nameFormat, metricRegistry)), metricRegistry);
+    }
+
+    private static ThreadFactory threadFactory(final String nameFormat, final MetricRegistry metricRegistry) {
+        return new InstrumentedThreadFactory(
+                new ThreadFactoryBuilder().setNameFormat(nameFormat).build(), metricRegistry);
     }
 
     private static ServerBootstrap buildServerBootStrap(final ExecutorService bossExecutor, final ExecutorService workerExecutor) {
@@ -243,7 +242,11 @@ public class RestApiService extends AbstractIdleService {
                         WebApplicationExceptionMapper.class)
                 .register(ObjectMapperProvider.class)
                 .register(JacksonFeature.class)
-                .registerFinder(new PackageNamesScanner(restControllerPackages, true))
+                .registerFinder(new PackageNamesScanner(new String[]{
+                        "org.graylog2.rest.resources",
+                        "org.graylog2.radio.rest.resources",
+                        "org.graylog2.shared.rest.resources"
+                }, true))
                 .registerResources(additionalResources);
 
         for (Class<? extends ExceptionMapper> exceptionMapper : exceptionMappers) {

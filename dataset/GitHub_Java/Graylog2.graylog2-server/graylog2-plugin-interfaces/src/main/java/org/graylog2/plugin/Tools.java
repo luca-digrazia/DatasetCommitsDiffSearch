@@ -1,6 +1,6 @@
 /**
  * The MIT License
- * Copyright (c) 2012 Graylog, Inc.
+ * Copyright (c) 2012 TORCH GmbH
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,7 @@ package org.graylog2.plugin;
 
 import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.Ints;
+import org.elasticsearch.search.SearchHit;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
@@ -319,6 +320,18 @@ public final class Tools {
                 .toFormatter();
     }
 
+    public static int getTimestampOfMessage(SearchHit msg) {
+        Object field = msg.getSource().get("timestamp");
+        if (field == null) {
+            throw new RuntimeException("Document has no field timestamp.");
+        }
+
+        DateTimeFormatter formatter = DateTimeFormat.forPattern(ES_DATE_FORMAT).withZoneUTC();
+        DateTime dt = formatter.parseDateTime(field.toString());
+
+        return (int) (dt.getMillis() / 1000);
+    }
+
     public static DateTime iso8601() {
         return new DateTime(DateTimeZone.UTC);
     }
@@ -491,12 +504,6 @@ public final class Tools {
         return null;
     }
 
-    public static String bytesToHex(byte[] a) {
-        StringBuilder sb = new StringBuilder(a.length * 2);
-        for(byte b: a)
-            sb.append(String.format("%02x", b & 0xff)).append(' ');
-        return sb.toString().trim();
-    }
     /**
      * The default uncaught exception handler will print to STDERR, which we don't always want for threads.
      * Using this utility method you can avoid writing to STDERR on a per-thread basis
