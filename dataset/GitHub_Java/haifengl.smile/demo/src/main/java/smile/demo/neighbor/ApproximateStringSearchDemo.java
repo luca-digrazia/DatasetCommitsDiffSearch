@@ -24,8 +24,12 @@ import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
+
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -34,14 +38,14 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
+import smile.plot.PlotCanvas;
 import smile.math.MathEx;
 import smile.math.distance.EditDistance;
 import smile.neighbor.BKTree;
 import smile.neighbor.CoverTree;
 import smile.neighbor.LinearSearch;
 import smile.neighbor.Neighbor;
-import smile.plot.swing.BarPlot;
-import smile.plot.swing.Canvas;
+import smile.plot.BarPlot;
 
 /**
  *
@@ -93,12 +97,16 @@ public class ApproximateStringSearchDemo extends JPanel implements Runnable, Act
             List<String> words = new ArrayList<>();
 
             try {
-                smile.util.Paths.getTestDataLines("neighbor/index.noun")
-                        .filter(line -> !line.startsWith(" "))
-                        .forEach(line -> {
-                            String[] w = line.split("\\s");
-                            words.add(w[0].replace('_', ' '));
-                        });
+                FileInputStream stream = new FileInputStream(smile.util.Paths.getTestData("index.noun").toFile());
+                BufferedReader input = new BufferedReader(new InputStreamReader(stream));
+                String line = input.readLine();
+                while (line != null) {
+                    if (!line.startsWith(" ")) {
+                        String[] w = line.split("\\s");
+                        words.add(w[0].replace('_', ' '));
+                    }
+                    line = input.readLine();
+                }
             } catch (Exception e) {
                 System.err.println(e);
             }
@@ -121,10 +129,9 @@ public class ApproximateStringSearchDemo extends JPanel implements Runnable, Act
             int coverBuild = (int) (System.currentTimeMillis() - time) / 1000;
 
             double[] buildTime = {naiveBuild, bktreeBuild, coverBuild};
-            Canvas build = BarPlot.of(buildTime).canvas();
+            PlotCanvas build = BarPlot.plot(buildTime, label);
             build.setTitle("Build Time");
-            build.setAxisLabels(label);
-            canvas.add(build.panel());
+            canvas.add(build);
             validate();
         }
 
@@ -154,10 +161,9 @@ public class ApproximateStringSearchDemo extends JPanel implements Runnable, Act
         int coverSearch = (int) (System.currentTimeMillis() - time) / 1000;
 
         double[] searchTime = {naiveSearch, kdtreeSearch, coverSearch};
-        Canvas search = BarPlot.of(searchTime).canvas();
+        PlotCanvas search = BarPlot.plot(searchTime, label);
         search.setTitle("Search Time of k = " + knn);
-        search.setAxisLabels(label);
-        canvas.add(search.panel());
+        canvas.add(search);
         if (canvas.getComponentCount() > 3)
             canvas.setLayout(new GridLayout(2,2));
         validate();

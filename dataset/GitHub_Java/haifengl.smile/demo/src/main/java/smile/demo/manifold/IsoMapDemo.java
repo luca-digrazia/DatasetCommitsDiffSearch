@@ -52,16 +52,16 @@ public class IsoMapDemo extends ManifoldDemo {
         }
 
         long clock = System.currentTimeMillis();
-        IsoMap isomap = IsoMap.of(data, k);
+        IsoMap isomap = new IsoMap(data, 2, k);
         System.out.format("Learn IsoMap from %d samples in %dms\n", data.length, System.currentTimeMillis() - clock);
 
-        double[][] y = isomap.coordinates;
+        double[][] y = isomap.getCoordinates();
 
         PlotCanvas plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
         plot.points(y, 'o', Color.RED);
 
         int n = y.length;
-        Graph graph = isomap.graph;
+        Graph graph = isomap.getNearestNeighborGraph();
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < i; j++) {
                 if (graph.hasEdge(i, j)) {

@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.classification;
 
@@ -25,7 +25,6 @@ import javax.swing.JOptionPane;
 import javax.swing.JTextField;
 
 import smile.classification.KNN;
-import smile.data.CategoricalEncoder;
 
 /**
  *
@@ -58,7 +57,7 @@ public class KNNDemo extends ClassificationDemo {
             return null;
         }
 
-        double[][] data = formula.x(dataset[datasetIndex]).toArray(false, CategoricalEncoder.ONE_HOT);
+        double[][] data = formula.x(dataset[datasetIndex]).toArray();
         int[] label = formula.y(dataset[datasetIndex]).toIntArray();
         
         KNN<double[]> knn = KNN.fit(data, label, k);

@@ -34,11 +34,10 @@ import org.apache.commons.csv.CSVFormat;
 import smile.classification.FLD;
 import smile.data.DataFrame;
 import smile.data.formula.Formula;
-import smile.io.Read;
-import smile.plot.swing.Palette;
-import smile.plot.swing.Canvas;
+import smile.io.DatasetReader;
+import smile.plot.Palette;
+import smile.plot.PlotCanvas;
 import smile.math.MathEx;
-import smile.plot.swing.ScatterPlot;
 
 @SuppressWarnings("serial")
 public class LDADemo extends JPanel implements Runnable, ActionListener {
@@ -49,13 +48,10 @@ public class LDADemo extends JPanel implements Runnable, ActionListener {
 
     private static final String[] datasource = {
         "classification/iris.txt",
-        "classification/pendigits.txt"
+        "pendigits.txt"
     };
 
-    protected static Formula[] formula = {
-            Formula.lhs("Species"),
-            Formula.lhs("V17"),
-    };
+    static Formula formula = Formula.lhs("class");
     static DataFrame[] dataset = new DataFrame[datasetName.length];
     static int datasetIndex = 0;
 
@@ -96,9 +92,10 @@ public class LDADemo extends JPanel implements Runnable, ActionListener {
      * the clusters.
      */
     public JComponent learn() {
-        double[][] data = formula[datasetIndex].x(dataset[datasetIndex]).toArray();
-        int[] labels = formula[datasetIndex].y(dataset[datasetIndex]).toIntArray();
+        double[][] data = formula.x(dataset[datasetIndex]).toArray();
+        String[] names = formula.x(dataset[datasetIndex]).names();
 
+        int[] labels = formula.y(dataset[datasetIndex]).toIntArray();
         int min = MathEx.min(labels);
         for (int i = 0; i < labels.length; i++) {
             labels[i] -= min;
@@ -110,15 +107,19 @@ public class LDADemo extends JPanel implements Runnable, ActionListener {
 
         double[][] y = lda.project(data);
 
-        Canvas plot;
-        if (labels != null) {
-            plot = ScatterPlot.of(y, labels).canvas();
+        PlotCanvas plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
+        if (names != null) {
+            plot.points(y, names);
+        } else if (labels != null) {
+            for (int i = 0; i < y.length; i++) {
+                plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
+            }
         } else {
-            plot = ScatterPlot.of(y).canvas();
+            plot.points(y, pointLegend);
         }
 
         plot.setTitle("Linear Discriminant Analysis");
-        return plot.panel();
+        return plot;
     }
 
     @Override
@@ -145,15 +146,13 @@ public class LDADemo extends JPanel implements Runnable, ActionListener {
             datasetIndex = datasetBox.getSelectedIndex();
 
             if (dataset[datasetIndex] == null) {
-                CSVFormat format = CSVFormat.DEFAULT.withDelimiter('\t');
-                if (datasetIndex == 0) format = format.withFirstRecordAsHeader();
+                CSVFormat format = CSVFormat.DEFAULT.withDelimiter('\t').withFirstRecordAsHeader();
 
                 try {
-                    dataset[datasetIndex] = Read.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format);
+                    dataset[datasetIndex] = DatasetReader.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format);
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(null, String.format("Failed to load dataset %s", datasetName[datasetIndex]), "ERROR", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(null, "Failed to load dataset.", "ERROR", JOptionPane.ERROR_MESSAGE);
                     System.out.println(ex);
-                    ex.printStackTrace();
                 }
             }
 

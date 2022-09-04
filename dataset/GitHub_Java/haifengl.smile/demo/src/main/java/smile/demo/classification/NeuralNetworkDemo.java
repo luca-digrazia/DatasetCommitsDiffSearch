@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.demo.classification;
 
@@ -28,9 +28,7 @@ import smile.base.mlp.Layer;
 import smile.base.mlp.OutputFunction;
 import smile.base.mlp.OutputLayer;
 import smile.classification.MLP;
-import smile.data.CategoricalEncoder;
 import smile.math.MathEx;
-import smile.math.TimeFunction;
 
 /**
  *
@@ -79,7 +77,7 @@ public class NeuralNetworkDemo extends ClassificationDemo {
             return null;
         }
 
-        double[][] data = formula.x(dataset[datasetIndex]).toArray(false, CategoricalEncoder.ONE_HOT);
+        double[][] data = formula.x(dataset[datasetIndex]).toArray();
         int[] label = formula.y(dataset[datasetIndex]).toIntArray();
         
         int k = MathEx.max(label) + 1;
@@ -89,13 +87,9 @@ public class NeuralNetworkDemo extends ClassificationDemo {
         } else {
             net = new MLP(2, Layer.sigmoid(units), Layer.mle(k, OutputFunction.SOFTMAX));
         }
-
-        net.setLearningRate(TimeFunction.linear(0.1, 2*data.length, 0.01));
-        net.setMomentum(TimeFunction.constant(0.5));
-
+        
         for (int i = 0; i < epochs; i++) {
-            int[] permutation = MathEx.permutate(data.length);
-            for (int j : permutation) {
+            for (int j = 0; j < data.length; j++) {
                 net.update(data[j], label[j]);
             }
         }

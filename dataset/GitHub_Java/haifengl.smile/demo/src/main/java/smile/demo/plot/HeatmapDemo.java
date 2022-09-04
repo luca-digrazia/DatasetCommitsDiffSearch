@@ -19,12 +19,24 @@ package smile.demo.plot;
 
 import java.awt.Color;
 import java.awt.GridLayout;
+import java.util.ArrayList;
+import java.util.stream.IntStream;
+
 import javax.swing.JFrame;
 import javax.swing.JPanel;
-import smile.plot.swing.Contour;
-import smile.plot.swing.Heatmap;
-import smile.plot.swing.Palette;
-import smile.plot.swing.Canvas;
+
+import org.apache.commons.csv.CSVFormat;
+import smile.data.DataFrame;
+import smile.data.formula.Formula;
+import smile.data.type.DataTypes;
+import smile.data.type.StructField;
+import smile.data.type.StructType;
+import smile.io.CSV;
+import smile.plot.Contour;
+import smile.plot.Heatmap;
+import smile.plot.Palette;
+import smile.plot.PlotCanvas;
+import smile.util.Paths;
 
 /**
  *
@@ -52,34 +64,34 @@ public class HeatmapDemo extends JPanel {
                 z[i][j] = x[j] * Math.exp(-x[j]*x[j] - y[i]*y[i]);
         }
 
-        Canvas canvas = Heatmap.of(z, Palette.jet(256)).canvas();
-        canvas.add(Contour.of(z));
+        PlotCanvas canvas = Heatmap.plot(z, Palette.jet(256));
+        canvas.add(new Contour(z));
         canvas.setTitle("jet");
-        add(canvas.panel());
-        canvas = new Heatmap(x, y, z, Palette.redblue(256)).canvas();
-        canvas.add(Contour.of(x, y, z));
+        add(canvas);
+        canvas = Heatmap.plot(x, y, z, Palette.redblue(256));
+        canvas.add(new Contour(x, y, z));
         canvas.setTitle("redblue");
-        add(canvas.panel());
-        canvas = Heatmap.of(z, Palette.redgreen(256)).canvas();
-        canvas.add(Contour.of(z));
+        add(canvas);
+        canvas = Heatmap.plot(z, Palette.redgreen(256));
+        canvas.add(new Contour(z));
         canvas.setTitle("redgreen");
-        add(canvas.panel());
-        canvas = new Heatmap(x, y, z, Palette.heat(256)).canvas();
-        canvas.add(Contour.of(x, y, z));
+        add(canvas);
+        canvas = Heatmap.plot(x, y, z, Palette.heat(256));
+        canvas.add(new Contour(x, y, z));
         canvas.setTitle("heat");
-        add(canvas.panel());
-        canvas = Heatmap.of(z, Palette.terrain(256)).canvas();
-        canvas.add(Contour.of(z));
+        add(canvas);
+        canvas = Heatmap.plot(z, Palette.terrain(256));
+        canvas.add(new Contour(z));
         canvas.setTitle("terrain");
-        add(canvas.panel());
-        canvas = new Heatmap(x, y, z, Palette.rainbow(256)).canvas();
-        canvas.add(Contour.of(x, y, z));
+        add(canvas);
+        canvas = Heatmap.plot(x, y, z, Palette.rainbow(256));
+        canvas.add(new Contour(x, y, z));
         canvas.setTitle("rainbow");
-        add(canvas.panel());
-        canvas = Heatmap.of(z, Palette.topo(256)).canvas();
-        canvas.add(Contour.of(z));
+        add(canvas);
+        canvas = Heatmap.plot(z, Palette.topo(256));
+        canvas.add(new Contour(z));
         canvas.setTitle("topo");
-        add(canvas.panel());
+        add(canvas);
     }
 
     @Override
@@ -88,11 +100,27 @@ public class HeatmapDemo extends JPanel {
     }
 
     public static void main(String[] args) {
-        JFrame frame = new JFrame("Heatmap");
-        frame.setSize(1000, 1000);
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setLocationRelativeTo(null);
-        frame.getContentPane().add(new HeatmapDemo());
-        frame.setVisible(true);
+        ArrayList<StructField> fields = new ArrayList<>();
+        fields.add(new StructField("class", DataTypes.ByteType));
+        IntStream.range(1, 257).forEach(i -> fields.add(new StructField("V"+i, DataTypes.DoubleType)));
+        StructType schema = DataTypes.struct(fields);
+
+        CSV csv = new CSV(CSVFormat.DEFAULT.withDelimiter(' '));
+        csv.schema(schema);
+        try {
+            DataFrame train = csv.read(Paths.getTestData("usps/zip.train"));
+            Formula formula = Formula.lhs("class");
+            double[][] x = formula.x(train).toArray();
+            int[] y = formula.y(train).toIntArray();
+
+            JFrame frame = new JFrame("Heatmap");
+            frame.setSize(1000, 1000);
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.setLocationRelativeTo(null);
+            frame.getContentPane().add(Heatmap.plot(x, Palette.jet(256)));
+            frame.setVisible(true);
+        } catch (Exception ex) {
+            System.err.println(ex);
+        }
     }
 }

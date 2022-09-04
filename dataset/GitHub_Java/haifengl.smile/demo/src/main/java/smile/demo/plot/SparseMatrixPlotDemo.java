@@ -21,9 +21,9 @@ import java.awt.GridLayout;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import smile.math.matrix.SparseMatrix;
-import smile.plot.swing.Palette;
-import smile.plot.swing.Canvas;
-import smile.plot.swing.SparseMatrixPlot;
+import smile.plot.Palette;
+import smile.plot.PlotCanvas;
+import smile.plot.SparseMatrixPlot;
 
 /**
  *
@@ -35,18 +35,17 @@ public class SparseMatrixPlotDemo extends JPanel {
         super(new GridLayout(1,2));
 
         try {
-            SparseMatrix m1 = SparseMatrix.text(smile.util.Paths.getTestData("matrix/08blocks.txt"));
-            Canvas canvas = SparseMatrixPlot.of(m1).canvas();
+            SparseMatrix m1 = SparseMatrix.harwell(smile.util.Paths.getTestData("matrix/08blocks.txt"));
+            PlotCanvas canvas = SparseMatrixPlot.plot(m1);
             canvas.setTitle("08blocks");
-            add(canvas.panel());
+            add(canvas);
 
-            SparseMatrix m2 = SparseMatrix.text(smile.util.Paths.getTestData("matrix/mesh2em5.txt"));
-            canvas = new SparseMatrixPlot(m2, Palette.jet(256)).canvas();
+            SparseMatrix m2 = SparseMatrix.harwell(smile.util.Paths.getTestData("matrix/mesh2em5.txt"));
+            canvas = SparseMatrixPlot.plot(m2, Palette.jet(256));
             canvas.setTitle("mesh2em5");
-            add(canvas.panel());
+            add(canvas);
         } catch (Exception ex) {
             System.err.println(ex);
-            ex.printStackTrace();
         }
     }
 

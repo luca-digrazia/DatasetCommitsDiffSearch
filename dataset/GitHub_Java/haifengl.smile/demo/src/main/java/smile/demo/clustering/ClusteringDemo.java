@@ -35,8 +35,8 @@ import javax.swing.event.AncestorListener;
 
 import org.apache.commons.csv.CSVFormat;
 import smile.data.DataFrame;
-import smile.io.Read;
-import smile.plot.swing.ScatterPlot;
+import smile.io.DatasetReader;
+import smile.plot.ScatterPlot;
 
 @SuppressWarnings("serial")
 public abstract class ClusteringDemo extends JPanel implements Runnable, ActionListener, AncestorListener {
@@ -49,20 +49,6 @@ public abstract class ClusteringDemo extends JPanel implements Runnable, ActionL
         "NonConvex/Pie", "NonConvex/Ring", "NonConvex/Sincos",
         "Chameleon/t4.8k", "Chameleon/t5.8k",
         "Chameleon/t7.10k", "Chameleon/t8.8k"
-    };
-
-    private static char[] delimiter = {
-            ' ',  ' ',  ' ',
-            '\t', ' ',  '\t',
-            '\t', '\t', '\t',
-            '\t', '\t', '\t',
-            ' ',  ' ',
-            ' ',  ' ',
-            '\t',  '\t',
-            '\t',  '\t',
-            '\t',  '\t',
-            '\t',  '\t',
-            '\t'
     };
 
     private static String[] datasource = {
@@ -84,7 +70,7 @@ public abstract class ClusteringDemo extends JPanel implements Runnable, ActionL
         "clustering/chameleon/t8.8k.txt"
     };
 
-    static double[][][] dataset = new double[datasetName.length][][];
+    static double[][][] dataset = null;
     static int datasetIndex = 0;
     static int clusterNumber = 2;
     
@@ -99,7 +85,18 @@ public abstract class ClusteringDemo extends JPanel implements Runnable, ActionL
      * Constructor.
      */
     public ClusteringDemo() {
-        loadData(datasetIndex);
+        if (dataset == null) {
+            dataset = new double[datasetName.length][][];
+            CSVFormat format = CSVFormat.DEFAULT.withDelimiter('\t');
+            try {
+                DataFrame data = DatasetReader.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format);
+                dataset[datasetIndex] = data.toArray();
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(null, "Failed to load dataset.", "ERROR", JOptionPane.ERROR_MESSAGE);
+                System.err.println(e);
+            }
+        }
+
         addAncestorListener(this);
 
         startButton = new JButton("Start");
@@ -127,7 +124,7 @@ public abstract class ClusteringDemo extends JPanel implements Runnable, ActionL
         setLayout(new BorderLayout());
         add(optionPane, BorderLayout.NORTH);
 
-        canvas = ScatterPlot.of(dataset[datasetIndex], '.').canvas().panel();
+        canvas = ScatterPlot.plot(dataset[datasetIndex], '.');
         add(canvas, BorderLayout.CENTER);
     }
 
@@ -181,7 +178,17 @@ public abstract class ClusteringDemo extends JPanel implements Runnable, ActionL
             thread.start();
         } else if ("datasetBox".equals(e.getActionCommand())) {
             datasetIndex = datasetBox.getSelectedIndex();
-            loadData(datasetIndex);
+            
+            if (dataset[datasetIndex] == null) {
+                CSVFormat format = CSVFormat.DEFAULT.withDelimiter('\t');
+                try {
+                    DataFrame data = DatasetReader.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format);
+                    dataset[datasetIndex] = data.toArray();
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(null, "Failed to load dataset.", "ERROR", JOptionPane.ERROR_MESSAGE);
+                    System.err.println(ex);
+                }
+            }
 
             remove(canvas);
             if (dataset[datasetIndex].length < 500) {
@@ -189,7 +196,7 @@ public abstract class ClusteringDemo extends JPanel implements Runnable, ActionL
             } else {
                 pointLegend = '.';
             }
-            canvas = ScatterPlot.of(dataset[datasetIndex], pointLegend).canvas().panel();
+            canvas = ScatterPlot.plot(dataset[datasetIndex], pointLegend);
             add(canvas, BorderLayout.CENTER);
             validate();
         }
@@ -207,7 +214,7 @@ public abstract class ClusteringDemo extends JPanel implements Runnable, ActionL
             } else {
                 pointLegend = '.';
             }
-            canvas = ScatterPlot.of(dataset[datasetIndex], pointLegend).canvas().panel();
+            canvas = ScatterPlot.plot(dataset[datasetIndex], pointLegend);
             add(canvas, BorderLayout.CENTER);
             validate();
         }
@@ -219,18 +226,5 @@ public abstract class ClusteringDemo extends JPanel implements Runnable, ActionL
 
     @Override
     public void ancestorRemoved(AncestorEvent event) {
-    }
-
-    private void loadData(int datasetIndex) {
-        if (dataset[datasetIndex] != null) return;
-
-        CSVFormat format = CSVFormat.DEFAULT.withDelimiter(delimiter[datasetIndex]).withIgnoreSurroundingSpaces(true);
-        try {
-            DataFrame data = Read.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format);
-            dataset[datasetIndex] = data.toArray();
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(null, String.format("Failed to load dataset %s", datasetName[datasetIndex]), "ERROR", JOptionPane.ERROR_MESSAGE);
-            System.err.println(e);
-        }
     }
 }

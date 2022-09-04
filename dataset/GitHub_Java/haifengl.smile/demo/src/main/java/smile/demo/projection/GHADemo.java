@@ -19,14 +19,14 @@ package smile.demo.projection;
 
 import java.awt.Dimension;
 import java.awt.GridLayout;
+
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 
-import smile.plot.swing.Palette;
-import smile.plot.swing.Canvas;
-import smile.plot.swing.ScatterPlot;
-import smile.plot.swing.TextPlot;
+import smile.data.DataFrame;
+import smile.plot.Palette;
+import smile.plot.PlotCanvas;
 import smile.projection.GHA;
 import smile.projection.PCA;
 import smile.math.MathEx;
@@ -42,48 +42,66 @@ public class GHADemo extends ProjectionDemo {
     }
 
     @Override
-    public JComponent learn(double[][] data, int[] labels, String[] names) {
+    public JComponent learn() {
         JPanel pane = new JPanel(new GridLayout(2, 2));
+        double[][] data;
+        int[] labels = null;
+        String[] names;
+
+        if (formula[datasetIndex] == null) {
+            data = dataset[datasetIndex].toArray();
+            names = dataset[datasetIndex].names();
+        } else {
+            DataFrame datax = formula[datasetIndex].x(dataset[datasetIndex]);
+            data = datax.toArray();
+            names = datax.names();
+            labels = formula[datasetIndex].y(dataset[datasetIndex]).toIntArray();
+        }
 
         long clock = System.currentTimeMillis();
-        PCA pca = PCA.cor(data);
+        PCA pca = new PCA(data, true);
         System.out.format("Learn PCA from %d samples in %dms\n", data.length, System.currentTimeMillis() - clock);
 
         pca.setProjection(2);
         double[][] y = pca.project(data);
 
-        Canvas plot;
+        PlotCanvas plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
         if (names != null) {
-            plot = TextPlot.of(names, y).canvas();
+            plot.points(y, names);
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels).canvas();
+            for (int i = 0; i < y.length; i++) {
+                plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
+            }
         } else {
-            plot = ScatterPlot.of(y).canvas();
+            plot.points(y, pointLegend);
         }
 
         plot.setTitle("PCA");
-        pane.add(plot.panel());
+        pane.add(plot);
 
         pca.setProjection(3);
         y = pca.project(data);
 
+        plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
         if (names != null) {
-            plot = TextPlot.of(names, y).canvas();
+            plot.points(y, names);
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels).canvas();
+            for (int i = 0; i < y.length; i++) {
+                plot.point(pointLegend, Palette.COLORS[labels[i]], labels[i]);
+            }
         } else {
-            plot = ScatterPlot.of(y).canvas();
+            plot.points(y, pointLegend);
         }
 
         plot.setTitle("PCA");
-        pane.add(plot.panel());
+        pane.add(plot);
 
         clock = System.currentTimeMillis();
         GHA gha = new GHA(data[0].length, 2, 0.00001);
         for (int iter = 1; iter <= 500; iter++) {
             double error = 0.0;
             for (int i = 0; i < data.length; i++) {
-                error += gha.update(data[i]);
+                error += gha.learn(data[i]);
             }
             error /= data.length;
 
@@ -93,23 +111,26 @@ public class GHADemo extends ProjectionDemo {
         }
         System.out.format("Learn GHA from %d samples in %dms\n", data.length, System.currentTimeMillis() - clock);
         y = gha.project(data);
+        plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
         if (names != null) {
-            plot = TextPlot.of(names, y).canvas();
+            plot.points(y, names);
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels).canvas();
+            for (int i = 0; i < y.length; i++) {
+                plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
+            }
         } else {
-            plot = ScatterPlot.of(y).canvas();
+            plot.points(y, pointLegend);
         }
 
         plot.setTitle("GHA");
-        pane.add(plot.panel());
+        pane.add(plot);
 
         clock = System.currentTimeMillis();
         gha = new GHA(data[0].length, 3, 0.00001);
         for (int iter = 1; iter <= 500; iter++) {
             double error = 0.0;
             for (int i = 0; i < data.length; i++) {
-                error += gha.update(data[i]);
+                error += gha.learn(data[i]);
             }
             error /= data.length;
 
@@ -119,16 +140,19 @@ public class GHADemo extends ProjectionDemo {
         }
         System.out.format("Learn GHA from %d samples in %dms\n", data.length, System.currentTimeMillis() - clock);
         y = gha.project(data);
+        plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
         if (names != null) {
-            plot = TextPlot.of(names, y).canvas();
+            plot.points(y, names);
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels).canvas();
+            for (int i = 0; i < y.length; i++) {
+                plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
+            }
         } else {
-            plot = ScatterPlot.of(y).canvas();
+            plot.points(y, pointLegend);
         }
 
         plot.setTitle("GHA");
-        pane.add(plot.panel());
+        pane.add(plot);
 
         return pane;
     }

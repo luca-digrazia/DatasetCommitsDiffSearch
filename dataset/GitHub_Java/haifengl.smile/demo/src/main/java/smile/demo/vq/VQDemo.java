@@ -43,28 +43,16 @@ public abstract class VQDemo extends JPanel implements Runnable, ActionListener,
 
     private static String[] datasetName = {
         "Gaussian/One", "Gaussian/Two", "Gaussian/Three",
-        "Gaussian/Five", "Gaussian/Six",
-        "NonConvex/Cross", "NonConvex/Pie",
+        "Gaussian/Five", "Gaussian/Six", "Gaussian/Elongate",
+        "NonConvex/Cross", "NonConvex/D4", "NonConvex/Face",
+        "NonConvex/Pie", "NonConvex/Ring", "NonConvex/Sincos",
         "Chameleon/t4.8k", "Chameleon/t5.8k",
         "Chameleon/t7.10k", "Chameleon/t8.8k",
-        "Neural Gas/Discrete", "Neural Gas/Rectangle",
+        "Neural Gas/Dscrete", "Neural Gas/Rectangle",
         "Neural Gas/Circle", "Neural Gas/Ring",
         "Neural Gas/Complex1", "Neural Gas/Complex2",
         "Neural Gas/Complex3", "Neural Gas/Complex4",
         "Neural Gas/HiLoDensity"
-    };
-
-    private static char[] delimiter = {
-            ' ',  ' ',  ' ',
-            '\t', ' ',
-            '\t', '\t',
-            ' ',  ' ',
-            ' ',  ' ',
-            '\t',  '\t',
-            '\t',  '\t',
-            '\t',  '\t',
-            '\t',  '\t',
-            '\t'
     };
 
     private static String[] datasource = {
@@ -73,8 +61,13 @@ public abstract class VQDemo extends JPanel implements Runnable, ActionListener,
         "clustering/gaussian/three.txt",
         "clustering/gaussian/five.txt",
         "clustering/gaussian/six.txt",
+        "clustering/gaussian/elongate.txt",
         "clustering/nonconvex/cross.txt",
+        "clustering/nonconvex/d4.txt",
+        "clustering/nonconvex/face.txt",
         "clustering/nonconvex/pie.txt",
+        "clustering/nonconvex/ring.txt",
+        "clustering/nonconvex/sincos.txt",
         "clustering/chameleon/t4.8k.txt",
         "clustering/chameleon/t5.8k.txt",
         "clustering/chameleon/t7.10k.txt",
@@ -90,19 +83,13 @@ public abstract class VQDemo extends JPanel implements Runnable, ActionListener,
         "clustering/neuralgas/HiLoDensity.txt"
     };
 
-    static double[][][] dataset = new double[datasetName.length][][];
+    static double[][][] dataset = null;
     static int datasetIndex = 0;
     static int clusterNumber = 2;
-    static int epochs = 20;
-    static double learningRate = 0.85;
-    static double neighborhood = 5;
 
     JPanel optionPane;
     JComponent canvas;
-    private JTextField clusterNumberField = new JTextField(Integer.toString(clusterNumber), 5);
-    private JTextField epochField = new JTextField(Integer.toString(epochs), 5);
-    private JTextField learningRateField = new JTextField(Double.toString(learningRate), 5);
-    private JTextField neighborhoodField = new JTextField(Double.toString(neighborhood), 5);
+    private JTextField clusterNumberField;
     private JButton startButton;
     private JComboBox<String> datasetBox;
     char pointLegend = '.';
@@ -111,7 +98,18 @@ public abstract class VQDemo extends JPanel implements Runnable, ActionListener,
      * Constructor.
      */
     public VQDemo() {
-        loadData(datasetIndex);
+        if (dataset == null) {
+            dataset = new double[datasetName.length][][];
+            CSVFormat format = CSVFormat.DEFAULT.withDelimiter('\t');
+            try {
+                DataFrame data = DatasetReader.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format);
+                dataset[datasetIndex] = data.toArray();
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(null, "Failed to load dataset.", "ERROR", JOptionPane.ERROR_MESSAGE);
+                System.err.println(e);
+            }
+        }
+
         addAncestorListener(this);
 
         startButton = new JButton("Start");
@@ -126,17 +124,15 @@ public abstract class VQDemo extends JPanel implements Runnable, ActionListener,
         datasetBox.setActionCommand("datasetBox");
         datasetBox.addActionListener(this);
 
+        clusterNumberField = new JTextField(Integer.toString(clusterNumber), 5);
+
         optionPane = new JPanel(new FlowLayout(FlowLayout.LEFT));
         optionPane.setBorder(BorderFactory.createRaisedBevelBorder());
         optionPane.add(startButton);
         optionPane.add(new JLabel("Dataset:"));
         optionPane.add(datasetBox);
-        optionPane.add(new JLabel("Epochs:"));
-        optionPane.add(epochField);
-        optionPane.add(new JLabel("Learning Rate:"));
-        optionPane.add(learningRateField);
-        optionPane.add(new JLabel("Neighborhood:"));
-        optionPane.add(neighborhoodField);
+        optionPane.add(new JLabel("K:"));
+        optionPane.add(clusterNumberField);
 
         setLayout(new BorderLayout());
         add(optionPane, BorderLayout.NORTH);
@@ -166,7 +162,6 @@ public abstract class VQDemo extends JPanel implements Runnable, ActionListener,
             validate();
         } catch (Exception ex) {
             System.err.println(ex);
-            ex.printStackTrace();
         }
 
         startButton.setEnabled(true);
@@ -187,26 +182,8 @@ public abstract class VQDemo extends JPanel implements Runnable, ActionListener,
                     JOptionPane.showMessageDialog(this, "Too large K: " + clusterNumber, "Error", JOptionPane.ERROR_MESSAGE);
                     return;
                 }
-
-                epochs = Integer.parseInt(epochField.getText().trim());
-                if (epochs < 1) {
-                    JOptionPane.showMessageDialog(this, "Invalid epochs: " + epochs, "Error", JOptionPane.ERROR_MESSAGE);
-                    return;
-                }
-
-                learningRate = Double.parseDouble(learningRateField.getText().trim());
-                if (learningRate <= 0.0) {
-                    JOptionPane.showMessageDialog(this, "Invalid learning rate: " + learningRate, "Error", JOptionPane.ERROR_MESSAGE);
-                    return;
-                }
-
-                neighborhood = Double.parseDouble(neighborhoodField.getText().trim());
-                if (neighborhood < 1) {
-                    JOptionPane.showMessageDialog(this, "Invalid neighborhood radius: " + neighborhood, "Error", JOptionPane.ERROR_MESSAGE);
-                    return;
-                }
             } catch (Exception ex) {
-                ex.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Invalid K: " + clusterNumberField.getText(), "Error", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
@@ -214,7 +191,17 @@ public abstract class VQDemo extends JPanel implements Runnable, ActionListener,
             thread.start();
         } else if ("datasetBox".equals(e.getActionCommand())) {
             datasetIndex = datasetBox.getSelectedIndex();
-            loadData(datasetIndex);
+
+            if (dataset[datasetIndex] == null) {
+                CSVFormat format = CSVFormat.DEFAULT.withDelimiter('\t');
+                try {
+                    DataFrame data = DatasetReader.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format);
+                    dataset[datasetIndex] = data.toArray();
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(null, "Failed to load dataset.", "ERROR", JOptionPane.ERROR_MESSAGE);
+                    System.err.println(ex);
+                }
+            }
 
             remove(canvas);
             if (dataset[datasetIndex].length < 500) {
@@ -252,18 +239,5 @@ public abstract class VQDemo extends JPanel implements Runnable, ActionListener,
 
     @Override
     public void ancestorRemoved(AncestorEvent event) {
-    }
-
-    private void loadData(int datasetIndex) {
-        if (dataset[datasetIndex] != null) return;
-
-        CSVFormat format = CSVFormat.DEFAULT.withDelimiter(delimiter[datasetIndex]).withIgnoreSurroundingSpaces(true);
-        try {
-            DataFrame data = DatasetReader.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format);
-            dataset[datasetIndex] = data.toArray();
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(null, String.format("Failed to load dataset %s", datasetName[datasetIndex]), "ERROR", JOptionPane.ERROR_MESSAGE);
-            System.err.println(e);
-        }
     }
 }

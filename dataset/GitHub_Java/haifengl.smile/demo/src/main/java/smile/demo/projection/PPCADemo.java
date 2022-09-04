@@ -19,13 +19,14 @@ package smile.demo.projection;
 
 import java.awt.Dimension;
 import java.awt.GridLayout;
+
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 
-import smile.plot.swing.Canvas;
-import smile.plot.swing.ScatterPlot;
-import smile.plot.swing.TextPlot;
+import smile.data.DataFrame;
+import smile.plot.Palette;
+import smile.plot.PlotCanvas;
 import smile.projection.PCA;
 import smile.projection.PPCA;
 import smile.math.MathEx;
@@ -41,69 +42,93 @@ public class PPCADemo extends ProjectionDemo {
     }
 
     @Override
-    public JComponent learn(double[][] data, int[] labels, String[] names) {
+    public JComponent learn() {
         JPanel pane = new JPanel(new GridLayout(2, 2));
+        double[][] data;
+        int[] labels = null;
+        String[] names;
+
+        if (formula[datasetIndex] == null) {
+            data = dataset[datasetIndex].toArray();
+            names = dataset[datasetIndex].names();
+        } else {
+            DataFrame datax = formula[datasetIndex].x(dataset[datasetIndex]);
+            data = datax.toArray();
+            names = datax.names();
+            labels = formula[datasetIndex].y(dataset[datasetIndex]).toIntArray();
+        }
 
         long clock = System.currentTimeMillis();
-        PCA pca = PCA.cor(data);
+        PCA pca = new PCA(data, true);
         System.out.format("Learn PCA from %d samples in %dms\n", data.length, System.currentTimeMillis() - clock);
 
         pca.setProjection(2);
         double[][] y = pca.project(data);
 
-        Canvas plot;
+        PlotCanvas plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
         if (names != null) {
-            plot = TextPlot.of(names, y).canvas();
+            plot.points(y, names);
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels).canvas();
+            for (int i = 0; i < y.length; i++) {
+                plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
+            }
         } else {
-            plot = ScatterPlot.of(y).canvas();
+            plot.points(y, pointLegend);
         }
 
         plot.setTitle("PCA");
-        pane.add(plot.panel());
+        pane.add(plot);
 
         pca.setProjection(3);
         y = pca.project(data);
 
+        plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
         if (names != null) {
-            plot = TextPlot.of(names, y).canvas();
+            plot.points(y, names);
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels).canvas();
+            for (int i = 0; i < y.length; i++) {
+                plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
+            }
         } else {
-            plot = ScatterPlot.of(y).canvas();
+            plot.points(y, pointLegend);
         }
 
         plot.setTitle("PCA");
-        pane.add(plot.panel());
+        pane.add(plot);
 
-        PPCA ppca = PPCA.fit(data, 2);
+        PPCA ppca = new PPCA(data, 2);
         y = ppca.project(data);
+        plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
         if (names != null) {
-            plot = TextPlot.of(names, y).canvas();
+            plot.points(y, names);
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels).canvas();
+            for (int i = 0; i < y.length; i++) {
+                plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
+            }
         } else {
-            plot = ScatterPlot.of(y).canvas();
+            plot.points(y, pointLegend);
         }
 
         plot.setTitle("PPCA");
-        pane.add(plot.panel());
+        pane.add(plot);
 
         clock = System.currentTimeMillis();
-        ppca = PPCA.fit(data, 3);
+        ppca = new PPCA(data, 3);
         System.out.format("Learn PPCA from %d samples in %dms\n", data.length, System.currentTimeMillis() - clock);
         y = ppca.project(data);
+        plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
         if (names != null) {
-            plot = TextPlot.of(names, y).canvas();
+            plot.points(y, names);
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels).canvas();
+            for (int i = 0; i < y.length; i++) {
+                plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
+            }
         } else {
-            plot = ScatterPlot.of(y).canvas();
+            plot.points(y, pointLegend);
         }
 
         plot.setTitle("PPCA");
-        pane.add(plot.panel());
+        pane.add(plot);
 
         return pane;
     }

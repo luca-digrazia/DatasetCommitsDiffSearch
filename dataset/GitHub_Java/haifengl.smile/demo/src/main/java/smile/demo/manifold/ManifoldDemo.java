@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,14 +13,13 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.manifold;
 
 import org.apache.commons.csv.CSVFormat;
-import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
-import smile.io.Read;
+import smile.io.DatasetReader;
 
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
@@ -111,7 +110,6 @@ public abstract class ManifoldDemo extends JPanel implements Runnable, ActionLis
             validate();
         } catch (Exception ex) {
             System.err.println(ex);
-            ex.printStackTrace();
         }
         
         startButton.setEnabled(true);
@@ -127,14 +125,14 @@ public abstract class ManifoldDemo extends JPanel implements Runnable, ActionLis
             if (dataset[datasetIndex] == null) {
                 try {
                     CSVFormat format = CSVFormat.DEFAULT.withDelimiter('\t');
-                    dataset[datasetIndex] = Read.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format);
+                    dataset[datasetIndex] = DatasetReader.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format);
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(null, "Failed to load dataset.", "ERROR", JOptionPane.ERROR_MESSAGE);
                     System.err.println(ex);
                 }
             }
 
-            double[][] data = dataset[datasetIndex].toArray(false, CategoricalEncoder.ONE_HOT);
+            double[][] data = dataset[datasetIndex].toArray();
         
             if (data.length < 500) {
                 pointLegend = 'o';

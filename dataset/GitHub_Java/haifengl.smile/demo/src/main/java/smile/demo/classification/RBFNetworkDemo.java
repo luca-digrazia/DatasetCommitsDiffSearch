@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.classification;
 
@@ -23,9 +23,12 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JTextField;
+
 import smile.base.rbf.RBF;
 import smile.classification.RBFNetwork;
-import smile.data.CategoricalEncoder;
+import smile.math.distance.EuclideanDistance;
+import smile.math.rbf.RadialBasisFunction;
+import smile.util.SmileUtils;
 
 /**
  *
@@ -47,7 +50,7 @@ public class RBFNetworkDemo extends ClassificationDemo {
 
     @Override
     public double[][] learn(double[] x, double[] y) {
-        double[][] data = formula.x(dataset[datasetIndex]).toArray(false, CategoricalEncoder.ONE_HOT);
+        double[][] data = formula.x(dataset[datasetIndex]).toArray();
         int[] label = formula.y(dataset[datasetIndex]).toIntArray();
         
         try {

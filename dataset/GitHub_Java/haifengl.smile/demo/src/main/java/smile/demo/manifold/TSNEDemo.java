@@ -22,7 +22,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import javax.swing.*;
 
-import org.apache.commons.csv.CSVFormat;
 import smile.data.DataFrame;
 import smile.io.DatasetReader;
 import smile.plot.Palette;
@@ -84,14 +83,14 @@ public class TSNEDemo extends JPanel implements Runnable, ActionListener {
     public JComponent learn() {
         JPanel pane = new JPanel(new GridLayout(1, 2));
 
-        PCA pca = PCA.fit(data);
+        PCA pca = new PCA(data);
         pca.setProjection(50);
         double[][] X = pca.project(data);
         long clock = System.currentTimeMillis();
         TSNE tsne = new TSNE(X, 2, perplexity, 200, 1000);
         System.out.format("Learn t-SNE from %d samples in %dms\n", data.length, System.currentTimeMillis() - clock);
 
-        double[][] y = tsne.coordinates;
+        double[][] y = tsne.getCoordinates();
 
         PlotCanvas plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
 
@@ -99,7 +98,7 @@ public class TSNEDemo extends JPanel implements Runnable, ActionListener {
             plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
         }
 
-        plot.setTitle("t-SNE");
+        plot.setTitle("tSNE");
         pane.add(plot);
 
         return pane;
@@ -134,12 +133,14 @@ public class TSNEDemo extends JPanel implements Runnable, ActionListener {
         if ("startButton".equals(e.getActionCommand())) {
 
             try {
-                CSVFormat format = CSVFormat.DEFAULT.withDelimiter(' ').withIgnoreSurroundingSpaces(true);
-                DataFrame dataset = DatasetReader.csv(smile.util.Paths.getTestData("mnist/mnist2500_X.txt"), format);
+                DataFrame dataset = DatasetReader.csv(smile.util.Paths.getTestData("mnist/mnist2500_X.txt"));
                 data = dataset.toArray();
 
                 dataset = DatasetReader.csv(smile.util.Paths.getTestData("mnist/mnist2500_labels.txt"));
-                labels = dataset.column(0).toIntArray();
+                labels = new int[dataset.size()];
+                for (int i = 0; i < labels.length; i++) {
+                    labels[i] = dataset.getInt(i, 0);
+                }
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(null, "Failed to load dataset.", "ERROR", JOptionPane.ERROR_MESSAGE);
                 System.err.println(ex);

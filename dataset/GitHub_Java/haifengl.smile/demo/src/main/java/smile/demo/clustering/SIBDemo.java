@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.clustering;
 
@@ -22,7 +22,6 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.util.stream.Collectors;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -37,8 +36,6 @@ import javax.swing.JTextField;
 
 import smile.clustering.SIB;
 import smile.data.SparseDataset;
-import smile.data.Instance;
-import smile.util.SparseArray;
 
 /**
  *
@@ -125,12 +122,14 @@ public class SIBDemo extends JPanel implements Runnable, ActionListener {
 
         if (dataset[datasetIndex] == null) {
             try {
-                int arrayIndexOrigin = 1;
-                dataset[datasetIndex] = SparseDataset.from(smile.util.Paths.getTestData(datasource[datasetIndex]), arrayIndexOrigin);
-                dataset[datasetIndex] = SparseDataset.of(
-                        dataset[datasetIndex].stream().filter(a -> !a.isEmpty()).collect(Collectors.toList()),
-                        dataset[datasetIndex].ncols()
-                );
+                dataset[datasetIndex] = SparseDataset.from(smile.util.Paths.getTestData(datasource[datasetIndex]));
+                /*
+                for (int i = dataset[datasetIndex].size(); i-- > 0; ) {
+                    if (dataset[datasetIndex].get(i).isEmpty()) {
+                        dataset[datasetIndex].remove(i);
+                    }
+                }
+                 */
                 dataset[datasetIndex].unitize1();
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(null, "Failed to load dataset.", "ERROR", JOptionPane.ERROR_MESSAGE);
@@ -141,12 +140,11 @@ public class SIBDemo extends JPanel implements Runnable, ActionListener {
         System.out.println("The dataset " + datasetName[datasetIndex] + " has " + dataset[datasetIndex].size() + " documents and " + dataset[datasetIndex].ncols() + " words.");
 
         long clock = System.currentTimeMillis();
-        SparseArray[] data = dataset[datasetIndex].stream().toArray(SparseArray[]::new);
-        SIB sib = SIB.fit(data, clusterNumber, 20);
+        SIB sib = new SIB(dataset[datasetIndex], clusterNumber, 20);
         outputArea.setText("");
         for (int j = 0; j < dataset[datasetIndex].ncols(); j++) {
             for (int i = 0; i < clusterNumber; i++) {
-                outputArea.append(String.format("%.5f\t", sib.centroids[i][j]));
+                outputArea.append(String.format("%.5f\t", sib.centroids()[i][j]));
             }
             outputArea.append("\n");
         }

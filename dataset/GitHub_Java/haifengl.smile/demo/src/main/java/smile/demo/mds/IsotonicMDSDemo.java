@@ -35,10 +35,10 @@ import javax.swing.JPanel;
 
 import org.apache.commons.csv.CSVFormat;
 import smile.data.DataFrame;
-import smile.io.Read;
+import smile.io.DatasetReader;
 import smile.mds.IsotonicMDS;
-import smile.plot.swing.Canvas;
-import smile.plot.swing.TextPlot;
+import smile.plot.PlotCanvas;
+import smile.plot.ScatterPlot;
 
 @SuppressWarnings("serial")
 public class IsotonicMDSDemo extends JPanel implements Runnable, ActionListener {
@@ -96,24 +96,24 @@ public class IsotonicMDSDemo extends JPanel implements Runnable, ActionListener 
      */
     public JComponent learn() {
         JPanel pane = new JPanel(new GridLayout(1, 2));
-        double[][] data = datasetIndex == 2 || datasetIndex == 3 ? dataset[datasetIndex].toArray() : dataset[datasetIndex].drop(0).toArray();
-        String[] labels = datasetIndex == 0 || datasetIndex == 1 ? dataset[datasetIndex].stringVector(0).toArray() : dataset[datasetIndex].names();
+        double[][] data = dataset[datasetIndex].toArray();
+        String[] labels = dataset[datasetIndex].names();
 
         long clock = System.currentTimeMillis();
-        IsotonicMDS isomds = IsotonicMDS.of(data, 2);
+        IsotonicMDS isomds = new IsotonicMDS(data, 2);
         System.out.format("Learn Kruskal's Nonmetric MDS (k=2) from %d samples in %dms\n", data.length, System.currentTimeMillis()-clock);
 
-        Canvas plot = TextPlot.of(labels, isomds.coordinates).canvas();
+        PlotCanvas plot = ScatterPlot.plot(isomds.getCoordinates(), labels);
         plot.setTitle("Kruskal's Nonmetric MDS (k = 2)");
-        pane.add(plot.panel());
+        pane.add(plot);
 
         clock = System.currentTimeMillis();
-        isomds = IsotonicMDS.of(data, 3);
+        isomds = new IsotonicMDS(data, 3);
         System.out.format("Learn Kruskal's Nonmetric MDS (k=3) from %d samples in %dms\n", data.length, System.currentTimeMillis()-clock);
 
-        plot = TextPlot.of(labels, isomds.coordinates).canvas();
+        plot = ScatterPlot.plot(isomds.getCoordinates(), labels);
         plot.setTitle("Kruskal's Nonmetric MDS (k = 3)");
-        pane.add(plot.panel());
+        pane.add(plot);
 
         return pane;
     }
@@ -145,13 +145,13 @@ public class IsotonicMDSDemo extends JPanel implements Runnable, ActionListener 
             datasetIndex = datasetBox.getSelectedIndex();
 
             if (dataset[datasetIndex] == null) {
-                CSVFormat format = CSVFormat.DEFAULT.withDelimiter('\t');
-                if (datasetIndex > 1) {
-                    format = format.withFirstRecordAsHeader();
-                }
+                CSVFormat format = CSVFormat.DEFAULT.withDelimiter('\t').withFirstRecordAsHeader();
 
                 try {
-                    dataset[datasetIndex] = Read.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format);
+                    dataset[datasetIndex] = DatasetReader.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format);
+                    if (datasetIndex != 2 && datasetIndex != 3) {
+                        dataset[datasetIndex] = dataset[datasetIndex].drop(0); // row names
+                    }
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(null, "Failed to load dataset.", "ERROR", JOptionPane.ERROR_MESSAGE);
                     System.err.println(ex);

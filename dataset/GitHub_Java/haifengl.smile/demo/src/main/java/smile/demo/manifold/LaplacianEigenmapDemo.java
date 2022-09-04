@@ -71,16 +71,16 @@ public class LaplacianEigenmapDemo extends ManifoldDemo {
         }
 
         long clock = System.currentTimeMillis();
-        LaplacianEigenmap eigenmap = LaplacianEigenmap.of(data, k, 2, sigma);
+        LaplacianEigenmap eigenmap = new LaplacianEigenmap(data, 2, k, sigma);
         System.out.format("Learn Laplacian Eigenmap from %d samples in %dms\n", data.length, System.currentTimeMillis() - clock);
 
-        double[][] y = eigenmap.coordinates;
+        double[][] y = eigenmap.getCoordinates();
 
         PlotCanvas plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
         plot.points(y, 'o', Color.RED);
 
         int n = y.length;
-        Graph graph = eigenmap.graph;
+        Graph graph = eigenmap.getNearestNeighborGraph();
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < i; j++) {
                 if (graph.hasEdge(i, j)) {

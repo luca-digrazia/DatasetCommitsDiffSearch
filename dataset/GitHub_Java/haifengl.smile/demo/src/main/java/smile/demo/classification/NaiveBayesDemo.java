@@ -19,9 +19,12 @@ package smile.demo.classification;
 
 import java.awt.Dimension;
 import javax.swing.JFrame;
+
 import org.apache.commons.csv.CSVFormat;
-import smile.plot.swing.Canvas;
-import smile.plot.swing.ScatterPlot;
+import smile.classification.NaiveBayes;
+import smile.plot.Palette;
+import smile.plot.PlotCanvas;
+import smile.plot.ScatterPlot;
 
 /**
  * Use iris data set for demo and visualization purpose. 
@@ -67,7 +70,7 @@ public class NaiveBayesDemo extends ClassificationDemo {
     }
     
     @Override
-    protected Canvas paintOnCanvas(double[][] data, int[] label) {
+    protected PlotCanvas paintOnCanvas(double[][] data, int[] label) {
 
         int rows = data.length;
         int features = data[0].length;
@@ -79,7 +82,11 @@ public class NaiveBayesDemo extends ClassificationDemo {
             }
         }
 
-        return ScatterPlot.of(paintPoints, label).canvas();
+        PlotCanvas canvas = ScatterPlot.plot(paintPoints, pointLegend);
+        for (int i = 0; i < data.length; i++) {
+            canvas.point(pointLegend, Palette.COLORS[label[i]], paintPoints[i]);
+        }
+        return canvas;
     }
     
     @Override

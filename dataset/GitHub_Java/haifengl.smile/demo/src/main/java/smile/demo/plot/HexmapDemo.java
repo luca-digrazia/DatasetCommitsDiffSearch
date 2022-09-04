@@ -132,8 +132,8 @@ public class HexmapDemo extends JPanel {
                         }
                     }
                     
-                    long sum = MathEx.sum(count);
-                    if (sum == 0) {
+                    int sum = MathEx.sum(count);
+                    if (sum == 0.0) {
                         labels[i][j] = "no samples";
                     } else {
                         labels[i][j] = String.format("<table border=\"1\"><tr><td>Total</td><td align=\"right\">%d</td></tr>", sum);
@@ -159,20 +159,20 @@ public class HexmapDemo extends JPanel {
                 }
             }
             
-            MDS mds = MDS.of(proximity, 3);
+            MDS mds = new MDS(proximity, 3);
             double[][] coords = mds.getCoordinates();
             double[][][] mdsgrid = new double[m][n][];
             for (int i = 0; i < m*n; i++) {
                 mdsgrid[i/n][i%n] = mds.getCoordinates()[i];
             }            
             
-            SammonMapping sammon = SammonMapping.of(proximity, coords, 0.2, 1E-4, 1E-3, 100);
+            SammonMapping sammon = new SammonMapping(proximity, coords);
             double[][][] sammongrid = new double[m][n][];
             for (int i = 0; i < m*n; i++) {
                 sammongrid[i/n][i%n] = sammon.getCoordinates()[i];
             }
             
-            IsotonicMDS isomds = IsotonicMDS.of(proximity, coords, 1E-4, 200);
+            IsotonicMDS isomds = new IsotonicMDS(proximity, coords);
             double[][][] isomdsgrid = new double[m][n][];
             for (int i = 0; i < m*n; i++) {
                 isomdsgrid[i/n][i%n] = isomds.getCoordinates()[i];
