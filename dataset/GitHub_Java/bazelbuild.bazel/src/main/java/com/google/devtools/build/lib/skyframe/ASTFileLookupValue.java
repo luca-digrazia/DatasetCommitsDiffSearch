@@ -45,8 +45,7 @@ public abstract class ASTFileLookupValue implements NotComparableSkyValue {
   public abstract String getErrorMsg();
 
   /** If the file is found, this class encapsulates the parsed AST. */
-  @AutoCodec.VisibleForSerialization
-  public static class ASTLookupWithFile extends ASTFileLookupValue {
+  private static class ASTLookupWithFile extends ASTFileLookupValue {
     private final BuildFileAST ast;
 
     private ASTLookupWithFile(BuildFileAST ast) {
@@ -72,8 +71,7 @@ public abstract class ASTFileLookupValue implements NotComparableSkyValue {
   }
 
   /** If the file isn't found, this class encapsulates a message with the reason. */
-  @AutoCodec.VisibleForSerialization
-  public static class ASTLookupNoFile extends ASTFileLookupValue {
+  private static class ASTLookupNoFile extends ASTFileLookupValue {
     private final String errorMsg;
 
     private ASTLookupNoFile(String errorMsg) {
