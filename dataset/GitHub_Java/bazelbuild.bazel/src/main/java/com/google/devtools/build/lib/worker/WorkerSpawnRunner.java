@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.worker;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
@@ -27,7 +26,6 @@ import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.ExecutionRequirements.WorkerProtocolFormat;
 import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
@@ -85,7 +83,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
   private final SandboxHelpers helpers;
   private final Path execRoot;
   private final WorkerPool workers;
-  private final boolean multiplex;
   private final ExtendedEventHandler reporter;
   private final SpawnRunner fallbackRunner;
   private final LocalEnvProvider localEnvProvider;
@@ -98,7 +95,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
       SandboxHelpers helpers,
       Path execRoot,
       WorkerPool workers,
-      boolean multiplex,
       ExtendedEventHandler reporter,
       SpawnRunner fallbackRunner,
       LocalEnvProvider localEnvProvider,
@@ -109,7 +105,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
     this.helpers = helpers;
     this.execRoot = execRoot;
     this.workers = Preconditions.checkNotNull(workers);
-    this.multiplex = multiplex;
     this.reporter = reporter;
     this.fallbackRunner = fallbackRunner;
     this.localEnvProvider = localEnvProvider;
@@ -197,15 +192,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
             context.getInputMapping(), spawn, context.getArtifactExpander(), execRoot);
     SandboxOutputs outputs = helpers.getOutputs(spawn);
 
-    WorkerProtocolFormat protocolFormat = Spawns.getWorkerProtocolFormat(spawn);
-    if (!workerOptions.experimentalJsonWorkerProtocol) {
-      if (protocolFormat == WorkerProtocolFormat.JSON) {
-        throw new IOException(
-            "Persistent worker protocol format must be set to proto unless"
-                + " --experimentalJsonWorkerProtocol is used");
-      }
-    }
-
     WorkerKey key =
         new WorkerKey(
             workerArgs,
@@ -215,8 +201,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
             workerFilesCombinedHash,
             workerFiles,
             context.speculating(),
-            multiplex && Spawns.supportsMultiplexWorkers(spawn),
-            protocolFormat);
+            Spawns.supportsMultiplexWorkers(spawn));
 
     SpawnMetrics.Builder spawnMetrics =
         SpawnMetrics.Builder.forWorkerExec()
@@ -351,39 +336,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
     return arg.matches("^@.*//.*");
   }
 
-  private static UserExecException createEmptyResponseException(Path logfile) {
-    String message =
-        ErrorMessage.builder()
-            .message("Worker process did not return a WorkResponse:")
-            .logFile(logfile)
-            .logSizeLimit(4096)
-            .build()
-            .toString();
-    return createUserExecException(message, Code.NO_RESPONSE);
-  }
-
-  private static UserExecException createUnparsableResponseException(
-      String recordingStreamMessage, Path logfile, Exception e) {
-    String message =
-        ErrorMessage.builder()
-            .message(
-                "Worker process returned an unparseable WorkResponse!\n\n"
-                    + "Did you try to print something to stdout? Workers aren't allowed to "
-                    + "do this, as it breaks the protocol between Bazel and the worker "
-                    + "process.\n\n"
-                    + "---8<---8<--- Start of response ---8<---8<---\n"
-                    + recordingStreamMessage
-                    + "---8<---8<--- End of response ---8<---8<---\n\n")
-            .logFile(logfile)
-            .logSizeLimit(8192)
-            .exception(e)
-            .build()
-            .toString();
-    return createUserExecException(message, Code.PARSE_RESPONSE_FAILURE);
-  }
-
-  @VisibleForTesting
-  WorkResponse execInWorker(
+  private WorkResponse execInWorker(
       Spawn spawn,
       WorkerKey key,
       SpawnExecutionContext context,
@@ -466,21 +419,35 @@ final class WorkerSpawnRunner implements SpawnRunner {
         try {
           response = worker.getResponse();
         } catch (IOException e) {
-          // If protobuf or json reader couldn't parse the response, try to print whatever the
-          // failing worker wrote to stdout - it's probably a stack trace or some kind of error
-          // message that will help the user figure out why the compiler is failing.
+          // If protobuf couldn't parse the response, try to print whatever the failing worker wrote
+          // to stdout - it's probably a stack trace or some kind of error message that will help
+          // the user figure out why the compiler is failing.
           String recordingStreamMessage = worker.getRecordingStreamMessage();
-          if (recordingStreamMessage.isEmpty()) {
-            throw createEmptyResponseException(worker.getLogFile());
-          } else {
-            throw createUnparsableResponseException(recordingStreamMessage, worker.getLogFile(), e);
-          }
+          String message =
+              ErrorMessage.builder()
+                  .message(
+                      "Worker process returned an unparseable WorkResponse!\n\n"
+                          + "Did you try to print something to stdout? Workers aren't allowed to "
+                          + "do this, as it breaks the protocol between Bazel and the worker "
+                          + "process.")
+                  .logText(recordingStreamMessage)
+                  .exception(e)
+                  .build()
+                  .toString();
+          throw createUserExecException(message, Code.PARSE_RESPONSE_FAILURE);
         }
         spawnMetrics.setExecutionWallTime(executionStopwatch.elapsed());
       }
 
       if (response == null) {
-        throw createEmptyResponseException(worker.getLogFile());
+        String message =
+            ErrorMessage.builder()
+                .message("Worker process did not return a WorkResponse:")
+                .logFile(worker.getLogFile())
+                .logSizeLimit(4096)
+                .build()
+                .toString();
+        throw createUserExecException(message, Code.NO_RESPONSE);
       }
 
       try {
@@ -492,7 +459,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
         String message =
             ErrorMessage.builder()
                 .message("IOException while finishing worker execution:")
-                .logFile(worker.getLogFile())
                 .exception(e)
                 .build()
                 .toString();
