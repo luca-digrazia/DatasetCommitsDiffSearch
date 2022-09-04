@@ -20,31 +20,14 @@
 
 package org.graylog2.rest.resources.streams;
 
-import java.io.IOException;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.Response.Status;
-
+import com.beust.jcommander.internal.Lists;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.Maps;
+import com.sun.jersey.api.core.ResourceConfig;
 import org.bson.types.ObjectId;
 import org.graylog2.Core;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.database.ValidationException;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.rest.RestResource;
 import org.graylog2.rest.resources.streams.requests.CreateRequest;
@@ -52,9 +35,22 @@ import org.graylog2.streams.StreamImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.beust.jcommander.internal.Lists;
-import com.google.common.collect.Maps;
-import com.sun.jersey.api.core.ResourceConfig;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -63,9 +59,9 @@ import com.sun.jersey.api.core.ResourceConfig;
 public class StreamResource extends RestResource {
 	private static final Logger LOG = LoggerFactory.getLogger(StreamResource.class);
 
-    @Context ResourceConfig rc;
-
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Context ResourceConfig rc;
 
     @POST @Path("/")
     @Consumes(MediaType.APPLICATION_JSON) 
@@ -81,31 +77,29 @@ public class StreamResource extends RestResource {
         CreateRequest cr;
         try {
             cr = objectMapper.readValue(body, CreateRequest.class);
-        } catch(IOException e) {
-            LOG.error("Error while parsing JSON", e);
-            throw new WebApplicationException(e, Status.BAD_REQUEST);
+        } catch(Exception e) {
+        	LOG.error("Malformed JSON. Returning HTTP 400.");
+        	throw new WebApplicationException(400);
         }
 
         // Create stream.
         Map<String, Object> streamData = Maps.newHashMap();
         streamData.put("title", cr.title);
-        streamData.put("creator_user_id", cr.creator_user_id);
+        streamData.put("creator_user_id", cr.creatorUserId);
         streamData.put("created_at", new Date());
-
-        StreamImpl stream;
-        try {
-            stream = new StreamImpl(streamData, core);
-        } catch (ValidationException e) {
-            LOG.error("Validation error.", e);
-            throw new WebApplicationException(e, Status.BAD_REQUEST);
-        }
-
+        
+        StreamImpl stream = new StreamImpl(streamData, core);
         ObjectId id = stream.save();
 
         Map<String, Object> result = Maps.newHashMap();
         result.put("stream_id", id.toStringMongod());
 
-        return Response.status(Status.CREATED).entity("fixme").build();
+        try {
+            return Response.status(Status.CREATED).entity(objectMapper.writeValueAsString(result)).build();
+        } catch (JsonProcessingException e) {
+            LOG.error("Error while generating JSON", e);
+            throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);
+        }
     }
     
     @GET @Path("/")
