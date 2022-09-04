@@ -373,9 +373,8 @@ public abstract class SkylarkList<E> extends BaseMutableList<E>
         throws EvalException {
       List<Integer> sliceIndices = EvalUtils.getSliceIndices(start, end, step, this.size(), loc);
       ArrayList<E> list = new ArrayList<>(sliceIndices.size());
-      // foreach is not used to avoid iterator overhead
-      for (int i = 0; i < sliceIndices.size(); ++i) {
-        list.add(this.get(sliceIndices.get(i)));
+      for (int pos : sliceIndices) {
+        list.add(this.get(pos));
       }
       return MutableList.wrapUnsafe(mutability, list);
     }
@@ -692,9 +691,8 @@ public abstract class SkylarkList<E> extends BaseMutableList<E>
         throws EvalException {
       List<Integer> sliceIndices = EvalUtils.getSliceIndices(start, end, step, this.size(), loc);
       ImmutableList.Builder<E> builder = ImmutableList.builderWithExpectedSize(sliceIndices.size());
-      // foreach is not used to avoid iterator overhead
-      for (int i = 0; i < sliceIndices.size(); ++i) {
-        builder.add(this.get(sliceIndices.get(i)));
+      for (int pos : sliceIndices) {
+        builder.add(this.get(pos));
       }
       return copyOf(builder.build());
     }
