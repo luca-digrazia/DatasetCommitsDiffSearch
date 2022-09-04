@@ -69,8 +69,7 @@ public class ValidatorHelper {
 	private static final Collection<Integer> VALID_LOG_LEVELS = Arrays.asList(LOG_VERBOSE, LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR);
 
 	private static final List<String> VALID_PREFERENCE_CLASSES = asList(CanonicalNameConstants.PREFERENCE_ACTIVITY, CanonicalNameConstants.PREFERENCE_FRAGMENT,
-			CanonicalNameConstants.SUPPORT_V4_PREFERENCE_FRAGMENT, CanonicalNameConstants.MACHINARIUS_V4_PREFERENCE_FRAGMENT, CanonicalNameConstants.SUPPORT_V7_PREFERENCE_FRAGMENTCOMPAT,
-			CanonicalNameConstants.SUPPORT_V14_PREFERENCE_FRAGMENT);
+			CanonicalNameConstants.SUPPORT_V4_PREFERENCE_FRAGMENT, CanonicalNameConstants.MACHINARIUS_V4_PREFERENCE_FRAGMENT);
 
 	protected final TargetAnnotationHelper annotationHelper;
 
@@ -104,6 +103,12 @@ public class ValidatorHelper {
 	public void isInterface(TypeElement element, ElementValidation valid) {
 		if (!annotationHelper.isInterface(element)) {
 			valid.addError("%s can only be used on an interface");
+		}
+	}
+
+	public void isNotInterface(TypeElement element, ElementValidation valid) {
+		if (annotationHelper.isInterface(element)) {
+			valid.addError("%s cannot be used on an interface");
 		}
 	}
 
@@ -408,7 +413,7 @@ public class ValidatorHelper {
 	}
 
 	public void extendsPreference(Element element, ElementValidation validation) {
-		extendsOneOfTypes(element, asList(CanonicalNameConstants.PREFERENCE, CanonicalNameConstants.SUPPORT_V7_PREFERENCE), validation);
+		extendsType(element, CanonicalNameConstants.PREFERENCE, validation);
 	}
 
 	public void extendsOneOfTypes(Element element, List<String> typeQualifiedNames, ElementValidation valid) {

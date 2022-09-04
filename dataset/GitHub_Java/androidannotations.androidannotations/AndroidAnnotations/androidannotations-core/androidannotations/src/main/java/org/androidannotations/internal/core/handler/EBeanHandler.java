@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -51,12 +50,12 @@ public class EBeanHandler extends BaseGeneratingAnnotationHandler<EBeanHolder> {
 	public void process(Element element, EBeanHolder holder) {
 		EBean eBeanAnnotation = element.getAnnotation(EBean.class);
 		EBean.Scope eBeanScope = eBeanAnnotation.scope();
-		boolean hasDefaultScope = eBeanScope == EBean.Scope.Default;
+		boolean hasSingletonScope = eBeanScope == EBean.Scope.Singleton;
 
-		holder.createFactoryMethod(eBeanScope);
+		holder.createFactoryMethod(hasSingletonScope);
 
-		if (hasDefaultScope) {
-			holder.invokeInitInConstructors();
+		if (!hasSingletonScope) {
+			holder.invokeInitInConstructor();
 			holder.createRebindMethod();
 		}
 	}
