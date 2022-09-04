@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
-import com.google.devtools.build.lib.exec.local.PosixLocalEnvProvider;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.LinuxSandboxUtil;
 import com.google.devtools.build.lib.shell.Command;
@@ -167,7 +166,7 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     this.inaccessibleHelperFile = inaccessibleHelperFile;
     this.inaccessibleHelperDir = inaccessibleHelperDir;
     this.timeoutKillDelay = timeoutKillDelay;
-    this.localEnvProvider = PosixLocalEnvProvider.INSTANCE;
+    this.localEnvProvider = LocalEnvProvider.ADD_TEMP_POSIX;
   }
 
   @Override
@@ -181,10 +180,7 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     // name unique (like we have to with standalone execution strategy).
     Path tmpDir = sandboxExecRoot.getRelative("tmp");
 
-    Map<String, String> environment =
-        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, tmpDir, productName);
-
-    Set<Path> writableDirs = getWritableDirs(sandboxExecRoot, environment, tmpDir);
+    Set<Path> writableDirs = getWritableDirs(sandboxExecRoot, spawn.getEnvironment(), tmpDir);
     ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
     Duration timeout = policy.getTimeout();
 
@@ -214,6 +210,9 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
       statisticsPath = Optional.of(sandboxPath.getRelative("stats.out").getPathString());
       commandLineBuilder.setStatisticsPath(statisticsPath.get());
     }
+
+    Map<String, String> environment =
+        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, tmpDir, productName);
 
     SandboxedSpawn sandbox =
         new SymlinkedSandboxedSpawn(

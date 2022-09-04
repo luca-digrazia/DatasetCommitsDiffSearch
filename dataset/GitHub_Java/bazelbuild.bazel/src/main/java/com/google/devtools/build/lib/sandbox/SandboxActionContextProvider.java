@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.exec.apple.XCodeLocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
 import com.google.devtools.build.lib.exec.local.LocalSpawnRunner;
-import com.google.devtools.build.lib.exec.local.PosixLocalEnvProvider;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.Path;
@@ -67,7 +66,7 @@ final class SandboxActionContextProvider extends ActionContextProvider {
               cmdEnv,
               new ProcessWrapperSandboxedSpawnRunner(
                   cmdEnv, sandboxBase, productName, timeoutKillDelay));
-      contexts.add(new ProcessWrapperSandboxedStrategy(cmdEnv.getExecRoot(), spawnRunner));
+      contexts.add(new ProcessWrapperSandboxedStrategy(spawnRunner));
     }
 
     // This is the preferred sandboxing strategy on Linux.
@@ -76,7 +75,7 @@ final class SandboxActionContextProvider extends ActionContextProvider {
           withFallback(
               cmdEnv,
               LinuxSandboxedStrategy.create(cmdEnv, sandboxBase, productName, timeoutKillDelay));
-      contexts.add(new LinuxSandboxedStrategy(cmdEnv.getExecRoot(), spawnRunner));
+      contexts.add(new LinuxSandboxedStrategy(spawnRunner));
     }
 
     // This is the preferred sandboxing strategy on macOS.
@@ -85,7 +84,7 @@ final class SandboxActionContextProvider extends ActionContextProvider {
           withFallback(
               cmdEnv,
               new DarwinSandboxedSpawnRunner(cmdEnv, sandboxBase, productName, timeoutKillDelay));
-      contexts.add(new DarwinSandboxedStrategy(cmdEnv.getExecRoot(), spawnRunner));
+      contexts.add(new DarwinSandboxedStrategy(spawnRunner));
     }
 
     return new SandboxActionContextProvider(contexts.build());
@@ -99,7 +98,9 @@ final class SandboxActionContextProvider extends ActionContextProvider {
     LocalExecutionOptions localExecutionOptions =
         env.getOptions().getOptions(LocalExecutionOptions.class);
     LocalEnvProvider localEnvProvider =
-        OS.getCurrent() == OS.DARWIN ? new XCodeLocalEnvProvider() : PosixLocalEnvProvider.INSTANCE;
+        OS.getCurrent() == OS.DARWIN
+            ? new XCodeLocalEnvProvider()
+            : LocalEnvProvider.ADD_TEMP_POSIX;
     return
         new LocalSpawnRunner(
             env.getExecRoot(),

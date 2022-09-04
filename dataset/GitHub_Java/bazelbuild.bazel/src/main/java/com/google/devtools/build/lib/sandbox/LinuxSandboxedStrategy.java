@@ -32,8 +32,8 @@ import java.util.Optional;
   contextType = SpawnActionContext.class
 )
 public final class LinuxSandboxedStrategy extends AbstractSpawnStrategy {
-  LinuxSandboxedStrategy(Path execRoot, SpawnRunner spawnRunner) {
-    super(execRoot, spawnRunner);
+  LinuxSandboxedStrategy(SpawnRunner spawnRunner) {
+    super(spawnRunner);
   }
 
   @Override

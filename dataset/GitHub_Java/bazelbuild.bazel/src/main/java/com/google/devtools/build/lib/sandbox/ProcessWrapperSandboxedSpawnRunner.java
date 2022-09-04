@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.exec.apple.XCodeLocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
-import com.google.devtools.build.lib.exec.local.PosixLocalEnvProvider;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
 import com.google.devtools.build.lib.util.OS;
@@ -89,7 +88,9 @@ final class ProcessWrapperSandboxedSpawnRunner extends AbstractSandboxSpawnRunne
     this.timeoutKillDelay = timeoutKillDelay;
     this.processWrapper = ProcessWrapperUtil.getProcessWrapper(cmdEnv);
     this.localEnvProvider =
-        OS.getCurrent() == OS.DARWIN ? new XCodeLocalEnvProvider() : PosixLocalEnvProvider.INSTANCE;
+        OS.getCurrent() == OS.DARWIN
+            ? new XCodeLocalEnvProvider()
+            : LocalEnvProvider.ADD_TEMP_POSIX;
   }
 
   @Override
@@ -102,9 +103,6 @@ final class ProcessWrapperSandboxedSpawnRunner extends AbstractSandboxSpawnRunne
     // Each sandboxed action runs in its own execroot, so we don't need to make the temp directory's
     // name unique (like we have to with standalone execution strategy).
     Path tmpDir = sandboxExecRoot.getRelative("tmp");
-
-    Map<String, String> environment =
-        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, tmpDir, productName);
 
     Duration timeout = policy.getTimeout();
     ProcessWrapperUtil.CommandLineBuilder commandLineBuilder =
@@ -121,6 +119,9 @@ final class ProcessWrapperSandboxedSpawnRunner extends AbstractSandboxSpawnRunne
       commandLineBuilder.setStatisticsPath(statisticsPath.get());
     }
 
+    Map<String, String> environment =
+        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, tmpDir, productName);
+
     SandboxedSpawn sandbox =
         new SymlinkedSandboxedSpawn(
             sandboxPath,
@@ -129,7 +130,7 @@ final class ProcessWrapperSandboxedSpawnRunner extends AbstractSandboxSpawnRunne
             environment,
             SandboxHelpers.getInputFiles(spawn, policy, execRoot),
             SandboxHelpers.getOutputFiles(spawn),
-            getWritableDirs(sandboxExecRoot, environment, tmpDir));
+            getWritableDirs(sandboxExecRoot, spawn.getEnvironment(), tmpDir));
 
     return runSpawn(spawn, sandbox, policy, execRoot, tmpDir, timeout, statisticsPath);
   }
