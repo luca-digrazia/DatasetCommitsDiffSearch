@@ -29,11 +29,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import org.graylog.plugins.views.search.errors.PermissionException;
 import org.graylog.plugins.views.search.views.PluginMetadataSummary;
-import org.graylog2.contentpacks.ContentPackable;
-import org.graylog2.contentpacks.EntityDescriptorIds;
-import org.graylog2.contentpacks.model.entities.SearchEntity;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.mongojack.Id;
@@ -53,7 +49,7 @@ import static java.util.stream.Collectors.toSet;
 @AutoValue
 @JsonAutoDetect
 @JsonDeserialize(builder = Search.Builder.class)
-public abstract class Search implements ContentPackable<SearchEntity> {
+public abstract class Search {
     public static final String FIELD_REQUIRES = "requires";
     private static final String FIELD_CREATED_AT = "created_at";
     public static final String FIELD_OWNER = "owner";
@@ -130,10 +126,6 @@ public abstract class Search implements ContentPackable<SearchEntity> {
         final Set<Query> withoutStreams = Sets.difference(queries(), withStreams);
 
         final ImmutableSet<String> defaultStreams = defaultStreamsSupplier.get();
-
-        if (defaultStreams.isEmpty())
-            throw new PermissionException("User doesn't have access to any streams");
-
         final Set<Query> withDefaultStreams = withoutStreams.stream()
                 .map(q -> q.addStreamsToFilter(defaultStreams))
                 .collect(toSet());
@@ -159,7 +151,7 @@ public abstract class Search implements ContentPackable<SearchEntity> {
                 .reduce(Collections.emptySet(), Sets::union);
         final Set<String> searchTypeStreamIds = queries().stream()
                 .flatMap(q -> q.searchTypes().stream())
-                .map(SearchType::effectiveStreams)
+                .map(SearchType::streams)
                 .reduce(Collections.emptySet(), Sets::union);
 
         return Sets.union(queryStreamIds, searchTypeStreamIds);
@@ -182,7 +174,7 @@ public abstract class Search implements ContentPackable<SearchEntity> {
         public abstract Builder requires(Map<String, PluginMetadataSummary> requirements);
 
         @JsonProperty(FIELD_OWNER)
-        public abstract Builder owner(@Nullable String owner);
+        public abstract Builder owner(String owner);
 
         @JsonProperty(FIELD_CREATED_AT)
         public abstract Builder createdAt(DateTime createdAt);
@@ -203,18 +195,6 @@ public abstract class Search implements ContentPackable<SearchEntity> {
             search.parameterIndex = Maps.uniqueIndex(search.parameters(), Parameter::name);
             return search;
         }
-    }
 
-    @Override
-    public SearchEntity toContentPackEntity(EntityDescriptorIds entityDescriptorIds) {
-        final SearchEntity.Builder searchEntityBuilder = SearchEntity.builder()
-                .queries(this.queries())
-                .parameters(this.parameters())
-                .requires(this.requires())
-                .createdAt(this.createdAt());
-        if (this.owner().isPresent()) {
-            searchEntityBuilder.owner(this.owner().get());
-        }
-        return searchEntityBuilder.build();
     }
 }

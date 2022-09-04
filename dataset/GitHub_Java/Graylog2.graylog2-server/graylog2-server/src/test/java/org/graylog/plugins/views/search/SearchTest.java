@@ -20,7 +20,6 @@ import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import org.graylog.plugins.views.search.engine.BackendQuery;
-import org.graylog.plugins.views.search.errors.PermissionException;
 import org.graylog.plugins.views.search.filter.StreamFilter;
 import org.graylog.plugins.views.search.searchtypes.MessageList;
 import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
@@ -37,7 +36,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -67,14 +65,6 @@ public class SearchTest {
         Search after = before.addStreamsToQueriesWithoutStreams(() -> ImmutableSet.of("one", "two", "three"));
 
         assertThat(before).isEqualTo(after);
-    }
-
-    @Test
-    public void throwsExceptionIfQueryHasNoStreamsAndThereAreNoDefaultStreams() {
-        Search search = searchWithQueriesWithStreams("a,b,c", "");
-
-        assertThatExceptionOfType(PermissionException.class)
-                .isThrownBy(() -> search.addStreamsToQueriesWithoutStreams(ImmutableSet::of));
     }
 
     @Test
@@ -216,7 +206,7 @@ public class SearchTest {
     private SearchType searchTypeWithStreams(String streamIds) {
         final SearchType searchType = mock(SearchType.class);
         final Set<String> streamIdSet = streamIds.isEmpty() ? Collections.emptySet() : new HashSet<>(Arrays.asList(streamIds.split(",")));
-        when(searchType.effectiveStreams()).thenReturn(streamIdSet);
+        when(searchType.streams()).thenReturn(streamIdSet);
         when(searchType.id()).thenReturn(UUID.randomUUID().toString());
 
         return searchType;
