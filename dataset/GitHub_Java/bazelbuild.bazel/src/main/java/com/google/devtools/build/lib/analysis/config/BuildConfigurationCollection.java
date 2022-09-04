@@ -15,17 +15,16 @@
 package com.google.devtools.build.lib.analysis.config;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 
 /**
  * Convenience container for top-level target and host configurations.
  *
  * <p>The target configuration is used for all targets specified on the command line. Multiple
  * target configurations are possible because of settings like {@link
- * BuildRequestOptions#multiCpus}.
+ * com.google.devtools.build.lib.buildtool.BuildRequest.BuildRequestOptions#multiCpus}.
  *
  * <p>The host configuration is used for tools that are executed during the build, e. g, compilers.
  */
@@ -34,10 +33,9 @@ public final class BuildConfigurationCollection {
   private final ImmutableList<BuildConfiguration> targetConfigurations;
   private final BuildConfiguration hostConfiguration;
 
-  public BuildConfigurationCollection(
-      Collection<BuildConfiguration> targetConfigurations,
+  public BuildConfigurationCollection(List<BuildConfiguration> targetConfigurations,
       BuildConfiguration hostConfiguration)
-          throws InvalidConfigurationException {
+      throws InvalidConfigurationException {
     this.targetConfigurations = ImmutableList.copyOf(targetConfigurations);
     this.hostConfiguration = hostConfiguration;
 

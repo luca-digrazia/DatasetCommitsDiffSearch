@@ -57,6 +57,8 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.Dependency;
+import com.google.devtools.build.lib.analysis.MergedConfiguredTarget;
+import com.google.devtools.build.lib.analysis.MergedConfiguredTarget.DuplicateException;
 import com.google.devtools.build.lib.analysis.ToolchainContext;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
@@ -71,8 +73,6 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactor
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
-import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget;
-import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget.DuplicateException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -533,9 +533,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   public void setOutputService(OutputService outputService) {
     this.outputService = outputService;
   }
-
-  /** Inform this SkyframeExecutor that a new command is starting. */
-  public void noteCommandStart() {}
 
   /**
    * Notify listeners about changed files, and release any associated memory afterwards.
@@ -1409,8 +1406,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         ArrayListMultimap.<Dependency, BuildConfiguration>create();
     Set<Dependency> depsToEvaluate = new HashSet<>();
 
+    // Check: if !Configuration.useDynamicConfigs then just return the original configs.
     Set<Class<? extends BuildConfiguration.Fragment>> allFragments = null;
-    if (useUntrimmedConfigs(fromOptions)) {
+    if (useUntrimmedDynamicConfigs(fromOptions)) {
       allFragments = ((ConfiguredRuleClassProvider) ruleClassProvider).getAllFragments();
     }
 
@@ -1421,7 +1419,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     for (Dependency key : keys) {
       if (key.hasExplicitConfiguration()) {
         builder.put(key, key.getConfiguration());
-      } else if (useUntrimmedConfigs(fromOptions)) {
+      } else if (useUntrimmedDynamicConfigs(fromOptions)) {
         fragmentsMap.put(key.getLabel(), allFragments);
       } else {
         depsToEvaluate.add(key);
@@ -1486,12 +1484,12 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   /**
-   * Returns whether configurations should trim their fragments to only those needed by
+   * Returns whether dynamic configurations should trim their fragments to only those needed by
    * targets and their transitive dependencies.
    */
-  private static boolean useUntrimmedConfigs(BuildOptions options) {
-    return options.get(BuildConfiguration.Options.class).configsMode
-        == BuildConfiguration.Options.ConfigsMode.NOTRIM;
+  private static boolean useUntrimmedDynamicConfigs(BuildOptions options) {
+    return options.get(BuildConfiguration.Options.class).useDynamicConfigurations
+        == BuildConfiguration.Options.DynamicConfigsMode.NOTRIM;
   }
 
   /**
