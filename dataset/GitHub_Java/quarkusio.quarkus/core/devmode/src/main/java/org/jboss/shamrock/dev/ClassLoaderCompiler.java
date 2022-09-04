@@ -16,10 +16,17 @@
 
 package org.jboss.shamrock.dev;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -47,6 +54,7 @@ import javax.tools.ToolProvider;
  */
 public class ClassLoaderCompiler {
 
+    public static final String DEV_MODE_CLASS_PATH = "META-INF/dev-mode-class-path.txt";
     private final File outputDirectory;
     private final Set<File> classPath;
 
@@ -60,6 +68,16 @@ public class ClassLoaderCompiler {
                 urls.addAll(Arrays.asList(((URLClassLoader) c).getURLs()));
             }
             c = c.getParent();
+        }
+
+        try (InputStream devModeCp = classLoader.getResourceAsStream(DEV_MODE_CLASS_PATH)){
+            BufferedReader r = new BufferedReader(new InputStreamReader(devModeCp, StandardCharsets.UTF_8));
+            String cp = r.readLine();
+            for(String i : cp.split(" ")) {
+                urls.add(new URI(i).toURL());
+            }
+        } catch (URISyntaxException e) {
+            throw new RuntimeException(e);
         }
 
         Set<String> parsedFiles = new HashSet<>();
@@ -85,7 +103,13 @@ public class ClassLoaderCompiler {
                             Object classPath = mf.getMainAttributes().get(Attributes.Name.CLASS_PATH);
                             if (classPath != null) {
                                 for (String i : classPath.toString().split(" ")) {
-                                    File f = new File(i);
+                                    File f;
+                                    try {
+                                        URL u = new URL(i);
+                                        f = new File(u.getPath());
+                                    } catch (MalformedURLException e) {
+                                        f = new File(file.getParentFile(), i);
+                                    }
                                     if (f.exists()) {
                                         toParse.add(f.getAbsolutePath());
                                     }
