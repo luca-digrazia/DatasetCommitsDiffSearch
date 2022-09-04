@@ -158,8 +158,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     ObjcProvider.Builder objcProviderBuilder = new ObjcProvider.Builder();
     for (DependencySpecificConfiguration dependencySpecificConfiguration :
         dependencySpecificConfigurations) {
-      objcProviderBuilder.addTransitiveAndPropagate(
-          dependencySpecificConfiguration.objcProviderWithDylibSymbols());
+      objcProviderBuilder.addTransitiveAndPropagate(dependencySpecificConfiguration.objcProvider());
     }
     objcProviderBuilder.add(MULTI_ARCH_LINKED_BINARIES, outputArtifact);
 
