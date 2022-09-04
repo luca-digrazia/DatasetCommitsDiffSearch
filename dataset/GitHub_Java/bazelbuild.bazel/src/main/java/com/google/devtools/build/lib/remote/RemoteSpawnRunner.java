@@ -83,7 +83,7 @@ final class RemoteSpawnRunner implements SpawnRunner {
       return fallbackRunner.exec(spawn, policy);
     }
 
-    policy.report(ProgressStatus.EXECUTING, "remote");
+    policy.report(ProgressStatus.EXECUTING);
     // Temporary hack: the TreeNodeRepository should be created and maintained upstream!
     ActionInputFileCache inputFileCache = policy.getActionInputFileCache();
     TreeNodeRepository repository = new TreeNodeRepository(execRoot, inputFileCache);
