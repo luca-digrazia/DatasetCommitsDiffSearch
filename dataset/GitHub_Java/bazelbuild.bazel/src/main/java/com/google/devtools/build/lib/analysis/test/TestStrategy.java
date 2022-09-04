@@ -141,8 +141,7 @@ public abstract class TestStrategy implements TestActionContext {
    * @return the command line as string list.
    * @throws ExecException if {@link #expandedArgsFromAction} throws
    */
-  public static ImmutableList<String> getArgs(TestRunnerAction testAction)
-      throws ExecException, InterruptedException {
+  public static ImmutableList<String> getArgs(TestRunnerAction testAction) throws ExecException {
     try {
       return expandedArgsFromAction(testAction);
     } catch (CommandLineExpansionException e) {
@@ -164,7 +163,7 @@ public abstract class TestStrategy implements TestActionContext {
    * @throws CommandLineExpansionException
    */
   public static ImmutableList<String> expandedArgsFromAction(TestRunnerAction testAction)
-      throws CommandLineExpansionException, InterruptedException {
+      throws CommandLineExpansionException {
     List<String> args = Lists.newArrayList();
     // TODO(ulfjack): `executedOnWindows` is incorrect for remote execution, where we need to
     // consider the target configuration, not the machine Bazel happens to run on. Change this to
@@ -254,7 +253,7 @@ public abstract class TestStrategy implements TestActionContext {
    * the "categorical timeouts" which are based on the --test_timeout flag. A rule picks its timeout
    * but ends up with the same effective value as all other rules in that bucket.
    */
-  protected static final Duration getTimeout(TestRunnerAction testAction) {
+  protected final Duration getTimeout(TestRunnerAction testAction) {
     BuildConfiguration configuration = testAction.getConfiguration();
     return configuration
         .getFragment(TestConfiguration.class)
