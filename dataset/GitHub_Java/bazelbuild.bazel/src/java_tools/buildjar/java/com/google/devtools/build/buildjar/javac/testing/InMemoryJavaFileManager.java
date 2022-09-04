@@ -15,154 +15,51 @@
 package com.google.devtools.build.buildjar.javac.testing;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.util.Locale.ENGLISH;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.base.CharMatcher;
+import com.google.common.base.Joiner;
+import com.google.common.base.StandardSystemProperty;
 import com.google.common.collect.ImmutableList;
-import com.google.common.jimfs.Configuration;
-import com.google.common.jimfs.Jimfs;
-
-import com.sun.tools.javac.nio.JavacPathFileManager;
+import com.google.devtools.build.java.bazel.JavaBuilderConfig;
+import com.sun.tools.javac.api.JavacTool;
+import com.sun.tools.javac.file.JavacFileManager;
 import com.sun.tools.javac.util.Context;
-import com.sun.tools.javac.util.Log;
-
 import java.io.IOError;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
+import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.file.FileSystem;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
-
+import java.util.Collection;
+import java.util.Collections;
+import java.util.jar.Attributes;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
+import javax.tools.Diagnostic;
+import javax.tools.DiagnosticCollector;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardLocation;
 
-/**
- * An in memory file manager based on {@link JavacPathFileManager} and Jimfs, with utilities for
- * creating Java source files and manipulating compiled classes.
- */
-@com.sun.tools.javac.api.ClientCodeWrapper.Trusted
-public class InMemoryJavaFileManager extends JavacPathFileManager {
+/** A collection of utilities for in-memory compilation testing. */
+// TODO(cushon): rename this, it is no longer a file manager
+public class InMemoryJavaFileManager {
 
   protected static final CharMatcher SLASH_MATCHER = CharMatcher.is('/');
   protected static final CharMatcher DOT_MATCHER = CharMatcher.is('.');
 
-  private FileSystem fileSystem;
-  private final List<Path> sources = new ArrayList<>();
-
-  // Upstream may eventually create a {@code JavaCompiler#getPathFileManager()} that we could
-  // use instead. (See implementation comment on {@link PathFileManager}.))
-  private static Context makeContext() {
-    Context context = new Context();
-    context.put(Locale.class, ENGLISH);
-    context.put(Log.outKey, new PrintWriter(new OutputStreamWriter(System.err, UTF_8), true));
-    return context;
-  }
-
-  public InMemoryJavaFileManager() {
-    super(makeContext(), false, UTF_8);
-    this.fileSystem = Jimfs.newFileSystem(Configuration.unix());
-    setDefaultFileSystem(fileSystem);
-  }
-
-  /**
-   * Creates an in-memory Jar from all compiled classes from package pkg.
-   *
-   * @param pkg name of package
-   * @param compiled a list of classes and their compiled bytecode to include in the jar
-   * @return the name of the constructed jar
-   */
-  public Path makeJarInClasspath(String pkg, List<CompiledClass> compiled) {
-    try {
-      String jarName = "lib" + pkg.replace(".", "") + ".jar";
-      Path jarPath = fileSystem.getPath("/" + jarName);
-      try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(jarPath))) {
-        for (CompiledClass compiledClass : compiled) {
-          if (pkg.equals(getPackageName(compiledClass.name()))) {
-            String entry = DOT_MATCHER.replaceFrom(compiledClass.name(), '/') + ".class";
-            out.putNextEntry(new ZipEntry(entry));
-            out.write(compiledClass.data());
-          }
-        }
-      }
-      return jarPath;
-    } catch (IOException e) {
-      throw new IOError(e);
-    }
-  }
-
-  /**
-   * Creates an in-memory Java source file with the specified name and content.
-   *
-   * @param className the fully-qualified class name
-   * @param lines Java source code
-   */
-  public void addSource(String className, String... lines) {
-    Path path = fileSystem.getPath(
-        "/", SLASH_MATCHER.trimLeadingFrom(DOT_MATCHER.replaceFrom(className, '/') + ".java"));
-    try {
-      Files.createDirectories(path.getParent());
-      Files.write(path, Arrays.asList(lines), UTF_8);
-    } catch (IOException e) {
-      throw new IOError(e);
-    }
-    sources.add(path);
-  }
-
-  /**
-   * Gets a list of available Java sources and clears the fileManager's cache.
-   *
-   * @return a list of the JavaFileObjects holding the source files
-   */
-  public List<JavaFileObject> takeAvailableSources() {
-    try {
-      return ImmutableList.copyOf(getJavaFileObjectsFromPaths(sources));
-    } finally {
-      sources.clear();
-    }
-  }
-
-  /**
-   * Copy the given JavaFileObjects into the current file manager's filesystem.
-   *
-   * <p>The previous implementation allowed {@link JavaFileObject}s to be passed between file
-   * managers.
-   */
-  // TODO(cushon): consider making this class return a wrapper around the content of source files
-  // other than JavaFileObjects, and then materialize them later.
-  public List<JavaFileObject> naturalize(
-      JavacPathFileManager external, Iterable<JavaFileObject> externalFileObjects) {
-    ImmutableList.Builder<JavaFileObject> result = ImmutableList.builder();
-    for (JavaFileObject externalFileObject : externalFileObjects) {
-      try {
-        Path externalPath = external.getPath(externalFileObject);
-        Path dest = fileSystem.getPath(externalPath.toString());
-        Files.createDirectories(dest.getParent());
-        Files.copy(external.getPath(externalFileObject), dest);
-        result.addAll(getJavaFileObjects(dest));
-      } catch (IOException e) {
-        throw new IOError(e);
-      }
-    }
-    return result.build();
-  }
-
-  /**
-   * The name and bytecode of a compiled class.
-   */
+  /** The name and bytecode of a compiled class. */
   @AutoValue
   public abstract static class CompiledClass {
     public abstract String name();
+
     @SuppressWarnings("mutable")
     public abstract byte[] data();
 
@@ -171,76 +68,215 @@ public class InMemoryJavaFileManager extends JavacPathFileManager {
     }
   }
 
-  /**
-   * Return the list of all compiled classes in the filesystem.
-   */
-  public List<CompiledClass> getCompiledClasses() {
-    final ImmutableList.Builder<CompiledClass> result = ImmutableList.builder();
-    try {
-      Files.walkFileTree(fileSystem.getPath("/"), new SimpleFileVisitor<Path>() {
-        @Override
-        public FileVisitResult visitFile(Path filePath, BasicFileAttributes attrs)
-            throws IOException {
-          if (filePath.toString().endsWith(".class")) {
-            String className = filePath.toString();
-            className = className.substring(0, className.length() - ".class".length());
-            className = DOT_MATCHER.trimLeadingFrom(SLASH_MATCHER.replaceFrom(className, '.'));
-            result.add(CompiledClass.create(className, Files.readAllBytes(filePath)));
-          }
-          return FileVisitResult.CONTINUE;
-        }
-      });
-    } catch (IOException e) {
-      throw new IOError(e);
-    }
-    return result.build();
-  }
-
-  /**
-   * Returns the package name for a fully-qualified classname, or the empty string.
-   */
+  /** Returns the package name for a fully-qualified classname, or the empty string. */
   // TODO(cushon): this doesn't work for nested classes.
   public static String getPackageName(String className) {
     int dot = className.lastIndexOf('.');
     return (dot > 0) ? className.substring(0, dot) : "";
   }
 
-  /**
-   * Create a plausible looking target name from a package name, for testing.
-   */
+  /** Create a plausible looking target name from a package name, for testing. */
   public static String getTargetName(String pkg) {
     return "//com/google/" + pkg.replace('.', '/');
   }
 
-  /**
-   * Set the filemanager's classpath for a compilation. Also explicitly sets the sourcepath and
-   * processorpath to empty, since the default behaviour searches for processors and additional
-   * sources to compile.
-   *
-   * <p>We don't rely on the command-line flags, since filemanager flag parsing doesn't work when
-   * using javac through the API.
-   */
-  public void initializeClasspath(Iterable<Path> classpath) {
-    try {
-      setLocation(StandardLocation.CLASS_PATH, classpath);
-      setLocation(StandardLocation.SOURCE_PATH, ImmutableList.<Path>of());
-      setLocation(StandardLocation.ANNOTATION_PROCESSOR_PATH, ImmutableList.<Path>of());
-    } catch (IOException e) {
-      throw new IOError(e);
+  /** Builds a collection of sources to compile. */
+  public static class SourceBuilder {
+    private final Path root;
+    private final ImmutableList.Builder<Path> sources = ImmutableList.builder();
+
+    public static SourceBuilder create(FileSystem fileSystem) {
+      try {
+        Path tmp = fileSystem.getPath("/tmp");
+        if (!Files.exists(tmp)) {
+          Files.createDirectory(tmp);
+        }
+        return new SourceBuilder(Files.createTempDirectory(tmp, ""));
+      } catch (IOException e) {
+        throw new IOError(e);
+      }
+    }
+
+    public SourceBuilder(Path root) {
+      this.root = root;
+    }
+
+    public SourceBuilder addSourceLines(String name, String... lines) throws IOException {
+      Path path = root.resolve(name);
+      Files.createDirectories(path.getParent());
+      Files.write(path, Arrays.asList(lines), UTF_8);
+      sources.add(path);
+      return this;
+    }
+
+    public ImmutableList<Path> build() {
+      return sources.build();
     }
   }
 
-  /**
-   * Set the filemanager's bootclasspath for a compilation.
-   *
-   * <p>We don't rely on the command-line flags, since filemanager flag parsing doesn't work when
-   * using javac through the API.
-   */
-  public void initializeBootClasspath(Iterable<Path> bootClasspath) {
-    try {
-      setLocation(StandardLocation.PLATFORM_CLASS_PATH, bootClasspath);
+  /** A wrapper around {@link JavaCompiler}. */
+  public static class CompilationBuilder {
+
+    private Context context = new Context();
+    private JavacFileManager fileManager = new JavacFileManager(new Context(), false, UTF_8);
+    private Collection<Path> sources = Collections.emptyList();
+    private Collection<Path> classpath = Collections.emptyList();
+    private Iterable<String> javacopts = JavaBuilderConfig.defaultJavacOpts();
+    private Path output = null;
+
+    public CompilationBuilder() {}
+
+    public CompilationBuilder setContext(Context context) {
+      this.context = context;
+      return this;
+    }
+
+    public CompilationBuilder setFileManager(JavacFileManager fileManager) {
+      this.fileManager = fileManager;
+      return this;
+    }
+
+    public CompilationBuilder setSources(Collection<Path> sources) {
+      this.sources = sources;
+      return this;
+    }
+
+    public CompilationBuilder setClasspath(Collection<Path> classpath) {
+      this.classpath = classpath;
+      return this;
+    }
+
+    public CompilationBuilder setJavacopts(Iterable<String> javacopts) {
+      this.javacopts = javacopts;
+      return this;
+    }
+
+    public CompilationBuilder setOutput(Path output) {
+      this.output = output;
+      return this;
+    }
+
+    public CompilationResult compile() throws IOException {
+      if (output == null) {
+        Path tmp =
+            sources
+                .iterator()
+                .next()
+                .getFileSystem()
+                .getPath(StandardSystemProperty.JAVA_IO_TMPDIR.value());
+        if (!Files.exists(tmp)) {
+          Files.createDirectory(tmp);
+        }
+        output = Files.createTempDirectory(tmp, "classes");
+        Files.createDirectories(output);
+      }
+      DiagnosticCollector<JavaFileObject> diagnosticCollector = new DiagnosticCollector<>();
+      StringWriter errorOutput = new StringWriter();
+
+      fileManager.setLocationFromPaths(StandardLocation.CLASS_PATH, classpath);
+      fileManager.setLocationFromPaths(StandardLocation.SOURCE_PATH, Collections.<Path>emptyList());
+      fileManager.setLocationFromPaths(
+          StandardLocation.ANNOTATION_PROCESSOR_PATH, Collections.<Path>emptyList());
+
+      fileManager.setLocationFromPaths(
+          StandardLocation.CLASS_OUTPUT, Collections.singleton(output));
+
+      boolean ok =
+          JavacTool.create()
+              .getTask(
+                  new PrintWriter(errorOutput, true),
+                  fileManager,
+                  diagnosticCollector,
+                  javacopts,
+                  /*classes=*/ Collections.<String>emptyList(),
+                  fileManager.getJavaFileObjectsFromPaths(sources),
+                  context)
+              .call();
+
+      return CompilationResult.create(
+          ok, diagnosticCollector.getDiagnostics(), errorOutput.toString(), output);
+    }
+
+    public CompilationResult compileOrDie() throws IOException {
+      CompilationResult result = compile();
+      if (!result.ok()) {
+        throw new AssertionError(Joiner.on('\n').join(result.diagnostics()));
+      }
+      return result;
+    }
+
+    public ImmutableList<CompiledClass> toCompiledClassesOrDie() throws IOException {
+      return compileOrDie().classData();
+    }
+
+    public Path compileOutputToJarOrDie() throws IOException {
+      CompilationResult result = compileOrDie();
+      return compiledClassesToJar(result.classOutput().resolve("output.jar"), result.classData());
+    }
+  }
+
+  public static Path compiledClassesToJar(Path jar, Iterable<CompiledClass> classes) {
+    return compiledClassesToJar(jar, classes, null);
+  }
+
+  public static Path compiledClassesToJar(
+      Path jar, Iterable<CompiledClass> classes, String targetLabel) {
+    Manifest manifest = new Manifest();
+    Attributes attributes = manifest.getMainAttributes();
+    attributes.put(Attributes.Name.MANIFEST_VERSION, "1.0");
+    if (targetLabel != null) {
+      attributes.putValue("Target-Label", targetLabel);
+    }
+    try (OutputStream os = Files.newOutputStream(jar);
+        final JarOutputStream jos = new JarOutputStream(os, manifest)) {
+      for (CompiledClass c : classes) {
+        jos.putNextEntry(new JarEntry(c.name().replace('.', '/') + ".class"));
+        jos.write(c.data());
+      }
     } catch (IOException e) {
       throw new IOError(e);
+    }
+    return jar;
+  }
+
+  /** The output from a compilation. */
+  @AutoValue
+  public abstract static class CompilationResult {
+    public abstract boolean ok();
+
+    public abstract ImmutableList<Diagnostic<? extends JavaFileObject>> diagnostics();
+
+    public abstract String errorOutput();
+
+    public abstract Path classOutput();
+
+    public ImmutableList<CompiledClass> classData() throws IOException {
+      ImmutableList.Builder<CompiledClass> result = ImmutableList.builder();
+      Files.walkFileTree(
+          classOutput(),
+          new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFile(Path path, BasicFileAttributes attrs)
+                throws IOException {
+              if (path.toString().endsWith(".class")) {
+                String className = classOutput().relativize(path).toString();
+                className = className.substring(0, className.length() - ".class".length());
+                className = DOT_MATCHER.trimLeadingFrom(SLASH_MATCHER.replaceFrom(className, '.'));
+                result.add(CompiledClass.create(className, Files.readAllBytes(path)));
+              }
+              return FileVisitResult.CONTINUE;
+            }
+          });
+      return result.build();
+    }
+
+    static CompilationResult create(
+        boolean ok,
+        Iterable<Diagnostic<? extends JavaFileObject>> diagnostics,
+        String errorOutput,
+        Path classOutput) {
+      return new AutoValue_InMemoryJavaFileManager_CompilationResult(
+          ok, ImmutableList.copyOf(diagnostics), errorOutput, classOutput);
     }
   }
 }

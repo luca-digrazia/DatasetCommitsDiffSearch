@@ -46,11 +46,14 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 import java.util.zip.ZipOutputStream;
+import javax.tools.Diagnostic;
+import javax.tools.JavaFileObject;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
@@ -78,15 +81,95 @@ public class JavacTurbine implements AutoCloseable {
   }
 
   public static Result compile(TurbineOptions turbineOptions) throws IOException {
-    return compile(
-        turbineOptions,
-        new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.err, UTF_8)), true));
-  }
-
-  public static Result compile(TurbineOptions turbineOptions, PrintWriter out) throws IOException {
-    try (JavacTurbine turbine = new JavacTurbine(out, turbineOptions)) {
+    try (JavacTurbine turbine =
+        new JavacTurbine(
+            new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.err, UTF_8))),
+            turbineOptions)) {
       return turbine.compile();
     }
+  }
+
+  /** A header compilation result. */
+  public enum Result {
+    /** The compilation succeeded with the reduced classpath optimization. */
+    OK_WITH_REDUCED_CLASSPATH(true),
+
+    /** The compilation succeeded, but had to fall back to a transitive classpath. */
+    OK_WITH_FULL_CLASSPATH(true),
+
+    /** The compilation did not succeed. */
+    ERROR(false);
+
+    private final boolean ok;
+
+    private Result(boolean ok) {
+      this.ok = ok;
+    }
+
+    public boolean ok() {
+      return ok;
+    }
+
+    public int exitCode() {
+      return ok ? 0 : 1;
+    }
+  }
+
+  private static final int ZIPFILE_BUFFER_SIZE = 1024 * 16;
+
+
+  private final PrintWriter out;
+  private final TurbineOptions turbineOptions;
+  @VisibleForTesting Context context;
+
+  /** Cache of opened zip filesystems for srcjars. */
+  private final Map<Path, FileSystem> filesystems = new HashMap<>();
+
+  public JavacTurbine(PrintWriter out, TurbineOptions turbineOptions) {
+    this.out = out;
+    this.turbineOptions = turbineOptions;
+  }
+
+  /** Creates the compilation javacopts from {@link TurbineOptions}. */
+  @VisibleForTesting
+  static ImmutableList<String> processJavacopts(TurbineOptions turbineOptions) {
+    ImmutableList<String> javacopts =
+        JavacOptions.removeBazelSpecificFlags(
+            JavacOptions.normalizeOptionsWithNormalizers(
+                turbineOptions.javacOpts(), new JavacOptions.ReleaseOptionNormalizer()));
+
+    ImmutableList.Builder<String> builder = ImmutableList.builder();
+    builder.addAll(javacopts);
+
+    // Disable compilation of implicit source files.
+    // This is insurance: the sourcepath is empty, so we don't expect implicit sources.
+    builder.add("-implicit:none");
+
+    // Disable debug info
+    builder.add("-g:none");
+
+    // Enable MethodParameters
+    builder.add("-parameters");
+
+    // Compile-time jars always use Java 8
+    if (javacopts.contains("--release")) {
+      // javac doesn't allow mixing -source and --release, so use --release if it's already present
+      // in javacopts.
+      builder.add("--release");
+      builder.add("8");
+    } else {
+      builder.add("-source");
+      builder.add("8");
+      builder.add("-target");
+      builder.add("8");
+    }
+
+    if (!turbineOptions.processors().isEmpty()) {
+      builder.add("-processor");
+      builder.add(Joiner.on(',').join(turbineOptions.processors()));
+    }
+
+    return builder.build();
   }
 
   Result compile() throws IOException {
@@ -154,8 +237,6 @@ public class JavacTurbine implements AutoCloseable {
     if (compileResult == null || shouldFallBack(compileResult)) {
       // fall back to transitive classpath
       actualClasspath = originalClasspath;
-      // reset SJD plugin
-      requestBuilder.setStrictDepsPlugin(new StrictJavaDepsPlugin(dependencyModule));
       requestBuilder.setClassPath(actualClasspath);
       compileResult = JavacTurbineCompiler.compile(requestBuilder.build());
       if (compileResult.success()) {
@@ -169,94 +250,12 @@ public class JavacTurbine implements AutoCloseable {
           turbineOptions, compileResult.files(), transitive.collectTransitiveDependencies());
       dependencyModule.emitDependencyInformation(actualClasspath, compileResult.success());
     } else {
-      for (FormattedDiagnostic diagnostic : compileResult.diagnostics()) {
-        out.println(diagnostic.message());
+      for (Diagnostic<? extends JavaFileObject> diagnostic : compileResult.diagnostics()) {
+        out.println(diagnostic.getMessage(Locale.getDefault()));
       }
       out.print(compileResult.output());
     }
     return result;
-  }
-
-  /** A header compilation result. */
-  public enum Result {
-    /** The compilation succeeded with the reduced classpath optimization. */
-    OK_WITH_REDUCED_CLASSPATH(true),
-
-    /** The compilation succeeded, but had to fall back to a transitive classpath. */
-    OK_WITH_FULL_CLASSPATH(true),
-
-    /** The compilation did not succeed. */
-    ERROR(false);
-
-    private final boolean ok;
-
-    private Result(boolean ok) {
-      this.ok = ok;
-    }
-
-    public boolean ok() {
-      return ok;
-    }
-
-    public int exitCode() {
-      return ok ? 0 : 1;
-    }
-  }
-
-  private static final int ZIPFILE_BUFFER_SIZE = 1024 * 16;
-
-  private final PrintWriter out;
-  private final TurbineOptions turbineOptions;
-  @VisibleForTesting Context context;
-
-  /** Cache of opened zip filesystems for srcjars. */
-  private final Map<Path, FileSystem> filesystems = new HashMap<>();
-
-  public JavacTurbine(PrintWriter out, TurbineOptions turbineOptions) {
-    this.out = out;
-    this.turbineOptions = turbineOptions;
-  }
-
-  /** Creates the compilation javacopts from {@link TurbineOptions}. */
-  @VisibleForTesting
-  static ImmutableList<String> processJavacopts(TurbineOptions turbineOptions) {
-    ImmutableList<String> javacopts =
-        JavacOptions.removeBazelSpecificFlags(
-            JavacOptions.normalizeOptionsWithNormalizers(
-                turbineOptions.javacOpts(), new JavacOptions.ReleaseOptionNormalizer()));
-
-    ImmutableList.Builder<String> builder = ImmutableList.builder();
-    builder.addAll(javacopts);
-
-    // Disable compilation of implicit source files.
-    // This is insurance: the sourcepath is empty, so we don't expect implicit sources.
-    builder.add("-implicit:none");
-
-    // Disable debug info
-    builder.add("-g:none");
-
-    // Enable MethodParameters
-    builder.add("-parameters");
-
-    // Compile-time jars always use Java 8
-    if (javacopts.contains("--release")) {
-      // javac doesn't allow mixing -source and --release, so use --release if it's already present
-      // in javacopts.
-      builder.add("--release");
-      builder.add("8");
-    } else {
-      builder.add("-source");
-      builder.add("8");
-      builder.add("-target");
-      builder.add("8");
-    }
-
-    if (!turbineOptions.processors().isEmpty()) {
-      builder.add("-processor");
-      builder.add(Joiner.on(',').join(turbineOptions.processors()));
-    }
-
-    return builder.build();
   }
 
   private static DependencyModule buildDependencyModule(
@@ -445,8 +444,8 @@ public class JavacTurbine implements AutoCloseable {
     if (result.success()) {
       return false;
     }
-    for (FormattedDiagnostic diagnostic : result.diagnostics()) {
-      String code = diagnostic.diagnostic().getCode();
+    for (Diagnostic<? extends JavaFileObject> diagnostic : result.diagnostics()) {
+      String code = diagnostic.getCode();
       if (code.contains("doesnt.exist")
           || code.contains("cant.resolve")
           || code.contains("cant.access")) {
@@ -454,7 +453,7 @@ public class JavacTurbine implements AutoCloseable {
       }
       // handle -Xdoclint:reference errors, which don't have a diagnostic code
       // TODO(cushon): this is locale-dependent
-      if (diagnostic.message().contains("error: reference not found")) {
+      if (diagnostic.getMessage(Locale.getDefault()).contains("error: reference not found")) {
         return true;
       }
     }
