@@ -16,28 +16,26 @@ package com.google.devtools.build.lib.packages;
 import static com.google.devtools.build.lib.packages.PackageFactory.getContext;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.docgen.annot.DocumentMethods;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
+import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.PackageFactory.PackageContext;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
-import com.google.devtools.build.lib.server.FailureDetails.PackageLoading.Code;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.syntax.NoneType;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.List;
 import java.util.Set;
 import net.starlark.java.annot.Param;
-import net.starlark.java.annot.ParamType;
+import net.starlark.java.annot.StarlarkGlobalLibrary;
 import net.starlark.java.annot.StarlarkMethod;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.NoneType;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkThread;
-import net.starlark.java.lib.json.Json;
-import net.starlark.java.syntax.Location;
 
 /**
  * A library of pre-declared Bazel Starlark functions.
@@ -52,20 +50,19 @@ public final class StarlarkLibrary {
   private StarlarkLibrary() {} // uninstantiable
 
   /**
-   * A library of Starlark values (keyed by name) that are not part of core Starlark but are common
-   * to all Bazel Starlark file environments (BUILD, .bzl, and WORKSPACE). Examples: depset, select,
-   * json.
+   * A library of Starlark functions (keyed by name) that are not part of core Starlark but are
+   * common to all Bazel Starlark file environments (BUILD, .bzl, and WORKSPACE). Examples: depset,
+   * select.
    */
   public static final ImmutableMap<String, Object> COMMON = initCommon();
 
   private static ImmutableMap<String, Object> initCommon() {
     ImmutableMap.Builder<String, Object> env = ImmutableMap.builder();
     Starlark.addMethods(env, new CommonLibrary());
-    env.put("json", Json.INSTANCE);
     return env.build();
   }
 
-  @DocumentMethods
+  @StarlarkGlobalLibrary
   private static class CommonLibrary {
 
     @StarlarkMethod(
@@ -103,9 +100,11 @@ public final class StarlarkLibrary {
         parameters = {
           @Param(
               name = "x",
+              type = Object.class,
               defaultValue = "None",
               positional = true,
               named = false,
+              noneable = true,
               doc =
                   "A positional parameter distinct from other parameters for legacy support. "
                       + "\n" //
@@ -119,6 +118,7 @@ public final class StarlarkLibrary {
           // TODO(cparsons): Make 'order' keyword-only.
           @Param(
               name = "order",
+              type = String.class,
               defaultValue = "\"default\"",
               doc =
                   "The traversal strategy for the new depset. See "
@@ -126,22 +126,24 @@ public final class StarlarkLibrary {
               named = true),
           @Param(
               name = "direct",
+              type = Object.class,
               defaultValue = "None",
               positional = false,
               named = true,
+              noneable = true,
               doc = "A list of <i>direct</i> elements of a depset. "),
           @Param(
               name = "transitive",
               named = true,
               positional = false,
-              allowedTypes = {
-                @ParamType(type = Sequence.class, generic1 = Depset.class),
-                @ParamType(type = NoneType.class),
-              },
+              type = Sequence.class,
+              generic1 = Depset.class,
+              noneable = true,
               doc = "A list of depsets whose elements will become indirect elements of the depset.",
               defaultValue = "None"),
           @Param(
               name = "items",
+              type = Object.class,
               defaultValue = "[]",
               positional = false,
               doc =
@@ -149,7 +151,7 @@ public final class StarlarkLibrary {
                       + "the new depset, in left-to-right order, or else a depset that becomes "
                       + "a transitive element of the new depset. In the latter case, "
                       + "<code>transitive</code> cannot be specified.",
-              disableWithFlag = BuildLanguageOptions.INCOMPATIBLE_DISABLE_DEPSET_ITEMS,
+              disableWithFlag = StarlarkSemantics.FlagIdentifier.INCOMPATIBLE_DISABLE_DEPSET_ITEMS,
               valueWhenDisabled = "[]",
               named = true),
         },
@@ -175,12 +177,14 @@ public final class StarlarkLibrary {
         parameters = {
           @Param(
               name = "x",
+              type = Dict.class,
               positional = true,
               doc =
                   "A dict that maps configuration conditions to values. Each key is a label string"
                       + " that identifies a config_setting instance."),
           @Param(
               name = "no_match_error",
+              type = String.class,
               defaultValue = "''",
               doc = "Optional custom error to report if no condition matches.",
               named = true),
@@ -188,6 +192,8 @@ public final class StarlarkLibrary {
     public Object select(Dict<?, ?> dict, String noMatchError) throws EvalException {
       return SelectorList.select(dict, noMatchError);
     }
+
+    // TODO(adonovan): move depset here.
   }
 
   /**
@@ -204,7 +210,7 @@ public final class StarlarkLibrary {
     return env.build();
   }
 
-  @DocumentMethods
+  @StarlarkGlobalLibrary
   private static class BuildLibrary {
     @StarlarkMethod(
         name = "environment_group",
@@ -212,21 +218,24 @@ public final class StarlarkLibrary {
             "Defines a set of related environments that can be tagged onto rules to prevent"
                 + "incompatible rules from depending on each other.",
         parameters = {
-          @Param(name = "name", positional = false, named = true, doc = "The name of the rule."),
+          @Param(
+              name = "name",
+              type = String.class,
+              positional = false,
+              named = true,
+              doc = "The name of the rule."),
           // Both parameter below are lists of label designators
           @Param(
               name = "environments",
-              allowedTypes = {
-                @ParamType(type = Sequence.class, generic1 = Label.class),
-              },
+              type = Sequence.class,
+              generic1 = Object.class,
               positional = false,
               named = true,
               doc = "A list of Labels for the environments to be grouped, from the same package."),
           @Param(
               name = "defaults",
-              allowedTypes = {
-                @ParamType(type = Sequence.class, generic1 = Label.class),
-              },
+              type = Sequence.class,
+              generic1 = Object.class,
               positional = false,
               named = true,
               doc = "A list of Labels.")
@@ -272,7 +281,8 @@ public final class StarlarkLibrary {
         parameters = {
           @Param(
               name = "license_strings",
-              allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
+              type = Sequence.class,
+              generic1 = String.class,
               doc = "A list of strings, the names of the licenses used.")
         },
         // Not documented by docgen, as this is only available in BUILD files.
@@ -288,8 +298,7 @@ public final class StarlarkLibrary {
         License license = BuildType.LICENSE.convert(licensesList, "'licenses' operand");
         context.pkgBuilder.setDefaultLicense(license);
       } catch (ConversionException e) {
-        context.eventHandler.handle(
-            Package.error(thread.getCallerLocation(), e.getMessage(), Code.LICENSE_PARSE_FAILURE));
+        context.eventHandler.handle(Event.error(thread.getCallerLocation(), e.getMessage()));
         context.pkgBuilder.setContainsErrors();
       }
       return Starlark.NONE;
@@ -298,7 +307,9 @@ public final class StarlarkLibrary {
     @StarlarkMethod(
         name = "distribs",
         doc = "Declare the distribution(s) for the code in the current package.",
-        parameters = {@Param(name = "distribution_strings", doc = "The distributions.")},
+        parameters = {
+          @Param(name = "distribution_strings", type = Object.class, doc = "The distributions.")
+        },
         // Not documented by docgen, as this is only available in BUILD files.
         // TODO(cparsons): Devise a solution to document BUILD functions.
         documented = false,
@@ -311,9 +322,7 @@ public final class StarlarkLibrary {
             BuildType.DISTRIBUTIONS.convert(object, "'distribs' operand");
         context.pkgBuilder.setDefaultDistribs(distribs);
       } catch (ConversionException e) {
-        context.eventHandler.handle(
-            Package.error(
-                thread.getCallerLocation(), e.getMessage(), Code.DISTRIBUTIONS_PARSE_FAILURE));
+        context.eventHandler.handle(Event.error(thread.getCallerLocation(), e.getMessage()));
         context.pkgBuilder.setContainsErrors();
       }
       return Starlark.NONE;
