@@ -22,7 +22,6 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import org.graylog2.Configuration;
 import org.graylog2.notifications.NotificationService;
-import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
 import org.slf4j.Logger;
@@ -49,9 +48,8 @@ public class CachedStreamRouter extends StreamRouter {
                               StreamRuleService streamRuleService,
                               MetricRegistry metricRegistry,
                               Configuration configuration,
-                              NotificationService notificationService,
-                              ServerStatus serverStatus) {
-        super(streamService, streamRuleService, metricRegistry, configuration, notificationService, serverStatus);
+                              NotificationService notificationService) {
+        super(streamService, streamRuleService, metricRegistry, configuration, notificationService);
 
         CACHED_STREAMS.compareAndSet(null, buildStreamsLoadingCache());
         CACHED_STREAM_RULES.compareAndSet(null, buildStreamRulesLoadingCache());
