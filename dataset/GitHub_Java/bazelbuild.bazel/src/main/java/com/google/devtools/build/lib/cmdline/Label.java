@@ -17,12 +17,11 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.actions.CommandLineItem;
+import com.google.devtools.build.lib.analysis.actions.CommandLineItem;
 import com.google.devtools.build.lib.cmdline.LabelValidator.BadLabelException;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
@@ -52,7 +51,6 @@ import javax.annotation.Nullable;
   category = SkylarkModuleCategory.BUILTIN,
   doc = "A BUILD target identifier."
 )
-@AutoCodec
 @Immutable
 @ThreadSafe
 public final class Label
@@ -82,6 +80,8 @@ public final class Label
   public static final PathFragment EXTERNAL_PATH_PREFIX = PathFragment.create("external");
   public static final SkyFunctionName TRANSITIVE_TRAVERSAL =
       SkyFunctionName.create("TRANSITIVE_TRAVERSAL");
+
+  public static final LabelCodec CODEC = LabelCodec.INSTANCE;
 
   private static final Interner<Label> LABEL_INTERNER = BlazeInterners.newWeakInterner();
 
@@ -185,11 +185,10 @@ public final class Label
    * Similar factory to above, but does not perform target name validation.
    *
    * <p>Only call this method if you know what you're doing; in particular, don't call it on
-   * arbitrary {@code name} inputs
+   * arbitrary {@code targetName} inputs
    */
-  @AutoCodec.Instantiator
-  public static Label createUnvalidated(PackageIdentifier packageIdentifier, String name) {
-    return LABEL_INTERNER.intern(new Label(packageIdentifier, name));
+  public static Label createUnvalidated(PackageIdentifier packageId, String targetName) {
+    return LABEL_INTERNER.intern(new Label(packageId, targetName));
   }
 
   /**
@@ -291,7 +290,7 @@ public final class Label
     return new LabelSerializationProxy(getUnambiguousCanonicalForm());
   }
 
-  private void readObject(ObjectInputStream unusedStream) throws InvalidObjectException {
+  private void readObject(ObjectInputStream stream) throws InvalidObjectException {
     throw new InvalidObjectException("Serialization is allowed only by proxy");
   }
 
