@@ -189,8 +189,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     // which only happens when some rule explicitly depends on the dynamic library.
     if (!createDynamicLibrary && !supportsDynamicLinker) {
       Artifact solibArtifact =
-          CppHelper.getLinuxLinkedArtifact(
-              ruleContext, ruleContext.getConfiguration(), LinkTargetType.DYNAMIC_LIBRARY);
+          CppHelper.getLinuxLinkedArtifact(ruleContext, LinkTargetType.DYNAMIC_LIBRARY);
       ruleContext.registerAction(new FailAction(ruleContext.getActionOwner(),
           ImmutableList.of(solibArtifact), "Toolchain does not support dynamic linking"));
     } else if (!createDynamicLibrary
@@ -201,8 +200,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
       // generate an .so with. If that's the case, register a fake generating action to prevent
       // a "no generating action for this artifact" error.
       Artifact solibArtifact =
-          CppHelper.getLinuxLinkedArtifact(
-              ruleContext, ruleContext.getConfiguration(), LinkTargetType.DYNAMIC_LIBRARY);
+          CppHelper.getLinuxLinkedArtifact(ruleContext, LinkTargetType.DYNAMIC_LIBRARY);
       ruleContext.registerAction(new FailAction(ruleContext.getActionOwner(),
           ImmutableList.of(solibArtifact), "configurable \"srcs\" triggers an implicit .so output "
           + "even though there are no sources to compile in this configuration"));

@@ -119,7 +119,7 @@ public class CppCompileActionBuilder {
   /**
    * Creates a builder from a rule and configuration.
    */
-  private CppCompileActionBuilder(
+  public CppCompileActionBuilder(
       ActionOwner actionOwner,
       Label sourceLabel,
       BuildConfiguration configuration,
@@ -238,7 +238,7 @@ public class CppCompileActionBuilder {
   private Iterable<IncludeScannable> getLipoScannables(NestedSet<Artifact> realMandatoryInputs) {
     boolean fake = tempOutputFile != null;
 
-    return lipoScannableMap.isEmpty() || fake
+    return lipoScannableMap == null || fake
         ? ImmutableList.<IncludeScannable>of()
         : Iterables.filter(
             Iterables.transform(
@@ -477,14 +477,13 @@ public class CppCompileActionBuilder {
         continue;
       }
       // One starting ../ is okay for getting to a sibling repository.
-      PathFragment originalInclude = include;
       if (include.startsWith(new PathFragment(Label.EXTERNAL_PATH_PREFIX))) {
         include = include.relativeTo(Label.EXTERNAL_PATH_PREFIX);
       }
-      if (include.isAbsolute() || !include.normalize().isNormalized()) {
+      if (include.isAbsolute()
+          || !PathFragment.EMPTY_FRAGMENT.getRelative(include).normalize().isNormalized()) {
         ruleContext.ruleError(
-            "The include path '" + originalInclude
-                + "' references a path outside of the execution root.");
+            "The include path '" + include + "' references a path outside of the execution root.");
       }
     }
   }

@@ -89,7 +89,6 @@ public final class CppModel {
   private List<VariablesExtension> variablesExtensions = new ArrayList<>();
   private final CcToolchainProvider ccToolchain;
   private final FdoSupportProvider fdoSupport;
-  private String linkedArtifactNameSuffix = "";
 
   public CppModel(RuleContext ruleContext, CppSemantics semantics,
       CcToolchainProvider ccToolchain, FdoSupportProvider fdoSupport) {
@@ -266,18 +265,6 @@ public final class CppModel {
     return this;
   }
 
-  /*
-   * Adds a suffix for paths of linked artifacts. Normally their paths are derived solely from rule
-   * labels. In the case of multiple callers (e.g., aspects) acting on a single rule, they may
-   * generate the same linked artifact and therefore lead to artifact conflicts. This method
-   * provides a way to avoid this artifact conflict by allowing different callers acting on the same
-   * rule to provide a suffix that will be used to scope their own linked artifacts.
-   */
-  public CppModel setLinkedArtifactNameSuffix(String suffix) {
-    this.linkedArtifactNameSuffix = suffix;
-    return this;
-  }
-  
   /**
    * @returns whether we want to provide header modules for the current target.
    */
@@ -957,11 +944,10 @@ public final class CppModel {
    */
   private Artifact getLinkedArtifact(LinkTargetType linkTargetType) throws RuleErrorException {
     Artifact result = null;
-    Artifact linuxDefault = CppHelper.getLinuxLinkedArtifact(
-        ruleContext, linkTargetType, linkedArtifactNameSuffix);
+    Artifact linuxDefault = CppHelper.getLinuxLinkedArtifact(ruleContext, linkTargetType);
 
     try {
-      String maybePicName = ruleContext.getLabel().getName() + linkedArtifactNameSuffix;
+      String maybePicName = ruleContext.getLabel().getName();
       if (linkTargetType.picness() == Picness.PIC) {
         maybePicName = CppHelper.getArtifactNameForCategory(
             ruleContext, ccToolchain, ArtifactCategory.PIC_FILE, maybePicName);
@@ -1116,8 +1102,7 @@ public final class CppModel {
     Artifact soInterface = null;
     if (cppConfiguration.useInterfaceSharedObjects() && allowInterfaceSharedObjects) {
       soInterface =
-          CppHelper.getLinuxLinkedArtifact(
-              ruleContext, LinkTargetType.INTERFACE_DYNAMIC_LIBRARY, linkedArtifactNameSuffix);
+          CppHelper.getLinuxLinkedArtifact(ruleContext, LinkTargetType.INTERFACE_DYNAMIC_LIBRARY);
       sonameLinkopts = ImmutableList.of("-Wl,-soname=" +
           SolibSymlinkAction.getDynamicLibrarySoname(soImpl.getRootRelativePath(), false));
     }

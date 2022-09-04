@@ -298,7 +298,6 @@ public final class CcLibraryHelper {
   private final FeatureConfiguration featureConfiguration;
   private CcToolchainProvider ccToolchain;
   private final FdoSupportProvider fdoSupport;
-  private String linkedArtifactNameSuffix = "";
 
   /**
    * Creates a CcLibraryHelper.
@@ -818,18 +817,6 @@ public final class CcLibraryHelper {
     return this;
   }
 
-  /*
-   * Adds a suffix for paths of linked artifacts. Normally their paths are derived solely from rule
-   * labels. In the case of multiple callers (e.g., aspects) acting on a single rule, they may
-   * generate the same linked artifact and therefore lead to artifact conflicts. This method
-   * provides a way to avoid this artifact conflict by allowing different callers acting on the same
-   * rule to provide a suffix that will be used to scope their own linked artifacts.
-   */
-  public CcLibraryHelper setLinkedArtifactNameSuffix(String suffix) {
-    this.linkedArtifactNameSuffix = Preconditions.checkNotNull(suffix);
-    return this;
-  }
-
   /**
    * This adds the {@link CcNativeLibraryProvider} to the providers created by this class.
    */
@@ -1099,20 +1086,16 @@ public final class CcLibraryHelper {
     if (ruleContext.attributes().get("alwayslink", Type.BOOLEAN)) {
       archiveFile.add(
           CppHelper.getLinuxLinkedArtifact(
-              ruleContext,
-              Link.LinkTargetType.ALWAYS_LINK_STATIC_LIBRARY,
-              linkedArtifactNameSuffix));
+              ruleContext, Link.LinkTargetType.ALWAYS_LINK_STATIC_LIBRARY));
     } else {
       archiveFile.add(
-          CppHelper.getLinuxLinkedArtifact(
-              ruleContext, Link.LinkTargetType.STATIC_LIBRARY, linkedArtifactNameSuffix));
+          CppHelper.getLinuxLinkedArtifact(ruleContext, Link.LinkTargetType.STATIC_LIBRARY));
     }
 
     if (!ruleContext.attributes().get("linkstatic", Type.BOOLEAN)
         && !ccOutputs.isEmpty()) {
       dynamicLibrary.add(
-          CppHelper.getLinuxLinkedArtifact(
-              ruleContext, Link.LinkTargetType.DYNAMIC_LIBRARY, linkedArtifactNameSuffix));
+          CppHelper.getLinuxLinkedArtifact(ruleContext, Link.LinkTargetType.DYNAMIC_LIBRARY));
     }
 
     outputGroups.put("archive", archiveFile.build());
@@ -1139,8 +1122,7 @@ public final class CcLibraryHelper {
         .setDynamicLibrary(dynamicLibrary)
         .addLinkopts(linkopts)
         .setFeatureConfiguration(featureConfiguration)
-        .addVariablesExtension(variablesExtensions)
-        .setLinkedArtifactNameSuffix(linkedArtifactNameSuffix);
+        .addVariablesExtension(variablesExtensions);
   }
 
   @Immutable

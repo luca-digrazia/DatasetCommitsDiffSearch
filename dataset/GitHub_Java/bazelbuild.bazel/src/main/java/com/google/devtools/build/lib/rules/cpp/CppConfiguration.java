@@ -384,7 +384,13 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
       // TODO(bazel-team): implement dynamic linking with LIPO
       this.dynamicMode = DynamicMode.OFF;
     } else {
-      this.dynamicMode = cppOptions.dynamicMode;
+      switch (cppOptions.dynamicMode) {
+        case DEFAULT:
+          this.dynamicMode = DynamicMode.DEFAULT; break;
+        case OFF: this.dynamicMode = DynamicMode.OFF; break;
+        case FULLY: this.dynamicMode = DynamicMode.FULLY; break;
+        default: throw new IllegalStateException("Invalid dynamicMode.");
+      }
     }
 
     this.fdoZip = params.fdoZip;
@@ -519,6 +525,10 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     PathFragment defaultSysroot = toolchain.getBuiltinSysroot().length() == 0
         ? null
         : new PathFragment(toolchain.getBuiltinSysroot());
+    if ((defaultSysroot != null) && !defaultSysroot.isNormalized()) {
+      throw new IllegalArgumentException("The built-in sysroot '" + defaultSysroot
+          + "' is not normalized.");
+    }
 
     if ((cppOptions.libcTop != null) && (defaultSysroot == null)) {
       throw new InvalidConfigurationException("The selected toolchain " + toolchainIdentifier
@@ -1061,7 +1071,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     if (packageEndIndex != -1 && s.startsWith(PACKAGE_START)) {
       String packageString = s.substring(PACKAGE_START.length(), packageEndIndex);
       try {
-        pathPrefix = PackageIdentifier.parse(packageString).getPathUnderExecRoot();
+        pathPrefix = PackageIdentifier.parse(packageString).getSourceRoot();
       } catch (LabelSyntaxException e) {
         throw new InvalidConfigurationException("The package '" + packageString + "' is not valid");
       }
