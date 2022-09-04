@@ -63,6 +63,7 @@ public abstract class StarlarkSemantics {
     INCOMPATIBLE_NO_RULE_OUTPUTS_PARAM(StarlarkSemantics::incompatibleNoRuleOutputsParam),
     INCOMPATIBLE_NO_TARGET_OUTPUT_GROUP(StarlarkSemantics::incompatibleNoTargetOutputGroup),
     INCOMPATIBLE_NO_ATTR_LICENSE(StarlarkSemantics::incompatibleNoAttrLicense),
+    INCOMPATIBLE_OBJC_FRAMEWORK_CLEANUP(StarlarkSemantics::incompatibleObjcFrameworkCleanup),
     INCOMPATIBLE_DISALLOW_RULE_EXECUTION_PLATFORM_CONSTRAINTS_ALLOWED(
         StarlarkSemantics::incompatibleDisallowRuleExecutionPlatformConstraintsAllowed),
     INCOMPATIBLE_ALLOW_TAGS_PROPAGATION(StarlarkSemantics::experimentalAllowTagsPropagation),
@@ -188,6 +189,8 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleNoTransitiveLoads();
 
+  public abstract boolean incompatibleObjcFrameworkCleanup();
+
   public abstract boolean incompatibleRemapMainRepo();
 
   public abstract boolean incompatibleRemoveNativeMavenJar();
@@ -276,6 +279,7 @@ public abstract class StarlarkSemantics {
           .incompatibleNoSupportToolsInActionInputs(true)
           .incompatibleNoTargetOutputGroup(true)
           .incompatibleNoTransitiveLoads(true)
+          .incompatibleObjcFrameworkCleanup(true)
           .incompatibleRemapMainRepo(false)
           .incompatibleRemoveNativeMavenJar(false)
           .incompatibleRunShellCommandString(false)
@@ -356,6 +360,8 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleNoTargetOutputGroup(boolean value);
 
     public abstract Builder incompatibleNoTransitiveLoads(boolean value);
+
+    public abstract Builder incompatibleObjcFrameworkCleanup(boolean value);
 
     public abstract Builder incompatibleRemapMainRepo(boolean value);
 

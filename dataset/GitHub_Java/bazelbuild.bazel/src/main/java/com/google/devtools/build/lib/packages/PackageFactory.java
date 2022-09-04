@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder.ThirdPartyLicens
 import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Argument;
@@ -1308,7 +1307,7 @@ public final class PackageFactory {
     private final RuleClass ruleClass;
 
     BuiltinRuleFunction(String ruleClassName, RuleFactory ruleFactory) {
-      super(ruleClassName, FunctionSignature.KWARGS, BuiltinFunction.USE_LOC_ENV);
+      super(ruleClassName, FunctionSignature.KWARGS, BuiltinFunction.USE_LOC_ENV, /*isRule=*/ true);
       this.ruleClassName = ruleClassName;
       Preconditions.checkNotNull(ruleFactory, "ruleFactory was null");
       this.ruleClass = Preconditions.checkNotNull(
@@ -1342,11 +1341,6 @@ public final class PackageFactory {
     @Override
     public RuleClass getRuleClass() {
       return ruleClass;
-    }
-
-    @Override
-    public void repr(SkylarkPrinter printer) {
-      printer.append("<built-in rule " + getName() + ">");
     }
   }
 
