@@ -298,16 +298,14 @@ public class QuarkusTestExtension
 
     @Override
     public void afterEach(ExtensionContext context) throws Exception {
-        boolean substrateTest = context.getRequiredTestClass().isAnnotationPresent(SubstrateTest.class);
         restAssuredURLManager.clearURL();
-        TestScopeManager.tearDown(substrateTest);
+        TestScopeManager.tearDown();
     }
 
     @Override
     public void beforeEach(ExtensionContext context) throws Exception {
-        boolean substrateTest = context.getRequiredTestClass().isAnnotationPresent(SubstrateTest.class);
         restAssuredURLManager.setURL();
-        TestScopeManager.setup(substrateTest);
+        TestScopeManager.setup();
     }
 
     @Override
