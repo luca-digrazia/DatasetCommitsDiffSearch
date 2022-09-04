@@ -17,7 +17,6 @@
 package org.graylog2.indexer.indices;
 
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
-import com.github.joschi.jadconfig.util.Duration;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -49,11 +48,9 @@ import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsRequest;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
 import org.elasticsearch.action.admin.indices.stats.ShardStats;
-import org.elasticsearch.action.admin.indices.template.delete.DeleteIndexTemplateRequest;
 import org.elasticsearch.action.admin.indices.template.put.PutIndexTemplateRequest;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
-import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.SearchType;
@@ -68,7 +65,6 @@ import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.shard.DocsStats;
 import org.elasticsearch.indices.IndexClosedException;
@@ -76,18 +72,17 @@ import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.bucket.filter.Filter;
 import org.elasticsearch.search.aggregations.bucket.filter.FilterAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.aggregations.metrics.max.Max;
 import org.elasticsearch.search.aggregations.metrics.min.Min;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortParseElement;
 import org.graylog2.audit.AuditActor;
 import org.graylog2.audit.AuditEventSender;
+import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.IndexNotFoundException;
-import org.graylog2.indexer.IndexSet;
 import org.graylog2.indexer.messages.Messages;
-import org.graylog2.indexer.searches.IndexRangeStats;
+import org.graylog2.indexer.searches.TimestampStats;
 import org.graylog2.plugin.system.NodeId;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -98,7 +93,6 @@ import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.validation.constraints.NotNull;
-import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -118,14 +112,16 @@ public class Indices {
     private static final String REOPENED_INDEX_SETTING = "graylog2_reopened";
 
     private final Client c;
+    private final ElasticsearchConfiguration configuration;
     private final IndexMapping indexMapping;
     private final Messages messages;
     private final NodeId nodeId;
     private final AuditEventSender auditEventSender;
 
     @Inject
-    public Indices(Client client, IndexMapping indexMapping, Messages messages, NodeId nodeId, AuditEventSender auditEventSender) {
+    public Indices(Client client, ElasticsearchConfiguration configuration, IndexMapping indexMapping, Messages messages, NodeId nodeId, AuditEventSender auditEventSender) {
         this.c = client;
+        this.configuration = configuration;
         this.indexMapping = indexMapping;
         this.messages = messages;
         this.nodeId = nodeId;
@@ -196,8 +192,8 @@ public class Indices {
         return docsStats == null ? 0L : docsStats.getCount();
     }
 
-    public Map<String, IndexStats> getAll(final IndexSet indexSet) {
-        final IndicesStatsRequest request = c.admin().indices().prepareStats(indexSet.getIndexWildcard()).request();
+    public Map<String, IndexStats> getAll() {
+        final IndicesStatsRequest request = c.admin().indices().prepareStats(allIndicesAlias()).request();
         final IndicesStatsResponse response = c.admin().indices().stats(request).actionGet();
 
         if (response.getFailedShards() > 0) {
@@ -206,8 +202,8 @@ public class Indices {
         return response.getIndices();
     }
 
-    public Map<String, IndexStats> getAllDocCounts(final IndexSet indexSet) {
-        final IndicesStatsRequest request = c.admin().indices().prepareStats(indexSet.getIndexWildcard()).setDocs(true).request();
+    public Map<String, IndexStats> getAllDocCounts() {
+        final IndicesStatsRequest request = c.admin().indices().prepareStats(allIndicesAlias()).setDocs(true).request();
         final IndicesStatsResponse response = c.admin().indices().stats(request).actionGet();
 
         return response.getIndices();
@@ -219,6 +215,10 @@ public class Indices {
         final IndicesStatsResponse response = c.admin().indices().stats(request).actionGet();
 
         return response.getIndex(indexName);
+    }
+
+    public String allIndicesAlias() {
+        return configuration.getIndexPrefix() + "_*";
     }
 
     public boolean exists(String index) {
@@ -275,9 +275,9 @@ public class Indices {
         return aliases.isEmpty() ? null : aliases.keysIt().next();
     }
 
-    private void ensureIndexTemplate(IndexSet indexSet) {
-        final Map<String, Object> template = indexMapping.messageTemplate(indexSet.getIndexWildcard(), indexSet.getConfig().indexAnalyzer());
-        final PutIndexTemplateRequest itr = c.admin().indices().preparePutTemplate(indexSet.getConfig().indexTemplateName())
+    private void ensureIndexTemplate() {
+        final Map<String, Object> template = indexMapping.messageTemplate(allIndicesAlias(), configuration.getAnalyzer());
+        final PutIndexTemplateRequest itr = c.admin().indices().preparePutTemplate(configuration.getTemplateName())
                 .setOrder(Integer.MIN_VALUE) // Make sure templates with "order: 0" are applied after our template!
                 .setSource(template)
                 .request();
@@ -285,48 +285,26 @@ public class Indices {
         try {
             final boolean acknowledged = c.admin().indices().putTemplate(itr).actionGet().isAcknowledged();
             if (acknowledged) {
-                LOG.info("Created Graylog index template \"{}\" in Elasticsearch.", indexSet.getConfig().indexTemplateName());
+                LOG.info("Created Graylog index template \"{}\" in Elasticsearch.", configuration.getTemplateName());
             }
         } catch (Exception e) {
-            LOG.error("Unable to create the Graylog index template: " + indexSet.getConfig().indexTemplateName(), e);
+            LOG.error("Unable to create the Graylog index template: " + configuration.getTemplateName(), e);
         }
     }
 
-    public void deleteIndexTemplate(IndexSet indexSet) {
-        final String templateName = indexSet.getConfig().indexTemplateName();
-
-        final DeleteIndexTemplateRequest deleteRequest = c.admin()
-                .indices()
-                .prepareDeleteTemplate(templateName)
-                .request();
-
-        try {
-            final boolean acknowledged = c.admin()
-                    .indices()
-                    .deleteTemplate(deleteRequest)
-                    .actionGet()
-                    .isAcknowledged();
-            if (acknowledged) {
-                LOG.info("Deleted Graylog index template \"{}\" in Elasticsearch.", templateName);
-            }
-        } catch (Exception e) {
-            LOG.error("Unable to delete the Graylog index template: " + templateName, e);
-        }
+    public boolean create(String indexName) {
+        return create(indexName, configuration.getShards(), configuration.getReplicas(), Settings.EMPTY);
     }
 
-    public boolean create(String indexName, IndexSet indexSet) {
-        return create(indexName, indexSet, Settings.EMPTY);
-    }
-
-    public boolean create(String indexName, IndexSet indexSet, Settings customSettings) {
+    public boolean create(String indexName, int numShards, int numReplicas, Settings customSettings) {
         final Settings settings = Settings.builder()
-                .put("number_of_shards", indexSet.getConfig().shards())
-                .put("number_of_replicas", indexSet.getConfig().replicas())
+                .put("number_of_shards", numShards)
+                .put("number_of_replicas", numReplicas)
                 .put(customSettings)
                 .build();
 
         // Make sure our index template exists before creating an index!
-        ensureIndexTemplate(indexSet);
+        ensureIndexTemplate();
 
         final CreateIndexRequest cir = c.admin().indices().prepareCreate(indexName)
                 .setSettings(settings)
@@ -341,10 +319,10 @@ public class Indices {
         return acknowledged;
     }
 
-    public Set<String> getAllMessageFields(final String[] writeIndexWildcards) {
+    public Set<String> getAllMessageFields() {
         Set<String> fields = Sets.newHashSet();
 
-        ClusterStateRequest csr = new ClusterStateRequest().blocks(true).nodes(true).indices(writeIndexWildcards);
+        ClusterStateRequest csr = new ClusterStateRequest().blocks(true).nodes(true).indices(allIndicesAlias());
         ClusterState cs = c.admin().cluster().state(csr).actionGet().getState();
 
         for (ObjectObjectCursor<String, IndexMetaData> m : cs.getMetaData().indices()) {
@@ -422,7 +400,7 @@ public class Indices {
                 .orElse(false);
     }
 
-    public Set<String> getClosedIndices(final IndexSet indexSet) {
+    public Set<String> getClosedIndices() {
         final Set<String> closedIndices = Sets.newHashSet();
 
         ClusterStateRequest csr = new ClusterStateRequest()
@@ -438,7 +416,7 @@ public class Indices {
         while (it.hasNext()) {
             IndexMetaData indexMeta = it.next();
             // Only search in our indices.
-            if (!indexMeta.getIndex().startsWith(indexSet.getIndexPrefix())) {
+            if (!indexMeta.getIndex().startsWith(configuration.getIndexPrefix())) {
                 continue;
             }
             if (indexMeta.getState().equals(IndexMetaData.State.CLOSE)) {
@@ -448,7 +426,7 @@ public class Indices {
         return closedIndices;
     }
 
-    public Set<String> getReopenedIndices(final IndexSet indexSet) {
+    public Set<String> getReopenedIndices() {
         final Set<String> reopenedIndices = Sets.newHashSet();
 
         ClusterStateRequest csr = new ClusterStateRequest()
@@ -464,7 +442,7 @@ public class Indices {
         while (it.hasNext()) {
             IndexMetaData indexMeta = it.next();
             // Only search in our indices.
-            if (!indexMeta.getIndex().startsWith(indexSet.getIndexPrefix())) {
+            if (!indexMeta.getIndex().startsWith(configuration.getIndexPrefix())) {
                 continue;
             }
             if (checkForReopened(indexMeta)) {
@@ -476,6 +454,10 @@ public class Indices {
 
     @Nullable
     public IndexStatistics getIndexStats(String index) {
+        if (!index.startsWith(configuration.getIndexPrefix())) {
+            return null;
+        }
+
         final IndexStats indexStats;
         try {
             indexStats = indexStats(index);
@@ -495,10 +477,10 @@ public class Indices {
         return IndexStatistics.create(indexStats.getIndex(), indexStats.getPrimaries(), indexStats.getTotal(), shardRouting.build());
     }
 
-    public Set<IndexStatistics> getIndicesStats(final IndexSet indexSet) {
+    public Set<IndexStatistics> getIndicesStats() {
         final Map<String, IndexStats> responseIndices;
         try {
-            responseIndices = getAll(indexSet);
+            responseIndices = getAll();
         } catch (ElasticsearchException e) {
             return Collections.emptySet();
         }
@@ -541,16 +523,16 @@ public class Indices {
                 .execute().actionGet().isAcknowledged();
     }
 
-    public void optimizeIndex(String index, int maxNumSegments, Duration timeout) {
+    public void optimizeIndex(String index) {
         // https://www.elastic.co/guide/en/elasticsearch/reference/2.1/indices-forcemerge.html
         final ForceMergeRequest request = c.admin().indices().prepareForceMerge(index)
-                .setMaxNumSegments(maxNumSegments)
+                .setMaxNumSegments(configuration.getIndexOptimizationMaxNumSegments())
                 .setOnlyExpungeDeletes(false)
                 .setFlush(true)
                 .request();
 
         // Using a specific timeout to override the global Elasticsearch request timeout
-        c.admin().indices().forceMerge(request).actionGet(timeout.getQuantity(), timeout.getUnit());
+        c.admin().indices().forceMerge(request).actionGet(1L, TimeUnit.HOURS);
     }
 
     public ClusterHealthStatus waitForRecovery(String index) {
@@ -595,12 +577,11 @@ public class Indices {
      * @return the timestamp stats in the given index, or {@code null} if they couldn't be calculated.
      * @see org.elasticsearch.search.aggregations.metrics.stats.Stats
      */
-    public IndexRangeStats indexRangeStatsOfIndex(String index) {
+    public TimestampStats timestampStatsOfIndex(String index) {
         final FilterAggregationBuilder builder = AggregationBuilders.filter("agg")
                 .filter(QueryBuilders.existsQuery("timestamp"))
                 .subAggregation(AggregationBuilders.min("ts_min").field("timestamp"))
-                .subAggregation(AggregationBuilders.max("ts_max").field("timestamp"))
-                .subAggregation(AggregationBuilders.terms("streams").field("streams"));
+                .subAggregation(AggregationBuilders.max("ts_max").field("timestamp"));
         final SearchRequestBuilder srb = c.prepareSearch()
                 .setIndices(index)
                 .setSearchType(SearchType.QUERY_THEN_FETCH)
@@ -609,13 +590,7 @@ public class Indices {
 
         final SearchResponse response;
         try {
-            final SearchRequest request = srb.request();
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Index range query: _search/{}: {}",
-                        index,
-                        XContentHelper.convertToJson(request.source(), false));
-            }
-            response = c.search(request).actionGet();
+            response = c.search(srb.request()).actionGet();
         } catch (IndexClosedException e) {
             throw e;
         } catch (org.elasticsearch.index.IndexNotFoundException e) {
@@ -624,32 +599,19 @@ public class Indices {
         } catch (ElasticsearchException e) {
             LOG.error("Error while calculating timestamp stats in index <" + index + ">", e);
             throw new org.elasticsearch.index.IndexNotFoundException("Index " + index + " not found", e);
-        } catch (IOException e) {
-            // can potentially happen when recreating the source of
-            // the index range aggregation query on DEBUG (via XContentHelper)
-            throw new RuntimeException(e);
         }
 
         final Filter f = response.getAggregations().get("agg");
         if (f.getDocCount() == 0L) {
             LOG.debug("No documents with attribute \"timestamp\" found in index <{}>", index);
-            return IndexRangeStats.EMPTY;
+            return TimestampStats.EMPTY;
         }
 
         final Min minAgg = f.getAggregations().get("ts_min");
         final DateTime min = new DateTime((long) minAgg.getValue(), DateTimeZone.UTC);
         final Max maxAgg = f.getAggregations().get("ts_max");
         final DateTime max = new DateTime((long) maxAgg.getValue(), DateTimeZone.UTC);
-        // make sure we return an empty list, so we can differentiate between old indices that don't have this information
-        // and newer ones that simply have no streams.
-        ImmutableList.Builder<String> streamIds = ImmutableList.builder();
-        final Terms streams = f.getAggregations().get("streams");
-        if (!streams.getBuckets().isEmpty()) {
-            streamIds.addAll(streams.getBuckets().stream()
-                    .map(Terms.Bucket::getKeyAsString)
-                    .collect(toSet()));
-        }
 
-        return IndexRangeStats.create(min, max, streamIds.build());
+        return TimestampStats.create(min, max);
     }
 }
