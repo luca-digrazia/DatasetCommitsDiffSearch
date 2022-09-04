@@ -97,7 +97,6 @@ class CoreLibrarySupport {
                 prefix ->
                     prefix.startsWith("java/")
                         || prefix.startsWith("sun/")
-                        || prefix.startsWith("jdk/internal/")
                         || prefix.startsWith("javadesugar/")),
         "Unexpected renamedPrefixes: Actual (%s).",
         renamedPrefixes);
@@ -118,7 +117,6 @@ class CoreLibrarySupport {
     String unprefixedName = rewriter.unprefix(internalName);
     if (!(unprefixedName.startsWith("java/")
             || unprefixedName.startsWith("sun/")
-            || unprefixedName.startsWith("jdk/internal/")
             || unprefixedName.startsWith("javadesugar/"))
         || renamedPrefixes.isEmpty()) {
       return false; // shortcut
@@ -134,7 +132,7 @@ class CoreLibrarySupport {
     if (internalName.startsWith("java/")) {
       return "j$/" + internalName.substring(/* cut away "java/" prefix */ 5);
     }
-    if (internalName.startsWith("sun/") || internalName.startsWith("jdk/internal")) {
+    if (internalName.startsWith("sun/")) {
       return "j$/" + internalName;
     }
     if (internalName.startsWith("javadesugar/")) {
