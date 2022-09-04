@@ -501,26 +501,17 @@ public class InMemoryNodeEntry implements NodeEntry {
     return DirtyBuildingState.create(dirtyType, directDeps, value);
   }
 
-  private static final GroupedList<SkyKey> EMPTY_LIST = new GroupedList<>();
-
   @Override
   public synchronized MarkedDirtyResult markDirty(DirtyType dirtyType) {
-    if (!DirtyType.FORCE_REBUILD.equals(dirtyType)) {
-      // A node can't be found to be dirty without deps unless it's force-rebuilt.
-      assertKeepDeps();
-    }
+    // Can't process a dirty node without its deps.
+    assertKeepDeps();
     if (isDone()) {
-      GroupedList<SkyKey> directDeps =
-          KeepEdgesPolicy.NONE.equals(keepEdges())
-              ? EMPTY_LIST
-              : GroupedList.create(getCompressedDirectDepsForDoneEntry());
-      dirtyBuildingState = createDirtyBuildingStateForDoneNode(dirtyType, directDeps, value);
+      dirtyBuildingState =
+          createDirtyBuildingStateForDoneNode(
+              dirtyType, GroupedList.create(getCompressedDirectDepsForDoneEntry()), value);
       value = null;
-      this.directDeps = null;
-      return new MarkedDirtyResult(
-          KeepEdgesPolicy.ALL.equals(keepEdges())
-              ? ReverseDepsUtility.getReverseDeps(this)
-              : ImmutableList.of());
+      directDeps = null;
+      return new MarkedDirtyResult(ReverseDepsUtility.getReverseDeps(this));
     }
     if (dirtyType.equals(DirtyType.FORCE_REBUILD)) {
       if (dirtyBuildingState != null) {
