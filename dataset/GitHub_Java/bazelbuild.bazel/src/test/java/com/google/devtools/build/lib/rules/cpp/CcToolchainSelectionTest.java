@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ToolchainContext.ResolvedToolchainProviders;
+import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.analysis.util.ScratchAttributeWriter;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -75,6 +76,26 @@ public class CcToolchainSelectionTest extends BuildViewTestCase {
   }
 
   @Test
+  public void testResolvedCcToolchainGenrule() throws Exception {
+    useConfiguration(
+        "--experimental_platforms=//mock_platform:mock-piii-platform",
+        "--extra_toolchains=//mock_platform:toolchain_cc-compiler-piii");
+    ConfiguredTarget target =
+        ScratchAttributeWriter.fromLabelString(this, "genrule", "//gen")
+            .set("cmd", "\"foobar\"")
+            .setList("outs", "out.txt")
+            .write();
+    ResolvedToolchainProviders providers =
+        (ResolvedToolchainProviders)
+            getRuleContext(target).getToolchainContext().getResolvedToolchainProviders();
+    CcToolchainProvider toolchain =
+        (CcToolchainProvider)
+            providers.getForToolchainType(Label.parseAbsolute(CPP_TOOLCHAIN_TYPE));
+    assertThat(Iterables.getOnlyElement(toolchain.getCompile()).getExecPathString())
+        .endsWith("piii");
+  }
+
+  @Test
   public void testToolchainSelectionWithPlatforms() throws Exception {
     useConfiguration(
         "--enabled_toolchain_types=" + CPP_TOOLCHAIN_TYPE,
@@ -89,6 +110,21 @@ public class CcToolchainSelectionTest extends BuildViewTestCase {
             .stream()
             .anyMatch(artifact -> artifact.getExecPathString().endsWith("piii"));
     assertThat(isPiii).isTrue();
+  }
+
+  @Test
+  public void testToolchainSelectionWithoutPlatforms() throws Exception {
+    useConfiguration("--experimental_platforms=//mock_platform:mock-piii-platform");
+    ConfiguredTarget target =
+        ScratchAttributeWriter.fromLabelString(this, "cc_library", "//lib")
+            .setList("srcs", "a.cc")
+            .write();
+    ResolvedToolchainProviders providers =
+        (ResolvedToolchainProviders)
+            getRuleContext(target).getToolchainContext().getResolvedToolchainProviders();
+    ToolchainInfo toolchain =
+        providers.getForToolchainType(Label.parseAbsolute(CPP_TOOLCHAIN_TYPE));
+    assertThat(toolchain.getFieldNames()).isEmpty();
   }
 
   @Test
@@ -123,8 +159,6 @@ public class CcToolchainSelectionTest extends BuildViewTestCase {
         "cc_toolchain(",
         "   name = 'incomplete_cc-compiler-piii',",
         "   cpu = 'piii',",
-        "   ar_files = 'ar-piii',",
-        "   as_files = 'as-piii',",
         "   compiler_files = 'compile-piii',",
         "   dwp_files = 'dwp-piii',",
         "   linker_files = 'link-piii',",

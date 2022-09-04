@@ -81,6 +81,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
           /* builtinIncludeFiles= */ ImmutableList.<Artifact>of(),
           /* coverageEnvironment= */ NestedSetBuilder.emptySet(Order.COMPILE_ORDER),
           /* linkDynamicLibraryTool= */ null,
+          /* environment= */ ImmutableMap.<String, String>of(),
           /* builtInIncludeDirectories= */ ImmutableList.<PathFragment>of(),
           /* sysroot= */ null,
           FdoMode.OFF);
@@ -112,6 +113,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
   private final ImmutableList<Artifact> builtinIncludeFiles;
   private final NestedSet<Pair<String, String>> coverageEnvironment;
   @Nullable private final Artifact linkDynamicLibraryTool;
+  private final ImmutableMap<String, String> environment;
   private final ImmutableList<PathFragment> builtInIncludeDirectories;
   @Nullable private final PathFragment sysroot;
   private final FdoMode fdoMode;
@@ -145,6 +147,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
       ImmutableList<Artifact> builtinIncludeFiles,
       NestedSet<Pair<String, String>> coverageEnvironment,
       Artifact linkDynamicLibraryTool,
+      ImmutableMap<String, String> environment,
       ImmutableList<PathFragment> builtInIncludeDirectories,
       @Nullable PathFragment sysroot,
       FdoMode fdoMode) {
@@ -176,6 +179,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
     this.builtinIncludeFiles = builtinIncludeFiles;
     this.coverageEnvironment = coverageEnvironment;
     this.linkDynamicLibraryTool = linkDynamicLibraryTool;
+    this.environment = environment;
     this.builtInIncludeDirectories = builtInIncludeDirectories;
     this.sysroot = sysroot;
     this.fdoMode = fdoMode;
@@ -504,6 +508,10 @@ public final class CcToolchainProvider extends ToolchainInfo {
     return coverageEnvironment;
   }
 
+  public ImmutableMap<String, String> getEnvironment() {
+    return environment;
+  }
+
   /**
    * Returns the tool which should be used for linking dynamic libraries, or in case it's not
    * specified by the crosstool this will be @tools_repository/tools/cpp:link_dynamic_library
@@ -730,36 +738,47 @@ public final class CcToolchainProvider extends ToolchainInfo {
     return toolchainInfo.getOptionalCompilerFlags();
   }
 
+  /** Returns optional compiler flags for C++ arising from the {@link CToolchain}. */
+  ImmutableList<OptionalFlag> getOptionalCxxFlags() {
+    return toolchainInfo.getOptionalCxxFlags();
+  }
+
   /** Returns linker flags for fully statically linked outputs. */
   FlagList getFullyStaticLinkFlags(CompilationMode compilationMode, LipoMode lipoMode) {
     return new FlagList(
-        configureLinkerOptions(compilationMode, lipoMode, LinkingMode.FULLY_STATIC),
-        ImmutableList.of(),
+        configureLinkerOptions(
+            compilationMode, lipoMode, LinkingMode.FULLY_STATIC),
+        FlagList.convertOptionalOptions(toolchainInfo.getOptionalLinkerFlags()),
         ImmutableList.<String>of());
   }
 
   /** Returns linker flags for mostly static linked outputs. */
   FlagList getMostlyStaticLinkFlags(CompilationMode compilationMode, LipoMode lipoMode) {
     return new FlagList(
-        configureLinkerOptions(compilationMode, lipoMode, LinkingMode.MOSTLY_STATIC),
-        ImmutableList.of(),
+        configureLinkerOptions(
+            compilationMode, lipoMode, LinkingMode.MOSTLY_STATIC),
+        FlagList.convertOptionalOptions(toolchainInfo.getOptionalLinkerFlags()),
         ImmutableList.<String>of());
   }
 
   /** Returns linker flags for mostly static shared linked outputs. */
   FlagList getMostlyStaticSharedLinkFlags(CompilationMode compilationMode, LipoMode lipoMode) {
     return new FlagList(
-        configureLinkerOptions(compilationMode, lipoMode, LinkingMode.MOSTLY_STATIC_LIBRARIES),
-        ImmutableList.of(),
+        configureLinkerOptions(
+            compilationMode,
+            lipoMode,
+            LinkingMode.MOSTLY_STATIC_LIBRARIES),
+        FlagList.convertOptionalOptions(toolchainInfo.getOptionalLinkerFlags()),
         ImmutableList.<String>of());
   }
 
   /** Returns linker flags for artifacts that are not fully or mostly statically linked. */
   FlagList getDynamicLinkFlags(CompilationMode compilationMode, LipoMode lipoMode) {
     return new FlagList(
-        configureLinkerOptions(compilationMode, lipoMode, LinkingMode.DYNAMIC),
-        ImmutableList.of(),
-        ImmutableList.of());
+        configureLinkerOptions(
+            compilationMode, lipoMode, LinkingMode.DYNAMIC),
+        FlagList.convertOptionalOptions(toolchainInfo.getOptionalLinkerFlags()),
+        ImmutableList.<String>of());
   }
 
   ImmutableList<String> configureLinkerOptions(
