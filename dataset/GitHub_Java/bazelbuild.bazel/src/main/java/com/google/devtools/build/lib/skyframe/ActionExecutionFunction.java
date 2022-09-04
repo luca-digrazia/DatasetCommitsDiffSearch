@@ -688,7 +688,11 @@ public class ActionExecutionFunction implements SkyFunction {
             (ContainingPackageLookupValue) values.get(depKeys.get(path));
         if (value.hasContainingPackage()) {
           // We have found corresponding root for current execPath.
-          result.put(path, value.getContainingPackageRoot());
+          result.put(
+              path,
+              SkyframeExecutor.maybeTransformRootForRepository(
+                  value.getContainingPackageRoot(),
+                  value.getContainingPackageName().getRepository()));
         } else {
           // We haven't found corresponding root for current execPath.
           result.put(path, null);

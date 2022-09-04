@@ -931,7 +931,6 @@ public final class SkyframeActionExecutor {
               // keep previous outputs in place.
               action.prepare(
                   actionExecutionContext.getExecRoot(),
-                  actionExecutionContext.getPathResolver(),
                   outputService != null ? outputService.bulkDeleter() : null);
             } catch (IOException e) {
               logger.atWarning().withCause(e).log(
