@@ -3040,12 +3040,13 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
   }
 
   @Test
-  public void testFeatureFlagPolicyIsNotUsedIfFlagValuesNotUsed() throws Exception {
+  public void testFeatureFlagPolicyDoesNotBlockRuleIfFlagValuesNotUsed() throws Exception {
     scratch.overwriteFile(
         "tools/whitelists/config_feature_flag/BUILD",
         "package_group(",
         "    name = 'config_feature_flag',",
-        "    packages = ['*super* busted package group'])");
+        "    packages = ['//flag'])");
+    scratch.file("flag/BUILD");
     scratch.file(
         "java/com/google/android/foo/BUILD",
         "android_binary(",
@@ -3054,13 +3055,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "  srcs = [':FooFlags.java'],",
         ")");
     assertThat(getConfiguredTarget("//java/com/google/android/foo:foo")).isNotNull();
-    // the package_group is busted, so we would have failed to get this far if we depended on it
     assertNoEvents();
-    // sanity check time: does this test actually test what we're testing for?
-    reporter.removeHandler(failFastHandler);
-    assertThat(getConfiguredTarget("//tools/whitelists/config_feature_flag:config_feature_flag"))
-        .isNull();
-    assertContainsEvent("*super* busted package group");
   }
 
   @Test

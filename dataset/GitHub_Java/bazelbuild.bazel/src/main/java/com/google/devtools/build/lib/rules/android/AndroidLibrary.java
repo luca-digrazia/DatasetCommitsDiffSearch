@@ -246,7 +246,9 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       primaryResources = resourceApk.getPrimaryResource();
       // applicationManifest has already been checked for nullness above in this method
       ApplicationManifest applicationManifest =
-          ApplicationManifest.fromExplicitManifest(ruleContext, resourceApk.getManifest());
+          ruleContext.getFragment(AndroidConfiguration.class).useManifestFromResourceApk()
+            ? ApplicationManifest.fromExplicitManifest(ruleContext, resourceApk.getManifest())
+            : androidSemantics.getManifestForRule(ruleContext);
 
       aar = Aar.create(aarOut, applicationManifest.getManifest());
       addAarToProvider(aar, transitiveAars, transitiveAarArtifacts);
