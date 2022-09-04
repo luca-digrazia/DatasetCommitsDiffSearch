@@ -33,9 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.inject.Named;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static org.apache.commons.lang3.StringUtils.isBlank;
 
 public class AuthServiceRealm extends AuthenticatingRealm {
@@ -45,18 +43,11 @@ public class AuthServiceRealm extends AuthenticatingRealm {
 
     private final AuthServiceAuthenticator authenticator;
     private final EncryptedValueService encryptedValueService;
-    private final String rootUsername;
 
     @Inject
-    public AuthServiceRealm(AuthServiceAuthenticator authenticator,
-                            EncryptedValueService encryptedValueService,
-                            @Named("root_username") String rootUsername) {
-        checkArgument(!isBlank(rootUsername), "root_username cannot be null or blank");
-
+    public AuthServiceRealm(AuthServiceAuthenticator authenticator, EncryptedValueService encryptedValueService) {
         this.authenticator = authenticator;
         this.encryptedValueService = encryptedValueService;
-        this.rootUsername = rootUsername;
-
         setAuthenticationTokenClass(UsernamePasswordToken.class);
         setCachingEnabled(false);
         // Credentials will be matched via the authentication service itself so we don't need Shiro to do it
@@ -77,10 +68,6 @@ public class AuthServiceRealm extends AuthenticatingRealm {
 
         if (isBlank(username) || isBlank(plainPassword)) {
             LOG.error("Username or password were empty. Not attempting authentication service authentication");
-            return null;
-        }
-        if (rootUsername.equals(username)) {
-            LOG.debug("Authentication services should not handle the local admin user <{}> - skipping", username);
             return null;
         }
 

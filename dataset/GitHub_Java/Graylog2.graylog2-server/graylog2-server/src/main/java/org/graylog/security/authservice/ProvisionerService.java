@@ -54,14 +54,6 @@ public class ProvisionerService {
     }
 
     public UserDetails provision(UserDetails userDetails) {
-        try {
-            return doProvision(userDetails);
-        } catch (Exception e) {
-            throw new ProvisionerServiceException(userDetails, e);
-        }
-    }
-
-    public UserDetails doProvision(UserDetails userDetails) throws Exception {
         // We don't provision anything for our internal MongoDB authentication service because the user profile
         // database collection ("users") is used for the user profile AND as source for the MongoDB authentication
         // service. This might change in the future once we separate the user profile and the MongoDB authentication
@@ -78,7 +70,8 @@ public class ProvisionerService {
             userId = userService.save(provisionUser(userDetails));
         } catch (ValidationException e) {
             LOG.error("Cannot update profile for user <{}> - {}", userDetails.username(), e.getErrors());
-            throw e;
+            // TODO: What to do? Throw an error and fail the login or just continue?
+            return userDetails;
         }
 
         // Provision actions might need the user's database ID, so make sure it's included
@@ -93,11 +86,11 @@ public class ProvisionerService {
                     action.provision(userDetailsWithId);
                 } catch (Exception e) {
                     LOG.error("Error running provisioner action <{}>", action.getClass().getCanonicalName(), e);
-                    throw e;
+                    // TODO: Should we fail the login here or just continue?
                 }
             } catch (Exception e) {
                 LOG.error("Error creating provisioner action instance with factory <{}>", actionFactory.getClass().getCanonicalName());
-                throw e;
+                // TODO: Should we fail the login here or just continue?
             }
         } else {
             LOG.debug("No provisioner action for authentication service <{}>", userDetails.authServiceType());
