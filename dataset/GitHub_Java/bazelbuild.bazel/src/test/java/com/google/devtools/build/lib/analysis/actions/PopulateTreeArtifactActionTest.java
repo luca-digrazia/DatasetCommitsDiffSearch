@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
@@ -325,7 +324,6 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
     return new ActionExecutionContext(
         executor,
         null,
-        ActionInputPrefetcher.NONE,
         new TestMetadataHandler(storingExpandedTreeFileArtifacts),
         null,
         ImmutableMap.<String, String>of(),

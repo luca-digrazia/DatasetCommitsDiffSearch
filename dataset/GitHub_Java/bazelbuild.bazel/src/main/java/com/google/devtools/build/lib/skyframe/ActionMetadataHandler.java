@@ -153,7 +153,10 @@ public class ActionMetadataHandler implements MetadataHandler {
         || value == FileArtifactValue.OMITTED_FILE_MARKER) {
       throw new FileNotFoundException();
     }
-    return value;
+    // If the file is a directory, we need to return the mtime because the action cache uses mtime
+    // to determine if this artifact has changed. We want this code path to go away somehow
+    // for directories (maybe by implementing FileSet in Skyframe).
+    return value.isFile() ? new Metadata(value.getDigest()) : new Metadata(value.getModifiedTime());
   }
 
   @Nullable
@@ -215,7 +218,7 @@ public class ActionMetadataHandler implements MetadataHandler {
       if (!fileValue.exists()) {
         throw new FileNotFoundException(artifact.prettyPrint() + " does not exist");
       }
-      return FileArtifactValue.createNormalFile(fileValue);
+      return new Metadata(Preconditions.checkNotNull(fileValue.getDigest(), artifact));
     }
     // We do not cache exceptions besides nonexistence here, because it is unlikely that the file
     // will be requested from this cache too many times.
@@ -253,7 +256,7 @@ public class ActionMetadataHandler implements MetadataHandler {
     if (isFile && !artifact.hasParent() && data.getDigest() != null) {
       // We do not need to store the FileArtifactValue separately -- the digest is in the file value
       // and that is all that is needed for this file's metadata.
-      return FileArtifactValue.createNormalFile(data);
+      return new Metadata(data.getDigest());
     }
     // Unfortunately, the FileValue does not contain enough information for us to calculate the
     // corresponding FileArtifactValue -- either the metadata must use the modified time, which we

@@ -50,28 +50,6 @@ import javax.annotation.Nullable;
  * otherwise lightweight, and should be constructed anew and discarded for each build request.
  */
 public class ActionCacheChecker {
-  private static final Metadata CONSTANT_METADATA = new Metadata() {
-    @Override
-    public boolean isFile() {
-      return false;
-    }
-
-    @Override
-    public byte[] getDigest() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public long getSize() {
-      return 0;
-    }
-
-    @Override
-    public long getModifiedTime() {
-      return -1;
-    }
-  };
-
   private final ActionCache actionCache;
   private final Predicate<? super Action> executionFilter;
   private final ArtifactResolver artifactResolver;
@@ -316,7 +294,7 @@ public class ActionCacheChecker {
   private static Metadata getMetadataOrConstant(MetadataHandler metadataHandler, Artifact artifact)
       throws IOException {
     if (artifact.isConstantMetadata()) {
-      return CONSTANT_METADATA;
+      return Metadata.CONSTANT_METADATA;
     } else {
       return metadataHandler.getMetadata(artifact);
     }
