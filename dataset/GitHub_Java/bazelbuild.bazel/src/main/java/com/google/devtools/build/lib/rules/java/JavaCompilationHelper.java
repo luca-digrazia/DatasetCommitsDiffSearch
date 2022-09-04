@@ -154,7 +154,7 @@ public final class JavaCompilationHelper {
     this(ruleContext, semantics, getDefaultJavacOptsFromRule(ruleContext), attributes);
   }
 
-  JavaTargetAttributes getAttributes() {
+  public JavaTargetAttributes getAttributes() {
     if (builtAttributes == null) {
       builtAttributes = attributes.build();
     }
@@ -341,9 +341,10 @@ public final class JavaCompilationHelper {
   }
 
   private boolean shouldInstrumentJar() {
+    // TODO(bazel-team): What about source jars?
     RuleContext ruleContext = getRuleContext();
     return getConfiguration().isCodeCoverageEnabled()
-        && attributes.hasSources()
+        && attributes.hasSourceFiles()
         && InstrumentedFilesCollector.shouldIncludeLocalSources(
             ruleContext.getConfiguration(), ruleContext.getLabel(), ruleContext.isTestTarget());
   }
@@ -352,7 +353,7 @@ public final class JavaCompilationHelper {
     if (!getJavaConfiguration().useHeaderCompilation()) {
       return false;
     }
-    if (!attributes.hasSources()) {
+    if (!attributes.hasSourceFiles() && !attributes.hasSourceJars()) {
       return false;
     }
     if (javaToolchain.getForciblyDisableHeaderCompilation()) {
@@ -380,13 +381,6 @@ public final class JavaCompilationHelper {
     return true;
   }
 
-  private Artifact turbineOutput(Artifact classJar, String newExtension) {
-    return getAnalysisEnvironment()
-        .getDerivedArtifact(
-            FileSystemUtils.replaceExtension(classJar.getRootRelativePath(), newExtension),
-            classJar.getRoot());
-  }
-
   /**
    * Creates the Action that compiles ijars from source.
    *
@@ -397,8 +391,16 @@ public final class JavaCompilationHelper {
       Artifact runtimeJar, JavaCompilationArtifacts.Builder artifactBuilder)
       throws InterruptedException {
 
-    Artifact headerJar = turbineOutput(runtimeJar, "-hjar.jar");
-    Artifact headerDeps = turbineOutput(runtimeJar, "-hjar.jdeps");
+    Artifact headerJar =
+        getAnalysisEnvironment()
+            .getDerivedArtifact(
+                FileSystemUtils.replaceExtension(runtimeJar.getRootRelativePath(), "-hjar.jar"),
+                runtimeJar.getRoot());
+    Artifact headerDeps =
+        getAnalysisEnvironment()
+            .getDerivedArtifact(
+                FileSystemUtils.replaceExtension(runtimeJar.getRootRelativePath(), "-hjar.jdeps"),
+                runtimeJar.getRoot());
 
     JavaTargetAttributes attributes = getAttributes();
     JavaHeaderCompileActionBuilder builder = new JavaHeaderCompileActionBuilder(getRuleContext());
