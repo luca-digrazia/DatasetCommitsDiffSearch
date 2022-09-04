@@ -90,6 +90,7 @@ public class ConsoleReporterFactory extends BaseFormattedReporterFactory {
                 .formattedFor(getLocale())
                 .formattedFor(getTimeZone())
                 .outputTo(getOutput().get())
+                .withClock(getClock().get())
                 .build();
     }
 }

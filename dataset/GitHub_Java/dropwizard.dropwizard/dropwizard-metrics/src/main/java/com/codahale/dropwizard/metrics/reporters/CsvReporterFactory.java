@@ -56,6 +56,7 @@ public class CsvReporterFactory extends BaseFormattedReporterFactory {
                 .convertDurationsTo(getRateUnit())
                 .filter(getFilter())
                 .formatFor(getLocale())
+                .withClock(getClock().get())
                 .build(getFile());
     }
 }
