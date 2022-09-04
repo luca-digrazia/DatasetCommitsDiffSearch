@@ -36,7 +36,7 @@ public class CodeModelGenerator {
 
 	public void generate(ProcessResult processResult) throws IOException {
 
-		ApiCodeGenerator apiCodeGenerator = new ApiCodeGenerator(filer);
+		ApiCodeGenerator apiCodeGenerator = new ApiCodeGenerator(filer, messager);
 		apiCodeGenerator.writeApiClasses(processResult.apiClassesToGenerate, processResult.originatingElementsHolder);
 
 		SourceCodewriter sourceCodeWriter = new SourceCodewriter(filer, messager, processResult.originatingElementsHolder);

@@ -149,7 +149,7 @@ public class EBeansHolder {
 
 	private final Set<Class<?>> apiClassesToGenerate = new HashSet<Class<?>>();
 
-	private final OriginatingElements originatingElements = new OriginatingElements();
+	private final OriginatingElementsHolder originatingElementsHolder = new OriginatingElementsHolder();
 
 	public EBeansHolder(JCodeModel codeModel) {
 		this.codeModel = codeModel;
@@ -167,7 +167,7 @@ public class EBeansHolder {
 
 		String qualifiedName = generatedClass.fullName();
 
-		originatingElements.add(qualifiedName, element);
+		originatingElementsHolder.addAsOriginatingElement(qualifiedName, element);
 
 		EBeanHolder activityHolder = new EBeanHolder(this, eBeanAnnotation, generatedClass);
 		eBeanHolders.put(element, activityHolder);
@@ -212,8 +212,8 @@ public class EBeansHolder {
 		return classes;
 	}
 
-	public OriginatingElements getOriginatingElements() {
-		return originatingElements;
+	public OriginatingElementsHolder getOriginatingElementsHolder() {
+		return originatingElementsHolder;
 	}
 
 	public Set<Class<?>> getApiClassesToGenerate() {
@@ -221,7 +221,7 @@ public class EBeansHolder {
 	}
 
 	public void generateApiClass(Element originatingElement, Class<?> apiClass) {
-		originatingElements.add(apiClass.getCanonicalName(), originatingElement);
+		originatingElementsHolder.addAsOriginatingElement(apiClass.getCanonicalName(), originatingElement);
 		apiClassesToGenerate.add(apiClass);
 	}
 

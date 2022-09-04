@@ -6,7 +6,9 @@ import java.io.OutputStream;
 import java.util.Set;
 
 import javax.annotation.processing.Filer;
+import javax.annotation.processing.Messager;
 import javax.lang.model.element.Element;
+import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 
 import org.androidannotations.processing.OriginatingElementsHolder;
@@ -16,9 +18,11 @@ public class ApiCodeGenerator {
 	private final static byte[] BUFFER = new byte[4096];
 
 	private final Filer filer;
+	private final Messager messager;
 
-	public ApiCodeGenerator(Filer filer) {
+	public ApiCodeGenerator(Filer filer, Messager messager) {
 		this.filer = filer;
+		this.messager = messager;
 	}
 
 	public void writeApiClasses(Set<Class<?>> apiClassesToGenerate, OriginatingElementsHolder originatingElementsHolder) {
@@ -62,6 +66,10 @@ public class ApiCodeGenerator {
 		while ((read = input.read(BUFFER)) != -1) {
 			output.write(BUFFER, 0, read);
 		}
+	}
+
+	private void printError(String message) {
+		messager.printMessage(Diagnostic.Kind.ERROR, message);
 	}
 
 }
