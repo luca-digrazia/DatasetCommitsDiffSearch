@@ -345,7 +345,8 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
       }
 
       try (SilentCloseable closeable = Profiler.instance().profile("setup event handler")) {
-        UiOptions eventHandlerOptions = options.getOptions(UiOptions.class);
+        BlazeCommandEventHandler.Options eventHandlerOptions =
+            options.getOptions(BlazeCommandEventHandler.Options.class);
         OutErr colorfulOutErr = outErr;
 
         if (!eventHandlerOptions.useColor()) {
@@ -641,7 +642,8 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
   }
 
   /** Returns the event handler to use for this Blaze command. */
-  private EventHandler createEventHandler(OutErr outErr, UiOptions eventOptions) {
+  private EventHandler createEventHandler(
+      OutErr outErr, BlazeCommandEventHandler.Options eventOptions) {
     Path workspacePath = runtime.getWorkspace().getDirectories().getWorkspace();
     PathFragment workspacePathFragment = workspacePath == null ? null : workspacePath.asFragment();
     return new ExperimentalEventHandler(

@@ -79,21 +79,23 @@ public class BlazeCommandEventHandler {
     public double showProgressRateLimit;
 
     @Option(
-        name = "color",
-        defaultValue = "auto",
-        converter = UseColorConverter.class,
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help = "Use terminal controls to colorize output.")
+      name = "color",
+      defaultValue = "auto",
+      converter = UseColorConverter.class,
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "Use terminal controls to colorize output going to stderr."
+    )
     public UseColor useColorEnum;
 
     @Option(
-        name = "curses",
-        defaultValue = "auto",
-        converter = UseCursesConverter.class,
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help = "Use terminal cursor controls to minimize scrolling output.")
+      name = "curses",
+      defaultValue = "auto",
+      converter = UseCursesConverter.class,
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "Use terminal cursor controls to minimize scrolling output going to stderr."
+    )
     public UseCurses useCursesEnum;
 
     @Option(
@@ -107,20 +109,21 @@ public class BlazeCommandEventHandler {
     public int terminalColumns;
 
     @Option(
-        name = "isatty",
-        // TODO(b/137881511): Old name should be removed after 2020-01-01, or whenever is
-        // reasonable.
-        oldName = "is_stderr_atty",
-        defaultValue = "false",
-        metadataTags = {OptionMetadataTag.HIDDEN},
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help =
-            "A system-generated parameter which is used to notify the "
-                + "server whether this client is running in a terminal. "
-                + "If this is set to false, then '--color=auto' will be treated as '--color=no'. "
-                + "If this is set to true, then '--color=auto' will be treated as '--color=yes'.")
-    public boolean isATty;
+      name = "is_stderr_atty",
+      // TODO(b/63386499): Old name should be removed after 2019-02-28.
+      oldName = "isatty",
+      defaultValue = "false",
+      metadataTags = {OptionMetadataTag.HIDDEN},
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help =
+          "A system-generated parameter which is used to notify the server whether this client is"
+              + " running in a terminal.  If this is set to false, then '--color=auto' will be"
+              + " treated as '--color=no'.  If this is set to true, then '--color=auto' will be"
+              + " treated as '--color=yes'.  As we only treat the stderr as a terminal, we only"
+              + " care if that file descriptor is connected to a TTY."
+    )
+    public boolean isStderrATty;
 
     // This lives here (as opposed to the more logical BuildRequest.Options)
     // because the client passes it to the server *always*.  We don't want the
@@ -253,11 +256,11 @@ public class BlazeCommandEventHandler {
     public boolean experimentalUiDeduplicate;
 
     public boolean useColor() {
-      return useColorEnum == UseColor.YES || (useColorEnum == UseColor.AUTO && isATty);
+      return useColorEnum == UseColor.YES || (useColorEnum == UseColor.AUTO && isStderrATty);
     }
 
     public boolean useCursorControl() {
-      return useCursesEnum == UseCurses.YES || (useCursesEnum == UseCurses.AUTO && isATty);
+      return useCursesEnum == UseCurses.YES || (useCursesEnum == UseCurses.AUTO && isStderrATty);
     }
   }
 }
