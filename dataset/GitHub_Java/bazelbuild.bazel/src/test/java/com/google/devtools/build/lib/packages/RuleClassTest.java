@@ -894,7 +894,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
         supportsConstraintChecking,
         /*requiredToolchains=*/ ImmutableSet.<Label>of(),
         /*supportsPlatforms=*/ true,
-        OutputFile.Kind.FILE, ImmutableList.copyOf(attributes));
+        ImmutableList.copyOf(attributes));
   }
 
   private static RuleClass createParentRuleClass() {

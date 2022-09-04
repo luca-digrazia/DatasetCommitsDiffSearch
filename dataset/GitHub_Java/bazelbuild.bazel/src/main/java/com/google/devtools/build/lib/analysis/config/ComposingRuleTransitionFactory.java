@@ -15,10 +15,8 @@
 
 package com.google.devtools.build.lib.analysis.config;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.config.transitions.ComposingPatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleTransitionFactory;
@@ -42,19 +40,19 @@ public class ComposingRuleTransitionFactory implements RuleTransitionFactory {
 
   @Override
   public ConfigurationTransition buildTransitionFor(Rule rule) {
-    PatchTransition transition1 =
-        (PatchTransition) Preconditions.checkNotNull(rtf1.buildTransitionFor(rule));
-    PatchTransition transition2 =
-        (PatchTransition) Preconditions.checkNotNull(rtf2.buildTransitionFor(rule));
+    PatchTransition transition1 = (PatchTransition) rtf1.buildTransitionFor(rule);
+    PatchTransition transition2 = (PatchTransition) rtf2.buildTransitionFor(rule);
 
-    if (transition1 == NoTransition.INSTANCE) {
+    if (transition1 == null) {
       return transition2;
     }
 
-    if (transition2 == NoTransition.INSTANCE) {
+    if (transition2 == null) {
       return transition1;
     }
 
-    return new ComposingPatchTransition(transition1, transition2);
+    return new ComposingPatchTransition(
+        (PatchTransition) rtf1.buildTransitionFor(rule),
+        (PatchTransition) rtf2.buildTransitionFor(rule));
   }
 }

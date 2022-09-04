@@ -51,13 +51,11 @@ import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Environment;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.util.FileTypeSet;
@@ -737,7 +735,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   public void testRuleBadTypeForDoc() throws Exception {
     registerDummyUserDefinedFunction();
     checkErrorContains(
-        "expected string for 'doc' while calling rule but got int instead",
+        "argument 'doc' has type 'int', but should be 'string'",
         "rule(impl, doc = 1)");
   }
 
@@ -792,15 +790,6 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
     Object result = evalRuleClassCode("FileType(['.css'])");
     SkylarkFileType fts = (SkylarkFileType) result;
     assertThat(fts.getExtensions()).isEqualTo(ImmutableList.of(".css"));
-  }
-
-  @Test
-  public void testFileTypeIsDisabled() throws Exception {
-    SkylarkSemantics semantics =
-        SkylarkSemantics.DEFAULT_SEMANTICS.toBuilder().incompatibleDisallowFileType(true).build();
-    EvalException expected =
-        assertThrows(EvalException.class, () -> evalRuleClassCode(semantics, "FileType(['.css'])"));
-    assertThat(expected).hasMessageThat().contains("FileType function is not available.");
   }
 
   @Test

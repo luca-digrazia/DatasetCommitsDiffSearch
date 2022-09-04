@@ -19,7 +19,6 @@ import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkModules;
@@ -30,14 +29,12 @@ import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.PackageContext;
 import com.google.devtools.build.lib.rules.platform.PlatformCommon;
 import com.google.devtools.build.lib.syntax.Environment;
-import com.google.devtools.build.lib.syntax.Environment.GlobalFrame;
 import com.google.devtools.build.lib.syntax.Environment.Phase;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import com.google.devtools.build.lib.testutil.TestConstants;
+import java.util.List;
 import org.junit.Before;
 
 /**
@@ -50,29 +47,25 @@ public abstract class SkylarkTestCase extends BuildViewTestCase {
 
   @Before
   public final void setUpEvaluator() throws Exception {
-    ev = createEvaluationTestCase(SkylarkSemantics.DEFAULT_SEMANTICS);
+    ev = createEvaluationTestCase();
     ev.initialize();
   }
 
-  private static final Environment.GlobalFrame getSkylarkGlobals() {
-    ImmutableMap.Builder<String, Object> envBuilder = ImmutableMap.builder();
-
-    SkylarkModules.addSkylarkGlobalsToBuilder(envBuilder);
-    Runtime.setupModuleGlobals(envBuilder, PlatformCommon.class);
-
-    return GlobalFrame.createForBuiltins(envBuilder.build());
-  }
-
-  protected EvaluationTestCase createEvaluationTestCase(SkylarkSemantics semantics) {
+  protected EvaluationTestCase createEvaluationTestCase() {
     return new EvaluationTestCase() {
       @Override
       public Environment newEnvironment() throws Exception {
+        List<Class<?>> modules =
+            new ImmutableList.Builder<Class<?>>()
+                .addAll(SkylarkModules.MODULES)
+                .add(PlatformCommon.class)
+                .build();
         Environment env =
             Environment.builder(mutability)
-                .setSemantics(semantics)
+                .useDefaultSemantics()
                 .setEventHandler(getEventHandler())
                 .setGlobals(
-                    getSkylarkGlobals()
+                    SkylarkModules.getGlobals(modules)
                         .withLabel(
                             Label.parseAbsoluteUnchecked("//test:label", /*defaultToMain=*/ false)))
                 .setPhase(Phase.LOADING)
@@ -146,12 +139,6 @@ public abstract class SkylarkTestCase extends BuildViewTestCase {
 
   protected Object evalRuleClassCode(String... lines) throws Exception {
     setUpEvaluator();
-    return eval("def impl(ctx): return None\n" + Joiner.on("\n").join(lines));
-  }
-
-  protected Object evalRuleClassCode(SkylarkSemantics semantics, String... lines) throws Exception {
-    ev = createEvaluationTestCase(semantics);
-    ev.initialize();
     return eval("def impl(ctx): return None\n" + Joiner.on("\n").join(lines));
   }
 

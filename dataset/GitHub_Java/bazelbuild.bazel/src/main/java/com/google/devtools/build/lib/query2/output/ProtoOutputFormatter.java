@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.ProtoUtils;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.query2.CommonQueryOptions;
 import com.google.devtools.build.lib.query2.FakeLoadTarget;
 import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
@@ -99,7 +98,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
   }
 
   @Override
-  public void setOptions(CommonQueryOptions options, AspectResolver aspectResolver) {
+  public void setOptions(QueryOptions options, AspectResolver aspectResolver) {
     super.setOptions(options, aspectResolver);
     this.relativeLocations = options.relativeLocations;
     this.includeDefaultValues = options.protoIncludeDefaultValues;
@@ -184,7 +183,33 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       if (includeLocation()) {
         rulePb.setLocation(location);
       }
-      addAttributes(rulePb, rule);
+      Map<Attribute, Build.Attribute> serializedAttributes = Maps.newHashMap();
+      AggregatingAttributeMapper attributeMapper = AggregatingAttributeMapper.of(rule);
+      for (Attribute attr : rule.getAttributes()) {
+        if ((!includeDefaultValues && !rule.isAttributeValueExplicitlySpecified(attr))
+            || !includeAttribute(rule, attr)) {
+          continue;
+        }
+        Object attributeValue;
+        if (flattenSelects || !attributeMapper.isConfigurable(attr.getName())) {
+          attributeValue =
+              flattenAttributeValues(attr.getType(), getPossibleAttributeValues(rule, attr));
+        } else {
+          attributeValue = attributeMapper.getSelectorList(attr.getName(), attr.getType());
+        }
+        Build.Attribute serializedAttribute =
+            AttributeFormatter.getAttributeProto(
+                attr,
+                attributeValue,
+                rule.isAttributeValueExplicitlySpecified(attr),
+                /*encodeBooleanAndTriStateAsIntegerAndString=*/ true);
+        serializedAttributes.put(attr, serializedAttribute);
+      }
+      rulePb.addAllAttribute(
+          serializedAttributes.values().stream().distinct().collect(Collectors.toList()));
+
+      postProcess(rule, rulePb, serializedAttributes);
+
       String transitiveHashCode = rule.getRuleClassObject().getRuleDefinitionEnvironmentHashCode();
       if (transitiveHashCode != null && includeRuleDefinitionEnvironment()) {
         // The RuleDefinitionEnvironment is always defined for Skylark rules and
@@ -239,6 +264,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       for (String feature : rule.getFeatures()) {
         rulePb.addDefaultSetting(feature);
       }
+
       targetPb.setType(RULE);
       targetPb.setRule(rulePb);
     } else if (target instanceof OutputFile) {
@@ -335,40 +361,6 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
     }
 
     return targetPb.build();
-  }
-
-  protected void addAttributes(Build.Rule.Builder rulePb, Rule rule)
-      throws InterruptedException {
-    Map<Attribute, Build.Attribute> serializedAttributes = Maps.newHashMap();
-    AggregatingAttributeMapper attributeMapper = AggregatingAttributeMapper.of(rule);
-    for (Attribute attr : rule.getAttributes()) {
-      if (!shouldIncludeAttribute(rule, attr)) {
-        continue;
-      }
-      Object attributeValue;
-      if (flattenSelects || !attributeMapper.isConfigurable(attr.getName())) {
-        attributeValue =
-            flattenAttributeValues(attr.getType(), getPossibleAttributeValues(rule, attr));
-      } else {
-        attributeValue = attributeMapper.getSelectorList(attr.getName(), attr.getType());
-      }
-      Build.Attribute serializedAttribute =
-          AttributeFormatter.getAttributeProto(
-              attr,
-              attributeValue,
-              rule.isAttributeValueExplicitlySpecified(attr),
-              /*encodeBooleanAndTriStateAsIntegerAndString=*/ true);
-      serializedAttributes.put(attr, serializedAttribute);
-    }
-    rulePb.addAllAttribute(
-        serializedAttributes.values().stream().distinct().collect(Collectors.toList()));
-
-    postProcess(rule, rulePb, serializedAttributes);
-  }
-
-  protected boolean shouldIncludeAttribute(Rule rule, Attribute attr) {
-    return (includeDefaultValues || rule.isAttributeValueExplicitlySpecified(attr))
-        && includeAttribute(rule, attr);
   }
 
   private static Object getAspectAttributeValue(Attribute attribute, Collection<Label> labels) {

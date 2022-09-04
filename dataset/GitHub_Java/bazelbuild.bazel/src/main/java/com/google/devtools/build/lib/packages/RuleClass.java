@@ -31,7 +31,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -554,15 +553,15 @@ public class RuleClass {
     @AutoCodec.VisibleForSerialization
     @AutoCodec
     static final class FixedTransitionFactory implements RuleTransitionFactory {
-      private final PatchTransition transition;
+      private final ConfigurationTransition transition;
 
       @AutoCodec.VisibleForSerialization
-      FixedTransitionFactory(PatchTransition transition) {
+      FixedTransitionFactory(ConfigurationTransition transition) {
         this.transition = transition;
       }
 
       @Override
-      public PatchTransition buildTransitionFor(Rule rule) {
+      public ConfigurationTransition buildTransitionFor(Rule rule) {
         return transition;
       }
     }
@@ -896,10 +895,13 @@ public class RuleClass {
     /**
      * Applies the given transition to all incoming edges for this rule class.
      *
+     * <p>The given transition must be a PatchTransition.  We use the more general Transition
+     * here because PatchTransition is not available in this package.
+     *
      * <p>If you need the transition to depend on the rule it's being applied to, use
      * {@link #cfg(RuleTransitionFactory)}.
      */
-    public Builder cfg(PatchTransition transition) {
+    public Builder cfg(ConfigurationTransition transition) {
       Preconditions.checkState(type != RuleClassType.ABSTRACT,
           "Setting not inherited property (cfg) of abstract rule class '%s'", name);
       Preconditions.checkState(this.transitionFactory == null,
