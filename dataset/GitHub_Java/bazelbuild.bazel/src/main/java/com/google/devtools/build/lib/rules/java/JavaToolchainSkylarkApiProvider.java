@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.rules.java;
 
-import static com.google.common.base.StandardSystemProperty.JAVA_SPECIFICATION_VERSION;
-
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkApiProvider;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -46,7 +44,7 @@ public final class JavaToolchainSkylarkApiProvider extends SkylarkApiProvider
         return it.next();
       }
     }
-    return JAVA_SPECIFICATION_VERSION.value();
+    return System.getProperty("java.specification.version");
   }
 
   /** @return the target Java language level */
@@ -61,7 +59,7 @@ public final class JavaToolchainSkylarkApiProvider extends SkylarkApiProvider
         return it.next();
       }
     }
-    return JAVA_SPECIFICATION_VERSION.value();
+    return System.getProperty("java.specification.version");
   }
 
   /** @return The {@link Artifact} of the javac jar */
