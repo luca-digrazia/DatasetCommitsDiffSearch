@@ -1,57 +1,36 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+package io.quarkus.arc;
 
-package org.jboss.quarkus.arc;
-
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Set;
-
 import javax.enterprise.context.spi.Contextual;
 import javax.enterprise.context.spi.CreationalContext;
 
 abstract class AbstractSharedContext implements InjectableContext {
 
-    private final ComputingCache<Key<?>, InstanceHandleImpl<?>> instances;
+    private final ComputingCache<Key<?>, ContextInstanceHandle<?>> instances;
 
-    @SuppressWarnings("rawtypes")
     public AbstractSharedContext() {
-        this.instances = new ComputingCache<>(key -> createInstanceHandle((InjectableBean) key.contextual, key.creationalContext));
+        this.instances = new ComputingCache<>(AbstractSharedContext::createInstanceHandle);
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public <T> T get(Contextual<T> contextual, CreationalContext<T> creationalContext) {
+        checkContextualParameter(contextual);
         return (T) instances.getValue(new Key<>(contextual, creationalContext)).get();
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public <T> T get(Contextual<T> contextual) {
-        InstanceHandleImpl<?> handle = instances.getValueIfPresent(new Key<>(contextual, null));
+        checkContextualParameter(contextual);
+        ContextInstanceHandle<?> handle = instances.getValueIfPresent(new Key<>(contextual, null));
         return handle != null ? (T) handle.get() : null;
     }
 
     @Override
-    public Collection<InstanceHandle<?>> getAll() {
-        List<InstanceHandle<?>> all = new ArrayList<>();
-        instances.forEachValue(all::add);
-        return all;
+    public ContextState getState() {
+        return new InstanceHandlesContextState(instances.getPresentValues());
     }
 
     @Override
@@ -61,41 +40,47 @@ abstract class AbstractSharedContext implements InjectableContext {
 
     @Override
     public void destroy(Contextual<?> contextual) {
-        InstanceHandleImpl<?> handle = instances.remove(new Key<>(contextual, null));
+        ContextInstanceHandle<?> handle = instances.remove(new Key<>(contextual, null));
         if (handle != null) {
-            handle.destroyInternal();
+            handle.destroy();
         }
     }
 
     @Override
     public synchronized void destroy() {
-        Set<InstanceHandleImpl<?>> values = instances.getPresentValues();
+        Set<ContextInstanceHandle<?>> values = instances.getPresentValues();
         // Destroy the producers first
-        for (Iterator<InstanceHandleImpl<?>> iterator = values.iterator(); iterator.hasNext();) {
-            InstanceHandleImpl<?> instanceHandle = iterator.next();
+        for (Iterator<ContextInstanceHandle<?>> iterator = values.iterator(); iterator.hasNext();) {
+            ContextInstanceHandle<?> instanceHandle = iterator.next();
             if (instanceHandle.getBean().getDeclaringBean() != null) {
-                instanceHandle.destroyInternal();
+                instanceHandle.destroy();
                 iterator.remove();
             }
         }
-        for (InstanceHandleImpl<?> instanceHandle : values) {
-            instanceHandle.destroyInternal();
+        for (ContextInstanceHandle<?> instanceHandle : values) {
+            instanceHandle.destroy();
         }
         instances.clear();
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
-    private static InstanceHandleImpl createInstanceHandle(InjectableBean bean, CreationalContext ctx) {
-        return new InstanceHandleImpl(bean, bean.create(ctx), ctx);
+    private static ContextInstanceHandle createInstanceHandle(Key key) {
+        InjectableBean<?> bean = (InjectableBean<?>) key.contextual;
+        return new ContextInstanceHandleImpl(bean, bean.create(key.creationalContext), key.creationalContext);
+    }
+
+    private void checkContextualParameter(Contextual<?> contextual) {
+        if (contextual == null) {
+            throw new IllegalArgumentException("Contextual parameter must not be null");
+        }
     }
 
     private static class Key<T> {
 
-        private Contextual<T> contextual;
+        private final Contextual<T> contextual;
+        private final CreationalContext<T> creationalContext;
 
-        private CreationalContext<T> creationalContext;
-
-        public Key(Contextual<T> contextual, CreationalContext<T> creationalContext) {
+        Key(Contextual<T> contextual, CreationalContext<T> creationalContext) {
             this.contextual = contextual;
             this.creationalContext = creationalContext;
         }
@@ -129,6 +114,11 @@ abstract class AbstractSharedContext implements InjectableContext {
                 return false;
             }
             return true;
+        }
+
+        @Override
+        public String toString() {
+            return "Key [contextual=" + contextual + "]";
         }
 
     }

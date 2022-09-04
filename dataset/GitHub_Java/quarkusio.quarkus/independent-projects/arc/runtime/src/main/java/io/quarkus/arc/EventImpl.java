@@ -16,6 +16,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 import java.util.function.Supplier;
 import javax.enterprise.context.RequestScoped;
 import javax.enterprise.event.Event;
@@ -37,11 +38,17 @@ import javax.enterprise.util.TypeLiteral;
 class EventImpl<T> implements Event<T> {
 
     private static final int DEFAULT_CACHE_CAPACITY = 4;
-    private static final NotificationOptions EMPTY_OPTIONS = NotificationOptions.builder().build();
+
+    private static final Executor DEFAULT_EXECUTOR = ForkJoinPool.commonPool();
+
+    private static final NotificationOptions DEFAULT_OPTIONS = NotificationOptions.ofExecutor(DEFAULT_EXECUTOR);
 
     private final HierarchyDiscovery injectionPointTypeHierarchy;
+
     private final Type eventType;
+
     private final Set<Annotation> qualifiers;
+
     private final ConcurrentMap<Class<?>, Notifier<? super T>> notifiers;
 
     private transient volatile Notifier<? super T> lastNotifier;
@@ -64,7 +71,7 @@ class EventImpl<T> implements Event<T> {
 
     @Override
     public <U extends T> CompletionStage<U> fireAsync(U event) {
-        return fireAsync(event, EMPTY_OPTIONS);
+        return fireAsync(event, DEFAULT_OPTIONS);
     }
 
     @Override
@@ -76,7 +83,7 @@ class EventImpl<T> implements Event<T> {
 
         Executor executor = options.getExecutor();
         if (executor == null) {
-            executor = Arc.container().getExecutorService();
+            executor = DEFAULT_EXECUTOR;
         }
 
         if (notifier.isEmpty()) {
