@@ -557,10 +557,9 @@ public class JavaSkylarkCommon {
   private static JavaToolchainProvider getJavaToolchainProvider(ConfiguredTarget javaToolchain)
       throws EvalException{
     JavaToolchainProvider javaToolchainProvider =
-        JavaToolchainProvider.from(javaToolchain);
+        javaToolchain.getProvider(JavaToolchainProvider.class);
     if (javaToolchainProvider == null) {
-      throw new EvalException(
-          null, javaToolchain.getLabel() + " does not provide JavaToolchainProvider.");
+      throw new EvalException(null, javaToolchain.getLabel() + " is not a java_toolchain rule.");
     }
     return javaToolchainProvider;
   }

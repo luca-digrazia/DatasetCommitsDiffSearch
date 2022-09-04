@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
@@ -28,6 +27,7 @@ import com.google.devtools.build.lib.rules.java.JavaHelper;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
 
@@ -340,9 +340,8 @@ public class ApkActionsBuilder {
     }
 
     List<String> noCompressExtensions;
-    if (ruleContext
-        .getRule()
-        .isAttrDefined(AndroidRuleClasses.NOCOMPRESS_EXTENSIONS_ATTR, Type.STRING_LIST)) {
+    if (ruleContext.getRule().isAttrDefined(
+        AndroidRuleClasses.NOCOMPRESS_EXTENSIONS_ATTR, Type.STRING_LIST)) {
       noCompressExtensions =
           ruleContext
               .getExpander()
@@ -420,13 +419,13 @@ public class ApkActionsBuilder {
   // Adds the appropriate SpawnAction options depending on if SingleJar is a jar or not.
   private static void setSingleJarAsExecutable(
       RuleContext ruleContext, SpawnAction.Builder builder) {
-    Artifact singleJar = JavaToolchainProvider.from(ruleContext).getSingleJar();
+    Artifact singleJar = JavaToolchainProvider.fromRuleContext(ruleContext).getSingleJar();
     if (singleJar.getFilename().endsWith(".jar")) {
       builder
           .setJarExecutable(
               JavaCommon.getHostJavaExecutable(ruleContext),
               singleJar,
-              JavaToolchainProvider.from(ruleContext).getJvmOptions())
+              JavaToolchainProvider.fromRuleContext(ruleContext).getJvmOptions())
           .addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext));
     } else {
       builder.setExecutable(singleJar);
@@ -435,8 +434,8 @@ public class ApkActionsBuilder {
 
   private Artifact getApkArtifact(RuleContext ruleContext, String baseName) {
     if (artifactLocation != null) {
-      return ruleContext.getUniqueDirectoryArtifact(
-          artifactLocation, baseName, ruleContext.getBinOrGenfilesDirectory());
+      return ruleContext.getUniqueDirectoryArtifact(artifactLocation, baseName,
+          ruleContext.getBinOrGenfilesDirectory());
     } else {
       return AndroidBinary.getDxArtifact(ruleContext, baseName);
     }

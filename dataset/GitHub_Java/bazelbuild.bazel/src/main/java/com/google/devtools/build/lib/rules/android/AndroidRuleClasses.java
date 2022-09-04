@@ -26,7 +26,6 @@ import static com.google.devtools.build.lib.syntax.Type.STRING;
 import static com.google.devtools.build.lib.syntax.Type.STRING_DICT;
 import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 import static com.google.devtools.build.lib.util.FileTypeSet.ANY_FILE;
-import static com.google.devtools.build.lib.util.FileTypeSet.NO_FILE;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -415,8 +414,6 @@ public final class AndroidRuleClasses {
           .add(attr("aidl", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE).exec())
           .add(attr("aidl_lib", LABEL).allowedFileTypes(JavaSemantics.JAR))
           .add(attr("android_jar", LABEL).mandatory().cfg(HOST).allowedFileTypes(JavaSemantics.JAR))
-          // TODO(b/67903726): Make this attribute mandatory after updating all android_sdk rules.
-          .add(attr("source_properties", LABEL).cfg(HOST).allowedFileTypes(ANY_FILE))
           .add(attr("shrinked_android_jar", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE))
           .add(attr("annotations_jar", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE))
           .add(attr("main_dex_classes", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE))
@@ -946,11 +943,6 @@ public final class AndroidRuleClasses {
                   .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel("//tools/android:resource_extractor")))
-          .add(
-              attr("instruments", BuildType.LABEL)
-                  .undocumented("blocked by android_instrumentation_test")
-                  .allowedRuleClasses("android_binary")
-                  .allowedFileTypes(NO_FILE))
           .advertiseSkylarkProvider(SkylarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
           .build();
       }
