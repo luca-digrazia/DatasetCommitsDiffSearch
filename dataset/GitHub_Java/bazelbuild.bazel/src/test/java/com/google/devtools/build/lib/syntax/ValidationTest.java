@@ -14,49 +14,118 @@
 package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertContainsEvent;
 
-import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
-import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
-import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
-
+import com.google.devtools.build.lib.events.EventCollector;
+import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions; // TODO(adonovan): break!
+import com.google.devtools.common.options.Options;
+import com.google.devtools.common.options.OptionsParsingException;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/**
- * Tests for the validation process of Skylark files.
- */
+/** Tests of the Starlark validator. */
 @RunWith(JUnit4.class)
-public class ValidationTest extends EvaluationTestCase {
+public class ValidationTest {
 
-  @Test
-  public void testAssignmentNotValidLValue() {
-    checkError("can only assign to variables and tuples, not to ''a''", "'a' = 1");
+  private StarlarkSemantics semantics = StarlarkSemantics.DEFAULT_SEMANTICS;
+
+  private void setSemantics(String... options) throws OptionsParsingException {
+    this.semantics =
+        Options.parse(StarlarkSemanticsOptions.class, options).getOptions().toSkylarkSemantics();
+  }
+
+  // Validates a file using the current semantics.
+  private StarlarkFile validateFile(String... lines) throws SyntaxError {
+    ParserInput input = ParserInput.fromLines(lines);
+    Module module = Module.createForBuiltins(Starlark.UNIVERSE);
+    return EvalUtils.parseAndValidate(input, module, semantics);
+  }
+
+  // Assertions that parsing and validation succeeds.
+  private void assertValid(String... lines) throws SyntaxError {
+    StarlarkFile file = validateFile(lines);
+    if (!file.ok()) {
+      throw new SyntaxError(file.errors());
+    }
+  }
+
+  // Asserts that parsing of the program succeeds but validation fails
+  // with at least the specified error.
+  private void assertInvalid(String expectedError, String... lines) throws SyntaxError {
+    EventCollector errors = getValidationErrors(lines);
+    assertContainsEvent(errors, expectedError);
+  }
+
+  // Returns the non-empty list of validation errors of the program.
+  private EventCollector getValidationErrors(String... lines) throws SyntaxError {
+    StarlarkFile file = validateFile(lines);
+    if (file.ok()) {
+      throw new AssertionError("validation succeeded unexpectedly");
+    }
+    EventCollector errors = new EventCollector();
+    Event.replayEventsOn(errors, file.errors());
+    return errors;
   }
 
   @Test
-  public void testTopLevelForStatement() throws Exception {
-    checkError("'For' is not allowed as a top level statement", "for i in [1,2,3]: a = i\n");
+  public void testAssignmentNotValidLValue() throws Exception {
+    assertInvalid("cannot assign to '\"a\"'", "'a' = 1");
+  }
+
+  @Test
+  public void testAugmentedAssignmentWithMultipleLValues() throws Exception {
+    assertInvalid(
+        "cannot perform augmented assignment on a list or tuple expression", //
+        "a, b += 2, 3");
   }
 
   @Test
   public void testReturnOutsideFunction() throws Exception {
-    checkError("Return statements must be inside a function", "return 2\n");
+    assertInvalid(
+        "return statements must be inside a function", //
+        "return 2\n");
   }
 
   @Test
-  public void testTwoFunctionsWithTheSameName() throws Exception {
-    checkError(
-        "Variable foo is read only", "def foo():", "  return 1", "def foo(x, y):", "  return 1");
+  public void testLoadAfterStatement() throws Exception {
+    assertInvalid(
+        "load() statements must be called before any other statement", //
+        "a = 5",
+        "load(':b.bzl', 'c')");
+  }
+
+  @Test
+  public void testLoadDuplicateSymbols() throws Exception {
+    assertInvalid(
+        "load statement defines 'x' more than once", //
+        "load('module', 'x', 'x')");
+    assertInvalid(
+        "load statement defines 'x' more than once", //
+        "load('module', 'x', x='y')");
+
+    // Eventually load bindings will be local,
+    // at which point these errors will need adjusting.
+    assertInvalid(
+        "cannot reassign global 'x'", //
+        "x=1; load('module', 'x')");
+    assertInvalid(
+        "cannot reassign global 'x'", //
+        "load('module', 'x'); x=1");
+  }
+
+  @Test
+  public void testForbiddenToplevelIfStatement() throws Exception {
+    assertInvalid(
+        "if statements are not allowed at the top level", //
+        "if True: a = 2");
   }
 
   @Test
   public void testFunctionLocalVariable() throws Exception {
-    checkError(
-        "name 'a' is not defined",
+    assertInvalid(
+        "name 'a' is not defined", //
         "def func2(b):",
         "  c = b",
         "  c = a",
@@ -67,193 +136,161 @@ public class ValidationTest extends EvaluationTestCase {
 
   @Test
   public void testFunctionLocalVariableDoesNotEffectGlobalValidationEnv() throws Exception {
-    checkError("name 'a' is not defined", "def func1():", "  a = 1", "def func2(b):", "  b = a");
+    assertInvalid(
+        "name 'a' is not defined", //
+        "def func1():",
+        "  a = 1",
+        "def func2(b):",
+        "  b = a");
   }
 
   @Test
   public void testFunctionParameterDoesNotEffectGlobalValidationEnv() throws Exception {
-    checkError("name 'a' is not defined", "def func1(a):", "  return a", "def func2():", "  b = a");
+    assertInvalid(
+        "name 'a' is not defined", //
+        "def func1(a):",
+        "  return a",
+        "def func2():",
+        "  b = a");
+  }
+
+  @Test
+  public void testDefinitionByItself() throws Exception {
+    // Variables are assumed to be statically visible in the block (even if they might not be
+    // initialized).
+    assertValid("a = a");
+    assertValid("a += a");
+    assertValid("[[] for a in a]");
+    assertValid("def f():", "  for a in a: pass");
   }
 
   @Test
   public void testLocalValidationEnvironmentsAreSeparated() throws Exception {
-    parse("def func1():", "  a = 1", "def func2():", "  a = 'abc'\n");
+    assertValid(
+        "def func1():", //
+        "  a = 1",
+        "def func2():",
+        "  a = 'abc'");
   }
 
   @Test
-  public void testBuiltinSymbolsAreReadOnly() throws Exception {
-    checkError("Variable repr is read only", "repr = 1");
+  public void testBuiltinsCanBeShadowed() throws Exception {
+    assertValid("repr = 1");
   }
 
   @Test
-  public void testSkylarkGlobalVariablesAreReadonly() throws Exception {
-    checkError("Variable a is read only", "a = 1", "a = 2");
+  public void testNoGlobalReassign() throws Exception {
+    EventCollector errors = getValidationErrors("a = 1", "a = 2");
+    assertContainsEvent(errors, ":2:1: cannot reassign global 'a'");
+    assertContainsEvent(errors, ":1:1: 'a' previously declared here");
+  }
+
+  @Test
+  public void testTwoFunctionsWithTheSameName() throws Exception {
+    EventCollector errors = getValidationErrors("def foo(): pass", "def foo(): pass");
+    assertContainsEvent(errors, ":2:5: cannot reassign global 'foo'");
+    assertContainsEvent(errors, ":1:5: 'foo' previously declared here");
   }
 
   @Test
   public void testFunctionDefRecursion() throws Exception {
-    parse("def func():", "  func()\n");
+    assertValid("def func():", "  func()\n");
   }
 
   @Test
   public void testMutualRecursion() throws Exception {
-    parse("def foo(i):", "  bar(i)", "def bar(i):", "  foo(i)", "foo(4)");
+    assertValid("def foo(i):", "  bar(i)", "def bar(i):", "  foo(i)", "foo(4)");
   }
 
   @Test
-  public void testFunctionDefinedBelow() {
-    parse("def bar(): a = foo() + 'a'", "def foo(): return 1\n");
+  public void testFunctionDefinedBelow() throws Exception {
+    assertValid("def bar(): a = foo() + 'a'", "def foo(): return 1\n");
   }
 
   @Test
-  public void testFunctionDoesNotExist() {
-    checkError("function 'foo' does not exist", "def bar(): a = foo() + 'a'");
+  public void testGlobalDefinedBelow() throws Exception {
+    assertValid("def bar(): return x", "x = 5\n");
   }
 
   @Test
-  public void testStructMembersAreImmutable() {
-    checkError(
-        "can only assign to variables and tuples, not to 's.x'",
-        "s = struct(x = 'a')",
-        "s.x = 'b'\n");
+  public void testLocalVariableDefinedBelow() throws Exception {
+    assertValid(
+        "def bar():",
+        "    for i in range(5):",
+        "        if i > 2: return x",
+        "        x = i" // x is visible in the entire function block
+        );
   }
 
   @Test
-  public void testStructDictMembersAreImmutable() {
-    checkError(
-        "can only assign to variables and tuples, not to 's.x['b']'",
-        "s = struct(x = {'a' : 1})",
-        "s.x['b'] = 2\n");
+  public void testFunctionDoesNotExist() throws Exception {
+    assertInvalid(
+        "name 'foo' is not defined", //
+        "def bar(): a = foo() + 'a'");
   }
 
   @Test
   public void testTupleLiteralWorksForDifferentTypes() throws Exception {
-    parse("('a', 1)");
+    assertValid("('a', 1)");
   }
 
   @Test
-  public void testDictLiteralDifferentValueTypeWorks() throws Exception {
-    parse("{'a': 1, 'b': 'c'}");
+  public void testDictExpressionDifferentValueTypeWorks() throws Exception {
+    assertValid("{'a': 1, 'b': 'c'}");
   }
 
   @Test
   public void testNoneAssignment() throws Exception {
-    parse("def func():", "  a = None", "  a = 2", "  a = None\n");
+    assertValid("def func():", "  a = None", "  a = 2", "  a = None\n");
   }
 
   @Test
   public void testNoneIsAnyType() throws Exception {
-    parse("None + None");
-    parse("2 == None");
-    parse("None > 'a'");
-    parse("[] in None");
-    parse("5 * None");
+    assertValid("None + None");
+    assertValid("2 == None");
+    assertValid("None > 'a'");
+    assertValid("[] in None");
+    assertValid("5 * None");
   }
 
-  // Skylark built-in functions specific tests
+  // Starlark built-in functions specific tests
 
   @Test
   public void testFuncReturningDictAssignmentAsLValue() throws Exception {
-    checkError(
-        "can only assign to variables and tuples, not to 'my_dict()['b']'",
-        "def my_dict():",
+    assertValid(
+        "def my_dict():", //
         "  return {'a': 1}",
         "def func():",
-        "  my_dict()['b'] = 2",
-        "  return d\n");
+        "  my_dict()['b'] = 2");
   }
 
   @Test
-  public void testEmptyLiteralGenericIsSetInLaterConcatWorks() {
-    parse("def func():", "  s = {}", "  s['a'] = 'b'\n");
+  public void testEmptyLiteralGenericIsSetInLaterConcatWorks() throws Exception {
+    assertValid(
+        "def func():", //
+        "  s = {}",
+        "  s['a'] = 'b'");
   }
 
   @Test
-  public void testReadOnlyWorksForSimpleBranching() {
-    parse("if 1:", "  v = 'a'", "else:", "  v = 'b'");
+  public void testModulesReadOnlyInFuncDefBody() throws Exception {
+    assertValid("def func():", "  cmd_helper = depset()");
   }
 
   @Test
-  public void testReadOnlyWorksForNestedBranching() {
-    parse(
-        "if 1:",
-        "  if 0:",
-        "    v = 'a'",
-        "  else:",
-        "    v = 'b'",
-        "else:",
-        "  if 0:",
-        "    v = 'c'",
-        "  else:",
-        "    v = 'd'\n");
+  public void testBuiltinGlobalFunctionsReadOnlyInFuncDefBody() throws Exception {
+    assertValid("def func():", "  rule = 'abc'");
   }
 
   @Test
-  public void testReadOnlyWorksForDifferentLevelBranches() {
-    checkError("Variable v is read only", "if 1:", "  if 1:", "    v = 'a'", "  v = 'b'\n");
+  public void testBuiltinGlobalFunctionsReadOnlyAsFuncDefArg() throws Exception {
+    assertValid("def func(rule):", "  return rule");
   }
 
   @Test
-  public void testReadOnlyWorksWithinSimpleBranch() {
-    checkError(
-        "Variable v is read only", "if 1:", "  v = 'a'", "else:", "  v = 'b'", "  v = 'c'\n");
-  }
-
-  @Test
-  public void testReadOnlyWorksWithinNestedBranch() {
-    checkError(
-        "Variable v is read only",
-        "if 1:",
-        "  v = 'a'",
-        "else:",
-        "  if 1:",
-        "    v = 'b'",
-        "  else:",
-        "    v = 'c'",
-        "    v = 'd'\n");
-  }
-
-  @Test
-  public void testReadOnlyWorksAfterSimpleBranch() {
-    checkError("Variable v is read only", "if 1:", "  v = 'a'", "else:", "  w = 'a'", "v = 'b'");
-  }
-
-  @Test
-  public void testReadOnlyWorksAfterNestedBranch() {
-    checkError("Variable v is read only", "if 1:", "  if 1:", "    v = 'a'", "v = 'b'");
-  }
-
-  @Test
-  public void testReadOnlyWorksAfterNestedBranch2() {
-    checkError(
-        "Variable v is read only",
-        "if 1:",
-        "  v = 'a'",
-        "else:",
-        "  if 0:",
-        "    w = 1",
-        "v = 'b'\n");
-  }
-
-  @Test
-  public void testModulesReadOnlyInFuncDefBody() {
-    parse("def func():", "  cmd_helper = set()");
-  }
-
-  @Test
-  public void testBuiltinGlobalFunctionsReadOnlyInFuncDefBody() {
-    parse("def func():", "  rule = 'abc'");
-  }
-
-  @Test
-  public void testBuiltinGlobalFunctionsReadOnlyAsFuncDefArg() {
-    parse("def func(rule):", "  return rule");
-  }
-
-  @Test
-  public void testFunctionReturnsFunction() {
-    parse(
-        "def rule(*, implementation): return None",
+  public void testFunctionReturnsFunction() throws Exception {
+    assertValid(
+        "def rule(*, implementation): return None", //
         "def impl(ctx): return None",
         "",
         "skylark_rule = rule(implementation = impl)",
@@ -263,126 +300,67 @@ public class ValidationTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testTypeForBooleanLiterals() {
-    parse("len([1, 2]) == 0 and True");
-    parse("len([1, 2]) == 0 and False");
-  }
-
-  @Test
-  public void testLoadRelativePathOneSegment() throws Exception {
-    parse("load('extension', 'a')\n");
-  }
-
-  @Test
-  public void testLoadAbsolutePathMultipleSegments() throws Exception {
-    parse("load('/pkg/extension', 'a')\n");
-  }
-
-  @Test
-  public void testLoadRelativePathMultipleSegments() throws Exception {
-    checkError(
-        "Path 'pkg/extension.bzl' is not valid. It should either start with "
-            + "a slash or refer to a file in the current directory.",
-        "load('pkg/extension', 'a')\n");
+  public void testTypeForBooleanLiterals() throws Exception {
+    assertValid("len([1, 2]) == 0 and True");
+    assertValid("len([1, 2]) == 0 and False");
   }
 
   @Test
   public void testDollarErrorDoesNotLeak() throws Exception {
-    setFailFast(false);
-    parseFile(
-        "def GenerateMapNames():", "  a = 2", "  b = [3, 4]", "  if a not b:", "    print(a)");
-    assertContainsEvent("syntax error at 'b': expected in");
+    EventCollector errors =
+        getValidationErrors(
+            "def GenerateMapNames():", //
+            "  a = 2",
+            "  b = [3, 4]",
+            "  if a not b:",
+            "    print(a)");
+    assertContainsEvent(errors, "syntax error at 'b': expected 'in'");
     // Parser uses "$error" symbol for error recovery.
     // It should not be used in error messages.
-    for (Event event : getEventCollector()) {
+    for (Event event : errors) {
       assertThat(event.getMessage()).doesNotContain("$error$");
     }
   }
 
   @Test
-  public void testParentWithSkylarkModule() throws Exception {
-    Class<?> emptyTupleClass = Tuple.EMPTY.getClass();
-    Class<?> tupleClass = Tuple.of(1, "a", "b").getClass();
-    Class<?> mutableListClass = new MutableList(Tuple.of(1, 2, 3), env).getClass();
-
-    assertThat(mutableListClass).isEqualTo(MutableList.class);
-    assertThat(MutableList.class.isAnnotationPresent(SkylarkModule.class)).isTrue();
-    assertThat(EvalUtils.getParentWithSkylarkModule(MutableList.class))
-        .isEqualTo(MutableList.class);
-    assertThat(EvalUtils.getParentWithSkylarkModule(emptyTupleClass)).isEqualTo(Tuple.class);
-    assertThat(EvalUtils.getParentWithSkylarkModule(tupleClass)).isEqualTo(Tuple.class);
-    // TODO(bazel-team): make a tuple not a list anymore.
-    assertThat(EvalUtils.getParentWithSkylarkModule(tupleClass)).isEqualTo(Tuple.class);
-
-    // TODO(bazel-team): fix that?
-    assertThat(ClassObject.class.isAnnotationPresent(SkylarkModule.class)).isFalse();
-    assertThat(ClassObject.SkylarkClassObject.class.isAnnotationPresent(SkylarkModule.class))
-        .isTrue();
-    assertThat(
-            EvalUtils.getParentWithSkylarkModule(ClassObject.SkylarkClassObject.class)
-                == ClassObject.SkylarkClassObject.class)
-        .isTrue();
-    assertThat(EvalUtils.getParentWithSkylarkModule(ClassObject.class)).isNull();
+  public void testPositionalAfterStarArg() throws Exception {
+    assertInvalid(
+        "positional argument is misplaced (positional arguments come first)", //
+        "def fct(*args, **kwargs): pass",
+        "fct(1, *[2], 3)");
   }
 
   @Test
-  public void testSkylarkTypeEquivalence() throws Exception {
-    // All subclasses of SkylarkList are made equivalent
-    Class<?> emptyTupleClass = Tuple.EMPTY.getClass();
-    Class<?> tupleClass = Tuple.of(1, "a", "b").getClass();
-    Class<?> mutableListClass = new MutableList(Tuple.of(1, 2, 3), env).getClass();
-
-    assertThat(SkylarkType.of(mutableListClass)).isEqualTo(SkylarkType.LIST);
-    assertThat(SkylarkType.of(emptyTupleClass)).isEqualTo(SkylarkType.TUPLE);
-    assertThat(SkylarkType.of(tupleClass)).isEqualTo(SkylarkType.TUPLE);
-    assertThat(SkylarkType.TUPLE).isNotEqualTo(SkylarkType.LIST);
-
-    // Also for ClassObject
-    assertThat(SkylarkType.of(ClassObject.SkylarkClassObject.class)).isEqualTo(SkylarkType.STRUCT);
-    // TODO(bazel-team): fix that?
-    assertThat(SkylarkType.of(ClassObject.class)).isNotEqualTo(SkylarkType.STRUCT);
-
-    // Also test for these bazel classes, to avoid some regression.
-    // TODO(bazel-team): move to some other place to remove dependency of syntax tests on Artifact?
-    assertThat(SkylarkType.of(Artifact.SpecialArtifact.class))
-        .isEqualTo(SkylarkType.of(Artifact.class));
-    assertThat(SkylarkType.of(RuleConfiguredTarget.class)).isNotEqualTo(SkylarkType.STRUCT);
+  public void testTwoStarArgs() throws Exception {
+    assertInvalid(
+        "*arg argument is misplaced", //
+        "def fct(*args, **kwargs):",
+        "  pass",
+        "fct(1, 2, 3, *[], *[])");
   }
 
   @Test
-  public void testSkylarkTypeInclusion() throws Exception {
-    assertThat(SkylarkType.INT.includes(SkylarkType.BOTTOM)).isTrue();
-    assertThat(SkylarkType.BOTTOM.includes(SkylarkType.INT)).isFalse();
-    assertThat(SkylarkType.TOP.includes(SkylarkType.INT)).isTrue();
-
-    SkylarkType combo1 = SkylarkType.Combination.of(SkylarkType.LIST, SkylarkType.INT);
-    assertThat(SkylarkType.LIST.includes(combo1)).isTrue();
-
-    SkylarkType union1 =
-        SkylarkType.Union.of(SkylarkType.MAP, SkylarkType.LIST, SkylarkType.STRUCT);
-    assertThat(union1.includes(SkylarkType.MAP)).isTrue();
-    assertThat(union1.includes(SkylarkType.STRUCT)).isTrue();
-    assertThat(union1.includes(combo1)).isTrue();
-    assertThat(union1.includes(SkylarkType.STRING)).isFalse();
-
-    SkylarkType union2 =
-        SkylarkType.Union.of(
-            SkylarkType.LIST, SkylarkType.MAP, SkylarkType.STRING, SkylarkType.INT);
-    SkylarkType inter1 = SkylarkType.intersection(union1, union2);
-    assertThat(inter1.includes(SkylarkType.MAP)).isTrue();
-    assertThat(inter1.includes(SkylarkType.LIST)).isTrue();
-    assertThat(inter1.includes(combo1)).isTrue();
-    assertThat(inter1.includes(SkylarkType.INT)).isFalse();
+  public void testKeywordArgAfterStarArg() throws Exception {
+    assertInvalid(
+        "keyword argument is misplaced (keyword arguments must be before any *arg or **kwarg)", //
+        "def fct(*args, **kwargs): pass",
+        "fct(1, *[2], a=3)");
   }
 
-  private void parse(String... lines) {
-    parseFile(lines);
-    assertNoEvents();
+  @Test
+  public void testTopLevelForFails() throws Exception {
+    assertInvalid(
+        "for loops are not allowed at the top level", //
+        "for i in []: 0\n");
   }
 
-  private void checkError(String errorMsg, String... lines) {
-    setFailFast(false);
-    parseFile(lines);
-    assertContainsEvent(errorMsg);
+  @Test
+  public void testNestedFunctionFails() throws Exception {
+    assertInvalid(
+        "nested functions are not allowed. Move the function to the top level", //
+        "def func(a):",
+        "  def bar(): return 0",
+        "  return bar()",
+        "");
   }
 }
