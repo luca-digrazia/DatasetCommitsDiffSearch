@@ -80,7 +80,8 @@ public class AsyncRequestLog extends AbstractLifeCycle implements RequestLog {
         this.dateCache = new ThreadLocal<DateCache>() {
             @Override
             protected DateCache initialValue() {
-                final DateCache cache = new DateCache("dd/MMM/yyyy:HH:mm:ss Z", Locale.US);
+                final DateCache cache = new DateCache("dd/MMM/yyyy:HH:mm:ss Z",
+                                                      Locale.getDefault());
                 cache.setTimeZoneID(timeZone.getID());
                 return cache;
             }
