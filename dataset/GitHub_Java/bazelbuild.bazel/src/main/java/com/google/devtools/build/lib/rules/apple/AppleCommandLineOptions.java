@@ -188,7 +188,7 @@ public class AppleCommandLineOptions extends FragmentOptions {
   @Option(name = "apple configuration distinguisher",
       defaultValue = "UNKNOWN",
       converter = ConfigurationDistinguisherConverter.class,
-      category = "internal")
+      category = "undocumented")
   public ConfigurationDistinguisher configurationDistinguisher;
 
   @Option(name = "ios_multi_cpus",
