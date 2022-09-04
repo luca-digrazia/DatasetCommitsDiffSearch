@@ -237,11 +237,11 @@ public final class ObjcProvider extends Info implements ObjcProviderApi<Artifact
 
   /**
    * Exec paths of {@code .framework} directories corresponding to frameworks to include in search
-   * paths, but not to link. These cause -F arguments (framework search paths) to be added to each
-   * compile action, but do not cause -framework (link framework) arguments to be added to link
-   * actions.
+   * paths, but not to link.  These cause -F arguments (framework search paths) to be added to
+   * each compile action, but do not cause -framework (link framework) arguments to be added to
+   * link actions.
    */
-  public static final Key<PathFragment> FRAMEWORK_SEARCH_PATHS =
+  public static final Key<PathFragment> FRAMEWORK_SEARCH_PATH_ONLY =
       new Key<>(LINK_ORDER, "framework_search_paths", PathFragment.class);
 
   /** The static library files of user-specified static frameworks. */
@@ -361,7 +361,7 @@ public final class ObjcProvider extends Info implements ObjcProviderApi<Artifact
           DYNAMIC_FRAMEWORK_DIR,
           DYNAMIC_FRAMEWORK_FILE,
           EXPORTED_DEBUG_ARTIFACTS,
-          FRAMEWORK_SEARCH_PATHS,
+          FRAMEWORK_SEARCH_PATH_ONLY,
           FORCE_LOAD_LIBRARY,
           HEADER,
           IMPORTED_LIBRARY,
@@ -425,7 +425,8 @@ public final class ObjcProvider extends Info implements ObjcProviderApi<Artifact
 
   @Override
   public SkylarkNestedSet frameworkSearchPathOnly() {
-    return ObjcProviderSkylarkConverters.convertPathFragmentsToSkylark(get(FRAMEWORK_SEARCH_PATHS));
+    return ObjcProviderSkylarkConverters.convertPathFragmentsToSkylark(
+        get(FRAMEWORK_SEARCH_PATH_ONLY));
   }
 
   @Override
@@ -596,7 +597,7 @@ public final class ObjcProvider extends Info implements ObjcProviderApi<Artifact
           DYNAMIC_FRAMEWORK_FILE,
           FLAG,
           MERGE_ZIP,
-          FRAMEWORK_SEARCH_PATHS,
+          FRAMEWORK_SEARCH_PATH_ONLY,
           HEADER,
           INCLUDE,
           INCLUDE_SYSTEM,

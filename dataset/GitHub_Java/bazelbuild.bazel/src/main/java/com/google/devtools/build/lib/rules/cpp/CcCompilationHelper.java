@@ -260,7 +260,7 @@ public final class CcCompilationHelper {
   private final CcToolchainProvider ccToolchain;
   private final FdoContext fdoContext;
   private boolean generateModuleMap = true;
-  private String purpose = "cc_compilation_middleman";
+  private String purpose = null;
   private boolean generateNoPicAction;
   private boolean generatePicAction;
   private boolean isCodeCoverageEnabled = true;
@@ -344,7 +344,6 @@ public final class CcCompilationHelper {
     setLooseIncludeDirs(common.getLooseIncludeDirs());
     addSystemIncludeDirs(common.getSystemIncludeDirs());
     setCoptsFilter(common.getCoptsFilter());
-    setPurpose(common.getPurpose(semantics));
     return this;
   }
 
@@ -1063,8 +1062,8 @@ public final class CcCompilationHelper {
    * @param purpose must be a string which is suitable for use as a filename. A single rule may have
    *     many middlemen with distinct purposes.
    */
-  public CcCompilationHelper setPurpose(String purpose) {
-    this.purpose = Preconditions.checkNotNull(purpose);
+  public CcCompilationHelper setPurpose(@Nullable String purpose) {
+    this.purpose = purpose;
     return this;
   }
 
@@ -1278,8 +1277,7 @@ public final class CcCompilationHelper {
     String outputNamePrefixDir = null;
     // purpose is only used by objc rules, it ends with either "_non_objc_arc" or "_objc_arc".
     // Here we use it to distinguish arc and non-arc compilation.
-    Preconditions.checkNotNull(purpose);
-    if (purpose.endsWith("_objc_arc")) {
+    if (purpose != null) {
       outputNamePrefixDir = purpose.endsWith("_non_objc_arc") ? "non_arc" : "arc";
     }
     outputNameMap = calculateOutputNameMapByType(compilationUnitSources, outputNamePrefixDir);
@@ -1400,19 +1398,12 @@ public final class CcCompilationHelper {
             /* additionalBuildVariables= */ ImmutableMap.of()));
     semantics.finalizeCompileActionBuilder(configuration, featureConfiguration, builder);
     // Make sure this builder doesn't reference ruleContext outside of analysis phase.
-    SpecialArtifact dotdTreeArtifact = null;
-    // The MSVC compiler won't generate .d file, instead we parse the output of /showIncludes flag.
-    // Therefore, dotdTreeArtifact should be null in this case.
-    if (!featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES)) {
-      dotdTreeArtifact =
-          CppHelper.getDotdOutputTreeArtifact(
-              actionConstructionContext, label, sourceArtifact, outputName, usePic);
-    }
     CppCompileActionTemplate actionTemplate =
         new CppCompileActionTemplate(
             sourceArtifact,
             outputFiles,
-            dotdTreeArtifact,
+            CppHelper.getDotdOutputTreeArtifact(
+                actionConstructionContext, label, sourceArtifact, outputName, usePic),
             builder,
             ccToolchain,
             outputCategories,
@@ -2034,9 +2025,6 @@ public final class CcCompilationHelper {
   }
 
   private Artifact getLtoIndexingFile(Artifact outputFile) {
-    if (featureConfiguration.isEnabled(CppRuleClasses.NO_USE_LTO_INDEXING_BITCODE_FILE)) {
-      return null;
-    }
     String ext = Iterables.getOnlyElement(CppFileTypes.LTO_INDEXING_OBJECT_FILE.getExtensions());
     return actionConstructionContext.getRelatedArtifact(outputFile.getRootRelativePath(), ext);
   }

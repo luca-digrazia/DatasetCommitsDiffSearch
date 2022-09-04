@@ -59,6 +59,7 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
+import com.google.devtools.build.lib.rules.cpp.FdoContext;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
@@ -272,6 +273,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
       try {
         CcToolchainProvider ccToolchain =
             CppHelper.getToolchain(ruleContext, ":j2objc_cc_toolchain");
+        FdoContext fdoContext = ccToolchain.getFdoContext();
         CompilationSupport compilationSupport =
             new CompilationSupport.Builder()
                 .setRuleContext(ruleContext)
@@ -282,10 +284,17 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
 
         compilationSupport
             .registerCompileAndArchiveActions(
-                common, EXTRA_COMPILE_ARGS, ImmutableList.<PathFragment>of())
+                common.getCompilationArtifacts().get(),
+                common.getObjcProvider(),
+                EXTRA_COMPILE_ARGS,
+                ImmutableList.<PathFragment>of(),
+                ccToolchain,
+                fdoContext)
             .registerFullyLinkAction(
                 common.getObjcProvider(),
-                ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB));
+                ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB),
+                ccToolchain,
+                fdoContext);
       } catch (RuleErrorException e) {
         ruleContext.ruleError(e.getMessage());
       }
@@ -368,7 +377,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
             J2OBJC_PROTO_TOOLCHAIN_ATTR, TARGET, ProtoLangToolchainProvider.class);
     // Avoid pulling in any generated files from blacklisted protos.
     ProtoSourceFileBlacklist protoBlacklist =
-        new ProtoSourceFileBlacklist(ruleContext, protoToolchain.blacklistedProtos());
+        new ProtoSourceFileBlacklist(ruleContext, protoToolchain.blacklistedProtos().toList());
 
     ImmutableList<Artifact> filteredProtoSources =
         ImmutableList.copyOf(protoBlacklist.filter(protoSources));
@@ -828,11 +837,13 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
     for (Attribute dependentAttribute : dependentAttributes) {
       if (ruleContext.attributes().has(dependentAttribute.getName(), BuildType.LABEL_LIST)
           || ruleContext.attributes().has(dependentAttribute.getName(), BuildType.LABEL)) {
-        builder.addDepObjcProviders(
+        Iterable<ObjcProvider> depObjcProviders =
             ruleContext.getPrerequisites(
                 dependentAttribute.getName(),
                 dependentAttribute.getAccessMode(),
-                ObjcProvider.SKYLARK_CONSTRUCTOR));
+                ObjcProvider.SKYLARK_CONSTRUCTOR);
+        builder.addDepObjcProviders(depObjcProviders);
+        builder.addRepropagatedModuleMapObjcProviders(depObjcProviders);
       }
     }
 
