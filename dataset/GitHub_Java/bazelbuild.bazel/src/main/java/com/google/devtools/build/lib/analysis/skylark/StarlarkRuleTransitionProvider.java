@@ -21,7 +21,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
@@ -30,7 +29,6 @@ import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.syntax.Environment;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import java.util.LinkedHashMap;
@@ -94,34 +92,16 @@ public class StarlarkRuleTransitionProvider implements RuleTransitionFactory {
                   + "currently cannot read attributes behind selects.");
     }
 
-    /**
-     * @return the post-transition build options or a clone of the original build options if an
-     *     error was encountered during transition application/validation.
-     */
     // TODO(b/121134880): validate that the targets these transitions are applied on don't read any
     // attributes that are then configured by the outputs of these transitions.
     @Override
     public BuildOptions patch(BuildOptions buildOptions) {
-      List<BuildOptions> result;
-      try {
-        result = applyAndValidate(buildOptions, starlarkDefinedConfigTransition, attrObject);
-      } catch (EvalException | InterruptedException e) {
-        starlarkDefinedConfigTransition
-            .getEventHandler()
-            .handle(
-                Event.error(
-                    starlarkDefinedConfigTransition.getLocationForErrorReporting(),
-                    e.getMessage()));
-        return buildOptions.clone();
-      }
+      List<BuildOptions> result =
+          applyAndValidate(buildOptions, starlarkDefinedConfigTransition, attrObject);
       if (result.size() != 1) {
-        starlarkDefinedConfigTransition
-            .getEventHandler()
-            .handle(
-                Event.error(
-                    starlarkDefinedConfigTransition.getLocationForErrorReporting(),
-                    "Rule transition only allowed to return a single transitioned configuration."));
-        return buildOptions.clone();
+        // TODO(b/121134880): handle this with a better (checked) exception)
+        throw new RuntimeException(
+            "Rule transition only allowed to return a single transitioned configuration.");
       }
       return Iterables.getOnlyElement(result);
     }

@@ -19,12 +19,13 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import java.util.List;
 
 /**
@@ -49,23 +50,23 @@ public interface ConfigGlobalLibraryApi {
             // TODO(cparsons): The settings dict should take actual Label objects as keys and not
             // strings. Update the documentation.
             doc =
-                "The function implementing this transition. This function always has two "
-                    + "parammeters: <code>settings</code> and <code>attr</code>. The "
-                    + "<code>settings</code> param is a dictionary whose set of keys is defined "
+                "The function implementing this transition. This function always has the "
+                    + "parameter <code>settings</code>, a dictionary whose set of keys is defined "
                     + "by the inputs parameter. So, for each build setting "
                     + "<code>--//foo=bar</code>, if <code>inputs</code> contains "
                     + "<code>//foo</code>, <code>settings</code> will "
                     + "have an entry <code>settings['//foo']='bar'</code>.<p>"
-                    + "The <code>attr</code> param is a reference to <code>ctx.attr</code>. This "
-                    + "gives the implementation function access to the rule's attributes to make "
+                    // TODO(cparsons): Consider making this parameter mandatory, and determine
+                    // what to do with attributes which are defined with select().
+                    + "This function also optionally takes a parameter <code>attr</code> which is "
+                    + "a reference to <code>ctx.attr</code> but pre-analysis-phase. This gives the "
+                    + "implementation function access to the rule's attributes to make "
                     + "attribute-parameterized transitions possible.<p>"
+                    // TODO(cparsons): Mention the expected output for split transitions.
                     + "This function must return a <code>dict</code> from build setting identifier "
                     + "to build setting value; this represents the configuration transition: for "
                     + "each entry in the returned <code>dict</code>, the transition updates that "
-                    + "setting to the new value. All other settings are unchanged. This function "
-                    + "can also return a <code>list</code> of <code>dict</code>s or a "
-                    + "<code>dict</code> of <code>dict</code>s in the case of a "
-                    + "split transition."),
+                    + "setting to the new value. All other settings are unchanged."),
         @Param(
             name = "inputs",
             type = SkylarkList.class,
@@ -87,14 +88,16 @@ public interface ConfigGlobalLibraryApi {
                     + "a superset of the key set of the dictionary returned by this transition."),
       },
       useLocation = true,
-      useEnvironment = true)
+      useEnvironment = true,
+      useContext = true)
   @SkylarkConstructor(objectType = ConfigurationTransitionApi.class)
   ConfigurationTransitionApi transition(
       BaseFunction implementation,
       List<String> inputs,
       List<String> outputs,
       Location location,
-      Environment env)
+      Environment env,
+      StarlarkContext context)
       throws EvalException;
 
   @SkylarkCallable(
@@ -120,8 +123,8 @@ public interface ConfigGlobalLibraryApi {
                     + "an analysis test requires to be set in order to pass."),
       },
       useLocation = true,
-      useStarlarkSemantics = true)
+      useSkylarkSemantics = true)
   public ConfigurationTransitionApi analysisTestTransition(
-      SkylarkDict<String, String> changedSettings, Location location, StarlarkSemantics semantics)
+      SkylarkDict<String, String> changedSettings, Location location, SkylarkSemantics semantics)
       throws EvalException;
 }
