@@ -6,7 +6,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
-import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.RandomUUIDProvider;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.TimeRange;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.ViewWidget;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.AggregationConfig;
@@ -60,9 +59,9 @@ public abstract class QuickValuesHistogramConfig extends WidgetConfigBase implem
     }
 
     @Override
-    public Set<ViewWidget> toViewWidgets(RandomUUIDProvider randomUUIDProvider) {
+    public Set<ViewWidget> toViewWidgets() {
         return Collections.singleton(
-                createViewWidget(randomUUIDProvider.get())
+                createViewWidget()
                         .config(
                                 AggregationConfig.builder()
                                         .rowPivots(Collections.singletonList(

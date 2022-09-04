@@ -9,7 +9,6 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.RandomUUIDProvider;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.TimeRange;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.ViewWidget;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.ViewWidgetPosition;
@@ -78,13 +77,13 @@ public abstract class QuickValuesConfig extends WidgetConfigBase implements Widg
     }
 
     @Override
-    public Set<ViewWidget> toViewWidgets(RandomUUIDProvider randomUUIDProvider) {
+    public Set<ViewWidget> toViewWidgets() {
         final ImmutableSet.Builder<ViewWidget> viewWidgets = ImmutableSet.builder();
         final AggregationConfig.Builder baseConfigBuilder = AggregationConfig.builder()
                 .sort(Collections.singletonList(sort()))
                 .series(Collections.singletonList(series()));
         if (showPieChart()) {
-            final ViewWidget pieChart = createViewWidget(randomUUIDProvider.get())
+            final ViewWidget pieChart = createViewWidget()
                     .config(
                             baseConfigBuilder
                                     .rowPivots(ImmutableList.<Pivot>builder().add(piePivot()).addAll(stackedFieldPivots()).build())
@@ -95,7 +94,7 @@ public abstract class QuickValuesConfig extends WidgetConfigBase implements Widg
             viewWidgets.add(pieChart);
         }
         if (showDataTable()) {
-            final ViewWidget dataTable = createViewWidget(randomUUIDProvider.get())
+            final ViewWidget pieChart = createViewWidget()
                     .config(
                             baseConfigBuilder
                                     .rowPivots(ImmutableList.<Pivot>builder().add(dataTablePivot()).addAll(stackedFieldPivots()).build())
@@ -103,7 +102,7 @@ public abstract class QuickValuesConfig extends WidgetConfigBase implements Widg
                                     .build()
                     )
                     .build();
-            viewWidgets.add(dataTable);
+            viewWidgets.add(pieChart);
         }
 
         return viewWidgets.build();
