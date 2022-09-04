@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.syntax.StarlarkThread.LexicalFrame;
 /** A StarlarkFunction is the function value created by a Starlark {@code def} statement. */
 public final class StarlarkFunction extends BaseFunction {
 
-  private final Location location;
   private final ImmutableList<Statement> statements;
 
   // we close over the globals at the time of definition
@@ -39,15 +38,9 @@ public final class StarlarkFunction extends BaseFunction {
       ImmutableList<Object> defaultValues,
       ImmutableList<Statement> statements,
       Module definitionGlobals) {
-    super(name, signature, defaultValues);
-    this.location = location;
+    super(name, signature, defaultValues, location);
     this.statements = statements;
     this.definitionGlobals = definitionGlobals;
-  }
-
-  @Override
-  public Location getLocation() {
-    return location;
   }
 
   public ImmutableList<Statement> getStatements() {

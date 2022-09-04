@@ -69,21 +69,16 @@ public class FunctionTest extends EvaluationTestCase {
 
   private void createOuterFunction(final List<Object> params) throws Exception {
     BaseFunction outerFunc =
-        new BaseFunction(FunctionSignature.ANY) {
+        new BaseFunction("outer_func", FunctionSignature.ANY) {
           @Override
-          public String getName() {
-            return "outer_func";
-          }
-
-          @Override
-          public Object callImpl(
-              StarlarkThread thread,
-              FuncallExpression call,
+          public Object call(
               List<Object> args,
-              Map<String, Object> kwargs)
+              Map<String, Object> kwargs,
+              FuncallExpression ast,
+              StarlarkThread thread)
               throws EvalException, InterruptedException {
             params.addAll(args);
-            return Starlark.NONE;
+            return Runtime.NONE;
           }
         };
     update("outer_func", outerFunc);

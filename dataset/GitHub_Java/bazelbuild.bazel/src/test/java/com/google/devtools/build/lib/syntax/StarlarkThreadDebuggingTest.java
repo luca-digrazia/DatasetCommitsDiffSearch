@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.events.Location.LineAndColumn;
+import com.google.devtools.build.lib.syntax.StarlarkThread.LexicalFrame;
 import com.google.devtools.build.lib.syntax.StarlarkThread.ReadyToPause;
 import com.google.devtools.build.lib.syntax.StarlarkThread.Stepping;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -28,22 +29,25 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Tests of debugging features of StarlarkThread. */
+/** Unit tests of {@link StarlarkThread}s implementation of {@link StarlarkThread}. */
 @RunWith(JUnit4.class)
 public class StarlarkThreadDebuggingTest {
-
-  // TODO(adonovan): rewrite these tests at a higher level.
 
   private static StarlarkThread newStarlarkThread() {
     Mutability mutability = Mutability.create("test");
     return StarlarkThread.builder(mutability).useDefaultSemantics().build();
   }
 
-  // Executes the definition of a trivial function f in the specified thread,
-  // and returns the function value.
-  private static StarlarkFunction defineFunc(StarlarkThread thread) throws Exception {
-    EvalUtils.exec(ParserInput.fromLines("def f(): pass"), thread);
-    return (StarlarkFunction) thread.lookup("f");
+  /** Enter a dummy function scope with the given name, and the current environment's globals. */
+  private static void enterFunctionScope(
+      StarlarkThread thread, String functionName, Location location) {
+    FuncallExpression ast = new FuncallExpression(Identifier.of("test"), ImmutableList.of());
+    ast.setLocation(location);
+    thread.enterScope(
+        new BaseFunction(functionName, FunctionSignature.ANY) {},
+        LexicalFrame.create(thread.mutability()),
+        ast,
+        thread.getGlobals());
   }
 
   @Test
@@ -71,11 +75,10 @@ public class StarlarkThreadDebuggingTest {
     thread.update("a", 1);
     thread.update("b", 2);
     thread.update("c", 3);
-    Location loc =
+    Location funcallLocation =
         Location.fromPathAndStartColumn(
             PathFragment.create("foo/bar"), 0, 0, new LineAndColumn(12, 0));
-    StarlarkFunction f = defineFunc(thread);
-    thread.push(f, loc, null);
+    enterFunctionScope(thread, "function", funcallLocation);
     thread.update("a", 4); // shadow parent frame var
     thread.update("y", 5);
     thread.update("z", 6);
@@ -86,26 +89,26 @@ public class StarlarkThreadDebuggingTest {
     assertThat(frames.get(0))
         .isEqualTo(
             DebugFrame.builder()
-                .setFunctionName("f")
+                .setFunctionName("function")
                 .setLocation(Location.BUILTIN)
                 .setLexicalFrameBindings(ImmutableMap.of("a", 4, "y", 5, "z", 6))
-                .setGlobalBindings(ImmutableMap.of("a", 1, "b", 2, "c", 3, "f", f))
+                .setGlobalBindings(ImmutableMap.of("a", 1, "b", 2, "c", 3))
                 .build());
     assertThat(frames.get(1))
         .isEqualTo(
             DebugFrame.builder()
                 .setFunctionName("<top level>")
-                .setLocation(loc)
-                .setGlobalBindings(ImmutableMap.of("a", 1, "b", 2, "c", 3, "f", f))
+                .setLocation(funcallLocation)
+                .setGlobalBindings(ImmutableMap.of("a", 1, "b", 2, "c", 3))
                 .build());
   }
 
   @Test
-  public void testStepIntoFunction() throws Exception {
+  public void testStepIntoFunction() {
     StarlarkThread thread = newStarlarkThread();
 
     ReadyToPause predicate = thread.stepControl(Stepping.INTO);
-    thread.push(defineFunc(thread), Location.BUILTIN, null);
+    enterFunctionScope(thread, "function", Location.BUILTIN);
 
     assertThat(predicate.test(thread)).isTrue();
   }
@@ -122,50 +125,50 @@ public class StarlarkThreadDebuggingTest {
   }
 
   @Test
-  public void testStepIntoFallsBackToStepOut() throws Exception {
+  public void testStepIntoFallsBackToStepOut() {
     // test that when stepping into, we'll fall back to stopping when exiting the current frame
     StarlarkThread thread = newStarlarkThread();
-    thread.push(defineFunc(thread), Location.BUILTIN, null);
+    enterFunctionScope(thread, "function", Location.BUILTIN);
 
     ReadyToPause predicate = thread.stepControl(Stepping.INTO);
-    thread.pop();
+    thread.exitScope();
 
     assertThat(predicate.test(thread)).isTrue();
   }
 
   @Test
-  public void testStepOverFunction() throws Exception {
+  public void testStepOverFunction() {
     StarlarkThread thread = newStarlarkThread();
 
     ReadyToPause predicate = thread.stepControl(Stepping.OVER);
-    thread.push(defineFunc(thread), Location.BUILTIN, null);
+    enterFunctionScope(thread, "function", Location.BUILTIN);
 
     assertThat(predicate.test(thread)).isFalse();
-    thread.pop();
+    thread.exitScope();
     assertThat(predicate.test(thread)).isTrue();
   }
 
   @Test
-  public void testStepOverFallsBackToStepOut() throws Exception {
+  public void testStepOverFallsBackToStepOut() {
     // test that when stepping over, we'll fall back to stopping when exiting the current frame
     StarlarkThread thread = newStarlarkThread();
-    thread.push(defineFunc(thread), Location.BUILTIN, null);
+    enterFunctionScope(thread, "function", Location.BUILTIN);
 
     ReadyToPause predicate = thread.stepControl(Stepping.OVER);
-    thread.pop();
+    thread.exitScope();
 
     assertThat(predicate.test(thread)).isTrue();
   }
 
   @Test
-  public void testStepOutOfInnerFrame() throws Exception {
+  public void testStepOutOfInnerFrame() {
     StarlarkThread thread = newStarlarkThread();
-    thread.push(defineFunc(thread), Location.BUILTIN, null);
+    enterFunctionScope(thread, "function", Location.BUILTIN);
 
     ReadyToPause predicate = thread.stepControl(Stepping.OUT);
 
     assertThat(predicate.test(thread)).isFalse();
-    thread.pop();
+    thread.exitScope();
     assertThat(predicate.test(thread)).isTrue();
   }
 

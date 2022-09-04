@@ -58,16 +58,8 @@ public final class AllocationTrackerTest {
   }
 
   private static class TestFunction extends BaseFunction {
-    private final Location location;
-
     TestFunction(String file, String name, int line) {
-      super(name, FunctionSignature.ANY, /*defaultValues=*/ null);
-      this.location = location(file, line);
-    }
-
-    @Override
-    public Location getLocation() {
-      return location;
+      super(name, FunctionSignature.ANY, /*defaultValues=*/ null, location(file, line));
     }
 
     public void invoke() {}
