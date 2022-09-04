@@ -42,7 +42,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
 public class DBGrantService extends PaginatedDbService<GrantDTO> {
@@ -103,28 +102,15 @@ public class DBGrantService extends PaginatedDbService<GrantDTO> {
     }
 
     public GrantDTO create(GrantDTO grantDTO, @Nullable User currentUser) {
-        return create(grantDTO, requireNonNull(currentUser, "currentUser cannot be null").getName());
-    }
-
-    public GrantDTO create(GrantDTO grantDTO, String creatorUsername) {
-        checkArgument(creatorUsername != null && !creatorUsername.trim().isEmpty(), "creatorUsername cannot be empty");
-
         final ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
+        final String userName = requireNonNull(currentUser, "currentUser cannot be null").getName();
 
         return super.save(grantDTO.toBuilder()
-                .createdBy(creatorUsername)
+                .createdBy(userName)
                 .createdAt(now)
-                .updatedBy(creatorUsername)
+                .updatedBy(userName)
                 .updatedAt(now)
                 .build());
-    }
-
-    public GrantDTO create(GRN grantee, Capability capability, GRN target, String creatorUsername) {
-        checkArgument(grantee != null, "grantee cannot be null");
-        checkArgument(capability != null, "capability cannot be null");
-        checkArgument(target != null, "target cannot be null");
-
-        return create(GrantDTO.of(grantee, capability, target), creatorUsername);
     }
 
     public GrantDTO update(GrantDTO updatedGrant, @Nullable User currentUser) {
