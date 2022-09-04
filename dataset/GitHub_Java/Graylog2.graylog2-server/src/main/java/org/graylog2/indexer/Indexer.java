@@ -1,330 +1,235 @@
+/**
+ * Copyright 2011 Lennart Koopmann <lennart@socketfeed.com>
+ *
+ * This file is part of Graylog2.
+ *
+ * Graylog2 is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog2 is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 package org.graylog2.indexer;
 
-import com.beust.jcommander.internal.Maps;
-import org.apache.commons.io.FileUtils;
-import org.elasticsearch.action.ActionFuture;
-import org.elasticsearch.action.WriteConsistencyLevel;
-import org.elasticsearch.action.admin.cluster.node.info.NodesInfoRequest;
-import org.elasticsearch.action.admin.cluster.node.info.NodesInfoResponse;
-import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
-import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
-import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
-import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
-import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest;
-import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsResponse;
-import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
-import org.elasticsearch.action.admin.indices.stats.IndexStats;
-import org.elasticsearch.action.admin.indices.stats.IndicesStats;
-import org.elasticsearch.action.admin.indices.stats.IndicesStatsRequest;
-import org.elasticsearch.action.bulk.BulkRequestBuilder;
-import org.elasticsearch.action.bulk.BulkResponse;
-import org.elasticsearch.action.count.CountRequest;
-import org.elasticsearch.action.deletebyquery.DeleteByQueryRequestBuilder;
-import org.elasticsearch.action.deletebyquery.DeleteByQueryResponse;
-import org.elasticsearch.action.index.IndexRequest.OpType;
-import org.elasticsearch.action.index.IndexRequestBuilder;
-import org.elasticsearch.action.support.replication.ReplicationType;
-import org.elasticsearch.client.Client;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.common.collect.ImmutableMap;
-import org.elasticsearch.common.settings.loader.YamlSettingsLoader;
-import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.index.query.QueryBuilder;
-import org.elasticsearch.node.Node;
-import org.elasticsearch.node.NodeBuilder;
-import org.graylog2.Core;
-import org.graylog2.activities.Activity;
-import org.graylog2.indexer.counts.Counts;
-import org.graylog2.indexer.messages.Messages;
-import org.graylog2.indexer.searches.Searches;
-import org.graylog2.plugin.Message;
-import org.json.simple.JSONValue;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.Calendar;
 import java.util.List;
-import java.util.Map;
 
-import static org.elasticsearch.index.query.QueryBuilders.rangeQuery;
-import static org.elasticsearch.node.NodeBuilder.nodeBuilder;
-import org.graylog2.plugin.indexer.MessageGateway;
+import org.apache.log4j.Logger;
+import org.graylog2.GraylogServer;
+import org.graylog2.messagehandlers.gelf.GELFMessage;
+import org.json.simple.JSONValue;
 
-// TODO this class blocks for most of its operations, but is called from the main thread for some of them
-// TODO figure out how to gracefully deal with failure to connect (or losing connection) to the elastic search cluster!
+/**
+ * Indexer.java: Sep 05, 2011 9:13:03 PM
+ * <p/>
+ * Stores/indexes log messages in ElasticSearch.
+ *
+ * @author Lennart Koopmann <lennart@socketfeed.com>
+ */
 public class Indexer {
-    private static final Logger LOG = LoggerFactory.getLogger(Indexer.class);
 
-    private Client client;
-    private final MessageGateway messageGateway;
+    // XXX ELASTIC: refactor.
+
+    private static final Logger LOG = Logger.getLogger(Indexer.class);
+
     public static final String TYPE = "message";
-    
-    private final Searches searches;
-    private final Counts counts;
-    private final Messages messages;
-    
-	public static enum DateHistogramInterval {
-		YEAR, QUARTER, MONTH, WEEK, DAY, HOUR, MINUTE
-	}
-	
-    private Core server;
+    private final String INDEX;
+    private final GraylogServer graylogServer;
 
-    public Indexer(Core graylogServer) {
-        server = graylogServer;
+    public Indexer(GraylogServer graylogServer) {
+        this.graylogServer = graylogServer;
+        INDEX = graylogServer.getConfiguration().getElasticSearchIndexName();
+    }
 
-        final NodeBuilder builder = nodeBuilder().client(true);
-        String esSettings;
-        Map<String, String> settings = null;
-        try {
-            esSettings = FileUtils.readFileToString(new File(graylogServer.getConfiguration().getElasticSearchConfigFile()));
-            settings = new YamlSettingsLoader().load(esSettings);
-        } catch (IOException e) {
-            throw new RuntimeException("Cannot read elasticsearch configuration.", e);
-        }
-        builder.settings().put(settings);
-        final Node node = builder.node();
-        client = node.client();
-
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                node.close();
+    /**
+     * Checks if the index for Graylog2 exists
+     * <p/>
+     * See <a href="http://www.elasticsearch.org/guide/reference/api/admin-indices-indices-exists.html">elasticsearch Indices Exists API</a> for details.
+     *
+     * @return {@literal true} if the index for Graylog2 exists, {@literal false} otherwise
+     * @throws IOException if elasticsearch server couldn't be reached
+     */
+    public boolean indexExists() throws IOException {
+        URL url = new URL(buildIndexURL());
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("HEAD");
+        // Older versions of ElasticSearch return 400 Bad Request in cse of an existing index.
+        if (conn.getResponseCode() == HttpURLConnection.HTTP_OK || conn.getResponseCode() == HttpURLConnection.HTTP_BAD_REQUEST) {
+            return true;
+        } else {
+            if (conn.getResponseCode() != HttpURLConnection.HTTP_NOT_FOUND) {
+                LOG.warn("Indexer response code was not (200 or 400) or 404, but " + conn.getResponseCode());
             }
-        });
-        
-        messageGateway = new MessageGatewayImpl(graylogServer);
-        searches = new Searches(client, graylogServer);
-        counts = new Counts(client, graylogServer);
-        messages = new Messages(client, graylogServer);
-    }
-    
-    public Client getClient() {
-        return client;
-    }
 
-    public MessageGateway getMessageGateway() {
-        return messageGateway;
-    }
-    
-    public String allIndicesAlias() {
-        return server.getConfiguration().getElasticSearchIndexPrefix() + "_*";
-    }
-    
-    public long getTotalIndexSize() {
-        return client.admin().indices().stats(
-                new IndicesStatsRequest().indices(allIndicesAlias()))
-                .actionGet()
-                .total()
-                .store()
-                .getSize()
-                .getMb();
-    }
-    
-    public String nodeIdToName(String nodeId) {
-        if (nodeId == null || nodeId.isEmpty()) {
-            return null;
-        }
-        
-        try {
-            NodesInfoResponse r = client.admin().cluster().nodesInfo(new NodesInfoRequest(nodeId).all()).actionGet();
-            return r.getNodesMap().get(nodeId).getNode().getName();
-        } catch (Exception e) {
-            LOG.error("Could not read name of ES node.", e);
-            return "UNKNOWN";
-        }
-        
-    }
-    
-    public String nodeIdToHostName(String nodeId) {
-        if (nodeId == null || nodeId.isEmpty()) {
-            return null;
-        }
-        
-        try {
-            NodesInfoResponse r = client.admin().cluster().nodesInfo(new NodesInfoRequest(nodeId).all()).actionGet();
-            return r.getNodesMap().get(nodeId).getHostname();
-        } catch (Exception e) {
-            LOG.error("Could not read name of ES node.", e);
-            return "UNKNOWN";
-        }
-        
-    }
-    
-    public int getNumberOfNodesInCluster() {
-        return client.admin().cluster().nodesInfo(new NodesInfoRequest().all()).actionGet().nodes().length;
-    }
-    
-    public long getTotalNumberOfMessagesInIndices() {
-        return client.count(new CountRequest(allIndicesAlias())).actionGet().count();
-    }
-    
-    public Map<String, IndexStats> getIndices() {
-        ActionFuture<IndicesStats> isr = client.admin().indices().stats(new IndicesStatsRequest().all());
-        
-        return isr.actionGet().indices();
-    }
-    
-    public ImmutableMap<String, IndexMetaData> getIndicesMetadata() {
-        return client.admin().cluster().state(new ClusterStateRequest()).actionGet().getState().getMetaData().indices();
-    }
-    
-    public boolean indexExists(String index) {
-        ActionFuture<IndicesExistsResponse> existsFuture = client.admin().indices().exists(new IndicesExistsRequest(index));
-        return existsFuture.actionGet().exists();
-    }
-
-    public boolean createIndex(String indexName) {
-        Map<String, Integer> settings = Maps.newHashMap();
-        settings.put("number_of_shards", server.getConfiguration().getElasticSearchShards());
-        settings.put("number_of_replicas", server.getConfiguration().getElasticSearchReplicas());
-
-        CreateIndexRequest cir = new CreateIndexRequest(indexName);
-        cir.settings(settings);
-        
-        final ActionFuture<CreateIndexResponse> createFuture = client.admin().indices().create(cir);
-        final boolean acknowledged = createFuture.actionGet().acknowledged();
-        if (!acknowledged) {
             return false;
         }
-        final PutMappingRequest mappingRequest = Mapping.getPutMappingRequest(client, indexName, server.getConfiguration().getElasticSearchAnalyzer());
-        final boolean mappingCreated = client.admin().indices().putMapping(mappingRequest).actionGet().acknowledged();
-        return acknowledged && mappingCreated;
-    }
-    
-    public boolean cycleAlias(String aliasName, String targetIndex) {
-        return client.admin().indices().prepareAliases()
-                .addAlias(targetIndex, aliasName)
-                .execute().actionGet().acknowledged();
-    }
-    
-    public boolean cycleAlias(String aliasName, String targetIndex, String oldIndex) {
-        return client.admin().indices().prepareAliases()
-                .removeAlias(oldIndex, aliasName)
-                .addAlias(targetIndex, aliasName)
-                .execute().actionGet().acknowledged();
-    }
-    
-    public long numberOfMessages(String indexName) throws IndexNotFoundException {
-        Map<String, IndexStats> indices = getIndices();
-        IndexStats index = indices.get(indexName);
-        
-        if (index == null) {
-            throw new IndexNotFoundException();
-        }
-        
-        return index.getPrimaries().docs().count();
     }
 
-    public boolean bulkIndex(final List<Message> messages) {
+    /**
+     * Creates the index for Graylog2 including the mapping
+     * <p/>
+     * <a href="http://www.elasticsearch.org/guide/reference/api/admin-indices-create-index.html">Create Index API</a> and
+     * <a href="http://www.elasticsearch.org/guide/reference/mapping">elasticsearch Mapping</a>
+     *
+     * @return {@literal true} if the index for Graylog2 could be created, {@literal false} otherwise
+     * @throws IOException if elasticsearch server couldn't be reached
+     */
+    public boolean createIndex() throws IOException {
+
+        Writer writer = null;
+        URL url = new URL(buildIndexURL());
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setDoOutput(true);
+        conn.setRequestMethod("POST");
+
+        try {
+            writer = new OutputStreamWriter(conn.getOutputStream());
+
+            // Write Mapping.
+            writer.write(JSONValue.toJSONString(Mapping.get()));
+            writer.flush();
+            if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
+                return true;
+            } else {
+                LOG.warn("Response code of create index operation was not 200, but " + conn.getResponseCode());
+                return false;
+            }
+        } finally {
+            if (null != writer) {
+                writer.close();
+            }
+        }
+    }
+
+    /**
+     * Bulk-indexes/persists messages to ElasticSearch.
+     * <p/>
+     * See <a href="http://www.elasticsearch.org/guide/reference/api/bulk.html">elasticsearch Bulk API</a> for details
+     *
+     * @param messages The messages to index
+     * @return {@literal true} if the messages were successfully indexed, {@literal false} otherwise
+     */
+    public boolean bulkIndex(List<GELFMessage> messages) {
+
         if (messages.isEmpty()) {
             return true;
         }
 
-        final BulkRequestBuilder request = client.prepareBulk();
-        for (Message msg : messages) {
-            String source = JSONValue.toJSONString(msg.toElasticSearchObject());
+        Writer writer = null;
+        int responseCode = 0;
 
-            // we manually set the document ID to the same value to be able to match up documents later.
-            request.add(buildIndexRequest(Deflector.DEFLECTOR_NAME, source, msg.getId(), 0)); // Main index.
-        }
+        try {
+            URL url = new URL(buildElasticSearchURL() + "_bulk");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setDoOutput(true);
+            conn.setRequestMethod("POST");
 
-        request.setConsistencyLevel(WriteConsistencyLevel.ONE);
-        request.setReplicationType(ReplicationType.ASYNC);
-        
-        final BulkResponse response = client.bulk(request.request()).actionGet();
-        
-        LOG.debug("Deflector index: Bulk indexed {} messages, took {} ms, failures: {}",
-                new Object[] { response.items().length, response.getTookInMillis(), response.hasFailures() });
+            writer = new OutputStreamWriter(conn.getOutputStream());
+            writer.write(getJSONfromGELFMessages(messages));
+            writer.flush();
 
-        return !response.hasFailures();
-    }
-
-    public void deleteMessagesByTimeRange(int to) {
-        DeleteByQueryRequestBuilder b = client.prepareDeleteByQuery();
-        final QueryBuilder qb = rangeQuery("created_at").from(0).to(to);
-        
-        b.setTypes(new String[] {TYPE});
-        b.setIndices(server.getDeflector().getAllDeflectorIndexNames());
-        b.setQuery(qb);
-        
-        ActionFuture<DeleteByQueryResponse> future = client.deleteByQuery(b.request());
-        future.actionGet();
-    }
-    
-    public void deleteIndex(String indexName) {
-        client.admin().indices().delete(new DeleteIndexRequest(indexName)).actionGet();
-    }
-    
-    public void runIndexRetention() throws NoTargetIndexException {
-        Map<String, IndexStats> indices = server.getDeflector().getAllDeflectorIndices();
-        int indexCount = indices.size();
-        int maxIndices = server.getConfiguration().getMaxNumberOfIndices();
-        
-        // Do we have more indices than the configured maximum?
-        if (indexCount <= maxIndices) {
-            LOG.debug("Number of indices ({}) lower than limit ({}). Not performing any retention actions.",
-                    indexCount, maxIndices);
-            return;
-        }
-        
-        // We have more indices than the configured maximum! Remove as many as needed.
-        int remove = indexCount-maxIndices;
-        String msg = "Number of indices (" + indexCount + ") higher than limit (" + maxIndices + "). Deleting " + remove + " indices.";
-        LOG.info(msg);
-        server.getActivityWriter().write(new Activity(msg, Indexer.class));
-        
-        for (String indexName : IndexHelper.getOldestIndices(indices.keySet(), remove)) {
-            // Never delete the current deflector target.
-            if (server.getDeflector().getCurrentTargetName().equals(indexName)) {
-                LOG.info("Not deleting current deflector target <{}>.", indexName);
-                continue;
+            responseCode = conn.getResponseCode();
+        } catch (IOException e) {
+            LOG.warn("IO error when trying to index messages", e);
+        } finally {
+            if (null != writer) {
+                try {
+                    writer.close();
+                } catch (IOException e) {
+                    LOG.error("Couldn't close output stream", e);
+                }
             }
-            
-            msg = "Retention cleaning: Deleting index <" + indexName + ">";
-            LOG.info(msg);
-            server.getActivityWriter().write(new Activity(msg, Indexer.class));
-            
-            // Sorry if this should ever go mad. Delete the index!
-            deleteIndex(indexName);
-            server.getMongoBridge().removeIndexDateRange(indexName);
         }
-    }
-    
-    public Searches searches() {
-    	return searches;
-    }
-    
-    public Counts counts() {
-    	return counts;
-    }
-    
-    public Messages messages() {
-    	return messages;
-    }
-    
-    private IndexRequestBuilder buildIndexRequest(String index, String source, String id, int ttlMinutes) {
-        final IndexRequestBuilder b = new IndexRequestBuilder(client);
-        
-        /*
-         * ID is set manually to allow inserting message into recent and total index
-         * with same ID. (Required for linking in frontend)
-         */
-        b.setId(id);
-        b.setSource(source);
-        b.setIndex(index);
-        b.setContentType(XContentType.JSON);
-        b.setOpType(OpType.INDEX);
-        b.setType(TYPE);
-        b.setConsistencyLevel(WriteConsistencyLevel.ONE);
 
-        // Set a TTL?
-        if (ttlMinutes > 0) {
-            b.setTTL(ttlMinutes*60*1000); // TTL is specified in milliseconds.
+        if (responseCode == HttpURLConnection.HTTP_OK) {
+            return true;
+        } else {
+            LOG.warn("Indexer response code was not 200, but " + responseCode);
+            return false;
         }
-        
-        return b;
+    }
+
+    /**
+     * Deletes all messages from index which are older than the specified timestamp.
+     *
+     * @param to UTC UNIX timestamp
+     * @return {@literal true} if the messages were successfully deleted, {@literal false} otherwise
+     */
+    public boolean deleteMessagesByTimeRange(int to) {
+        int responseCode = 0;
+
+        try {
+            URL url = new URL(buildIndexWithTypeUrl() + buildDeleteByQuerySinceDate(to));
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("DELETE");
+            conn.connect();
+
+            responseCode = conn.getResponseCode();
+        } catch (IOException e) {
+            LOG.warn("IO error when trying to delete messages older than date", e);
+        }
+
+        if (responseCode == HttpURLConnection.HTTP_OK) {
+            return true;
+        } else {
+            LOG.warn("Indexer response code was not 200, but " + responseCode);
+            return false;
+        }
+    }
+
+    private static String buildDeleteByQuerySinceDate(int to) {
+        return "/_query?q=created_at%3A%5B0%20TO%20" + to + "%5D";
+    }
+
+    private String getJSONfromGELFMessages(List<GELFMessage> messages) {
+        StringBuilder sb = new StringBuilder();
+
+        for (GELFMessage message : messages) {
+            sb.append("{\"index\":{\"_index\":\"");
+            sb.append(INDEX);
+            sb.append("\",\"_type\":\"");
+            sb.append(TYPE);
+            sb.append("\"}}\n");
+            sb.append(JSONValue.toJSONString(message.toElasticSearchObject()));
+            sb.append("\n");
+        }
+
+        return sb.toString();
+    }
+
+    private String buildElasticSearchURL() {
+        return graylogServer.getConfiguration().getElasticSearchUrl();
+    }
+
+    private String buildIndexURL() {
+        return buildElasticSearchURL() + INDEX;
+    }
+
+    private String buildIndexWithTypeUrl() {
+        return buildIndexURL() + "/" + TYPE;
+    }
+
+    // yyyy-MM-dd HH-mm-ss
+    // http://docs.oracle.com/javase/1.5.0/docs/api/java/util/Formatter.html#syntax
+    public static String buildTimeFormat(double timestamp) {
+        final Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis(System.currentTimeMillis());
+
+        return String.format("%1$tY-%1$tm-%1$td %1$tH-%1$tM-%1$tS", cal); // ramtamtam
     }
 
 }

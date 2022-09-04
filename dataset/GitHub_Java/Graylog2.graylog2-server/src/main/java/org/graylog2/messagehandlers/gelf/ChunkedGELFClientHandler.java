@@ -1,5 +1,5 @@
 /**
- * Copyright 2010 Lennart Koopmann <lennart@socketfeed.com>
+ * Copyright 2010, 2011 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -20,45 +20,177 @@
 
 package org.graylog2.messagehandlers.gelf;
 
-import java.io.UnsupportedEncodingException;
+import java.io.IOException;
 import java.net.DatagramPacket;
+import java.util.zip.DataFormatException;
+
+import org.apache.log4j.Logger;
+import org.graylog2.GraylogServer;
+import org.graylog2.Tools;
+import org.graylog2.blacklists.Blacklist;
+import org.graylog2.forwarders.Forwarder;
+import org.graylog2.messagehandlers.common.HostUpsertHook;
+import org.graylog2.messagehandlers.common.MessageCountUpdateHook;
+import org.graylog2.messagehandlers.common.MessageParserHook;
+import org.graylog2.messagehandlers.common.RealtimeCollectionUpdateHook;
+import org.graylog2.messagehandlers.common.ReceiveHookManager;
+import org.graylog2.messagequeue.MessageQueue;
 
 /**
  * ChunkedGELFClient.java: Sep 14, 2010 6:38:38 PM
  *
  * Handling a GELF client message consisting on more than one UDP message.
  *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class ChunkedGELFClientHandler extends GELFClientHandlerBase implements GELFClientHandlerIF {
+
+    private static final Logger LOG = Logger.getLogger(ChunkedGELFClientHandler.class);
 
     /**
      * Representing a GELF client based on more than one UDP message.
      *
      * @param clientMessage The raw data the GELF client sent. (JSON string)
-     * @param threadName The name of the GELFClientHandlerThread that called this.
+     * @throws InvalidGELFHeaderException
+     * @throws IOException
+     * @throws DataFormatException
+     * @throws InvalidGELFCompressionMethodException
      */
-    public ChunkedGELFClientHandler(DatagramPacket clientMessage) throws UnsupportedEncodingException, InvalidGELFHeaderException {
-
-        // 70 byte / 140 chars:
-        // 3765 3335383765646265393165323131396537373066383266383363383432373733366661393430366534656436646665643833376366373239636437636661 0000 0002
-        // 1: 0-2 byte: MAGIC NUMBER
-        // 2: 2-66 byte: MESSAGE ID
-        // 3: 66-68 byte: SEQUENCE NUMBER
-        // 4: 68-70 byte: SEQUENCE COUNT
-
+    public ChunkedGELFClientHandler(GraylogServer server, DatagramPacket clientMessage) throws GELFException, IOException, DataFormatException {
+        super(server);
         GELFHeader header = GELF.extractGELFHeader(clientMessage);
 
-        System.out.println("GOT MESSAGE: " + header.getSequenceNumber() + "/" + header.getSequenceCount());
+        GELFClientChunk chunk = new GELFClientChunk();
+        chunk.setRaw(clientMessage.getData(), clientMessage.getLength());
+        chunk.setHash(header.getHash());
+        chunk.setSequenceCount(header.getSequenceCount());
+        chunk.setSequenceNumber(header.getSequenceNumber());
+        chunk.setData(GELF.extractData(clientMessage));
+        chunk.setArrival((int) (System.currentTimeMillis()/1000));
+
+        // Insert the chunk.
+        ChunkedGELFMessage possiblyCompleteMessage = null;
+        try {
+            possiblyCompleteMessage = ChunkedGELFClientManager.getInstance().insertChunk(chunk);
+        } catch (InvalidGELFChunkException e) {
+            throw new InvalidGELFHeaderException(e.toString(), e);
+        } catch (ForeignGELFChunkException e) {
+            throw new InvalidGELFHeaderException(e.toString(), e);
+        }
+
+        LOG.debug("Got GELF message chunk: " + chunk.toString());
+
+        // Catch the full message data if all chunks are complete.
+        if (possiblyCompleteMessage != null) {
+            ChunkedGELFMessage completeMessage = possiblyCompleteMessage;
+
+            byte[] data = null;
+            String hash = null;
+            try {
+                hash = completeMessage.getHash();
+                LOG.debug("Chunked GELF message <" + hash + "> complete. Handling now.");
+                data = completeMessage.getData();
+            } catch (IncompleteGELFMessageException e) {
+                LOG.warn("Tried to fetch information from incomplete chunked GELF message", e);
+                return;
+            }
+
+            try {
+                // Decompress and store in this.clientMessage
+                decompress(data, hash);
+
+                // Store message chunks for easy later forwarding.
+                this.message.storeMessageChunks(completeMessage.getChunkMap());
+                this.message.setIsChunked(true);
+            } catch(IOException e) {
+                LOG.warn("Error while trying to decompress complete message: " + e.toString());
+            } finally {
+                // Remove message from chunk manager as it is being handled next.
+                ChunkedGELFClientManager.getInstance().dropMessage(hash);
+            }
+        }
+    }
+
+    private void decompress(byte[] data, String hash) throws InvalidGELFCompressionMethodException, IOException {
+        // Determine compression type.
+        int type = GELF.getGELFType(data);
+        // Decompress.
+        switch (type) {
+            // Decompress ZLIB
+            case GELF.TYPE_ZLIB:
+                LOG.debug("Chunked GELF message <" + hash + "> is ZLIB compressed.");
+                this.clientMessage = Tools.decompressZlib(data);
+                break;
+            case GELF.TYPE_GZIP:
+                LOG.debug("Chunked GELF message <" + hash + "> is GZIP compressed.");
+                this.clientMessage = Tools.decompressGzip(data);
+                break;
+            default:
+                throw new InvalidGELFCompressionMethodException("Unknown compression type.");
+        }
     }
 
     /**
      * Handles the client: Decodes JSON, Stores in MongoDB, ReceiveHooks
-     * 
-     * @return
+     *
+     * @return boolean
      */
+    @Override
     public boolean handle() {
+        // Don't handle if message is incomplete.
+        if (this.clientMessage == null) {
+            return true;
+        }
+
+        try {
+             // Fills properties with values from JSON.
+            try { this.parse(); } catch(Exception e) {
+                LOG.warn("Could not parse GELF JSON: " + e.getMessage() + " - clientMessage was: " + this.clientMessage, e);
+                return false;
+            }
+
+            if (!this.message.allRequiredFieldsSet()) {
+                LOG.info("GELF message is not complete. Version, host and short_message must be set.");
+                return false;
+            }
+
+            if (!this.message.convertedFromSyslog()) {
+                LOG.debug("Got GELF message: " + this.message.toString());
+            }
+
+            // Blacklisted?
+            if (this.message.blacklisted(Blacklist.fetchAll())) {
+                return true;
+            }
+
+            // PreProcess message based on filters. Insert message into indexer.
+            ReceiveHookManager.preProcess(new MessageParserHook(getServer()), message);
+            if(!message.getFilterOut()) {
+                // Add message to queue and post-process if it was successful.
+                if (MessageQueue.getInstance().add(message)) {
+                    // Update periodic counts collection.
+                    ReceiveHookManager.postProcess(new MessageCountUpdateHook(), message);
+
+                    // Counts up host in hosts collection.
+                    ReceiveHookManager.postProcess(new HostUpsertHook(), message);
+
+                    // Update realtime collection-
+                    ReceiveHookManager.postProcess(new RealtimeCollectionUpdateHook(getServer()), message);
+                }
+            }
+
+            // Forward.
+            int forwardCount = Forwarder.forward(this.message);
+            if (forwardCount > 0) {
+                LOG.info("Forwarded message to " + forwardCount + " endpoints");
+            }
+        } catch(Exception e) {
+            LOG.warn("Could not handle GELF client: " + e.getMessage(), e);
+            return false;
+        }
+
         return true;
     }
+
 
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright 2010, 2011, 2012 Lennart Koopmann <lennart@socketfeed.com>
+ * Copyright 2010, 2011 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -20,31 +20,19 @@
 
 package org.graylog2;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.Writer;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+
 import com.beust.jcommander.JCommander;
 import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.PropertiesRepository;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.Writer;
-import org.apache.commons.io.IOUtils;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.graylog2.initializers.*;
-import org.graylog2.inputs.gelf.GELFUDPInput;
-
-/*
- * 
- * ZOMG TODOS:
- * 
- *  * Add two-queue system. Possibly use Disruptor.
- *  * Add AMQP handling again.
- *  * Move GELF handling to netty (chunked/non-chunked)
- *  * Add GELF forwarder again.
- *  * Add syslog handling again.
- * 
- */
 
 /**
  * Main class of Graylog2.
@@ -108,22 +96,8 @@ public final class Main {
 
         savePidFile(commandLineArguments.getPidFile());
 
-        // Le server object. This is where all the magic happens.
-        GraylogServer server = new GraylogServer(configuration);
-
-        // Register initializers.
-        server.registerInitializer(new ServerValueWriterInitializer(server, configuration));
-        server.registerInitializer(new MessageQueueInitializer(server, configuration));
-        //////server.registerInitializer(new DroolsInitializer(server, configuration));
-        server.registerInitializer(new HostCounterCacheWriterInitializer(server));
-        server.registerInitializer(new MessageCounterInitializer(server));
-        server.registerInitializer(new SyslogServerInitializer(server, configuration));
-        
-        // Register inputs.
-        server.registerInput(new GELFUDPInput());
-
-        // Blocks until we shut down.
-        server.run();
+        // blocks until we shut down
+        new GraylogServer(configuration).run();
 
         LOG.info("Graylog2 " + GraylogServer.GRAYLOG2_VERSION + " exiting.");
     }

@@ -26,6 +26,8 @@ import org.graylog2.SimpleObjectCache;
 import java.util.List;
 
 /**
+ * StreamCache.java: Mar 31, 2011 6:11:14 PM
+ *
  * Singleton caching the already fetched blacklist.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -41,6 +43,7 @@ public class BlacklistCache extends SimpleObjectCache<List<Blacklist>> {
         BlacklistCache blacklistCache = getInstance();
         blacklistCache.setGraylogServer(server);
         return blacklistCache;
+        
     }
 
     public static synchronized BlacklistCache getInstance() {

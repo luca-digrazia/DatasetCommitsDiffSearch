@@ -17,50 +17,44 @@
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+package org.graylog2.messagequeue;
 
-package org.graylog2.periodical;
+import java.util.List;
 
 import org.apache.log4j.Logger;
 import org.graylog2.GraylogServer;
-import org.graylog2.database.HostCounterCache;
-import org.graylog2.database.MongoBridge;
-
+import org.graylog2.messagehandlers.gelf.GELFMessage;
 
 /**
- * HostCounterCacheWriterThread.java: Feb 23, 2011 5:59:58 PM
- * <p/>
- * Periodically writes host counter cache to hosts collection.
+ * MessageQueueFlusher.java: Nov 17, 2011 7:02:40 PM
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class HostCounterCacheWriterThread implements Runnable {
+public class MessageQueueFlusher extends Thread {
 
-    private static final Logger LOG = Logger.getLogger(HostCounterCacheWriterThread.class);
-
-    public static final int PERIOD = 5;
-    public static final int INITIAL_DELAY = 5;
-
+    private static final Logger LOG = Logger.getLogger(MessageQueueFlusher.class);
     private final GraylogServer graylogServer;
 
-    public HostCounterCacheWriterThread(GraylogServer graylogServer) {
+    public MessageQueueFlusher(GraylogServer graylogServer) {
         this.graylogServer = graylogServer;
     }
 
-    /**
-     * Start the thread. Runs forever.
-     */
     @Override
     public void run() {
         try {
-            final MongoBridge m = graylogServer.getMongoBridge();
-            for (String host : HostCounterCache.getInstance().getAllHosts()) {
-                m.upsertHostCount(host, HostCounterCache.getInstance().getCount(host));
-                HostCounterCache.getInstance().reset(host);
-            }
-        } catch (Exception e) {
-            LOG.warn("Error in HostCounterCacheWriterThread: " + e.getMessage(), e);
-        }
+            LOG.info("Message queue flusher called!");
 
+            LOG.info("Closing message queue.");
+            MessageQueue.getInstance().close();
+
+            List<GELFMessage> messages = MessageQueue.getInstance().readAll();
+            LOG.info("Flushing all " + messages.size() + " messages to indexer.");
+            graylogServer.getIndexer().bulkIndex(messages);
+        } catch (Exception e) {
+            LOG.warn("Error while flushing messages from queue: " + e.getMessage(), e);
+        } finally {
+            LOG.info("Finalizing message queue flushing.");
+        }
     }
 
 }

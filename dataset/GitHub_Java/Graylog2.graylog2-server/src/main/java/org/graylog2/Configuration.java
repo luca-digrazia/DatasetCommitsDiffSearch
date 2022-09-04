@@ -69,8 +69,8 @@ public class Configuration {
     @Parameter(value = "no_retention")
     private boolean noRetention;
 
-    @Parameter(value = "elasticsearch_config_file", required = true, validator = FilePresentValidator.class)
-    private String elasticSearchConfigFile;
+    @Parameter(value = "elasticsearch_url", required = true)
+    private String elasticsearchUrl = "http://localhost:9200/";
 
     @Parameter(value = "elasticsearch_index_name", required = true)
     private String elasticsearchIndexName = "graylog2";
@@ -110,6 +110,9 @@ public class Configuration {
 
     @Parameter(value = "mq_max_size", required = false, validator = PositiveIntegerValidator.class)
     private int mqMaxSize = 0;
+
+    @Parameter(value = "enable_realtime_collection", required = true)
+    private boolean enableRealtimeCollection = true;
 
     @Parameter(value = "use_gelf", required = true)
     private boolean useGELF = false;
@@ -171,8 +174,15 @@ public class Configuration {
         return !noRetention;
     }
 
-    public String getElasticSearchConfigFile() {
-        return elasticSearchConfigFile;
+    public String getElasticSearchUrl() {
+        String ret = elasticsearchUrl;
+
+        // Possibly add the required trailing slash if omitted.
+        if (!elasticsearchUrl.endsWith("/")) {
+           ret = elasticsearchUrl + "/";
+        }
+
+        return ret;
     }
 
     public String getElasticSearchIndexName() {
@@ -225,6 +235,10 @@ public class Configuration {
 
     public int getMessageQueueMaximumSize() {
         return mqMaxSize;
+    }
+
+    public boolean enableRealtimeCollection() {
+        return enableRealtimeCollection;
     }
 
     public boolean isUseGELF() {

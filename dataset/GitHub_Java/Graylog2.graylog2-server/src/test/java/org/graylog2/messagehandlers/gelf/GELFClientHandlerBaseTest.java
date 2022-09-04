@@ -20,19 +20,25 @@
 
 package org.graylog2.messagehandlers.gelf;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+
 import java.util.Map;
+
 import org.junit.Test;
-import static org.junit.Assert.*;
 
 /**
  * GELFClientHandlerBaseTest.java: Oct 18, 2010 7:07:26 PM
  *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GELFClientHandlerBaseTest {
 
     private String originalMessage = "{\"short_message\":\"something.\",\"full_message\":\"lol!\",\"host\":\"somehost\",\"level\":2,\"file\":\"example.php\",\"line\":1337}";
-    private String originalMessageWithAdditionalData = "{\"short_message\":\"something.\",\"full_message\":\"lol!\",\"host\":\"somehost\",\"level\":2,\"file\":\"example.php\",\"line\":1337,\"s1\":\"yes\", ,\"s2\":\"yes, really\"}";
+    private String originalMessageWithAdditionalData = "{\"short_message\":\"something.\",\"full_message\":\"lol!\",\"host\":\"somehost\",\"level\":2,\"file\":\"example.php\",\"line\":1337,\"_a_s1\":\"yes\",\"_a_s2\":\"yes, really\"}";
+    private String originalMessageWithIDField = "{\"short_message\":\"something.\",\"full_message\":\"lol!\",\"host\":\"somehost\",\"level\":2,\"file\":\"example.php\",\"line\":1337,\"_id\":\"foo\"}";
+    private String originalMessageWithAdditionalDataThatHasInts = "{\"short_message\":\"something.\",\"full_message\":\"lol!\",\"host\":\"somehost\",\"level\":2,\"file\":\"example.php\",\"line\":1337,\"_a_s1\":\"yes\",\"_a_s2\":\"yes, really\",\"_a_i\":9001}";
+
 
     public GELFClientHandlerBaseTest() {
     }
@@ -42,7 +48,7 @@ public class GELFClientHandlerBaseTest {
      */
     @Test
     public void testParseWithoutAdditionalData() throws Exception {
-        GELFClientHandlerBase instance = new GELFClientHandlerBase();
+        GELFClientHandlerBase instance = new GELFClientHandlerBase(null);
         instance.clientMessage = this.originalMessage;
         instance.parse();
 
@@ -65,14 +71,14 @@ public class GELFClientHandlerBaseTest {
      */
     @Test
     public void testParseWithAdditionalData() throws Exception {
-        GELFClientHandlerBase instance = new GELFClientHandlerBase();
+        GELFClientHandlerBase instance = new GELFClientHandlerBase(null);
         instance.clientMessage = this.originalMessageWithAdditionalData;
         instance.parse();
 
         GELFMessage message = instance.message;
 
         // There should be two additional data fields.
-        assertEquals(message.getAdditionalData().size(), 2);
+        assertEquals(2, message.getAdditionalData().size());
 
         // Test standard fields.
         assertEquals("something.", message.getShortMessage());
@@ -83,9 +89,48 @@ public class GELFClientHandlerBaseTest {
         assertEquals(1337, message.getLine());
 
         // Test additional fields.
-        Map<String, String> additionalData = message.getAdditionalData();
-        assertEquals("yes", additionalData.get("s1"));
-        assertEquals("yes, really", additionalData.get("s2"));
+        Map<String, Object> additionalData = message.getAdditionalData();
+        assertEquals("yes", additionalData.get("_a_s1"));
+        assertEquals("yes, really", additionalData.get("_a_s2"));
+    }
+
+    @Test
+    public void testParseWithAdditionalDataAndDifferentDataTypes() throws Exception {
+        GELFClientHandlerBase instance = new GELFClientHandlerBase(null);
+        instance.clientMessage = this.originalMessageWithAdditionalDataThatHasInts;
+        instance.parse();
+
+        GELFMessage message = instance.message;
+
+        // There should be two additional data fields.
+        assertEquals(3, message.getAdditionalData().size());
+
+        // Test standard fields.
+        assertEquals("something.", message.getShortMessage());
+        assertEquals("lol!", message.getFullMessage());
+        assertEquals("somehost", message.getHost());
+        assertEquals(2, message.getLevel());
+        assertEquals("example.php", message.getFile());
+        assertEquals(1337, message.getLine());
+
+        // Test additional fields.
+        long thatLong = 9001;
+        Map<String, Object> additionalData = message.getAdditionalData();
+        assertEquals("yes", additionalData.get("_a_s1"));
+        assertEquals("yes, really", additionalData.get("_a_s2"));
+        assertEquals(thatLong, additionalData.get("_a_i"));
+    }
+
+    @Test
+    public void testIdFieldIsSkipped() throws Exception {
+        GELFClientHandlerBase instance = new GELFClientHandlerBase(null);
+        instance.clientMessage = this.originalMessageWithIDField;
+        instance.parse();
+
+        GELFMessage message = instance.message;
+
+        assertFalse(message.getAdditionalData().containsKey("_id"));
+        assertFalse(message.getAdditionalData().containsKey("id"));
     }
 
     /**
@@ -93,7 +138,7 @@ public class GELFClientHandlerBaseTest {
      */
     @Test
     public void testGetClientMessage() {
-        GELFClientHandlerBase instance = new GELFClientHandlerBase();
+        GELFClientHandlerBase instance = new GELFClientHandlerBase(null);
         instance.clientMessage = this.originalMessage;
         assertEquals(this.originalMessage, instance.clientMessage);
     }

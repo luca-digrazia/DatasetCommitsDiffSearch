@@ -20,15 +20,7 @@
 
 package org.graylog2.messagehandlers.common;
 
-import org.drools.KnowledgeBase;
-import org.drools.KnowledgeBaseFactory;
-import org.drools.builder.KnowledgeBuilder;
-import org.drools.builder.KnowledgeBuilderError;
-import org.drools.builder.KnowledgeBuilderErrors;
-import org.drools.builder.KnowledgeBuilderFactory;
-import org.drools.builder.ResourceType;
-import org.drools.io.ResourceFactory;
-import org.drools.runtime.StatefulKnowledgeSession;
+import org.graylog2.GraylogServer;
 import org.graylog2.messagehandlers.gelf.GELFMessage;
 
 /**
@@ -36,43 +28,27 @@ import org.graylog2.messagehandlers.gelf.GELFMessage;
  *
  * Filters events based on regular expression.
  *
- * @author: Joshua Spaulding <joshua.spaulding@gmail.com>
+ * @author Joshua Spaulding <joshua.spaulding@gmail.com>
  */
 public class MessageParserHook implements MessagePreReceiveHookIF {
+
+    private final GraylogServer server;
+
+    public MessageParserHook(GraylogServer server) {
+        this.server = server;
+    }
 
     /**
      * Process the hook.
      */
-    public void process(Object message) {
-		/**
-		 * Run GELFMessage through the rules engine
-		 */
-    	GELFMessage gmsg = (GELFMessage) message;
-    	
-		try {
-			// load up the knowledge base
-			KnowledgeBase kbase = readKnowledgeBase();
-			StatefulKnowledgeSession ksession = kbase.newStatefulKnowledgeSession();
-			ksession.insert(gmsg);
-			ksession.fireAllRules();
-			ksession.dispose();
-		} catch (Throwable t) {
-			t.printStackTrace();
-		}
+    @Override
+    public void process(GELFMessage message) {
+        /**
+         * Run GELFMessage through the rules engine
+         */
+        if (server.getDrools() != null)
+        {
+            server.getDrools().evaluate(message);
+        }
     }
-    
-	private static KnowledgeBase readKnowledgeBase() throws Exception {
-		KnowledgeBuilder kbuilder = KnowledgeBuilderFactory.newKnowledgeBuilder();
-		kbuilder.add(ResourceFactory.newFileResource("/etc/graylog2.d/rules/Sample.drl"), ResourceType.DRL);
-		KnowledgeBuilderErrors errors = kbuilder.getErrors();
-		if (errors.size() > 0) {
-			for (KnowledgeBuilderError error: errors) {
-				System.err.println(error);
-			}
-			throw new IllegalArgumentException("Could not parse knowledge.");
-		}
-		KnowledgeBase kbase = KnowledgeBaseFactory.newKnowledgeBase();
-		kbase.addKnowledgePackages(kbuilder.getKnowledgePackages());
-		return kbase;
-	}
 }

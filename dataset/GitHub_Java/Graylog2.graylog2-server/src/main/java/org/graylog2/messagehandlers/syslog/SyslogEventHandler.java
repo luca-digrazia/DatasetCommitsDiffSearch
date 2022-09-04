@@ -1,6 +1,6 @@
 /**
- * Copyright 2010 Lennart Koopmann <lennart@socketfeed.com>
- * 
+ * Copyright 2010, 2011 Lennart Koopmann <lennart@socketfeed.com>
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -20,53 +20,144 @@
 
 package org.graylog2.messagehandlers.syslog;
 
-import org.graylog2.Log;
-import org.graylog2.Main;
+import java.net.SocketAddress;
+import java.net.UnknownHostException;
+import java.util.Date;
+import java.util.Map;
+
+import org.apache.log4j.Logger;
+import org.graylog2.GraylogServer;
 import org.graylog2.Tools;
-import org.graylog2.database.MongoBridge;
-import org.graylog2.messagehandlers.common.MessageCounterHook;
-import org.graylog2.messagehandlers.common.ReceiveHookManager;
-import org.productivity.java.syslog4j.server.SyslogServerEventHandlerIF;
+import org.graylog2.messagehandlers.gelf.GELFMessage;
+import org.graylog2.messagehandlers.gelf.SimpleGELFClientHandler;
 import org.productivity.java.syslog4j.server.SyslogServerEventIF;
 import org.productivity.java.syslog4j.server.SyslogServerIF;
+import org.productivity.java.syslog4j.server.SyslogServerSessionlessEventHandlerIF;
 
 /**
  * SyslogEventHandler.java: May 17, 2010 8:58:18 PM
- *
+ * <p/>
  * Handles incoming Syslog messages
  *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class SyslogEventHandler implements SyslogServerEventHandlerIF {
-    
+public class SyslogEventHandler implements SyslogServerSessionlessEventHandlerIF {
+
+    private static final Logger LOG = Logger.getLogger(SyslogEventHandler.class);
+    private final GraylogServer server;
+
+    public SyslogEventHandler(GraylogServer server) {
+        this.server = server;
+    }
     /**
      * Handle an incoming syslog message: Output if in debug mode, store in MongoDB, ReceiveHooks
      *
      * @param syslogServer The syslog server
-     * @param event The event to handle
+     * @param event        The event to handle
      */
-    @Override public void event(SyslogServerIF syslogServer, SyslogServerEventIF event) {
-        if (Main.debugMode) {
-            Log.info("Received message: " + event.getMessage());
-            Log.info("Host: " + event.getHost());
-            Log.info("Facility: " + event.getFacility() + " (" + Tools.syslogFacilityToReadable(event.getFacility()) + ")");
-            Log.info("Level: " + event.getLevel() + " (" + Tools.syslogLevelToReadable(event.getLevel()) + ")");
-            Log.info("=======");
+    @Override
+    public void event(SyslogServerIF syslogServer, SocketAddress socketAddress, SyslogServerEventIF event) {
+
+        GELFMessage gelf = new GELFMessage();
+
+        // Print out debug information.
+        if (event instanceof GraylogSyslogServerEvent) {
+            GraylogSyslogServerEvent glEvent = (GraylogSyslogServerEvent) event;
+            LOG.debug("Received syslog message (via AMQP): " + event.getMessage());
+            LOG.debug("AMQP queue: " + glEvent.getAmqpReceiverQueue());
+
+            gelf.addAdditionalData("_amqp_queue", glEvent.getAmqpReceiverQueue());
+        } else {
+            LOG.debug("Received syslog message: " + event.getMessage());
+        }
+        LOG.debug("Host: " + event.getHost());
+        LOG.debug("Facility: " + event.getFacility() + " (" + Tools.syslogFacilityToReadable(event.getFacility()) + ")");
+        LOG.debug("Level: " + event.getLevel() + " (" + Tools.syslogLevelToReadable(event.getLevel()) + ")");
+        LOG.debug("Raw: " + new String(event.getRaw()));
+        LOG.debug("Host stripped from message? " + event.isHostStrippedFromMessage());
+
+        // Check if date could be parsed.
+        if (event.getDate() == null) {
+            if (server.getConfiguration().getAllowOverrideSyslogDate()) {
+                // empty Date constructor allocates a Date object and initializes it so that it represents the time at which it was allocated.
+                event.setDate(new Date());
+                LOG.info("Date could not be parsed. Was set to NOW because allow_override_syslog_date is true.");
+            } else {
+                LOG.info("Syslog message is missing date or date could not be parsed. (Possibly set allow_override_syslog_date to true) "
+                        + "Not further handling. Message was: " + new String(event.getRaw()));
+                return;
+            }
         }
 
-         // Insert into database.
+        // try to parse from event. if that fails or nothing is parsed, tokenize self.
+        // Parse possibly included structured syslog data into additional_fields.
+        Map<String, String> structuredData = StructuredSyslog.extractFields(event.getRaw());
+        if (structuredData.size() > 0) {
+            // We were able to parse structured data from the message. Add as additional fields.
+            LOG.debug("Parsed <" + structuredData.size() + "> structured data pairs."
+                        + " Adding as additional_fields. Not using tokenizer.");
+            gelf.addAdditionalData(structuredData);
+        } else {
+            /*
+             * There was no structured data to be parsed or parsing failed.
+             *
+             * This means that we can safely extract values with the Tokenizer
+             * without interfering with structured data.
+             */
+             LOG.debug("No structured data was parsed from message. Using tokenizer.");
+            // XXX IMPLEMENT
+        }
+
+        // Possibly overwrite host with RNDS if configured.
+        String host = event.getHost();
         try {
-            // Connect to database.
-            MongoBridge m = new MongoBridge();
-
-            m.insert(event);
-
-            // This is doing the upcounting for RRD.
-            ReceiveHookManager.postProcess(new MessageCounterHook());
-        } catch (Exception e) {
-            Log.crit("Could not insert syslog event into database: " + e.toString());
+            if (server.getConfiguration().getForceSyslogRdns()) {
+                host = Tools.rdnsLookup(socketAddress);
+            }
+        } catch (UnknownHostException e) {
+            LOG.warn("Reverse DNS lookup failed. Falling back to parsed hostname.", e);
         }
 
+        try {
+            gelf.setCreatedAt(Tools.getUTCTimestampWithMilliseconds(event.getDate().getTime()));
+            gelf.setConvertedFromSyslog(true);
+            gelf.setVersion("0");
+            gelf.setShortMessage(event.getMessage());
+            gelf.setFullMessage(new String(event.getRaw()));
+            gelf.setHost(host);
+            gelf.setFacility(Tools.syslogFacilityToReadable(event.getFacility()));
+            gelf.setLevel(event.getLevel());
+            gelf.setRaw(event.getRaw());
+        } catch (Exception e) {
+            LOG.info("Could not parse syslog message to GELF: " + e.toString(), e);
+            return;
+        }
+
+        if (gelf.allRequiredFieldsSet()) {
+            try {
+                SimpleGELFClientHandler gelfHandler = new SimpleGELFClientHandler(server, gelf);
+                gelfHandler.handle();
+            } catch (Exception e) {
+                LOG.debug("Couldn't process message with GELF handler", e);
+            }
+        } else {
+            LOG.info("Broken or incomplete syslog message. Not further handling. Message was: " + event.getRaw());
+        }
+    }
+
+    @Override
+    public void exception(SyslogServerIF syslogServer, SocketAddress socketAddress, Exception exception) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public void initialize(SyslogServerIF syslogServer) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public void destroy(SyslogServerIF syslogServer) {
+        throw new UnsupportedOperationException("Not supported yet.");
     }
 
 }

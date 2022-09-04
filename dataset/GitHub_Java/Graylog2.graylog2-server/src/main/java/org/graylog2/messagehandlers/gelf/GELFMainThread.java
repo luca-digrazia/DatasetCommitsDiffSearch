@@ -1,5 +1,5 @@
 /**
- * Copyright 2010 Lennart Koopmann <lennart@scopeport.org>
+ * Copyright 2010 Lennart Koopmann <lennart@socketfeed.coms>
  *
  * This file is part of Graylog2.
  *
@@ -18,49 +18,67 @@
  *
  */
 
-/**
- * GELFMainThread.java: Lennart Koopmann <lennart@scopeport.org> | Jun 23, 2010 6:43:21 PM
- */
-
 package org.graylog2.messagehandlers.gelf;
 
+import java.net.DatagramPacket;
+import java.net.InetSocketAddress;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import org.graylog2.Log;
 
+import org.apache.log4j.Logger;
+import org.graylog2.GraylogServer;
+
+/**
+ * GELFMainThread.java: Jun 23, 2010 6:43:21 PM
+ *
+ * Thread responsible for listening for GELF messages.
+ *
+ * @author Lennart Koopmann <lennart@socketfeed.com>
+ */
 public class GELFMainThread extends Thread {
 
-    private int port = 0;
+    private static final Logger LOG = Logger.getLogger(GELFMainThread.class);
 
-    ExecutorService threadPool = Executors.newCachedThreadPool();
+    private InetSocketAddress socketAddress;
 
-    public GELFMainThread(int port) {
-        this.port = port;
+    private ExecutorService threadPool = Executors.newCachedThreadPool();
+
+    private final GraylogServer graylogServer;
+
+    /**
+     * Thread responsible for listening for GELF messages.
+     *
+     * @param socketAddress The {@link InetSocketAddress} to bind to
+     */
+    public GELFMainThread(GraylogServer graylogServer, InetSocketAddress socketAddress) {
+        this.graylogServer = graylogServer;
+        this.socketAddress = socketAddress;
     }
 
+    /**
+     * Run the thread. Runs forever!
+     */
     @Override public void run() {
         GELFServer server = new GELFServer();
-        if (!server.create(this.port)) {
-            System.out.println("Could not start GELF server. Do you have permissions to listen on UDP port " + this.port + "?");
-            System.exit(1); // Exit with error.
+        if (!server.create(socketAddress)) {
+            throw new RuntimeException("Could not start GELF server. Do you have permissions to bind to " + socketAddress + "?");
         }
 
         // Run forever.
         while (true) {
             try {
                 // Listen on socket.
-                String receivedGelfSentence = server.listen();
+                DatagramPacket receivedGelfSentence = server.listen();
 
                 // Skip empty sentences.
-                if (receivedGelfSentence.length() == 0) {
+                if (receivedGelfSentence.getLength() == 0) {
                     continue;
                 }
 
                 // We got a connected client. Start a GELFClientHandlerThread() in our thread pool and wait for next client.
-                threadPool.execute(new GELFClientHandlerThread(receivedGelfSentence));
+                threadPool.execute(new GELFClientHandlerThread(graylogServer, receivedGelfSentence));
             } catch (Exception e) {
-                Log.crit("Skipping GELF client. Error: " + e.toString());
-                continue;
+                LOG.error("Skipping GELF client. Error: " + e.getMessage(), e);
             }
         }
     }

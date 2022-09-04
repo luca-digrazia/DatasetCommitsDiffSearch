@@ -20,7 +20,6 @@
 
 package org.graylog2.blacklists;
 
-import com.google.common.collect.Lists;
 import com.mongodb.*;
 import org.apache.log4j.Logger;
 import org.bson.types.ObjectId;
@@ -30,6 +29,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * Blacklist.java: Mar 30, 2011 10:05:34 PM
+ *
  * Representing a blacklist stored in MongoDB.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -58,7 +59,7 @@ public class Blacklist {
             return blacklistCache.get();
         }
 
-        List<Blacklist> blacklists = Lists.newArrayList();
+        List<Blacklist> blacklists = new ArrayList<Blacklist>();
 
         DBCollection coll = blacklistCache.getGraylogServer().getMongoConnection().getDatabase().getCollection("blacklists");
         DBCursor cur = coll.find(new BasicDBObject());
@@ -98,7 +99,7 @@ public class Blacklist {
             return this.rules;
         }
 
-        ArrayList<BlacklistRule> tempRules = Lists.newArrayList();
+        ArrayList<BlacklistRule> tempRules = new ArrayList<BlacklistRule>();
 
         BasicDBList rawRules = (BasicDBList) this.mongoObject.get("blacklisted_terms");
         if (rawRules != null && rawRules.size() > 0) {

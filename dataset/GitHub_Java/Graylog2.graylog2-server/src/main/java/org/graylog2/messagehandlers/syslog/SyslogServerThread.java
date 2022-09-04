@@ -20,8 +20,9 @@
 
 package org.graylog2.messagehandlers.syslog;
 
-import org.graylog2.Main;
+import org.graylog2.GraylogServer;
 import org.productivity.java.syslog4j.server.SyslogServer;
+import org.productivity.java.syslog4j.server.SyslogServerConfigIF;
 import org.productivity.java.syslog4j.server.SyslogServerIF;
 
 /**
@@ -29,37 +30,56 @@ import org.productivity.java.syslog4j.server.SyslogServerIF;
  *
  * Listen for Syslog messages
  *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class SyslogServerThread extends Thread {
 
-    private int port = 0;
+    private int port;
+    private String host;
+    private String syslogProtocol;
 
     private Thread coreThread = null;
+    private final GraylogServer server;
 
     /**
      * Listen for Syslog messages
+     *
+     * @param syslogProtocol Protocol to use for the Syslog server (tcp/udp)
      * @param port On which port to listen?
      */
-    public SyslogServerThread(int port) {
+    public SyslogServerThread(GraylogServer server, String syslogProtocol, int port, String host) {
+        this.server = server;
+        this.syslogProtocol = syslogProtocol;
         this.port = port;
+        this.host = host;
     }
 
     /**
      * Start the thread. Runs forever.
      */
     @Override public void run() {
-        String syslog_protocol = Main.masterConfig.getProperty("syslog_protocol");
-        SyslogServerIF syslogServer = SyslogServer.getThreadedInstance(syslog_protocol);
-        
-        syslogServer.getConfig().setPort(port);
-        syslogServer.getConfig().addEventHandler(new SyslogEventHandler());
+
+        SyslogServerIF syslogServer = SyslogServer.getInstance(syslogProtocol);
+        SyslogServerConfigIF syslogServerConfig = syslogServer.getConfig();
+
+        syslogServerConfig.setPort(port);
+        syslogServerConfig.setHost(host);
+        syslogServerConfig.setUseStructuredData(true);
+        syslogServerConfig.addEventHandler(new SyslogEventHandler(server));
+
+        syslogServer = SyslogServer.getThreadedInstance(syslogProtocol);
 
         this.coreThread = syslogServer.getThread();
     }
 
+    /**
+     * Get the thread all syslog handling is running in
+     *
+     * @return
+     */
     public Thread getCoreThread() {
         return this.coreThread;
     }
 
 }
+
