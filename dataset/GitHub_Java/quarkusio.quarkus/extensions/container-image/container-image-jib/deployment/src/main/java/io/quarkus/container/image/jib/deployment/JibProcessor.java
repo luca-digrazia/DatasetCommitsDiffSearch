@@ -16,7 +16,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.jboss.logging.Logger;
 
@@ -292,14 +291,12 @@ public class JibProcessor {
             }
 
             if (sourceJarBuildItem.getLibraryDir() != null) {
-                try (Stream<Path> dependenciesPaths = Files.list(sourceJarBuildItem.getLibraryDir())) {
-                    javaContainerBuilder
-                            .addDependencies(
-                                    dependenciesPaths
-                                            .filter(p -> Files.isRegularFile(p) && p.getFileName().toString().endsWith(".jar"))
-                                            .sorted(Comparator.comparing(Path::getFileName))
-                                            .collect(Collectors.toList()));
-                }
+                javaContainerBuilder
+                        .addDependencies(
+                                Files.list(sourceJarBuildItem.getLibraryDir())
+                                        .filter(p -> Files.isRegularFile(p) && p.getFileName().toString().endsWith(".jar"))
+                                        .sorted(Comparator.comparing(Path::getFileName))
+                                        .collect(Collectors.toList()));
             }
 
             JibContainerBuilder jibContainerBuilder = javaContainerBuilder.toContainerBuilder()
