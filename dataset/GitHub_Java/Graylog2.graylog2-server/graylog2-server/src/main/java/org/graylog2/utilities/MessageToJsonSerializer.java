@@ -148,7 +148,7 @@ public class MessageToJsonSerializer {
         this.streamService = streamService;
         this.inputService = inputService;
         this.streamCache = CacheBuilder.newBuilder()
-                .expireAfterAccess(1, TimeUnit.SECONDS)
+                .expireAfterWrite(1, TimeUnit.SECONDS)
                 .build(
                         new CacheLoader<String, Stream>() {
                             @Override
@@ -160,7 +160,7 @@ public class MessageToJsonSerializer {
                         }
                 );
         this.messageInputCache = CacheBuilder.newBuilder()
-                .expireAfterAccess(1, TimeUnit.SECONDS)
+                .expireAfterWrite(1, TimeUnit.SECONDS)
                 .build(
                         new CacheLoader<String, MessageInput>() {
                             @Override
