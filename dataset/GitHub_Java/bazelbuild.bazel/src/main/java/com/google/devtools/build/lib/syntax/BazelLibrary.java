@@ -119,21 +119,12 @@ public class BazelLibrary {
         doc = "Same as for <a href=\"#depset\">depset</a>."
       )
     },
-    useLocation = true,
-    useEnvironment = true
+    useLocation = true
   )
   private static final BuiltinFunction set =
       new BuiltinFunction("set") {
-        public SkylarkNestedSet invoke(Object items, String order, Location loc, Environment env)
+        public SkylarkNestedSet invoke(Object items, String order, Location loc)
             throws EvalException {
-          if (env.getSemantics().incompatibleDepsetConstructor) {
-            throw new EvalException(
-                loc,
-                "The `set` constructor for depsets is deprecated and will be removed. Please use "
-                    + "the `depset` constructor instead. You can temporarily enable the "
-                    + "deprecated `set` constructor by passing the flag "
-                    + "--incompatible_depset_constructor=false");
-          }
           try {
             return new SkylarkNestedSet(Order.parse(order), items, loc);
           } catch (IllegalArgumentException ex) {
