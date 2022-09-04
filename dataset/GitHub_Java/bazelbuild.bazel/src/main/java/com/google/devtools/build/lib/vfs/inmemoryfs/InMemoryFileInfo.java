@@ -122,7 +122,7 @@ public class InMemoryFileInfo extends FileInfo {
 
     @Override
     public synchronized void flush() {
-      receiver.accept(toByteArray());
+      receiver.accept(toByteArray().clone());
     }
   }
 }
