@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -68,13 +67,16 @@ public class CcToolchainProviderHelper {
     CppConfiguration cppConfiguration =
         Preconditions.checkNotNull(configuration.getFragment(CppConfiguration.class));
 
-    CcToolchainConfigInfo toolchainConfigInfo = attributes.getCcToolchainConfigInfo();
+    CppToolchainInfo toolchainInfo;
     ImmutableMap<String, PathFragment> toolPaths;
     CcToolchainFeatures toolchainFeatures;
     PathFragment toolsDirectory = getToolsDirectory(ruleContext.getLabel());
     try {
-      toolPaths = computeToolPaths(toolchainConfigInfo, toolsDirectory);
-      toolchainFeatures = new CcToolchainFeatures(toolchainConfigInfo, toolsDirectory);
+      toolchainInfo =
+          CppToolchainInfo.create(ruleContext.getLabel(), attributes.getCcToolchainConfigInfo());
+      toolPaths = computeToolPaths(attributes.getCcToolchainConfigInfo(), toolsDirectory);
+      toolchainFeatures =
+          new CcToolchainFeatures(attributes.getCcToolchainConfigInfo(), toolsDirectory);
     } catch (EvalException e) {
       throw ruleContext.throwWithRuleError(e.getMessage());
     }
@@ -90,12 +92,6 @@ public class CcToolchainProviderHelper {
     String runtimeSolibDirBase = attributes.getRuntimeSolibDirBase();
     final PathFragment runtimeSolibDir =
         configuration.getBinFragment().getRelative(runtimeSolibDirBase);
-    String solibDirectory = "_solib_" + toolchainConfigInfo.getTargetCpu();
-    PathFragment defaultSysroot =
-        CppConfiguration.computeDefaultSysroot(toolchainConfigInfo.getBuiltinSysroot());
-    PathFragment sysroot = calculateSysroot(attributes.getLibcTopLabel(), defaultSysroot);
-    PathFragment targetSysroot =
-        calculateSysroot(attributes.getTargetLibcTopLabel(), defaultSysroot);
 
     // Static runtime inputs.
     TransitiveInfoCollection staticRuntimeLib = attributes.getStaticRuntimeLib();
@@ -135,7 +131,7 @@ public class CcToolchainProviderHelper {
           dynamicRuntimeLinkInputs.add(artifact);
           dynamicRuntimeLinkSymlinksBuilder.add(
               SolibSymlinkAction.getCppRuntimeSymlink(
-                  ruleContext, artifact, solibDirectory, runtimeSolibDirBase));
+                  ruleContext, artifact, toolchainInfo.getSolibDirectory(), runtimeSolibDirBase));
         }
       }
       if (dynamicRuntimeLinkInputs.isEmpty()) {
@@ -154,7 +150,7 @@ public class CcToolchainProviderHelper {
               ruleContext,
               purposePrefix + "dynamic_runtime_link",
               dynamicRuntimeLinkInputs,
-              solibDirectory,
+              toolchainInfo.getSolibDirectory(),
               runtimeSolibDirBase,
               configuration);
       dynamicRuntimeLinkMiddleman =
@@ -178,8 +174,13 @@ public class CcToolchainProviderHelper {
     }
     final CcCompilationContext ccCompilationContext = ccCompilationContextBuilder.build();
 
+    PathFragment sysroot =
+        calculateSysroot(attributes.getLibcTopLabel(), toolchainInfo.getDefaultSysroot());
+    PathFragment targetSysroot =
+        calculateSysroot(attributes.getTargetLibcTopLabel(), toolchainInfo.getDefaultSysroot());
+
     ImmutableList.Builder<PathFragment> builtInIncludeDirectoriesBuilder = ImmutableList.builder();
-    for (String s : toolchainConfigInfo.getCxxBuiltinIncludeDirectories()) {
+    for (String s : toolchainInfo.getRawBuiltInIncludeDirectories()) {
       try {
         builtInIncludeDirectoriesBuilder.add(resolveIncludeDir(s, sysroot, toolsDirectory));
       } catch (InvalidConfigurationException e) {
@@ -192,6 +193,7 @@ public class CcToolchainProviderHelper {
     return new CcToolchainProvider(
         getToolchainForSkylark(toolPaths),
         cppConfiguration,
+        toolchainInfo,
         toolchainFeatures,
         toolsDirectory,
         attributes.getAllFiles(),
@@ -229,28 +231,9 @@ public class CcToolchainProviderHelper {
         sysroot,
         targetSysroot,
         fdoContext,
-        configuration.isHostConfiguration() || configuration.isExecConfiguration(),
+        configuration.isHostConfiguration(),
         attributes.getLicensesProvider(),
-        toolPaths,
-        toolchainConfigInfo.getToolchainIdentifier(),
-        toolchainConfigInfo.getCompiler(),
-        toolchainConfigInfo.getAbiLibcVersion(),
-        toolchainConfigInfo.getTargetCpu(),
-        toolchainConfigInfo.getCcTargetOs(),
-        defaultSysroot,
-        // The runtime sysroot should really be set from --grte_top. However, currently libc has
-        // no way to set the sysroot. The CROSSTOOL file does set the runtime sysroot, in the
-        // builtin_sysroot field. This implies that you can not arbitrarily mix and match
-        // Crosstool and libc versions, you must always choose compatible ones.
-        defaultSysroot,
-        toolchainConfigInfo.getTargetLibc(),
-        toolchainConfigInfo.getHostSystemName(),
-        ruleContext.getLabel(),
-        solibDirectory,
-        toolchainConfigInfo.getAbiVersion(),
-        toolchainConfigInfo.getTargetSystemName(),
-        computeAdditionalMakeVariables(toolchainConfigInfo),
-        computeLegacyCcFlagsMakeVariable(toolchainConfigInfo));
+        toolPaths);
   }
 
   /**
@@ -466,36 +449,5 @@ public class CcToolchainProviderHelper {
 
   static PathFragment getToolsDirectory(Label ccToolchainLabel) {
     return ccToolchainLabel.getPackageIdentifier().getPathUnderExecRoot();
-  }
-
-  private static ImmutableMap<String, String> computeAdditionalMakeVariables(
-      CcToolchainConfigInfo ccToolchainConfigInfo) {
-    Map<String, String> makeVariablesBuilder = new HashMap<>();
-    // The following are to be used to allow some build rules to avoid the limits on stack frame
-    // sizes and variable-length arrays.
-    // These variables are initialized here, but may be overridden by the getMakeVariables() checks.
-    makeVariablesBuilder.put("STACK_FRAME_UNLIMITED", "");
-    makeVariablesBuilder.put(CppConfiguration.CC_FLAGS_MAKE_VARIABLE_NAME, "");
-    for (Pair<String, String> variable : ccToolchainConfigInfo.getMakeVariables()) {
-      makeVariablesBuilder.put(variable.getFirst(), variable.getSecond());
-    }
-    makeVariablesBuilder.remove(CppConfiguration.CC_FLAGS_MAKE_VARIABLE_NAME);
-
-    return ImmutableMap.copyOf(makeVariablesBuilder);
-  }
-
-  // TODO(b/65151735): Remove when cc_flags is entirely from features.
-  private static String computeLegacyCcFlagsMakeVariable(
-      CcToolchainConfigInfo ccToolchainConfigInfo) {
-    String legacyCcFlags = "";
-    // Needs to ensure the last value with the name is used, to match the previous logic in
-    // computeAdditionalMakeVariables.
-    for (Pair<String, String> variable : ccToolchainConfigInfo.getMakeVariables()) {
-      if (variable.getFirst().equals(CppConfiguration.CC_FLAGS_MAKE_VARIABLE_NAME)) {
-        legacyCcFlags = variable.getSecond();
-      }
-    }
-
-    return legacyCcFlags;
   }
 }
