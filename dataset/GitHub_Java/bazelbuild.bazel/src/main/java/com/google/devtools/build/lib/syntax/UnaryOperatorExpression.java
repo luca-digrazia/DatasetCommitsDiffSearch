@@ -99,9 +99,4 @@ public final class UnaryOperatorExpression extends Expression {
   public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
   }
-
-  @Override
-  public Kind kind() {
-    return Kind.UNARY_OPERATOR;
-  }
 }

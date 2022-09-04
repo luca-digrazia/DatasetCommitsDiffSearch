@@ -83,9 +83,4 @@ public final class IndexExpression extends Expression {
   public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
   }
-
-  @Override
-  public Kind kind() {
-    return Kind.INDEX;
-  }
 }

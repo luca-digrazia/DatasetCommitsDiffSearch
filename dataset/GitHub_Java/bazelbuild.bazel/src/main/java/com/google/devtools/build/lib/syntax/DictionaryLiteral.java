@@ -99,11 +99,6 @@ public final class DictionaryLiteral extends Expression {
     visitor.visit(this);
   }
 
-  @Override
-  public Kind kind() {
-    return Kind.DICTIONARY_LITERAL;
-  }
-
   public ImmutableList<DictionaryEntryLiteral> getEntries() {
     return entries;
   }

@@ -43,9 +43,4 @@ public final class IntegerLiteral extends Expression {
   public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
   }
-
-  @Override
-  public Kind kind() {
-    return Kind.INTEGER_LITERAL;
-  }
 }

@@ -269,11 +269,6 @@ public abstract class AbstractComprehension extends Expression {
   }
 
   @Override
-  public Kind kind() {
-    return Kind.COMPREHENSION;
-  }
-
-  @Override
   Object doEval(Environment env) throws EvalException, InterruptedException {
     OutputCollector collector = createCollector(env);
     evalStep(env, collector, 0);

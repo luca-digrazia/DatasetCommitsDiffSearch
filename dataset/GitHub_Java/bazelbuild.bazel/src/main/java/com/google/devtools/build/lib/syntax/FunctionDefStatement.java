@@ -62,8 +62,7 @@ public final class FunctionDefStatement extends Statement {
     env.update(
         identifier.getName(),
         new UserDefinedFunction(
-            identifier.getName(),
-            identifier.getLocation(),
+            identifier,
             FunctionSignature.WithValues.create(sig, defaultValues, /*types=*/null),
             statements,
             env.getGlobals()));
@@ -109,10 +108,5 @@ public final class FunctionDefStatement extends Statement {
   @Override
   public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
-  }
-
-  @Override
-  public Kind kind() {
-    return Kind.FUNCTION_DEF;
   }
 }

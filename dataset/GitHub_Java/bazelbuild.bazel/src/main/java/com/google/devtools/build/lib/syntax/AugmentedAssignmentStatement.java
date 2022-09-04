@@ -67,9 +67,4 @@ public final class AugmentedAssignmentStatement extends Statement {
   public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
   }
-
-  @Override
-  public Kind kind() {
-    return Kind.AUGMENTED_ASSIGNMENT;
-  }
 }
