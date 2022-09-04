@@ -20,10 +20,8 @@
 
 package org.graylog2.streams.matchers;
 
-import java.util.Map;
 import org.bson.types.ObjectId;
 import com.mongodb.BasicDBObject;
-import java.util.HashMap;
 import org.graylog2.messagehandlers.gelf.GELFMessage;
 import org.graylog2.streams.StreamRule;
 import org.junit.Test;
@@ -72,35 +70,49 @@ public class MessageMatcherTest {
     }
 
     /*
-     * Testing specific cases reported by users.
+     * http://jira.graylog2.org/browse/SERVER-11
      */
     @Test
-    public void testSpecificMatches() {
-        Map<String, String> cases = new HashMap<String, String>();
+    public void testSpecificMatch1() {
+        String message = "su: (to myuser) root on none";
+        String regex = "(su|sudo).+";
 
-        cases.put("su: (to myuser) root on none", "(su|sudo).+"); // http://jira.graylog2.org/browse/SERVER-11
-        cases.put("MyHostname su: (to myuser) root on none\n", ".+su.+"); // http://jira.graylog2.org/browse/SERVER-11
-        cases.put("aws.ses.blacklist[3648]: Received error response: " // https://groups.google.com/forum/#!topic/graylog2/k2c83gtwqbk
-                + "Status Code: 400, AWS Request ID: bbbcd5c8-5d70-11"
-                + "e0-93c0-07085af79fd6, AWS Error Code: MessageRejec"
-                + "ted, AWS Error Message: Address blacklisted.", ".+(?i).Received error response.+Address blacklisted.+");
+        BasicDBObject mongoRule = new BasicDBObject();
+        mongoRule.put("_id", new ObjectId());
+        mongoRule.put("rule_type", StreamRule.TYPE_MESSAGE);
+        mongoRule.put("value",  regex);
 
-        for (Map.Entry<String, String> e : cases.entrySet()) {
-            BasicDBObject mongoRule = new BasicDBObject();
-            mongoRule.put("_id", new ObjectId());
-            mongoRule.put("rule_type", StreamRule.TYPE_MESSAGE);
-            mongoRule.put("value",  e.getValue());
+        StreamRule rule = new StreamRule(mongoRule);
 
-            StreamRule rule = new StreamRule(mongoRule);
+        GELFMessage msg = new GELFMessage();
+        msg.setShortMessage(message);
 
-            GELFMessage msg = new GELFMessage();
-            msg.setShortMessage(e.getKey());
+        MessageMatcher matcher = new MessageMatcher();
 
-            MessageMatcher matcher = new MessageMatcher();
-
-            assertTrue(matcher.match(msg, rule));
-        }
+        assertTrue(matcher.match(msg, rule));
     }
 
+    /*
+     * http://jira.graylog2.org/browse/SERVER-11
+     */
+    @Test
+    public void testSpecificMatch2() {
+        String message = "MyHostname su: (to myuser) root on none\n";
+        String regex = ".+su.+";
+
+        BasicDBObject mongoRule = new BasicDBObject();
+        mongoRule.put("_id", new ObjectId());
+        mongoRule.put("rule_type", StreamRule.TYPE_MESSAGE);
+        mongoRule.put("value",  regex);
+
+        StreamRule rule = new StreamRule(mongoRule);
+
+        GELFMessage msg = new GELFMessage();
+        msg.setShortMessage(message);
+
+        MessageMatcher matcher = new MessageMatcher();
+
+        assertTrue(matcher.match(msg, rule));
+    }
 
 }
