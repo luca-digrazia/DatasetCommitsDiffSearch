@@ -740,8 +740,6 @@ public class AndroidCommon {
         builder, skylarkApiProvider, filesToBuild, classJar, ANDROID_COLLECTION_SPEC);
     javaCommon.addGenJarsProvider(builder, skylarkApiProvider, genClassJar, genSourceJar);
 
-    DataBinding.maybeAddProvider(builder, ruleContext);
-
     return builder
         .setFilesToBuild(filesToBuild)
         .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, skylarkApiProvider.build())
@@ -921,7 +919,8 @@ public class AndroidCommon {
       // input for the annotation processor.
       Artifact annotationFile = DataBinding.createAnnotationFile(ruleContext, isLibrary);
       if (annotationFile != null) {
-        srcs = ImmutableList.<Artifact>builder().addAll(srcs).add(annotationFile).build();
+        srcs = ImmutableList.<Artifact>builder().addAll(srcs)
+            .add(DataBinding.createAnnotationFile(ruleContext, isLibrary)).build();
       }
     }
 
