@@ -43,12 +43,7 @@ public class MavenRegistryCache implements RegistryCache {
             }
             if (Files.exists(dir)) {
                 try {
-                    Files.list(dir).forEach(path -> {
-                        try {
-                            Files.delete(path);
-                        } catch (IOException e) {
-                        }
-                    });
+                    Files.list(dir).forEach(path -> path.toFile().deleteOnExit());
                 } catch (IOException e) {
                     throw new RegistryResolutionException("Failed to read directory " + dir, e);
                 }
