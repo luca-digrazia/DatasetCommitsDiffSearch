@@ -31,24 +31,26 @@ import javax.annotation.Nullable;
  */
 @AutoCodec
 public class FragmentClassSet {
-  private final ImmutableSortedSet<Class<? extends Fragment>> fragments;
+  private final ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> fragments;
 
   // Lazily initialized.
   @Nullable private volatile byte[] fingerprint;
   private volatile int hashCode;
 
-  private FragmentClassSet(ImmutableSortedSet<Class<? extends Fragment>> fragments) {
+  private FragmentClassSet(
+      ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> fragments) {
     this.fragments = fragments;
   }
 
   private static final Interner<FragmentClassSet> interner = BlazeInterners.newWeakInterner();
 
   @AutoCodec.Instantiator
-  public static FragmentClassSet of(ImmutableSortedSet<Class<? extends Fragment>> fragments) {
+  public static FragmentClassSet of(
+      ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> fragments) {
     return interner.intern(new FragmentClassSet(fragments));
   }
 
-  public ImmutableSortedSet<Class<? extends Fragment>> fragmentClasses() {
+  public ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> fragmentClasses() {
     return fragments;
   }
 
@@ -70,7 +72,7 @@ public class FragmentClassSet {
         return;
       }
       Fingerprint fingerprint = new Fingerprint();
-      for (Class<? extends Fragment> fragment : fragments) {
+      for (Class<? extends BuildConfiguration.Fragment> fragment : fragments) {
         fingerprint.addString(fragment.getName());
       }
       byte[] computedFingerprint = fingerprint.digestAndReset();

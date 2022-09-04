@@ -14,12 +14,10 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
@@ -86,7 +84,7 @@ public class BuildConfigurationValue implements SkyValue {
   public static Key keyWithPlatformMapping(
       PlatformMappingValue platformMappingValue,
       BuildOptions defaultBuildOptions,
-      Set<Class<? extends Fragment>> fragments,
+      Set<Class<? extends BuildConfiguration.Fragment>> fragments,
       BuildOptions.OptionsDiffForReconstruction optionsDiff)
       throws OptionsParsingException {
     return platformMappingValue.map(
@@ -105,7 +103,7 @@ public class BuildConfigurationValue implements SkyValue {
    */
   @ThreadSafe
   static Key keyWithoutPlatformMapping(
-      Set<Class<? extends Fragment>> fragments,
+      Set<Class<? extends BuildConfiguration.Fragment>> fragments,
       BuildOptions.OptionsDiffForReconstruction optionsDiff) {
     return Key.create(
         FragmentClassSet.of(
@@ -150,12 +148,12 @@ public class BuildConfigurationValue implements SkyValue {
     }
 
     private Key(FragmentClassSet fragments, BuildOptions.OptionsDiffForReconstruction optionsDiff) {
-      this.fragments = Preconditions.checkNotNull(fragments);
-      this.optionsDiff = Preconditions.checkNotNull(optionsDiff);
+      this.fragments = fragments;
+      this.optionsDiff = optionsDiff;
     }
 
     @VisibleForTesting
-    public ImmutableSortedSet<Class<? extends Fragment>> getFragments() {
+    public ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> getFragments() {
       return fragments.fragmentClasses();
     }
 
@@ -177,7 +175,8 @@ public class BuildConfigurationValue implements SkyValue {
         return false;
       }
       Key otherConfig = (Key) o;
-      return optionsDiff.equals(otherConfig.optionsDiff) && fragments.equals(otherConfig.fragments);
+      return optionsDiff.equals(otherConfig.optionsDiff)
+          && Objects.equals(fragments, otherConfig.fragments);
     }
 
     @Override

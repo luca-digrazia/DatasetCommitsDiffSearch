@@ -743,11 +743,6 @@ public class BuildConfiguration implements BuildConfigurationApi {
     return options.isHost;
   }
 
-  /** Returns true if this is an execution configuration. */
-  public boolean isExecConfiguration() {
-    return options.isExec;
-  }
-
   public boolean checkVisibility() {
     return options.checkVisibility;
   }
