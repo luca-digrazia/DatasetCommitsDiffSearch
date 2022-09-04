@@ -197,6 +197,5 @@ public @interface Option {
    * expansion flags to other flags, or as implicit requirements to other flags. Use the inner flags
    * instead.
    */
-  @Deprecated
   boolean wrapperOption() default false;
 }
