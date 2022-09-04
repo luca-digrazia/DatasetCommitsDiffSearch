@@ -190,23 +190,17 @@ public class SerializationContext {
    * com.google.devtools.build.lib.packages.Package} inside {@link
    * com.google.devtools.build.lib.skyframe.PackageValue}.
    */
-  public <T> void checkClassExplicitlyAllowed(Class<T> allowedClass, T objectForDebugging)
-      throws SerializationException {
+  public void checkClassExplicitlyAllowed(Class<?> allowedClass) throws SerializationException {
     if (serializer == null) {
       throw new SerializationException(
-          "Cannot check explicitly allowed class "
-              + allowedClass
-              + " without memoization ("
-              + objectForDebugging
-              + ")");
+          "Cannot check explicitly allowed class " + allowedClass + " without memoization");
     }
     if (!explicitlyAllowedClasses.contains(allowedClass)) {
       throw new SerializationException(
           allowedClass
               + " not explicitly allowed (allowed classes were: "
               + explicitlyAllowedClasses
-              + ") and object is "
-              + objectForDebugging);
+              + ")");
     }
   }
 
