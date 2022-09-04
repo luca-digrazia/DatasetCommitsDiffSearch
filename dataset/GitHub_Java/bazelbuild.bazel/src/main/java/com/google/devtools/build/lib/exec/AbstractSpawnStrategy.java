@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.exec;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionInput;
@@ -33,7 +34,6 @@ import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.SpawnResult.Status;
 import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.exec.SpawnCache.CacheHandle;
 import com.google.devtools.build.lib.exec.SpawnRunner.ProgressStatus;
 import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionContext;
@@ -260,14 +260,14 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
       }
 
       // TODO(ulfjack): We should report more details to the UI.
-      ExtendedEventHandler eventHandler = actionExecutionContext.getEventHandler();
+      EventBus eventBus = actionExecutionContext.getEventBus();
       switch (state) {
         case EXECUTING:
         case CHECKING_CACHE:
-          eventHandler.post(ActionStatusMessage.runningStrategy(action, name));
+          eventBus.post(ActionStatusMessage.runningStrategy(action, name));
           break;
         case SCHEDULING:
-          eventHandler.post(ActionStatusMessage.schedulingStrategy(action));
+          eventBus.post(ActionStatusMessage.schedulingStrategy(action));
           break;
         default:
           break;
