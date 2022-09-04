@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,9 +15,62 @@
  */
 package org.androidannotations.helper;
 
-import org.androidannotations.annotations.*;
-import org.androidannotations.annotations.rest.*;
-import org.androidannotations.annotations.sharedpreferences.*;
+import static java.util.Arrays.asList;
+import static org.androidannotations.helper.AndroidConstants.LOG_DEBUG;
+import static org.androidannotations.helper.AndroidConstants.LOG_ERROR;
+import static org.androidannotations.helper.AndroidConstants.LOG_INFO;
+import static org.androidannotations.helper.AndroidConstants.LOG_VERBOSE;
+import static org.androidannotations.helper.AndroidConstants.LOG_WARN;
+import static org.androidannotations.helper.CanonicalNameConstants.CLIENT_HTTP_REQUEST_INTERCEPTOR;
+import static org.androidannotations.helper.CanonicalNameConstants.HTTP_MESSAGE_CONVERTER;
+import static org.androidannotations.helper.CanonicalNameConstants.INTERNET_PERMISSION;
+import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
+import static org.androidannotations.helper.ModelConstants.VALID_ENHANCED_COMPONENT_ANNOTATIONS;
+import static org.androidannotations.helper.ModelConstants.VALID_ENHANCED_VIEW_SUPPORT_ANNOTATIONS;
+
+import java.lang.annotation.Annotation;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.ArrayType;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.ErrorType;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.ElementFilter;
+import javax.lang.model.util.Elements;
+
+import org.androidannotations.annotations.EActivity;
+import org.androidannotations.annotations.EBean;
+import org.androidannotations.annotations.EFragment;
+import org.androidannotations.annotations.EIntentService;
+import org.androidannotations.annotations.ServiceAction;
+import org.androidannotations.annotations.Trace;
+import org.androidannotations.annotations.ViewById;
+import org.androidannotations.annotations.rest.Delete;
+import org.androidannotations.annotations.rest.Get;
+import org.androidannotations.annotations.rest.Head;
+import org.androidannotations.annotations.rest.Options;
+import org.androidannotations.annotations.rest.Post;
+import org.androidannotations.annotations.rest.Put;
+import org.androidannotations.annotations.rest.Rest;
+import org.androidannotations.annotations.sharedpreferences.DefaultBoolean;
+import org.androidannotations.annotations.sharedpreferences.DefaultFloat;
+import org.androidannotations.annotations.sharedpreferences.DefaultInt;
+import org.androidannotations.annotations.sharedpreferences.DefaultLong;
+import org.androidannotations.annotations.sharedpreferences.DefaultString;
+import org.androidannotations.annotations.sharedpreferences.SharedPref;
 import org.androidannotations.api.rest.RestClientErrorHandling;
 import org.androidannotations.api.rest.RestClientHeaders;
 import org.androidannotations.api.rest.RestClientRootUrl;
@@ -27,18 +80,6 @@ import org.androidannotations.model.AndroidSystemServices;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
 
-import javax.lang.model.element.*;
-import javax.lang.model.type.*;
-import javax.lang.model.util.ElementFilter;
-import javax.lang.model.util.Elements;
-import java.lang.annotation.Annotation;
-import java.util.*;
-
-import static java.util.Arrays.asList;
-import static org.androidannotations.helper.AndroidConstants.*;
-import static org.androidannotations.helper.CanonicalNameConstants.*;
-import static org.androidannotations.helper.ModelConstants.*;
-
 public class ValidatorHelper {
 
 	private static final List<String> VALID_REST_INTERFACES = asList(RestClientHeaders.class.getName(), RestClientErrorHandling.class.getName(), RestClientRootUrl.class.getName(), RestClientSupport.class.getName());
@@ -47,7 +88,6 @@ public class ValidatorHelper {
 
 	private static final String METHOD_NAME_SET_ROOT_URL = "setRootUrl";
 	private static final String METHOD_NAME_SET_AUTHENTICATION = "setAuthentication";
-	private static final String METHOD_NAME_SET_BEARER_AUTH = "setBearerAuth";
 	private static final String METHOD_NAME_GET_COOKIE = "getCookie";
 	private static final String METHOD_NAME_GET_HEADER = "getHeader";
 
@@ -58,10 +98,6 @@ public class ValidatorHelper {
 	private static final List<String> INVALID_PREF_METHOD_NAMES = Arrays.asList("edit", "getSharedPreferences", "clear", "getEditor", "apply");
 
 	private static final Collection<Integer> VALID_LOG_LEVELS = Arrays.asList(LOG_VERBOSE, LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR);
-
-	private static final List<Receiver.RegisterAt> VALID_ACTIVITY_REGISTER_AT = Arrays.asList(Receiver.RegisterAt.OnCreateOnDestroy, Receiver.RegisterAt.OnResumeOnPause, Receiver.RegisterAt.OnStartOnStop);
-	private static final List<Receiver.RegisterAt> VALID_SERVICE_REGISTER_AT = Arrays.asList(Receiver.RegisterAt.OnCreateOnDestroy);
-	private static final List<Receiver.RegisterAt> VALID_FRAGMENT_REGISTER_AT = Arrays.asList(Receiver.RegisterAt.OnCreateOnDestroy, Receiver.RegisterAt.OnResumeOnPause, Receiver.RegisterAt.OnStartOnStop, Receiver.RegisterAt.OnAttachOnDetach);
 
 	protected final TargetAnnotationHelper annotationHelper;
 
@@ -156,13 +192,6 @@ public class ValidatorHelper {
 		Element enclosingElement = element.getEnclosingElement();
 		@SuppressWarnings("unchecked")
 		List<Class<? extends Annotation>> validAnnotations = asList(EActivity.class, EFragment.class);
-		hasOneOfClassAnnotations(element, enclosingElement, validatedElements, validAnnotations, valid);
-	}
-
-	public void enclosingElementHasEActivityOrEFragmentOrEService(Element element, AnnotationElements validatedElements, IsValid valid) {
-		Element enclosingElement = element.getEnclosingElement();
-		@SuppressWarnings("unchecked")
-		List<Class<? extends Annotation>> validAnnotations = asList(EActivity.class, EFragment.class, EService.class);
 		hasOneOfClassAnnotations(element, enclosingElement, validatedElements, validAnnotations, valid);
 	}
 
@@ -569,21 +598,16 @@ public class ValidatorHelper {
 	}
 
 	public void extendsType(Element element, String typeQualifiedName, IsValid valid) {
-		if (!extendsType(element, typeQualifiedName)) {
-			valid.invalidate();
-			annotationHelper.printAnnotationError(element, "%s can only be used on an element that extends " + typeQualifiedName);
-		}
-	}
-
-	private boolean extendsType(Element element, String typeQualifiedName) {
 		TypeMirror elementType = element.asType();
 
 		TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(typeQualifiedName);
 		if (typeElement != null) {
 			TypeMirror expectedType = typeElement.asType();
-			return annotationHelper.isSubtype(elementType, expectedType);
+			if (!annotationHelper.isSubtype(elementType, expectedType)) {
+				valid.invalidate();
+				annotationHelper.printAnnotationError(element, "%s can only be used on an element that extends " + typeQualifiedName);
+			}
 		}
-		return false;
 	}
 
 	public void allowedType(Element element, IsValid valid, TypeMirror fieldTypeMirror, List<String> allowedTypes) {
@@ -728,7 +752,6 @@ public class ValidatorHelper {
 		boolean foundGetRestTemplateMethod = false;
 		boolean foundSetRestTemplateMethod = false;
 		boolean foundSetAuthenticationMethod = false;
-		boolean foundSetBearerAuthMethod = false;
 		boolean foundSetRootUrlMethod = false;
 		boolean foundGetCookieMethod = false;
 		boolean foundGetHeaderMethod = false;
@@ -799,8 +822,6 @@ public class ValidatorHelper {
 								foundSetRootUrlMethod = true;
 							} else if (executableElement.getSimpleName().toString().equals(METHOD_NAME_SET_AUTHENTICATION) && !foundSetAuthenticationMethod) {
 								foundSetAuthenticationMethod = true;
-							} else if (executableElement.getSimpleName().toString().equals(METHOD_NAME_SET_BEARER_AUTH) && !foundSetBearerAuthMethod) {
-								foundSetBearerAuthMethod = true;
 							} else {
 								valid.invalidate();
 								annotationHelper.printError(enclosedElement, "The method to set a RestTemplate should have only one RestTemplate parameter on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
@@ -1027,19 +1048,14 @@ public class ValidatorHelper {
 				Element converterElement = converterType.asElement();
 				if (converterElement.getKind().isClass()) {
 					if (!annotationHelper.isAbstract(converterElement)) {
-						if (converterElement.getAnnotation(EBean.class) == null) {
-							List<ExecutableElement> constructors = ElementFilter.constructorsIn(converterElement.getEnclosedElements());
-							boolean hasPublicWithNoArgumentConstructor = false;
-							for (ExecutableElement constructor : constructors) {
-								if (annotationHelper.isPublic(constructor) && constructor.getParameters().isEmpty()) {
-									hasPublicWithNoArgumentConstructor = true;
-								}
-							}
-							if (!hasPublicWithNoArgumentConstructor) {
-								valid.invalidate();
-								annotationHelper.printAnnotationError(element, "The converter class must have a public no argument constructor");
+						List<ExecutableElement> constructors = ElementFilter.constructorsIn(converterElement.getEnclosedElements());
+						for (ExecutableElement constructor : constructors) {
+							if (annotationHelper.isPublic(constructor) && constructor.getParameters().isEmpty()) {
+								return;
 							}
 						}
+						valid.invalidate();
+						annotationHelper.printAnnotationError(element, "The converter class must have a public no argument constructor");
 					} else {
 						valid.invalidate();
 						annotationHelper.printAnnotationError(element, "The converter class must not be abstract");
@@ -1053,47 +1069,7 @@ public class ValidatorHelper {
 				annotationHelper.printAnnotationError(element, "The converter class must be a subtype of " + HTTP_MESSAGE_CONVERTER);
 			}
 		}
-	}
 
-	public void validateInterceptors(Element element, IsValid valid) {
-		TypeMirror clientHttpRequestInterceptorType = annotationHelper.typeElementFromQualifiedName(CLIENT_HTTP_REQUEST_INTERCEPTOR).asType();
-		TypeMirror clientHttpRequestInterceptorTypeErased = annotationHelper.getTypeUtils().erasure(clientHttpRequestInterceptorType);
-		List<DeclaredType> interceptors = annotationHelper.extractAnnotationClassArrayParameter(element, annotationHelper.getTarget(), "interceptors");
-		if (interceptors == null) {
-			return;
-		}
-		for (DeclaredType interceptorType : interceptors) {
-			TypeMirror erasedInterceptorType = annotationHelper.getTypeUtils().erasure(interceptorType);
-			if (annotationHelper.isSubtype(erasedInterceptorType, clientHttpRequestInterceptorTypeErased)) {
-				Element interceptorElement = interceptorType.asElement();
-				if (interceptorElement.getKind().isClass()) {
-					if (!annotationHelper.isAbstract(interceptorElement)) {
-						if (interceptorElement.getAnnotation(EBean.class) == null) {
-							List<ExecutableElement> constructors = ElementFilter.constructorsIn(interceptorElement.getEnclosedElements());
-							boolean hasPublicWithNoArgumentConstructor = false;
-							for (ExecutableElement constructor : constructors) {
-								if (annotationHelper.isPublic(constructor) && constructor.getParameters().isEmpty()) {
-									hasPublicWithNoArgumentConstructor = true;
-								}
-							}
-							if (!hasPublicWithNoArgumentConstructor) {
-								valid.invalidate();
-								annotationHelper.printAnnotationError(element, "The interceptor class must have a public no argument constructor or be annotated with @EBean");
-							}
-						}
-					} else {
-						valid.invalidate();
-						annotationHelper.printAnnotationError(element, "The interceptor class must not be abstract");
-					}
-				} else {
-					valid.invalidate();
-					annotationHelper.printAnnotationError(element, "The interceptor class must be a class");
-				}
-			} else {
-				valid.invalidate();
-				annotationHelper.printAnnotationError(element, "The interceptor class must be a subtype of " + CLIENT_HTTP_REQUEST_INTERCEPTOR);
-			}
-		}
 	}
 
 	public void isDebuggable(Element element, AndroidManifest androidManifest, IsValid valid) {
@@ -1117,36 +1093,38 @@ public class ValidatorHelper {
 		}
 	}
 
-	public void validateRequestFactory(Element element, IsValid valid) {
-		TypeMirror clientHttpRequestFactoryType = annotationHelper.typeElementFromQualifiedName(CLIENT_HTTP_REQUEST_FACTORY).asType();
-		DeclaredType requestFactory = annotationHelper.extractAnnotationClassParameter(element, annotationHelper.getTarget(), "requestFactory");
-		if (requestFactory != null) {
-			if (annotationHelper.isSubtype(requestFactory, clientHttpRequestFactoryType)) {
-				Element requestFactoryElement = requestFactory.asElement();
-				if (requestFactoryElement.getKind().isClass()) {
-					if (!annotationHelper.isAbstract(requestFactoryElement)) {
-						if (requestFactoryElement.getAnnotation(EBean.class) != null) {
-							return;
-						}
-						List<ExecutableElement> constructors = ElementFilter.constructorsIn(requestFactoryElement.getEnclosedElements());
+	public void validateInterceptors(Element element, IsValid valid) {
+		TypeMirror clientHttpRequestInterceptorType = annotationHelper.typeElementFromQualifiedName(CLIENT_HTTP_REQUEST_INTERCEPTOR).asType();
+		TypeMirror clientHttpRequestInterceptorTypeErased = annotationHelper.getTypeUtils().erasure(clientHttpRequestInterceptorType);
+		List<DeclaredType> interceptors = annotationHelper.extractAnnotationClassArrayParameter(element, annotationHelper.getTarget(), "interceptors");
+		if (interceptors == null) {
+			return;
+		}
+		for (DeclaredType interceptorType : interceptors) {
+			TypeMirror erasedInterceptorType = annotationHelper.getTypeUtils().erasure(interceptorType);
+			if (annotationHelper.isSubtype(erasedInterceptorType, clientHttpRequestInterceptorTypeErased)) {
+				Element interceptorElement = interceptorType.asElement();
+				if (interceptorElement.getKind().isClass()) {
+					if (!annotationHelper.isAbstract(interceptorElement)) {
+						List<ExecutableElement> constructors = ElementFilter.constructorsIn(interceptorElement.getEnclosedElements());
 						for (ExecutableElement constructor : constructors) {
 							if (annotationHelper.isPublic(constructor) && constructor.getParameters().isEmpty()) {
 								return;
 							}
 						}
 						valid.invalidate();
-						annotationHelper.printAnnotationError(element, "The requestFactory class must have a public no argument constructor or must be annotated with @EBean");
+						annotationHelper.printAnnotationError(element, "The interceptor class must have a public no argument constructor");
 					} else {
 						valid.invalidate();
-						annotationHelper.printAnnotationError(element, "The requestFactory class must not be abstract");
+						annotationHelper.printAnnotationError(element, "The interceptor class must not be abstract");
 					}
 				} else {
 					valid.invalidate();
-					annotationHelper.printAnnotationError(element, "The requestFactory class must be a class");
+					annotationHelper.printAnnotationError(element, "The interceptor class must be a class");
 				}
 			} else {
 				valid.invalidate();
-				annotationHelper.printAnnotationError(element, "The requestFactory class must be a subtype of " + CLIENT_HTTP_REQUEST_FACTORY);
+				annotationHelper.printAnnotationError(element, "The interceptor class must be a subtype of " + CLIENT_HTTP_REQUEST_INTERCEPTOR);
 			}
 		}
 	}
@@ -1345,40 +1323,9 @@ public class ValidatorHelper {
 			String enclosedElementName = enclosedElement.getSimpleName().toString();
 			if (actionNames.contains(enclosedElementName)) {
 				valid.invalidate();
-				annotationHelper.printError(enclosedElement, "The " + TargetAnnotationHelper.annotationName(annotation) + " annotated method must have unique name even if the signature is not the same");
+				annotationHelper.printError(enclosedElement, "The " + TargetAnnotationHelper.annotationName(ServiceAction.class) + " annotated method must have unique name even if the signature is not the same");
 			} else {
 				actionNames.add(enclosedElementName);
-			}
-		}
-	}
-
-	public void hasRightRegisterAtValueDependingOnEnclosingElement(Element element, IsValid valid) {
-		Element enclosingElement = element.getEnclosingElement();
-		Receiver.RegisterAt registerAt = element.getAnnotation(Receiver.class).registerAt();
-
-		Map<String, List<Receiver.RegisterAt>> validRegisterAts = new HashMap<String, List<Receiver.RegisterAt>>();
-		validRegisterAts.put(CanonicalNameConstants.ACTIVITY, VALID_ACTIVITY_REGISTER_AT);
-		validRegisterAts.put(CanonicalNameConstants.SERVICE, VALID_SERVICE_REGISTER_AT);
-		validRegisterAts.put(CanonicalNameConstants.FRAGMENT, VALID_FRAGMENT_REGISTER_AT);
-
-		for (Map.Entry<String, List<Receiver.RegisterAt>> validRegisterAt : validRegisterAts.entrySet()) {
-			String enclosingType = validRegisterAt.getKey();
-			Collection<Receiver.RegisterAt> validRegisterAtValues = validRegisterAt.getValue();
-			if (extendsType(enclosingElement, enclosingType) && !validRegisterAtValues.contains(registerAt)) {
-				valid.invalidate();
-				annotationHelper.printAnnotationError(element, "The parameter registerAt of @Receiver in " + enclosingType + " can only be one of the following values : " + validRegisterAtValues);
-			}
-		}
-	}
-
-	public void hasSupportV4JarIfLocal(Element element, IsValid valid) {
-		boolean local = element.getAnnotation(Receiver.class).local();
-		if (local) {
-
-			Elements elementUtils = annotationHelper.getElementUtils();
-			if (elementUtils.getTypeElement(CanonicalNameConstants.LOCAL_BROADCAST_MANAGER) == null) {
-				valid.invalidate();
-				annotationHelper.printAnnotationError(element, "To use the LocalBroadcastManager, you MUST include the android-support-v4 jar");
 			}
 		}
 	}
