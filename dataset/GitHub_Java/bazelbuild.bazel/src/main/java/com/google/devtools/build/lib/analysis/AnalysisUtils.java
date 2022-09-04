@@ -196,13 +196,13 @@ public final class AnalysisUtils {
    *
    * <p>Preserves the original input ordering.
    */
-  // Keep this in sync with PrepareAnalysisPhaseFunction.
   public static List<TargetAndConfiguration> getTargetsWithConfigs(
       BuildConfigurationCollection configurations,
       Collection<Target> targets,
       ExtendedEventHandler eventHandler,
       ConfiguredRuleClassProvider ruleClassProvider,
-      SkyframeExecutor skyframeExecutor) {
+      SkyframeExecutor skyframeExecutor)
+      throws InterruptedException {
     // We use a hash set here to remove duplicate nodes; this can happen for input files and package
     // groups.
     LinkedHashSet<TargetAndConfiguration> nodes = new LinkedHashSet<>(targets.size());
@@ -225,7 +225,7 @@ public final class AnalysisUtils {
 
   @VisibleForTesting
   public static Multimap<BuildConfiguration, Dependency> targetsToDeps(
-      Collection<TargetAndConfiguration> nodes, ConfiguredRuleClassProvider ruleClassProvider) {
+      LinkedHashSet<TargetAndConfiguration> nodes, ConfiguredRuleClassProvider ruleClassProvider) {
     Multimap<BuildConfiguration, Dependency> asDeps =
         ArrayListMultimap.<BuildConfiguration, Dependency>create();
     for (TargetAndConfiguration targetAndConfig : nodes) {
