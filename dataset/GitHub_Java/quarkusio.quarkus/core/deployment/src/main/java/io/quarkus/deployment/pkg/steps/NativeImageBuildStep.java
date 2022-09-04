@@ -32,7 +32,6 @@ import io.quarkus.deployment.pkg.builditem.ArtifactResultBuildItem;
 import io.quarkus.deployment.pkg.builditem.NativeImageBuildItem;
 import io.quarkus.deployment.pkg.builditem.NativeImageSourceJarBuildItem;
 import io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem;
-import io.quarkus.deployment.util.FileUtil;
 
 public class NativeImageBuildStep {
 
@@ -83,12 +82,8 @@ public class NativeImageBuildStep {
             String containerRuntime = nativeConfig.containerRuntime.orElse("docker");
             // E.g. "/usr/bin/docker run -v {{PROJECT_DIR}}:/project --rm quarkus/graalvm-native-image"
             nativeImage = new ArrayList<>();
-
-            String outputPath = outputDir.toAbsolutePath().toString();
-            if (IS_WINDOWS) {
-                outputPath = FileUtil.translateToVolumePath(outputPath);
-            }
-            Collections.addAll(nativeImage, containerRuntime, "run", "-v", outputPath + ":/project:z");
+            Collections.addAll(nativeImage, containerRuntime, "run", "-v",
+                    outputDir.toAbsolutePath() + ":/project:z");
 
             if (IS_LINUX) {
                 if ("docker".equals(containerRuntime)) {
