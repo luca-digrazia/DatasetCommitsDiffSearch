@@ -31,10 +31,7 @@ import org.junit.Test;
 public class AmbiguousNameTest {
 
     @Rule
-    public ArcTestContainer container = ArcTestContainer.builder()
-            .beanClasses(Bravo.class, Alpha.class)
-            .shouldFail()
-            .build();
+    public ArcTestContainer container = new ArcTestContainer(Bravo.class, Alpha.class);
 
     @Test
     public void testFailure() {
