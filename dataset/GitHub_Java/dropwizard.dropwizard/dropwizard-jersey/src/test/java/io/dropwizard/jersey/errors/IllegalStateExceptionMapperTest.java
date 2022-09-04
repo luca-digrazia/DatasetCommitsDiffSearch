@@ -1,7 +1,7 @@
 package io.dropwizard.jersey.errors;
 
 import org.glassfish.jersey.server.internal.LocalizationMessages;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.ws.rs.NotSupportedException;
 import javax.ws.rs.core.Response;
@@ -15,7 +15,7 @@ public class IllegalStateExceptionMapperTest {
     private final IllegalStateExceptionMapper mapper = new IllegalStateExceptionMapper();
 
     @Test
-    void delegatesToParentClass() {
+    public void delegatesToParentClass() {
         @SuppressWarnings("serial")
         final Response reponse = mapper.toResponse(new IllegalStateException(getClass().getName()) {
         });
@@ -23,7 +23,7 @@ public class IllegalStateExceptionMapperTest {
     }
 
     @Test
-    void handlesFormParamContentTypeError() {
+    public void handlesFormParamContentTypeError() {
         final Response reponse = mapper
             .toResponse(new IllegalStateException(LocalizationMessages.FORM_PARAM_CONTENT_TYPE_ERROR()));
         assertThat(reponse.getStatusInfo()).isEqualTo(UNSUPPORTED_MEDIA_TYPE);
