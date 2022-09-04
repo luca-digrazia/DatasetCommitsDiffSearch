@@ -83,13 +83,13 @@ public class QuarkusPlugin implements Plugin<Project> {
 
                     nativeTestSourceSet.setCompileClasspath(
                             nativeTestSourceSet.getCompileClasspath()
-                                    .plus(mainSourceSet.getOutput())
-                                    .plus(testSourceSet.getOutput()));
+                                    .plus(mainSourceSet.getCompileClasspath())
+                                    .plus(testSourceSet.getCompileClasspath()));
 
                     nativeTestSourceSet.setRuntimeClasspath(
                             nativeTestSourceSet.getRuntimeClasspath()
-                                    .plus(mainSourceSet.getOutput())
-                                    .plus(testSourceSet.getOutput()));
+                                    .plus(mainSourceSet.getRuntimeClasspath())
+                                    .plus(testSourceSet.getRuntimeClasspath()));
 
                     // create a custom configuration to be used for the dependencies of the testNative task
                     ConfigurationContainer configurations = project.getConfigurations();
