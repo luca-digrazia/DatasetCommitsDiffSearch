@@ -1,6 +1,7 @@
 package com.yammer.dropwizard.config;
 
-import org.codehaus.jackson.annotate.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.base.Objects;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
@@ -40,15 +41,15 @@ import javax.validation.constraints.NotNull;
  *
  * @see <a href="http://www.yaml.org/YAML_for_ruby.html">YAML Cookbook</a>
  */
-@SuppressWarnings("FieldMayBeFinal")
+@SuppressWarnings("UnusedDeclaration")
 public class Configuration {
-    @NotNull
     @Valid
+    @NotNull
     @JsonProperty
     private HttpConfiguration http = new HttpConfiguration();
 
-    @NotNull
     @Valid
+    @NotNull
     @JsonProperty
     private LoggingConfiguration logging = new LoggingConfiguration();
 
@@ -62,11 +63,33 @@ public class Configuration {
     }
 
     /**
+     * Sets the HTTP-specific section of the configuration file.
+     */
+    public void setHttpConfiguration(HttpConfiguration config) {
+        this.http = config;
+    }
+
+    /**
      * Returns the logging-specific section of the configuration file.
      *
      * @return logging-specific configuration parameters
      */
     public LoggingConfiguration getLoggingConfiguration() {
         return logging;
+    }
+
+    /**
+     * Sets the logging-specific section of the configuration file.
+     */
+    public void setLoggingConfiguration(LoggingConfiguration config) {
+        this.logging = config;
+    }
+
+    @Override
+    public String toString() {
+        return Objects.toStringHelper(this)
+                      .add("http", http)
+                      .add("logging", logging)
+                      .toString();
     }
 }

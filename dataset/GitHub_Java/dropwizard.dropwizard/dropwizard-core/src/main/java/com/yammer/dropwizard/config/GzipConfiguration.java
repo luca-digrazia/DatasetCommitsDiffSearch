@@ -1,44 +1,69 @@
 package com.yammer.dropwizard.config;
 
-import com.google.common.base.Optional;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableSet;
 import com.yammer.dropwizard.util.Size;
-import org.codehaus.jackson.annotate.JsonProperty;
 
-@SuppressWarnings({ "FieldMayBeFinal", "FieldCanBeLocal" })
+import javax.validation.constraints.NotNull;
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+@SuppressWarnings("UnusedDeclaration")
 public class GzipConfiguration {
     @JsonProperty
     private boolean enabled = true;
 
     @JsonProperty
-    private Size minimumEntitySize = null;
+    @NotNull
+    private Size minimumEntitySize = Size.bytes(256);
 
     @JsonProperty
-    private Size bufferSize = null;
+    private Size bufferSize = Size.kilobytes(8);
 
     @JsonProperty
-    private ImmutableSet<String> excludedUserAgents = null;
+    private ImmutableSet<String> excludedUserAgents = ImmutableSet.of();
 
     @JsonProperty
-    private ImmutableSet<String> compressedMimeTypes = null;
+    private ImmutableSet<String> compressedMimeTypes = ImmutableSet.of();
 
     public boolean isEnabled() {
         return enabled;
     }
 
-    public Optional<Size> getMinimumEntitySize() {
-        return Optional.fromNullable(minimumEntitySize);
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
     }
 
-    public Optional<Size> getBufferSize() {
-        return Optional.fromNullable(bufferSize);
+    public Size getMinimumEntitySize() {
+        return minimumEntitySize;
     }
 
-    public Optional<ImmutableSet<String>> getExcludedUserAgents() {
-        return Optional.fromNullable(excludedUserAgents);
+    public void setMinimumEntitySize(Size size) {
+        this.minimumEntitySize = checkNotNull(size);
     }
 
-    public Optional<ImmutableSet<String>> getCompressedMimeTypes() {
-        return Optional.fromNullable(compressedMimeTypes);
+    public Size getBufferSize() {
+        return bufferSize;
+    }
+
+    public void setBufferSize(Size size) {
+        this.bufferSize = checkNotNull(size);
+    }
+
+    public ImmutableSet<String> getExcludedUserAgents() {
+        return excludedUserAgents;
+    }
+
+    public void setExcludedUserAgents(Set<String> userAgents) {
+        this.excludedUserAgents = ImmutableSet.copyOf(userAgents);
+    }
+
+    public ImmutableSet<String> getCompressedMimeTypes() {
+        return compressedMimeTypes;
+    }
+
+    public void setCompressedMimeTypes(Set<String> mimeTypes) {
+        this.compressedMimeTypes = ImmutableSet.copyOf(mimeTypes);
     }
 }

@@ -1,34 +1,59 @@
 package com.yammer.dropwizard.config;
 
-import org.codehaus.jackson.annotate.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
-import javax.validation.constraints.Max;
-import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
+import java.util.TimeZone;
 
-@SuppressWarnings({ "FieldMayBeFinal", "FieldCanBeLocal" })
+import static com.yammer.dropwizard.config.LoggingConfiguration.*;
+
+@SuppressWarnings("UnusedDeclaration")
 public class RequestLogConfiguration {
+    @NotNull
     @JsonProperty
-    private boolean enabled = false;
+    private ConsoleConfiguration console = new ConsoleConfiguration();
 
     @NotNull
     @JsonProperty
-    private String filenamePattern = "./logs/yyyy_mm_dd.log";
+    private FileConfiguration file = new FileConfiguration();
 
-    @Min(1)
-    @Max(50)
+    @NotNull
     @JsonProperty
-    private int retainedFileCount = 5;
+    private SyslogConfiguration syslog = new SyslogConfiguration();
 
-    public boolean isEnabled() {
-        return enabled;
+    @NotNull
+    @JsonProperty
+    private TimeZone timeZone = UTC;
+
+    public ConsoleConfiguration getConsoleConfiguration() {
+        return console;
     }
 
-    public String getFilenamePattern() {
-        return filenamePattern;
+    public void setConsoleConfiguration(ConsoleConfiguration consoleConfiguration) {
+        this.console = consoleConfiguration;
     }
 
-    public int getRetainedFileCount() {
-        return retainedFileCount;
+    public FileConfiguration getFileConfiguration() {
+        return file;
+    }
+
+    public void setFileConfiguration(FileConfiguration fileConfiguration) {
+        this.file = fileConfiguration;
+    }
+
+    public SyslogConfiguration getSyslogConfiguration() {
+        return syslog;
+    }
+
+    public void setSyslogConfiguration(SyslogConfiguration syslogConfiguration) {
+        this.syslog = syslogConfiguration;
+    }
+
+    public TimeZone getTimeZone() {
+        return timeZone;
+    }
+
+    public void setTimeZone(TimeZone timeZone) {
+        this.timeZone = timeZone;
     }
 }

@@ -1,278 +1,428 @@
 package com.yammer.dropwizard.config;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonValue;
 import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableMap;
+import com.yammer.dropwizard.validation.PortRange;
 import com.yammer.dropwizard.util.Duration;
 import com.yammer.dropwizard.util.Size;
+import com.yammer.dropwizard.validation.ValidationMethod;
 
 import javax.validation.Valid;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Pattern;
-import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
-// TODO: 11/7/11 <coda> -- document HttpConfiguration
-// TODO: 11/7/11 <coda> -- test HttpConfiguration
-
-@SuppressWarnings("FieldCanBeLocal")
+/**
+ * An object representation of the {@code http} section of the YAML configuration file.
+ */
+@SuppressWarnings("UnusedDeclaration")
 public class HttpConfiguration {
-    public static class RequestLogConfiguration {
-        private boolean enabled = true;
+    public enum ConnectorType {
+        BLOCKING,
+        LEGACY,
+        LEGACY_SSL,
+        NONBLOCKING,
+        NONBLOCKING_SSL;
 
-        @NotNull
-        private String filenamePattern = "./logs/yyyy_mm_dd.log";
-        
-        @Min(1)
-        @Max(50)
-        private int retainedFileCount = 5;
-
-        public boolean isEnabled() {
-            return enabled;
+        @Override
+        @JsonValue
+        public String toString() {
+            return super.toString().replace("_", "+").toLowerCase(Locale.ENGLISH);
         }
 
-        public String getFilenamePattern() {
-            return filenamePattern;
-        }
-
-        public int getRetainedFileCount() {
-            return retainedFileCount;
+        @JsonCreator
+        public static ConnectorType parse(String type) {
+            return valueOf(type.toUpperCase(Locale.ENGLISH).replace('+', '_'));
         }
     }
 
-    public static class GzipConfiguration {
-        private boolean enabled = true;
-
-        private Size minimumEntitySize = null;
-
-        private Size bufferSize = null;
-
-        private List<String> excludedUserAgents = null;
-
-        private List<String> compressedMimeTypes = null;
-
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        public Optional<Size> getMinimumEntitySize() {
-            return Optional.fromNullable(minimumEntitySize);
-        }
-
-        public Optional<Size> getBufferSize() {
-            return Optional.fromNullable(bufferSize);
-        }
-
-        public Optional<List<String>> getExcludedUserAgents() {
-            return Optional.fromNullable(excludedUserAgents);
-        }
-
-        public Optional<List<String>> getCompressedMimeTypes() {
-            return Optional.fromNullable(compressedMimeTypes);
-        }
-    }
-
+    @Valid
     @NotNull
+    @JsonProperty
     private RequestLogConfiguration requestLog = new RequestLogConfiguration();
 
+    @Valid
     @NotNull
+    @JsonProperty
     private GzipConfiguration gzip = new GzipConfiguration();
 
-    public static enum ConnectorType {
-        SOCKET,
-        BLOCKING_CHANNEL,
-        SELECT_CHANNEL
-    }
+    @Valid
+    @JsonProperty
+    private SslConfiguration ssl = null;
 
-    @Min(1025)
-    @Max(65535)
+    @NotNull
+    @JsonProperty
+    private ImmutableMap<String, String> contextParameters = ImmutableMap.of();
+
+    @PortRange
+    @JsonProperty
     private int port = 8080;
 
-    @Min(1025)
-    @Max(65535)
+    @PortRange
+    @JsonProperty
     private int adminPort = 8081;
 
-    @Min(10)
-    @Max(20000)
-    private int maxThreads = 100;
+    @Min(2)
+    @Max(1000000)
+    @JsonProperty
+    private int maxThreads = 1024;
 
-    @Min(10)
-    @Max(20000)
-    private int minThreads = 10;
-
-    @NotNull
-    @Pattern(regexp = "(blocking|nonblocking|legacy)",
-             flags = {Pattern.Flag.CASE_INSENSITIVE})
-    private String connectorType = "blocking";
+    @Min(1)
+    @Max(1000000)
+    @JsonProperty
+    private int minThreads = 8;
 
     @NotNull
-    @Valid
-    private Duration maxIdleTime = Duration.seconds(1);
+    @JsonProperty
+    private String rootPath = "/*";
+    
+    @NotNull
+    @JsonProperty
+    private ConnectorType connectorType = ConnectorType.BLOCKING;
+
+    @NotNull
+    @JsonProperty
+    private Duration maxIdleTime = Duration.seconds(200);
 
     @Min(1)
     @Max(128)
-    private int acceptorThreadCount = Runtime.getRuntime().availableProcessors();
+    @JsonProperty
+    private int acceptorThreads = 1;
 
     @Min(-Thread.NORM_PRIORITY)
     @Max(Thread.NORM_PRIORITY)
+    @JsonProperty
     private int acceptorThreadPriorityOffset = 0;
 
     @Min(-1)
+    @JsonProperty
     private int acceptQueueSize = -1;
 
     @Min(1)
+    @JsonProperty
     private int maxBufferCount = 1024;
 
     @NotNull
-    @Valid
-    private Size requestBufferSize = Size.kilobytes(32);
+    @JsonProperty
+    private Size requestBufferSize = Size.kilobytes(16);
 
     @NotNull
-    @Valid
+    @JsonProperty
     private Size requestHeaderBufferSize = Size.kilobytes(6);
 
     @NotNull
-    @Valid
+    @JsonProperty
     private Size responseBufferSize = Size.kilobytes(32);
 
     @NotNull
-    @Valid
+    @JsonProperty
     private Size responseHeaderBufferSize = Size.kilobytes(6);
 
+    @JsonProperty
     private boolean reuseAddress = true;
 
-    @Valid
+    @JsonProperty
     private Duration soLingerTime = null;
 
-    @Min(1)
-    private int lowResourcesConnectionThreshold = 25000;
+    @JsonProperty
+    private int lowResourcesConnectionThreshold = 0;
 
     @NotNull
-    @Valid
-    private Duration lowResourcesMaxIdleTime = Duration.seconds(5);
+    @JsonProperty
+    private Duration lowResourcesMaxIdleTime = Duration.seconds(0);
 
     @NotNull
-    @Valid
+    @JsonProperty
     private Duration shutdownGracePeriod = Duration.seconds(2);
 
+    @JsonProperty
     private boolean useServerHeader = false;
 
+    @JsonProperty
     private boolean useDateHeader = true;
 
+    @JsonProperty
     private boolean useForwardedHeaders = true;
 
+    @JsonProperty
     private boolean useDirectBuffers = true;
 
+    @JsonProperty
     private String bindHost = null;
+
+    @JsonProperty
+    private String adminUsername = null;
+
+    @JsonProperty
+    private String adminPassword = null;
+
+    @ValidationMethod(message = "must have an SSL configuration when using SSL connection")
+    public boolean isSslConfigured() {
+        final ConnectorType type = getConnectorType();
+        return !((ssl == null) && ((type == ConnectorType.LEGACY_SSL) ||
+                                   (type == ConnectorType.NONBLOCKING_SSL)));
+    }
+
+    @ValidationMethod(message = "must have a smaller minThreads than maxThreads")
+    public boolean isThreadPoolSizedCorrectly() {
+        return minThreads <= maxThreads;
+    }
+    
+    @ValidationMethod(message = "must have adminUsername if adminPassword is defined")
+    public boolean isAdminUsernameDefined() {
+        return (adminPassword == null) || (adminUsername != null);
+    }
 
     public RequestLogConfiguration getRequestLogConfiguration() {
         return requestLog;
+    }
+
+    public void setRequestLogConfiguration(RequestLogConfiguration config) {
+        this.requestLog = config;
     }
 
     public GzipConfiguration getGzipConfiguration() {
         return gzip;
     }
 
+    public void setGzipConfiguration(GzipConfiguration config) {
+        this.gzip = config;
+    }
+
+    public SslConfiguration getSslConfiguration() {
+        return ssl;
+    }
+
+    public void setSslConfiguration(SslConfiguration config) {
+        this.ssl = config;
+    }
+
+    public ImmutableMap<String, String> getContextParameters() {
+        return contextParameters;
+    }
+
+    public void setContextParameters(Map<String, String> contextParameters) {
+        this.contextParameters = ImmutableMap.copyOf(contextParameters);
+    }
+
     public ConnectorType getConnectorType() {
-        if (connectorType.equalsIgnoreCase("blocking")) {
-            return ConnectorType.BLOCKING_CHANNEL;
-        } else if (connectorType.equalsIgnoreCase("legacy")) {
-            return ConnectorType.SOCKET;
-        } else if (connectorType.equalsIgnoreCase("nonblocking")) {
-            return ConnectorType.SELECT_CHANNEL;
-        } else {
-            throw new IllegalStateException("Invalid connector type: " + connectorType);
-        }
+        return connectorType;
+    }
+
+    public void setConnectorType(ConnectorType type) {
+        this.connectorType = type;
     }
 
     public int getPort() {
         return port;
     }
 
+    public void setPort(int port) {
+        this.port = port;
+    }
+
     public int getAdminPort() {
         return adminPort;
+    }
+
+    public void setAdminPort(int port) {
+        this.adminPort = port;
     }
 
     public int getMaxThreads() {
         return maxThreads;
     }
 
+    public void setMaxThreads(int count) {
+        this.maxThreads = count;
+    }
+
     public int getMinThreads() {
         return minThreads;
+    }
+
+    public void setMinThreads(int count) {
+        this.minThreads = count;
     }
 
     public Duration getMaxIdleTime() {
         return maxIdleTime;
     }
 
-    public int getAcceptorThreadCount() {
-        return acceptorThreadCount;
+    public void setMaxIdleTime(Duration duration) {
+        this.maxIdleTime = duration;
+    }
+
+    public int getAcceptorThreads() {
+        return acceptorThreads;
+    }
+
+    public void setAcceptorThreads(int count) {
+        this.acceptorThreads = count;
     }
 
     public int getAcceptorThreadPriorityOffset() {
         return acceptorThreadPriorityOffset;
     }
 
+    public void setAcceptorThreadPriorityOffset(int priorityOffset) {
+        this.acceptorThreadPriorityOffset = priorityOffset;
+    }
+
     public int getAcceptQueueSize() {
         return acceptQueueSize;
+    }
+
+    public void setAcceptQueueSize(int size) {
+        this.acceptQueueSize = size;
     }
 
     public int getMaxBufferCount() {
         return maxBufferCount;
     }
 
+    public void setMaxBufferCount(int count) {
+        this.maxBufferCount = count;
+    }
+
     public Size getRequestBufferSize() {
         return requestBufferSize;
+    }
+
+    public void setRequestBufferSize(Size size) {
+        this.requestBufferSize = size;
     }
 
     public Size getRequestHeaderBufferSize() {
         return requestHeaderBufferSize;
     }
 
+    public void setRequestHeaderBufferSize(Size size) {
+        this.requestHeaderBufferSize = size;
+    }
+
     public Size getResponseBufferSize() {
         return responseBufferSize;
+    }
+
+    public void setResponseBufferSize(Size size) {
+        this.responseBufferSize = size;
     }
 
     public Size getResponseHeaderBufferSize() {
         return responseHeaderBufferSize;
     }
 
-    public boolean enableReuseAddress() {
+    public void setResponseHeaderBufferSize(Size size) {
+        this.responseHeaderBufferSize = size;
+    }
+
+    public boolean isReuseAddressEnabled() {
         return reuseAddress;
+    }
+
+    public void setReuseAddress(boolean reuseAddress) {
+        this.reuseAddress = reuseAddress;
     }
 
     public Optional<Duration> getSoLingerTime() {
         return Optional.fromNullable(soLingerTime);
     }
 
+    public void setSoLingerTime(Duration duration) {
+        this.soLingerTime = duration;
+    }
+
     public int getLowResourcesConnectionThreshold() {
         return lowResourcesConnectionThreshold;
+    }
+
+    public void setLowResourcesConnectionThreshold(int connectionCount) {
+        this.lowResourcesConnectionThreshold = connectionCount;
     }
 
     public Duration getLowResourcesMaxIdleTime() {
         return lowResourcesMaxIdleTime;
     }
 
+    public void setLowResourcesMaxIdleTime(Duration duration) {
+        this.lowResourcesMaxIdleTime = duration;
+    }
+
     public Duration getShutdownGracePeriod() {
         return shutdownGracePeriod;
+    }
+
+    public void setShutdownGracePeriod(Duration duration) {
+        this.shutdownGracePeriod = duration;
     }
 
     public boolean useForwardedHeaders() {
         return useForwardedHeaders;
     }
 
+    public void setUseForwardedHeaders(boolean useForwardedHeaders) {
+        this.useForwardedHeaders = useForwardedHeaders;
+    }
+
     public boolean useDirectBuffers() {
         return useDirectBuffers;
+    }
+
+    public void setUseDirectBuffers(boolean useDirectBuffers) {
+        this.useDirectBuffers = useDirectBuffers;
     }
 
     public Optional<String> getBindHost() {
         return Optional.fromNullable(bindHost);
     }
 
-    public boolean enableDateHeader() {
+    public void setBindHost(String host) {
+        this.bindHost = host;
+    }
+
+    public boolean isDateHeaderEnabled() {
         return useDateHeader;
     }
 
-    public boolean enableServerHeader() {
+    public void setUseDateHeader(boolean useDateHeader) {
+        this.useDateHeader = useDateHeader;
+    }
+
+    public boolean isServerHeaderEnabled() {
         return useServerHeader;
+    }
+
+    public void setUseServerHeader(boolean useServerHeader) {
+        this.useServerHeader = useServerHeader;
+    }
+
+    public String getRootPath() {
+        return rootPath;
+    }
+
+    public void setRootPath(String path) {
+        this.rootPath = path;
+    }
+
+    public Optional<String> getAdminUsername() {
+        return Optional.fromNullable(adminUsername);
+    }
+
+    public void setAdminUsername(String username) {
+        this.adminUsername = username;
+    }
+
+    public Optional<String> getAdminPassword() {
+        return Optional.fromNullable(adminPassword);
+    }
+
+    public void setAdminPassword(String password) {
+        this.adminPassword = password;
     }
 }
