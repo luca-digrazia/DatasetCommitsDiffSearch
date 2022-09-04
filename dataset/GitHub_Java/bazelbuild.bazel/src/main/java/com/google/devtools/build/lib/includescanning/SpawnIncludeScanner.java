@@ -491,17 +491,23 @@ public class SpawnIncludeScanner {
     // parent context as a lock to make it thread-safe (see dump() below).
     FileOutErr originalOutErr = actionExecutionContext.getFileOutErr();
     FileOutErr grepOutErr = originalOutErr.childOutErr();
+    SettableFuture<InputStream> future = SettableFuture.create();
     ActionExecutionContext grepContext = actionExecutionContext.withFileOutErr(grepOutErr);
-    SpawnContinuation spawnContinuation;
     try {
-      spawnContinuation =
-          grepContext.getContext(SpawnActionContext.class).beginExecution(spawn, grepContext);
+      process(
+          executor,
+          future,
+          SpawnContinuation.ofBeginExecution(spawn, grepContext).execute(),
+          output,
+          grepContext,
+          actionExecutionContext);
+    } catch (ExecException e) {
+      dump(grepContext, actionExecutionContext);
+      future.setException(e);
     } catch (InterruptedException e) {
       dump(grepContext, actionExecutionContext);
-      return Futures.immediateCancelledFuture();
+      future.cancel(false);
     }
-    SettableFuture<InputStream> future = SettableFuture.create();
-    process(executor, future, spawnContinuation, output, grepContext, actionExecutionContext);
     return future;
   }
 
@@ -512,25 +518,22 @@ public class SpawnIncludeScanner {
       ActionInput output,
       ActionExecutionContext actionExecutionContext,
       ActionExecutionContext originalActionExecutionContext) {
-    continuation
-        .getFuture()
-        .addListener(
-            () -> {
-              if (continuation.isDone()) {
-                List<SpawnResult> results = continuation.get();
-                dump(actionExecutionContext, originalActionExecutionContext);
-                SpawnResult result = Iterables.getLast(results);
-                InputStream stream = result.getInMemoryOutput(output);
-                try {
-                  InputStream finalResult =
-                      stream == null
-                          ? actionExecutionContext.getInputPath(output).getInputStream()
-                          : stream;
-                  future.set(finalResult);
-                } catch (IOException e) {
-                  future.setException(e);
-                }
-              } else {
+    if (continuation.isDone()) {
+      List<SpawnResult> results = continuation.get();
+      dump(actionExecutionContext, originalActionExecutionContext);
+      SpawnResult result = Iterables.getLast(results);
+      InputStream stream = result.getInMemoryOutput(output);
+      try {
+        future.set(
+            stream == null ? actionExecutionContext.getInputPath(output).getInputStream() : stream);
+      } catch (IOException e) {
+        future.setException(e);
+      }
+    } else {
+      continuation
+          .getFuture()
+          .addListener(
+              () -> {
                 try {
                   SpawnContinuation next = continuation.execute();
                   process(
@@ -547,9 +550,9 @@ public class SpawnIncludeScanner {
                   dump(actionExecutionContext, originalActionExecutionContext);
                   future.cancel(false);
                 }
-              }
-            },
-            executor);
+              },
+              executor);
+    }
   }
 
   private static void dump(ActionExecutionContext fromContext, ActionExecutionContext toContext) {
