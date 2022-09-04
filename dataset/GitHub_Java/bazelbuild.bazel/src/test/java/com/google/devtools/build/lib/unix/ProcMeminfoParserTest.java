@@ -18,6 +18,7 @@ import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.util.FsApparatus;
+import java.io.IOException;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -31,7 +32,7 @@ public class ProcMeminfoParserTest {
   private FsApparatus scratch = FsApparatus.newNative();
 
   @Test
-  public void memInfo() throws Exception {
+  public void memInfo() throws IOException, ProcMeminfoParser.KeywordNotFoundException {
     String meminfoContent = StringUtilities.joinLines(
         "MemTotal:      3091732 kB",
         "MemFree:       2167344 kB",
