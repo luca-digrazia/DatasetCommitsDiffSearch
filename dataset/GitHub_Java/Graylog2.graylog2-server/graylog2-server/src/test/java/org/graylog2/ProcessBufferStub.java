@@ -37,7 +37,7 @@ public class ProcessBufferStub extends ProcessBuffer {
     }
 
     @Override
-    public void insertCached(Message msg, String sourceInputId) {
+    public void insertCached(Message msg) {
         serverStub.callsToProcessBufferInserter++;
         serverStub.lastInsertedToProcessBuffer = msg;
     }

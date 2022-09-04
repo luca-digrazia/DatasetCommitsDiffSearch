@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -15,11 +15,13 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2;
 
 import com.codahale.metrics.MetricRegistry;
+import org.graylog2.buffers.ProcessBuffer;
 import org.graylog2.plugin.Message;
 
 /**
@@ -29,7 +31,27 @@ public class GraylogServerStub extends Core {
 
     public int callsToProcessBufferInserter = 0;
     public Message lastInsertedToProcessBuffer = null;
+    private Configuration configurationStub;
     private MetricRegistry fakeMetricRegistry = new MetricRegistry();
+
+    @Override
+    public ProcessBuffer getProcessBuffer() {
+        // The process buffer stuf writes back to our counter instance variables.
+        return new ProcessBufferStub(this);
+    }
+
+    public void setConfigurationStub(Configuration stub) {
+        this.configurationStub = stub;
+    }
+
+    @Override
+    public Configuration getConfiguration() {
+        if (this.configurationStub == null) {
+            return new Configuration();
+        } else {
+            return this.configurationStub;
+        }
+    }
 
     @Override
     public MetricRegistry metrics() {
