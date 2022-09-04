@@ -70,9 +70,8 @@ abstract class ArtifactFunctionTestCase {
   protected SkyFunction delegateActionExecutionFunction;
 
   @Before
-  public void baseSetUp() throws Exception {
-    CustomInMemoryFs fs = new CustomInMemoryFs();
-    setupRoot(fs);
+  public void baseSetUp() throws Exception  {
+    setupRoot(new CustomInMemoryFs());
     AtomicReference<PathPackageLocator> pkgLocator =
         new AtomicReference<>(
             new PathPackageLocator(
@@ -118,7 +117,7 @@ abstract class ArtifactFunctionTestCase {
                         TestRuleClassProvider.getRuleClassProvider(),
                         TestConstants.PACKAGE_FACTORY_BUILDER_FACTORY_FOR_TESTING
                             .builder(directories)
-                            .build(TestRuleClassProvider.getRuleClassProvider(), fs),
+                            .build(TestRuleClassProvider.getRuleClassProvider()),
                         directories))
                 .put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction())
                 .put(
