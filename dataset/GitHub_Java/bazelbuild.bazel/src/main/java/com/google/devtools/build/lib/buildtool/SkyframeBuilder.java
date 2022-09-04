@@ -128,7 +128,7 @@ public class SkyframeBuilder implements Builder {
     EvaluationResult<?> result;
 
     ActionExecutionStatusReporter statusReporter = ActionExecutionStatusReporter.create(
-        reporter, skyframeExecutor.getEventBus());
+        reporter, executor, skyframeExecutor.getEventBus());
 
     AtomicBoolean isBuildingExclusiveArtifacts = new AtomicBoolean(false);
     ActionExecutionInactivityWatchdog watchdog =
