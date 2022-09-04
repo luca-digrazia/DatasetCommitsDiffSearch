@@ -65,14 +65,6 @@ public abstract class LdapSettingsResponse {
     @Nullable
     public abstract Map<String, String> groupMapping();
 
-    @JsonProperty
-    @Nullable
-    public abstract String groupSearchBase();
-
-    @JsonProperty
-    @Nullable
-    public abstract String groupIdAttribute();
-
     @JsonCreator
     public static LdapSettingsResponse create(@JsonProperty("enabled") boolean enabled,
                                               @JsonProperty("system_username") String systemUsername,
@@ -85,9 +77,7 @@ public abstract class LdapSettingsResponse {
                                               @JsonProperty("search_pattern") String searchPattern,
                                               @JsonProperty("display_name_attributes") String displayNameAttribute,
                                               @JsonProperty("default_group") String defaultGroup,
-                                              @JsonProperty("groupMapping") @Nullable Map<String, String> groupMapping,
-                                              @JsonProperty("group_search_base") @Nullable String groupSearchBase,
-                                              @JsonProperty("group_id_attribute") @Nullable String groupIdAttribute) {
+                                              @JsonProperty("groupMapping") @Nullable Map<String, String> groupMapping) {
         return new AutoValue_LdapSettingsResponse(enabled,
                                                   systemUsername,
                                                   systemPassword,
@@ -99,8 +89,6 @@ public abstract class LdapSettingsResponse {
                                                   searchPattern,
                                                   displayNameAttribute,
                                                   defaultGroup,
-                                                  groupMapping,
-                                                  groupSearchBase,
-                                                  groupIdAttribute);
+                                                  groupMapping);
     }
 }

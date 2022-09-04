@@ -66,14 +66,6 @@ public abstract class LdapSettingsRequest {
     @Nullable
     public abstract Map<String, String> groupMapping();
 
-    @JsonProperty
-    @Nullable
-    public abstract String groupSearchBase();
-
-    @JsonProperty
-    @Nullable
-    public abstract String groupIdAttribute();
-
     @JsonCreator
     public static LdapSettingsRequest create(@JsonProperty("enabled") boolean enabled,
                                              @JsonProperty("system_username") @NotEmpty String systemUsername,
@@ -86,9 +78,7 @@ public abstract class LdapSettingsRequest {
                                              @JsonProperty("search_pattern") @NotEmpty String searchPattern,
                                              @JsonProperty("display_name_attribute") @NotEmpty String displayNameAttribute,
                                              @JsonProperty("default_group") @NotEmpty String defaultGroup,
-                                             @JsonProperty("group_mapping") @Nullable Map<String, String> groupMapping,
-                                             @JsonProperty("group_search_base") @Nullable String groupSearchBase,
-                                             @JsonProperty("group_id_attribute") @Nullable String groupIdAttribute) {
+                                             @JsonProperty("group_mapping") @Nullable Map<String, String> groupMapping) {
         return new AutoValue_LdapSettingsRequest(enabled,
                                                  systemUsername,
                                                  systemPassword,
@@ -100,8 +90,6 @@ public abstract class LdapSettingsRequest {
                                                  searchPattern,
                                                  displayNameAttribute,
                                                  defaultGroup,
-                                                 groupMapping,
-                                                 groupSearchBase,
-                                                 groupIdAttribute);
+                                                 groupMapping);
     }
 }
