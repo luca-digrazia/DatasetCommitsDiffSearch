@@ -29,8 +29,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
-import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
+import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.OutputFilter;
@@ -47,6 +46,7 @@ import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.QueryEnvironmentFactory;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 import com.google.devtools.build.lib.query2.output.OutputFormatter;
+import com.google.devtools.build.lib.rules.test.CoverageReportActionFactory;
 import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.LockingMode;
 import com.google.devtools.build.lib.runtime.commands.InfoItem;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
@@ -126,7 +126,7 @@ public final class BlazeRuntime {
   private final Runnable abruptShutdownHandler;
 
   private final PackageFactory packageFactory;
-  private final ImmutableList<ConfigurationFragmentFactory> configurationFragmentFactories;
+  private final ConfigurationFactory configurationFactory;
   private final ConfiguredRuleClassProvider ruleClassProvider;
   // For bazel info.
   private final ImmutableMap<String, InfoItem> infoItems;
@@ -156,7 +156,7 @@ public final class BlazeRuntime {
       ImmutableList<OutputFormatter> queryOutputFormatters,
       PackageFactory pkgFactory,
       ConfiguredRuleClassProvider ruleClassProvider,
-      ImmutableList<ConfigurationFragmentFactory> configurationFragmentFactories,
+      ConfigurationFactory configurationFactory,
       ImmutableMap<String, InfoItem> infoItems,
       Clock clock,
       Runnable abruptShutdownHandler,
@@ -177,7 +177,7 @@ public final class BlazeRuntime {
     this.moduleInvocationPolicy = moduleInvocationPolicy;
 
     this.ruleClassProvider = ruleClassProvider;
-    this.configurationFragmentFactories = configurationFragmentFactories;
+    this.configurationFactory = configurationFactory;
     this.infoItems = infoItems;
     this.clock = clock;
     this.abruptShutdownHandler = abruptShutdownHandler;
@@ -342,8 +342,8 @@ public final class BlazeRuntime {
     return null;
   }
 
-  public ImmutableList<ConfigurationFragmentFactory> getConfigurationFragmentFactories() {
-    return configurationFragmentFactories;
+  public ConfigurationFactory getConfigurationFactory() {
+    return configurationFactory;
   }
 
   /**
@@ -1084,6 +1084,7 @@ public final class BlazeRuntime {
    * BlazeDirectories}, and the {@link RuleClassProvider} (except for testing). All other fields
    * have safe default values.
    *
+   * <p>If a {@link ConfigurationFactory} is set, then the builder ignores the host system flag.
    * <p>The default behavior of the BlazeRuntime's EventBus is to exit when a subscriber throws
    * an exception. Please plan appropriately.
    */
@@ -1147,6 +1148,11 @@ public final class BlazeRuntime {
               BlazeVersionInfo.instance().getVersion(),
               packageBuilderHelper);
 
+      ConfigurationFactory configurationFactory =
+          new ConfigurationFactory(
+              ruleClassProvider.getConfigurationCollectionFactory(),
+              ruleClassProvider.getConfigurationFragments());
+
       ProjectFile.Provider projectFileProvider = null;
       for (BlazeModule module : blazeModules) {
         ProjectFile.Provider candidate = module.createProjectFileProvider();
@@ -1163,7 +1169,7 @@ public final class BlazeRuntime {
           serverBuilder.getQueryOutputFormatters(),
           packageFactory,
           ruleClassProvider,
-          ruleClassProvider.getConfigurationFragments(),
+          configurationFactory,
           serverBuilder.getInfoItems(),
           clock,
           abruptShutdownHandler,
