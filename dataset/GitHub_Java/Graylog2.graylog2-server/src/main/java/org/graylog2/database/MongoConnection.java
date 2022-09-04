@@ -20,17 +20,9 @@
 
 package org.graylog2.database;
 
-import java.net.UnknownHostException;
-import java.util.List;
+import com.mongodb.*;
 
-import com.mongodb.BasicDBObject;
-import com.mongodb.BasicDBObjectBuilder;
-import com.mongodb.DB;
-import com.mongodb.DBCollection;
-import com.mongodb.Mongo;
-import com.mongodb.MongoException;
-import com.mongodb.MongoOptions;
-import com.mongodb.ServerAddress;
+import java.util.List;
 
 /**
  * MongoConnection.java: Jun 6, 2010 1:36:19 PM
@@ -40,85 +32,82 @@ import com.mongodb.ServerAddress;
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public final class MongoConnection {
+    private static MongoConnection instance;
+
     private Mongo m;
     private DB db;
 
-    private DBCollection realtimeMessagesCollection;
+    private DBCollection messagesCollection;
+    private DBCollection historicServerValuesCollection;
     private DBCollection messageCountsCollection;
 
-    private static final String REALTIME_MESSAGE_COLLECTION_NAME = "realtime_messages";
-    private static final int REALTIME_MESSAGE_COLLECTION_SIZE = 52428800; // 50 MB
+    private long messagesCollSize;
 
-    private String username;
+    private MongoConnection() {}
 
-    @SuppressWarnings("unused")
-    private long messagesCollectionSize;
-
-    private List<ServerAddress> replicaServers;
-
-    private int threadsAllowedToBlockMultiplier;
-
-    private boolean useAuth;
-
-    private int maxConnections;
-
-    private String database;
-
-    private String password;
-
-    private String host;
-
-    private int port;
-
-    public MongoConnection() {
+    /**
+     * Get the connection instance
+     * @return MongoConnection instance
+     */
+    public static synchronized MongoConnection getInstance() {
+        if (instance == null) {
+            instance = new MongoConnection();
+        }
+        return instance;
     }
 
     /**
      * Connect the instance.
-     * @return
+     *
+     * @param username MongoDB user
+     * @param password MongoDB password
+     * @param hostname MongoDB host
+     * @param database MongoDB database
+     * @param port MongoDB port
+     * @param useAuth Use authentication?
+     * @param maxConnections
+     * @param threadsAllowedToBlockForConnectionMultiplier
+     * @param replicaServers
      *
      * @throws Exception
      */
-    public synchronized Mongo connect() {
-        if (m == null) {
-            MongoOptions options = new MongoOptions();
-            options.connectionsPerHost = maxConnections;
-            options.threadsAllowedToBlockForConnectionMultiplier = threadsAllowedToBlockMultiplier;
+    public void connect(String username, String password, String hostname, String database, int port, boolean useAuth,
+                        int maxConnections, int threadsAllowedToBlockForConnectionMultiplier,
+                        List<ServerAddress> replicaServers, long messagesCollSize) throws Exception {
+        MongoOptions options = new MongoOptions();
+        options.connectionsPerHost = maxConnections;
+        options.threadsAllowedToBlockForConnectionMultiplier = threadsAllowedToBlockForConnectionMultiplier;
 
-            try {
+        this.messagesCollSize = messagesCollSize;
 
-                // Connect to replica servers if given. Else the standard way to one server.
-                if (replicaServers != null && replicaServers.size() > 0) {
-                    m = new Mongo(replicaServers, options);
-                } else {
-                    ServerAddress address = new ServerAddress(host, port);
-                    m = new Mongo(address, options);
-                }
-                db = m.getDB(database);
+        try {
 
-                // Try to authenticate if configured.
-                if (useAuth) {
-                    if(!db.authenticate(username, password.toCharArray())) {
-                        throw new RuntimeException("Could not authenticate to database '" + database + "' with user '" + username + "'.");
-                    }
-                }
-            } catch (MongoException.Network e) {
-                throw e;
-            } catch (UnknownHostException e) {
-                throw new RuntimeException("Cannot resolve host name for MongoDB", e);
+            // Connect to replica servers if given. Else the standard way to one server.
+            if (replicaServers != null && replicaServers.size() > 0) {
+                m = new Mongo(replicaServers, options);
+            } else {
+                ServerAddress address = new ServerAddress(hostname, port);
+                m = new Mongo(address, options);
             }
+
+            db = m.getDB(database);
+
+            // Try to authenticate if configured.
+            if (useAuth) {
+                if(!db.authenticate(username, password.toCharArray())) {
+                    throw new Exception("Could not authenticate to database '" + database + "' with user '" + username + "'.");
+                }
+            }
+        } catch (MongoException.Network e) {
+            throw new Exception("Could not connect to Mongo DB.", e);
         }
-        return m;
     }
 
     /**
      * Returns the raw connection.
      * @return connection
      */
-    public synchronized Mongo getConnection() {
-        if (m == null) {
-            return connect();
-        }
+    public Mongo getConnection() {
         return m;
     }
 
@@ -131,32 +120,40 @@ public final class MongoConnection {
     }
 
     /**
-     * Get the message realtime collection. Lazily creates a new, capped one
-     * if there is none.
+     * Get the messages collection. Lazily creates a new, capped one based on the
+     * messages_collection_size from graylog2.conf if there is none.
      *
      * @return The messages collection
      */
-    public DBCollection getRealtimeMessagesColl() {
-        // Return cached collection if it has been checked and created already.
-        if (this.realtimeMessagesCollection != null) {
-            return this.realtimeMessagesCollection;
+    public DBCollection getMessagesColl() {
+        if (this.messagesCollection != null) {
+            return this.messagesCollection;
         }
 
         // Collection has not been cached yet. Do it now.
         DBCollection coll = null;
 
         // Create a capped collection if the collection does not yet exist.
-        if(getDatabase().collectionExists(REALTIME_MESSAGE_COLLECTION_NAME)) {
-            coll = getDatabase().getCollection(REALTIME_MESSAGE_COLLECTION_NAME);
+        if(MongoConnection.getInstance().getDatabase().collectionExists("messages")) {
+            coll = MongoConnection.getInstance().getDatabase().getCollection("messages");
         } else {
-            coll = getDatabase()
-                    .createCollection(REALTIME_MESSAGE_COLLECTION_NAME, BasicDBObjectBuilder.start()
+            coll = MongoConnection.getInstance()
+                    .getDatabase()
+                    .createCollection("messages", BasicDBObjectBuilder.start()
                     .add("capped", true)
-                    .add("size", REALTIME_MESSAGE_COLLECTION_SIZE)
+                    .add("size", messagesCollSize)
                     .get());
         }
 
-        this.realtimeMessagesCollection = coll;
+        coll.ensureIndex(new BasicDBObject("_id", 1));
+        coll.ensureIndex(new BasicDBObject("created_at", 1));
+        coll.ensureIndex(new BasicDBObject("host", 1));
+        coll.ensureIndex(new BasicDBObject("streams", 1));
+
+        coll.ensureIndex(new BasicDBObject("facility", 1));
+        coll.ensureIndex(new BasicDBObject("level", 1));
+
+        this.messagesCollection = coll;
         return coll;
     }
 
@@ -171,53 +168,12 @@ public final class MongoConnection {
         }
 
         // Collection has not been cached yet. Do it now.
-        DBCollection coll = getDatabase().getCollection("message_counts");
+        DBCollection coll = MongoConnection.getInstance().getDatabase().getCollection("message_counts");
 
         coll.ensureIndex(new BasicDBObject("timestamp", 1));
 
         this.messageCountsCollection = coll;
         return coll;
-    }
-
-    public void setUser(String mongoUser) {
-        this.username = mongoUser;
-    }
-
-    public void setMessagesCollectionSize(long messagesCollectionSize) {
-        this.messagesCollectionSize = messagesCollectionSize;
-    }
-
-    public void setReplicaSet(List<ServerAddress> mongoReplicaSet) {
-        this.replicaServers = mongoReplicaSet;
-    }
-
-    public void setThreadsAllowedToBlockMultiplier(
-            int mongoThreadsAllowedToBlockMultiplier) {
-                this.threadsAllowedToBlockMultiplier = mongoThreadsAllowedToBlockMultiplier;
-    }
-
-    public void setUseAuth(boolean mongoUseAuth) {
-        this.useAuth = mongoUseAuth;
-    }
-
-    public void setMaxConnections(int mongoMaxConnections) {
-        this.maxConnections = mongoMaxConnections;
-    }
-
-    public void setDatabase(String mongoDatabase) {
-        this.database = mongoDatabase;
-    }
-
-    public void setPassword(String mongoPassword) {
-        this.password = mongoPassword;
-    }
-
-    public void setHost(String mongoHost) {
-        this.host = mongoHost;
-    }
-
-    public void setPort(int mongoPort) {
-        this.port = mongoPort;
     }
 
 }
