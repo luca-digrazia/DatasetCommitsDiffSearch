@@ -150,18 +150,9 @@ public class Searches {
             srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(server, range));
         }
 
-        System.out.println("WOW FILTER:" + filter);
-
         StatisticalFacetBuilder stats = new StatisticalFacetBuilder(STATS_FACET_NAME);
         stats.global(false);
-
-        // wow such dsl
-        stats.facetFilter(
-                FilterBuilders.boolFilter()
-                        .must(IndexHelper.getTimestampRangeFilter(range))
-                        .must(FilterBuilders.queryFilter(QueryBuilders.queryString(filter)))
-        );
-
+        stats.facetFilter(IndexHelper.getTimestampRangeFilter(range));
         stats.field(field);
 
         srb.addFacet(stats);
@@ -190,7 +181,7 @@ public class Searches {
 				.interval(interval.toString().toLowerCase());
 
         QueryStringQueryBuilder qs = queryString(query);
-        qs.allowLeadingWildcard(server.getConfiguration().isAllowLeadingWildcardSearches());
+        qs.allowLeadingWildcard(false);
 
         SearchRequestBuilder srb = c.prepareSearch();
 		srb.setIndices(IndexHelper.determineAffectedIndices(server, range).toArray(new String[]{}));
