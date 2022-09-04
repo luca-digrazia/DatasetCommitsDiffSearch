@@ -54,7 +54,6 @@ public class V20200811143600_ViewSharingToGrantsMigration extends Migration {
 
     private final DBGrantService grantService;
     private final MongoCollection<Document> collection;
-    private final GRNRegistry grnRegistry;
     private final UserService userService;
     private final RoleService roleService;
     private final String rootUsername;
@@ -63,14 +62,12 @@ public class V20200811143600_ViewSharingToGrantsMigration extends Migration {
     @Inject
     public V20200811143600_ViewSharingToGrantsMigration(MongoConnection mongoConnection,
                                                         DBGrantService grantService,
-                                                        GRNRegistry grnRegistry,
                                                         UserService userService,
                                                         RoleService roleService,
                                                         @Named("root_username") String rootUsername,
                                                         ViewService viewService) {
 
         this.grantService = grantService;
-        this.grnRegistry = grnRegistry;
         this.userService = userService;
         this.roleService = roleService;
         this.rootUsername = rootUsername;
@@ -119,7 +116,7 @@ public class V20200811143600_ViewSharingToGrantsMigration extends Migration {
     }
 
     private void migrateUsers(String viewId, Collection<String> users) {
-        LOG.debug("Migrate users for view {}: {}", viewId, users);
+        LOG.info("Migrate users for view {} to grants: {}", viewId, users);
 
         final GRN target = getTarget(viewId);
 
@@ -129,7 +126,7 @@ public class V20200811143600_ViewSharingToGrantsMigration extends Migration {
     }
 
     private void migrateRoles(String viewId, Collection<String> roleNames) {
-        LOG.debug("Migrate roles for view {}: {}", viewId, roleNames);
+        LOG.info("Migrate roles for view {} to grants: {}", viewId, roleNames);
 
         final GRN target = getTarget(viewId);
 
@@ -153,12 +150,18 @@ public class V20200811143600_ViewSharingToGrantsMigration extends Migration {
     }
 
     private void migrateAllOfInstance(String viewId) {
-        LOG.debug("Migrate all-of-instance for view {}", viewId);
+        LOG.info("Migrate all-of-instance for view {} to grants", viewId);
 
         final GRN target = getTarget(viewId);
 
-        for (final User user : userService.loadAll()) {
-            ensureGrant(user.getName(), target);
+        ensureEveryoneGrant(target);
+    }
+
+    private void ensureEveryoneGrant(GRN target) {
+        final GRN grantee = GRNRegistry.GLOBAL_USER_GRN;
+
+        if (!grantService.hasGrantFor(grantee, CAPABILITY, target)) {
+            grantService.create(grantee, CAPABILITY, target, rootUsername);
         }
     }
 
@@ -180,6 +183,7 @@ public class V20200811143600_ViewSharingToGrantsMigration extends Migration {
     }
 
     private void deleteViewSharing(ObjectId id) {
+        LOG.debug("Removing obsolete view sharing document {}", id);
         collection.deleteOne(Filters.eq("_id", id));
     }
 }
