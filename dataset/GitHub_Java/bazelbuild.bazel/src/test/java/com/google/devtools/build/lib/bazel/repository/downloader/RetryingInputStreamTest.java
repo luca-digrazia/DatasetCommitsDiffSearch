@@ -15,10 +15,10 @@
 package com.google.devtools.build.lib.bazel.repository.downloader;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.fail;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.same;
+import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -78,26 +78,10 @@ public class RetryingInputStreamTest {
   }
 
   @Test
-  public void readThrowsExceptionWhenDisabled_passesThrough() throws Exception {
-    stream.disabled = true;
-    when(delegate.read()).thenThrow(new IOException());
-    try {
-      stream.read();
-      fail("Expected IOException");
-    } catch (IOException expected) {
-      verify(delegate).read();
-    }
-  }
-
-  @Test
   public void readInterrupted_alwaysPassesThrough() throws Exception {
     when(delegate.read()).thenThrow(new InterruptedIOException());
-    try {
-      stream.read();
-      fail("Expected InterruptedIOException");
-    } catch (InterruptedIOException expected) {
-      verify(delegate).read();
-    }
+    assertThrows(InterruptedIOException.class, () -> stream.read());
+    verify(delegate).read();
   }
 
   @Test
@@ -110,7 +94,7 @@ public class RetryingInputStreamTest {
     when(connection.getHeaderField("Content-Range")).thenReturn("bytes 1-42/42");
     assertThat(stream.read()).isEqualTo(1);
     assertThat(stream.read()).isEqualTo(2);
-    verify(reconnector).connect(any(Throwable.class), eq(ImmutableMap.of("Range", "bytes 1-")));
+    verify(reconnector).connect(any(Throwable.class), eq(ImmutableMap.of("Range", "bytes=1-")));
     verify(delegate, times(2)).read();
     verify(delegate).close();
     verify(newDelegate).read();
@@ -136,14 +120,10 @@ public class RetryingInputStreamTest {
     when(delegate.read()).thenThrow(new IOException());
     when(reconnector.connect(any(Throwable.class), any(ImmutableMap.class)))
         .thenThrow(new IOException());
-    try {
-      stream.read();
-      fail("Expected IOException");
-    } catch (IOException expected) {
-      verify(delegate).read();
+    assertThrows(IOException.class, () -> stream.read());
+    verify(delegate).read();
       verify(delegate).close();
-      verify(reconnector).connect(any(Throwable.class), any(ImmutableMap.class));
-    }
+    verify(reconnector).connect(any(Throwable.class), any(ImmutableMap.class));
   }
 
   @Test
@@ -159,15 +139,11 @@ public class RetryingInputStreamTest {
     when(connection.getInputStream()).thenReturn(delegate);
     when(connection.getHeaderField("Content-Range")).thenReturn("bytes 1-42/42");
     stream.read();
-    try {
-      stream.read();
-      fail("Expected SocketTimeoutException");
-    } catch (SocketTimeoutException e) {
-      assertThat(e.getSuppressed()).hasLength(3);
+    SocketTimeoutException e = assertThrows(SocketTimeoutException.class, () -> stream.read());
+    assertThat(e.getSuppressed()).hasLength(3);
       verify(reconnector, times(3))
-          .connect(any(Throwable.class), eq(ImmutableMap.of("Range", "bytes 1-")));
+          .connect(any(Throwable.class), eq(ImmutableMap.of("Range", "bytes=1-")));
       verify(delegate, times(5)).read();
-      verify(delegate, times(3)).close();
-    }
+    verify(delegate, times(3)).close();
   }
 }
