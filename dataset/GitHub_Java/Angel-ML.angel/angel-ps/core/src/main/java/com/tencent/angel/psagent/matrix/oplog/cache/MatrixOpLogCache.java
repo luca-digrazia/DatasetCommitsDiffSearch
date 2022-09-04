@@ -1,93 +1,124 @@
 /*
  * Tencent is pleased to support the open source community by making Angel available.
  *
- * Copyright (C) 2017 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2017-2018 THL A29 Limited, a Tencent company. All rights reserved.
  *
- * Licensed under the BSD 3-Clause License (the "License"); you may not use this file except in
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
  * compliance with the License. You may obtain a copy of the License at
  *
- * https://opensource.org/licenses/BSD-3-Clause
+ * https://opensource.org/licenses/Apache-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is
- * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
- * either express or implied. See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
+ *
  */
+
 
 package com.tencent.angel.psagent.matrix.oplog.cache;
 
-import com.tencent.angel.conf.MatrixConf;
-import com.tencent.angel.ml.math.TUpdate;
+import com.tencent.angel.conf.AngelConf;
+import com.tencent.angel.ml.math2.matrix.Matrix;
+import com.tencent.angel.ml.math2.vector.Vector;
 import com.tencent.angel.ml.matrix.MatrixMeta;
-import com.tencent.angel.ml.matrix.psf.update.enhance.VoidResult;
+import com.tencent.angel.ml.matrix.psf.update.base.VoidResult;
 import com.tencent.angel.psagent.PSAgentContext;
 import com.tencent.angel.psagent.matrix.ResponseType;
 import com.tencent.angel.psagent.matrix.transport.FutureResult;
-import com.tencent.angel.psagent.matrix.transport.adapter.MatrixClientAdapter;
+import com.tencent.angel.psagent.matrix.transport.adapter.UserRequestAdapter;
 import com.tencent.angel.psagent.task.TaskContext;
-
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectAVLTreeMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 /**
  * Matrix oplog(updates) cache.
  */
 public class MatrixOpLogCache {
+
   private static final Log LOG = LogFactory.getLog(MatrixOpLogCache.class);
 
-  /** matrix id to cache map */
-  private final Int2ObjectOpenHashMap<MatrixOpLog> opLogs;
+  /**
+   * matrix id to cache map
+   */
+  private final ConcurrentHashMap<Integer, MatrixOpLog> opLogs;
 
-  /** thread pool for workers that merge updates and flush updates to ps */
+  /**
+   * thread pool for workers that merge updates and flush updates to ps
+   */
   private ExecutorService workerPool;
 
-  /** oplog message(request) queue, there are three type request now:flush, clock and merge */
+  /**
+   * oplog message(request) queue, there are three type request now:flush, clock and merge
+   */
   private final PriorityBlockingQueue<OpLogMessage> messageQueue;
 
-  /** matrix id -> (message sequence id -> message) */
+  /**
+   * matrix id -> (message sequence id -> message)
+   */
   private final Int2ObjectOpenHashMap<Int2ObjectAVLTreeMap<OpLogMessage>> seqIdToMessageMaps;
 
-  /** matrix id to waiting merge requests list map */
+  /**
+   * matrix id to waiting merge requests list map
+   */
   private final Int2ObjectOpenHashMap<LinkedBlockingQueue<OpLogMessage>> waitedMessageQueues;
 
-  /** stop message dispatcher and workers */
+  /**
+   * stop message dispatcher and workers
+   */
   private final AtomicBoolean stopped;
 
-  /** matrix id to merging update counter map */
+  /**
+   * matrix id to merging update counter map
+   */
   private final Int2IntOpenHashMap mergingCounters;
 
-  /** blocked flush/clock request */
+  /**
+   * blocked flush/clock request
+   */
   private final Int2ObjectOpenHashMap<List<OpLogMessage>> flushListeners;
 
-  /** message sequence id generator */
+  /**
+   * message sequence id generator
+   */
   private final AtomicInteger seqIdGenerator;
 
-  /** request to result map */
+  /**
+   * request to result map
+   */
   private final ConcurrentHashMap<OpLogMessage, Future<VoidResult>> messageToFutureMap;
 
-  /** request dispatcher */
+  /**
+   * request dispatcher
+   */
   private Thread dispatcher;
 
   public MatrixOpLogCache() {
-    opLogs = new Int2ObjectOpenHashMap<MatrixOpLog>();
+    opLogs = new ConcurrentHashMap<>();
 
-    messageQueue = new PriorityBlockingQueue<OpLogMessage>(100, new PriorityComparator());
-    seqIdToMessageMaps = new Int2ObjectOpenHashMap<Int2ObjectAVLTreeMap<OpLogMessage>>();
-    waitedMessageQueues = new Int2ObjectOpenHashMap<LinkedBlockingQueue<OpLogMessage>>();
-    flushListeners = new Int2ObjectOpenHashMap<List<OpLogMessage>>();
+    messageQueue = new PriorityBlockingQueue<>(100, new PriorityComparator());
+    seqIdToMessageMaps = new Int2ObjectOpenHashMap<>();
+    waitedMessageQueues = new Int2ObjectOpenHashMap<>();
+    flushListeners = new Int2ObjectOpenHashMap<>();
     seqIdGenerator = new AtomicInteger(0);
     mergingCounters = new Int2IntOpenHashMap();
     stopped = new AtomicBoolean(false);
-    messageToFutureMap = new ConcurrentHashMap<OpLogMessage, Future<VoidResult>>();
+    messageToFutureMap = new ConcurrentHashMap<>();
   }
 
   /**
@@ -95,7 +126,10 @@ public class MatrixOpLogCache {
    * merge/flush tasks
    */
   public void start() {
-    workerPool = Executors.newCachedThreadPool();
+    workerPool = Executors.newFixedThreadPool(PSAgentContext.get().getConf()
+        .getInt(AngelConf.ANGEL_MATRIX_OPLOG_MERGER_POOL_SIZE,
+            AngelConf.DEFAULT_ANGEL_MATRIX_OPLOG_MERGER_POOL_SIZE));
+
     dispatcher = new MergeDispacher();
     dispatcher.setName("oplog-merge-dispatcher");
     dispatcher.start();
@@ -105,23 +139,30 @@ public class MatrixOpLogCache {
    * Stop all merge/flush tasks and dispatcher
    */
   public void stop() {
-    if (stopped.getAndSet(true)) {
-      return;
-    }
-
-    workerPool.shutdownNow();
-    if (dispatcher != null) {
-      dispatcher.interrupt();
-      try {
-        dispatcher.join();
-      } catch (InterruptedException ie) {
-        LOG.warn("InterruptedException while stopping");
+    if (!stopped.getAndSet(true)) {
+      if (workerPool != null) {
+        workerPool.shutdownNow();
+        workerPool = null;
       }
-      dispatcher = null;
+
+      if (dispatcher != null) {
+        dispatcher.interrupt();
+        try {
+          dispatcher.join();
+        } catch (InterruptedException ie) {
+          LOG.warn("InterruptedException while stopping");
+        }
+        dispatcher = null;
+      }
+      return;
     }
   }
 
+  public void increment(TaskContext taskContext, Vector[] delta) {
+  }
+
   class PriorityComparator implements Comparator<OpLogMessage> {
+
     @Override
     public int compare(OpLogMessage o1, OpLogMessage o2) {
       return o1.getSeqId() - o2.getSeqId();
@@ -130,13 +171,13 @@ public class MatrixOpLogCache {
 
   /**
    * Flush the updates in cache to parameter servers
-   * 
+   *
    * @param context task context
    * @param matrixId matrix id
    * @return Future<VoidResult> a future result that caller can wait for result by get()
    */
   public Future<VoidResult> flush(TaskContext context, int matrixId) {
-    FutureResult<VoidResult> futureResult = new FutureResult<VoidResult>();
+    FutureResult<VoidResult> futureResult = new FutureResult<>();
     try {
       // Generate a flush request and put it to request queue
       OpLogMessage flushMessage =
@@ -153,16 +194,17 @@ public class MatrixOpLogCache {
 
   /**
    * Update matrix partition clocks
-   * 
+   *
    * @param context task context
    * @param matrixId matrix id matrix id
    * @param flushFirst true means we need flush the matrix updates first
    * @return Future<VoidResult> a future result that caller can wait for result by get()
    */
   public Future<VoidResult> clock(TaskContext context, int matrixId, boolean flushFirst) {
-    FutureResult<VoidResult> futureResult = new FutureResult<VoidResult>();
+    FutureResult<VoidResult> futureResult = new FutureResult<>();
     try {
       // Generate a clock request and put it to request queue
+      LOG.debug("task " + context.getIndex() + " clock matrix " + matrixId);
       ClockMessage clockMessage =
           new ClockMessage(seqIdGenerator.incrementAndGet(), matrixId, context, flushFirst);
       messageToFutureMap.put(clockMessage, futureResult);
@@ -176,14 +218,29 @@ public class MatrixOpLogCache {
 
   /**
    * Put a matrix update to the cache
-   * 
+   *
    * @param context task context
    * @param delta matrix update
    */
-  public void increment(TaskContext context, TUpdate delta) {
+  public void increment(TaskContext context, Vector delta) {
     try {
       // Generate a merge request and put it to request queue
-      messageQueue.add(new OpLogMergeMessage(seqIdGenerator.incrementAndGet(), context, delta));
+      messageQueue.add(new VectorMergeMessage(seqIdGenerator.incrementAndGet(), context, delta));
+    } catch (IllegalStateException e) {
+      LOG.warn("oplog flush failed, ", e);
+    }
+  }
+
+  /**
+   * Put a matrix update to the cache
+   *
+   * @param context task context
+   * @param delta matrix update
+   */
+  public void increment(TaskContext context, Matrix delta) {
+    try {
+      // Generate a merge request and put it to request queue
+      messageQueue.add(new MatrixMergeMessage(seqIdGenerator.incrementAndGet(), context, delta));
     } catch (IllegalStateException e) {
       LOG.warn("oplog flush failed, ", e);
     }
@@ -193,6 +250,7 @@ public class MatrixOpLogCache {
    * Message dispatcher
    */
   class MergeDispacher extends Thread {
+
     @Override
     public void run() {
       while (!stopped.get() && !Thread.currentThread().isInterrupted()) {
@@ -210,7 +268,8 @@ public class MatrixOpLogCache {
 
         int matrixId = message.getMatrixId();
         switch (message.getType()) {
-          case MERGE: {
+          case VECTOR_MERGE:
+          case MATRIX_MERGE: {
             // If the matrix op log cache does not exist for the matrix, create a new one for the
             // matrix
             // and add it to cache maps
@@ -236,7 +295,7 @@ public class MatrixOpLogCache {
             } else {
               // Launch a merge worker to merge the update to matrix op log cache
               mergingCounters.addTo(message.getMatrixId(), 1);
-              merge((OpLogMergeMessage) message);
+              merge(message);
             }
             break;
           }
@@ -274,7 +333,8 @@ public class MatrixOpLogCache {
 
         // Get next merge message sequence id
         int endPos = 0;
-        if (seqIdToMessageMaps.get(matrixId) == null || seqIdToMessageMaps.get(matrixId).isEmpty()) {
+        if (seqIdToMessageMaps.get(matrixId) == null || seqIdToMessageMaps.get(matrixId)
+            .isEmpty()) {
           endPos = Integer.MAX_VALUE;
         } else {
           endPos = seqIdToMessageMaps.get(matrixId).firstIntKey();
@@ -331,8 +391,8 @@ public class MatrixOpLogCache {
         Iterator<OpLogMessage> iter = messages.iterator();
         while (iter.hasNext()) {
           OpLogMessage message = iter.next();
-          LOG.debug("currentMergePos=" + currentMergePos + ", message.getSeqId()="
-              + message.getSeqId());
+          LOG.debug(
+              "currentMergePos=" + currentMergePos + ", message.getSeqId()=" + message.getSeqId());
           if (currentMergePos > message.getSeqId()) {
             LOG.debug("clock opLogs for " + matrixId + ", oplog=" + opLogs.get(matrixId));
             if (message.getType() == OpLogMessageType.CLOCK) {
@@ -352,7 +412,6 @@ public class MatrixOpLogCache {
           }
         }
       }
-
     }
 
     private void wakeupWaitMessages(int matrixId) {
@@ -403,7 +462,7 @@ public class MatrixOpLogCache {
       return sb.toString();
     }
 
-    private void merge(OpLogMergeMessage message) {
+    private void merge(OpLogMessage message) {
       workerPool.execute(new Merger(message));
     }
 
@@ -416,34 +475,42 @@ public class MatrixOpLogCache {
     }
   }
 
+
   /**
    * Thread that merge the updates
    */
   class Merger extends Thread {
-    private final OpLogMergeMessage message;
 
-    public Merger(OpLogMergeMessage message) {
+    private final OpLogMessage message;
+
+    public Merger(OpLogMessage message) {
       this.message = message;
     }
 
     @Override
     public void run() {
       try {
-        opLogs.get(message.getMatrixId()).merge(message.getUpdate());
+        if (message.getType() == OpLogMessageType.VECTOR_MERGE) {
+          opLogs.get(message.getMatrixId()).merge(((VectorMergeMessage) message).getUpdate());
+        } else {
+          opLogs.get(message.getMatrixId()).merge(((MatrixMergeMessage) message).getUpdate());
+        }
         merged(message);
       } catch (InterruptedException e) {
         LOG.warn("merge " + message + " is interruped");
-      } catch (Exception e) {
+      } catch (Throwable e) {
         LOG.fatal("merge " + message + " falied, ", e);
         PSAgentContext.get().getPsAgent().error("merge " + message + " falied, " + e.getMessage());
       }
     }
   }
 
+
   /**
    * Thread that flush the updates
    */
   class Flusher extends Thread {
+
     private final OpLogMessage message;
     private final MatrixOpLog matrixOpLog;
 
@@ -454,21 +521,21 @@ public class MatrixOpLogCache {
 
     @Override
     public void run() {
-      MatrixClientAdapter matrixClientAdapter = PSAgentContext.get().getMatrixClientAdapter();
+      UserRequestAdapter adapter = PSAgentContext.get().getUserRequestAdapter();
       try {
         if ((matrixOpLog != null) && needFlushLocalStorage(message.getMatrixId())) {
           matrixOpLog.flushToLocalStorage();
         }
 
-        Future<VoidResult> flushFuture =
-            matrixClientAdapter.flush(message.getMatrixId(), message.getContext(), matrixOpLog,
+        Future<VoidResult> flushFuture = adapter
+            .flush(message.getMatrixId(), message.getContext(), matrixOpLog,
                 message.getType() == OpLogMessageType.CLOCK);
         VoidResult result = flushFuture.get();
         ((FutureResult<VoidResult>) messageToFutureMap.remove(message)).set(result);
-      } catch (Exception e) {
-        LOG.error("flush op " + message + " failed, ", e);
-        ((FutureResult<VoidResult>) messageToFutureMap.remove(message)).set(new VoidResult(
-            ResponseType.FAILED));
+      } catch (Throwable e) {
+        LOG.fatal("flush op " + message + " failed, ", e);
+        PSAgentContext.get().getPsAgent()
+            .error("flush op " + message + " falied, " + e.getMessage());
       }
     }
 
@@ -488,43 +555,26 @@ public class MatrixOpLogCache {
   }
 
   private void addMatrixOpLog(int matrixId) {
-    MatrixMeta matrixMeta = PSAgentContext.get().getMatrixMetaManager().getMatrixMeta(matrixId);
-    String type =
-        matrixMeta.getAttribute(MatrixConf.MATRIX_OPLOG_TYPE,
-            MatrixConf.DEFAULT_MATRIX_OPLOG_TYPE);
-
-    String enableFilter =
-        matrixMeta.getAttribute(MatrixConf.MATRIX_OPLOG_ENABLEFILTER,
-            MatrixConf.DEFAULT_MATRIX_OPLOG_ENABLEFILTER);
-
-    opLogs.put(matrixId, createMatrixOpLog(matrixId, type, enableFilter.equalsIgnoreCase("true")));
+    opLogs.put(matrixId, createMatrixOpLog(matrixId));
   }
 
-  private MatrixOpLog createMatrixOpLog(int matrixId, String type, boolean enableFilter) {
-    switch (type) {
-      case "DENSE_DOUBLE":
-        return new DenseDoubleMatrixOpLog(matrixId, enableFilter);
-
-      case "LIL_INT":
-        return new LILIntMatrixOpLog(matrixId, enableFilter);
-
-      case "DENSE_INT":
-        return new DenseIntMatrixOpLog(matrixId, enableFilter);
-
-      case "DENSE_FLOAT":
-        return new DenseFloatMatrixOplog(matrixId);
-
-      default:
-        return new DenseDoubleMatrixOpLog(matrixId, enableFilter);
-    }
+  private MatrixOpLog createMatrixOpLog(int matrixId) {
+    MatrixOpLog log = new MatrixOpLog(matrixId);
+    log.init();
+    return log;
   }
 
-  private void merged(OpLogMergeMessage message) throws InterruptedException {
-    messageQueue.put(new OpLogMessage(message.getSeqId(), message.getMatrixId(),
-        OpLogMessageType.MERGE_SUCCESS, message.getContext()));
+  private void merged(OpLogMessage message) throws InterruptedException {
+    messageQueue.put(
+        new OpLogMessage(message.getSeqId(), message.getMatrixId(), OpLogMessageType.MERGE_SUCCESS,
+            message.getContext()));
   }
 
-  public void delOplog(int matrixId) {
+  public void remove(int matrixId) {
     opLogs.remove(matrixId);
+  }
+
+  public MatrixOpLog getLog(int matrixId) {
+    return opLogs.get(matrixId);
   }
 }
