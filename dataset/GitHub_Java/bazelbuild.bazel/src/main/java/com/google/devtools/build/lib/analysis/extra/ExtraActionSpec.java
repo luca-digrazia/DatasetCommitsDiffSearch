@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.analysis.CommandHelper;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -122,7 +123,11 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
     // See {@link #createExpandedCommand} for list of supported variables.
     String command = createExpandedCommand(owningRule, actionToShadow, extraActionInfoFile);
 
-    CommandHelper commandHelper = CommandHelper.builder(owningRule).build();
+    CommandHelper commandHelper =
+        new CommandHelper(
+            owningRule,
+            ImmutableList.<TransitiveInfoCollection>of(),
+            ImmutableMap.<Label, Iterable<Artifact>>of());
 
     // Multiple actions in the same configured target need to have different names for the artifact
     // that might be created here, so we append something that should be unique for each action.

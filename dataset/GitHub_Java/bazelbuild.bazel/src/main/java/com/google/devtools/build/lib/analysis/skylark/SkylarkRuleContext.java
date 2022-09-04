@@ -759,10 +759,11 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
     checkMutable("expand_make_variables");
     ConfigurationMakeVariableContext makeVariableContext =
         new ConfigurationMakeVariableContext(
-            this.getRuleContext(),
+            // TODO(lberki): This should be removed. But only after either verifying that no one
+            // uses it or providing an alternative.
+            ruleContext.getMakeVariables(ImmutableList.of(":cc_toolchain")),
             ruleContext.getRule().getPackage(),
-            ruleContext.getConfiguration(),
-            ImmutableList.of()) {
+            ruleContext.getConfiguration()) {
           @Override
           public String lookupVariable(String variableName) throws ExpansionException {
             if (additionalSubstitutions.containsKey(variableName)) {
