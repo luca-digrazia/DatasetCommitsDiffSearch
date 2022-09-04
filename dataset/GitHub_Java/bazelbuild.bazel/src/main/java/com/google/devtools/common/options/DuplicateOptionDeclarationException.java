@@ -15,7 +15,7 @@
 package com.google.devtools.common.options;
 
 /** Indicates that a flag is declared more than once. */
-public class DuplicateOptionDeclarationException extends Exception {
+public class DuplicateOptionDeclarationException extends RuntimeException {
 
   DuplicateOptionDeclarationException(String message) {
     super(message);
