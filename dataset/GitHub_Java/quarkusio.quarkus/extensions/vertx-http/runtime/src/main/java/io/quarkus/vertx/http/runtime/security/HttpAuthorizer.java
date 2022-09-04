@@ -1,26 +1,22 @@
 package io.quarkus.vertx.http.runtime.security;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.function.BiFunction;
-import java.util.function.Supplier;
+import java.util.function.Consumer;
 
+import javax.enterprise.inject.Instance;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
+import io.quarkus.runtime.BlockingOperationControl;
+import io.quarkus.runtime.ExecutorRecorder;
 import io.quarkus.security.identity.IdentityProviderManager;
 import io.quarkus.security.identity.SecurityIdentity;
-import io.quarkus.security.identity.request.AnonymousAuthenticationRequest;
-import io.quarkus.vertx.http.runtime.HttpBuildTimeConfig;
-import io.quarkus.vertx.http.runtime.PolicyMappingConfig;
-import io.vertx.core.http.HttpServerRequest;
+import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.subscription.UniEmitter;
+import io.smallrye.mutiny.subscription.UniSubscriber;
+import io.smallrye.mutiny.subscription.UniSubscription;
 import io.vertx.ext.web.RoutingContext;
 
 /**
@@ -29,168 +25,152 @@ import io.vertx.ext.web.RoutingContext;
 @Singleton
 public class HttpAuthorizer {
 
-    private final PathMatcher<List<HttpMatcher>> pathMatcher = new PathMatcher<>();
     @Inject
     HttpAuthenticator httpAuthenticator;
+
     @Inject
     IdentityProviderManager identityProviderManager;
 
-    public CompletionStage<SecurityIdentity> checkPermission(RoutingContext routingContext) {
-        QuarkusHttpUser user = (QuarkusHttpUser) routingContext.user();
-        if (user == null) {
-            //check the anonymous identity
-            return attemptAnonymousAuthentication(routingContext);
+    final List<HttpSecurityPolicy> policies;
+
+    @Inject
+    HttpAuthorizer(Instance<HttpSecurityPolicy> installedPolicies) {
+        policies = new ArrayList<>();
+        for (HttpSecurityPolicy i : installedPolicies) {
+            policies.add(i);
         }
-        //we have a user, check their permissions
-        return doPermissionCheck(routingContext, user.getSecurityIdentity());
     }
 
-    protected CompletableFuture<SecurityIdentity> attemptAnonymousAuthentication(RoutingContext routingContext) {
-        CompletableFuture<SecurityIdentity> latch = new CompletableFuture<>();
-        identityProviderManager.authenticate(AnonymousAuthenticationRequest.INSTANCE)
-                .handle(new BiFunction<SecurityIdentity, Throwable, Object>() {
+    /**
+     * context that allows for running blocking tasks
+     */
+    private static final HttpSecurityPolicy.AuthorizationRequestContext CONTEXT = new HttpSecurityPolicy.AuthorizationRequestContext() {
+        @Override
+        public Uni<HttpSecurityPolicy.CheckResult> runBlocking(RoutingContext context, Uni<SecurityIdentity> identity,
+                BiFunction<RoutingContext, SecurityIdentity, HttpSecurityPolicy.CheckResult> function) {
+            if (BlockingOperationControl.isBlockingAllowed()) {
+                try {
+                    HttpSecurityPolicy.CheckResult res = function.apply(context, identity.await().indefinitely());
+                    return Uni.createFrom().item(res);
+                } catch (Throwable t) {
+                    return Uni.createFrom().failure(t);
+                }
+            }
+            try {
+                return Uni.createFrom().emitter(new Consumer<UniEmitter<? super HttpSecurityPolicy.CheckResult>>() {
                     @Override
-                    public Object apply(SecurityIdentity identity, Throwable throwable) {
-                        if (throwable != null) {
-                            latch.completeExceptionally(throwable);
-                        } else {
-                            doPermissionCheck(routingContext, identity).handle(
-                                    new BiFunction<SecurityIdentity, Throwable, SecurityIdentity>() {
-                                        @Override
-                                        public SecurityIdentity apply(SecurityIdentity identity,
-                                                Throwable throwable) {
-                                            if (throwable != null) {
-                                                latch.completeExceptionally(throwable);
-                                                return null;
-                                            }
-                                            latch.complete(identity);
-                                            return identity;
-                                        }
-                                    });
-                        }
-                        return null;
+                    public void accept(UniEmitter<? super HttpSecurityPolicy.CheckResult> uniEmitter) {
+
+                        ExecutorRecorder.getCurrent().execute(new Runnable() {
+                            @Override
+                            public void run() {
+                                try {
+                                    HttpSecurityPolicy.CheckResult val = function.apply(context,
+                                            identity.await().indefinitely());
+                                    uniEmitter.complete(val);
+                                } catch (Throwable t) {
+                                    uniEmitter.fail(t);
+                                }
+                            }
+                        });
                     }
                 });
-        return latch;
+            } catch (Exception e) {
+                return Uni.createFrom().failure(e);
+            }
+        }
+    };
+
+    /**
+     * Checks that the request is allowed to proceed. If it is then {@link RoutingContext#next()} will
+     * be invoked, if not appropriate action will be taken to either report the failure or attempt authentication.
+     *
+     */
+    public void checkPermission(RoutingContext routingContext) {
+        //check their permissions
+        doPermissionCheck(routingContext, QuarkusHttpUser.getSecurityIdentity(routingContext, identityProviderManager), 0, null,
+                policies);
     }
 
-    private CompletionStage<SecurityIdentity> doPermissionCheck(RoutingContext routingContext,
-            SecurityIdentity identity) {
-        CompletableFuture<SecurityIdentity> latch = new CompletableFuture<>();
-        List<HttpSecurityPolicy> permissionCheckers = findPermissionCheckers(routingContext.request());
-        doPermissionCheck(routingContext, latch, identity, 0, permissionCheckers);
-        return latch;
-    }
-
-    private void doPermissionCheck(RoutingContext routingContext, CompletableFuture<SecurityIdentity> latch,
-            SecurityIdentity identity, int index,
+    private void doPermissionCheck(RoutingContext routingContext,
+            Uni<SecurityIdentity> identity, int index,
+            SecurityIdentity augmentedIdentity,
             List<HttpSecurityPolicy> permissionCheckers) {
         if (index == permissionCheckers.size()) {
-            latch.complete(identity);
+            QuarkusHttpUser currentUser = (QuarkusHttpUser) routingContext.user();
+            if (augmentedIdentity != null) {
+                if (!augmentedIdentity.isAnonymous()
+                        && (currentUser == null || currentUser.getSecurityIdentity() != augmentedIdentity)) {
+                    routingContext.setUser(new QuarkusHttpUser(augmentedIdentity));
+                    routingContext.put(QuarkusHttpUser.DEFERRED_IDENTITY_KEY, Uni.createFrom().item(augmentedIdentity));
+                }
+            }
+            routingContext.next();
             return;
         }
         //get the current checker
         HttpSecurityPolicy res = permissionCheckers.get(index);
-        res.checkPermission(routingContext.request(), identity)
-                .handle(new BiFunction<HttpSecurityPolicy.CheckResult, Throwable, Object>() {
+        res.checkPermission(routingContext, identity, CONTEXT)
+                .subscribe().with(new Consumer<HttpSecurityPolicy.CheckResult>() {
                     @Override
-                    public Object apply(HttpSecurityPolicy.CheckResult checkResult, Throwable throwable) {
-                        if (throwable != null) {
-                            latch.completeExceptionally(throwable);
+                    public void accept(HttpSecurityPolicy.CheckResult checkResult) {
+                        if (!checkResult.isPermitted()) {
+                            doDeny(identity, routingContext);
                         } else {
-                            if (checkResult == HttpSecurityPolicy.CheckResult.DENY) {
-                                doDeny(identity, routingContext, latch);
+                            if (checkResult.getAugmentedIdentity() != null) {
+                                doPermissionCheck(routingContext, Uni.createFrom().item(checkResult.getAugmentedIdentity()),
+                                        index + 1, checkResult.getAugmentedIdentity(), permissionCheckers);
                             } else {
                                 //attempt to run the next checker
-                                doPermissionCheck(routingContext, latch, identity, index + 1, permissionCheckers);
+                                doPermissionCheck(routingContext, identity, index + 1, augmentedIdentity, permissionCheckers);
                             }
                         }
-                        return null;
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) {
+                        routingContext.fail(throwable);
                     }
                 });
     }
 
-    private void doDeny(SecurityIdentity identity, RoutingContext routingContext,
-            CompletableFuture<SecurityIdentity> latch) {
-        //if we were denied we send a challenge if we are not authenticated, otherwise we send a 403
-        if (identity.isAnonymous()) {
-            httpAuthenticator.sendChallenge(routingContext, new Runnable() {
-                @Override
-                public void run() {
-                    routingContext.response().end();
-                }
-            });
-        } else {
-            routingContext.fail(403);
-        }
-        latch.complete(null);
-    }
+    private void doDeny(Uni<SecurityIdentity> identity, RoutingContext routingContext) {
+        identity.subscribe().withSubscriber(new UniSubscriber<SecurityIdentity>() {
+            @Override
+            public void onSubscribe(UniSubscription subscription) {
 
-    void init(HttpBuildTimeConfig config, Map<String, Supplier<HttpSecurityPolicy>> supplierMap) {
-        Map<String, HttpSecurityPolicy> permissionCheckers = new HashMap<>();
-        for (Map.Entry<String, Supplier<HttpSecurityPolicy>> i : supplierMap.entrySet()) {
-            permissionCheckers.put(i.getKey(), i.getValue().get());
-        }
-
-        Map<String, List<HttpMatcher>> tempMap = new HashMap<>();
-        for (Map.Entry<String, PolicyMappingConfig> entry : config.auth.permissions.entrySet()) {
-            HttpSecurityPolicy checker = permissionCheckers.get(entry.getValue().policy);
-            if (checker == null) {
-                throw new RuntimeException("Unable to find HTTP security policy " + entry.getValue().policy);
             }
 
-            for (String path : entry.getValue().paths) {
-                if (tempMap.containsKey(path)) {
-                    HttpMatcher m = new HttpMatcher(new HashSet<>(entry.getValue().methods), checker);
-                    tempMap.get(path).add(m);
+            @Override
+            public void onItem(SecurityIdentity identity) {
+                //if we were denied we send a challenge if we are not authenticated, otherwise we send a 403
+                if (identity.isAnonymous()) {
+                    httpAuthenticator.sendChallenge(routingContext).subscribe().withSubscriber(new UniSubscriber<Boolean>() {
+                        @Override
+                        public void onSubscribe(UniSubscription subscription) {
+
+                        }
+
+                        @Override
+                        public void onItem(Boolean item) {
+                            routingContext.response().end();
+                        }
+
+                        @Override
+                        public void onFailure(Throwable failure) {
+                            routingContext.fail(failure);
+                        }
+                    });
                 } else {
-                    HttpMatcher m = new HttpMatcher(new HashSet<>(entry.getValue().methods), checker);
-                    List<HttpMatcher> perms = new ArrayList<>();
-                    tempMap.put(path, perms);
-                    perms.add(m);
-                    if (path.endsWith("*")) {
-                        pathMatcher.addPrefixPath(path.substring(0, path.length() - 1), perms);
-                    } else {
-                        pathMatcher.addExactPath(path, perms);
-                    }
+                    routingContext.fail(403);
                 }
             }
-        }
-    }
 
-    public List<HttpSecurityPolicy> findPermissionCheckers(HttpServerRequest request) {
-        PathMatcher.PathMatch<List<HttpMatcher>> toCheck = pathMatcher.match(request.path());
-        if (toCheck.getValue() == null || toCheck.getValue().isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<HttpSecurityPolicy> methodMatch = new ArrayList<>();
-        List<HttpSecurityPolicy> noMethod = new ArrayList<>();
-        for (HttpMatcher i : toCheck.getValue()) {
-            if (i.methods == null || i.methods.isEmpty()) {
-                noMethod.add(i.checker);
-            } else if (i.methods.contains(request.method().toString())) {
-                methodMatch.add(i.checker);
+            @Override
+            public void onFailure(Throwable failure) {
+                routingContext.fail(failure);
             }
-        }
-        if (!methodMatch.isEmpty()) {
-            return methodMatch;
-        } else if (!noMethod.isEmpty()) {
-            return noMethod;
-        } else {
-            //we deny if we did not match due to method filtering
-            return Collections.singletonList(DenySecurityPolicy.INSTANCE);
-        }
+        });
 
-    }
-
-    static class HttpMatcher {
-
-        final Set<String> methods;
-        final HttpSecurityPolicy checker;
-
-        HttpMatcher(Set<String> methods, HttpSecurityPolicy checker) {
-            this.methods = methods;
-            this.checker = checker;
-        }
     }
 }

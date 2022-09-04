@@ -22,7 +22,6 @@ import io.quarkus.security.identity.request.AnonymousAuthenticationRequest;
 import io.quarkus.vertx.http.runtime.FormAuthConfig;
 import io.quarkus.vertx.http.runtime.HttpBuildTimeConfig;
 import io.quarkus.vertx.http.runtime.HttpConfiguration;
-import io.smallrye.mutiny.CompositeException;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.subscription.UniSubscriber;
 import io.smallrye.mutiny.subscription.UniSubscription;
@@ -64,7 +63,9 @@ public class HttpSecurityRecorder {
                 event.put(QuarkusHttpUser.AUTH_FAILURE_HANDLER, new BiConsumer<RoutingContext, Throwable>() {
                     @Override
                     public void accept(RoutingContext routingContext, Throwable throwable) {
-                        throwable = extractRootCause(throwable);
+                        while (throwable instanceof CompletionException && throwable.getCause() != null) {
+                            throwable = throwable.getCause();
+                        }
                         //auth failed
                         if (throwable instanceof AuthenticationFailedException) {
                             authenticator.sendChallenge(event).subscribe().with(new Consumer<Boolean>() {
@@ -190,18 +191,6 @@ public class HttpSecurityRecorder {
         };
     }
 
-    private Throwable extractRootCause(Throwable throwable) {
-        while ((throwable instanceof CompletionException && throwable.getCause() != null) ||
-                (throwable instanceof CompositeException)) {
-            if (throwable instanceof CompositeException) {
-                throwable = ((CompositeException) throwable).getCauses().get(0);
-            } else {
-                throwable = throwable.getCause();
-            }
-        }
-        return throwable;
-    }
-
     public Handler<RoutingContext> permissionCheckHandler() {
         return new Handler<RoutingContext>() {
             volatile HttpAuthorizer authorizer;
@@ -263,15 +252,6 @@ public class HttpSecurityRecorder {
             @Override
             public BasicAuthenticationMechanism get() {
                 return new BasicAuthenticationMechanism(buildTimeConfig.auth.realm, "BASIC", buildTimeConfig.auth.form.enabled);
-            }
-        };
-    }
-
-    public Supplier<?> setupMtlsClientAuth() {
-        return new Supplier<MtlsAuthenticationMechanism>() {
-            @Override
-            public MtlsAuthenticationMechanism get() {
-                return new MtlsAuthenticationMechanism();
             }
         };
     }
