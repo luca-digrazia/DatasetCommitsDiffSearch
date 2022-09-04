@@ -373,7 +373,7 @@ public final class ProguardHelper {
           output.getConstantStringObfuscatedMapping(),
           output.getConfig());
       proguardAction
-          .setProgressMessage("Trimming binary with Proguard: %s", ruleContext.getLabel())
+          .setProgressMessage("Trimming binary with Proguard")
           .addOutput(proguardOutputJar);
       proguardAction.addCommandLine(commandLine.build());
       ruleContext.registerAction(proguardAction.build(ruleContext));

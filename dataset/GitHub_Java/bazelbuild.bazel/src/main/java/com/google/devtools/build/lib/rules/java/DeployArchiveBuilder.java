@@ -19,6 +19,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
@@ -28,6 +29,7 @@ import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
+import com.google.devtools.build.lib.collect.IterablesChain;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
@@ -53,7 +55,7 @@ public class DeployArchiveBuilder {
 
   private final RuleContext ruleContext;
 
-  private final NestedSetBuilder<Artifact> runtimeJarsBuilder = NestedSetBuilder.stableOrder();
+  private final IterablesChain.Builder<Artifact> runtimeJarsBuilder = IterablesChain.builder();
 
   private final JavaSemantics semantics;
 
@@ -126,20 +128,14 @@ public class DeployArchiveBuilder {
   }
 
   /** Adds additional jars that should be on the classpath at runtime. */
-  public DeployArchiveBuilder addRuntimeJars(NestedSet<Artifact> jars) {
-    this.runtimeJarsBuilder.addTransitive(jars);
-    return this;
-  }
-
-  /** Adds additional jars that should be on the classpath at runtime. */
   public DeployArchiveBuilder addRuntimeJars(Iterable<Artifact> jars) {
-    this.runtimeJarsBuilder.addAll(jars);
+    this.runtimeJarsBuilder.add(jars);
     return this;
   }
 
   /** Sets the list of extra lines to add to the archive's MANIFEST.MF file. */
-  public DeployArchiveBuilder setDeployManifestLines(ImmutableList<String> deployManifestLines) {
-    this.deployManifestLines = Preconditions.checkNotNull(deployManifestLines);
+  public DeployArchiveBuilder setDeployManifestLines(Iterable<String> deployManifestLines) {
+    this.deployManifestLines = ImmutableList.copyOf(deployManifestLines);
     return this;
   }
 
@@ -291,7 +287,7 @@ public class DeployArchiveBuilder {
       }
     }
 
-    NestedSet<Artifact> runtimeJars = runtimeJarsBuilder.build();
+    Iterable<Artifact> runtimeJars = runtimeJarsBuilder.build();
 
     NestedSet<Artifact> runtimeClasspathForArchive = attributes.getRuntimeClassPathForArchive();
 
@@ -301,9 +297,9 @@ public class DeployArchiveBuilder {
     inputs.addTransitive(getArchiveInputs(attributes, runtimeClasspathForArchive, derivedJars));
 
     if (derivedJars != null) {
-      inputs.addAll(Iterables.transform(runtimeJars.toList(), derivedJars));
+      inputs.addAll(Streams.stream(runtimeJars).map(derivedJars).collect(toImmutableList()));
     } else {
-      inputs.addTransitive(runtimeJars);
+      inputs.addAll(runtimeJars);
     }
     if (runfilesMiddleman != null) {
       inputs.add(runfilesMiddleman);
@@ -314,11 +310,11 @@ public class DeployArchiveBuilder {
 
     NestedSetBuilder<Artifact> runtimeClasspath = NestedSetBuilder.stableOrder();
     if (derivedJars != null) {
-      runtimeClasspath.addAll(Iterables.transform(runtimeJars.toList(), derivedJars));
       runtimeClasspath.addAll(
-          Iterables.transform(runtimeClasspathForArchive.toList(), derivedJars));
+          Iterables.transform(
+              Iterables.concat(runtimeJars, runtimeClasspathForArchive.toList()), derivedJars));
     } else {
-      runtimeClasspath.addTransitive(runtimeJars);
+      runtimeClasspath.addAll(runtimeJars);
       runtimeClasspath.addTransitive(runtimeClasspathForArchive);
     }
 

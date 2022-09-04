@@ -514,7 +514,7 @@ public class JavaCompileAction extends AbstractAction implements CommandAction {
   }
 
   @Override
-  public NestedSet<Artifact> getPossibleInputsForTesting() {
+  public Iterable<Artifact> getPossibleInputsForTesting() {
     return null;
   }
 
