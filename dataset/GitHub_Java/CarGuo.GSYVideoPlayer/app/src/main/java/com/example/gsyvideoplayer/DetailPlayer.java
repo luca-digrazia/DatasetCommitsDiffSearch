@@ -119,7 +119,6 @@ public class DetailPlayer extends AppCompatActivity {
         Map<String, String> header = new HashMap<>();
         header.put("ee", "33");
         header.put("allowCrossProtocolRedirects", "true");
-        header.put("User-Agent", "GSY");
         GSYVideoOptionBuilder gsyVideoOption = new GSYVideoOptionBuilder();
         gsyVideoOption.setThumbImageView(imageView)
                 .setIsTouchWiget(true)
@@ -283,9 +282,6 @@ public class DetailPlayer extends AppCompatActivity {
         //String url = "android.resource://" + getPackageName() + "/" + R.raw.test;
         //注意，用ijk模式播放raw视频，这个必须打开
         GSYVideoManager.instance().enableRawPlay(getApplicationContext());
-
-        ///exo 播放 raw
-        //String url = "rawresource://" + getPackageName() + "/" + R.raw.test;
 
         ///exo raw 支持
         //String url =  RawResourceDataSource.buildRawResourceUri(R.raw.test).toString();

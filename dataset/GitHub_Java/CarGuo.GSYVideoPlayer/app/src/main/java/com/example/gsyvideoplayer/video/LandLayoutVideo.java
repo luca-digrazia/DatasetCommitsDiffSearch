@@ -135,13 +135,11 @@ public class LandLayoutVideo extends StandardGSYVideoPlayer {
     protected void changeUiToCompleteClear() {
         super.changeUiToCompleteClear();
         setTextAndProgress(0, true);
-        //changeUiToNormal();
     }
 
     @Override
     protected void changeUiToCompleteShow() {
         super.changeUiToCompleteShow();
         setTextAndProgress(0, true);
-        //changeUiToNormal();
     }
 }
