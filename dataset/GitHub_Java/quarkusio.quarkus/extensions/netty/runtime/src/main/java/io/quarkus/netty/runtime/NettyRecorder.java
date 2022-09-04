@@ -25,8 +25,7 @@ public class NettyRecorder {
                 DefaultChannelId.newInstance();
                 if (System.currentTimeMillis() - start > 1000) {
                     log.warn(
-                            "Localhost lookup took more than one second, you need to add a /etc/hosts entry to improve Quarkus startup time. "
-                                    + "On Windows the path is C:\\Windows\\System32\\Drivers\\etc\\hosts. See https://thoeni.io/post/macos-sierra-java/ for macOS details.");
+                            "Localhost lookup took more than one second, you need to add a /etc/hosts entry to improve Quarkus startup time. See https://thoeni.io/post/macos-sierra-java/ for details.");
                 }
             }
         }).start();

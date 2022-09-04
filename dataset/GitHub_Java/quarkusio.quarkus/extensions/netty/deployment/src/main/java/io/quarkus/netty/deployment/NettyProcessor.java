@@ -1,6 +1,5 @@
 package io.quarkus.netty.deployment;
 
-import java.util.Optional;
 import java.util.function.Supplier;
 
 import javax.enterprise.context.ApplicationScoped;
@@ -17,8 +16,7 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.JniBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
-import io.quarkus.netty.BossEventLoopGroup;
-import io.quarkus.netty.MainEventLoopGroup;
+import io.quarkus.netty.BossGroup;
 import io.quarkus.netty.runtime.NettyRecorder;
 
 class NettyProcessor {
@@ -41,14 +39,11 @@ class NettyProcessor {
                 .addNativeImageSystemProperty("io.netty.noUnsafe", "true")
                 .addRuntimeInitializedClass("io.netty.handler.ssl.JdkNpnApplicationProtocolNegotiator")
                 .addRuntimeInitializedClass("io.netty.handler.ssl.ReferenceCountedOpenSslEngine")
-                .addRuntimeInitializedClass("io.netty.handler.ssl.ReferenceCountedOpenSslContext")
-                .addRuntimeInitializedClass("io.netty.handler.ssl.ReferenceCountedOpenSslClientContext")
                 .addRuntimeInitializedClass("io.netty.handler.ssl.util.ThreadLocalInsecureRandom")
-                .addRuntimeInitializedClass("io.netty.handler.ssl.ConscryptAlpnSslEngine")
                 .addNativeImageSystemProperty("io.netty.leakDetection.level", "DISABLED");
         try {
             Class.forName("io.netty.handler.codec.http.HttpObjectEncoder");
-            builder.addRuntimeInitializedClass("io.netty.handler.codec.http2.Http2CodecUtil")
+            builder.addRuntimeReinitializedClass("io.netty.handler.codec.http2.Http2CodecUtil")
                     .addRuntimeInitializedClass("io.netty.handler.codec.http.HttpObjectEncoder")
                     .addRuntimeInitializedClass("io.netty.handler.codec.http2.DefaultHttp2FrameWriter")
                     .addRuntimeInitializedClass("io.netty.handler.codec.http.websocketx.WebSocket00FrameEncoder");
@@ -113,27 +108,19 @@ class NettyProcessor {
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
     void createExecutors(BuildProducer<RuntimeBeanBuildItem> runtimeBeanBuildItemBuildProducer,
-            Optional<EventLoopSupplierBuildItem> loopSupplierBuildItem,
             NettyRecorder recorder) {
         //TODO: configuration
-        Supplier<Object> boss;
-        Supplier<Object> main;
-        if (loopSupplierBuildItem.isPresent()) {
-            boss = (Supplier) loopSupplierBuildItem.get().getBossSupplier();
-            main = (Supplier) loopSupplierBuildItem.get().getMainSupplier();
-        } else {
-            boss = recorder.createEventLoop(1);
-            main = recorder.createEventLoop(0);
-        }
+        Supplier<Object> boss = recorder.createEventLoop(1);
+        Supplier<Object> worker = recorder.createEventLoop(0);
+
         runtimeBeanBuildItemBuildProducer.produce(RuntimeBeanBuildItem.builder(EventLoopGroup.class)
                 .setSupplier(boss)
                 .setScope(ApplicationScoped.class)
-                .addQualifier(BossEventLoopGroup.class)
+                .addQualifier(BossGroup.class)
                 .build());
         runtimeBeanBuildItemBuildProducer.produce(RuntimeBeanBuildItem.builder(EventLoopGroup.class)
-                .setSupplier(main)
+                .setSupplier(worker)
                 .setScope(ApplicationScoped.class)
-                .addQualifier(MainEventLoopGroup.class)
                 .build());
     }
 
