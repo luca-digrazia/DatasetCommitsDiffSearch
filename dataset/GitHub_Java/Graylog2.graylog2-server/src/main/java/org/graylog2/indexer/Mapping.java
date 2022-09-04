@@ -1,5 +1,5 @@
 /**
- * Copyright 2011, 2012 Lennart Koopmann <lennart@socketfeed.com>
+ * Copyright 2011 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -39,7 +39,6 @@ public class Mapping {
         Map mapping = new HashMap();
         mapping.put("properties", partFieldProperties());
         mapping.put("dynamic_templates", partDefaultAllInDynamicTemplate());
-        mapping.put("_source", enabledAndCompressed()); // Compress source field..
 
         Map completeMapping = new HashMap();
         completeMapping.put(Indexer.TYPE, mapping);
@@ -53,7 +52,7 @@ public class Mapping {
     /*
      * Disable analyzing for every field by default.
      */
-    private static List partDefaultAllInDynamicTemplate() {
+    public static List partDefaultAllInDynamicTemplate() {
         List dynamicTemplates = new LinkedList();
         Map template = new HashMap();
         Map defaultAll = new HashMap();
@@ -74,7 +73,7 @@ public class Mapping {
     /*
      * Enable analyzing for some fields again. Like for message and full_message.
      */
-    private static Map partFieldProperties() {
+    public static Map partFieldProperties() {
         Map properties = new HashMap();
 
         properties.put("message", analyzedString());
@@ -89,7 +88,7 @@ public class Mapping {
         return properties;
     }
 
-    private static Map analyzedString() {
+    public static Map analyzedString() {
         Map type = new HashMap();
         type.put("index", "analyzed");
         type.put("type", "string");
@@ -98,27 +97,19 @@ public class Mapping {
         return type;
     }
 
-    private static Map typeNumberDouble() {
+    public static Map typeNumberDouble() {
         Map type = new HashMap();
         type.put("type", "double");
 
         return type;
     }
 
-    private static Map typeTimeNoMillis() {
+    public static Map typeTimeNoMillis() {
         Map type = new HashMap();
         type.put("type", "date");
         type.put("format", "yyyy-MM-dd HH-mm-ss");
 
         return type;
-    }
-
-    private static Map enabledAndCompressed() {
-        Map e = new HashMap();
-        e.put("enabled", true);
-        e.put("compressed", true);
-
-        return e;
     }
 
 }

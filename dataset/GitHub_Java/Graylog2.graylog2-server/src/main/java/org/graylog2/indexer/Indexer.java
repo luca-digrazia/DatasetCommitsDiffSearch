@@ -20,18 +20,19 @@
 
 package org.graylog2.indexer;
 
+import org.apache.log4j.Logger;
+import org.graylog2.Main;
+import org.graylog2.messagehandlers.gelf.GELFMessage;
+import org.json.simple.JSONValue;
+
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Calendar;
+import java.util.Formatter;
 import java.util.List;
-
-import org.apache.log4j.Logger;
-import org.graylog2.GraylogServer;
-import org.graylog2.messagehandlers.gelf.GELFMessage;
-import org.json.simple.JSONValue;
 
 /**
  * Indexer.java: Sep 05, 2011 9:13:03 PM
@@ -46,14 +47,8 @@ public class Indexer {
 
     private static final Logger LOG = Logger.getLogger(Indexer.class);
 
+    public static final String INDEX = Main.configuration.getElasticSearchIndexName();
     public static final String TYPE = "message";
-    private final String INDEX;
-    private final GraylogServer graylogServer;
-
-    public Indexer(GraylogServer graylogServer) {
-        this.graylogServer = graylogServer;
-        INDEX = graylogServer.getConfiguration().getElasticSearchIndexName();
-    }
 
     /**
      * Checks if the index for Graylog2 exists
@@ -63,8 +58,8 @@ public class Indexer {
      * @return {@literal true} if the index for Graylog2 exists, {@literal false} otherwise
      * @throws IOException if elasticsearch server couldn't be reached
      */
-    public boolean indexExists() throws IOException {
-        URL url = new URL(buildIndexURL());
+    public static boolean indexExists() throws IOException {
+        URL url = new URL(Indexer.buildIndexURL());
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("HEAD");
         // Older versions of ElasticSearch return 400 Bad Request in cse of an existing index.
@@ -88,10 +83,10 @@ public class Indexer {
      * @return {@literal true} if the index for Graylog2 could be created, {@literal false} otherwise
      * @throws IOException if elasticsearch server couldn't be reached
      */
-    public boolean createIndex() throws IOException {
+    public static boolean createIndex() throws IOException {
 
         Writer writer = null;
-        URL url = new URL(buildIndexURL());
+        URL url = new URL(Indexer.buildIndexURL());
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setDoOutput(true);
         conn.setRequestMethod("POST");
@@ -123,7 +118,7 @@ public class Indexer {
      * @param messages The messages to index
      * @return {@literal true} if the messages were successfully indexed, {@literal false} otherwise
      */
-    public boolean bulkIndex(List<GELFMessage> messages) {
+    public static boolean bulkIndex(List<GELFMessage> messages) {
 
         if (messages.isEmpty()) {
             return true;
@@ -169,7 +164,7 @@ public class Indexer {
      * @param to UTC UNIX timestamp
      * @return {@literal true} if the messages were successfully deleted, {@literal false} otherwise
      */
-    public boolean deleteMessagesByTimeRange(int to) {
+    public static boolean deleteMessagesByTimeRange(int to) {
         int responseCode = 0;
 
         try {
@@ -181,7 +176,7 @@ public class Indexer {
             responseCode = conn.getResponseCode();
         } catch (IOException e) {
             LOG.warn("IO error when trying to delete messages older than date", e);
-        }
+        } 
 
         if (responseCode == HttpURLConnection.HTTP_OK) {
             return true;
@@ -195,7 +190,7 @@ public class Indexer {
         return "/_query?q=created_at%3A%5B0%20TO%20" + to + "%5D";
     }
 
-    private String getJSONfromGELFMessages(List<GELFMessage> messages) {
+    private static String getJSONfromGELFMessages(List<GELFMessage> messages) {
         StringBuilder sb = new StringBuilder();
 
         for (GELFMessage message : messages) {
@@ -211,16 +206,16 @@ public class Indexer {
         return sb.toString();
     }
 
-    private String buildElasticSearchURL() {
-        return graylogServer.getConfiguration().getElasticSearchUrl();
+    private static String buildElasticSearchURL() {
+        return Main.configuration.getElasticSearchUrl();
     }
 
-    private String buildIndexURL() {
-        return buildElasticSearchURL() + INDEX;
+    private static String buildIndexURL() {
+        return buildElasticSearchURL() + Indexer.INDEX;
     }
 
-    private String buildIndexWithTypeUrl() {
-        return buildIndexURL() + "/" + TYPE;
+    private static String buildIndexWithTypeUrl() {
+        return buildIndexURL() + "/" + Indexer.TYPE;
     }
 
     // yyyy-MM-dd HH-mm-ss
