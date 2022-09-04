@@ -14,15 +14,11 @@ import java.util.Map;
 import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 import org.elasticsearch.action.ActionFuture;
-import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
-import org.elasticsearch.action.admin.cluster.node.info.NodesInfoRequest;
-import org.elasticsearch.action.admin.cluster.node.info.NodesInfoResponse;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesResponse;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
-import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.elasticsearch.action.admin.indices.exists.IndicesExistsRequest;
 import org.elasticsearch.action.admin.indices.exists.IndicesExistsResponse;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
@@ -94,38 +90,7 @@ public class EmbeddedElasticSearchClient {
     }
     
     public String allIndicesAlias() {
-
         return server.getConfiguration().getElasticSearchIndexPrefix() + "_*";
-    }
-    
-    public String nodeIdToName(String nodeId) {
-        if (nodeId == null || nodeId.isEmpty()) {
-            return null;
-        }
-        
-        try {
-            NodesInfoResponse r = client.admin().cluster().nodesInfo(new NodesInfoRequest(nodeId).all()).actionGet();
-            return r.getNodesMap().get(nodeId).getNode().getName();
-        } catch (Exception e) {
-            LOG.error("Could not read name of ES node.", e);
-            return "UNKNOWN";
-        }
-        
-    }
-    
-    public String nodeIdToHostName(String nodeId) {
-        if (nodeId == null || nodeId.isEmpty()) {
-            return null;
-        }
-        
-        try {
-            NodesInfoResponse r = client.admin().cluster().nodesInfo(new NodesInfoRequest(nodeId).all()).actionGet();
-            return r.getNodesMap().get(nodeId).getHostname();
-        } catch (Exception e) {
-            LOG.error("Could not read name of ES node.", e);
-            return "UNKNOWN";
-        }
-        
     }
     
     public Map<String, IndexStats> getIndices() {
@@ -235,10 +200,6 @@ public class EmbeddedElasticSearchClient {
         cal.setTimeInMillis(System.currentTimeMillis());
 
         return String.format("%1$tY-%1$tm-%1$td %1$tH-%1$tM-%1$tS", cal); // ramtamtam
-    }
-    
-    public void deleteIndex(String indexName) {
-        client.admin().indices().delete(new DeleteIndexRequest(indexName)).actionGet();
     }
     
     private IndexRequestBuilder buildIndexRequest(String index, String source, String id, int ttlMinutes) {

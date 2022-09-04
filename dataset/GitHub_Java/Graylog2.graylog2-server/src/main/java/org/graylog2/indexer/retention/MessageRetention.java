@@ -20,7 +20,6 @@
 
 package org.graylog2.indexer.retention;
 
-import com.google.common.base.Stopwatch;
 import org.apache.log4j.Logger;
 import org.graylog2.GraylogServer;
 import org.graylog2.Tools;
@@ -40,15 +39,10 @@ public class MessageRetention {
 
     public void performCleanup(int timeDays) {
         int to = Tools.getTimestampDaysAgo(Tools.getUTCTimestamp(), timeDays);
-        
-        Stopwatch stopWatch = new Stopwatch();
-        stopWatch.start();
-        graylogServer.getIndexer().deleteMessagesByTimeRange(to);
-        stopWatch.stop();
-        
-        String msg = "Deleted all messages older than " + to + " (" + timeDays + " days ago) - took <" + stopWatch.elapsedMillis() + "ms>";
+        String msg = "Deleting all messages older than " + to + " (" + timeDays + " days ago)";
         LOG.debug(msg);
         graylogServer.getActivityWriter().write(new Activity(msg, MessageRetention.class));
+        graylogServer.getIndexer().deleteMessagesByTimeRange(to);
     }
 
     public void updateLastPerformedTime() {
