@@ -20,16 +20,22 @@
 
 package org.graylog2;
 
-import java.util.List;
+import static org.junit.Assert.assertEquals;
+
 import java.util.ArrayList;
-import com.google.common.collect.Maps;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import org.json.simple.JSONValue;
+
 import org.bson.types.ObjectId;
+import org.graylog2.plugin.MessageCounter;
+import org.graylog2.plugin.Tools;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+import org.json.simple.JSONValue;
 import org.junit.Test;
-import static org.junit.Assert.*;
+
+import com.google.common.collect.Maps;
 
 public class LibratoMetricsFormatterTest {
 
@@ -49,33 +55,41 @@ public class LibratoMetricsFormatterTest {
         // Host bar.example.org: 1
         counter.incrementHost("bar.example.org");
 
+        Map<String, String> fakeStreamNames = Maps.newHashMap();
+        
         // Stream id1: 2
         ObjectId id1 = new ObjectId();
+        fakeStreamNames.put(id1.toString(), "lol-stream1");
         counter.incrementStream(id1);
         counter.incrementStream(id1);
 
         // Stream id2: 1
         ObjectId id2 = new ObjectId();
+        fakeStreamNames.put(id2.toString(), "lolano$therSTREAM");
         counter.incrementStream(id2);
 
-        LibratoMetricsFormatter f = new LibratoMetricsFormatter(counter, "gl2-", new ArrayList<String>(), "");
+        Map<Integer, MessageCounter> counters = Maps.newConcurrentMap();
+        counters.put(Tools.getUTCTimestamp(), counter);
+        LibratoMetricsFormatter f = new LibratoMetricsFormatter(counters, "gl2-", new ArrayList<String>(), "", fakeStreamNames);
 
         Map<String, Map<String,Object>> gauges = parseGauges(f.asJson());
 
         assertEquals(5, gauges.size());
-        
+
         assertEquals("gl2-graylog2-server", gauges.get("gl2-total").get("source"));
         assertEquals((long) 2, gauges.get("gl2-total").get("value"));
         assertEquals((long) 3, gauges.get("gl2-host-fooexampleorg").get("value"));
         assertEquals((long) 1, gauges.get("gl2-host-barexampleorg").get("value"));
-        assertEquals((long) 2, gauges.get("gl2-stream-" + id1.toString()).get("value"));
-        assertEquals((long) 1, gauges.get("gl2-stream-" + id2.toString()).get("value"));
+        assertEquals((long) 2, gauges.get("gl2-stream-lolstream1").get("value"));
+        assertEquals((long) 1, gauges.get("gl2-stream-lolanotherstream").get("value"));
     }
 
     @Test
     public void testAsJsonWithEmptyCounter() {
         MessageCounterImpl counter = new MessageCounterImpl();
-        LibratoMetricsFormatter f = new LibratoMetricsFormatter(counter, "gl2-", new ArrayList<String>(), "");
+        Map<Integer, MessageCounter> counters = Maps.newConcurrentMap();
+        counters.put(Tools.getUTCTimestamp(), counter);
+        LibratoMetricsFormatter f = new LibratoMetricsFormatter(counters, "gl2-", new ArrayList<String>(), "", new HashMap<String, String>());
 
         Map<String, Map<String,Object>> gauges = parseGauges(f.asJson());
 
@@ -99,8 +113,11 @@ public class LibratoMetricsFormatterTest {
         // Host bar.example.org: 1
         counter.incrementHost("bar.example.org");
 
+        Map<String, String> fakeStreamNames = Maps.newHashMap();
+        
         // Stream id1: 2
         ObjectId id1 = new ObjectId();
+        fakeStreamNames.put(id1.toString(), "some_stream");
         counter.incrementStream(id1);
         counter.incrementStream(id1);
 
@@ -117,7 +134,9 @@ public class LibratoMetricsFormatterTest {
         streamFilter.add(id3.toString());
         streamFilter.add(new ObjectId().toString());
 
-        LibratoMetricsFormatter f = new LibratoMetricsFormatter(counter, "gl2-", streamFilter, "");
+        Map<Integer, MessageCounter> counters = Maps.newConcurrentMap();
+        counters.put(Tools.getUTCTimestamp(), counter);
+        LibratoMetricsFormatter f = new LibratoMetricsFormatter(counters, "gl2-", streamFilter, "", fakeStreamNames);
 
         Map<String, Map<String,Object>> gauges = parseGauges(f.asJson());
 
@@ -127,7 +146,7 @@ public class LibratoMetricsFormatterTest {
         assertEquals((long) 2, gauges.get("gl2-total").get("value"));
         assertEquals((long) 3, gauges.get("gl2-host-fooexampleorg").get("value"));
         assertEquals((long) 1, gauges.get("gl2-host-barexampleorg").get("value"));
-        assertEquals((long) 1, gauges.get("gl2-stream-" + id2.toString()).get("value"));
+        assertEquals((long) 1, gauges.get("gl2-stream-noname-" + id2.toString()).get("value"));
     }
 
     @Test
@@ -149,18 +168,24 @@ public class LibratoMetricsFormatterTest {
         // Host bar.lolwut.example.org: 1
         counter.incrementHost("bar.lolwut.example.org");
 
+        Map<String, String> fakeStreamNames = Maps.newHashMap();
+        
         // Stream id1: 2
         ObjectId id1 = new ObjectId();
+        fakeStreamNames.put(id1.toString(), "some_stream");
         counter.incrementStream(id1);
         counter.incrementStream(id1);
 
         // Stream id2: 1
         ObjectId id2 = new ObjectId();
+        fakeStreamNames.put(id2.toString(), " some_stream__ ___2 ");
         counter.incrementStream(id2);
 
         String hostFilter = "^bar.*\\.example.org$";
 
-        LibratoMetricsFormatter f = new LibratoMetricsFormatter(counter, "gl2-", new ArrayList<String>(), hostFilter);
+        Map<Integer, MessageCounter> counters = Maps.newConcurrentMap();
+        counters.put(Tools.getUTCTimestamp(), counter);
+        LibratoMetricsFormatter f = new LibratoMetricsFormatter(counters, "gl2-", new ArrayList<String>(), hostFilter, fakeStreamNames);
 
         Map<String, Map<String,Object>> gauges = parseGauges(f.asJson());
 
@@ -169,8 +194,8 @@ public class LibratoMetricsFormatterTest {
         assertEquals("gl2-graylog2-server", gauges.get("gl2-total").get("source"));
         assertEquals((long) 2, gauges.get("gl2-total").get("value"));
         assertEquals((long) 3, gauges.get("gl2-host-fooexampleorg").get("value"));
-        assertEquals((long) 2, gauges.get("gl2-stream-" + id1.toString()).get("value"));
-        assertEquals((long) 1, gauges.get("gl2-stream-" + id2.toString()).get("value"));
+        assertEquals((long) 2, gauges.get("gl2-stream-somestream").get("value"));
+        assertEquals((long) 1, gauges.get("gl2-stream-somestream2").get("value"));
     }
 
     private Map<String, Map<String,Object>> parseGauges(String json) {
