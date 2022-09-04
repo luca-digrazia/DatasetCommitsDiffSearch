@@ -14,12 +14,14 @@
 package com.google.devtools.build.lib.collect.nestedset;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.util.concurrent.Futures.immediateCancelledFuture;
+import static com.google.common.util.concurrent.Futures.immediateFailedFuture;
+import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.testing.EqualsTester;
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetStore.MissingNestedSetException;
@@ -137,6 +139,31 @@ public final class NestedSetTest {
                 .build());
   }
 
+  @Test
+  public void reusesSingleTransitiveSet_noDirectMembers() {
+    NestedSet<String> set = NestedSetBuilder.create(Order.STABLE_ORDER, "a", "b", "c");
+    NestedSet<String> built = NestedSetBuilder.<String>stableOrder().addTransitive(set).build();
+    assertThat(built).isSameInstanceAs(set);
+  }
+
+  @Test
+  public void reusesSingleTransitiveSet_singletonEqualsDirects() {
+    NestedSet<String> set = NestedSetBuilder.create(Order.STABLE_ORDER, "a");
+    NestedSet<String> built =
+        NestedSetBuilder.<String>stableOrder().add("a").addTransitive(set).build();
+    assertThat(built).isSameInstanceAs(set);
+  }
+
+  @Test
+  public void noReuseOfSingleTransitiveSet_orderWouldDiffer() {
+    NestedSet<String> set = NestedSetBuilder.create(Order.NAIVE_LINK_ORDER, "b", "a");
+    NestedSet<String> built =
+        NestedSetBuilder.<String>naiveLinkOrder().add("a").add("b").addTransitive(set).build();
+    assertThat(built).isNotSameInstanceAs(set);
+    assertThat(set.toList()).containsExactly("b", "a").inOrder();
+    assertThat(built.toList()).containsExactly("a", "b").inOrder();
+  }
+
   /**
    * A handy wrapper that allows us to use EqualsTester to test shallowEquals and shallowHashCode.
    */
@@ -174,7 +201,7 @@ public final class NestedSetTest {
   private static <E> SetWrapper<E> flat(E... directMembers) {
     NestedSetBuilder<E> builder = NestedSetBuilder.stableOrder();
     builder.addAll(Lists.newArrayList(directMembers));
-    return new SetWrapper<E>(builder.build());
+    return new SetWrapper<>(builder.build());
   }
 
   @SafeVarargs
@@ -183,7 +210,7 @@ public final class NestedSetTest {
     for (SetWrapper<E> wrap : nested) {
       builder.addTransitive(wrap.set);
     }
-    return new SetWrapper<E>(builder.build());
+    return new SetWrapper<>(builder.build());
   }
 
   @SafeVarargs
@@ -204,7 +231,7 @@ public final class NestedSetTest {
     // Used below to check that inner nested sets can be compared by reference equality.
     SetWrapper<Integer> myRef = nest(nest(flat(7, 8)), flat(9));
     // Used to check equality for deserializing nested sets
-    ListenableFuture<Object[]> contents = Futures.immediateFuture(new Object[] {"a", "b"});
+    ListenableFuture<Object[]> contents = immediateFuture(new Object[] {"a", "b"});
     NestedSet<String> referenceNestedSet =
         NestedSet.withFuture(Order.STABLE_ORDER, UNKNOWN_DEPTH, contents);
     NestedSet<String> otherReferenceNestedSet =
@@ -242,18 +269,16 @@ public final class NestedSetTest {
     assertThat(nestedSetBuilder("a").build().shallowEquals(null)).isFalse();
     Object[] contents = {"a", "b"};
     assertThat(
-            NestedSet.withFuture(
-                    Order.STABLE_ORDER, UNKNOWN_DEPTH, Futures.immediateFuture(contents))
+            NestedSet.withFuture(Order.STABLE_ORDER, UNKNOWN_DEPTH, immediateFuture(contents))
                 .shallowEquals(null))
         .isFalse();
 
     // shallowEquals() should require reference equality for underlying futures
     assertThat(
-            NestedSet.withFuture(
-                    Order.STABLE_ORDER, UNKNOWN_DEPTH, Futures.immediateFuture(contents))
+            NestedSet.withFuture(Order.STABLE_ORDER, UNKNOWN_DEPTH, immediateFuture(contents))
                 .shallowEquals(
                     NestedSet.withFuture(
-                        Order.STABLE_ORDER, UNKNOWN_DEPTH, Futures.immediateFuture(contents))))
+                        Order.STABLE_ORDER, UNKNOWN_DEPTH, immediateFuture(contents))))
         .isFalse();
   }
 
@@ -317,7 +342,7 @@ public final class NestedSetTest {
         3); // {a, b, c}
 
     // 25000 has a 3-digit base128 encoding.
-    NestedSetBuilder<Integer> largeShallow = NestedSetBuilder.<Integer>stableOrder();
+    NestedSetBuilder<Integer> largeShallow = NestedSetBuilder.stableOrder();
     for (int i = 0; i < 25000; ++i) {
       largeShallow.add(i);
     }
@@ -365,6 +390,25 @@ public final class NestedSetTest {
   }
 
   @Test
+  public void toListInterruptibly_propagatesInterrupt() {
+    NestedSet<String> deserializingNestedSet =
+        NestedSet.withFuture(Order.STABLE_ORDER, UNKNOWN_DEPTH, SettableFuture.create());
+    Thread.currentThread().interrupt();
+    assertThrows(InterruptedException.class, deserializingNestedSet::toListInterruptibly);
+  }
+
+  @Test
+  public void toListInterruptibly_propagatesMissingNestedSetException() {
+    NestedSet<String> deserializingNestedSet =
+        NestedSet.withFuture(
+            Order.STABLE_ORDER,
+            UNKNOWN_DEPTH,
+            immediateFailedFuture(
+                new MissingNestedSetException(ByteString.copyFromUtf8("fingerprint"))));
+    assertThrows(MissingNestedSetException.class, deserializingNestedSet::toListInterruptibly);
+  }
+
+  @Test
   public void toListWithTimeout_propagatesInterrupt() {
     NestedSet<String> deserializingNestedSet =
         NestedSet.withFuture(Order.STABLE_ORDER, UNKNOWN_DEPTH, SettableFuture.create());
@@ -380,7 +424,7 @@ public final class NestedSetTest {
         NestedSet.withFuture(
             Order.STABLE_ORDER,
             UNKNOWN_DEPTH,
-            Futures.immediateFailedFuture(
+            immediateFailedFuture(
                 new MissingNestedSetException(ByteString.copyFromUtf8("fingerprint"))));
     assertThrows(
         MissingNestedSetException.class,
@@ -437,6 +481,24 @@ public final class NestedSetTest {
     assertThat(deserializingNestedSet.isReady()).isFalse();
     future.set(new Object[] {"a", "b"});
     assertThat(deserializingNestedSet.isReady()).isTrue();
+  }
+
+  @Test
+  public void isReady_fromStorage_cancelled() {
+    NestedSet<?> deserializingNestedSet =
+        NestedSet.withFuture(Order.STABLE_ORDER, UNKNOWN_DEPTH, immediateCancelledFuture());
+    assertThat(deserializingNestedSet.isReady()).isFalse();
+  }
+
+  @Test
+  public void isReady_fromStorage_failed() {
+    NestedSet<?> deserializingNestedSet =
+        NestedSet.withFuture(
+            Order.STABLE_ORDER,
+            UNKNOWN_DEPTH,
+            immediateFailedFuture(
+                new MissingNestedSetException(ByteString.copyFromUtf8("fingerprint"))));
+    assertThat(deserializingNestedSet.isReady()).isFalse();
   }
 
   @Test
