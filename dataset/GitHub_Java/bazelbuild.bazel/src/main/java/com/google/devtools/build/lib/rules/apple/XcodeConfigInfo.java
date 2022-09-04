@@ -14,18 +14,14 @@
 package com.google.devtools.build.lib.rules.apple;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TransitionMode;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
-import com.google.devtools.build.lib.starlarkbuildapi.apple.XcodeConfigInfoApi;
-import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.skylarkbuildapi.apple.XcodeConfigInfoApi;
 import com.google.devtools.build.lib.syntax.EvalException;
-import java.util.Map;
 import javax.annotation.Nullable;
 
 /**
@@ -34,8 +30,8 @@ import javax.annotation.Nullable;
 @Immutable
 public class XcodeConfigInfo extends NativeInfo
     implements XcodeConfigInfoApi<ApplePlatform, PlatformType> {
-  /** Starlark name for this provider. */
-  public static final String STARLARK_NAME = "XcodeVersionConfig";
+  /** Skylark name for this provider. */
+  public static final String SKYLARK_NAME = "XcodeVersionConfig";
 
   /** Provider identifier for {@link XcodeConfigInfo}. */
   public static final BuiltinProvider<XcodeConfigInfo> PROVIDER = new XcodeConfigProvider();
@@ -50,7 +46,6 @@ public class XcodeConfigInfo extends NativeInfo
   private final DottedVersion macosMinimumOsVersion;
   @Nullable private final DottedVersion xcodeVersion;
   @Nullable private final Availability availability;
-  @Nullable private final Map<String, String> executionRequirements;
 
   public XcodeConfigInfo(
       DottedVersion iosSdkVersion,
@@ -74,21 +69,6 @@ public class XcodeConfigInfo extends NativeInfo
     this.macosMinimumOsVersion = Preconditions.checkNotNull(macosMinimumOsVersion);
     this.xcodeVersion = xcodeVersion;
     this.availability = availability;
-
-    ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
-    builder.put(ExecutionRequirements.REQUIRES_DARWIN, "");
-    switch (availability) {
-      case LOCAL:
-        builder.put(ExecutionRequirements.NO_REMOTE, "");
-        break;
-      case REMOTE:
-        builder.put(ExecutionRequirements.NO_LOCAL, "");
-        break;
-      default:
-        break;
-    }
-    builder.put(ExecutionRequirements.REQUIREMENTS_SET, "");
-    this.executionRequirements = builder.build();
   }
 
   /** Indicates the platform(s) on which an Xcode version is available. */
@@ -116,7 +96,7 @@ public class XcodeConfigInfo extends NativeInfo
     XcodeConfigInfo xcodeConfigInfo;
 
     private XcodeConfigProvider() {
-      super(STARLARK_NAME, XcodeConfigInfo.class);
+      super(SKYLARK_NAME, XcodeConfigInfo.class);
     }
 
     @Override
@@ -144,7 +124,7 @@ public class XcodeConfigInfo extends NativeInfo
             DottedVersion.fromString(xcodeVersion),
             Availability.UNKNOWN);
       } catch (DottedVersion.InvalidDottedVersionException e) {
-        throw new EvalException(e);
+        throw new EvalException(null, e);
       }
     }
   }
@@ -212,18 +192,8 @@ public class XcodeConfigInfo extends NativeInfo
     return availability.toString();
   }
 
-  /** Returns the execution requirements for actions that use this Xcode version. */
-  public Map<String, String> getExecutionRequirements() {
-    return executionRequirements;
-  }
-
-  @Override
-  public Dict<String, String> getExecutionRequirementsDict() {
-    return Dict.copyOf(null, executionRequirements);
-  }
-
   public static XcodeConfigInfo fromRuleContext(RuleContext ruleContext) {
     return ruleContext.getPrerequisite(
-        XcodeConfigRule.XCODE_CONFIG_ATTR_NAME, TransitionMode.TARGET, XcodeConfigInfo.PROVIDER);
+        XcodeConfigRule.XCODE_CONFIG_ATTR_NAME, Mode.TARGET, XcodeConfigInfo.PROVIDER);
   }
 }
