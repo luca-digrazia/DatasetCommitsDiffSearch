@@ -19,35 +19,38 @@ package org.graylog2.plugin.configuration;
 import com.fasterxml.jackson.annotation.JsonValue;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import org.graylog2.plugin.configuration.fields.*;
+import org.graylog2.plugin.configuration.fields.BooleanField;
+import org.graylog2.plugin.configuration.fields.ConfigurationField;
+import org.graylog2.plugin.configuration.fields.DropdownField;
+import org.graylog2.plugin.configuration.fields.ListField;
+import org.graylog2.plugin.configuration.fields.NumberField;
+import org.graylog2.plugin.configuration.fields.TextField;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 public class ConfigurationRequest {
     private static final Logger log = LoggerFactory.getLogger(ConfigurationRequest.class);
+    private static final String WILDCARD_IP_ADDRESS = "0.0.0.0";
 
     private final Map<String, ConfigurationField> fields = Maps.newLinkedHashMap();
 
-    public ConfigurationRequest() {}
+    public ConfigurationRequest() {
+    }
 
-    public ConfigurationRequest putAll(Map<String, ConfigurationField> fields) {
+    public void putAll(Map<String, ConfigurationField> fields) {
         this.fields.putAll(fields);
-        return this;
     }
 
-    public ConfigurationRequest addField(ConfigurationField f) {
+    public void addField(ConfigurationField f) {
         fields.put(f.getName(), f);
-        return this;
     }
 
-    public ConfigurationRequest addFields(List<ConfigurationField> fields) {
+    public void addFields(List<ConfigurationField> fields) {
         fields.forEach(this::addField);
-        return this;
     }
 
     public boolean containsField(String fieldName) {
@@ -60,6 +63,11 @@ public class ConfigurationRequest {
 
     public Map<String, ConfigurationField> getFields() {
         return fields;
+    }
+
+    @Deprecated
+    public boolean removeField(String fieldName) {
+        return fields.remove(fieldName) != null;
     }
 
     public static ConfigurationRequest createWithFields(ConfigurationField... fields) {
@@ -93,30 +101,38 @@ public class ConfigurationRequest {
         for (ConfigurationField field : fields.values()) {
             if (field.isOptional().equals(ConfigurationField.Optional.NOT_OPTIONAL)) {
                 final String type = field.getFieldType();
-                log.debug("Checking for non-optional field {} of type {} in configuration", field.getName(), type);
+                final String fieldName = field.getName();
+                log.debug("Checking for mandatory field \"{}\" of type {} in configuration", fieldName, type);
                 switch (type) {
                     case BooleanField.FIELD_TYPE:
-                        if (!configuration.booleanIsSet(field.getName())) {
-                            throw new ConfigurationException("Mandatory configuration field " + field.getName() + " is missing");
+                        if (!configuration.booleanIsSet(fieldName)) {
+                            throw new ConfigurationException("Mandatory configuration field \"" + fieldName + "\" is missing or has the wrong data type");
                         }
                         break;
                     case NumberField.FIELD_TYPE:
-                        if (!configuration.intIsSet(field.getName())) {
-                            throw new ConfigurationException("Mandatory configuration field " + field.getName() + " is missing");
+                        if (!configuration.intIsSet(fieldName)) {
+                            throw new ConfigurationException("Mandatory configuration field \"" + fieldName + "\" is missing or has the wrong data type");
+                        }
+                        break;
+                    case ListField.FIELD_TYPE:
+                        if (!configuration.listIsSet(fieldName)) {
+                            throw new ConfigurationException("Mandatory configuration field \"" + fieldName + "\" is missing or has the wrong data type");
                         }
                         break;
                     case TextField.FIELD_TYPE:
                     case DropdownField.FIELD_TYPE:
-                        if (!configuration.stringIsSet(field.getName())) {
-                                throw new ConfigurationException("Mandatory configuration field " + field.getName() + " is missing");
+                        if (!configuration.stringIsSet(fieldName)) {
+                            throw new ConfigurationException("Mandatory configuration field \"" + fieldName + "\" is missing or has the wrong data type");
                         }
                         break;
                     default:
-                        throw new IllegalStateException("Unknown field type " + type + ". This is a bug.");
+                        throw new IllegalStateException("Unknown field type " + type + " for configuration field \"" + fieldName + "\". This is a bug.");
                 }
             }
         }
     }
+
+
 
     /**
      * Creates a new {@link org.graylog2.plugin.configuration.Configuration configuration object} containing only the
@@ -142,6 +158,11 @@ public class ConfigurationRequest {
                         values.put(name, config.getInt(name));
                     }
                     break;
+                case ListField.FIELD_TYPE:
+                    if (config.listIsSet(name)) {
+                        values.put(name, config.getList(name));
+                    }
+                    break;
                 case TextField.FIELD_TYPE:
                 case DropdownField.FIELD_TYPE:
                     if (config.stringIsSet(name)) {
@@ -149,11 +170,12 @@ public class ConfigurationRequest {
                     }
                     break;
                 default:
-                    throw new IllegalStateException("Unknown field type " + type + ". This is a bug.");
+                    throw new IllegalStateException("Unknown field type " + type + " for configuration field \"" + name + "\". This is a bug.");
             }
         }
         return new Configuration(values);
     }
+
 
     public static class Templates {
 
@@ -161,7 +183,7 @@ public class ConfigurationRequest {
             return new TextField(
                     name,
                     "Bind address",
-                    "0.0.0.0",
+                    WILDCARD_IP_ADDRESS,
                     "Address to listen on. For example 0.0.0.0 or 127.0.0.1."
             );
         }
@@ -186,7 +208,5 @@ public class ConfigurationRequest {
                     NumberField.Attribute.ONLY_POSITIVE
             );
         }
-
     }
-
 }
