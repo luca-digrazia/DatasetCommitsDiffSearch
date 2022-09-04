@@ -281,6 +281,29 @@ public class ExecutionOptions extends OptionsBase {
   public boolean useResourceAutoSense;
 
   @Option(
+      name = "incompatible_remove_ram_utilization_factor",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.EXECUTION},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help = "If true, fully deprecates --ram_utilization_factor.")
+  public boolean removeRamUtilizationFactor;
+
+  @Option(
+      name = "ram_utilization_factor",
+      defaultValue = "0",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      deprecationWarning =
+          "--ram_utilization_factor will be deprecated. Please use"
+              + " --local_ram_resources=HOST_RAM*<float> instead.",
+      help = "This flag will be deprecated. Please use --local_ram_resources.")
+  public int ramUtilizationPercentage;
+
+  @Option(
       name = "local_resources",
       defaultValue = "null",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
@@ -289,7 +312,7 @@ public class ExecutionOptions extends OptionsBase {
           "Deprecated by '--incompatible_remove_local_resources'. Please use "
               + "'--local_ram_resources' and '--local_cpu_resources'",
       deprecationWarning =
-          "--local_resources is deprecated. Please use"
+          "--local_resources will be deprecated. Please use"
               + " --local_ram_resources and --local_cpu_resources instead.",
       converter = ResourceSet.ResourceSetConverter.class)
   public ResourceSet availableResources;
@@ -335,7 +358,7 @@ public class ExecutionOptions extends OptionsBase {
               + "By default, (\"HOST_RAM*.67\"), Bazel will query system configuration to estimate "
               + "amount of RAM available for the locally executed build actions and will use 67% "
               + "of available RAM. "
-              + "Note: This is a no-op if --local_resources is set.",
+              + "Note: This is a no-op if --ram_utilization_factor or --local_resources is set.",
       converter = RamResourceConverter.class)
   public float localRamResources;
 
