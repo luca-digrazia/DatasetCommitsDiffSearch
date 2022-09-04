@@ -14,35 +14,41 @@
 package com.google.devtools.build.docgen.skylark;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
-
-import java.util.ArrayList;
+import java.text.Collator;
 import java.util.Collection;
-import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
+import javax.annotation.Nullable;
 
 /**
- * A class representing a Skylark built-in object with its {@link SkylarkSignature} annotation
- * and the {@link SkylarkCallable} methods it might have.
+ * A class representing documentation for a Skylark built-in object with its {@link SkylarkModule}
+ * annotation and with the {@link SkylarkCallable} methods and {@link SkylarkSignature} fields it
+ * documents.
  */
 public final class SkylarkModuleDoc extends SkylarkDoc {
   private final SkylarkModule module;
   private final Class<?> classObject;
   private final Map<String, SkylarkBuiltinMethodDoc> builtinMethodMap;
-  private ArrayList<SkylarkJavaMethodDoc> javaMethods;
+  private final Multimap<String, SkylarkJavaMethodDoc> javaMethods;
   private TreeMap<String, SkylarkMethodDoc> methodMap;
   private final String title;
+  @Nullable private SkylarkJavaMethodDoc javaConstructor;
 
   public SkylarkModuleDoc(SkylarkModule module, Class<?> classObject) {
     this.module = Preconditions.checkNotNull(
         module, "Class has to be annotated with SkylarkModule: %s", classObject);
     this.classObject = classObject;
-    this.builtinMethodMap = new TreeMap<>();
-    this.methodMap = new TreeMap<>();
-    this.javaMethods = new ArrayList<>();
+    this.builtinMethodMap = new TreeMap<>(Collator.getInstance(Locale.US));
+    this.methodMap = new TreeMap<>(Collator.getInstance(Locale.US));
+    this.javaMethods = HashMultimap.<String, SkylarkJavaMethodDoc>create();
     if (module.title().isEmpty()) {
       this.title = module.name();
     } else {
@@ -57,7 +63,7 @@ public final class SkylarkModuleDoc extends SkylarkDoc {
 
   @Override
   public String getDocumentation() {
-    return module.doc();
+    return SkylarkDocUtils.substituteVariables(module.doc());
   }
 
   public String getTitle() {
@@ -72,14 +78,41 @@ public final class SkylarkModuleDoc extends SkylarkDoc {
     return classObject;
   }
 
+  public void setConstructor(SkylarkJavaMethodDoc method) {
+    Preconditions.checkState(javaConstructor == null);
+    javaConstructor = method;
+    methodMap.put(method.getName(), method);
+  }
+
   public void addMethod(SkylarkBuiltinMethodDoc method) {
     methodMap.put(method.getName(), method);
     builtinMethodMap.put(method.getName(), method);
   }
 
   public void addMethod(SkylarkJavaMethodDoc method) {
-    methodMap.put(method.getName() + "$" + method.getMethod().getParameterTypes().length, method);
-    javaMethods.add(method);
+    if (!method.documented()) {
+      return;
+    }
+
+    String shortName = method.getName();
+    Collection<SkylarkJavaMethodDoc> overloads = javaMethods.get(shortName);
+    if (!overloads.isEmpty()) {
+      method.setOverloaded(true);
+      // Overload information only needs to be updated if we're discovering the first overload
+      // (= the second method of the same name).
+      if (overloads.size() == 1) {
+        Iterables.getOnlyElement(overloads).setOverloaded(true);
+      }
+    }
+    javaMethods.put(shortName, method);
+    // If the method is overloaded, getName() now returns a longer, unique name including
+    // the names of the parameters.
+    String uniqueName = method.getName();
+    Preconditions.checkState(
+        !methodMap.containsKey(uniqueName),
+        "There are multiple overloads of %s with the same signature!",
+        uniqueName);
+    methodMap.put(uniqueName, method);
   }
 
   public boolean javaMethodsNotCollected() {
@@ -90,8 +123,12 @@ public final class SkylarkModuleDoc extends SkylarkDoc {
     return builtinMethodMap;
   }
 
-  public List<SkylarkJavaMethodDoc> getJavaMethods() {
-    return javaMethods;
+  public Collection<SkylarkJavaMethodDoc> getJavaMethods() {
+    ImmutableList.Builder<SkylarkJavaMethodDoc> returnedMethods = ImmutableList.builder();
+    if (javaConstructor != null) {
+      returnedMethods.add(javaConstructor);
+    }
+    return returnedMethods.addAll(javaMethods.values()).build();
   }
 
   public Collection<SkylarkMethodDoc> getMethods() {

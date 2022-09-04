@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -22,6 +23,7 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.util.Pair;
+import java.util.Map;
 import javax.annotation.Nullable;
 
 /**
@@ -38,7 +40,8 @@ import javax.annotation.Nullable;
  * </pre>
  *
  * To allow construction from Skylark and custom construction logic, override {@link
- * ProviderFromFunction#createInstanceFromSkylark(Object[], Environment, Location)}.
+ * Provider#createInstanceFromSkylark(Object[], Environment, Location)} (see {@link #STRUCT} for an
+ * example.
  *
  * @deprecated use {@link BuiltinProvider} instead.
  */
@@ -47,6 +50,9 @@ import javax.annotation.Nullable;
 public abstract class NativeProvider<V extends Info> extends ProviderFromFunction {
   private final NativeKey key;
   private final String errorMessageFormatForUnknownField;
+
+  /** "struct" function. */
+  public static final StructProvider STRUCT = new StructProvider();
 
   private final Class<V> valueClass;
 
@@ -64,6 +70,42 @@ public abstract class NativeProvider<V extends Info> extends ProviderFromFunctio
   @Deprecated
   public interface WithLegacySkylarkName {
     String getSkylarkName();
+  }
+
+  /**
+   * The provider for the built-in type {@code struct}.
+   *
+   * <p>Its singleton instance is {@link #STRUCT}.
+   */
+  public static final class StructProvider extends NativeProvider<Info> {
+    private StructProvider() {
+      super(Info.class, "struct");
+    }
+
+    @Override
+    protected Info createInstanceFromSkylark(Object[] args, Environment env, Location loc) {
+      @SuppressWarnings("unchecked")
+      Map<String, Object> kwargs = (Map<String, Object>) args[0];
+      return SkylarkInfo.createSchemaless(this, kwargs, loc);
+    }
+
+    /**
+     * Creates a struct with the he given field values and message format for unknown fields.
+     *
+     * <p>The custom message is useful for objects that have fields but aren't exactly used as
+     * providers, such as the {@code native} object, and the struct fields of {@code ctx} like
+     * {@code ctx.attr}.
+     * */
+    public SkylarkInfo create(
+        Map<String, Object> values, String errorMessageFormatForUnknownField) {
+      return SkylarkInfo.createSchemalessWithCustomMessage(
+          this, values, errorMessageFormatForUnknownField);
+    }
+
+    /** Creates an empty struct with the given location. */
+    public SkylarkInfo createEmpty(Location loc) {
+      return SkylarkInfo.createSchemaless(this, ImmutableMap.of(), loc);
+    }
   }
 
   private static final FunctionSignature.WithValues<Object, SkylarkType> SIGNATURE =
