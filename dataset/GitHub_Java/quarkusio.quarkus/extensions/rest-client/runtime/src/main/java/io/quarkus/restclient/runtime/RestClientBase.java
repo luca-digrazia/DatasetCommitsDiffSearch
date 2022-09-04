@@ -1,6 +1,11 @@
 package io.quarkus.restclient.runtime;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.security.KeyStore;
@@ -9,13 +14,18 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 
 import javax.net.ssl.HostnameVerifier;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.InstanceHandle;
+import io.quarkus.runtime.graal.DisabledSSLContext;
+import io.quarkus.runtime.ssl.SslContextConfiguration;
 import org.eclipse.microprofile.config.Config;
-import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
+import org.eclipse.microprofile.config.ConfigProvider;
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.rest.client.RestClientBuilder;
+import org.graalvm.nativeimage.ImageInfo;
 
 public class RestClientBase {
 
@@ -38,12 +48,9 @@ public class RestClientBase {
     private final String baseUriFromAnnotation;
     private final String propertyPrefix;
 
-    private final Config config;
-
     public RestClientBase(Class<?> proxyType, String baseUriFromAnnotation, String propertyPrefix) {
         this.proxyType = proxyType;
         this.baseUriFromAnnotation = baseUriFromAnnotation;
-        this.config = ConfigProviderResolver.instance().getConfig();
         this.propertyPrefix = propertyPrefix;
     }
 
@@ -53,30 +60,52 @@ public class RestClientBase {
         configureTimeouts(builder);
         configureProviders(builder);
         configureSsl(builder);
+        // If we have context propagation, then propagate context to the async client threads
+        InstanceHandle<ManagedExecutor> managedExecutor = Arc.container().instance(ManagedExecutor.class);
+        if (managedExecutor.isAvailable()) {
+            builder.executorService(managedExecutor.get());
+        }
 
-        return builder.build(proxyType);
+        Object result = builder.build(proxyType);
+        return result;
     }
 
     private void configureSsl(RestClientBuilder builder) {
         Optional<String> maybeTrustStore = getOptionalProperty(REST_TRUST_STORE, String.class);
-        maybeTrustStore.ifPresent(trustStore -> registerTrustStore(trustStore, builder));
+        if (maybeTrustStore.isPresent()) {
+            registerTrustStore(maybeTrustStore.get(), builder);
+        }
 
         Optional<String> maybeKeyStore = getOptionalProperty(REST_KEY_STORE, String.class);
-        maybeKeyStore.ifPresent(keyStore -> registerKeyStore(keyStore, builder));
+        if (maybeKeyStore.isPresent()) {
+            registerKeyStore(maybeKeyStore.get(), builder);
+        }
 
         Optional<String> maybeHostnameVerifier = getOptionalProperty(REST_HOSTNAME_VERIFIER, String.class);
-        maybeHostnameVerifier.ifPresent(verifier -> registerHostnameVerifier(verifier, builder));
+        if (maybeHostnameVerifier.isPresent()) {
+            registerHostnameVerifier(maybeHostnameVerifier.get(), builder);
+        }
+
+        // we need to push a disabled SSL context when SSL has been disabled
+        // because otherwise Apache HTTP Client will try to initialize one and will fail
+        if (ImageInfo.inImageRuntimeCode() && !SslContextConfiguration.isSslNativeEnabled()) {
+            builder.sslContext(new DisabledSSLContext());
+        }
     }
 
     private void registerHostnameVerifier(String verifier, RestClientBuilder builder) {
         try {
             Class<?> verifierClass = Class.forName(verifier, true, Thread.currentThread().getContextClassLoader());
-            builder.hostnameVerifier((HostnameVerifier) verifierClass.newInstance());
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException("Could not find hostname verifier class" + verifier, e);
-        } catch (InstantiationException | IllegalAccessException e) {
+            builder.hostnameVerifier((HostnameVerifier) verifierClass.getDeclaredConstructor().newInstance());
+        } catch (NoSuchMethodException e) {
             throw new RuntimeException(
-                    "Failed to instantiate hostname verifier class. Make sure it has a public, no-argument constructor", e);
+                    "Could not find a public, no-argument constructor for the hostname verifier class " + verifier, e);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException("Could not find hostname verifier class " + verifier, e);
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            throw new RuntimeException(
+                    "Failed to instantiate hostname verifier class " + verifier
+                            + ". Make sure it has a public, no-argument constructor", e);
         } catch (ClassCastException e) {
             throw new RuntimeException("The provided hostname verifier " + verifier + " is not an instance of HostnameVerifier",
                     e);
@@ -89,8 +118,10 @@ public class RestClientBase {
 
         try {
             KeyStore keyStore = KeyStore.getInstance(keyStoreType.orElse("JKS"));
-            String password = keyStorePassword
-                    .orElseThrow(() -> new IllegalArgumentException("No password provided for keystore"));
+            if (!keyStorePassword.isPresent()) {
+                throw new IllegalArgumentException("No password provided for keystore");
+            }
+            String password = keyStorePassword.get();
 
             try (InputStream input = locateStream(keyStorePath)) {
                 keyStore.load(input, password.toCharArray());
@@ -111,8 +142,10 @@ public class RestClientBase {
 
         try {
             KeyStore trustStore = KeyStore.getInstance(maybeTrustStoreType.orElse("JKS"));
-            String password = maybeTrustStorePassword
-                    .orElseThrow(() -> new IllegalArgumentException("No password provided for truststore"));
+            if (!maybeTrustStorePassword.isPresent()) {
+                throw new IllegalArgumentException("No password provided for truststore");
+            }
+            String password = maybeTrustStorePassword.get();
 
             try (InputStream input = locateStream(trustStorePath)) {
                 trustStore.load(input, password.toCharArray());
@@ -154,14 +187,15 @@ public class RestClientBase {
 
     private void configureProviders(RestClientBuilder builder) {
         Optional<String> maybeProviders = getOptionalProperty(REST_PROVIDERS, String.class);
-        maybeProviders.ifPresent(providers -> registerProviders(builder, providers));
+        if (maybeProviders.isPresent()) {
+            registerProviders(builder, maybeProviders.get());
+        }
     }
 
     private void registerProviders(RestClientBuilder builder, String providersAsString) {
-        Stream.of(providersAsString.split(","))
-                .map(String::trim)
-                .map(this::providerClassForName)
-                .forEach(builder::register);
+        for (String s : providersAsString.split(",")) {
+            builder.register(providerClassForName(s.trim()));
+        }
     }
 
     private Class<?> providerClassForName(String name) {
@@ -174,10 +208,14 @@ public class RestClientBase {
 
     private void configureTimeouts(RestClientBuilder builder) {
         Optional<Long> connectTimeout = getOptionalProperty(REST_CONNECT_TIMEOUT_FORMAT, Long.class);
-        connectTimeout.ifPresent(timeout -> builder.connectTimeout(timeout, TimeUnit.MILLISECONDS));
+        if (connectTimeout.isPresent()) {
+            builder.connectTimeout(connectTimeout.get(), TimeUnit.MILLISECONDS);
+        }
 
         Optional<Long> readTimeout = getOptionalProperty(REST_READ_TIMEOUT_FORMAT, Long.class);
-        readTimeout.ifPresent(timeout -> builder.readTimeout(timeout, TimeUnit.MILLISECONDS));
+        if (readTimeout.isPresent()) {
+            builder.readTimeout(readTimeout.get(), TimeUnit.MILLISECONDS);
+        }
     }
 
     private void configureBaseUrl(RestClientBuilder builder) {
@@ -189,8 +227,11 @@ public class RestClientBase {
                 && !propertyOptional.isPresent()) {
             throw new IllegalArgumentException(
                     String.format(
-                            "Unable to determine the proper baseUrl/baseUri. Consider registering using @RegisterRestClient(baseUri=\"someuri\", configKey=\"orkey\"), or by adding '%s' to your Quarkus configuration",
-                            propertyPrefix));
+                            "Unable to determine the proper baseUrl/baseUri. " +
+                                    "Consider registering using @RegisterRestClient(baseUri=\"someuri\"), @RegisterRestClient(configKey=\"orkey\"), "
+                                    +
+                                    "or by adding '%s' or '%s' to your Quarkus configuration",
+                            String.format(REST_URL_FORMAT, propertyPrefix), String.format(REST_URI_FORMAT, propertyPrefix)));
         }
         String baseUrl = propertyOptional.orElse(baseUriFromAnnotation);
 
@@ -208,6 +249,7 @@ public class RestClientBase {
     }
 
     private <T> Optional<T> getOptionalProperty(String propertyFormat, Class<T> type) {
+        final Config config = ConfigProvider.getConfig();
         Optional<T> interfaceNameValue = config.getOptionalValue(String.format(propertyFormat, proxyType.getName()), type);
         return interfaceNameValue.isPresent() ? interfaceNameValue
                 : config.getOptionalValue(String.format(propertyFormat, propertyPrefix), type);
