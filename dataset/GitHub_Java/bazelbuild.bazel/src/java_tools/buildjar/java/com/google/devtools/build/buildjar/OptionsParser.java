@@ -51,23 +51,8 @@ public final class OptionsParser {
   private String outputDepsProtoFile;
   private final Set<String> depsArtifacts = new LinkedHashSet<>();
 
-  enum ReduceClasspathMode {
-    BAZEL_REDUCED,
-    BAZEL_FALLBACK,
-    JAVABUILDER_REDUCED,
-    NONE
-  }
-
-  /**
-   * The flag --reduce_classpath_mode can be passed to JavaBuilder to request a compilation with
-   * reduced classpath, computed from the compilations direct dependencies plus what was actually
-   * required to build those. If this compilation fails with a specific error code, then a fallback
-   * is done using the full (transitive) classpath.
-   */
-  private ReduceClasspathMode reduceClasspathMode = ReduceClasspathMode.NONE;
-
-  private int fullClasspathLength = -1;
-  private int reducedClasspathLength = -1;
+  private boolean strictClasspathMode;
+  private boolean noClasspathFallback;
 
   private String sourceGenDir;
   private String generatedSourcesOutputJar;
@@ -137,16 +122,10 @@ public final class OptionsParser {
           collectFlagArguments(depsArtifacts, argQueue, "--");
           break;
         case "--reduce_classpath":
-          reduceClasspathMode = ReduceClasspathMode.JAVABUILDER_REDUCED;
+          strictClasspathMode = true;
           break;
-        case "--reduce_classpath_mode":
-          reduceClasspathMode = ReduceClasspathMode.valueOf(getArgument(argQueue, arg));
-          break;
-        case "--full_classpath_length":
-          fullClasspathLength = Integer.parseInt(getArgument(argQueue, arg));
-          break;
-        case "--reduced_classpath_length":
-          reducedClasspathLength = Integer.parseInt(getArgument(argQueue, arg));
+        case "--noclasspathfallback":
+          noClasspathFallback = true;
           break;
         case "--sourcegendir":
           sourceGenDir = getArgument(argQueue, arg);
@@ -371,16 +350,12 @@ public final class OptionsParser {
     return depsArtifacts;
   }
 
-  public ReduceClasspathMode reduceClasspathMode() {
-    return reduceClasspathMode;
+  public boolean reduceClasspath() {
+    return strictClasspathMode;
   }
 
-  public int fullClasspathLength() {
-    return fullClasspathLength;
-  }
-
-  public int reducedClasspathLength() {
-    return reducedClasspathLength;
+  public boolean noClasspathFallback() {
+    return noClasspathFallback;
   }
 
   public String getSourceGenDir() {
