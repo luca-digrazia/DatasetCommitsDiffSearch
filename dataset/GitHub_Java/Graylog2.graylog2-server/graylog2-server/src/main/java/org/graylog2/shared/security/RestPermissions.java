@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.shared.security;
 
@@ -31,8 +31,8 @@ public class RestPermissions implements PluginPermissions {
      * These should all be in the form of "group:action", because {@link Permissions#allPermissionsMap()} below depends on it.
      * Should this ever change, you need to adapt the code below, too.
      */
-    public static final String AUTH_HTTP_HEADER_CONFIG_EDIT = "authhttpheaderconfig:edit";
-    public static final String AUTH_HTTP_HEADER_CONFIG_READ = "authhttpheaderconfig:read";
+    public static final String AUTHENTICATION_READ = "authentication:read";
+    public static final String AUTHENTICATION_EDIT = "authentication:edit";
     public static final String AUTH_SERVICE_BACKEND_CREATE = "authservicebackend:create";
     public static final String AUTH_SERVICE_BACKEND_DELETE = "authservicebackend:delete";
     public static final String AUTH_SERVICE_BACKEND_EDIT = "authservicebackend:edit";
@@ -93,6 +93,9 @@ public class RestPermissions implements PluginPermissions {
     public static final String JOURNAL_READ = "journal:read";
     public static final String JVMSTATS_READ = "jvmstats:read";
     public static final String LBSTATUS_CHANGE = "lbstatus:change";
+    public static final String LDAP_EDIT = "ldap:edit";
+    public static final String LDAPGROUPS_EDIT = "ldapgroups:edit";
+    public static final String LDAPGROUPS_READ = "ldapgroups:read";
     public static final String LOOKUP_TABLES_CREATE = "lookuptables:create";
     public static final String LOOKUP_TABLES_DELETE = "lookuptables:delete";
     public static final String LOOKUP_TABLES_EDIT = "lookuptables:edit";
@@ -109,7 +112,7 @@ public class RestPermissions implements PluginPermissions {
     public static final String METRICS_READ = "metrics:read";
     public static final String METRICS_READALL = "metrics:readall";
     public static final String METRICS_READHISTORY = "metrics:readhistory";
-    @Deprecated public static final String NODE_SHUTDOWN = "node:shutdown";
+    public static final String NODE_SHUTDOWN = "node:shutdown";
     public static final String NOTIFICATIONS_DELETE = "notifications:delete";
     public static final String NOTIFICATIONS_READ = "notifications:read";
     public static final String OUTPUTS_CREATE = "outputs:create";
@@ -158,8 +161,8 @@ public class RestPermissions implements PluginPermissions {
     public static final String ENTITY_OWN = "entity:own";
 
     protected static final ImmutableSet<Permission> PERMISSIONS = ImmutableSet.<Permission>builder()
-            .add(create(AUTH_HTTP_HEADER_CONFIG_EDIT, ""))
-            .add(create(AUTH_HTTP_HEADER_CONFIG_READ, ""))
+            .add(create(AUTHENTICATION_EDIT, ""))
+            .add(create(AUTHENTICATION_READ, ""))
             .add(create(AUTH_SERVICE_BACKEND_CREATE, ""))
             .add(create(AUTH_SERVICE_BACKEND_DELETE, ""))
             .add(create(AUTH_SERVICE_BACKEND_EDIT, ""))
@@ -218,6 +221,9 @@ public class RestPermissions implements PluginPermissions {
             .add(create(JOURNAL_READ, ""))
             .add(create(JVMSTATS_READ, ""))
             .add(create(LBSTATUS_CHANGE, ""))
+            .add(create(LDAP_EDIT, ""))
+            .add(create(LDAPGROUPS_EDIT, ""))
+            .add(create(LDAPGROUPS_READ, ""))
             .add(create(LOOKUP_TABLES_CREATE, ""))
             .add(create(LOOKUP_TABLES_DELETE, ""))
             .add(create(LOOKUP_TABLES_EDIT, ""))
