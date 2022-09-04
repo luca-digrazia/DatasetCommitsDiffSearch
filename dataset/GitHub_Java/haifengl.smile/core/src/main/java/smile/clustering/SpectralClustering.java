@@ -15,8 +15,6 @@
  *******************************************************************************/
 package smile.clustering;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import smile.math.Math;
 import smile.math.matrix.EigenValueDecomposition;
 
@@ -41,7 +39,6 @@ import smile.math.matrix.EigenValueDecomposition;
  * @author Haifeng Li
  */
 public class SpectralClustering {
-    private static final Logger logger = LoggerFactory.getLogger(SpectralClustering.class);
 
     /**
      * The number of clusters.
@@ -169,7 +166,7 @@ public class SpectralClustering {
             }
 
             if (D[i] < 1E-5) {
-                logger.error(String.format("Small D[%d] = %f. The data may contain outliers.", i, D[i]));
+                System.err.format("Small D[%d] = %f. The data may contain outliers.\n", i, D[i]);
             }
             
             D[i] = 1.0 / Math.sqrt(D[i]);
@@ -246,7 +243,7 @@ public class SpectralClustering {
             }
             
             if (sum < 1E-5) {
-                logger.error(String.format("Small D[%d] = %f. The data may contain outliers.", i, sum));
+                System.err.format("Small D[%d] = %f. The data may contain outliers.\n", i, sum);
             }
             
             D[i] = 1.0 / Math.sqrt(sum);
@@ -336,11 +333,11 @@ public class SpectralClustering {
     public String toString() {
         StringBuilder sb = new StringBuilder();
 
-        sb.append(String.format("Spectral Clustering distortion in feature space: %.5f%n", distortion));
-        sb.append(String.format("Clusters of %d data points:%n", y.length));
+        sb.append(String.format("Spectral Clustering distortion in feature space: %.5f\n", distortion));
+        sb.append(String.format("Clusters of %d data points:\n", y.length));
         for (int i = 0; i < k; i++) {
             int r = (int) Math.round(1000.0 * size[i] / y.length);
-            sb.append(String.format("%3d\t%5d (%2d.%1d%%)%n", i, size[i], r / 10, r % 10));
+            sb.append(String.format("%3d\t%5d (%2d.%1d%%)\n", i, size[i], r / 10, r % 10));
         }
 
         return sb.toString();
