@@ -212,8 +212,10 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
         depKeysAsSet = depKeys.toSet();
         evaluatorContext
             .getGraph()
-            .prefetchDeps(
-                requestor, Iterables.filter(oldDeps, Predicates.not(Predicates.in(depKeysAsSet))));
+            .getBatchAsync(
+                requestor,
+                Reason.PREFETCH,
+                Iterables.filter(oldDeps, Predicates.not(Predicates.in(depKeysAsSet))));
       }
     }
     Map<SkyKey, ? extends NodeEntry> batchMap =
