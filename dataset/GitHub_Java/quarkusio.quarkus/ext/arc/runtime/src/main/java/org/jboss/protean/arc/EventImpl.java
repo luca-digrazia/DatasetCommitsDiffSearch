@@ -16,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
-import java.util.function.Supplier;
 
 import javax.enterprise.event.Event;
 import javax.enterprise.event.NotificationOptions;
@@ -38,9 +37,7 @@ class EventImpl<T> implements Event<T> {
 
     private static final int DEFAULT_CACHE_CAPACITY = 4;
 
-    private static final Executor DEFAULT_EXECUTOR = ForkJoinPool.commonPool();
-
-    private static final NotificationOptions DEFAULT_OPTIONS = NotificationOptions.ofExecutor(DEFAULT_EXECUTOR);
+    private static final NotificationOptions DEFAULT_OPTIONS = NotificationOptions.ofExecutor(ForkJoinPool.commonPool());
 
     private final HierarchyDiscovery injectionPointTypeHierarchy;
 
@@ -76,24 +73,19 @@ class EventImpl<T> implements Event<T> {
 
         @SuppressWarnings("unchecked")
         Notifier<U> notifier = (Notifier<U>) notifiers.computeIfAbsent(event.getClass(), this::createNotifier);
-
         Executor executor = options.getExecutor();
-        if (executor == null) {
-            executor = DEFAULT_EXECUTOR;
-        }
 
         if (notifier.isEmpty()) {
             return AsyncEventDeliveryStage.completed(event, executor);
         }
 
-        Supplier<U> notifyLogic = () -> {
-            ObserverExceptionHandler exceptionHandler = new CollectingExceptionHandler();
+        ObserverExceptionHandler exceptionHandler = new CollectingExceptionHandler();
+        CompletableFuture<U> completableFuture = CompletableFuture.supplyAsync(() -> {
             notifier.notify(event, exceptionHandler, true);
             handleExceptions(exceptionHandler);
             return event;
-        };
+        }, executor);
 
-        CompletableFuture<U> completableFuture = CompletableFuture.supplyAsync(Arc.container().withinRequest(notifyLogic), executor);
         return new AsyncEventDeliveryStage<>(completableFuture, executor);
     }
 

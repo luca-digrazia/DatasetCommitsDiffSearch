@@ -1,20 +1,22 @@
 package org.jboss.protean.arc.test.observers.async;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import javax.annotation.PostConstruct;
+import javax.annotation.Priority;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.event.Event;
-import javax.enterprise.event.Observes;
 import javax.enterprise.event.ObservesAsync;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -25,7 +27,7 @@ import org.jboss.protean.arc.test.ArcTestContainer;
 import org.junit.Rule;
 import org.junit.Test;
 
-public class AsyncObserverTest {
+public class AsyncObserverExceptionTest {
 
     @Rule
     public ArcTestContainer container = new ArcTestContainer(StringProducer.class, StringObserver.class);
@@ -35,21 +37,21 @@ public class AsyncObserverTest {
         ArcContainer container = Arc.container();
         StringProducer producer = container.instance(StringProducer.class).get();
         StringObserver observer = container.instance(StringObserver.class).get();
-        String currentThread = Thread.currentThread().getName();
 
-        producer.produce("ping");
+        BlockingQueue<Object> synchronizer = new LinkedBlockingQueue<>();
+        producer.produceAsync("pong").exceptionally(ex -> {
+            synchronizer.add(ex);
+            return ex.getMessage();
+        });
+
+        Object exception = synchronizer.poll(10, TimeUnit.SECONDS);
+        assertNotNull(exception);
+        assertTrue(exception instanceof RuntimeException);
+
         List<String> events = observer.getEvents();
-        assertEquals(1, events.size());
-        assertTrue(events.get(0).startsWith("sync::ping"));
-        assertTrue(events.get(0).endsWith(currentThread));
-
-        events.clear();
-
-        CompletionStage<String> completionStage = producer.produceAsync("pong");
-        assertEquals("pong", completionStage.toCompletableFuture().get(10, TimeUnit.SECONDS));
-        assertEquals(1, events.size());
-        assertTrue(events.get(0).startsWith("async::pong"));
-        assertFalse(events.get(0).endsWith(currentThread));
+        assertEquals(2, events.size());
+        assertEquals("async1::pong", events.get(0));
+        assertEquals("async2::pong", events.get(1));
     }
 
     @Singleton
@@ -62,12 +64,13 @@ public class AsyncObserverTest {
             events = new CopyOnWriteArrayList<>();
         }
 
-        void observeAsync(@ObservesAsync String value) {
-            events.add("async::" + value + "::" + Thread.currentThread().getName());
+        void observeAsync1(@ObservesAsync @Priority(1) String value) {
+            events.add("async1::" + value);
+            throw new RuntimeException("nok");
         }
 
-        void observeSync(@Observes String value) {
-            events.add("sync::" + value + "::" + Thread.currentThread().getName());
+        void observeAsync2(@ObservesAsync @Priority(2) String value) {
+            events.add("async2::" + value);
         }
 
         List<String> getEvents() {
@@ -81,10 +84,6 @@ public class AsyncObserverTest {
 
         @Inject
         Event<String> event;
-
-        void produce(String value) {
-            event.fire(value);
-        }
 
         CompletionStage<String> produceAsync(String value) {
             return event.fireAsync(value);
