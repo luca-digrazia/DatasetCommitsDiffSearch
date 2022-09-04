@@ -161,17 +161,17 @@ public class FileFunction implements SkyFunction {
       ArrayList<RootedPath> logicalChain,
       Environment env)
       throws InterruptedException, FileFunctionException {
-    RootedPath parentRootedPath = rootedPath.getParentDirectory();
-    return parentRootedPath != null
+    PathFragment parentDirectory = rootedPath.getRootRelativePath().getParentDirectory();
+    return parentDirectory != null
         ? resolveFromAncestorsWithParent(
-            rootedPath, parentRootedPath, sortedLogicalChain, logicalChain, env)
+            rootedPath, parentDirectory, sortedLogicalChain, logicalChain, env)
         : resolveFromAncestorsNoParent(rootedPath, sortedLogicalChain, logicalChain, env);
   }
 
   @Nullable
   private PartialResolutionResult resolveFromAncestorsWithParent(
       RootedPath rootedPath,
-      RootedPath parentRootedPath,
+      PathFragment parentDirectory,
       TreeSet<Path> sortedLogicalChain,
       ArrayList<RootedPath> logicalChain,
       Environment env)
@@ -179,6 +179,7 @@ public class FileFunction implements SkyFunction {
     PathFragment relativePath = rootedPath.getRootRelativePath();
     RootedPath rootedPathFromAncestors;
     String baseName = relativePath.getBaseName();
+    RootedPath parentRootedPath = RootedPath.toRootedPath(rootedPath.getRoot(), parentDirectory);
 
     FileValue parentFileValue = (FileValue) env.getValue(FileValue.key(parentRootedPath));
     if (parentFileValue == null) {
