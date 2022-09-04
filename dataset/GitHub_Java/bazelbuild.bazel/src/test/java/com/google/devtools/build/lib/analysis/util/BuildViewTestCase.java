@@ -101,7 +101,6 @@ import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.AttributeMap;
-import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
@@ -1342,13 +1341,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
   }
 
-  protected static ConfiguredAttributeMapper getMapperFromConfiguredTargetAndTarget(
-      ConfiguredTargetAndTarget ctat) {
-    return ConfiguredAttributeMapper.of(
-        (Rule) ctat.getTarget(),
-        ((RuleConfiguredTarget) ctat.getConfiguredTarget()).getConfigConditions());
-  }
-
   public static Label makeLabel(String label) {
     try {
       return Label.parseAbsolute(label);
@@ -1579,13 +1571,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * Returns an attribute value retriever for the given rule for the target configuration.
    */
   protected AttributeMap attributes(RuleConfiguredTarget ct) {
-    ConfiguredTargetAndTarget ctat;
-    try {
-      ctat = getConfiguredTargetAndTarget(ct.getLabel().toString());
-    } catch (LabelSyntaxException e) {
-      throw new RuntimeException(e);
-    }
-    return getMapperFromConfiguredTargetAndTarget(ctat);
+    return ct.getAttributeMapper();
   }
 
   protected AttributeMap attributes(ConfiguredTarget rule) {

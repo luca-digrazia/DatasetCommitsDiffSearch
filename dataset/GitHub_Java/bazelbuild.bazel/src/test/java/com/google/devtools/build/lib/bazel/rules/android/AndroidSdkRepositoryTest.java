@@ -23,7 +23,7 @@ import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.util.ResourceLoader;
 import com.google.devtools.build.lib.rules.android.AndroidSdkProvider;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import org.junit.Before;
 import org.junit.Test;
@@ -92,8 +92,8 @@ public class AndroidSdkRepositoryTest extends BuildViewTestCase {
         ")");
     invalidatePackages();
 
-    ConfiguredTargetAndData aarImportTarget =
-        getConfiguredTargetAndData("@androidsdk//com.google.android:foo-1.0.0");
+    ConfiguredTargetAndTarget aarImportTarget =
+        getConfiguredTargetAndTarget("@androidsdk//com.google.android:foo-1.0.0");
     assertThat(aarImportTarget).isNotNull();
     assertThat(aarImportTarget.getTarget().getAssociatedRule().getRuleClass())
         .isEqualTo("aar_import");
@@ -210,7 +210,7 @@ public class AndroidSdkRepositoryTest extends BuildViewTestCase {
 
     ConfiguredTarget androidSdk = getConfiguredTarget("@androidsdk//:sdk");
     assertThat(androidSdk).isNotNull();
-    assertThat(androidSdk.get(AndroidSdkProvider.PROVIDER).getBuildToolsVersion())
+    assertThat(androidSdk.getProvider(AndroidSdkProvider.class).getBuildToolsVersion())
         .isEqualTo("26.0.2");
   }
 
@@ -230,7 +230,7 @@ public class AndroidSdkRepositoryTest extends BuildViewTestCase {
 
     ConfiguredTarget androidSdk = getConfiguredTarget("@androidsdk//:sdk");
     assertThat(androidSdk).isNotNull();
-    assertThat(androidSdk.get(AndroidSdkProvider.PROVIDER).getAndroidJar().getExecPathString())
+    assertThat(androidSdk.getProvider(AndroidSdkProvider.class).getAndroidJar().getExecPathString())
         .isEqualTo("external/androidsdk/platforms/android-25/android.jar");
   }
 
@@ -253,7 +253,8 @@ public class AndroidSdkRepositoryTest extends BuildViewTestCase {
     for (int apiLevel : apiLevels) {
       ConfiguredTarget androidSdk = getConfiguredTarget("@androidsdk//:sdk-" + apiLevel);
       assertThat(androidSdk).isNotNull();
-      assertThat(androidSdk.get(AndroidSdkProvider.PROVIDER).getAndroidJar().getExecPathString())
+      assertThat(
+          androidSdk.getProvider(AndroidSdkProvider.class).getAndroidJar().getExecPathString())
           .isEqualTo(
               String.format("external/androidsdk/platforms/android-%d/android.jar", apiLevel));
     }
