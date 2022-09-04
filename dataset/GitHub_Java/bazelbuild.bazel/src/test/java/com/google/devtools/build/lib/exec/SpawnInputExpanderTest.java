@@ -388,16 +388,16 @@ public class SpawnInputExpanderTest {
         .containsEntry(PathFragment.create("out/foo/bar"), ActionInputHelper.fromPath("/some"));
   }
 
-  private static FilesetOutputSymlink filesetSymlink(String from, String to) {
+  private FilesetOutputSymlink filesetSymlink(String from, String to) {
     return FilesetOutputSymlink.createForTesting(
-        PathFragment.create(from), PathFragment.create(to), PathFragment.create("/root"));
+        PathFragment.create(from), PathFragment.create(to));
   }
 
   private ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> simpleFilesetManifest() {
     return ImmutableMap.of(
         createFileset("out"),
         ImmutableList.of(
-            filesetSymlink("workspace/bar", "foo"), filesetSymlink("workspace/foo", "/root/bar")));
+            filesetSymlink("workspace/bar", "foo"), filesetSymlink("workspace/foo", "/foo/bar")));
   }
 
   private SpecialArtifact createFileset(String execPath) {
@@ -426,7 +426,7 @@ public class SpawnInputExpanderTest {
     expander.addFilesetManifests(simpleFilesetManifest(), entries);
     assertThat(entries)
         .containsExactly(
-            PathFragment.create("out/workspace/foo"), ActionInputHelper.fromPath("/root/bar"));
+            PathFragment.create("out/workspace/foo"), ActionInputHelper.fromPath("/foo/bar"));
   }
 
   @Test
@@ -436,7 +436,7 @@ public class SpawnInputExpanderTest {
     expander.addFilesetManifests(simpleFilesetManifest(), entries);
     assertThat(entries)
         .containsExactly(
-            PathFragment.create("out/workspace/bar"), ActionInputHelper.fromPath("/root/bar"),
-            PathFragment.create("out/workspace/foo"), ActionInputHelper.fromPath("/root/bar"));
+            PathFragment.create("out/workspace/bar"), ActionInputHelper.fromPath("/foo/bar"),
+            PathFragment.create("out/workspace/foo"), ActionInputHelper.fromPath("/foo/bar"));
   }
 }

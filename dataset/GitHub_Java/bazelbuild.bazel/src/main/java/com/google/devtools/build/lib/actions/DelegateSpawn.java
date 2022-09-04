@@ -33,7 +33,7 @@ public class DelegateSpawn implements Spawn {
   }
 
   @Override
-  public ImmutableMap<String, String> getExecutionInfo() {
+  public final ImmutableMap<String, String> getExecutionInfo() {
     return spawn.getExecutionInfo();
   }
 

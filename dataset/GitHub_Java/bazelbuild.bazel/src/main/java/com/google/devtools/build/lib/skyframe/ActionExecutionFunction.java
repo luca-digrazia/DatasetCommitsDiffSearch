@@ -483,10 +483,9 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     // Aggregate top-level Filesets with Filesets nested in Runfiles. Both should be used to update
     // the FileSystem context.
     state.expandedFilesets.forEach(filesetMappings::put);
-    ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets =
-        ImmutableMap.copyOf(filesetMappings);
     try {
-      state.updateFileSystemContext(skyframeActionExecutor, env, metadataHandler, expandedFilesets);
+      state.updateFileSystemContext(skyframeActionExecutor, env, metadataHandler,
+          ImmutableMap.copyOf(filesetMappings));
     } catch (IOException e) {
       throw new ActionExecutionException(
           "Failed to update filesystem context: ", e, action, /*catastrophe=*/ false);
@@ -496,7 +495,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
             perActionFileCache,
             metadataHandler,
             Collections.unmodifiableMap(state.expandedArtifacts),
-            expandedFilesets,
+            Collections.unmodifiableMap(state.expandedFilesets),
             topLevelFilesets,
             state.actionFileSystem,
             skyframeDepsResult)) {
