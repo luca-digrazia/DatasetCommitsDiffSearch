@@ -22,7 +22,6 @@
  */
 package org.graylog2.plugin.inputs.transports;
 
-import com.codahale.metrics.MetricSet;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.inputs.MessageInput2;
 import org.graylog2.plugin.inputs.MisfireException;
@@ -38,5 +37,6 @@ public interface Transport {
 
     ConfigurationRequest getRequestedConfiguration();
 
-    MetricSet getMetricSet();
+    // TODO convert to returning a MetricSet
+    void setupMetrics(MessageInput2 input);
 }

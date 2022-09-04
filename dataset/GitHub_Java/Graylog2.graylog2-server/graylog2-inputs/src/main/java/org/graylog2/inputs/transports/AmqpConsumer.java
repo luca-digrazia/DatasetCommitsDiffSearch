@@ -20,7 +20,7 @@ import com.google.common.util.concurrent.Uninterruptibles;
 import com.rabbitmq.client.*;
 import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
 import org.graylog2.plugin.buffers.ProcessingDisabledException;
-import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.inputs.MessageInput2;
 import org.graylog2.plugin.journal.RawMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,16 +51,15 @@ public class AmqpConsumer {
     private Connection connection;
     private Channel channel;
 
-    private final MessageInput sourceInput;
-    private final int parallelQueues;
+    private final MessageInput2 sourceInput;
 
     private AtomicLong totalBytesRead = new AtomicLong(0);
     private AtomicLong lastSecBytesRead = new AtomicLong(0);
     private AtomicLong lastSecBytesReadTmp = new AtomicLong(0);
 
     public AmqpConsumer(String hostname, int port, String virtualHost, String username, String password,
-                        int prefetchCount, String queue, String exchange, String routingKey, int parallelQueues,
-                        MessageInput sourceInput, ScheduledExecutorService scheduler) {
+                        int prefetchCount, String queue, String exchange, String routingKey,
+                        MessageInput2 sourceInput, ScheduledExecutorService scheduler) {
         this.hostname = hostname;
         this.port = port;
         this.virtualHost = virtualHost;
@@ -73,7 +72,6 @@ public class AmqpConsumer {
         this.routingKey = routingKey;
 
         this.sourceInput = sourceInput;
-        this.parallelQueues = parallelQueues;
 
         scheduler.scheduleAtFixedRate(new Runnable() {
             @Override
@@ -88,13 +86,11 @@ public class AmqpConsumer {
             connect();
         }
 
-        for (int i = 0; i < parallelQueues; i++) {
-            final String queueName = String.format(queue, i);
-            channel.queueDeclare(queueName, true, false, false, null);
-            channel.basicConsume(queueName, false, new DefaultConsumer(channel) {
+        channel.basicConsume(queue, false, new DefaultConsumer(channel) {
                 @Override
                 public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                    long deliveryTag = envelope.getDeliveryTag();
+                    final long deliveryTag = envelope.getDeliveryTag();
+
                     try {
                         totalBytesRead.addAndGet(body.length);
                         lastSecBytesReadTmp.addAndGet(body.length);
@@ -121,8 +117,8 @@ public class AmqpConsumer {
                         }
                     }
                 }
-            });
-        }
+            }
+        );
     }
 
     public void connect() throws IOException {
