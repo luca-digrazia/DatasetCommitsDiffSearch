@@ -28,12 +28,10 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.EvalException.EvalExceptionWithJavaCause;
-import com.google.devtools.build.lib.syntax.Printer.BasePrinter;
 import com.google.devtools.build.lib.syntax.Runtime.NoneType;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringUtilities;
-import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -251,34 +249,17 @@ public final class FuncallExpression extends Expression {
     return numPositionalArgs;
   }
 
-   @Override
-   public void prettyPrint(Appendable buffer) throws IOException {
-     if (obj != null) {
-       obj.prettyPrint(buffer);
-       buffer.append('.');
-     }
-     func.prettyPrint(buffer);
-     buffer.append('(');
-     String sep = "";
-     for (Argument.Passed arg : args) {
-       buffer.append(sep);
-       arg.prettyPrint(buffer);
-       sep = ", ";
-     }
-     buffer.append(')');
-   }
-
   @Override
   public String toString() {
-    BasePrinter printer = Printer.getPrinter();
+    StringBuilder sb = new StringBuilder();
     if (obj != null) {
-      printer.append(obj.toString()).append(".");
+      sb.append(obj).append(".");
     }
-    printer.append(func.toString());
-    printer.printAbbreviatedList(args, "(", ", ", ")", null,
+    sb.append(func);
+    Printer.printList(sb, args, "(", ", ", ")", /* singletonTerminator */ null,
         Printer.SUGGESTED_CRITICAL_LIST_ELEMENTS_COUNT,
         Printer.SUGGESTED_CRITICAL_LIST_ELEMENTS_STRING_LENGTH);
-    return printer.toString();
+    return sb.toString();
   }
 
   /**
@@ -327,8 +308,7 @@ public final class FuncallExpression extends Expression {
               loc,
               "method invocation returned None, please file a bug report: "
                   + methodName
-                  + Printer.printAbbreviatedList(
-                      ImmutableList.copyOf(args), "(", ", ", ")", null));
+                  + Printer.listString(ImmutableList.copyOf(args), "(", ", ", ")", null));
         }
       }
       // TODO(bazel-team): get rid of this, by having everyone use the Skylark data structures
