@@ -17,6 +17,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
+import static com.google.devtools.build.lib.syntax.Type.STRING;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -24,12 +25,13 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
+import com.google.devtools.build.lib.analysis.config.TransitionFactories;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration.TestOptions;
 import com.google.devtools.build.lib.analysis.util.MockRule;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.query2.ConfiguredTargetQueryEnvironment;
+import com.google.devtools.build.lib.query2.cquery.ConfiguredTargetQueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.build.lib.util.FileTypeSet;
@@ -92,13 +94,16 @@ public class ConfiguredTargetQueryTest extends PostAnalysisQueryTest<ConfiguredT
                 "rule_with_transitions",
                 attr("patch_dep", LABEL)
                     .allowedFileTypes(FileTypeSet.ANY_FILE)
-                    .cfg(new TestArgPatchTransition("SET BY PATCH")),
+                    .cfg(TransitionFactories.of(new TestArgPatchTransition("SET BY PATCH"))),
+                attr("string_dep", STRING),
                 attr("split_dep", LABEL)
                     .allowedFileTypes(FileTypeSet.ANY_FILE)
-                    .cfg(new TestArgSplitTransition("SET BY SPLIT 1", "SET BY SPLIT 2")),
+                    .cfg(
+                        TransitionFactories.of(
+                            new TestArgSplitTransition("SET BY SPLIT 1", "SET BY SPLIT 2"))),
                 attr("patch_dep_list", LABEL_LIST)
                     .allowedFileTypes(FileTypeSet.ANY_FILE)
-                    .cfg(new TestArgPatchTransition("SET BY PATCH 2")));
+                    .cfg(TransitionFactories.of(new TestArgPatchTransition("SET BY PATCH 2"))));
     MockRule noAttributeRule = () -> MockRule.define("no_attribute_rule");
 
     helper.useRuleClassProvider(
@@ -109,6 +114,7 @@ public class ConfiguredTargetQueryTest extends PostAnalysisQueryTest<ConfiguredT
         "rule_with_transitions(name = 'my_rule',",
         "  patch_dep = ':dep-1',",
         "  split_dep = ':dep-2',",
+        "  string_dep = 'some string',",
         "  patch_dep_list = [':dep-3', ':dep-4']",
         ")",
         "no_attribute_rule(name = 'dep-1')",
@@ -187,6 +193,12 @@ public class ConfiguredTargetQueryTest extends PostAnalysisQueryTest<ConfiguredT
   }
 
   @Test
+  public void testLabelsFunction_nonLabelAttribute() throws Exception {
+    setUpLabelsFunctionTests();
+    assertThat(eval("labels('string_dep', //test:my_rule)")).isEmpty();
+  }
+
+  @Test
   public void testAlias_filtering() throws Exception {
     MockRule ruleWithHostDep =
         () ->
@@ -194,7 +206,7 @@ public class ConfiguredTargetQueryTest extends PostAnalysisQueryTest<ConfiguredT
                 "rule_with_host_dep",
                 attr("host_dep", LABEL)
                     .allowedFileTypes(FileTypeSet.ANY_FILE)
-                    .cfg(HostTransition.INSTANCE),
+                    .cfg(HostTransition.createFactory()),
                 attr("$impl_dep", LABEL)
                     .allowedFileTypes(FileTypeSet.ANY_FILE)
                     .value(Label.parseAbsoluteUnchecked("//test:other")));
@@ -269,7 +281,7 @@ public class ConfiguredTargetQueryTest extends PostAnalysisQueryTest<ConfiguredT
                 attr("target", LABEL).allowedFileTypes(FileTypeSet.ANY_FILE),
                 attr("host", LABEL)
                     .allowedFileTypes(FileTypeSet.ANY_FILE)
-                    .cfg(HostTransition.INSTANCE),
+                    .cfg(HostTransition.createFactory()),
                 attr("deps", BuildType.LABEL_LIST).allowedFileTypes(FileTypeSet.ANY_FILE));
     MockRule simpleRule =
         () ->
