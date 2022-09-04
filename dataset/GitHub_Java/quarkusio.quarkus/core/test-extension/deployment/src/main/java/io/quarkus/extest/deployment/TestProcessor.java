@@ -1,24 +1,11 @@
 package io.quarkus.extest.deployment;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.RUNTIME_INIT;
-import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
-import java.security.interfaces.DSAPublicKey;
-import java.security.spec.X509EncodedKeySpec;
-import java.util.Base64;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 
-import io.quarkus.deployment.builditem.ObjectSubstitutionBuildItem;
-import io.quarkus.extest.runtime.subst.DSAPublicKeyObjectSubstitution;
-import io.quarkus.extest.runtime.subst.KeyProxy;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
@@ -56,7 +43,7 @@ public final class TestProcessor {
 
     /**
      * Register a extension capability and feature
-     *
+     * 
      * @return test-extension feature build item
      */
     @BuildStep(providesCapabilities = "io.quarkus.test-extension")
@@ -66,7 +53,7 @@ public final class TestProcessor {
 
     /**
      * Register a custom bean defining annotation
-     *
+     * 
      * @return
      */
     @BuildStep
@@ -78,9 +65,9 @@ public final class TestProcessor {
      * Validate the expected BUILD_TIME configuration
      */
     @BuildStep
-    @Record(STATIC_INIT)
+    @Record(ExecutionTime.STATIC_INIT)
     void checkConfig() {
-        // Deployment time configuration	
+        // Deployment time configuration
         if (!buildTimeConfig.btSBV.getValue().equals("StringBasedValue")) {
             throw new IllegalStateException("buildTimeConfig.btSBV != StringBasedValue; " + buildTimeConfig.btSBV.getValue());
         }
@@ -113,12 +100,12 @@ public final class TestProcessor {
             throw new IllegalStateException(
                     "buildTimeConfig.allValues.longPrimitive != 1234567891L; " + buildTimeConfig.allValues.longPrimitive);
         }
-        // quarkus.bt.all-values.double-primitive=3.1415926535897932384	
+        // quarkus.bt.all-values.double-primitive=3.1415926535897932384
         if (Math.IEEEremainder(buildTimeConfig.allValues.doublePrimitive, 3.1415926535897932384) != 0) {
             throw new IllegalStateException("buildTimeConfig.allValues.doublePrimitive != 3.1415926535897932384; "
                     + buildTimeConfig.allValues.doublePrimitive);
         }
-        // quarkus.bt.all-values.opt-double-value=3.1415926535897932384	
+        // quarkus.bt.all-values.opt-double-value=3.1415926535897932384
         if (Math.IEEEremainder(buildTimeConfig.allValues.optDoubleValue.getAsDouble(), 3.1415926535897932384) != 0) {
             throw new IllegalStateException("buildTimeConfig.allValues.optDoubleValue != 3.1415926535897932384; "
                     + buildTimeConfig.allValues.optDoubleValue);
@@ -139,7 +126,7 @@ public final class TestProcessor {
             throw new IllegalStateException(
                     "buildTimeConfig.allValues.simpleMap.size != 2; " + buildTimeConfig.allValues.nestedConfigMap.size());
         }
-        //quarkus.bt.all-values.string-list=value1,value2	
+        //quarkus.bt.all-values.string-list=value1,value2
         if (buildTimeConfig.allValues.stringList.size() != 2) {
             throw new IllegalStateException(
                     "buildTimeConfig.allValues.stringList.size != 2; " + buildTimeConfig.allValues.stringList.size());
@@ -152,7 +139,7 @@ public final class TestProcessor {
             throw new IllegalStateException(
                     "buildTimeConfig.allValues.stringList[1] != value2; " + buildTimeConfig.allValues.stringList.get(1));
         }
-        // quarkus.rt.all-values.long-list=1,2,3	
+        // quarkus.rt.all-values.long-list=1,2,3
         if (buildTimeConfig.allValues.longList.size() != 3) {
             throw new IllegalStateException(
                     "buildTimeConfig.allValues.longList.size != 3; " + buildTimeConfig.allValues.longList.size());
@@ -167,49 +154,15 @@ public final class TestProcessor {
         }
     }
 
-    @BuildStep
-    @Record(STATIC_INIT)
-    PublicKeyBuildItem loadDSAPublicKey(TestTemplate template,
-                                        BuildProducer<ObjectSubstitutionBuildItem> substitutions) throws GeneralSecurityException {
-        String base64 = "MIIDQjCCAjUGByqGSM44BAEwggIoAoIBAQCPeTXZuarpv6vtiHrPSVG28y7FnjuvNxjo6sSWHz79NgbnQ1GpxBgzObg" +
-            "J58KuHFObp0dbhdARrbi0eYd1SYRpXKwOjxSzNggooi/6JxEKPWKpk0U0CaD+aWxGWPhL3SCBnDcJoBBXsZWtzQAjPbpUhLYpH51k" +
-            "jviDRIZ3l5zsBLQ0pqwudemYXeI9sCkvwRGMn/qdgYHnM423krcw17njSVkvaAmYchU5Feo9a4tGU8YzRY+AOzKkwuDycpAlbk4/i" +
-            "jsIOKHEUOThjBopo33fXqFD3ktm/wSQPtXPFiPhWNSHxgjpfyEc2B3KI8tuOAdl+CLjQr5ITAV2OTlgHNZnAh0AuvaWpoV499/e5/" +
-            "pnyXfHhe8ysjO65YDAvNVpXQKCAQAWplxYIEhQcE51AqOXVwQNNNo6NHjBVNTkpcAtJC7gT5bmHkvQkEq9rI837rHgnzGC0jyQQ8" +
-            "tkL4gAQWDt+coJsyB2p5wypifyRz6Rh5uixOdEvSCBVEy1W4AsNo0fqD7UielOD6BojjJCilx4xHjGjQUntxyaOrsLC+EsRGiWOef" +
-            "TznTbEBplqiuH9kxoJts+xy9LVZmDS7TtsC98kOmkltOlXVNb6/xF1PYZ9j897buHOSXC8iTgdzEpbaiH7B5HSPh++1/et1SEMWs" +
-            "iMt7lU92vAhErDR8C2jCXMiT+J67ai51LKSLZuovjntnhA6Y8UoELxoi34u1DFuHvF9veA4IBBQACggEAK6IeZShhydDUM5XsOJ/V" +
-            "AYPOgrnLr30AfKWLR39+FJBunVMWNPpvO5D9dU7B6nmSiLATpwhBDNEhyJ0ltmBGuFDBAkKkqE4l6l2iVh+C1TyYliv1P2LCJFNgr" +
-            "AJxyr+5Q5zM9hUgfbT66xnwCf/4aiO7nBlj4wOL3l9ABVllYifMZyKVYFGluXmo+jyyeAcCtzHi5SABbTOQJN0WXTlGtzxLFQ0QErD" +
-            "GhP1/A6z5lw5VHJn2aWMeTCaH+rJZpQfM8b2VWr7UEljqFgpSIHbrImuXcf2nP6uZLKFiDdAjDUyj0h2jXwwcdhwWXuhOEv8XIilkc" +
-            "9nMcPLqbdcQ4M5agg==";
-        byte[] encoded = Base64.getDecoder().decode(base64);
-        KeyFactory keyFactory = KeyFactory.getInstance("DSA");
-        X509EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(encoded);
-        DSAPublicKey publicKey = (DSAPublicKey) keyFactory.generatePublic(publicKeySpec);
-        ObjectSubstitutionBuildItem.Holder<DSAPublicKey, KeyProxy> holder = new ObjectSubstitutionBuildItem.Holder(
-                DSAPublicKey.class, KeyProxy.class, DSAPublicKeyObjectSubstitution.class);
-        ObjectSubstitutionBuildItem keysub = new ObjectSubstitutionBuildItem(holder);
-        substitutions.produce(keysub);
-        log.infof("loadDSAPublicKey run");
-        return new PublicKeyBuildItem(publicKey);
-    }
-
-    @BuildStep
-    @Record(RUNTIME_INIT)
-    void loadDSAPublicKeyProducer(TestTemplate template, PublicKeyBuildItem publicKey, BeanContainerBuildItem beanContainer) {
-        template.loadDSAPublicKeyProducer(publicKey.getPublicKey(), beanContainer.getValue());
-    }
-
     /**
      * Collect the beans with our custom bean defining annotation and configure them with the runtime config
-     *
+     * 
      * @param template - runtime template
      * @param beanArchiveIndex - index of type information
      * @param testBeanProducer - producer for located Class<IConfigConsumer> bean types
      */
     @BuildStep
-    @Record(STATIC_INIT)
+    @Record(ExecutionTime.STATIC_INIT)
     void scanForBeans(TestTemplate template, BeanArchiveIndexBuildItem beanArchiveIndex,
             BuildProducer<TestBeanBuildItem> testBeanProducer) {
         IndexView indexView = beanArchiveIndex.getIndex();
@@ -228,7 +181,7 @@ public final class TestProcessor {
 
     /**
      * For each IConfigConsumer type, have the runtime template create a bean and pass in the runtime related configs
-     *
+     * 
      * @param template - runtime template
      * @param testBeans - types of IConfigConsumer found
      * @param beanContainer - bean container to create test bean in
