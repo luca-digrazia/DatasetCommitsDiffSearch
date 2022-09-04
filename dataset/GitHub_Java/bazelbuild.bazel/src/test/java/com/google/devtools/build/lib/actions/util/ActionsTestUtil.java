@@ -179,13 +179,9 @@ public final class ActionsTestUtil {
   }
 
   public static ActionExecutionContext createContext(ExtendedEventHandler eventHandler) {
-    return createContext(new DummyExecutor(), eventHandler);
-  }
-
-  public static ActionExecutionContext createContext(
-      Executor executor, ExtendedEventHandler eventHandler) {
+    DummyExecutor dummyExecutor = new DummyExecutor();
     return new ActionExecutionContext(
-        executor,
+        dummyExecutor,
         /*actionInputFileCache=*/ null,
         ActionInputPrefetcher.NONE,
         new ActionKeyContext(),
