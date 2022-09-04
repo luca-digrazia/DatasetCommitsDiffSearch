@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,10 +13,11 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.validation;
 
+import java.util.Arrays;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -53,22 +54,17 @@ public class LOOCVTest {
     public void testComplete() {
         System.out.println("Complete");
         int n = 57;
-        LOOCV instance = new LOOCV(n);
+        int[][] splits = LOOCV.of(n);
         boolean[] hit = new boolean[n];
         for (int i = 0; i < n; i++) {
-            for (int j = 0; j < n; j++) {
-                hit[j] = false;
+            Arrays.fill(hit, false);
+
+            for (int j : splits[i]) {
+                hit[j] = true;
             }
 
-            int[] train = instance.train[i];
-            for (int j = 0; j < train.length; j++) {
-                assertFalse(hit[train[j]]);
-                hit[train[j]] = true;
-            }
-
-            int test = instance.test[i];
-            assertFalse(hit[test]);
-            hit[test] = true;
+            assertFalse(hit[i]);
+            hit[i] = true;
 
             for (int j = 0; j < n; j++) {
                 assertTrue(hit[j]);
@@ -80,17 +76,9 @@ public class LOOCVTest {
     public void testOrthogonal() {
         System.out.println("Orthogonal");
         int n = 57;
-        LOOCV instance = new LOOCV(n);
-        boolean[] hit = new boolean[n];
+        int[][] splits = LOOCV.of(n);
         for (int i = 0; i < n; i++) {
-            int test = instance.test[i];
-            assertFalse(hit[test]);
-            hit[test] = true;
-        }
-
-        for (int j = 0; j < n; j++) {
-            assertTrue(hit[j]);
+            assertTrue(Arrays.binarySearch(splits[i], i) < 0);
         }
     }
-
 }
