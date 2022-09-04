@@ -23,7 +23,7 @@ public class ThreadPoolConfig {
 
     /**
      * The maximum number of threads. If this is not specified then
-     * it will be automatically sized to 8 * the number of available processors
+     * it will be automatically sized to 4 * the number of available processors
      */
     @ConfigItem
     public OptionalInt maxThreads;
@@ -50,7 +50,7 @@ public class ThreadPoolConfig {
      * then additional threads will be spawned to attempt to finish any pending tasks, and the shutdown process will
      * continue
      */
-    @ConfigItem(defaultValue = "1M")
+    @ConfigItem(defaultValue = "PT60S")
     public Duration shutdownTimeout;
 
     /**
@@ -58,7 +58,7 @@ public class ThreadPoolConfig {
      * greater than or equal to the value for {@link #shutdownTimeout}, then tasks will not be interrupted before
      * the shutdown timeout occurs.
      */
-    @ConfigItem(defaultValue = "10")
+    @ConfigItem(defaultValue = "PT10S")
     public Duration shutdownInterrupt;
 
     /**
@@ -66,13 +66,13 @@ public class ThreadPoolConfig {
      * waiting tasks and threads will be checked and possibly logged at this interval. Setting this key to an empty
      * value disables the shutdown check interval.
      */
-    @ConfigItem(defaultValue = "5")
+    @ConfigItem(defaultValue = "PT5S")
     public Optional<Duration> shutdownCheckInterval;
 
     /**
      * The amount of time a thread will stay alive with no work.
      */
-    @ConfigItem(defaultValue = "30")
+    @ConfigItem(defaultValue = "PT30S")
     public Duration keepAliveTime;
 
 }
