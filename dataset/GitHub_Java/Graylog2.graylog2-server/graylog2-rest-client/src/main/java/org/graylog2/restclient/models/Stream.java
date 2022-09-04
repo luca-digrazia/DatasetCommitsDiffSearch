@@ -1,23 +1,22 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.google.common.collect.Lists;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
@@ -25,7 +24,6 @@ import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.ApiRequestBuilder;
 import org.graylog2.restclient.models.alerts.Alert;
-import org.graylog2.restclient.models.alerts.AlertCondition;
 import org.graylog2.restclient.models.alerts.AlertConditionService;
 import org.graylog2.restclient.models.api.requests.alerts.CreateAlertConditionRequest;
 import org.graylog2.restclient.models.api.responses.alerts.AlertSummaryResponse;
@@ -38,26 +36,27 @@ import org.graylog2.restroutes.generated.routes;
 import org.joda.time.DateTime;
 
 import java.io.IOException;
-import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 public class Stream {
-
     private final StreamService streamService;
 
     public interface Factory {
-        public Stream fromSummaryResponse(StreamSummaryResponse ssr);
+        Stream fromSummaryResponse(StreamSummaryResponse ssr);
     }
 
     private final ApiClient api;
-	
+
 	private final String id;
     private final String title;
     private final String description;
     private final String creatorUserId;
     private final String createdAt;
+    private final String contentPack;
     private final List<StreamRule> streamRules;
     private final Boolean disabled;
+    private final String matchingType;
 
     private final UserService userService;
     private final AlertConditionService alertConditionService;
@@ -81,6 +80,7 @@ public class Stream {
         this.description = ssr.description;
         this.creatorUserId = ssr.creatorUserId;
         this.createdAt = ssr.createdAt;
+        this.contentPack = ssr.contentPack;
 
         this.streamRules = Lists.newArrayList();
 
@@ -111,6 +111,8 @@ public class Stream {
         for (StreamRuleSummaryResponse streamRuleSummaryResponse : ssr.streamRules) {
             streamRules.add(streamRuleFactory.fromSummaryResponse(streamRuleSummaryResponse));
         }
+
+        this.matchingType = ssr.matchingType;
 	}
 
     public void addAlertCondition(CreateAlertConditionRequest r) throws APIException, IOException {
@@ -149,6 +151,7 @@ public class Stream {
                 .execute();
     }
 
+    @JsonIgnore
     public List<Alert> getAlerts() throws APIException, IOException {
         return getAlertsSince(0);
     }
@@ -163,6 +166,7 @@ public class Stream {
         return alerts;
     }
 
+    @JsonIgnore
     public Long getTotalAlerts() throws APIException, IOException {
         return getAlertsInformation(0).total;
     }
@@ -183,12 +187,17 @@ public class Stream {
         return creatorUserId;
     }
 
+    @JsonIgnore
     public User getCreatorUser() {
         return userService.load(this.creatorUserId);
     }
 
     public DateTime getCreatedAt() {
         return DateTime.parse(createdAt);
+    }
+
+    public String getContentPack() {
+        return contentPack;
     }
 
     public List<StreamRule> getStreamRules() {
@@ -213,40 +222,40 @@ public class Stream {
         return alertsResponse;
     }
 
+    @JsonIgnore
     public int getActiveAlerts() throws APIException, IOException {
-        /*int total = 0;
-        for (AlertCondition alertCondition : this.alertConditionService.allOfStream(this)) {
-            if (alertCondition.getParameters() == null) continue;
-
-            int time = (alertCondition.getParameters().get("time") == null ? 0 : Integer.parseInt(alertCondition.getParameters().get("time").toString()));
-            int grace = (alertCondition.getParameters().get("grace") == null ? 0 : Integer.parseInt(alertCondition.getParameters().get("grace").toString()));
-            int since = Math.round(new DateTime().minusMinutes((time + grace == 0 ? 1 : time + grace)).getMillis()/1000);
-            total += getAlertsInformation(since).alerts.size();
-        }*/
         CheckConditionResponse response = streamService.activeAlerts(this.getId());
         int size = (response.results == null ? 0 : response.results.size());
 
         return size;
     }
 
+    @JsonIgnore
     public long getThroughput() throws APIException, IOException {
-        final StreamThroughputResponse throughputResponse = api.path(routes.StreamResource().oneStreamThroughput(getId()), StreamThroughputResponse.class)
+        long result = 0;
+        final Map<Node, StreamThroughputResponse> throughputResponses = api.path(routes.StreamResource().oneStreamThroughput(getId()), StreamThroughputResponse.class)
+                .fromAllNodes()
                 .expect(200, 404)
-                .execute();
+                .executeOnAll();
 
-        if (throughputResponse == null) {
-            return 0L;
-        }
-        return throughputResponse.throughput;
+        for (StreamThroughputResponse throughputResponse : throughputResponses.values())
+            if (throughputResponse != null)
+                result += throughputResponse.throughput;
+        return result;
     }
 
 
+    @JsonIgnore
     public List<String> getUserAlertReceivers() {
         return userAlertReceivers;
     }
 
+    @JsonIgnore
     public List<String> getEmailAlertReceivers() {
         return emailAlertReceivers;
     }
 
+    public String getMatchingType() {
+        return matchingType;
+    }
 }
