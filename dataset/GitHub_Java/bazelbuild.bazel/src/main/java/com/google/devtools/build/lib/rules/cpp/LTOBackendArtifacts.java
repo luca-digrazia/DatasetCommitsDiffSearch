@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,42 +15,35 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Root;
-import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
- * LTOBackendArtifacts represents a set of artifacts for a single LTO backend compile.
+ * LTOBackendArtifacts represents a set of artifacts for a single ThinLTO backend compile.
  *
- * <p>LTO expands the traditional 2 step compile (N x compile .cc, 1x link (N .o files) into a
- * 4 step process:
+ * <p>ThinLTO expands the traditional 2 step compile (N x compile .cc, 1x link (N .o files) into a 4
+ * step process:
+ *
  * <ul>
- *   <li>1. Bitcode generation (N times). This is produces intermediate LLVM bitcode from a source
- *   file. For this product, it reuses the .o extension.
- *   </li>
- *   <li>2. Indexing (once on N files). This takes all bitcode .o files, and for each .o file, it
- *   decides from which other .o files symbols can be inlined. In addition, it generates an
- *   index for looking up these symbols.
- *   </li>
- *   <li>3. Backend compile (N times). This is the traditional compilation, and uses the same
- *   command line
- *   as the Bitcode generation in 1). Since the compiler has many bit code files available, it
- *   can inline functions and propagate constants across .o files. This step is costly, as it
- *   will do traditional optimization. The result is a .lto.o file, a traditional ELF object file.
- *   <p>
- *     For simplicity, our current prototype step 2. also generates a command line which we execute
- *     in step 3.
- *   </p>
- *   </li>
- *   <li>4. Backend link (once). This is the traditional link, and produces the final executable.
- *   </li>
+ * <li>1. Bitcode generation (N times). This is produces intermediate LLVM bitcode from a source
+ *     file. For this product, it reuses the .o extension.
+ * <li>2. Indexing (once on N files). This takes all bitcode .o files, and for each .o file, it
+ *     decides from which other .o files symbols can be inlined. In addition, it generates an index
+ *     for looking up these symbols, and an imports file for identifying new input files for each
+ *     step 3 {@link LTOBackendAction}.
+ * <li>3. Backend compile (N times). This is the traditional compilation, and uses the same command
+ *     line as the Bitcode generation in 1). Since the compiler has many bit code files available,
+ *     it can inline functions and propagate constants across .o files. This step is costly, as it
+ *     will do traditional optimization. The result is a .lto.o file, a traditional ELF object file.
+ * <li>4. Backend link (once). This is the traditional link, and produces the final executable.
  * </ul>
  */
 public final class LTOBackendArtifacts {
@@ -64,37 +57,33 @@ public final class LTOBackendArtifacts {
   // unused.
   private final Artifact imports;
 
-  // A file containing a command-line to run for the backend compile.
-  private final Artifact beCommandline;
-
   // The result of executing the above command line, an ELF object file.
   private final Artifact objectFile;
 
-  // A collection of all of the bitcode files. This is the universe from which the .imports file
-  // distills its lists.  The nested set is the same across all LTOBackendArtifacts of a given
+  // A map of all of the bitcode files. This is the universe from which the .imports file
+  // distills its lists.  The map is the same across all LTOBackendArtifacts of a given
   // binary.
-  private final NestedSet<Artifact> bitcodeFiles;
+  private final Map<PathFragment, Artifact> bitcodeFiles;
+
+  // Command line arguments to apply to back-end compile action, typically from
+  // the feature configuration and user-provided linkopts.
+  private List<String> commandLine;
 
   LTOBackendArtifacts(
       PathFragment ltoOutputRootPrefix,
       Artifact bitcodeFile,
-      NestedSet<Artifact> allBitCodeFiles,
-      AnalysisEnvironment analysisEnvironment,
-      BuildConfiguration configuration) {
+      Map<PathFragment, Artifact> allBitCodeFiles,
+      RuleContext ruleContext,
+      BuildConfiguration configuration,
+      CppLinkAction.LinkArtifactFactory linkArtifactFactory) {
     this.bitcodeFile = bitcodeFile;
     PathFragment obj = ltoOutputRootPrefix.getRelative(bitcodeFile.getRootRelativePath());
-    Root binDir = configuration.getBinDirectory();
 
-    objectFile = analysisEnvironment.getDerivedArtifact(obj, binDir);
-    imports =
-        analysisEnvironment.getDerivedArtifact(
-            FileSystemUtils.replaceExtension(obj, ".imports"), binDir);
-    index =
-        analysisEnvironment.getDerivedArtifact(
-            FileSystemUtils.replaceExtension(obj, ".thinlto.index"), binDir);
-    beCommandline =
-        analysisEnvironment.getDerivedArtifact(
-            FileSystemUtils.replaceExtension(obj, ".thinlto_commandline.txt"), binDir);
+    objectFile = linkArtifactFactory.create(ruleContext, configuration, obj);
+    imports = linkArtifactFactory.create(
+        ruleContext, configuration, FileSystemUtils.appendExtension(obj, ".imports"));
+    index = linkArtifactFactory.create(
+        ruleContext, configuration, FileSystemUtils.appendExtension(obj, ".thinlto.bc"));
 
     bitcodeFiles = allBitCodeFiles;
   }
@@ -110,21 +99,29 @@ public final class LTOBackendArtifacts {
   public void addIndexingOutputs(ImmutableList.Builder<Artifact> builder) {
     builder.add(imports);
     builder.add(index);
-    builder.add(beCommandline);
   }
 
-  public void scheduleLTOBackendAction(RuleContext ruleContext) {
-    SpawnAction.Builder builder = new SpawnAction.Builder();
+  public void setCommandLine(List<String> cmdLine) {
+    commandLine = cmdLine;
+  }
 
-    // TODO(bazel-team): should prune to the files mentioned in .imports.
-    builder.addTransitiveInputs(bitcodeFiles);
-    builder.addInput(imports);
+  public void scheduleLTOBackendAction(
+      RuleContext ruleContext,
+      FeatureConfiguration featureConfiguration,
+      CcToolchainProvider ccToolchain,
+      FdoSupportProvider fdoSupport,
+      boolean usePic,
+      boolean generateDwo) {
+    LTOBackendAction.Builder builder = new LTOBackendAction.Builder();
+    builder.addImportsInfo(bitcodeFiles, imports);
+
+    builder.addInput(bitcodeFile);
     builder.addInput(index);
-    builder.addInput(beCommandline);
-    builder.addTransitiveInputs(CppHelper.getToolchain(ruleContext).getCompile());
+    builder.addTransitiveInputs(ccToolchain.getCompile());
+
     builder.addOutput(objectFile);
 
-    builder.setProgressMessage("LTO Backend Compile");
+    builder.setProgressMessage("LTO Backend Compile " + objectFile.getFilename());
     builder.setMnemonic("CcLtoBackendCompile");
 
     // The command-line doesn't specify the full path to clang++, so we set it in the
@@ -133,9 +130,40 @@ public final class LTOBackendArtifacts {
 
     PathFragment compiler = cppConfiguration.getCppExecutable();
 
-    builder.setShellCommand(beCommandline.getExecPathString());
-    builder.setEnvironment(
-        ImmutableMap.of("CLANGXX", compiler.replaceName("clang++").getPathString()));
+    builder.setExecutable(compiler);
+    Variables.Builder buildVariablesBuilder = new Variables.Builder();
+    buildVariablesBuilder.addStringVariable("thinlto_index", index.getExecPath().toString());
+    // The output from the LTO backend step is a native object file.
+    buildVariablesBuilder.addStringVariable(
+        "thinlto_output_object_file", objectFile.getExecPath().toString());
+    // The input to the LTO backend step is the bitcode file.
+    buildVariablesBuilder.addStringVariable(
+        "thinlto_input_bitcode_file", bitcodeFile.getExecPath().toString());
+    Artifact autoFdoProfile = fdoSupport.getFdoSupport().buildProfileForLtoBackend(
+        fdoSupport, featureConfiguration, buildVariablesBuilder, ruleContext);
+    if (autoFdoProfile != null) {
+      builder.addInput(autoFdoProfile);
+    }
+
+    if (generateDwo) {
+      Artifact dwoFile = ruleContext.getRelatedArtifact(objectFile.getRootRelativePath(), ".dwo");
+      builder.addOutput(dwoFile);
+      buildVariablesBuilder.addStringVariable(
+          "per_object_debug_info_file", dwoFile.getExecPathString());
+    }
+
+    Variables buildVariables = buildVariablesBuilder.build();
+    List<String> execArgs = new ArrayList<>();
+    execArgs.addAll(featureConfiguration.getCommandLine("lto-backend", buildVariables));
+    execArgs.addAll(commandLine);
+    // If this is a PIC compile (set based on the CppConfiguration), the PIC
+    // option should be added after the rest of the command line so that it
+    // cannot be overridden. This is consistent with the ordering in the
+    // CppCompileAction's compiler options.
+    if (usePic) {
+      execArgs.add("-fPIC");
+    }
+    builder.addExecutableArguments(execArgs);
 
     ruleContext.registerAction(builder.build(ruleContext));
   }
