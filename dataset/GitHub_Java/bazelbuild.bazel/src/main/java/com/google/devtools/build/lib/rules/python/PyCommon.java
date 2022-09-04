@@ -483,16 +483,14 @@ public final class PyCommon {
     if (!ruleContext.getFragment(PythonConfiguration.class).useNewPyVersionSemantics()) {
       return false;
     }
-    String errorTemplate =
-        "This target is being built for Python %s but (transitively) includes Python %s-only "
-            + "sources. You can get diagnostic information about which dependencies introduce this "
-            + "version requirement by running the `find_requirements` aspect. For more info see "
-            + "the documentation for the `srcs_version` attribute.";
+    // TODO(brandjon): Add link to documentation explaining the error and use of the aspect.
     String error = null;
     if (version == PythonVersion.PY2 && hasPy3OnlySources) {
-      error = String.format(errorTemplate, "2", "3");
+      error =
+          "target is being built for Python 2 but (transitively) includes Python 3-only sources";
     } else if (version == PythonVersion.PY3 && hasPy2OnlySources) {
-      error = String.format(errorTemplate, "3", "2");
+      error =
+          "target is being built for Python 3 but (transitively) includes Python 2-only sources";
     }
     if (error == null) {
       return false;
