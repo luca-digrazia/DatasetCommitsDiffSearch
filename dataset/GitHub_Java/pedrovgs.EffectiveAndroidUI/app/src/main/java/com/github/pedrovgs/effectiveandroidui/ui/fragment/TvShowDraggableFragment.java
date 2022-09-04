@@ -8,7 +8,6 @@ import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import butterknife.InjectView;
-import com.github.pedrovgs.DraggableListener;
 import com.github.pedrovgs.DraggableView;
 import com.github.pedrovgs.effectiveandroidui.R;
 import com.github.pedrovgs.effectiveandroidui.domain.tvshow.ChapterCollection;
@@ -89,10 +88,6 @@ public class TvShowDraggableFragment extends BaseFragment implements TvShowPrese
     return isAdded();
   }
 
-  @Override public boolean isAlreadyLoaded() {
-    return adapter.getCount() > 0;
-  }
-
   @Override public void showChapters(ChapterCollection chapters) {
     chapterAdapteeCollection.clear();
     chapterAdapteeCollection.addAll(chapters.getChapters());
@@ -154,23 +149,6 @@ public class TvShowDraggableFragment extends BaseFragment implements TvShowPrese
       @Override
       public void run() {
         draggable_view.closeToRight();
-      }
-    });
-    draggable_view.setDraggableListener(new DraggableListener() {
-      @Override public void onMaximized() {
-        //Empty
-      }
-
-      @Override public void onMinimized() {
-        //Empty
-      }
-
-      @Override public void onClosedToLeft() {
-        tvShowPresenter.tvShowClosed();
-      }
-
-      @Override public void onClosedToRight() {
-        tvShowPresenter.tvShowClosed();
       }
     });
   }
