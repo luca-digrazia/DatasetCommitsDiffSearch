@@ -23,8 +23,10 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 
-import io.quarkus.arc.deployment.RuntimeBeanBuildItem;
+import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
 import io.quarkus.camel.core.runtime.CamelRuntime;
+import io.quarkus.camel.core.runtime.CamelRuntimeProducer;
 import io.quarkus.camel.core.runtime.CamelTemplate;
 import io.quarkus.camel.core.runtime.RuntimeRegistry;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -59,9 +61,16 @@ class CamelInitProcessor {
     CamelConfig config;
 
     @Record(ExecutionTime.STATIC_INIT)
+    @BuildStep
+    AdditionalBeanBuildItem camelRuntimeProducer(BuildProducer<BeanContainerListenerBuildItem> listener, CamelTemplate template,
+            CamelRuntimeBuildItem runtimeBuildItem) {
+        listener.produce(new BeanContainerListenerBuildItem(template.initRuntimeInjection(runtimeBuildItem.getRuntime())));
+        return new AdditionalBeanBuildItem(CamelRuntimeProducer.class);
+    }
+
+    @Record(ExecutionTime.STATIC_INIT)
     @BuildStep(applicationArchiveMarkers = { CamelSupport.CAMEL_SERVICE_BASE_PATH, CamelSupport.CAMEL_ROOT_PACKAGE_DIRECTORY })
-    CamelRuntimeBuildItem createInitTask(RecorderContext recorderContext, CamelTemplate template,
-            BuildProducer<RuntimeBeanBuildItem> runtimeBeans) {
+    CamelRuntimeBuildItem createInitTask(RecorderContext recorderContext, CamelTemplate template) {
         Properties properties = new Properties();
         Config configProvider = ConfigProvider.getConfig();
         for (String property : configProvider.getPropertyNames()) {
@@ -81,12 +90,7 @@ class CamelInitProcessor {
 
         visitServices((name, type) -> registry.bind(name, type, recorderContext.newInstance(type.getName())));
 
-        CamelRuntime camelRuntime = template.init(runtime, registry, properties, builders);
-
-        runtimeBeans
-                .produce(RuntimeBeanBuildItem.builder(CamelRuntime.class, template.camelRuntimeSupplier(camelRuntime)).build());
-
-        return new CamelRuntimeBuildItem(camelRuntime);
+        return new CamelRuntimeBuildItem(template.init(runtime, registry, properties, builders));
     }
 
     @Record(ExecutionTime.RUNTIME_INIT)
