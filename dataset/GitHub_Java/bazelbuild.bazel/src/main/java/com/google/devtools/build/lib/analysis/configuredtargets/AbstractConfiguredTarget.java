@@ -20,8 +20,10 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.DefaultInfo;
+import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
+import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.VisibilityProvider;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -214,7 +216,12 @@ public abstract class AbstractConfiguredTarget implements ConfiguredTarget, Visi
 
   private DefaultInfo getDefaultProvider() {
     if (defaultProvider.get() == null) {
-      defaultProvider.compareAndSet(null, DefaultInfo.build(this));
+      defaultProvider.compareAndSet(
+          null,
+          DefaultInfo.build(
+              getProvider(RunfilesProvider.class),
+              getProvider(FileProvider.class),
+              getProvider(FilesToRunProvider.class)));
     }
     return defaultProvider.get();
   }
