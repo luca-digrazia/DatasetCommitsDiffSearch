@@ -470,21 +470,15 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     assertThat(action.getExecutionInfo()).containsKey(ExecutionRequirements.REQUIRES_DARWIN);
   }
 
-  protected ConfiguredTarget addBinWithTransitiveDepOnFrameworkImport(boolean cleanup)
-      throws Exception {
-    ConfiguredTarget lib;
-    if (!cleanup) {
-      lib = addLibWithDepOnFrameworkImportPreCleanup();
-    } else {
-      lib = addLibWithDepOnFrameworkImportPostCleanup();
-    }
+  protected ConfiguredTarget addBinWithTransitiveDepOnFrameworkImport() throws Exception {
+    ConfiguredTarget lib = addLibWithDepOnFrameworkImport();
     return createBinaryTargetWriter("//bin:bin")
         .setList("deps", lib.getLabel().toString())
         .write();
 
   }
 
-  private ConfiguredTarget addLibWithDepOnFrameworkImportPreCleanup() throws Exception {
+  protected ConfiguredTarget addLibWithDepOnFrameworkImport() throws Exception {
     scratch.file(
         "fx/defs.bzl",
         "def _custom_static_framework_import_impl(ctx):",
@@ -504,29 +498,6 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         "custom_static_framework_import(",
         "    name = 'fx',",
         "    link_inputs = glob(['fx1.framework/*', 'fx2.framework/*']),",
-        ")");
-    return createLibraryTargetWriter("//lib:lib")
-        .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
-        .setList("deps", "//fx:fx")
-        .write();
-  }
-
-  private ConfiguredTarget addLibWithDepOnFrameworkImportPostCleanup() throws Exception {
-    scratch.file(
-        "fx/defs.bzl",
-        "def _custom_static_framework_import_impl(ctx):",
-        "  return [apple_common.new_objc_provider(",
-        "      framework_search_paths=depset(ctx.attr.framework_search_paths))]",
-        "custom_static_framework_import = rule(",
-        "    _custom_static_framework_import_impl,",
-        "    attrs={'framework_search_paths': attr.string_list()},",
-        ")");
-    scratch.file(
-        "fx/BUILD",
-        "load(':defs.bzl', 'custom_static_framework_import')",
-        "custom_static_framework_import(",
-        "    name = 'fx',",
-        "    framework_search_paths = ['fx/fx1.framework', 'fx/fx2.framework'],",
         ")");
     return createLibraryTargetWriter("//lib:lib")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
@@ -865,8 +836,8 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     assertThat(protoProvider).isNotNull();
   }
 
-  protected void checkFrameworkDepLinkFlags(
-      RuleType ruleType, ExtraLinkArgs extraLinkArgs, boolean cleanup) throws Exception {
+  protected void checkFrameworkDepLinkFlags(RuleType ruleType,
+      ExtraLinkArgs extraLinkArgs) throws Exception {
     scratch.file(
         "libs/defs.bzl",
         "def _custom_static_framework_import_impl(ctx):",
@@ -889,12 +860,6 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         "    name = 'my_framework',",
         "    link_inputs = glob(['buzzbuzz.framework/*']),",
         ")");
-
-    if (!cleanup) {
-      setSkylarkSemanticsOptions("--incompatible_objc_framework_cleanup=true");
-    } else {
-      setSkylarkSemanticsOptions("--incompatible_objc_framework_cleanup=false");
-    }
 
     ruleType.scratchTarget(scratch, "deps", "['//libs:objc_lib']");
 
@@ -1593,7 +1558,11 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         ruleType.target(scratch, "x", "x", "minimum_os_version", "'4.3.1'"));
   }
 
-  private void checkDylibDependenciesSetupFrameworkPreCleanup() throws Exception {
+  protected void checkDylibDependencies(RuleType ruleType,
+      ExtraLinkArgs extraLinkArgs) throws Exception {
+    ruleType.scratchTarget(scratch,
+        "dylibs", "['//fx:framework_import']");
+
     scratch.file(
         "fx/defs.bzl",
         "def _custom_dynamic_framework_import_impl(ctx):",
@@ -1615,43 +1584,6 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         "    name = 'framework_import',",
         "    link_inputs = glob(['MyFramework.framework/*']),",
         ")");
-  }
-
-  private void checkDylibDependenciesSetupFrameworkPostCleanup() throws Exception {
-    scratch.file(
-        "fx/defs.bzl",
-        "def _custom_dynamic_framework_import_impl(ctx):",
-        "  return [",
-        "    apple_common.new_objc_provider(",
-        "      dynamic_framework_file=depset(ctx.files.link_inputs)),",
-        "    apple_common.new_dynamic_framework_provider(objc=apple_common.new_objc_provider()),",
-        "  ]",
-        "custom_dynamic_framework_import = rule(",
-        "    _custom_dynamic_framework_import_impl,",
-        "    attrs={'link_inputs': attr.label_list(allow_files=True)},",
-        ")");
-    scratch.file("fx/MyFramework.framework/MyFramework");
-    scratch.file(
-        "fx/BUILD",
-        "load(':defs.bzl', 'custom_dynamic_framework_import')",
-        "custom_dynamic_framework_import(",
-        "    name = 'framework_import',",
-        "    link_inputs = ['MyFramework.framework/MyFramework'],",
-        ")");
-  }
-
-  protected void checkDylibDependencies(
-      RuleType ruleType, ExtraLinkArgs extraLinkArgs, boolean cleanup) throws Exception {
-    ruleType.scratchTarget(scratch, "dylibs", "['//fx:framework_import']");
-
-    if (!cleanup) {
-      checkDylibDependenciesSetupFrameworkPreCleanup();
-      setSkylarkSemanticsOptions("--incompatible_objc_framework_cleanup=false");
-    } else {
-      checkDylibDependenciesSetupFrameworkPostCleanup();
-      setSkylarkSemanticsOptions("--incompatible_objc_framework_cleanup=true");
-    }
-
     useConfiguration("--ios_multi_cpus=i386,x86_64");
 
     Action lipobinAction = lipoBinAction("//x:x");

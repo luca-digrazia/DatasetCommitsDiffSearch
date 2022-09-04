@@ -99,6 +99,38 @@ public class AppleStaticLibraryTest extends ObjcRuleTestCase {
   }
 
   @Test
+  public void testAvoidDepsProviders() throws Exception {
+    useConfiguration("--incompatible_disable_objc_library_resources=false");
+    scratch.file(
+        "package/BUILD",
+        "apple_static_library(",
+        "    name = 'test',",
+        "    deps = [':objcLib'],",
+        "    platform_type = 'ios',",
+        "    avoid_deps = [':avoidLib'],",
+        ")",
+        "objc_library(name = 'objcLib', srcs = [ 'b.m' ], deps = [':avoidLib', ':baseLib'])",
+        "objc_library(",
+        "    name = 'baseLib',",
+        "    srcs = [ 'base.m' ],",
+        "    sdk_frameworks = ['BaseSDK'],",
+        "    resources = [':base.png']",
+        ")",
+        "objc_library(",
+        "    name = 'avoidLib',",
+        "    srcs = [ 'c.m' ],",
+        "    sdk_frameworks = ['AvoidSDK'],",
+        "    resources = [':avoid.png']",
+        ")");
+
+    ObjcProvider provider =  getConfiguredTarget("//package:test")
+        .get(AppleStaticLibraryInfo.SKYLARK_CONSTRUCTOR).getDepsObjcProvider();
+    // Do not remove SDK_FRAMEWORK values in avoid_deps.
+    assertThat(provider.get(ObjcProvider.SDK_FRAMEWORK))
+        .containsAllOf(new SdkFramework("AvoidSDK"), new SdkFramework("BaseSDK"));
+  }
+
+  @Test
   public void testNoSrcs() throws Exception {
     scratch.file("package/BUILD",
         "apple_static_library(",
@@ -167,7 +199,7 @@ public class AppleStaticLibraryTest extends ObjcRuleTestCase {
             getGeneratingAction(getFirstArtifactEndingWith(linkAction.getInputs(), "libobjcLib.a"));
 
     assertAppleSdkPlatformEnv(objcLibCompileAction, "WatchSimulator");
-    assertThat(objcLibCompileAction.getArguments()).containsAtLeast("-arch_only", "i386").inOrder();
+    assertThat(objcLibCompileAction.getArguments()).containsAllOf("-arch_only", "i386").inOrder();
   }
 
   @Test
@@ -222,7 +254,7 @@ public class AppleStaticLibraryTest extends ObjcRuleTestCase {
 
     assertContainsSublist(action.getArguments(), ImmutableList.of(
         MOCK_XCRUNWRAPPER_EXECUTABLE_PATH, LIPO, "-create"));
-    assertThat(action.getArguments()).containsAtLeast(armv7kBin, i386Bin);
+    assertThat(action.getArguments()).containsAllOf(armv7kBin, i386Bin);
     assertContainsSublist(action.getArguments(), ImmutableList.of(
         "-o", execPathEndingWith(action.getOutputs(), "x_lipo.a")));
 
@@ -447,7 +479,7 @@ public class AppleStaticLibraryTest extends ObjcRuleTestCase {
 
     assertAppleSdkPlatformEnv(linkAction, "WatchSimulator");
     assertThat(normalizeBashArgs(linkAction.getArguments()))
-        .containsAtLeast("-arch_only", "i386")
+        .containsAllOf("-arch_only", "i386")
         .inOrder();
   }
 
@@ -484,8 +516,8 @@ public class AppleStaticLibraryTest extends ObjcRuleTestCase {
         "objc_library(name = 'avoidLib', srcs = [ 'c.m' ])");
 
     CommandAction action = linkLibAction("//package:test");
-    assertThat(Artifact.toRootRelativePaths(action.getInputs()))
-        .containsAtLeast("package/libobjcLib.a", "package/libbaseLib.a");
+    assertThat(Artifact.toRootRelativePaths(action.getInputs())).containsAllOf(
+        "package/libobjcLib.a", "package/libbaseLib.a");
     assertThat(Artifact.toRootRelativePaths(action.getInputs())).doesNotContain(
         "package/libavoidLib.a");
   }
@@ -641,7 +673,9 @@ public class AppleStaticLibraryTest extends ObjcRuleTestCase {
         "   dep_provider = ctx.attr.proxy[apple_common.AppleStaticLibrary]",
         "   my_provider = apple_common.AppleStaticLibrary(archive = dep_provider.archive,",
         "       objc = dep_provider.objc)",
-        "   return [my_provider]",
+        "   return struct(",
+        "      providers = [my_provider]",
+        "   )",
         "",
         "skylark_static_lib = rule(",
         "  implementation = skylark_static_lib_impl,",
@@ -679,7 +713,9 @@ public class AppleStaticLibraryTest extends ObjcRuleTestCase {
         "   dep_provider = ctx.attr.proxy[apple_common.AppleStaticLibrary]",
         "   my_provider = apple_common.AppleStaticLibrary(archive = dep_provider.archive,",
         "       objc = dep_provider.objc, foo = 'bar')",
-        "   return [my_provider]",
+        "   return struct(",
+        "      providers = [my_provider]",
+        "   )",
         "",
         "skylark_static_lib = rule(",
         "  implementation = skylark_static_lib_impl,",
