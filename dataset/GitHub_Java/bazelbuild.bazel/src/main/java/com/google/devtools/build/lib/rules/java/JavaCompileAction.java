@@ -303,7 +303,19 @@ public class JavaCompileAction extends AbstractAction
         new JavaActionContinuation(
             actionExecutionContext,
             reducedClasspath,
-            SpawnContinuation.ofBeginExecution(spawn, actionExecutionContext));
+            new SpawnContinuation() {
+              @Override
+              public ListenableFuture<?> getFuture() {
+                return null;
+              }
+
+              @Override
+              public SpawnContinuation execute() throws ExecException, InterruptedException {
+                SpawnActionContext context =
+                    actionExecutionContext.getContext(SpawnActionContext.class);
+                return context.beginExecution(spawn, actionExecutionContext);
+              }
+            });
     return continuation.execute();
   }
 
