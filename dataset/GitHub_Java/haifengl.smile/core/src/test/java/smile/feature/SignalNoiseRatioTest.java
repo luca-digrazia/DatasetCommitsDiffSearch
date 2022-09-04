@@ -50,9 +50,12 @@ public class SignalNoiseRatioTest {
     public void tearDown() {
     }
 
+    /**
+     * Test of rank method, of class SignalNoiseRatio.
+     */
     @Test
-    public void test() {
-        System.out.println("SignalNoiseRatio");
+    public void testRank() {
+        System.out.println("rank");
         int[] y = new int[Iris.data.size()];
             
         for (int i = 0; i < y.length; i++) {
@@ -60,7 +63,8 @@ public class SignalNoiseRatioTest {
             else y[i] = 1;
         }
 
-        double[] ratio = SignalNoiseRatio.apply(Iris.x, y);
+        SignalNoiseRatio s2n = new SignalNoiseRatio();
+        double[] ratio = s2n.apply(Iris.x, y);
         assertEquals(4, ratio.length);
         assertEquals(0.8743107, ratio[0], 1E-7);
         assertEquals(0.1502717, ratio[1], 1E-7);

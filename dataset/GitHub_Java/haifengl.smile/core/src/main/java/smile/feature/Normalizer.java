@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,11 +13,10 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.feature;
 
-import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
 import smile.data.Tuple;
 import smile.math.MathEx;
@@ -101,7 +100,7 @@ public class Normalizer implements FeatureTransform {
 
     @Override
     public Tuple transform(Tuple x) {
-        double[] y = transform(x.toArray(false, CategoricalEncoder.ONE_HOT));
+        double[] y = transform(x.toArray());
         return Tuple.of(y, x.schema());
     }
 

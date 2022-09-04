@@ -268,7 +268,7 @@ public interface Tuple extends Serializable {
      * @throws ClassCastException when data type does not match.
      */
     default String getString(int i) {
-        return schema().field(i).toString(get(i));
+        return getAs(i);
     }
 
     /**
@@ -277,8 +277,7 @@ public interface Tuple extends Serializable {
      * @throws ClassCastException when data type does not match.
      */
     default String getString(String field) {
-        int i = fieldIndex(field);
-        return schema().field(i).toString(get(i));
+        return getAs(field);
     }
 
     /**

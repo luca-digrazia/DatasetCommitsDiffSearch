@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,11 +13,13 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.feature;
 
-import smile.classification.ClassLabels;
+import java.util.Arrays;
+
+import smile.classification.ClassLabel;
 import smile.math.MathEx;
 
 /**
@@ -38,28 +40,14 @@ import smile.math.MathEx;
  * @author Haifeng Li
  */
 public class SumSquaresRatio implements FeatureRanking {
-    public static final SumSquaresRatio instance = new SumSquaresRatio();
 
     @Override
-    public double[] rank(double[][] x, int[] y) {
-        return of(x, y);
-    }
-
-    /**
-     * Univariate feature ranking. Note that this method actually does NOT rank
-     * the features. It just returns the metric values of each feature. The
-     * use can then rank and select features.
-     *
-     * @param x a n-by-p matrix of n instances with p features.
-     * @param y class labels.
-     * @return the sum of squares ratio of between-groups to within-groups.
-     */
-    public static double[] of(double[][] x, int[] y) {
+    public double[] apply(double[][] x, int[] y) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
         }
 
-        ClassLabels codec = ClassLabels.fit(y);
+        ClassLabel.Result codec = ClassLabel.fit(y);
         int k = codec.k;
         y = codec.y;
 
