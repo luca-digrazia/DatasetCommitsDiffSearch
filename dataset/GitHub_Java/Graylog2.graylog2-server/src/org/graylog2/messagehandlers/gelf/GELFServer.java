@@ -56,16 +56,10 @@ public class GELFServer {
     }
 
     public String listen() throws Exception {
-
         // Reveive and fill buffer.
         byte[] receiveData = new byte[MAX_PACKET_SIZE];
         DatagramPacket receivedPacket = new DatagramPacket(receiveData, receiveData.length);
-
-        try {
-            serverSocket.receive(receivedPacket);
-        } catch (SocketException e) {
-            return new String();
-        }
+        serverSocket.receive(receivedPacket);
 
         // Uncompress.
         Inflater decompresser = new Inflater();
