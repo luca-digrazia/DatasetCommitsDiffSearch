@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.actions;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
-import com.google.common.hash.Hashing;
 import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.actions.cache.DigestUtils;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -398,10 +397,6 @@ public abstract class FileArtifactValue implements SkyValue {
     public InlineFileArtifactValue(byte[] data, byte[] digest) {
       this.data = Preconditions.checkNotNull(data);
       this.digest = Preconditions.checkNotNull(digest);
-    }
-
-    public InlineFileArtifactValue(byte[] bytes) {
-      this(bytes, Hashing.md5().hashBytes(bytes).asBytes());
     }
 
     public ByteArrayInputStream getInputStream() {
