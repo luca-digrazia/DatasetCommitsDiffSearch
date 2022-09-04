@@ -14,7 +14,6 @@
 
 package net.starlark.java.eval;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import java.util.AbstractList;
@@ -77,7 +76,6 @@ public final class StarlarkList<E> extends AbstractList<E>
   // The implementation strategy is similar to ArrayList,
   // but without the extra indirection of using ArrayList.
 
-  // elems[0:size] holds the logical elements, and elems[size:] are not used.
   private int size;
   private int iteratorCount; // number of active iterators (unused once frozen)
   private Object[] elems = EMPTY_ARRAY; // elems[i] == null  iff  i >= size
@@ -193,6 +191,79 @@ public final class StarlarkList<E> extends AbstractList<E>
     return wrap(null, Arrays.copyOf(elems, elems.length));
   }
 
+  /** Returns a new empty StarlarkList builder. */
+  public static <T> Builder<T> builder() {
+    return new Builder<>();
+  }
+
+  /** A reusable builder for StarlarkLists. */
+  public static final class Builder<T> {
+    private Object[] elems = EMPTY;
+    private int size;
+    private boolean shared; // whether elems is nonempty and shared with some StarlarkList
+
+    private static final Object[] EMPTY = {};
+
+    /** Adds an element to the builder. */
+    public Builder<T> add(T v) {
+      ensureCapacity(1);
+      elems[size++] = Starlark.checkValid(v);
+      return this;
+    }
+
+    /** Adds all the iterable's entries to the builder. */
+    public Builder<T> addAll(Iterable<? extends T> seq) {
+      if (!(seq instanceof Collection)) {
+        // iterable of unknown size
+        for (T elem : seq) {
+          add(elem);
+        }
+
+      } else if (size == 0) {
+        // first time: bulk copy, avoiding iterator
+        elems = ((Collection<? extends T>) seq).toArray();
+        for (Object elem : elems) {
+          Starlark.checkValid(elem);
+        }
+        size = elems.length;
+
+      } else {
+        // general case
+        ensureCapacity(((Collection) seq).size());
+        for (Object elem : seq) {
+          elems[size++] = Starlark.checkValid(elem);
+        }
+      }
+      return this;
+    }
+
+    // Ensures elems is unshared with sufficient capacity for n additional elements.
+    private void ensureCapacity(int n) {
+      int cap = elems.length;
+      if (shared || size + n > cap) {
+        int newcap = Math.max(size + n, cap + (cap >> 1) + 1); // grow by at least 50%
+        elems = Arrays.copyOf(elems, newcap);
+        shared = false;
+      }
+    }
+
+    /** Returns a new immutable StarlarkList containing the elements added so far. */
+    public StarlarkList<T> buildImmutable() {
+      return build(null);
+    }
+
+    /**
+     * Returns a new StarlarkList containing the elements added so far. The result has the specified
+     * mutability; null means immutable.
+     */
+    public StarlarkList<T> build(@Nullable Mutability mu) {
+      // TODO(adonovan): opt: if elems.length ≫ size, reallocate smaller.
+      ensureCapacity(0);
+      shared = size > 0;
+      return new StarlarkList<T>(mu, elems, size);
+    }
+  }
+
   @Override
   public Mutability mutability() {
     return mutability;
@@ -253,7 +324,7 @@ public final class StarlarkList<E> extends AbstractList<E>
 
   @Override
   public int hashCode() {
-    // Hash the elements elems[0:size].
+    // Roll our own hash code to avoid iterating through null part of elems.
     int result = 1;
     for (int i = 0; i < size; i++) {
       result = 31 * result + elems[i].hashCode();
@@ -290,9 +361,6 @@ public final class StarlarkList<E> extends AbstractList<E>
   @Override
   @SuppressWarnings("unchecked")
   public E get(int i) {
-    if (i >= size) {
-      throw new IndexOutOfBoundsException();
-    }
     return (E) elems[i]; // unchecked
   }
 
@@ -414,12 +482,14 @@ public final class StarlarkList<E> extends AbstractList<E>
   }
 
   /**
-   * Sets the position at the given index to contain the given value. Precondition: {@code 0 <=
-   * index < size()}.
+   * Sets the position at the given index to contain the given value. The index must already have
+   * been validated to be in range.
+   *
+   * @param index the position to change
+   * @param value the new value
    */
   public void setElementAt(int index, E value) throws EvalException {
     Starlark.checkMutable(this);
-    Preconditions.checkArgument(index < size);
     elems[index] = value;
   }
 
@@ -528,9 +598,8 @@ public final class StarlarkList<E> extends AbstractList<E>
     return result;
   }
 
-  /** Returns a new array of class Object[] containing the list elements. */
   @Override
   public Object[] toArray() {
-    return size != 0 ? Arrays.copyOf(elems, size, Object[].class) : EMPTY_ARRAY;
+    return size != 0 ? Arrays.copyOf(elems, size) : EMPTY_ARRAY;
   }
 }

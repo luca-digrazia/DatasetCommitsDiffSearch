@@ -125,14 +125,15 @@ public class PrinterTest {
     assertThat(Starlark.format("%% %d %r %s", StarlarkInt.of(1), "2", "3"))
         .isEqualTo("% 1 \"2\" 3");
 
-    checkFormatPositionalFails("got string for '%d' format, want int or float", "%d", "1");
     checkFormatPositionalFails(
-        "unsupported format character \".\" at index 1 in \"%.3g\"", "%.3g", 1);
+        "invalid argument \"1\" for format pattern %d",
+        "%d", "1");
+    checkFormatPositionalFails("unsupported format character \".\" at index 1 in \"%.3g\"",
+        "%.3g");
     checkFormatPositionalFails("unsupported format character \".\" at index 1 in \"%.3g\"",
         "%.3g", 1, 2);
-    checkFormatPositionalFails(
-        "unsupported format character \".\" at index 1 in \"%.s\"", "%.s", 1);
-    checkFormatPositionalFails("not enough arguments for format pattern \"%.s\": ()", "%.s");
+    checkFormatPositionalFails("unsupported format character \".\" at index 1 in \"%.s\"",
+        "%.s");
   }
 
   private StarlarkValue createObjWithStr() {
