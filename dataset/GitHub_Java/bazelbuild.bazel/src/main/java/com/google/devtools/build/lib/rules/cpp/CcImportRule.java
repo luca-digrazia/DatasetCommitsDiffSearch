@@ -96,6 +96,7 @@ public final class CcImportRule implements RuleDefinition {
         .add(attr("alwayslink", BOOLEAN))
         .add(
             attr("data", LABEL_LIST)
+                .cfg(env.getLipoDataTransition())
                 .allowedFileTypes(FileTypeSet.ANY_FILE)
                 .dontCheckConstraints())
         .addRequiredToolchains(CppRuleClasses.ccToolchainTypeAttribute(env))

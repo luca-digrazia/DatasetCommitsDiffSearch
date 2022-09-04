@@ -106,7 +106,7 @@ public final class ProguardLibrary {
     }
     NestedSetBuilder<Artifact> dependencySpecsBuilder = NestedSetBuilder.naiveLinkOrder();
     for (ProguardSpecProvider provider :
-        ruleContext.getPrerequisites(attributeName, mode, ProguardSpecProvider.PROVIDER)) {
+        ruleContext.getPrerequisites(attributeName, mode, ProguardSpecProvider.class)) {
       dependencySpecsBuilder.addTransitive(provider.getTransitiveProguardSpecs());
     }
     return dependencySpecsBuilder.build();
