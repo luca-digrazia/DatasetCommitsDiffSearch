@@ -169,10 +169,21 @@ class OptionsParserImpl {
   List<OptionValueDescription> asListOfEffectiveOptions() {
     List<OptionValueDescription> result = new ArrayList<>();
     for (Map.Entry<String, OptionDefinition> mapEntry : optionsData.getAllOptionDefinitions()) {
+      String fieldName = mapEntry.getKey();
       OptionDefinition optionDefinition = mapEntry.getValue();
       OptionValueDescription entry = parsedValues.get(optionDefinition);
       if (entry == null) {
-        result.add(OptionValueDescription.newDefaultValue(optionDefinition));
+        Object value = optionDefinition.getDefaultValue();
+        result.add(
+            new OptionValueDescription(
+                fieldName,
+                /*originalValueString=*/ null,
+                value,
+                OptionPriority.DEFAULT,
+                /*source=*/ null,
+                /*implicitDependant=*/ null,
+                /*expandedFrom=*/ null,
+                false));
       } else {
         result.add(entry);
       }
@@ -251,20 +262,21 @@ class OptionsParserImpl {
         // Record the new value:
         parsedValues.put(
             optionDefinition,
-            OptionValueDescription.newOptionValue(
-                optionDefinition, null, value, priority, source, implicitDependant, expandedFrom));
+            new OptionValueDescription(
+                name, null, value, priority, source, implicitDependant, expandedFrom, false));
       }
     } else {
       parsedValues.put(
           optionDefinition,
-          OptionValueDescription.newOptionValue(
-              optionDefinition, null, value, priority, source, implicitDependant, expandedFrom));
+          new OptionValueDescription(
+              name, null, value, priority, source, implicitDependant, expandedFrom, false));
       maybeAddDeprecationWarning(optionDefinition);
     }
   }
 
   private void addListValue(
       OptionDefinition optionDefinition,
+      String originalName,
       Object value,
       OptionPriority priority,
       String source,
@@ -273,14 +285,15 @@ class OptionsParserImpl {
     OptionValueDescription entry = parsedValues.get(optionDefinition);
     if (entry == null) {
       entry =
-          OptionValueDescription.newOptionValue(
-              optionDefinition,
+          new OptionValueDescription(
+              originalName,
               /* originalValueString */ null,
               ArrayListMultimap.create(),
               priority,
               source,
               implicitDependant,
-              expandedFrom);
+              expandedFrom,
+              true);
       parsedValues.put(optionDefinition, entry);
       maybeAddDeprecationWarning(optionDefinition);
     }
@@ -335,14 +348,15 @@ class OptionsParserImpl {
       String unparsedFlagExpression = optionsIterator.next();
       ParseOptionResult parseResult = parseOption(unparsedFlagExpression, optionsIterator);
       builder.add(
-          OptionValueDescription.newOptionValue(
-              parseResult.optionDefinition,
+          new OptionValueDescription(
+              parseResult.optionDefinition.getOptionName(),
               parseResult.value,
               /* value */ null,
               /* priority */ null,
               /* source */ null,
               implicitDependant,
-              /* expendedFrom */ null));
+              /* expendedFrom */ null,
+              parseResult.optionDefinition.allowsMultiple()));
     }
     return builder.build();
   }
@@ -365,14 +379,15 @@ class OptionsParserImpl {
       String unparsedFlagExpression = optionsIterator.next();
       ParseOptionResult parseResult = parseOption(unparsedFlagExpression, optionsIterator);
       builder.add(
-          OptionValueDescription.newOptionValue(
-              parseResult.optionDefinition,
+          new OptionValueDescription(
+              parseResult.optionDefinition.getOptionName(),
               parseResult.value,
               /* value */ null,
               /* priority */ null,
               /* source */ null,
               /* implicitDependant */ null,
-              flagName));
+              flagName,
+              parseResult.optionDefinition.allowsMultiple()));
     }
     return builder.build();
   }
@@ -433,10 +448,11 @@ class OptionsParserImpl {
       OptionDefinition optionDefinition = parseOptionResult.optionDefinition;
       @Nullable String value = parseOptionResult.value;
 
+      final String originalName = optionDefinition.getOptionName();
+
       if (optionDefinition.isWrapperOption()) {
         if (value.startsWith("-")) {
-          String sourceMessage =
-              "Unwrapped from wrapper option --" + optionDefinition.getOptionName();
+          String sourceMessage =  "Unwrapped from wrapper option --" + originalName;
           List<String> unparsed =
               parse(
                   priority,
@@ -459,14 +475,8 @@ class OptionsParserImpl {
           continue;
 
         } else {
-          throw new OptionsParsingException(
-              "Invalid --"
-                  + optionDefinition.getOptionName()
-                  + " value format. "
-                  + "You may have meant --"
-                  + optionDefinition.getOptionName()
-                  + "=--"
-                  + value);
+          throw new OptionsParsingException("Invalid --" + originalName + " value format. "
+              + "You may have meant --" + originalName + "=--" + value);
         }
       }
 
@@ -476,10 +486,11 @@ class OptionsParserImpl {
         // correctly canonicalize flags.
         UnparsedOptionValueDescription unparsedOptionValueDescription =
             new UnparsedOptionValueDescription(
+                originalName,
                 optionDefinition,
                 value,
                 priority,
-                sourceFunction.apply(optionDefinition.getOptionName()),
+                sourceFunction.apply(originalName),
                 expandedFrom == null);
         unparsedValues.add(unparsedOptionValueDescription);
         if (optionDefinition.allowsMultiple()) {
@@ -495,20 +506,14 @@ class OptionsParserImpl {
         ImmutableList<String> expansion =
             optionsData.getEvaluatedExpansion(optionDefinition, value);
 
-        String sourceMessage =
-            "expanded from option --"
-                + optionDefinition.getOptionName()
-                + " from "
-                + sourceFunction.apply(optionDefinition.getOptionName());
+        String sourceMessage = "expanded from option --"
+            + originalName
+            + " from "
+            + sourceFunction.apply(originalName);
         Function<Object, String> expansionSourceFunction = o -> sourceMessage;
         maybeAddDeprecationWarning(optionDefinition);
         List<String> unparsed =
-            parse(
-                priority,
-                expansionSourceFunction,
-                null,
-                optionDefinition.getOptionName(),
-                expansion);
+            parse(priority, expansionSourceFunction, null, originalName, expansion);
         if (!unparsed.isEmpty()) {
           // Throw an assertion, because this indicates an error in the code that specified the
           // expansion for the current option.
@@ -535,10 +540,10 @@ class OptionsParserImpl {
         if (!optionDefinition.allowsMultiple()) {
           setValue(
               optionDefinition,
-              optionDefinition.getOptionName(),
+              originalName,
               convertedValue,
               priority,
-              sourceFunction.apply(optionDefinition.getOptionName()),
+              sourceFunction.apply(originalName),
               implicitDependent,
               expandedFrom);
         } else {
@@ -549,9 +554,10 @@ class OptionsParserImpl {
           // for the field declaration.
           addListValue(
               optionDefinition,
+              originalName,
               convertedValue,
               priority,
-              sourceFunction.apply(optionDefinition.getOptionName()),
+              sourceFunction.apply(originalName),
               implicitDependent,
               expandedFrom);
         }

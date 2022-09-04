@@ -116,7 +116,7 @@ public class AllIncompatibleChangesExpansion implements ExpansionFunction {
     if (optionDefinition.allowsMultiple()) {
       throw new IllegalArgumentException(prefix + "must not use the allowMultiple field");
     }
-    if (optionDefinition.hasImplicitRequirements()) {
+    if (optionDefinition.getImplicitRequirements().length > 0) {
       throw new IllegalArgumentException(prefix + "must not use the implicitRequirements field");
     }
     if (!optionDefinition.getOldOptionName().equals(defaultString)) {
