@@ -19,10 +19,13 @@ package smile.classification;
 
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import smile.base.mlp.*;
 import smile.math.MathEx;
+import smile.math.TimeFunction;
 import smile.util.IntSet;
 import smile.util.Strings;
 
@@ -234,7 +237,7 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
     /**
      * Fits a MLP model.
      * @param x the training dataset.
-     * @param y the training labels.
+     * @param y training labels.
      * @param prop the hyper-parameters.
      * @return the model.
      */
@@ -242,9 +245,32 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
         int p = x[0].length;
         int k = MathEx.max(y) + 1;
 
-        LayerBuilder[] layers = Layer.of(k, prop.getProperty("smile.mlp.layers", "ReLU(100)"));
-        MLP model = new MLP(p, layers);
-        model.setProperties(prop);
+        String activation = prop.getProperty("smile.mlp.activation", "ReLU");
+        List<LayerBuilder> layers = Arrays.stream(prop.getProperty("smile.mlp.layers", "100").split("\\|"))
+                .mapToInt(Integer::parseInt)
+                .mapToObj(nodes -> Layer.builder(activation, nodes))
+                .collect(Collectors.toList());
+        layers.add(Layer.mle(k == 2 ? 1 : k, OutputFunction.SIGMOID));
+        MLP model = new MLP(p, layers.toArray(new LayerBuilder[0]));
+
+        String learningRate = prop.getProperty("smile.mlp.learning_rate", "0.01");
+        model.setLearningRate(TimeFunction.of(learningRate));
+
+        String weightDecay = prop.getProperty("smile.mlp.weight_decay");
+        if (weightDecay != null) {
+            model.setWeightDecay(Double.parseDouble(weightDecay));
+        }
+
+        String momentum = prop.getProperty("smile.mlp.momentum");
+        if (momentum != null) {
+            model.setMomentum(TimeFunction.of(momentum));
+        }
+
+        String rho = prop.getProperty("smile.mlp.RMSProp.rho");
+        if (rho != null) {
+            double epsilon = Double.parseDouble(prop.getProperty("smile.mlp.RMSProp.epsilon", "1E-7"));
+            model.setRMSProp(Double.parseDouble(rho), epsilon);
+        }
 
         int epochs = Integer.parseInt(prop.getProperty("smile.mlp.epochs", "100"));
         int batch = Integer.parseInt(prop.getProperty("smile.mlp.mini_batch", "256"));
