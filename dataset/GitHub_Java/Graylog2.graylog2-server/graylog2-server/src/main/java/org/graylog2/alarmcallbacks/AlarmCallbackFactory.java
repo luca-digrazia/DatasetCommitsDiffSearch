@@ -24,22 +24,16 @@ import org.graylog2.plugin.alarms.callbacks.AlarmCallbackConfigurationException;
 import org.graylog2.shared.bindings.InstantiationService;
 
 import javax.inject.Inject;
-import java.util.Set;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 public class AlarmCallbackFactory {
     private InstantiationService instantiationService;
-    private final Set<Class<? extends AlarmCallback>> availableAlarmCallbacks;
 
     @Inject
-    public AlarmCallbackFactory(InstantiationService instantiationService,
-                                Set<Class<? extends AlarmCallback>> availableAlarmCallbacks) {
+    public AlarmCallbackFactory(InstantiationService instantiationService) {
         this.instantiationService = instantiationService;
-        this.availableAlarmCallbacks = availableAlarmCallbacks;
-
-        System.out.println("Available alarm callback classes: " + availableAlarmCallbacks);
     }
 
     public AlarmCallback create(AlarmCallbackConfiguration configuration) throws ClassNotFoundException, AlarmCallbackConfigurationException {
@@ -50,12 +44,8 @@ public class AlarmCallbackFactory {
     }
 
     public AlarmCallback create(String type) throws ClassNotFoundException {
-        for (Class<? extends AlarmCallback> availableClass : availableAlarmCallbacks) {
-            System.out.println(availableClass.getCanonicalName());
-            if (availableClass.getCanonicalName().equals(type))
-                return create(availableClass);
-        }
-        throw new RuntimeException("No class found for type " + type);
+        Class<? extends AlarmCallback> alarmCallbackClass = Class.forName(type).asSubclass(AlarmCallback.class);
+        return create(alarmCallbackClass);
     }
 
     public AlarmCallback create(Class<? extends AlarmCallback> alarmCallbackClass) {
