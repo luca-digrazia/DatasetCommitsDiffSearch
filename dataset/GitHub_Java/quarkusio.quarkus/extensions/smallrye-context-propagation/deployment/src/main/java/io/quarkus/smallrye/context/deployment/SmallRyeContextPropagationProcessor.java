@@ -26,12 +26,10 @@ import org.jboss.logging.Logger;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
-import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ExecutorBuildItem;
-import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.smallrye.context.runtime.SmallRyeContextPropagationProvider;
 import io.quarkus.smallrye.context.runtime.SmallRyeContextPropagationTemplate;
@@ -65,7 +63,6 @@ class SmallRyeContextPropagationProcessor {
         for (Class<?> extension : ServiceUtil.classesNamedIn(SmallRyeContextPropagationTemplate.class.getClassLoader(),
                 "META-INF/services/" + ContextManagerExtension.class.getName())) {
             try {
-                System.err.println("Found ext: " + extension);
                 discoveredExtensions.add((ContextManagerExtension) extension.newInstance());
             } catch (InstantiationException | IllegalAccessException e) {
                 throw new RuntimeException("Failed to instantiate declared ThreadContextProvider class: " + extension.getName(),
@@ -80,10 +77,7 @@ class SmallRyeContextPropagationProcessor {
     @Record(ExecutionTime.RUNTIME_INIT)
     void build(SmallRyeContextPropagationTemplate template,
             BeanContainerBuildItem beanContainer,
-            ExecutorBuildItem executorBuildItem,
-            BuildProducer<FeatureBuildItem> feature) {
-        feature.produce(new FeatureBuildItem(FeatureBuildItem.SMALLRYE_CONTEXT_PROPAGATION));
-
+            ExecutorBuildItem executorBuildItem) {
         template.configureRuntime(beanContainer.getValue(), executorBuildItem.getExecutorProxy());
     }
 }
