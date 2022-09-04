@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.config.ConfigGlobalLibraryApi;
 import com.google.devtools.build.lib.skylarkbuildapi.config.ConfigurationTransitionApi;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -45,8 +44,7 @@ public class ConfigGlobalLibrary implements ConfigGlobalLibraryApi {
       List<String> inputs,
       List<String> outputs,
       Location location,
-      Environment env,
-      StarlarkContext context)
+      Environment env)
       throws EvalException {
     SkylarkSemantics semantics = env.getSemantics();
     if (!semantics.experimentalStarlarkConfigTransitions()) {
@@ -59,7 +57,7 @@ public class ConfigGlobalLibrary implements ConfigGlobalLibraryApi {
     validateBuildSettingKeys(inputs, "input", location);
     validateBuildSettingKeys(outputs, "output", location);
     return StarlarkDefinedConfigTransition.newRegularTransition(
-        implementation, inputs, outputs, semantics, env.getEventHandler(), context);
+        implementation, inputs, outputs, semantics, env.getEventHandler());
   }
 
   @Override
