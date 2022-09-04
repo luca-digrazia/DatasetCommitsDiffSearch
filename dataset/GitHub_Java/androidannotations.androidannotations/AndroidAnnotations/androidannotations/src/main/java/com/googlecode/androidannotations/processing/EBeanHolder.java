@@ -33,7 +33,7 @@ import com.sun.codemodel.JVar;
 
 public class EBeanHolder {
 
-	public final JDefinedClass generatedClass;
+	public JDefinedClass eBean;
 	/**
 	 * Only defined on activities
 	 */
@@ -52,8 +52,7 @@ public class EBeanHolder {
 
 	public JFieldVar handler;
 
-	public JBlock onOptionsItemSelectedIfElseBlock;
-	public JVar onOptionsItemSelectedItemId;
+	public JSwitch onOptionsItemSelectedSwitch;
 	public JVar onOptionsItemSelectedItem;
 
 	public JMethod restoreSavedInstanceStateMethod;
@@ -85,26 +84,7 @@ public class EBeanHolder {
 	/**
 	 * TextWatchers by idRef
 	 */
-	public final HashMap<String, TextWatcherHolder> textWatchers = new HashMap<String, TextWatcherHolder>();
-
-	/**
-	 * OnActivityResult byResultCode
-	 */
-	public final HashMap<Integer, JBlock> onActivityResultCases = new HashMap<Integer, JBlock>();
-
-	public JSwitch onActivityResultSwitch;
-	public JMethod onActivityResultMethod;
-
-	/**
-	 * onSeekBarChangeListeners by idRef
-	 */
-	public final HashMap<String, OnSeekBarChangeListenerHolder> onSeekBarChangeListeners = new HashMap<String, OnSeekBarChangeListenerHolder>();
-
-	public JVar fragmentArguments;
-	public JFieldVar fragmentArgumentsBuilderField;
-	public JMethod fragmentArgumentsInjectMethod;
-	public JBlock fragmentArgumentsNotNullBlock;
-	public JDefinedClass fragmentBuilderClass;
+	public HashMap<String, TextWatcherHolder> textWatchers = new HashMap<String, TextWatcherHolder>();
 
 	public JMethod findNativeFragmentById;
 	public JMethod findSupportFragmentById;
@@ -114,10 +94,9 @@ public class EBeanHolder {
 	private final EBeansHolder eBeansHolder;
 	public final Class<? extends Annotation> eBeanAnnotation;
 
-	public EBeanHolder(EBeansHolder eBeansHolder, Class<? extends Annotation> eBeanAnnotation, JDefinedClass generatedClass) {
+	public EBeanHolder(EBeansHolder eBeansHolder, Class<? extends Annotation> eBeanAnnotation) {
 		this.eBeansHolder = eBeansHolder;
 		this.eBeanAnnotation = eBeanAnnotation;
-		this.generatedClass = generatedClass;
 	}
 
 	public Classes classes() {
@@ -128,12 +107,20 @@ public class EBeanHolder {
 		return eBeansHolder.codeModel();
 	}
 
+	public JClass parseClass(String fullyQualifiedClassName) {
+		return eBeansHolder.parseClass(fullyQualifiedClassName);
+	}
+
 	public JClass refClass(String fullyQualifiedClassName) {
 		return eBeansHolder.refClass(fullyQualifiedClassName);
 	}
 
 	public JClass refClass(Class<?> clazz) {
 		return eBeansHolder.refClass(clazz);
+	}
+
+	public JDefinedClass definedClass(String fullyQualifiedClassName) {
+		return eBeansHolder.definedClass(fullyQualifiedClassName);
 	}
 
 }

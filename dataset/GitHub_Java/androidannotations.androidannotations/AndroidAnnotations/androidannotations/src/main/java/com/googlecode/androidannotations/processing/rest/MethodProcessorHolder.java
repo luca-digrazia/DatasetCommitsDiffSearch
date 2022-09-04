@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -19,6 +19,7 @@ import java.util.TreeMap;
 
 import javax.lang.model.element.Element;
 
+import com.googlecode.androidannotations.processing.EBeanHolder;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
@@ -27,19 +28,21 @@ import com.sun.codemodel.JVar;
 public class MethodProcessorHolder {
 
 	private Element element;
-	private String url;
+	private String urlSuffix;
 	private JClass expectedClass;
-	private JClass generatedReturnType;
+	private JClass methodReturnClass;
 	private JCodeModel codeModel;
 
 	private JBlock body;
 	private TreeMap<String, JVar> methodParams;
+	private final EBeanHolder holder;
 
-	public MethodProcessorHolder(Element element, String url, JClass expectedClass, JClass generatedReturnType, JCodeModel codeModel) {
+	public MethodProcessorHolder(EBeanHolder holder, Element element, String urlSuffix, JClass expectedClass, JClass generatedReturnType, JCodeModel codeModel) {
+		this.holder = holder;
 		this.element = element;
-		this.url = url;
+		this.urlSuffix = urlSuffix;
 		this.expectedClass = expectedClass;
-		this.generatedReturnType = generatedReturnType;
+		this.methodReturnClass = generatedReturnType;
 		this.codeModel = codeModel;
 	}
 
@@ -47,16 +50,24 @@ public class MethodProcessorHolder {
 		return element;
 	}
 
-	public String getUrl() {
-		return url;
+	public String getUrlSuffix() {
+		return urlSuffix;
 	}
 
 	public JClass getExpectedClass() {
 		return expectedClass;
 	}
 
-	public JClass getGeneratedReturnType() {
-		return generatedReturnType;
+	public void setExpectedClass(JClass expectedClass) {
+		this.expectedClass = expectedClass;
+	}
+
+	public JClass getMethodReturnClass() {
+		return methodReturnClass;
+	}
+
+	public void setMethodReturnClass(JClass methodReturnClass) {
+		this.methodReturnClass = methodReturnClass;
 	}
 
 	public JCodeModel getCodeModel() {
@@ -77,6 +88,10 @@ public class MethodProcessorHolder {
 
 	public void setMethodParams(TreeMap<String, JVar> methodParams) {
 		this.methodParams = methodParams;
+	}
+
+	public EBeanHolder getHolder() {
+		return holder;
 	}
 
 }
