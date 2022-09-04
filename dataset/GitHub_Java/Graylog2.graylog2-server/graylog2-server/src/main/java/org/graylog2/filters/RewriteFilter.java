@@ -17,23 +17,41 @@
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.graylog2;
+package org.graylog2.filters;
 
-import com.codahale.metrics.MetricRegistry;
+import com.google.inject.internal.util.$Nullable;
+import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.Message;
+import org.graylog2.plugin.RulesEngine;
+import org.graylog2.plugin.filters.MessageFilter;
+
+import javax.inject.Inject;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class GraylogServerStub extends Core {
+public class RewriteFilter implements MessageFilter {
 
-    public int callsToProcessBufferInserter = 0;
-    public Message lastInsertedToProcessBuffer = null;
-    private MetricRegistry fakeMetricRegistry = new MetricRegistry();
+    private final RulesEngine rulesEngine;
+
+    @Inject
+    public RewriteFilter(@$Nullable RulesEngine rulesEngine) {
+        this.rulesEngine = rulesEngine;
+    }
 
     @Override
-    public MetricRegistry metrics() {
-        return fakeMetricRegistry;
+    public boolean filter(Message msg, GraylogServer server) {
+        if (rulesEngine != null) {
+            rulesEngine.evaluate(msg);
+        }
+
+        // false if not expecitly set to true in the rules.
+        return msg.getFilterOut();
+    }
+    
+    @Override
+    public String getName() {
+        return "Rewriter";
     }
 
 }

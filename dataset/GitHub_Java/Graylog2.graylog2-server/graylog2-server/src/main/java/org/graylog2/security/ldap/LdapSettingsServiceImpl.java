@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.security.ldap;
 
 import com.mongodb.BasicDBObject;
@@ -28,7 +31,7 @@ import javax.inject.Inject;
 import java.util.List;
 
 public class LdapSettingsServiceImpl extends PersistedServiceImpl implements LdapSettingsService {
-    private static final Logger LOG = LoggerFactory.getLogger(LdapSettingsServiceImpl.class);
+    private static final Logger log = LoggerFactory.getLogger(LdapSettingsServiceImpl.class);
 
     @Inject
     public LdapSettingsServiceImpl(MongoConnection mongoConnection) {
@@ -43,7 +46,7 @@ public class LdapSettingsServiceImpl extends PersistedServiceImpl implements Lda
             return null;
         }
         if (results.size() > 1) {
-            LOG.error(
+            log.error(
                     "Graylog2 does not yet support multiple LDAP backends, but {} configurations were found. This is a bug, ignoring LDAP config.",
                     results.size());
             return null;

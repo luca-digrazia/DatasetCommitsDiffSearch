@@ -98,7 +98,7 @@ public class FieldChartWidget extends DashboardWidget {
                     timeRange
             );
 
-            return new ComputationResult(histogramResult.getResults(), histogramResult.took().millis(), histogramResult.getHistogramBoundaries());
+            return new ComputationResult(histogramResult.getResults(), histogramResult.took().millis());
         } catch (Searches.FieldTypeException e) {
             String msg = "Could not calculate [" + this.getClass().getCanonicalName() + "] widget <" + getId() + ">. Not a numeric field? The field was [" + config.get("field") + "]";
             LOG.error(msg, e);

@@ -21,6 +21,7 @@ package org.graylog2.dashboards;
 
 import com.google.common.collect.Maps;
 import com.google.inject.Inject;
+import org.graylog2.Core;
 
 import javax.inject.Singleton;
 import java.util.Map;
@@ -39,8 +40,8 @@ public class DashboardRegistry {
         this.dashboardService = dashboardService;
     }
 
-    public void loadPersisted() {
-        for (Dashboard dashboard : dashboardService.all()) {
+    public void loadPersisted(Core core) {
+        for (Dashboard dashboard : dashboardService.all(core)) {
             dashboards.put(dashboard.getId(), dashboard);
         }
     }

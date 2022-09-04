@@ -59,6 +59,9 @@ public class SessionsResource extends RestResource {
     private static final Logger log = LoggerFactory.getLogger(SessionsResource.class);
 
     @Inject
+    private Core core;
+
+    @Inject
     private UserService userService;
     @Inject
     private DefaultSecurityManager securityManager;

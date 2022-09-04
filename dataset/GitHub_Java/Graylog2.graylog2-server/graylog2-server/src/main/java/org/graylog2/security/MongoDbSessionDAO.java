@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -31,7 +33,7 @@ import java.util.List;
 import java.util.Map;
 
 public class MongoDbSessionDAO extends CachingSessionDAO {
-    private static final Logger LOG = LoggerFactory.getLogger(MongoDbSessionDAO.class);
+    private static final Logger log = LoggerFactory.getLogger(MongoDbSessionDAO.class);
 
     private final MongoDBSessionService mongoDBSessionService;
 
@@ -57,7 +59,7 @@ public class MongoDbSessionDAO extends CachingSessionDAO {
         }
         fields.put("attributes", attributes);
         final MongoDbSession dbSession = new MongoDbSession(fields);
-        LOG.debug("Created session {}", id);
+        log.debug("Created session {}", id);
         final String objectId = mongoDBSessionService.saveWithoutValidation(dbSession);
 
         return id;
@@ -66,7 +68,7 @@ public class MongoDbSessionDAO extends CachingSessionDAO {
     @Override
     protected Session doReadSession(Serializable sessionId) {
         final MongoDbSession dbSession = mongoDBSessionService.load(sessionId.toString());
-        LOG.debug("Reading session for id {} from MongoDB: {}", sessionId, dbSession);
+        log.debug("Reading session for id {} from MongoDB: {}", sessionId, dbSession);
         if (dbSession == null) {
             // expired session or it was never there to begin with
             return null;
@@ -89,7 +91,7 @@ public class MongoDbSessionDAO extends CachingSessionDAO {
     @Override
     protected void doUpdate(Session session) {
         final MongoDbSession dbSession = mongoDBSessionService.load(session.getId().toString());
-        LOG.debug("Updating session {}", session);
+        log.debug("Updating session {}", session);
         dbSession.setHost(session.getHost());
         dbSession.setTimeout(session.getTimeout());
         dbSession.setStartTimestamp(session.getStartTimestamp());
@@ -106,7 +108,7 @@ public class MongoDbSessionDAO extends CachingSessionDAO {
 
     @Override
     protected void doDelete(Session session) {
-        LOG.debug("Deleting session {}", session);
+        log.debug("Deleting session {}", session);
         final Serializable id = session.getId();
         final MongoDbSession dbSession = mongoDBSessionService.load(id.toString());
         mongoDBSessionService.destroy(dbSession);
@@ -114,7 +116,7 @@ public class MongoDbSessionDAO extends CachingSessionDAO {
 
     @Override
     public Collection<Session> getActiveSessions() {
-        LOG.debug("Retrieving all active sessions.");
+        log.debug("Retrieving all active sessions.");
 
         Collection<MongoDbSession> dbSessions = mongoDBSessionService.loadAll();
         List<Session> sessions = Lists.newArrayList();

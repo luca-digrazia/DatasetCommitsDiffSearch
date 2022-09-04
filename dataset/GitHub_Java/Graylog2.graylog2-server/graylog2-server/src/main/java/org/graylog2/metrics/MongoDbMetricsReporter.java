@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -24,7 +26,7 @@ import com.mongodb.DBObject;
 import com.mongodb.WriteConcern;
 import org.bson.types.ObjectId;
 import org.graylog2.database.MongoConnection;
-import org.graylog2.plugin.ServerStatus;
+import org.graylog2.shared.ServerStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +38,7 @@ import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
 
 public class MongoDbMetricsReporter extends ScheduledReporter {
-    private static final Logger LOG = LoggerFactory.getLogger(MongoDbMetricsReporter.class);
+    private static final Logger log = LoggerFactory.getLogger(MongoDbMetricsReporter.class);
 
     private final Clock clock;
     private final String nodeId;
@@ -117,7 +119,7 @@ public class MongoDbMetricsReporter extends ScheduledReporter {
 
             collection.insert(docs, WriteConcern.UNACKNOWLEDGED);
         } catch (Exception e) {
-            LOG.warn("Unable to write graylog2 metrics to mongodb. Ignoring this error.", e);
+            log.warn("Unable to write graylog2 metrics to mongodb. Ignoring this error.", e);
         }
     }
 

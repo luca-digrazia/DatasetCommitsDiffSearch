@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -32,7 +34,7 @@ import javax.inject.Inject;
 import javax.ws.rs.core.MultivaluedMap;
 
 public class SessionAuthenticator extends AuthenticatingRealm {
-    private static final Logger LOG = LoggerFactory.getLogger(SessionAuthenticator.class);
+    private static final Logger log = LoggerFactory.getLogger(SessionAuthenticator.class);
 
     private final UserService userService;
     private final LdapUserAuthenticator ldapAuthenticator;
@@ -52,22 +54,22 @@ public class SessionAuthenticator extends AuthenticatingRealm {
         final Subject subject = new Subject.Builder().sessionId(sessionIdToken.getSessionId()).buildSubject();
         final Session session = subject.getSession(false);
         if (session == null) {
-            LOG.debug("Invalid session {}. Either it has expired or did not exist.", sessionIdToken.getSessionId());
+            log.debug("Invalid session {}. Either it has expired or did not exist.", sessionIdToken.getSessionId());
             return null;
         }
 
         final Object username = subject.getPrincipal();
         final User user = userService.load(String.valueOf(username));
         if (user == null) {
-            LOG.debug("No user named {} found for session {}", username, sessionIdToken.getSessionId());
+            log.debug("No user named {} found for session {}", username, sessionIdToken.getSessionId());
             return null;
         }
         if (user.isExternalUser() && !ldapAuthenticator.isEnabled()) {
             throw new LockedAccountException("LDAP authentication is currently disabled.");
         }
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Found session {} for user name {}", session.getId(), username);
+        if (log.isDebugEnabled()) {
+            log.debug("Found session {} for user name {}", session.getId(), username);
         }
 
         @SuppressWarnings("unchecked")
@@ -77,7 +79,7 @@ public class SessionAuthenticator extends AuthenticatingRealm {
         if (requestHeaders == null || !"true".equalsIgnoreCase(requestHeaders.getFirst("X-Graylog2-No-Session-Extension"))) {
             session.touch();
         } else {
-            LOG.debug("Not extending session because the request indicated not to.");
+            log.debug("Not extending session because the request indicated not to.");
         }
         ThreadContext.bind(subject);
 

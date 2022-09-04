@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -34,7 +36,7 @@ import java.util.List;
 
 public class MongoDbAuthorizationRealm extends AuthorizingRealm {
 
-    private static final Logger LOG = LoggerFactory.getLogger(MongoDbAuthorizationRealm.class);
+    private static final Logger log = LoggerFactory.getLogger(MongoDbAuthorizationRealm.class);
     private final UserService userService;
 
     @Inject
@@ -44,14 +46,14 @@ public class MongoDbAuthorizationRealm extends AuthorizingRealm {
 
     @Override
     protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
-        LOG.debug("Retrieving authorization information for {}", principals);
+        log.debug("Retrieving authorization information for {}", principals);
         final User user = userService.load(principals.getPrimaryPrincipal().toString());
         final SimpleAuthorizationInfo info = new SimpleAuthorizationInfo();
         final List<String> permissions = user.getPermissions();
         if (permissions != null) {
             info.setStringPermissions(Sets.newHashSet(permissions));
         }
-        LOG.debug("User {} has permissions: {}", principals, permissions);
+        log.debug("User {} has permissions: {}", principals, permissions);
         return info;
     }
 

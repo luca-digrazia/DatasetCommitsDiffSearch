@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,15 +16,16 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.alerts.types;
 
+import org.graylog2.alerts.AlertCondition;
 import org.graylog2.alerts.AlertConditionTest;
 import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.results.FieldStatsResult;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.alarms.AlertCondition;
 import org.mockito.Matchers;
 import org.testng.annotations.Test;
 

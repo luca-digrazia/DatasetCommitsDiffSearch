@@ -63,6 +63,9 @@ public class LdapResource extends RestResource {
     private static final Logger log = LoggerFactory.getLogger(LdapResource.class);
 
     @Inject
+    private Core core;
+
+    @Inject
     private LdapSettingsService ldapSettingsService;
 
     @Inject

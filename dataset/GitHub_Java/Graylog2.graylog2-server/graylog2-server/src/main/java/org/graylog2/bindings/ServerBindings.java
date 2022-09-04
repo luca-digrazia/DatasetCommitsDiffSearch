@@ -19,21 +19,17 @@
 
 package org.graylog2.bindings;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.AbstractModule;
-import com.google.inject.TypeLiteral;
 import com.google.inject.assistedinject.FactoryModuleBuilder;
-import com.google.inject.multibindings.Multibinder;
-import com.ning.http.client.AsyncHttpClient;
+import com.google.inject.name.Names;
 import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.graylog2.Configuration;
-import org.graylog2.alerts.AlertSender;
-import org.graylog2.alerts.FormattedEmailAlertSender;
 import org.graylog2.bindings.providers.*;
 import org.graylog2.buffers.OutputBuffer;
 import org.graylog2.buffers.OutputBufferWatermark;
 import org.graylog2.buffers.processors.OutputBufferProcessor;
 import org.graylog2.buffers.processors.ServerProcessBufferProcessor;
-import org.graylog2.dashboards.DashboardRegistry;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.MessageGatewayImpl;
@@ -45,28 +41,23 @@ import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.indices.jobs.OptimizeIndexJob;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.indexer.searches.Searches;
+import org.graylog2.initializers.Initializers;
 import org.graylog2.inputs.InputCache;
 import org.graylog2.inputs.OutputCache;
+import org.graylog2.inputs.ServerInputRegistry;
 import org.graylog2.jersey.container.netty.SecurityContextFactory;
 import org.graylog2.outputs.OutputRegistry;
-import org.graylog2.plugin.PluginMetaData;
+import org.graylog2.periodical.Periodicals;
 import org.graylog2.plugin.RulesEngine;
 import org.graylog2.plugin.indexer.MessageGateway;
-import org.graylog2.rest.RestAccessLogFilter;
-import org.graylog2.security.ShiroSecurityBinding;
 import org.graylog2.security.ShiroSecurityContextFactory;
 import org.graylog2.security.ldap.LdapConnector;
 import org.graylog2.security.realm.LdapUserAuthenticator;
-import org.graylog2.shared.BaseConfiguration;
 import org.graylog2.shared.ServerStatus;
-import org.graylog2.shared.bindings.providers.AsyncHttpClientProvider;
-import org.graylog2.shared.inputs.InputRegistry;
-import org.graylog2.shared.metrics.jersey2.MetricsDynamicBinding;
-import org.graylog2.system.jobs.SystemJobFactory;
 import org.graylog2.system.jobs.SystemJobManager;
 
-import javax.ws.rs.container.ContainerResponseFilter;
-import javax.ws.rs.container.DynamicFeature;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
@@ -74,6 +65,7 @@ import javax.ws.rs.container.DynamicFeature;
 public class ServerBindings extends AbstractModule {
     private final Configuration configuration;
     private final MongoConnection mongoConnection;
+    private static final int SCHEDULED_THREADS_POOL_SIZE = 30;
 
     public ServerBindings(Configuration configuration) {
         this.configuration = configuration;
@@ -96,9 +88,7 @@ public class ServerBindings extends AbstractModule {
         bindInterfaces();
         bindSingletons();
         bindFactoryModules();
-        bindDynamicFeatures();
-        bindContainerResponseFilters();
-        bindPluginMetaData();
+        bindSchedulers();
     }
 
     private void bindFactoryModules() {
@@ -117,7 +107,6 @@ public class ServerBindings extends AbstractModule {
 
     private void bindSingletons() {
         bind(Configuration.class).toInstance(configuration);
-        bind(BaseConfiguration.class).toInstance(configuration);
 
         bind(MongoConnection.class).toInstance(mongoConnection);
         bind(OutputRegistry.class).toInstance(new OutputRegistry());
@@ -134,40 +123,41 @@ public class ServerBindings extends AbstractModule {
         bind(SystemJobManager.class).toProvider(SystemJobManagerProvider.class);
         bind(InputCache.class).toProvider(InputCacheProvider.class);
         bind(OutputCache.class).toProvider(OutputCacheProvider.class);
-        bind(InputRegistry.class).toProvider(ServerInputRegistryProvider.class);
+        bind(ServerInputRegistry.class).toProvider(ServerInputRegistryProvider.class);
         bind(RulesEngine.class).toProvider(RulesEngineProvider.class);
+        bind(Initializers.class).toInstance(new Initializers(serverStatus));
         bind(LdapConnector.class).toProvider(LdapConnectorProvider.class);
         bind(LdapUserAuthenticator.class).toProvider(LdapUserAuthenticatorProvider.class);
         bind(DefaultSecurityManager.class).toProvider(DefaultSecurityManagerProvider.class);
-        bind(SystemJobFactory.class).toProvider(SystemJobFactoryProvider.class);
-        bind(DashboardRegistry.class).toProvider(DashboardRegistryProvider.class);
-        bind(AsyncHttpClient.class).toProvider(AsyncHttpClientProvider.class);
     }
 
     private void bindInterfaces() {
         bind(MessageGateway.class).to(MessageGatewayImpl.class);
         bind(SecurityContextFactory.class).to(ShiroSecurityContextFactory.class);
-        bind(AlertSender.class).to(FormattedEmailAlertSender.class);
     }
 
     private MongoConnection getMongoConnection() {
         return this.mongoConnection;
     }
 
-    private void bindDynamicFeatures() {
-        TypeLiteral<Class<? extends DynamicFeature>> type = new TypeLiteral<Class<? extends DynamicFeature>>(){};
-        Multibinder<Class<? extends DynamicFeature>> setBinder = Multibinder.newSetBinder(binder(), type);
-        setBinder.addBinding().toInstance(ShiroSecurityBinding.class);
-        setBinder.addBinding().toInstance(MetricsDynamicBinding.class);
-    }
+    private void bindSchedulers() {
+        final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE,
+                new ThreadFactoryBuilder()
+                        .setNameFormat("scheduled-%d")
+                        .setDaemon(false)
+                        .build()
+        );
 
-    private void bindContainerResponseFilters() {
-        TypeLiteral<Class<? extends ContainerResponseFilter>> type = new TypeLiteral<Class<? extends ContainerResponseFilter>>(){};
-        Multibinder<Class<? extends ContainerResponseFilter>> setBinder = Multibinder.newSetBinder(binder(), type);
-        setBinder.addBinding().toInstance(RestAccessLogFilter.class);
-    }
+        bind(ScheduledExecutorService.class).annotatedWith(Names.named("scheduler")).toInstance(scheduler);
 
-    private void bindPluginMetaData() {
-        Multibinder<PluginMetaData> setBinder = Multibinder.newSetBinder(binder(), PluginMetaData.class);
+        final ScheduledExecutorService daemonScheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE,
+                new ThreadFactoryBuilder()
+                        .setNameFormat("scheduled-%d")
+                        .setDaemon(true)
+                        .build()
+        );
+
+        bind(ScheduledExecutorService.class).annotatedWith(Names.named("daemonScheduler")).toInstance(daemonScheduler);
+        bind(Periodicals.class).toInstance(new Periodicals(scheduler, daemonScheduler));
     }
 }

@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.alerts;
 
 import com.google.common.collect.Maps;
@@ -21,7 +24,6 @@ import org.graylog2.database.MongoConnection;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
 import org.testng.annotations.BeforeClass;
@@ -87,7 +89,7 @@ public class AlertConditionTest {
         when(alertService.triggeredSecondsAgo(STREAM_ID, CONDITION_ID)).thenReturn(seconds);
     }
 
-    protected <T extends AbstractAlertCondition> T getTestInstance(Class<T> klazz, Map<String, Object> parameters) {
+    protected <T extends AlertCondition> T getTestInstance(Class<T> klazz, Map<String, Object> parameters) {
         try {
             return klazz.getConstructor(Stream.class, String.class, DateTime.class, String.class, Map.class)
                     .newInstance(stream, CONDITION_ID, Tools.iso8601(), STREAM_CREATOR, parameters);

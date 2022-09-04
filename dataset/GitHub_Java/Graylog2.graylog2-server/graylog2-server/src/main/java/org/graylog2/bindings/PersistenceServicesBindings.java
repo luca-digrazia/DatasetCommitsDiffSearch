@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,11 +16,10 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.bindings;
 
 import com.google.inject.AbstractModule;
-import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationService;
-import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationServiceImpl;
 import org.graylog2.alerts.AlertService;
 import org.graylog2.alerts.AlertServiceImpl;
 import org.graylog2.cluster.NodeService;
@@ -43,7 +44,10 @@ import org.graylog2.security.MongoDBSessionService;
 import org.graylog2.security.MongoDBSessionServiceImpl;
 import org.graylog2.security.ldap.LdapSettingsService;
 import org.graylog2.security.ldap.LdapSettingsServiceImpl;
-import org.graylog2.streams.*;
+import org.graylog2.streams.StreamRuleService;
+import org.graylog2.streams.StreamRuleServiceImpl;
+import org.graylog2.streams.StreamService;
+import org.graylog2.streams.StreamServiceImpl;
 import org.graylog2.system.activities.SystemMessageService;
 import org.graylog2.system.activities.SystemMessageServiceImpl;
 import org.graylog2.users.UserService;
@@ -71,6 +75,5 @@ public class PersistenceServicesBindings extends AbstractModule {
         bind(SavedSearchService.class).to(SavedSearchServiceImpl.class);
         bind(LdapSettingsService.class).to(LdapSettingsServiceImpl.class);
         bind(MongoDBSessionService.class).to(MongoDBSessionServiceImpl.class);
-        bind(AlarmCallbackConfigurationService.class).to(AlarmCallbackConfigurationServiceImpl.class);
     }
 }

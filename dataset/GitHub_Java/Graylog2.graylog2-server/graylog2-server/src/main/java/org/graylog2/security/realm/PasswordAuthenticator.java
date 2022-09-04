@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -31,7 +33,7 @@ import javax.inject.Inject;
  * @author Kay Roepke <kay@torch.sh>
  */
 public class PasswordAuthenticator extends AuthenticatingRealm {
-    private static final Logger LOG = LoggerFactory.getLogger(PasswordAuthenticator.class);
+    private static final Logger log = LoggerFactory.getLogger(PasswordAuthenticator.class);
     private final UserService userService;
     private final Configuration configuration;
 
@@ -44,7 +46,7 @@ public class PasswordAuthenticator extends AuthenticatingRealm {
     @Override
     protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authToken) throws AuthenticationException {
         UsernamePasswordToken token = (UsernamePasswordToken) authToken;
-        LOG.debug("Retrieving authc info for user {}", token.getUsername());
+        log.debug("Retrieving authc info for user {}", token.getUsername());
 
         final User user = userService.load(token.getUsername());
         if (user == null || user.isLocalAdmin()) {
@@ -53,12 +55,12 @@ public class PasswordAuthenticator extends AuthenticatingRealm {
         }
         if (user.isExternalUser()) {
             // we don't store passwords for LDAP users, so we can't handle them here.
-            LOG.trace("Skipping mongodb-based password check for LDAP user {}", token.getUsername());
+            log.trace("Skipping mongodb-based password check for LDAP user {}", token.getUsername());
             return null;
         }
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Found user {} to be authenticated with password.", user.getName());
+        if (log.isDebugEnabled()) {
+            log.debug("Found user {} to be authenticated with password.", user.getName());
         }
         return new SimpleAccount(token.getPrincipal(),
                 user.getHashedPassword(),

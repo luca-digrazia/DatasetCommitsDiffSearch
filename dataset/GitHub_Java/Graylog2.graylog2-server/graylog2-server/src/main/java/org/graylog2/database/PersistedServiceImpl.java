@@ -29,7 +29,6 @@ import org.bson.types.ObjectId;
 import org.graylog2.plugin.database.EmbeddedPersistable;
 import org.graylog2.plugin.database.Persisted;
 import org.graylog2.plugin.database.validators.Validator;
-import org.graylog2.plugin.system.NodeId;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,8 +96,6 @@ public class PersistedServiceImpl implements PersistedService {
 
     protected <T extends Persisted> DBCollection collection(Class<T> modelClass) {
         CollectionName collectionNameAnnotation = modelClass.getAnnotation(CollectionName.class);
-        if (collectionNameAnnotation == null)
-            throw new RuntimeException("Unable to determine collection for class " + modelClass.getCanonicalName());
         final String collectionName = (collectionNameAnnotation == null ? null : collectionNameAnnotation.value());
 
         if (collectionName == null)
@@ -285,11 +282,6 @@ public class PersistedServiceImpl implements PersistedService {
             // JodaTime DateTime is not accepted by MongoDB. Convert to java.util.Date...
             if (x.getValue() instanceof DateTime) {
                 doc.put(x.getKey(), ((DateTime) x.getValue()).toDate());
-            }
-
-            // Our own NodeID
-            if (x.getValue() instanceof NodeId) {
-                doc.put(x.getKey(), x.getValue().toString());
             }
 
         }

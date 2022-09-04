@@ -19,8 +19,6 @@
 
 package org.graylog2.bindings.providers;
 
-import com.google.inject.Inject;
-import org.graylog2.Configuration;
 import org.graylog2.security.ldap.LdapConnector;
 
 import javax.inject.Provider;
@@ -31,12 +29,9 @@ import javax.inject.Provider;
  */
 public class LdapConnectorProvider implements Provider<LdapConnector> {
     private static LdapConnector ldapConnector = null;
-
-    @Inject
-    public LdapConnectorProvider(final Configuration configuration) {
-        if (ldapConnector == null) {
-            ldapConnector = new LdapConnector(configuration.getLdapConnectionTimeout());
-        }
+    public LdapConnectorProvider() {
+        if (ldapConnector == null)
+            ldapConnector = new LdapConnector();
     }
 
     @Override

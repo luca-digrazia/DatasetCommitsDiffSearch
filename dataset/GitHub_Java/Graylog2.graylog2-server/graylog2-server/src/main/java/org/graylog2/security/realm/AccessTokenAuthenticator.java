@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -31,7 +33,7 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 
 public class AccessTokenAuthenticator extends AuthenticatingRealm {
-    private static final Logger LOG = LoggerFactory.getLogger(AccessTokenAuthenticator.class);
+    private static final Logger log = LoggerFactory.getLogger(AccessTokenAuthenticator.class);
 
     private final AccessTokenService accessTokenService;
     private final UserService userService;
@@ -64,13 +66,13 @@ public class AccessTokenAuthenticator extends AuthenticatingRealm {
         if (user.isExternalUser() && !ldapAuthenticator.isEnabled()) {
             throw new LockedAccountException("LDAP authentication is currently disabled.");
         }
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Found user {} for access token.", user);
+        if (log.isDebugEnabled()) {
+            log.debug("Found user {} for access token.", user);
         }
         try {
             accessTokenService.touch(accessToken);
         } catch (ValidationException e) {
-            LOG.warn("Unable to update access token's last access date.", e);
+            log.warn("Unable to update access token's last access date.", e);
         }
         return new SimpleAccount(user.getName(), null, "access token realm");
     }
