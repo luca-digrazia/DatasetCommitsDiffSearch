@@ -94,7 +94,6 @@ import com.google.devtools.build.skydoc.fakebuildapi.java.FakeJavaInfo.FakeJavaI
 import com.google.devtools.build.skydoc.fakebuildapi.java.FakeJavaProtoCommon;
 import com.google.devtools.build.skydoc.fakebuildapi.platform.FakePlatformCommon;
 import com.google.devtools.build.skydoc.fakebuildapi.proto.FakeProtoInfoApiProvider;
-import com.google.devtools.build.skydoc.fakebuildapi.proto.FakeProtoModule;
 import com.google.devtools.build.skydoc.fakebuildapi.python.FakePyInfo.FakePyInfoProvider;
 import com.google.devtools.build.skydoc.fakebuildapi.python.FakePyRuntimeInfo.FakePyRuntimeInfoProvider;
 import com.google.devtools.build.skydoc.fakebuildapi.repository.FakeRepositoryModule;
@@ -168,7 +167,6 @@ public class SkydocMain {
         OptionsParser.newOptionsParser(StarlarkSemanticsOptions.class, SkydocOptions.class);
     parser.parseAndExitUponError(args);
     StarlarkSemanticsOptions semanticsOptions = parser.getOptions(StarlarkSemanticsOptions.class);
-    semanticsOptions.incompatibleDepsetUnion = false;
     SkydocOptions skydocOptions = parser.getOptions(SkydocOptions.class);
 
     String targetFileLabelString;
@@ -521,8 +519,7 @@ public class SkydocMain {
             new FakeJavaProtoCommon(),
             new FakeJavaCcLinkParamsProvider.Provider());
     PlatformBootstrap platformBootstrap = new PlatformBootstrap(new FakePlatformCommon());
-    ProtoBootstrap protoBootstrap =
-        new ProtoBootstrap(new FakeProtoInfoApiProvider(), new FakeProtoModule());
+    ProtoBootstrap protoBootstrap = new ProtoBootstrap(new FakeProtoInfoApiProvider());
     PyBootstrap pyBootstrap =
         new PyBootstrap(new FakePyInfoProvider(), new FakePyRuntimeInfoProvider());
     RepositoryBootstrap repositoryBootstrap =
