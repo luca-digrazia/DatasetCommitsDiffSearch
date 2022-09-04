@@ -247,7 +247,7 @@ public class CcModule
         /* interfaceLibraryOutput= */ null,
         /* ltoOutputRootPrefix= */ null,
         convertFromNoneable(defFile, /* defaultValue= */ null),
-        /* fdoContext= */ null,
+        /* fdoProvider= */ null,
         asStringNestedSet(runtimeLibrarySearchDirectories),
         /* librariesToLink= */ null,
         asStringNestedSet(librarySearchDirectories),
@@ -537,7 +537,7 @@ public class CcModule
         convertFromNoneable(skylarkFeatureConfiguration, null);
     Pair<List<Artifact>, List<Artifact>> separatedHeadersAndSources =
         separateSourcesFromHeaders(sources);
-    FdoContext fdoContext = ccToolchainProvider.getFdoContext();
+    FdoProvider fdoProvider = ccToolchainProvider.getFdoProvider();
     // TODO(plf): Need to flatten the nested set to convert the Strings to PathFragment. This could
     // be avoided if path fragments are ever added to Skylark or in the C++ code we take Strings
     // instead of PathFragments.
@@ -549,7 +549,7 @@ public class CcModule
                 featureConfiguration,
                 CcCompilationHelper.SourceCategory.CC,
                 ccToolchainProvider,
-                fdoContext)
+                fdoProvider)
             .addPublicHeaders(headers)
             .addIncludeDirs(
                 includeDirs.stream()
@@ -614,7 +614,7 @@ public class CcModule
     CcToolchainProvider ccToolchainProvider = convertFromNoneable(skylarkCcToolchainProvider, null);
     FeatureConfiguration featureConfiguration =
         convertFromNoneable(skylarkFeatureConfiguration, null);
-    FdoContext fdoContext = ccToolchainProvider.getFdoContext();
+    FdoProvider fdoProvider = ccToolchainProvider.getFdoProvider();
     NestedSet<String> linkopts =
         convertSkylarkListOrNestedSetToNestedSet(skylarkLinkopts, String.class);
     CcLinkingHelper helper =
@@ -623,7 +623,7 @@ public class CcModule
                 cppSemantics,
                 featureConfiguration,
                 ccToolchainProvider,
-                fdoContext,
+                fdoProvider,
                 ruleContext.getConfiguration())
             .addLinkopts(linkopts)
             .setShouldCreateStaticLibraries(shouldCreateStaticLibraries)

@@ -14,15 +14,16 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi.cpp;
 
+import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
-import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.BazelCcModuleApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationOutputsApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingContextApi;
+import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcModuleApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainVariablesApi;
@@ -39,14 +40,13 @@ import com.google.devtools.build.skydoc.fakebuildapi.FakeProviderApi;
 /** Fake implementation of {@link CcModuleApi}. */
 public class FakeCcModule
     implements BazelCcModuleApi<
-        FileApi,
-        SkylarkRuleContextApi,
         CcToolchainProviderApi,
         FeatureConfigurationApi,
         CompilationInfoApi,
         CcCompilationContextApi,
         CcCompilationOutputsApi,
         LinkingInfoApi,
+        CcLinkingInfoApi,
         CcLinkingContextApi,
         LibraryToLinkWrapperApi,
         CcToolchainVariablesApi> {
@@ -158,11 +158,11 @@ public class FakeCcModule
 
   @Override
   public CompilationInfoApi compile(
-      SkylarkRuleContextApi skylarkRuleContext,
+      SkylarkRuleContext skylarkRuleContext,
       FeatureConfigurationApi skylarkFeatureConfiguration,
       CcToolchainProviderApi skylarkCcToolchainProvider,
-      SkylarkList<FileApi> sources,
-      SkylarkList<FileApi> headers,
+      SkylarkList<Artifact> sources,
+      SkylarkList<Artifact> headers,
       Object skylarkIncludes,
       Object skylarkCopts,
       SkylarkList<CcCompilationContextApi> ccCompilationContexts) {
@@ -171,13 +171,13 @@ public class FakeCcModule
 
   @Override
   public LinkingInfoApi link(
-      SkylarkRuleContextApi skylarkRuleContext,
+      SkylarkRuleContext skylarkRuleContext,
       FeatureConfigurationApi skylarkFeatureConfiguration,
       CcToolchainProviderApi skylarkCcToolchainProvider,
       CcCompilationOutputsApi ccCompilationOutputs,
       Object skylarkLinkopts,
       Object dynamicLibrary,
-      SkylarkList<CcLinkingContextApi> skylarkCcLinkingContexts,
+      SkylarkList<CcLinkingInfoApi> skylarkCcLinkingInfos,
       boolean neverLink) {
     return null;
   }
