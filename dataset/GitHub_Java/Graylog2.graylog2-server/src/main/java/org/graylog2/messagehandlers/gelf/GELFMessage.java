@@ -40,7 +40,7 @@ import org.json.simple.JSONValue;
  *
  * A GELF message
  *
- * @author Lennart Koopmann <lennart@socketfeed.com>
+ * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GELFMessage {
 
@@ -54,7 +54,7 @@ public class GELFMessage {
     private String file = null;
     private int line = 0;
     private String facility = null;
-    private Map<String, Object> additionalData = new HashMap<String, Object>();
+    private Map<String, String> additionalData = new HashMap<String, String>();
     private List<Stream> streams = null;
     private boolean convertedFromSyslog = false;
     private double createdAt = 0;
@@ -213,27 +213,16 @@ public class GELFMessage {
      *
      * @return The whole additional data map.
      */
-    public Map<String, Object> getAdditionalData() {
+    public Map<String, String> getAdditionalData() {
         return this.additionalData;
     }
 
     /**
      * Add a key/value pair
      */
-    public void addAdditionalData(String key, Object value) {
+    public void addAdditionalData(String key, String value) {
         if (key != null && value != null) {
-
-            if (value instanceof Long) {
-                this.additionalData.put(key, (Long) value);
-                return;
-            }
-
-            if (value instanceof String) {
-                this.additionalData.put(key, (String) value);
-                return;
-            }
-
-            LOG.info("Skipping additional data field in not allowed format. Allowed: String or Integral");
+            this.additionalData.put(key, value);
         }
     }
     
@@ -353,12 +342,12 @@ public class GELFMessage {
 
         if (this.getAdditionalData().size() > 0) {
             // Add additional fields. XXX PERFORMANCE
-            Map<String,Object> additionalFields = this.getAdditionalData();
+            Map<String,String> additionalFields = this.getAdditionalData();
             Set<String> set = additionalFields.keySet();
             Iterator<String> iter = set.iterator();
             while(iter.hasNext()) {
                 String key = iter.next();
-                String value = (String) additionalFields.get(key);
+                String value = additionalFields.get(key);
                 msg += "," + key + "=" + value;
             }
         }
