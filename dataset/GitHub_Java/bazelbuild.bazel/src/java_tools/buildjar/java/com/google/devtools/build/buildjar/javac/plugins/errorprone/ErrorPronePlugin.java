@@ -100,8 +100,7 @@ public final class ErrorPronePlugin extends BlazeJavaCompilerPlugin {
     if (epOptions == null) {
       epOptions = ErrorProneOptions.empty();
     }
-    errorProneAnalyzer =
-        ErrorProneAnalyzer.createByScanningForPlugins(scannerSupplier, epOptions, context);
+    errorProneAnalyzer = new ErrorProneAnalyzer(scannerSupplier, epOptions, context);
   }
 
   /** Run Error Prone analysis after performing dataflow checks. */

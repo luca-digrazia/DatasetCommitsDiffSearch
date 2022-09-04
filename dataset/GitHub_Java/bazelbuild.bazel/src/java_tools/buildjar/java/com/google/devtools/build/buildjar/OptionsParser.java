@@ -82,6 +82,7 @@ public final class OptionsParser {
 
   private boolean compressJar;
 
+  private String ruleKind;
   private String targetLabel;
   private String injectingRuleKind;
 
@@ -214,6 +215,9 @@ public final class OptionsParser {
           break;
         case "--compress_jar":
           compressJar = true;
+          break;
+        case "--rule_kind":
+          ruleKind = getArgument(argQueue, arg);
           break;
         case "--target_label":
           targetLabel = getArgument(argQueue, arg);
@@ -518,6 +522,10 @@ public final class OptionsParser {
 
   public boolean compressJar() {
     return compressJar;
+  }
+
+  public String getRuleKind() {
+    return ruleKind;
   }
 
   public String getTargetLabel() {
