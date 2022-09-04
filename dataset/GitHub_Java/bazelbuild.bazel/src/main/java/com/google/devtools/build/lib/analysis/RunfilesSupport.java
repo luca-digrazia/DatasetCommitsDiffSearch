@@ -27,9 +27,9 @@ import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTa
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -354,7 +354,7 @@ public final class RunfilesSupport {
     context
         .getAnalysisEnvironment()
         .registerAction(
-            new SourceManifestAction(
+            SourceManifestAction.forRunfiles(
                 ManifestType.SOURCE_SYMLINKS, context.getActionOwner(), inputManifest, runfiles));
 
     if (!createSymlinks) {
@@ -402,7 +402,7 @@ public final class RunfilesSupport {
     context
         .getAnalysisEnvironment()
         .registerAction(
-            new SourceManifestAction(
+            SourceManifestAction.forRunfiles(
                 ManifestType.SOURCES_ONLY, context.getActionOwner(), sourceOnlyManifest, runfiles));
     return sourceOnlyManifest;
   }
@@ -468,15 +468,5 @@ public final class RunfilesSupport {
     }
     return CommandLine.concat(
         ruleContext.getExpander().withDataLocations().tokenized("args"), additionalArgs);
-  }
-
-  /** Returns the path of the input manifest of {@code runfilesDir}. */
-  public static Path inputManifestPath(Path runfilesDir) {
-    return FileSystemUtils.replaceExtension(runfilesDir, INPUT_MANIFEST_EXT);
-  }
-
-  /** Returns the path of the output manifest of {@code runfilesDir}. */
-  public static Path outputManifestPath(Path runfilesDir) {
-    return runfilesDir.getRelative(OUTPUT_MANIFEST_BASENAME);
   }
 }

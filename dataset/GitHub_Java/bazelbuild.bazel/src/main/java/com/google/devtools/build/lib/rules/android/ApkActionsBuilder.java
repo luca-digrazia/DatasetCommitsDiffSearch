@@ -21,11 +21,11 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesSupplierImpl;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.ApkSigningMethod;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeInfo;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
 
@@ -46,10 +46,8 @@ public class ApkActionsBuilder {
   private Artifact unsignedApk;
   private Artifact signedApk;
   private boolean zipalignApk = false;
-  private List<Artifact> signingKeys;
-  private Artifact signingLineage;
+  private Artifact signingKey;
   private String artifactLocation;
-  private Artifact v4SignatureFile;
 
   private final String apkName;
 
@@ -125,26 +123,15 @@ public class ApkActionsBuilder {
     return this;
   }
 
-  public ApkActionsBuilder setV4Signature(Artifact v4SignatureFile) {
-    this.v4SignatureFile = v4SignatureFile;
-    return this;
-  }
-
   /** Requests that signed APKs are zipaligned. */
   public ApkActionsBuilder setZipalignApk(boolean zipalign) {
     this.zipalignApk = zipalign;
     return this;
   }
 
-  /** Sets the signing keys that will be used to sign the APK. */
-  public ApkActionsBuilder setSigningKeys(List<Artifact> signingKeys) {
-    this.signingKeys = signingKeys;
-    return this;
-  }
-
-  /** Sets the signing lineage file used to sign the APK. */
-  public ApkActionsBuilder setSigningLineageFile(Artifact signingLineage) {
-    this.signingLineage = signingLineage;
+  /** Sets the signing key that will be used to sign the APK. */
+  public ApkActionsBuilder setSigningKey(Artifact signingKey) {
+    this.signingKey = signingKey;
     return this;
   }
 
@@ -301,7 +288,7 @@ public class ApkActionsBuilder {
     }
 
     for (String architecture : nativeLibs.getMap().keySet()) {
-      for (Artifact nativeLib : nativeLibs.getMap().get(architecture).toList()) {
+      for (Artifact nativeLib : nativeLibs.getMap().get(architecture)) {
         compressedApkActionBuilder.addInput(nativeLib);
         compressedApkCommandLine
             .add("--resources")
@@ -418,38 +405,28 @@ public class ApkActionsBuilder {
       RuleContext ruleContext, Artifact unsignedApk, Artifact signedAndZipalignedApk) {
     ApkSigningMethod signingMethod =
         ruleContext.getFragment(AndroidConfiguration.class).getApkSigningMethod();
-    SpawnAction.Builder actionBuilder =
+    ruleContext.registerAction(
         new SpawnAction.Builder()
             .setExecutable(AndroidSdkProvider.fromRuleContext(ruleContext).getApkSigner())
             .setProgressMessage("Signing %s", apkName)
             .setMnemonic("ApkSignerTool")
+            .addInput(signingKey)
             .addOutput(signedAndZipalignedApk)
-            .addInput(unsignedApk);
-    CustomCommandLine.Builder commandLine = CustomCommandLine.builder().add("sign");
-    actionBuilder.addInputs(signingKeys);
-    if (signingLineage != null) {
-      actionBuilder.addInput(signingLineage);
-      commandLine.add("--lineage").addExecPath(signingLineage);
-    }
-    for (int i = 0; i < signingKeys.size(); i++) {
-      if (i > 0) {
-        commandLine.add("--next-signer");
-      }
-      commandLine.add("--ks").addExecPath(signingKeys.get(i)).add("--ks-pass", "pass:android");
-    }
-    commandLine
-        .add("--v1-signing-enabled", Boolean.toString(signingMethod.signV1()))
-        .add("--v1-signer-name", "CERT")
-        .add("--v2-signing-enabled", Boolean.toString(signingMethod.signV2()))
-        .add("--v4-signing-enabled", Boolean.toString(signingMethod.signV4()))
-        .add("--out")
-        .addExecPath(signedAndZipalignedApk)
-        .addExecPath(unsignedApk);
-    if (v4SignatureFile != null) {
-      actionBuilder.addOutput(v4SignatureFile);
-    }
-    ruleContext.registerAction(
-        actionBuilder.addCommandLine(commandLine.build()).build(ruleContext));
+            .addInput(unsignedApk)
+            .addCommandLine(
+                CustomCommandLine.builder()
+                    .add("sign")
+                    .add("--ks")
+                    .addExecPath(signingKey)
+                    .add("--ks-pass", "pass:android")
+                    .add("--v1-signing-enabled", Boolean.toString(signingMethod.signV1()))
+                    .add("--v1-signer-name", "CERT")
+                    .add("--v2-signing-enabled", Boolean.toString(signingMethod.signV2()))
+                    .add("--out")
+                    .addExecPath(signedAndZipalignedApk)
+                    .addExecPath(unsignedApk)
+                    .build())
+            .build(ruleContext));
   }
 
   // Adds the appropriate SpawnAction options depending on if SingleJar is a jar or not.

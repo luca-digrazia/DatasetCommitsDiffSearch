@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.io.IOException;
 import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
@@ -36,10 +37,10 @@ public class RunfilesSupplierImplTest {
   private ArtifactRoot rootDir;
 
   @Before
-  public final void setRoot() {
+  public final void setRoot() throws IOException {
     Scratch scratch = new Scratch();
     Path execRoot = scratch.getFileSystem().getPath("/");
-    rootDir = ArtifactRoot.asDerivedRoot(execRoot, "fake", "root", "dont", "matter");
+    rootDir = ArtifactRoot.asDerivedRoot(execRoot, scratch.dir("/fake/root/dont/matter"));
   }
 
   @Test
@@ -49,7 +50,7 @@ public class RunfilesSupplierImplTest {
     RunfilesSupplierImpl underTest =
         new RunfilesSupplierImpl(PathFragment.create("notimportant"), mkRunfiles(artifacts));
 
-    assertThat(underTest.getArtifacts().toList()).containsExactlyElementsIn(artifacts);
+    assertThat(underTest.getArtifacts()).containsExactlyElementsIn(artifacts);
   }
 
   @Test

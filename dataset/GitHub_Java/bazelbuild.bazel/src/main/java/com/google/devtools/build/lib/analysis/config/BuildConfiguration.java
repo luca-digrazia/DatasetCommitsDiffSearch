@@ -718,11 +718,6 @@ public class BuildConfiguration implements BuildConfigurationApi {
     return options.isExec;
   }
 
-  /** Returns true if this is an tool-related configuration. */
-  public boolean isToolConfiguration() {
-    return isExecConfiguration() || isHostConfiguration();
-  }
-
   public boolean checkVisibility() {
     return options.checkVisibility;
   }

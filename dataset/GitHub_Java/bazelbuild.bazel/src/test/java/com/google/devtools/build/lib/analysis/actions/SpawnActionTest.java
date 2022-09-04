@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.actions;
 
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
@@ -31,7 +32,6 @@ import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
 import com.google.devtools.build.lib.actions.extra.EnvironmentVariable;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
@@ -49,6 +49,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.StreamSupport;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -101,7 +102,7 @@ public class SpawnActionTest extends BuildViewTestCase {
   public void testWelcomeArtifactIsInput() {
     SpawnAction copyFromWelcomeToDestination =
         createCopyFromWelcomeToDestination(ImmutableMap.<String, String>of());
-    Iterable<Artifact> inputs = copyFromWelcomeToDestination.getInputs().toList();
+    Iterable<Artifact> inputs = copyFromWelcomeToDestination.getInputs();
     assertThat(inputs).containsExactly(welcomeArtifact);
   }
 
@@ -135,7 +136,7 @@ public class SpawnActionTest extends BuildViewTestCase {
     SpawnAction action = (SpawnAction) actions[0];
     assertThat(action.getOwner().getLabel())
         .isEqualTo(ActionsTestUtil.NULL_ACTION_OWNER.getLabel());
-    assertThat(action.getInputs().toList()).containsExactly(input);
+    assertThat(action.getInputs()).containsExactly(input);
     assertThat(action.getOutputs()).containsExactly(output);
     assertThat(action.getSpawn().getLocalResources())
         .isEqualTo(AbstractAction.DEFAULT_RESOURCE_SET);
@@ -214,7 +215,7 @@ public class SpawnActionTest extends BuildViewTestCase {
 
     // Asserts that the inputs contain the param file virtual input
     Optional<? extends ActionInput> input =
-        spawn.getInputFiles().toList().stream()
+        StreamSupport.stream(spawn.getInputFiles().spliterator(), false)
             .filter(i -> i instanceof VirtualActionInput)
             .findFirst();
     assertThat(input.isPresent()).isTrue();
@@ -300,8 +301,10 @@ public class SpawnActionTest extends BuildViewTestCase {
     assertThat(spawnInfo.getArgumentList())
         .containsExactlyElementsIn(action.getArguments());
 
-    Iterable<String> inputPaths = Artifact.asExecPaths(action.getInputs());
-    Iterable<String> outputPaths = Artifact.asExecPaths(action.getOutputs());
+    Iterable<String> inputPaths = Artifact.toExecPaths(
+        action.getInputs());
+    Iterable<String> outputPaths = Artifact.toExecPaths(
+        action.getOutputs());
 
     assertThat(spawnInfo.getInputFileList()).containsExactlyElementsIn(inputPaths);
     assertThat(spawnInfo.getOutputFileList()).containsExactlyElementsIn(outputPaths);
@@ -465,43 +468,13 @@ public class SpawnActionTest extends BuildViewTestCase {
         /* doAnalysis= */ true,
         new EventBus());
 
-    Artifact artifact = getFilesToBuild(getConfiguredTarget("//a:a")).getSingleton();
+    Artifact artifact = getOnlyElement(getFilesToBuild(getConfiguredTarget("//a:a")));
     ExtraActionInfo.Builder extraActionInfo =
         getGeneratingAction(artifact).getExtraActionInfo(actionKeyContext);
     assertThat(extraActionInfo.getAspectName()).isEqualTo("//a:def.bzl%aspect1");
     assertThat(extraActionInfo.getAspectParametersMap())
         .containsExactly(
             "parameter", ExtraActionInfo.StringList.newBuilder().addValue("param_value").build());
-  }
-
-  private SpawnAction createWorkerSupportSpawn(Map<String, String> executionInfoVariables)
-      throws Exception {
-    Artifact input = getSourceArtifact("input");
-    Artifact output = getBinArtifactWithNoOwner("output");
-    Action[] actions =
-        builder()
-            .addInput(input)
-            .addOutput(output)
-            .setExecutionInfo(executionInfoVariables)
-            .setExecutable(scratch.file("/bin/xxx").asFragment())
-            .build(ActionsTestUtil.NULL_ACTION_OWNER, targetConfig);
-    return (SpawnAction) actions[0];
-  }
-
-  @Test
-  public void testWorkerSupport() throws Exception {
-    SpawnAction workerSupportSpawn =
-        createWorkerSupportSpawn(ImmutableMap.<String, String>of("supports-workers", "1"));
-    assertThat(Spawns.supportsWorkers(workerSupportSpawn.getSpawn())).isEqualTo(true);
-  }
-
-  @Test
-  public void testMultiplexWorkerSupport() throws Exception {
-    SpawnAction multiplexWorkerSupportSpawn =
-        createWorkerSupportSpawn(
-            ImmutableMap.<String, String>of("supports-multiplex-workers", "1"));
-    assertThat(Spawns.supportsMultiplexWorkers(multiplexWorkerSupportSpawn.getSpawn()))
-        .isEqualTo(true);
   }
 
   private static RunfilesSupplier runfilesSupplier(Artifact manifest, PathFragment dir) {
