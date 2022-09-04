@@ -140,6 +140,10 @@ public class ResourceManager {
   // Used local test count. Corresponds to the local test count definition in the ResourceSet class.
   private int usedLocalTestCount;
 
+  // Specifies how much of the RAM in staticResources we should allow to be used.
+  public static final int DEFAULT_RAM_UTILIZATION_PERCENTAGE = 67;
+  private int ramUtilizationPercentage = DEFAULT_RAM_UTILIZATION_PERCENTAGE;
+
   // Determines if local memory estimates are used.
   private boolean localMemoryEstimate = false;
 
@@ -173,12 +177,18 @@ public class ResourceManager {
   public synchronized void setAvailableResources(ResourceSet resources) {
     Preconditions.checkNotNull(resources);
     staticResources = resources;
-    availableResources =
-        ResourceSet.create(
-            staticResources.getMemoryMb(),
-            staticResources.getCpuUsage(),
-            staticResources.getLocalTestCount());
+    availableResources = ResourceSet.create(
+        staticResources.getMemoryMb() * this.ramUtilizationPercentage / 100.0,
+        staticResources.getCpuUsage(),
+        staticResources.getLocalTestCount());
     processWaitingThreads();
+  }
+
+  /**
+   * Specify how much of the available RAM we should allow to be used.
+   */
+  public synchronized void setRamUtilizationPercentage(int percentage) {
+    ramUtilizationPercentage = percentage;
   }
 
   /**
@@ -200,8 +210,7 @@ public class ResourceManager {
     Preconditions.checkState(
         !threadHasResources(), "acquireResources with existing resource lock during %s", owner);
 
-    AutoProfiler p =
-        profiled("Aquiring resources for: " + owner.describe(), ProfilerTask.ACTION_LOCK);
+    AutoProfiler p = profiled(owner.describe(), ProfilerTask.ACTION_LOCK);
     CountDownLatch latch = null;
     try {
       latch = acquire(resources);
@@ -388,7 +397,8 @@ public class ResourceManager {
       try {
         ProcMeminfoParser memInfo = new ProcMeminfoParser();
         double totalFreeRam = memInfo.getFreeRamKb() / 1024;
-        double reserveMemory = staticResources.getMemoryMb();
+        double reserveMemory =
+            staticResources.getMemoryMb() * (100.0 - this.ramUtilizationPercentage) / 100.0;
         remainingRam = totalFreeRam - reserveMemory;
       } catch (IOException e) {
         // If we get an error trying to determine the currently free system memory for any reason,

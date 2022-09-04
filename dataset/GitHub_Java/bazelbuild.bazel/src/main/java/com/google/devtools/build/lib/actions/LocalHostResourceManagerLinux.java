@@ -16,13 +16,10 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.base.Splitter;
 import com.google.common.io.Files;
-import com.google.devtools.build.lib.util.ProcMeminfoParser;
-
+import com.google.devtools.build.lib.unix.ProcMeminfoParser;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * This class estimates the local host's resource capacity for Linux.
@@ -39,11 +36,6 @@ public class LocalHostResourceManagerLinux {
     return getLogicalCpuCountHelper(content);
   }
 
-  private static int getPhysicalCpuCount(int logicalCpuCount) throws IOException {
-    String content = getCpuInfoContent();
-    return getPhysicalCpuCountHelper(logicalCpuCount, content);
-  }
-
   private static double getMemoryInMb() throws IOException {
     return getMemoryInMbHelper(MEM_INFO_FILE);
   }
@@ -51,17 +43,13 @@ public class LocalHostResourceManagerLinux {
   public static ResourceSet getLocalHostResources() {
     try {
       int logicalCpuCount = getLogicalCpuCount();
-      int physicalCpuCount = getPhysicalCpuCount(logicalCpuCount);
       double ramMb = getMemoryInMb();
 
-      boolean hyperthreading = (logicalCpuCount != physicalCpuCount);
-      final double EFFECTIVE_CPUS_PER_HYPERTHREADED_CPU = 0.6;
       return ResourceSet.create(
           ramMb,
-          logicalCpuCount * (hyperthreading ? EFFECTIVE_CPUS_PER_HYPERTHREADED_CPU : 1.0),
-          1.0,
+          logicalCpuCount,
           Integer.MAX_VALUE);
-    } catch (IOException | IllegalArgumentException e) {
+    } catch (IOException e) {
       return null;
     }
   }
@@ -74,7 +62,7 @@ public class LocalHostResourceManagerLinux {
   }
 
   private static String readContent(String filename) throws IOException {
-    return Files.toString(new File(filename), Charset.defaultCharset());
+    return Files.asCharSource(new File(filename), Charset.defaultCharset()).read();
   }
 
   /**
@@ -92,36 +80,6 @@ public class LocalHostResourceManagerLinux {
       throw new IllegalArgumentException("Can't get logical CPU count");
     }
     return count;
-  }
-
-  public static int getPhysicalCpuCountHelper(int logicalCpuCount, String content)
-      throws IOException {
-    // CPU count
-    Iterable<String> lines = NEWLINE_SPLITTER.split(content);
-    Set<String> uniq = new HashSet<>();
-    for (String line : lines) {
-      if (line.startsWith("physical id")) {
-        uniq.add(line);
-      }
-    }
-    int cpuCount = uniq.size();
-    if (cpuCount == 0) {
-      cpuCount = logicalCpuCount;
-    }
-
-    // core per CPU
-    uniq = new HashSet<>();
-    for (String line : lines) {
-      if (line.startsWith("core id")) {
-        uniq.add(line);
-      }
-    }
-    int coresPerCpu = uniq.size();
-    if (coresPerCpu == 0) {
-      coresPerCpu = 1;
-    }
-
-    return cpuCount * coresPerCpu;
   }
 
   public static double getMemoryInMbHelper(String memInfoFileName) throws IOException {

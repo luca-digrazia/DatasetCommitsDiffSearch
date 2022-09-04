@@ -21,13 +21,11 @@ import com.google.common.io.Files;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Parse and return information from /proc/meminfo. In case of duplicate entries the first one is
- * used and other values are skipped.
+ * Parse and return information from /proc/meminfo.
  */
 public class ProcMeminfoParser {
 
@@ -46,7 +44,7 @@ public class ProcMeminfoParser {
   @VisibleForTesting
   public ProcMeminfoParser(String fileName) throws IOException {
     List<String> lines = Files.readLines(new File(fileName), Charset.defaultCharset());
-    Map<String, Long> newMemInfo = new HashMap<>();
+    ImmutableMap.Builder<String, Long> builder = ImmutableMap.builder();
     for (String line : lines) {
       int colon = line.indexOf(':');
       if (colon == -1) {
@@ -56,12 +54,12 @@ public class ProcMeminfoParser {
       String valString = line.substring(colon + 1);
       try {
         long val =  Long.parseLong(CharMatcher.inRange('0', '9').retainFrom(valString));
-        newMemInfo.putIfAbsent(keyword, val);
+        builder.put(keyword, val);
       } catch (NumberFormatException e) {
         // Ignore: we'll fail later if somebody tries to capture this value.
       }
     }
-    memInfo = ImmutableMap.copyOf(newMemInfo);
+    memInfo = builder.build();
   }
 
   /** Gets a named field in KB. */
