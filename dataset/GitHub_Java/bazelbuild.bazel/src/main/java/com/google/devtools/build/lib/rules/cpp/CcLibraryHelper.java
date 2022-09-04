@@ -282,7 +282,6 @@ public final class CcLibraryHelper {
   private final List<LibraryToLink> picStaticLibraries = new ArrayList<>();
   private final List<LibraryToLink> dynamicLibraries = new ArrayList<>();
 
-  private boolean emitLinkActions = true;
   private boolean emitLinkActionsIfEmpty;
   private boolean emitCcNativeLibrariesProvider;
   private boolean emitCcSpecificLinkParamsProvider;
@@ -834,11 +833,6 @@ public final class CcLibraryHelper {
     return this;
   }
 
-  public CcLibraryHelper setEmitLinkActions(boolean emitLinkActions) {
-    this.emitLinkActions = emitLinkActions;
-    return this;
-  }
-
   /**
    * Enables or disables generation of link actions if there are no object files. Some rules declare
    * a <code>.a</code> or <code>.so</code> implicit output, which requires that these files are
@@ -936,7 +930,7 @@ public final class CcLibraryHelper {
 
     // Create link actions (only if there are object files or if explicitly requested).
     CcLinkingOutputs ccLinkingOutputs = CcLinkingOutputs.EMPTY;
-    if (emitLinkActions && (emitLinkActionsIfEmpty || !ccOutputs.isEmpty())) {
+    if (emitLinkActionsIfEmpty || !ccOutputs.isEmpty()) {
       // On some systems, the linker gives an error message if there are no input files. Even with
       // the check above, this can still happen if there is a .nopic.o or .o files in srcs, but no
       // other files. To fix that, we'd have to check for each link action individually.
@@ -1018,7 +1012,7 @@ public final class CcLibraryHelper {
     Map<String, NestedSet<Artifact>> outputGroups = new TreeMap<>();
 
     if (shouldAddLinkerOutputArtifacts(ruleContext, ccOutputs)) {
-      addLinkerOutputArtifacts(outputGroups, ccOutputs);
+      addLinkerOutputArtifacts(outputGroups);
     }
 
     outputGroups.put(OutputGroupProvider.TEMP_FILES, getTemps(ccOutputs));
@@ -1065,7 +1059,7 @@ public final class CcLibraryHelper {
   /**
    * Returns true if the appropriate attributes for linker output artifacts are defined, and either
    * the compile action produces object files or the build is configured to produce an archive or
-   * dynamic library even in the absence of object files.
+   * dynamic library even in the absense of object files.
    */
   private boolean shouldAddLinkerOutputArtifacts(
       RuleContext ruleContext, CcCompilationOutputs ccOutputs) {
@@ -1078,8 +1072,7 @@ public final class CcLibraryHelper {
    * Adds linker output artifacts to the given map, to be registered on the configured target as
    * output groups.
    */
-  private void addLinkerOutputArtifacts(Map<String, NestedSet<Artifact>> outputGroups,
-      CcCompilationOutputs ccOutputs) {
+  private void addLinkerOutputArtifacts(Map<String, NestedSet<Artifact>> outputGroups) {
     NestedSetBuilder<Artifact> archiveFile = new NestedSetBuilder<>(Order.STABLE_ORDER);
     NestedSetBuilder<Artifact> dynamicLibrary = new NestedSetBuilder<>(Order.STABLE_ORDER);
 
@@ -1092,8 +1085,7 @@ public final class CcLibraryHelper {
           CppHelper.getLinuxLinkedArtifact(ruleContext, Link.LinkTargetType.STATIC_LIBRARY));
     }
 
-    if (!ruleContext.attributes().get("linkstatic", Type.BOOLEAN)
-        && !ccOutputs.isEmpty()) {
+    if (CppRuleClasses.shouldCreateDynamicLibrary(ruleContext.attributes())) {
       dynamicLibrary.add(
           CppHelper.getLinuxLinkedArtifact(ruleContext, Link.LinkTargetType.DYNAMIC_LIBRARY));
     }
