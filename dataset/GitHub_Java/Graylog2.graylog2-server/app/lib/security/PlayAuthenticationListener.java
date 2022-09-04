@@ -38,8 +38,7 @@ public class PlayAuthenticationListener implements AuthenticationListener {
 
     @Override
     public void onFailure(AuthenticationToken token, AuthenticationException ae) {
-//        final Http.Session session = Http.Context.current().session();
-//        session.remove("sessionid");
+        // TODO keep metric of failed logins. maybe log to some graylog instance
     }
 
     @Override
