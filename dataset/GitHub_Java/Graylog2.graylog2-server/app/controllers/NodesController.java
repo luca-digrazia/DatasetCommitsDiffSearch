@@ -1,20 +1,20 @@
 /**
- * Copyright 2012-2015 TORCH GmbH, 2015 Graylog, Inc.
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 package controllers;
@@ -38,6 +38,9 @@ import static lib.security.RestPermissions.BUFFERS_READ;
 import static lib.security.RestPermissions.JVMSTATS_READ;
 import static views.helpers.Permissions.isPermitted;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class NodesController extends AuthenticatedController {
 
     private final NodeService nodeService;
@@ -105,8 +108,7 @@ public class NodesController extends AuthenticatedController {
 
             return ok(views.html.system.nodes.show.render(currentUser(), bc, node, installedPlugins));
         } catch (NodeService.NodeNotFoundException e) {
-            flash("error", "Could not find node '" + nodeId + "'");
-            return redirect(routes.NodesController.nodes());
+            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
         } catch (IOException e) {
             return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
         } catch (APIException e) {
