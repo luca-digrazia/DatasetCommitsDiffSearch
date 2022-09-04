@@ -38,7 +38,7 @@ public class HttpHostConfigSource implements ConfigSource, Serializable {
     @Override
     public String getValue(String propertyName) {
         if (propertyName.equals(QUARKUS_HTTP_HOST)) {
-            if (LaunchMode.isRemoteDev()) {
+            if (LaunchMode.current().isRemoteDev()) {
                 // in remote-dev mode we need to listen on all interfaces
                 return ALL_INTERFACES;
             }
