@@ -298,8 +298,8 @@ public class CppActionConfigs {
                         "    flag_group {",
                         "      expand_if_all_available: 'fdo_profile_path'",
                         "      flag: '-fprofile-use=%{fdo_profile_path}'",
-                        "      flag: '-Wno-profile-instr-unprofiled'",
-                        "      flag: '-Wno-profile-instr-out-of-date'",
+                        "      flag: '-Xclang-only=-Wno-profile-instr-unprofiled'",
+                        "      flag: '-Xclang-only=-Wno-profile-instr-out-of-date'",
                         "      flag: '-fprofile-correction'",
                         "    }",
                         "  }")));
@@ -341,8 +341,8 @@ public class CppActionConfigs {
                         "    flag_group {",
                         "      expand_if_all_available: 'fdo_profile_path'",
                         "      flag: '-fprofile-use=%{fdo_profile_path}'",
-                        "      flag: '-Wno-profile-instr-unprofiled'",
-                        "      flag: '-Wno-profile-instr-out-of-date'",
+                        "      flag: '-Xclang-only=-Wno-profile-instr-unprofiled'",
+                        "      flag: '-Xclang-only=-Wno-profile-instr-out-of-date'",
                         "      flag: '-fprofile-correction'",
                         "    }",
                         "  }")));
@@ -360,8 +360,9 @@ public class CppActionConfigs {
                         "    action: 'lto-backend'",
                         "    flag_group {",
                         "      expand_if_all_available: 'fdo_prefetch_hints_path'",
-                        "      flag: '-mllvm'",
-                        "      flag: '-prefetch-hints-file=" + "%{fdo_prefetch_hints_path}'",
+                        "      flag: '-Xclang-only=-mllvm'",
+                        "      flag: '-Xclang-only=-prefetch-hints-file="
+                            + "%{fdo_prefetch_hints_path}'",
                         "    }",
                         "  }")));
       }
@@ -1572,7 +1573,7 @@ public class CppActionConfigs {
   }
 
   private static String ifLinux(CppPlatform platform, String... lines) {
-    // Platform `LINUX` also includes FreeBSD and OpenBSD.
+    // Platform `LINUX` also includes FreeBSD.
     return ifTrue(platform == CppPlatform.LINUX, lines);
   }
 
