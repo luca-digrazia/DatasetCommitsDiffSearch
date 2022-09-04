@@ -72,7 +72,29 @@ public class MobileInstallCommand implements BlazeCommand {
   /**
    * An enumeration of all the modes that mobile-install supports.
    */
-  public enum Mode { CLASSIC, CLASSIC_INTERNAL_TEST_DO_NOT_USE, SKYLARK }
+  public enum Mode {
+    CLASSIC("classic", null),
+    CLASSIC_INTERNAL_TEST("classic_internal_test_DO_NOT_USE", null),
+    SKYLARK("skylark", "MIASPECT"),
+    SKYLARK_INCREMENTAL_RES("skylark_incremental_res", "MIRESASPECT");
+
+    private final String mode;
+    private final String aspectName;
+
+    Mode(String mode, String aspectName) {
+      this.mode = mode;
+      this.aspectName = aspectName;
+    }
+
+    public String getAspectName() {
+      return aspectName;
+    }
+
+    @Override
+    public String toString() {
+      return mode;
+    }
+  }
 
   /**
    * Converter for the --mode option.
@@ -122,7 +144,9 @@ public class MobileInstallCommand implements BlazeCommand {
       help =
           "Select how to run mobile-install. \"classic\" runs the current version of "
               + "mobile-install. \"skylark\" uses the new skylark version, which has support for "
-              + "android_test."
+              + "android_test. \"skylark_incremental_res\" is the same as \"skylark\" plus "
+              + "incremental resource processing. \"skylark_incremental_res\" requires a device "
+              + "with root access."
     )
     public Mode mode;
 
@@ -146,7 +170,7 @@ public class MobileInstallCommand implements BlazeCommand {
     WriteAdbArgsAction.Options adbOptions = options.getOptions(WriteAdbArgsAction.Options.class);
 
     if (mobileInstallOptions.mode == Mode.CLASSIC
-        || mobileInstallOptions.mode == Mode.CLASSIC_INTERNAL_TEST_DO_NOT_USE) {
+        || mobileInstallOptions.mode == Mode.CLASSIC_INTERNAL_TEST) {
       // Notify internal users that classic mode is no longer supported.
       if (mobileInstallOptions.mode == Mode.CLASSIC
           && !mobileInstallOptions.mobileInstallAspect.startsWith("@")) {
@@ -301,7 +325,7 @@ public class MobileInstallCommand implements BlazeCommand {
   public void editOptions(OptionsParser optionsParser) {
     Options options = optionsParser.getOptions(Options.class);
     try {
-      if (options.mode == Mode.CLASSIC || options.mode == Mode.CLASSIC_INTERNAL_TEST_DO_NOT_USE) {
+      if (options.mode == Mode.CLASSIC || options.mode == Mode.CLASSIC_INTERNAL_TEST) {
         String outputGroup =
             options.splitApks
                 ? "mobile_install_split" + INTERNAL_SUFFIX
@@ -317,7 +341,7 @@ public class MobileInstallCommand implements BlazeCommand {
             PriorityCategory.COMMAND_LINE,
             "Options required by the skylark implementation of mobile-install command",
             ImmutableList.of(
-                "--aspects=" + options.mobileInstallAspect + "%MIASPECT",
+                "--aspects=" + options.mobileInstallAspect + "%" + options.mode.getAspectName(),
                 "--output_groups=android_incremental_deploy_info",
                 "--output_groups=mobile_install" + INTERNAL_SUFFIX,
                 "--output_groups=mobile_install_launcher" + INTERNAL_SUFFIX));

@@ -13,14 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.common.options.EnumConverter;
@@ -36,7 +35,7 @@ import java.util.List;
 
 /**
  * An action that writes the a parameter file to {@code incremental_install.py} based on the command
- * line arguments to {@code bazel mobile-install}.
+ * line arguments to {@code blaze mobile-install}.
  */
 @Immutable // note that it accesses data non-hermetically during the execution phase
 public final class WriteAdbArgsAction extends AbstractFileWriteAction {
@@ -118,7 +117,7 @@ public final class WriteAdbArgsAction extends AbstractFileWriteAction {
   }
 
   public WriteAdbArgsAction(ActionOwner owner, Artifact outputFile) {
-    super(owner, NestedSetBuilder.emptySet(Order.STABLE_ORDER), outputFile, false);
+    super(owner, ImmutableList.of(), outputFile, false);
   }
 
   @Override
@@ -130,7 +129,8 @@ public final class WriteAdbArgsAction extends AbstractFileWriteAction {
     final String device = options.device;
     final String incrementalInstallVerbosity = options.incrementalInstallVerbosity;
     final StartType start = options.start;
-    final String userHomeDirectory = ctx.getClientEnv().get("HOME");
+    final String userHomeDirectory =
+        ctx.getContext(WriteAdbArgsActionContext.class).getUserHomeDirectory();
 
     return new DeterministicWriter() {
       @Override
