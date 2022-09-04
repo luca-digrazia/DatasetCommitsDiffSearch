@@ -20,14 +20,13 @@ import com.codahale.metrics.InstrumentedExecutorService;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Splitter;
 import com.google.common.net.HostAndPort;
 import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.squareup.okhttp.OkHttpClient;
-import com.squareup.okhttp.Request;
-import com.squareup.okhttp.Response;
+import com.ning.http.client.AsyncHttpClient;
+import com.ning.http.client.ListenableFuture;
+import com.ning.http.client.Response;
 import org.elasticsearch.ElasticsearchTimeoutException;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
@@ -42,11 +41,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.inject.Named;
 import javax.inject.Singleton;
 import java.io.IOException;
-import java.net.URI;
 import java.util.Iterator;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -59,35 +57,23 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 public class IndexerSetupService extends AbstractIdleService {
     private static final Logger LOG = LoggerFactory.getLogger(IndexerSetupService.class);
     private static final Version MINIMUM_ES_VERSION = Version.V_1_3_4;
-    private static final Version MAXIMUM_ES_VERSION = Version.fromString("1.5.99");
+    private static final Version MAXIMUM_ES_VERSION = Version.fromString("1.4.99");
 
     private final Node node;
     private final ElasticsearchConfiguration configuration;
     private final BufferSynchronizerService bufferSynchronizerService;
-    private final OkHttpClient httpClient;
-    private final ObjectMapper objectMapper;
+    private final AsyncHttpClient httpClient;
 
     @Inject
     public IndexerSetupService(final Node node,
                                final ElasticsearchConfiguration configuration,
                                final BufferSynchronizerService bufferSynchronizerService,
-                               @Named("systemHttpClient") final OkHttpClient httpClient,
+                               final AsyncHttpClient httpClient,
                                final MetricRegistry metricRegistry) {
-        this(node, configuration, bufferSynchronizerService, httpClient, new ObjectMapper(), metricRegistry);
-    }
-
-    @VisibleForTesting
-    IndexerSetupService(final Node node,
-                        final ElasticsearchConfiguration configuration,
-                        final BufferSynchronizerService bufferSynchronizerService,
-                        final OkHttpClient httpClient,
-                        final ObjectMapper objectMapper,
-                        final MetricRegistry metricRegistry) {
         this.node = node;
         this.configuration = configuration;
         this.bufferSynchronizerService = bufferSynchronizerService;
         this.httpClient = httpClient;
-        this.objectMapper = objectMapper;
 
         // Shutdown after the BufferSynchronizerServer has stopped to avoid shutting down ES too early.
         bufferSynchronizerService.addListener(new Listener() {
@@ -145,39 +131,39 @@ public class IndexerSetupService extends AbstractIdleService {
                 if (!isNullOrEmpty(hosts)) {
                     final Iterable<String> hostList = Splitter.on(',').omitEmptyStrings().trimResults().split(hosts);
 
+                    // if no elasticsearch running
                     for (String host : hostList) {
-                        final URI esUri = URI.create("http://" + HostAndPort.fromString(host).getHostText() + ":9200/");
+                        // guess that Elasticsearch http is listening on port 9200
+                        final HostAndPort hostAndPort = HostAndPort.fromString(host);
+                        LOG.info("Checking Elasticsearch HTTP API at http://{}:9200/", hostAndPort.getHostText());
 
-                        LOG.info("Checking Elasticsearch HTTP API at {}", esUri);
                         try {
                             // Try the HTTP API endpoint
-                            final Request request = new Request.Builder()
-                                    .get()
-                                    .url(esUri.resolve("/_nodes").toString())
-                                    .build();
-                            final Response response = httpClient.newCall(request).execute();
+                            final ListenableFuture<Response> future = httpClient.prepareGet("http://" + hostAndPort.getHostText() + ":9200/_nodes").execute();
+                            final Response response = future.get();
 
-                            if (response.isSuccessful()) {
-                                final JsonNode resultTree = objectMapper.readTree(response.body().byteStream());
-                                final JsonNode nodesList = resultTree.get("nodes");
+                            final JsonNode resultTree = new ObjectMapper().readTree(response.getResponseBody());
+                            final String clusterName = resultTree.get("cluster_name").textValue();
+                            final JsonNode nodesList = resultTree.get("nodes");
+
+                            final Iterator<String> nodes = nodesList.fieldNames();
+                            while (nodes.hasNext()) {
+                                final String id = nodes.next();
+                                final Version clusterVersion = Version.fromString(nodesList.get(id).get("version").textValue());
 
                                 if (!configuration.isDisableVersionCheck()) {
-                                    final Iterator<String> nodes = nodesList.fieldNames();
-                                    while (nodes.hasNext()) {
-                                        final String id = nodes.next();
-                                        final Version clusterVersion = Version.fromString(nodesList.get(id).get("version").textValue());
-
-                                        checkClusterVersion(clusterVersion);
-                                    }
+                                    checkClusterVersion(clusterVersion);
                                 }
-
-                                final String clusterName = resultTree.get("cluster_name").textValue();
-                                checkClusterName(clusterName);
-                            } else {
-                                LOG.error("Could not connect to Elasticsearch at " + esUri + ". Is it running?");
                             }
+
+                            checkClusterName(clusterName);
                         } catch (IOException ioException) {
                             LOG.error("Could not connect to Elasticsearch.", ioException);
+                        } catch (InterruptedException ignore) {
+                        } catch (ExecutionException e1) {
+                            // could not find any server on that address
+                            LOG.error("Could not connect to Elasticsearch at http://" + hostAndPort.getHostText() + ":9200/, is it running?",
+                                    e1.getCause());
                         }
                     }
                 }
