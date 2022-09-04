@@ -29,8 +29,6 @@ import static com.codahale.metrics.MetricRegistry.name;
 @AutoValue
 public abstract class Stage implements Comparable<Stage> {
     private List<Rule> rules;
-    // not an autovalue property, because it introduces a cycle in hashCode() and we have no way of excluding it
-    private transient Pipeline pipeline;
     private transient Meter executed;
     private transient String meterName;
 
@@ -84,14 +82,6 @@ public abstract class Stage implements Comparable<Stage> {
         if (executed != null) {
             executed.mark();
         }
-    }
-
-    public Pipeline getPipeline() {
-        return pipeline;
-    }
-
-    public void setPipeline(Pipeline pipeline) {
-        this.pipeline = pipeline;
     }
 
     @AutoValue.Builder

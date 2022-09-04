@@ -33,6 +33,10 @@ public abstract class Pipeline {
     private String metricName;
     private transient Meter executed;
 
+    public Pipeline() {
+        ;
+    }
+
     @Nullable
     public abstract String id();
     public abstract String name();

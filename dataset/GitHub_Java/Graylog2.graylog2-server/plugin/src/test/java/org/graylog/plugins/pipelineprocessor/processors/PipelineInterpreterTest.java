@@ -102,18 +102,15 @@ public class PipelineInterpreterTest {
 
         final PipelineRuleParser parser = setupParser(functions);
 
-        final ConfigurationStateUpdater stateUpdater = new ConfigurationStateUpdater(ruleService,
-                                                                                     pipelineService,
-                                                                                     pipelineStreamConnectionsService,
-                                                                                     parser,
-                                                                                     new MetricRegistry(),
-                                                                                     Executors.newScheduledThreadPool(1),
-                                                                                     mock(EventBus.class));
         final PipelineInterpreter interpreter = new PipelineInterpreter(
+                ruleService,
+                pipelineService,
+                pipelineStreamConnectionsService,
+                parser,
                 mock(Journal.class),
                 new MetricRegistry(),
-                mock(EventBus.class),
-                stateUpdater
+                Executors.newScheduledThreadPool(1),
+                mock(EventBus.class)
         );
 
         Message msg = new Message("original message", "test", Tools.nowUTC());
@@ -159,18 +156,15 @@ public class PipelineInterpreterTest {
         final PipelineRuleParser parser = setupParser(functions);
 
         final MetricRegistry metricRegistry = new MetricRegistry();
-        final ConfigurationStateUpdater stateUpdater = new ConfigurationStateUpdater(ruleService,
-                                                                                     pipelineService,
-                                                                                     pipelineStreamConnectionsService,
-                                                                                     parser,
-                                                                                     metricRegistry,
-                                                                                     Executors.newScheduledThreadPool(1),
-                                                                                     mock(EventBus.class));
         final PipelineInterpreter interpreter = new PipelineInterpreter(
+                ruleService,
+                pipelineService,
+                pipelineStreamConnectionsService,
+                parser,
                 mock(Journal.class),
                 metricRegistry,
-                mock(EventBus.class),
-                stateUpdater
+                Executors.newScheduledThreadPool(1),
+                mock(EventBus.class)
         );
 
         interpreter.process(new Message("", "", Tools.nowUTC()));
