@@ -4,6 +4,8 @@ import java.security.Permission;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -17,13 +19,12 @@ import org.keycloak.adapters.authorization.PolicyEnforcer;
 import org.keycloak.representations.adapters.config.AdapterConfig;
 import org.keycloak.representations.adapters.config.PolicyEnforcerConfig;
 
-import io.quarkus.oidc.OidcTenantConfig;
 import io.quarkus.oidc.runtime.OidcConfig;
+import io.quarkus.oidc.runtime.OidcTenantConfig;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.security.runtime.QuarkusSecurityIdentity;
 import io.quarkus.vertx.http.runtime.HttpConfiguration;
 import io.quarkus.vertx.http.runtime.security.HttpSecurityPolicy;
-import io.smallrye.mutiny.Uni;
 import io.vertx.ext.web.RoutingContext;
 
 @Singleton
@@ -34,7 +35,7 @@ public class KeycloakPolicyEnforcerAuthorizer
     private volatile long readTimeout;
 
     @Override
-    public Uni<CheckResult> checkPermission(RoutingContext request, SecurityIdentity identity,
+    public CompletionStage<CheckResult> checkPermission(RoutingContext request, SecurityIdentity identity,
             AuthorizationRequestContext requestContext) {
         return requestContext.runBlocking(request, identity, this);
     }
@@ -56,35 +57,33 @@ public class KeycloakPolicyEnforcerAuthorizer
             AuthorizationContext context) {
         Map<String, Object> attributes = new HashMap<>(current.getAttributes());
 
-        if (context != null) {
-            attributes.put("permissions", context.getPermissions());
-        }
+        attributes.put("permissions", context.getPermissions());
 
         return new QuarkusSecurityIdentity.Builder()
                 .addAttributes(attributes)
                 .setPrincipal(current.getPrincipal())
                 .addRoles(current.getRoles())
                 .addCredentials(current.getCredentials())
-                .addPermissionChecker(new Function<Permission, Uni<Boolean>>() {
+                .addPermissionChecker(new Function<Permission, CompletionStage<Boolean>>() {
                     @Override
-                    public Uni<Boolean> apply(Permission permission) {
+                    public CompletionStage<Boolean> apply(Permission permission) {
                         if (context != null) {
                             String scopes = permission.getActions();
 
                             if (scopes == null) {
-                                return Uni.createFrom().item(context.hasResourcePermission(permission.getName()));
+                                return CompletableFuture.completedFuture(context.hasResourcePermission(permission.getName()));
                             }
 
                             for (String scope : scopes.split(",")) {
                                 if (!context.hasPermission(permission.getName(), scope)) {
-                                    return Uni.createFrom().item(false);
+                                    return CompletableFuture.completedFuture(false);
                                 }
                             }
 
-                            return Uni.createFrom().item(true);
+                            return CompletableFuture.completedFuture(true);
                         }
 
-                        return Uni.createFrom().item(false);
+                        return CompletableFuture.completedFuture(false);
                     }
                 }).build();
     }

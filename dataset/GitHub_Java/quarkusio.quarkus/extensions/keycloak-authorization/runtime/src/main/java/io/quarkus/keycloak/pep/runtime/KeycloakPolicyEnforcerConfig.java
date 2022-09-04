@@ -40,8 +40,8 @@ public class KeycloakPolicyEnforcerConfig {
         /**
          * Specifies how policies are enforced.
          */
-        @ConfigItem(defaultValue = "enforcing")
-        public PolicyEnforcerConfig.EnforcementMode enforcementMode;
+        @ConfigItem(defaultValue = "ENFORCING")
+        public String enforcementMode;
 
         /**
          * Specifies the paths to protect.
