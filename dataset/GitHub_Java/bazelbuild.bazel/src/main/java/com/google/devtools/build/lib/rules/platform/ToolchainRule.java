@@ -58,7 +58,7 @@ public class ToolchainRule implements RuleDefinition {
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(
             attr(EXEC_COMPATIBLE_WITH_ATTR, BuildType.LABEL_LIST)
-                .mandatoryProviders(ConstraintValueInfo.PROVIDER.id())
+                .mandatoryProviders(ConstraintValueInfo.SKYLARK_CONSTRUCTOR.id())
                 .allowedFileTypes()
                 .nonconfigurable("part of toolchain configuration"))
         /* <!-- #BLAZE_RULE(toolchain).ATTRIBUTE(target_compatible_with) -->
@@ -67,7 +67,7 @@ public class ToolchainRule implements RuleDefinition {
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(
             attr(TARGET_COMPATIBLE_WITH_ATTR, BuildType.LABEL_LIST)
-                .mandatoryProviders(ConstraintValueInfo.PROVIDER.id())
+                .mandatoryProviders(ConstraintValueInfo.SKYLARK_CONSTRUCTOR.id())
                 .allowedFileTypes()
                 .nonconfigurable("part of toolchain configuration"))
         /* <!-- #BLAZE_RULE(toolchain).ATTRIBUTE(toolchain) -->
