@@ -390,7 +390,7 @@ public final class ConfiguredTargetFactory {
     RuleContext.Builder builder =
         new RuleContext.Builder(
             env,
-            associatedTarget.getTarget(),
+            associatedTarget.getTarget().getAssociatedRule(),
             aspectPath,
             aspectConfiguration,
             hostConfiguration,
