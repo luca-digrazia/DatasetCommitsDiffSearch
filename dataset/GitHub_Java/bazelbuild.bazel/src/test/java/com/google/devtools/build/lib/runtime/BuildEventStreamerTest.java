@@ -48,12 +48,9 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.LockSupport;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -204,7 +201,7 @@ public class BuildEventStreamerTest extends FoundationTestCase {
 
     @Subscribe
     void transportsAnnounced(AnnounceBuildEventTransportsEvent evt) {
-      transportSet = Collections.synchronizedSet(new HashSet<>(evt.transports()));
+      transportSet = new HashSet<>(evt.transports());
     }
 
     @Subscribe
@@ -218,7 +215,7 @@ public class BuildEventStreamerTest extends FoundationTestCase {
     MockitoAnnotations.initMocks(this);
   }
 
-  @Test(timeout = 5000)
+  @Test
   public void testSimpleStream() {
     // Verify that a well-formed event is passed through and that completion of the
     // build clears the pending progress-update event.
@@ -250,9 +247,7 @@ public class BuildEventStreamerTest extends FoundationTestCase {
     assertEquals(BuildEventId.buildFinished(), finalStream.get(1).getEventId());
     assertEquals(ProgressEvent.INITIAL_PROGRESS_UPDATE, finalStream.get(2).getEventId());
 
-    while (!handler.transportSet.isEmpty()) {
-      LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
-    }
+    assertEquals(0, handler.transportSet.size());
   }
 
   @Test
