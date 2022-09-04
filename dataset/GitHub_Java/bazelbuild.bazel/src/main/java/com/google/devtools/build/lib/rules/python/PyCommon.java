@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.Util;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -51,7 +50,6 @@ import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.server.FailureDetails.FailAction.Code;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.FileType;
-import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.protobuf.GeneratedMessage.GeneratedExtension;
@@ -66,11 +64,6 @@ import net.starlark.java.eval.Starlark;
 
 /** A helper class for analyzing a Python configured target. */
 public final class PyCommon {
-
-  private static final InstrumentationSpec INSTRUMENTATION_SPEC =
-      new InstrumentationSpec(FileTypeSet.of(PyRuleClasses.PYTHON_SOURCE))
-          .withSourceAttributes("srcs")
-          .withDependencyAttributes("deps", "data");
 
   /** Name of the version attribute. */
   public static final String PYTHON_VERSION_ATTRIBUTE = "python_version";
@@ -177,9 +170,6 @@ public final class PyCommon {
    */
   @Nullable private final Map<PathFragment, Artifact> convertedFiles;
 
-  // Null if requiresMainFile is false, or the main artifact couldn't be determined.
-  @Nullable private Artifact mainArtifact = null;
-
   private Artifact executable = null;
 
   private NestedSet<Artifact> filesToBuild = null;
@@ -193,21 +183,16 @@ public final class PyCommon {
   // TODO(bazel-team): validateSources is the result of refactoring while preserving
   // legacy behavior across some (but not all) Google-internal uses of PyCommon. Ideally all call
   // sites should be updated to expect the same validation steps.
-  public PyCommon(
-      RuleContext ruleContext,
-      PythonSemantics semantics,
-      boolean validateSources,
-      boolean requiresMainFile) {
+  public PyCommon(RuleContext ruleContext, PythonSemantics semantics, boolean validateSources) {
     this.ruleContext = ruleContext;
     this.semantics = semantics;
     this.version = ruleContext.getFragment(PythonConfiguration.class).getPythonVersion();
     this.sourcesVersion = initSrcsVersionAttr(ruleContext);
     this.dependencyTransitivePythonSources = initDependencyTransitivePythonSources(ruleContext);
     this.transitivePythonSources = initTransitivePythonSources(ruleContext);
-    this.mainArtifact = requiresMainFile ? initMainArtifact(ruleContext) : null;
     this.directPythonSources =
         initAndMaybeValidateDirectPythonSources(
-            ruleContext, semantics, /*validate=*/ validateSources, this.mainArtifact);
+            ruleContext, semantics, /*validate=*/ validateSources);
     this.usesSharedLibraries = initUsesSharedLibraries(ruleContext);
     this.imports = initImports(ruleContext, semantics);
     this.hasPy2OnlySources = initHasPy2OnlySources(ruleContext, this.sourcesVersion);
@@ -267,7 +252,7 @@ public final class PyCommon {
   }
 
   private static List<Artifact> initAndMaybeValidateDirectPythonSources(
-      RuleContext ruleContext, PythonSemantics semantics, boolean validate, Artifact mainArtifact) {
+      RuleContext ruleContext, PythonSemantics semantics, boolean validate) {
     List<Artifact> sourceFiles = new ArrayList<>();
     // TODO(bazel-team): Need to get the transitive deps closure, not just the sources of the rule.
     for (TransitiveInfoCollection src :
@@ -275,13 +260,9 @@ public final class PyCommon {
       // Make sure that none of the sources contain hyphens.
       if (validate
           && semantics.prohibitHyphensInPackagePaths()
-          && Util.containsHyphen(src.getLabel().getPackageFragment())
-          // It's ok to have hyphens in main file - usually no one imports it.
-          && !src.getLabel().equals(mainArtifact.getOwnerLabel())) {
+          && Util.containsHyphen(src.getLabel().getPackageFragment())) {
         ruleContext.attributeError(
-            "srcs",
-            src.getLabel()
-                + ": paths to Python sources (besides the main source) may not contain '-'");
+            "srcs", src.getLabel() + ": paths to Python sources may not contain '-'");
       }
       Iterable<Artifact> pySrcs =
           FileType.filter(
@@ -856,7 +837,8 @@ public final class PyCommon {
 
     builder
         .addNativeDeclaredProvider(
-            InstrumentedFilesCollector.collect(ruleContext, INSTRUMENTATION_SPEC))
+            InstrumentedFilesCollector.collect(
+                ruleContext, semantics.getCoverageInstrumentationSpec()))
         // Python targets are not really compilable. The best we can do is make sure that all
         // generated source files are ready.
         .addOutputGroup(OutputGroupInfo.FILES_TO_COMPILE, transitivePythonSources)
@@ -920,8 +902,8 @@ public final class PyCommon {
   @AutoCodec @AutoCodec.VisibleForSerialization
   static final GeneratedExtension<ExtraActionInfo, PythonInfo> PYTHON_INFO = PythonInfo.pythonInfo;
 
-  /** Returns the artifact for the main Python source file. */
-  private static Artifact initMainArtifact(RuleContext ruleContext) {
+  /** @return A String that is the full path to the main python entry point. */
+  public String determineMainExecutableSource(boolean withWorkspaceName) {
     String mainSourceName;
     Rule target = ruleContext.getRule();
     boolean explicitMain = target.isAttributeValueExplicitlySpecified("main");
@@ -932,7 +914,6 @@ public final class PyCommon {
       }
     } else {
       String ruleName = target.getName();
-      // TODO(blaze-team) Shouldn't the same check apply for all Python targets?
       if (ruleName.endsWith(".py")) {
         ruleContext.attributeError("name", "name must not end in '.py'");
       }
@@ -959,18 +940,6 @@ public final class PyCommon {
 
     if (mainArtifact == null) {
       ruleContext.attributeError("srcs", buildNoMainMatchesErrorText(explicitMain, mainSourceName));
-    }
-
-    return mainArtifact;
-  }
-
-  /**
-   * Returns the path to the main python entry point, or null if this PyCommon was initialized with
-   * {@code requiresMainFile} set to false (or there was an error in determining the main artifact).
-   */
-  @Nullable
-  public String determineMainExecutableSource(boolean withWorkspaceName) {
-    if (mainArtifact == null) {
       return null;
     }
     if (!withWorkspaceName) {

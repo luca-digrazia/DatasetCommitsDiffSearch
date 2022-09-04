@@ -46,8 +46,7 @@ public abstract class PyExecutable implements RuleConfiguredTargetFactory {
     ruleContext.initConfigurationMakeVariableContext(new CcFlagsSupplier(ruleContext));
 
     PythonSemantics semantics = createSemantics();
-    PyCommon common =
-        new PyCommon(ruleContext, semantics, /*validateSources=*/ true, /*requiresMainFile=*/ true);
+    PyCommon common = new PyCommon(ruleContext, semantics, /*validateSources=*/ true);
 
     List<Artifact> srcs = common.getPythonSources();
     List<Artifact> allOutputs =

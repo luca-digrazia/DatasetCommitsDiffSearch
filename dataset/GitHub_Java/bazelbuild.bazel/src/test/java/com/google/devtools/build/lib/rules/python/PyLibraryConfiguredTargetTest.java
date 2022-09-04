@@ -34,52 +34,61 @@ public class PyLibraryConfiguredTargetTest extends PyBaseConfiguredTargetTestBas
   }
 
   @Test
-  public void canBuildWithIncompatibleSrcsVersionUnderNewSemantics() throws Exception {
-    // See PyBaseConfiguredTargetTestBase for the analogous test under the old semantics, which
-    // applies not just to py_library but also to py_binary and py_test.
-    useConfiguration(
-        "--incompatible_allow_python_version_transitions=true", "--python_version=PY3");
+  public void pyRuntimeInfoIsNotPresent() throws Exception {
+    useConfiguration("--incompatible_use_python_toolchains=true");
+    scratch.file(
+        "pkg/BUILD", //
+        "py_library(",
+        "    name = 'foo',",
+        "    srcs = [':foo.py'],",
+        ")");
+    assertThat(getConfiguredTarget("//pkg:foo").get(PyRuntimeInfo.PROVIDER)).isNull();
+  }
+
+  @Test
+  public void canBuildWithIncompatibleSrcsVersion() throws Exception {
+    useConfiguration("--python_version=PY3");
     scratch.file(
         "pkg/BUILD",
         "py_library(",
         "    name = 'foo',",
         "    srcs = [':foo.py'],",
         "    srcs_version = 'PY2ONLY')");
-    // Under the new semantics, errors are only reported at the binary target, not the library, and
-    // even then they'd be deferred to execution time, so there should be nothing wrong here.
+    // Errors are only reported at the binary target, not the library, and even then they'd be
+    // deferred to execution time, so there should be nothing wrong here.
     assertThat(view.hasErrors(getConfiguredTarget("//pkg:foo"))).isFalse();
   }
 
   @Test
-  public void versionIs3IfSetByFlagUnderNewSemantics() throws Exception {
-    // See PyBaseConfiguredTargetTestBase for the analogous test under the old semantics, which
-    // applies not just to py_library but also to py_binary and py_test.
+  public void versionIs3IfSetByFlag() throws Exception {
     assumesDefaultIsPY2();
-    useConfiguration(
-        "--incompatible_allow_python_version_transitions=true", "--python_version=PY3");
+    useConfiguration("--python_version=PY3");
     scratch.file(
-        "pkg/BUILD",
+        "pkg/BUILD", //
         "py_library(",
         "    name = 'foo',",
-        "    srcs = ['foo.py'])");
+        "    srcs = ['foo.py'],",
+        ")");
     assertThat(getPythonVersion(getConfiguredTarget("//pkg:foo"))).isEqualTo(PythonVersion.PY3);
   }
 
   @Test
   public void filesToBuild() throws Exception {
-    scratch.file("pkg/BUILD",
+    scratch.file(
+        "pkg/BUILD", //
         "py_library(",
         "    name = 'foo',",
         "    srcs = ['foo.py'])");
     ConfiguredTarget target = getConfiguredTarget("//pkg:foo");
     FileConfiguredTarget srcFile = getFileConfiguredTarget("//pkg:foo.py");
-    assertThat(getFilesToBuild(target))
-        .containsExactly(srcFile.getArtifact());
+    assertThat(getFilesToBuild(target).toList()).containsExactly(srcFile.getArtifact());
   }
 
   @Test
   public void srcsCanContainRuleGeneratingPyAndNonpyFiles() throws Exception {
-    scratchConfiguredTarget("pkg", "foo",
+    scratchConfiguredTarget(
+        "pkg",
+        "foo",
         // build file:
         "py_binary(",
         "    name = 'foo',",
@@ -89,27 +98,32 @@ public class PyLibraryConfiguredTargetTest extends PyBaseConfiguredTargetTestBas
         "    outs = ['bar.cc', 'bar.py'],",
         "    cmd = 'touch $(OUTS)')");
     assertNoEvents();
-    }
+  }
 
   @Test
   public void whatIfSrcsContainsRuleGeneratingNoPyFiles() throws Exception {
     // In Bazel it's an error, in Blaze it's a warning.
     String[] lines = {
-        "py_binary(",
-        "    name = 'foo',",
-        "    srcs = ['foo.py', ':bar'])",
-        "genrule(",
-        "    name = 'bar',",
-        "    outs = ['bar.cc'],",
-        "    cmd = 'touch $(OUTS)')"};
+      "py_binary(",
+      "    name = 'foo',",
+      "    srcs = ['foo.py', ':bar'])",
+      "genrule(",
+      "    name = 'bar',",
+      "    outs = ['bar.cc'],",
+      "    cmd = 'touch $(OUTS)')"
+    };
     if (analysisMock.isThisBazel()) {
-      checkError("pkg", "foo",
+      checkError(
+          "pkg",
+          "foo",
           // error:
           "'//pkg:bar' does not produce any py_binary srcs files",
           // build file:
           lines);
     } else {
-      checkWarning("pkg", "foo",
+      checkWarning(
+          "pkg",
+          "foo",
           // warning:
           "rule '//pkg:bar' does not produce any Python source files",
           // build file:
@@ -119,21 +133,36 @@ public class PyLibraryConfiguredTargetTest extends PyBaseConfiguredTargetTestBas
 
   @Test
   public void filesToCompile() throws Exception {
-    ConfiguredTarget lib = scratchConfiguredTarget("pkg", "lib",
-        // build file:
-        "py_library(name = 'lib', srcs = ['lib.py'], deps = [':bar'])",
-        "py_library(name = 'bar', srcs = ['bar.py'], deps = [':baz'])",
-        "py_library(name = 'baz', srcs = ['baz.py'])");
+    ConfiguredTarget lib =
+        scratchConfiguredTarget(
+            "pkg",
+            "lib",
+            // build file:
+            "py_library(name = 'lib', srcs = ['lib.py'], deps = [':bar'])",
+            "py_library(name = 'bar', srcs = ['bar.py'], deps = [':baz'])",
+            "py_library(name = 'baz', srcs = ['baz.py'])");
 
     assertThat(
-        ActionsTestUtil.baseNamesOf(
-            getOutputGroup(lib, OutputGroupInfo.COMPILATION_PREREQUISITES)))
+            ActionsTestUtil.baseNamesOf(
+                getOutputGroup(lib, OutputGroupInfo.COMPILATION_PREREQUISITES)))
         .isEqualTo("baz.py bar.py lib.py");
 
     // compilationPrerequisites should be included in filesToCompile.
-    assertThat(
-        ActionsTestUtil.baseNamesOf(getOutputGroup(lib, OutputGroupInfo.FILES_TO_COMPILE)))
+    assertThat(ActionsTestUtil.baseNamesOf(getOutputGroup(lib, OutputGroupInfo.FILES_TO_COMPILE)))
         .isEqualTo("baz.py bar.py lib.py");
   }
-}
 
+  @Test
+  public void libraryTargetCanBeInPackageWithHyphensIfSourcesAreRemote() throws Exception {
+    scratch.file(
+        "pkg/BUILD", //
+        "exports_files(['foo.py'])");
+    scratchConfiguredTarget(
+        "pkg-with-hyphens", //
+        "foo",
+        "py_library(",
+        "    name = 'foo',",
+        "    srcs = ['//pkg:foo.py'])");
+    assertNoEvents();
+  }
+}
