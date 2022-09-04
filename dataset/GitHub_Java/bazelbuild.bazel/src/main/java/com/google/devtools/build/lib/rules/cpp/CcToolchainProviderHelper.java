@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -70,18 +71,12 @@ public class CcToolchainProviderHelper {
     CcToolchainConfigInfo toolchainConfigInfo = attributes.getCcToolchainConfigInfo();
     ImmutableMap<String, PathFragment> toolPaths;
     CcToolchainFeatures toolchainFeatures;
-    PathFragment toolsDirectory =
-        getToolsDirectory(
-            ruleContext.getLabel(),
-            ruleContext
-                .getAnalysisEnvironment()
-                .getSkylarkSemantics()
-                .experimentalSiblingRepositoryLayout());
+    PathFragment toolsDirectory = getToolsDirectory(ruleContext.getLabel());
     try {
       toolPaths = computeToolPaths(toolchainConfigInfo, toolsDirectory);
       toolchainFeatures = new CcToolchainFeatures(toolchainConfigInfo, toolsDirectory);
     } catch (EvalException e) {
-      throw ruleContext.throwWithRuleError(e);
+      throw ruleContext.throwWithRuleError(e.getMessage());
     }
 
     FdoContext fdoContext =
@@ -116,7 +111,7 @@ public class CcToolchainProviderHelper {
         staticRuntimeLinkMiddleman =
             staticRuntimeLinkMiddlemanSet.isEmpty()
                 ? null
-                : staticRuntimeLinkMiddlemanSet.getSingleton();
+                : Iterables.getOnlyElement(staticRuntimeLinkMiddlemanSet);
       } else {
         staticRuntimeLinkMiddleman = null;
       }
@@ -130,12 +125,12 @@ public class CcToolchainProviderHelper {
     // Dynamic runtime inputs.
     TransitiveInfoCollection dynamicRuntimeLib = attributes.getDynamicRuntimeLib();
     NestedSet<Artifact> dynamicRuntimeLinkSymlinks;
-    NestedSetBuilder<Artifact> dynamicRuntimeLinkInputs = NestedSetBuilder.stableOrder();
+    List<Artifact> dynamicRuntimeLinkInputs = new ArrayList<>();
     Artifact dynamicRuntimeLinkMiddleman;
     if (dynamicRuntimeLib != null) {
       NestedSetBuilder<Artifact> dynamicRuntimeLinkSymlinksBuilder = NestedSetBuilder.stableOrder();
       for (Artifact artifact :
-          dynamicRuntimeLib.getProvider(FileProvider.class).getFilesToBuild().toList()) {
+          dynamicRuntimeLib.getProvider(FileProvider.class).getFilesToBuild()) {
         if (CppHelper.SHARED_LIBRARY_FILETYPES.matches(artifact.getFilename())) {
           dynamicRuntimeLinkInputs.add(artifact);
           dynamicRuntimeLinkSymlinksBuilder.add(
@@ -158,7 +153,7 @@ public class CcToolchainProviderHelper {
           CppHelper.getAggregatingMiddlemanForCppRuntimes(
               ruleContext,
               purposePrefix + "dynamic_runtime_link",
-              dynamicRuntimeLinkInputs.build(),
+              dynamicRuntimeLinkInputs,
               solibDirectory,
               runtimeSolibDirBase,
               configuration);
@@ -361,7 +356,7 @@ public class CcToolchainProviderHelper {
 
   private static ImmutableList<Artifact> getBuiltinIncludes(NestedSet<Artifact> libc) {
     ImmutableList.Builder<Artifact> result = ImmutableList.builder();
-    for (Artifact artifact : libc.toList()) {
+    for (Artifact artifact : libc) {
       for (PathFragment suffix : BUILTIN_INCLUDE_FILE_SUFFIXES) {
         if (artifact.getExecPath().endsWith(suffix)) {
           result.add(artifact);
@@ -469,8 +464,8 @@ public class CcToolchainProviderHelper {
     return toolPaths.get(tool.getNamePart());
   }
 
-  static PathFragment getToolsDirectory(Label ccToolchainLabel, boolean siblingRepositoryLayout) {
-    return ccToolchainLabel.getPackageIdentifier().getExecPath(siblingRepositoryLayout);
+  static PathFragment getToolsDirectory(Label ccToolchainLabel) {
+    return ccToolchainLabel.getPackageIdentifier().getPathUnderExecRoot();
   }
 
   private static ImmutableMap<String, String> computeAdditionalMakeVariables(
