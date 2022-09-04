@@ -328,8 +328,6 @@ public class DecisionTree implements SoftClassifier<double[]> {
             this.splitFeature = -1;
             this.splitValue = Double.NaN;
             this.splitScore = 0.0;
-            this.trueChild = null;
-            this.falseChild = null;
         }
 
         /**
