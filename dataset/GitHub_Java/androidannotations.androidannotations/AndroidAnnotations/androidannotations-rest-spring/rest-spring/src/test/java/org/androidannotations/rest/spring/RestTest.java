@@ -113,7 +113,7 @@ public class RestTest extends AAProcessorTestHelper {
 		assertCompilationErrorOn(ClientWithWrongFields.class, "@Path(\"elementNameConflict\")", result);
 		assertCompilationErrorOn(ClientWithWrongFields.class, "@Path(\"pathParamConflict\")", result);
 		assertCompilationErrorOn(ClientWithWrongFields.class, "@Post(\"/conflictWithPathParam\")", result);
-		assertCompilationErrorOn(ClientWithWrongFields.class, "@Post(\"/duplicateField/{v1}/{v2}\")", result);
+		assertCompilationErrorOn(ClientWithWrongFields.class, "@Post(\"/duplicateField\")", result);
 		assertCompilationErrorOn(ClientWithWrongFields.class, "@Post(\"/fieldAndPartOnSameMethod\")", result);
 		assertCompilationErrorOn(ClientWithWrongFields.class, "@Post(\"/fieldAndBodyOnSameMethod\")", result);
 
@@ -132,7 +132,7 @@ public class RestTest extends AAProcessorTestHelper {
 		assertCompilationErrorOn(FieldPathParamOnSameArgument.class, "@Field", result);
 		assertCompilationErrorOn(FieldPathParamOnSameArgument.class, "@Path", result);
 
-		assertCompilationErrorCount(3, result);
+		assertCompilationErrorCount(2, result);
 	}
 
 	@Test
@@ -170,5 +170,12 @@ public class RestTest extends AAProcessorTestHelper {
 
 		assertCompilationErrorOn(ClientWithPatch.class, "@Patch(\"/\")", result);
 		assertCompilationErrorCount(1, result);
+	}
+
+	@Test
+	public void clientWithWrongRequiresCookieInUrl() throws IOException {
+		CompileResult result = compileFiles(ClientWithWrongRequiresCookieInUrl.class);
+		assertCompilationErrorOn(ClientWithWrongRequiresCookieInUrl.class, "@Post(\"/badNamedRequiresCookieInUrl/?myCookieInUrl={myCookieInUrl}\")", result);
+		assertCompilationErrorOn(ClientWithWrongRequiresCookieInUrl.class, "@Post(\"/noPlaceholderRequiresCookieInUrl\")", result);
 	}
 }
