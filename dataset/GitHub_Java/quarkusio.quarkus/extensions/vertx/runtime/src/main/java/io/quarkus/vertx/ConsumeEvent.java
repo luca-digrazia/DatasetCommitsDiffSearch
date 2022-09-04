@@ -6,15 +6,18 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
+import io.quarkus.vertx.runtime.GenericMessageCodec;
 import io.vertx.core.eventbus.MessageCodec;
 
 /**
  * Marks a business method to be automatically registered as a Vertx message consumer.
  * <p>
  * The method must accept exactly one parameter. If it accepts {@link io.vertx.core.eventbus.Message} then the return type must
- * be void. For any other type the {@link io.vertx.core.eventbus.Message#body()} is passed as the parameter value and the method
- * may return an object that is passed to
- * {@link io.vertx.core.eventbus.Message#reply(Object)}, either directly or via
+ * be void. For any other
+ * type the {@link io.vertx.core.eventbus.Message#body()}
+ * is passed as the parameter value and the method may return an object that is passed to
+ * {@link io.vertx.core.eventbus.Message#reply(Object)}, either
+ * directly or via
  * {@link java.util.concurrent.CompletionStage#thenAccept(java.util.function.Consumer)} in case of the method returns a
  * completion stage.
  * 
@@ -38,9 +41,6 @@ import io.vertx.core.eventbus.MessageCodec;
  *     }
  * }
  * </pre>
- * 
- * <p>
- * The CDI request context is active during notification of the registered message consumer.
  * 
  * @see io.vertx.core.eventbus.EventBus
  */
@@ -78,9 +78,8 @@ public @interface ConsumeEvent {
     /**
      * 
      * @return {@code null} if it should use a default MessageCodec
-     * @see io.quarkus.vertx.LocalEventBusCodec
+     * @see io.quarkus.vertx.runtime.deployment.GenericMessageCodec
      */
-    @SuppressWarnings("rawtypes")
-    Class<? extends MessageCodec> codec() default LocalEventBusCodec.class;
+    Class<? extends MessageCodec<?, ?>> codec() default GenericMessageCodec.class;
 
 }
