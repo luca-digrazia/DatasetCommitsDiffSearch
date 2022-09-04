@@ -16,7 +16,6 @@
  */
 package org.graylog2.rest.models.system.buffers.responses;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -26,7 +25,6 @@ import javax.annotation.Nullable;
 
 @AutoValue
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonAutoDetect
 public abstract class RingSummary {
     @JsonProperty
     public abstract SingleRingUtilization input();
