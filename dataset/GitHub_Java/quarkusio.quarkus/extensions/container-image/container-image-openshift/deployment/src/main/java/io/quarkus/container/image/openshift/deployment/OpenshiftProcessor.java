@@ -52,7 +52,7 @@ import io.quarkus.container.spi.ContainerImageBuildRequestBuildItem;
 import io.quarkus.container.spi.ContainerImageInfoBuildItem;
 import io.quarkus.container.spi.ContainerImagePushRequestBuildItem;
 import io.quarkus.deployment.Capability;
-import io.quarkus.deployment.IsNormalNotRemoteDev;
+import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ArchiveRootBuildItem;
@@ -119,7 +119,7 @@ public class OpenshiftProcessor {
         decorator.produce(new DecoratorBuildItem(new RemoveEnvVarDecorator(null, "JAVA_APP_LIB")));
     }
 
-    @BuildStep(onlyIf = { IsNormalNotRemoteDev.class, OpenshiftBuild.class }, onlyIfNot = NativeBuild.class)
+    @BuildStep(onlyIf = { IsNormal.class, OpenshiftBuild.class }, onlyIfNot = NativeBuild.class)
     public void openshiftRequirementsJvm(OpenshiftConfig openshiftConfig,
             S2iConfig s2iConfig,
             CurateOutcomeBuildItem curateOutcomeBuildItem,
@@ -174,7 +174,7 @@ public class OpenshiftProcessor {
         }
     }
 
-    @BuildStep(onlyIf = { IsNormalNotRemoteDev.class, OpenshiftBuild.class, NativeBuild.class })
+    @BuildStep(onlyIf = { IsNormal.class, OpenshiftBuild.class, NativeBuild.class })
     public void openshiftRequirementsNative(OpenshiftConfig openshiftConfig,
             S2iConfig s2iConfig,
             CurateOutcomeBuildItem curateOutcomeBuildItem,
@@ -225,7 +225,7 @@ public class OpenshiftProcessor {
         }
     }
 
-    @BuildStep(onlyIf = { IsNormalNotRemoteDev.class, OpenshiftBuild.class }, onlyIfNot = NativeBuild.class)
+    @BuildStep(onlyIf = { IsNormal.class, OpenshiftBuild.class }, onlyIfNot = NativeBuild.class)
     public void openshiftBuildFromJar(OpenshiftConfig openshiftConfig,
             S2iConfig s2iConfig,
             ContainerImageConfig containerImageConfig,
@@ -267,17 +267,14 @@ public class OpenshiftProcessor {
         if (packageConfig.isFastJar()) {
             createContainerImage(kubernetesClient, openshiftYml.get(), config, contextRoot, jar.getPath().getParent(),
                     jar.getPath().getParent());
-        } else if (jar.getLibraryDir() != null) { //When using uber-jar the libraryDir is going to be null, potentially causing NPE.
-            createContainerImage(kubernetesClient, openshiftYml.get(), config, contextRoot, jar.getPath().getParent(),
-                    jar.getPath(), jar.getLibraryDir());
         } else {
             createContainerImage(kubernetesClient, openshiftYml.get(), config, contextRoot, jar.getPath().getParent(),
-                    jar.getPath());
+                    jar.getPath(), jar.getLibraryDir());
         }
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "jar-container", Collections.emptyMap()));
     }
 
-    @BuildStep(onlyIf = { IsNormalNotRemoteDev.class, OpenshiftBuild.class, NativeBuild.class })
+    @BuildStep(onlyIf = { IsNormal.class, OpenshiftBuild.class, NativeBuild.class })
     public void openshiftBuildFromNative(OpenshiftConfig openshiftConfig, S2iConfig s2iConfig,
             ContainerImageConfig containerImageConfig,
             KubernetesClientBuildItem kubernetesClient,
