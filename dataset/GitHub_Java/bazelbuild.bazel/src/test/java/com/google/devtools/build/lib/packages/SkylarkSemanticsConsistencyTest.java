@@ -121,8 +121,6 @@ public class SkylarkSemanticsConsistencyTest {
         // <== Add new options here in alphabetic order ==>
         "--debug_depset_depth=" + rand.nextBoolean(),
         "--experimental_action_args=" + rand.nextBoolean(),
-        "--experimental_disable_external_package=" + rand.nextBoolean(),
-        "--experimental_sibling_repository_layout=" + rand.nextBoolean(),
         "--experimental_allow_incremental_repository_updates=" + rand.nextBoolean(),
         "--experimental_aspect_output_propagation=" + rand.nextBoolean(),
         "--experimental_build_setting_api=" + rand.nextBoolean(),
@@ -162,7 +160,6 @@ public class SkylarkSemanticsConsistencyTest {
         "--incompatible_restrict_named_params=" + rand.nextBoolean(),
         "--incompatible_run_shell_command_string=" + rand.nextBoolean(),
         "--incompatible_visibility_private_attributes_at_definition=" + rand.nextBoolean(),
-        "--incompatible_require_linker_input_cc_api=" + rand.nextBoolean(),
         "--incompatible_restrict_string_escapes=" + rand.nextBoolean(),
         "--incompatible_use_cc_configure_from_rules_cc=" + rand.nextBoolean(),
         "--internal_skylark_flag_test_canary=" + rand.nextBoolean());
@@ -177,8 +174,6 @@ public class SkylarkSemanticsConsistencyTest {
         // <== Add new options here in alphabetic order ==>
         .debugDepsetDepth(rand.nextBoolean())
         .experimentalActionArgs(rand.nextBoolean())
-        .experimentalDisableExternalPackage(rand.nextBoolean())
-        .experimentalSiblingRepositoryLayout(rand.nextBoolean())
         .experimentalAllowIncrementalRepositoryUpdates(rand.nextBoolean())
         .experimentalAspectOutputPropagation(rand.nextBoolean())
         .experimentalBuildSettingApi(rand.nextBoolean())
@@ -216,7 +211,6 @@ public class SkylarkSemanticsConsistencyTest {
         .incompatibleRestrictNamedParams(rand.nextBoolean())
         .incompatibleRunShellCommandString(rand.nextBoolean())
         .incompatibleVisibilityPrivateAttributesAtDefinition(rand.nextBoolean())
-        .incompatibleRequireLinkerInputCcApi(rand.nextBoolean())
         .incompatibleRestrictStringEscapes(rand.nextBoolean())
         .incompatibleUseCcConfigureFromRulesCc(rand.nextBoolean())
         .internalSkylarkFlagTestCanary(rand.nextBoolean())
