@@ -43,7 +43,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.google.common.collect.Maps;
 import java.util.Map;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import org.cliffc.high_scale_lib.Counter;
 import org.graylog2.activities.Activity;
 import org.graylog2.activities.ActivityWriter;
 import org.graylog2.cluster.Cluster;
@@ -88,7 +87,7 @@ public class Core implements GraylogServer {
     private static final int SCHEDULED_THREADS_POOL_SIZE = 30;
     private ScheduledExecutorService scheduler;
 
-    public static final String GRAYLOG2_VERSION = "0.10.0-rc.3";
+    public static final String GRAYLOG2_VERSION = "0.10.0-rc.2";
 
     public static final String MASTER_COUNTER_NAME = "master";
     
@@ -101,8 +100,6 @@ public class Core implements GraylogServer {
     private MessageCounterManagerImpl messageCounterManager;
 
     private Cluster cluster;
-    
-    private Counter benchmarkCounter = new Counter();
     
     private List<Initializer> initializers = Lists.newArrayList();
     private List<MessageInput> inputs = Lists.newArrayList();
@@ -504,10 +501,6 @@ public class Core implements GraylogServer {
         }
         
         return streams;
-    }
-    
-    public Counter getBenchmarkCounter() {
-        return benchmarkCounter;
     }
     
 }
