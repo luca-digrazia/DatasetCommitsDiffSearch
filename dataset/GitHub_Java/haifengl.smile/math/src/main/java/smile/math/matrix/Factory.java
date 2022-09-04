@@ -17,6 +17,8 @@
 package smile.math.matrix;
 
 import java.lang.reflect.Constructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * An abstract interface of dense matrix.
@@ -24,19 +26,13 @@ import java.lang.reflect.Constructor;
  * @author Haifeng Li
  */
 class Factory {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Factory.class);
+    private static final Logger logger = LoggerFactory.getLogger(Factory.class);
 
     private static Class<?> nlmatrix;
     private static Constructor<?> nlmatrixArray;
     private static Constructor<?> nlmatrixArray2D;
     private static Constructor<?> nlmatrixZeros;
     private static Constructor<?> nlmatrixOnes;
-
-    private static Class<?> ndmatrix;
-    private static Constructor<?> ndmatrixArray;
-    private static Constructor<?> ndmatrixArray2D;
-    private static Constructor<?> ndmatrixZeros;
-    private static Constructor<?> ndmatrixOnes;
 
     static {
         try {
@@ -68,36 +64,6 @@ class Factory {
         } catch (ClassNotFoundException e) {
             logger.info("smile-netlib module is not available in the classpath. Pure Java matrix library will be employed.");
         }
-
-        try {
-            ndmatrix = Class.forName("smile.nd4j.NDMatrix");
-
-            try {
-                ndmatrixArray2D = ndmatrix.getConstructor(double[][].class);
-            } catch (NoSuchMethodException e) {
-                logger.error("NDMatrix(double[][]) does not exist");
-            }
-
-            try {
-                ndmatrixArray = ndmatrix.getConstructor(double[].class);
-            } catch (NoSuchMethodException e) {
-                logger.error("NDMatrix(double[]) does not exist");
-            }
-
-            try {
-                ndmatrixZeros = ndmatrix.getConstructor(Integer.TYPE, Integer.TYPE);
-            } catch (NoSuchMethodException e) {
-                logger.error("NDMatrix(int, int) does not exist");
-            }
-
-            try {
-                ndmatrixOnes = ndmatrix.getConstructor(Integer.TYPE, Integer.TYPE, Double.TYPE);
-            } catch (NoSuchMethodException e) {
-                logger.error("NDMatrix(int, int, double) does not exist");
-            }
-        } catch (ClassNotFoundException e) {
-            logger.info("smile-nd4j module is not available in the classpath. Pure Java matrix library will be employed.");
-        }
     }
 
     /** Creates a matrix initialized by A. */
@@ -107,14 +73,6 @@ class Factory {
                 return (DenseMatrix) nlmatrixArray2D.newInstance((Object) A);
             } catch (Exception e) {
                 logger.error("Failed to call NLMatrix(double[][]): {}", e);
-            }
-        }
-
-        if (ndmatrixZeros != null) {
-            try {
-                return (DenseMatrix) ndmatrixArray2D.newInstance((Object) A);
-            } catch (Exception e) {
-                logger.error("Failed to call NDMatrix(double[][]): {}", e);
             }
         }
 
@@ -131,14 +89,6 @@ class Factory {
             }
         }
 
-        if (ndmatrixZeros != null) {
-            try {
-                return (DenseMatrix) ndmatrixArray.newInstance(A);
-            } catch (Exception e) {
-                logger.error("Failed to call NDMatrix(double[]): {}", e);
-            }
-        }
-
         return new JMatrix(A);
     }
 
@@ -152,14 +102,6 @@ class Factory {
             }
         }
 
-        if (ndmatrixZeros != null) {
-            try {
-                return (DenseMatrix) ndmatrixZeros.newInstance(nrows, ncols);
-            } catch (Exception e) {
-                logger.error("Failed to call NDMatrix(int, int): {}", e);
-            }
-        }
-
         return new JMatrix(nrows, ncols);
     }
 
@@ -170,14 +112,6 @@ class Factory {
                 return (DenseMatrix) nlmatrixOnes.newInstance(nrows, ncols, value);
             } catch (Exception e) {
                 logger.error("Failed to call NLMatrix(int, int, double): {}", e);
-            }
-        }
-
-        if (ndmatrixOnes != null) {
-            try {
-                return (DenseMatrix) ndmatrixOnes.newInstance(nrows, ncols, value);
-            } catch (Exception e) {
-                logger.error("Failed to call NDMatrix(int, int, double): {}", e);
             }
         }
 
