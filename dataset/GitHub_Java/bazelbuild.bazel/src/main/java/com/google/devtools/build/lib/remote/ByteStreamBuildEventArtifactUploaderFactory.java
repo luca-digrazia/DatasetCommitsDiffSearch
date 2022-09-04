@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.remote;
 
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
-import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.runtime.BuildEventArtifactUploaderFactory;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import io.grpc.Context;
@@ -29,7 +28,7 @@ class ByteStreamBuildEventArtifactUploaderFactory implements
   private final ByteStreamUploader uploader;
   private final String remoteServerName;
   private final Context ctx;
-  @Nullable private final String remoteInstanceName;
+  private final @Nullable String remoteInstanceName;
 
   ByteStreamBuildEventArtifactUploaderFactory(
       ByteStreamUploader uploader, String remoteServerName, Context ctx,
