@@ -27,27 +27,23 @@ import javax.annotation.Nullable;
 @AutoValue
 @JsonAutoDetect
 public abstract class IndexRangeSummary {
-    @JsonProperty("index_name")
+    @JsonProperty("index")
     public abstract String indexName();
-
-    @JsonProperty("begin")
-    public abstract DateTime begin();
-
-    @JsonProperty("end")
-    public abstract DateTime end();
 
     @Nullable @JsonProperty("calculated_at")
     public abstract DateTime calculatedAt();
 
-    @JsonProperty("took_ms")
+    @JsonProperty("starts")
+    public abstract DateTime start();
+
+    @JsonProperty("calculation_took_ms")
     public abstract int calculationTookMs();
 
     @JsonCreator
-    public static IndexRangeSummary create(@JsonProperty("index_name") String indexName,
-                                           @JsonProperty("begin") DateTime begin,
-                                           @JsonProperty("end") DateTime end,
+    public static IndexRangeSummary create(@JsonProperty("index") String indexName,
                                            @Nullable @JsonProperty("calculated_at") DateTime calculatedAt,
-                                           @JsonProperty("took_ms") int calculationTookMs) {
-        return new AutoValue_IndexRangeSummary(indexName, begin, end, calculatedAt, calculationTookMs);
+                                           @JsonProperty("starts") DateTime start,
+                                           @JsonProperty("calculation_took_ms") int calculationTookMs) {
+        return new AutoValue_IndexRangeSummary(indexName, calculatedAt, start, calculationTookMs);
     }
 }
