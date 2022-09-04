@@ -21,11 +21,10 @@ import java.util.stream.Collectors;
 
 import smile.data.DataFrame;
 import smile.data.Tuple;
-import smile.data.type.*;
+import smile.data.type.DataTypes;
+import smile.data.type.StructField;
+import smile.data.type.StructType;
 import smile.data.vector.*;
-import smile.data.vector.Vector;
-import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.Matrix;
 
 /**
  * A formula extracts the variables from a context
@@ -35,9 +34,9 @@ import smile.math.matrix.Matrix;
  */
 public class Formula implements Serializable {
     /** The left-hand side of formula. */
-    private Term response;
+    private Term lhs;
     /** The right-hand side of formula. */
-    private HyperTerm[] predictors;
+    private HyperTerm[] rhs;
     /** The terms after binding to a schema and expanding the hyper-terms. */
     private Term[] terms;
     /** The formula output schema. */
@@ -45,29 +44,29 @@ public class Formula implements Serializable {
 
     /**
      * Constructor.
-     * @param response the response formula, i.e. dependent variable.
+     * @param lhs the left-hand side of formula, i.e. dependent variable.
      */
-    public Formula(Term response) {
-        this.response = response;
-        this.predictors = new HyperTerm[] { new All() };
+    public Formula(Term lhs) {
+        this.lhs = lhs;
+        this.rhs = new HyperTerm[] { new All() };
     }
 
     /**
      * Constructor.
-     * @param predictors the right-hand side of formula, i.e. independent/predictor variables.
+     * @param rhs the right-hand side of formula, i.e. independent/predictor variables.
      */
-    public Formula(HyperTerm[] predictors) {
-        this.predictors = predictors;
+    public Formula(HyperTerm[] rhs) {
+        this.rhs = rhs;
     }
 
     /**
      * Constructor.
-     * @param response the left-hand side of formula, i.e. dependent variable.
-     * @param predictors the right-hand side of formula, i.e. independent/predictor variables.
+     * @param lhs the left-hand side of formula, i.e. dependent variable.
+     * @param rhs the right-hand side of formula, i.e. independent/predictor variables.
      */
-    public Formula(Term response, HyperTerm[] predictors) {
-        this.response = response;
-        this.predictors = predictors;
+    public Formula(Term lhs, HyperTerm[] rhs) {
+        this.lhs = lhs;
+        this.rhs = rhs;
     }
 
     /**
@@ -144,19 +143,19 @@ public class Formula implements Serializable {
 
     /** Binds the formula to a schema and returns the output schema of formula. */
     public StructType bind(StructType inputSchema) {
-        Arrays.stream(predictors).forEach(term -> term.bind(inputSchema));
+        Arrays.stream(rhs).forEach(term -> term.bind(inputSchema));
 
-        List<Term> factors = Arrays.stream(predictors)
+        List<Term> factors = Arrays.stream(rhs)
                 .filter(term -> !(term instanceof All) && !(term instanceof Delete))
                 .flatMap(term -> term.terms().stream())
                 .collect(Collectors.toList());
 
-        if (response != null) {
-            response.bind(inputSchema);
-            factors.add(response);
+        if (lhs != null) {
+            lhs.bind(inputSchema);
+            factors.add(lhs);
         }
 
-        List<Term> removes = Arrays.stream(predictors)
+        List<Term> removes = Arrays.stream(rhs)
                 .filter(term -> term instanceof Delete)
                 .flatMap(term -> term.terms().stream())
                 .collect(Collectors.toList());
@@ -165,7 +164,7 @@ public class Formula implements Serializable {
             .flatMap(factor -> factor.variables().stream())
             .collect(Collectors.toSet());
 
-        Optional<All> hasAll = Arrays.stream(predictors)
+        Optional<All> hasAll = Arrays.stream(rhs)
                 .filter(term -> term instanceof All)
                 .map(term -> (All) term)
                 .findAny();
@@ -194,109 +193,24 @@ public class Formula implements Serializable {
     }
 
     /**
-     * Returns a data frame with the variables needed to use formula.
+     * Apply the formula on a DataFrame.
      * @param df The input DataFrame.
      */
-    public DataFrame frame(DataFrame df) {
-        bind(df.schema());
+    public DataFrame apply(DataFrame df) {
+        StructType schema = bind(df.schema());
+        StructField[] fields = schema.fields();
+
         Term[] terms = terms();
-        BaseVector[] vectors = new BaseVector[terms.length];
-        for (int i = 0; i < terms.length; i++) {
-            vectors[i] = terms[i].apply(df);
-        }
-
-        return DataFrame.of(vectors);
-    }
-    /**
-     * Creates a design (or model) matrix with bias column.
-     * @param df The input DataFrame.
-     */
-    public DenseMatrix matrix(DataFrame df) {
-        return matrix(df, true);
-    }
-
-    /**
-     * Creates a design (or model) matrix.
-     * @param df The input DataFrame.
-     */
-    public DenseMatrix matrix(DataFrame df, boolean bias) {
-        bind(df.schema());
-        Term[] terms = terms();
-
-        int nrows = df.nrows();
-        int ncols = terms.length;
-        int j0 = 0;
-
-        if (response != null) {
-            ncols -= 1;
-            j0 = 1;
-        }
-
-        ncols += bias ? 1 : 0;
-        DenseMatrix m = Matrix.of(nrows, ncols, 0.0);
-        if (bias) for (int i = 0; i < nrows; i++) m.set(i, ncols, 1.0);
-
-        for (int j = 0, jj = j0; jj < terms.length; j++, jj++) {
-            BaseVector v = terms[jj].apply(df);
-            DataType type = terms[jj].type();
-            switch (type.id()) {
-                case Double:
-                case Integer:
-                case Float:
-                case Long:
-                case Boolean:
-                case Byte:
-                case Short:
-                case Char: {
-                    for (int i = 0; i < nrows; i++) m.set(i, j, v.getDouble(i));
-                    break;
-                }
-
-                case String: {
-                    for (int i = 0; i < nrows; i++) {
-                        String s = (String) v.get(i);
-                        m.set(i, j, s == null ? Double.NaN : Double.valueOf(s));
-                    }
-                    break;
-                }
-
-                case Object: {
-                    Class clazz = ((ObjectType) type).getObjectClass();
-                    if (clazz == Boolean.class) {
-                        for (int i = 0; i < nrows; i++) {
-                            Boolean b = (Boolean) v.get(i);
-                            if (b != null)
-                                m.set(i, j, b.booleanValue() ? 1 : 0);
-                            else
-                                m.set(i, j, Double.NaN);
-                        }
-                    } else if (Number.class.isAssignableFrom(clazz)) {
-                        for (int i = 0; i < nrows; i++) m.set(i, j, v.getDouble(i));
-                    } else {
-                        throw new UnsupportedOperationException(String.format("DataFrame.toMatrix() doesn't support type %s", type));
-                    }
-                    break;
-                }
-
-                default:
-                    throw new UnsupportedOperationException(String.format("DataFrame.toMatrix() doesn't support type %s", type));
+        BaseVector[] vectors = new BaseVector[fields.length];
+        for (int i = 0; i < fields.length; i++) {
+            StructField field = fields[i];
+            if (terms[i].isVariable()) {
+                vectors[i] = df.column(field.name);
+            } else {
+                vectors[i] = df.apply(terms[i]);
             }
         }
 
-        return m;
-    }
-
-
-    /**
-     * Returns the response vector.
-     * @param df The input DataFrame.
-     */
-    public BaseVector response(DataFrame df) {
-        if (response == null) {
-            throw new IllegalStateException("Formula doesn't have a response variable");
-        }
-
-        response.bind(df.schema());
-        return response.apply(df);
+        return DataFrame.of(vectors);
     }
 }
