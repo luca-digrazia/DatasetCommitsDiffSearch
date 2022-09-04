@@ -13,18 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.actions.FileStateType;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
-import com.google.devtools.build.skyframe.AbstractSkyKey;
-import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.skyframe.LegacySkyKey;
+import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.util.Objects;
 import javax.annotation.Nullable;
@@ -116,31 +112,12 @@ public abstract class FileValue implements SkyValue {
     return realFileStateValue().getDigest();
   }
 
-  /** Returns a key for building a file value for the given root-relative path. */
+  /**
+   * Returns a key for building a file value for the given root-relative path.
+   */
   @ThreadSafe
-  public static Key key(RootedPath rootedPath) {
-    return Key.create(rootedPath);
-  }
-
-  @AutoCodec.VisibleForSerialization
-  @AutoCodec
-  static class Key extends AbstractSkyKey<RootedPath> {
-    private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
-
-    private Key(RootedPath arg) {
-      super(arg);
-    }
-
-    @AutoCodec.VisibleForSerialization
-    @AutoCodec.Instantiator
-    static Key create(RootedPath arg) {
-      return interner.intern(new Key(arg));
-    }
-
-    @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctions.FILE;
-    }
+  public static SkyKey key(RootedPath rootedPath) {
+    return LegacySkyKey.create(SkyFunctions.FILE, rootedPath);
   }
 
   /**
@@ -169,16 +146,14 @@ public abstract class FileValue implements SkyValue {
    * requested path. For example, this is the case for the path "foo/bar/baz" if neither 'foo' nor
    * 'foo/bar' nor 'foo/bar/baz' are symlinks.
    */
-  @VisibleForTesting
-  @AutoCodec
   public static final class RegularFileValue extends FileValue {
 
     private final RootedPath rootedPath;
     private final FileStateValue fileStateValue;
 
-    public RegularFileValue(RootedPath rootedPath, FileStateValue fileStateValue) {
+    public RegularFileValue(RootedPath rootedPath, FileStateValue fileState) {
       this.rootedPath = Preconditions.checkNotNull(rootedPath);
-      this.fileStateValue = Preconditions.checkNotNull(fileStateValue);
+      this.fileStateValue = Preconditions.checkNotNull(fileState);
     }
 
     @Override
@@ -219,15 +194,13 @@ public abstract class FileValue implements SkyValue {
    * requested path. For example, this is the case for the path "foo/bar/baz" if at least one of
    * 'foo', 'foo/bar', or 'foo/bar/baz' is a symlink.
    */
-  @AutoCodec.VisibleForSerialization
-  @AutoCodec
-  static class DifferentRealPathFileValue extends FileValue {
+  public static class DifferentRealPathFileValue extends FileValue {
 
     protected final RootedPath realRootedPath;
     protected final FileStateValue realFileStateValue;
 
-    @AutoCodec.VisibleForSerialization
-    DifferentRealPathFileValue(RootedPath realRootedPath, FileStateValue realFileStateValue) {
+    public DifferentRealPathFileValue(RootedPath realRootedPath,
+                                      FileStateValue realFileStateValue) {
       this.realRootedPath = Preconditions.checkNotNull(realRootedPath);
       this.realFileStateValue = Preconditions.checkNotNull(realFileStateValue);
     }
@@ -267,16 +240,13 @@ public abstract class FileValue implements SkyValue {
   }
 
   /** Implementation of {@link FileValue} for files that are symlinks. */
-  @VisibleForTesting
-  @AutoCodec
-  static final class SymlinkFileValue extends DifferentRealPathFileValue {
-    private final PathFragment linkTarget;
+  public static final class SymlinkFileValue extends DifferentRealPathFileValue {
+    private final PathFragment linkValue;
 
-    @VisibleForTesting
-    SymlinkFileValue(
-        RootedPath realRootedPath, FileStateValue realFileStateValue, PathFragment linkTarget) {
-      super(realRootedPath, realFileStateValue);
-      this.linkTarget = linkTarget;
+    public SymlinkFileValue(RootedPath realRootedPath, FileStateValue realFileState,
+                            PathFragment linkTarget) {
+      super(realRootedPath, realFileState);
+      this.linkValue = linkTarget;
     }
 
     @Override
@@ -286,7 +256,7 @@ public abstract class FileValue implements SkyValue {
 
     @Override
     public PathFragment getUnresolvedLinkTarget() {
-      return linkTarget;
+      return linkValue;
     }
 
     @Override
@@ -300,19 +270,19 @@ public abstract class FileValue implements SkyValue {
       SymlinkFileValue other = (SymlinkFileValue) obj;
       return realRootedPath.equals(other.realRootedPath)
           && realFileStateValue.equals(other.realFileStateValue)
-          && linkTarget.equals(other.linkTarget);
+          && linkValue.equals(other.linkValue);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(realRootedPath, realFileStateValue, linkTarget, Boolean.TRUE);
+      return Objects.hash(
+          realRootedPath, realFileStateValue, linkValue, Boolean.TRUE);
     }
 
     @Override
     public String toString() {
-      return String.format(
-          "symlink (real_path=%s, real_state=%s, link_value=%s)",
-          realRootedPath, realFileStateValue, linkTarget);
+      return String.format("symlink (real_path=%s, real_state=%s, link_value=%s)",
+          realRootedPath, realFileStateValue, linkValue);
     }
   }
 }

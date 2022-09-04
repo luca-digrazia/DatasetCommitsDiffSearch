@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
@@ -41,7 +42,7 @@ class WorkerFilesHash {
 
   static HashCode getCombinedHash(SortedMap<PathFragment, HashCode> workerFilesMap) {
     Hasher hasher = Hashing.sha256().newHasher();
-    for (Map.Entry<PathFragment, HashCode> workerFile : workerFilesMap.entrySet()) {
+    for (Entry<PathFragment, HashCode> workerFile : workerFilesMap.entrySet()) {
       hasher.putString(workerFile.getKey().getPathString(), Charset.defaultCharset());
       hasher.putBytes(workerFile.getValue().asBytes());
     }
@@ -65,11 +66,11 @@ class WorkerFilesHash {
           HashCode.fromBytes(actionInputFileCache.getMetadata(tool).getDigest()));
     }
 
-    for (Map.Entry<PathFragment, Map<PathFragment, Artifact>> rootAndMappings :
+    for (Entry<PathFragment, Map<PathFragment, Artifact>> rootAndMappings :
         spawn.getRunfilesSupplier().getMappings().entrySet()) {
       PathFragment root = rootAndMappings.getKey();
       Preconditions.checkState(!root.isAbsolute(), root);
-      for (Map.Entry<PathFragment, Artifact> mapping : rootAndMappings.getValue().entrySet()) {
+      for (Entry<PathFragment, Artifact> mapping : rootAndMappings.getValue().entrySet()) {
         Artifact localArtifact = mapping.getValue();
         if (localArtifact != null) {
           Metadata metadata = actionInputFileCache.getMetadata(localArtifact);

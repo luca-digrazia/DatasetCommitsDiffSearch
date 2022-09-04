@@ -170,7 +170,8 @@ public class FileFunction implements SkyFunction {
       throws FileFunctionException, InterruptedException {
     RootedPath symlinkTargetRootedPath;
     if (symlinkTarget.isAbsolute()) {
-      Path path = rootedPath.asPath().getFileSystem().getPath(symlinkTarget);
+      Path path = rootedPath.asPath().getFileSystem().getRootDirectory().getRelative(
+          symlinkTarget);
       symlinkTargetRootedPath =
           RootedPath.toRootedPathMaybeUnderRoot(path, pkgLocator.get().getPathEntries());
     } else {

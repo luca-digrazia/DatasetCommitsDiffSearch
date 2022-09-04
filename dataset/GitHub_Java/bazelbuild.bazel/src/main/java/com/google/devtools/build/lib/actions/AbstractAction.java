@@ -606,9 +606,9 @@ public abstract class AbstractAction implements Action, SkylarkValue {
     return null;
   }
 
-  @Override
   @Nullable
+  @Override
   public PlatformInfo getExecutionPlatform() {
-    return getOwner().getExecutionPlatform();
+    return null;
   }
 }

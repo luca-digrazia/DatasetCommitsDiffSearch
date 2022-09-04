@@ -1862,11 +1862,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   @VisibleForTesting
-  public PackageFactory getPackageFactoryForTesting() {
-    return pkgFactory;
-  }
-
-  @VisibleForTesting
   public Package.Builder.Helper getPackageBuilderHelperForTesting() {
     return pkgFactory.getPackageBuilderHelperForTesting();
   }

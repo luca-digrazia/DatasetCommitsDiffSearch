@@ -261,7 +261,8 @@ public class ActionMetadataHandler implements MetadataHandler {
     // metadata separately.
     // Use the FileValue's digest if no digest was injected, or if the file can't be digested.
     injectedDigest = injectedDigest != null || !isFile ? injectedDigest : data.getDigest();
-    FileArtifactValue value = FileArtifactValue.create(artifact, data, injectedDigest);
+    FileArtifactValue value =
+        FileArtifactValue.create(artifact, isFile, isFile ? data.getSize() : 0, injectedDigest);
     FileArtifactValue oldValue = additionalOutputData.putIfAbsent(artifact, value);
     checkInconsistentData(artifact, oldValue, value);
     return metadataFromValue(value);
