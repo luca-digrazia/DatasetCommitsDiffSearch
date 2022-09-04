@@ -126,7 +126,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
     }
 
     /**
-     * 开始播放
+     * 显示wifi确定框
      */
     @Override
     public void startPlayLogic() {
