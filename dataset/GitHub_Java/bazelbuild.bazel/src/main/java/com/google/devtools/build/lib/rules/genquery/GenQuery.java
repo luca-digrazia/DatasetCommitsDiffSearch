@@ -36,8 +36,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
-import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction.DeterministicWriter;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
+import com.google.devtools.build.lib.analysis.actions.ByteStringDeterministicWriter;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
@@ -60,20 +59,19 @@ import com.google.devtools.build.lib.pkgcache.PackageProvider;
 import com.google.devtools.build.lib.pkgcache.TargetPatternPreloader;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
-import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.QueryEnvironmentFactory;
+import com.google.devtools.build.lib.query2.engine.DigraphQueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
-import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.engine.QueryUtil;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.SkyframeRestartQueryException;
+import com.google.devtools.build.lib.query2.query.BlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.query.output.OutputFormatter;
 import com.google.devtools.build.lib.query2.query.output.QueryOptions;
 import com.google.devtools.build.lib.query2.query.output.QueryOptions.OrderOutput;
 import com.google.devtools.build.lib.query2.query.output.QueryOutputUtils;
-import com.google.devtools.build.lib.rules.genquery.GenQueryOutputStream.GenQueryResult;
 import com.google.devtools.build.lib.runtime.KeepGoingOption;
 import com.google.devtools.build.lib.skyframe.PackageValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue;
@@ -93,7 +91,6 @@ import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.protobuf.ByteString;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.Collection;
 import java.util.HashSet;
@@ -119,7 +116,6 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     // The query string
     final String query = ruleContext.attributes().get("expression", Type.STRING);
 
-    @SuppressWarnings("unchecked")
     OptionsParser optionsParser =
         OptionsParser.builder()
             .optionsClasses(QueryOptions.class, KeepGoingOption.class)
@@ -156,23 +152,13 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       ruleContext.attributeError("opts", "option --order_output is not allowed");
       return null;
     }
-    if (optionsParser.containsExplicitOption("experimental_graphless_query")) {
-      ruleContext.attributeError("opts", "option --experimental_graphless_query is not allowed");
-      return null;
-    }
-    if (ruleContext.getConfiguration().getOptions().get(CoreOptions.class).useGraphlessQuery) {
-      queryOptions.orderOutput = OrderOutput.NO;
-      queryOptions.useGraphlessQuery = true;
-    } else {
-      // Force results to be deterministic.
-      queryOptions.orderOutput = OrderOutput.FULL;
-      queryOptions.useGraphlessQuery = false;
-    }
+    // Force results to be deterministic.
+    queryOptions.orderOutput = OrderOutput.FULL;
 
     // force relative_locations to true so it has a deterministic output across machines.
     queryOptions.relativeLocations = true;
 
-    GenQueryResult result;
+    ByteString result;
     try (SilentCloseable c =
         Profiler.instance().profile("GenQuery.executeQuery/" + ruleContext.getLabel())) {
       result =
@@ -196,14 +182,11 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> filesToBuild = NestedSetBuilder.create(Order.STABLE_ORDER, outputArtifact);
     return new RuleConfiguredTargetBuilder(ruleContext)
         .setFilesToBuild(filesToBuild)
-        .addProvider(
-            RunfilesProvider.class,
-            RunfilesProvider.simple(
-                new Runfiles.Builder(
-                        ruleContext.getWorkspaceName(),
-                        ruleContext.getConfiguration().legacyExternalRunfiles())
-                    .addTransitiveArtifacts(filesToBuild)
-                    .build()))
+        .add(RunfilesProvider.class, RunfilesProvider.simple(
+            new Runfiles.Builder(
+                ruleContext.getWorkspaceName(),
+                ruleContext.getConfiguration().legacyExternalRunfiles())
+                .addTransitiveArtifacts(filesToBuild).build()))
         .build();
   }
 
@@ -279,7 +262,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
   }
 
   @Nullable
-  private GenQueryResult executeQuery(
+  private ByteString executeQuery(
       RuleContext ruleContext, QueryOptions queryOptions, Collection<Label> scope, String query)
       throws InterruptedException {
     SkyFunction.Environment env = ruleContext.getAnalysisEnvironment().getSkyframeEnv();
@@ -306,7 +289,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
 
   @SuppressWarnings("unchecked")
   @Nullable
-  private GenQueryResult doQuery(
+  private ByteString doQuery(
       QueryOptions queryOptions,
       PreloadedMapPackageProvider packageProvider,
       Predicate<Label> labelFilter,
@@ -315,7 +298,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       RuleContext ruleContext)
       throws InterruptedException {
 
-    QueryEvalResult queryResult;
+    DigraphQueryEvalResult<Target> queryResult;
     OutputFormatter formatter;
     AggregateAllOutputFormatterCallback<Target, ?> targets;
     try {
@@ -339,30 +322,32 @@ public class GenQuery implements RuleConfiguredTargetFactory {
             OutputFormatter.formatterNames(OutputFormatter.getDefaultFormatters())));
         return null;
       }
-      AbstractBlazeQueryEnvironment<Target> queryEnvironment =
-          QUERY_ENVIRONMENT_FACTORY.create(
-              /*transitivePackageLoader=*/ null,
-              /* graphFactory= */ null,
-              packageProvider,
-              packageProvider,
-              preloader,
-              PathFragment.EMPTY_FRAGMENT,
-              /*keepGoing=*/ false,
-              ruleContext.attributes().get("strict", Type.BOOLEAN),
-              /*orderedResults=*/ !QueryOutputUtils.shouldStreamResults(queryOptions, formatter),
-              /*universeScope=*/ ImmutableList.of(),
-              // Use a single thread to prevent race conditions causing nondeterministic output
-              // (b/127644784). All the packages are already loaded at this point, so there is
-              // no need to start up multiple threads anyway.
-              /*loadingPhaseThreads=*/ 1,
-              labelFilter,
-              getEventHandler(ruleContext),
-              settings,
-              /*extraFunctions=*/ ImmutableList.of(),
-              /*packagePath=*/ null,
-              /*blockUniverseEvaluationErrors=*/ false,
-              /*useForkJoinPool=*/ false,
-              /*useGraphlessQuery=*/ queryOptions.useGraphlessQuery);
+      BlazeQueryEnvironment queryEnvironment =
+          (BlazeQueryEnvironment)
+              QUERY_ENVIRONMENT_FACTORY.create(
+                  /*transitivePackageLoader=*/ null,
+                  /* graphFactory= */ null,
+                  packageProvider,
+                  packageProvider,
+                  preloader,
+                  PathFragment.EMPTY_FRAGMENT,
+                  /*keepGoing=*/ false,
+                  ruleContext.attributes().get("strict", Type.BOOLEAN),
+                  /*orderedResults=*/ !QueryOutputUtils.shouldStreamResults(
+                      queryOptions, formatter),
+                  /*universeScope=*/ ImmutableList.of(),
+                  // Use a single thread to prevent race conditions causing nondeterministic output
+                  // (b/127644784). All the packages are already loaded at this point, so there is
+                  // no need to start up multiple threads anyway.
+                  /*loadingPhaseThreads=*/ 1,
+                  labelFilter,
+                  getEventHandler(ruleContext),
+                  settings,
+                  /*extraFunctions=*/ ImmutableList.of(),
+                  /*packagePath=*/ null,
+                  /*blockUniverseEvaluationErrors=*/ false,
+                  /*useForkJoinPool=*/ false,
+                  /*useGraphlessQuery=*/ false);
       QueryExpression expr = QueryExpression.parse(query, queryEnvironment);
       formatter.verifyCompatible(queryEnvironment, expr);
       targets = QueryUtil.newOrderedAggregateAllOutputFormatterCallback(queryEnvironment);
@@ -378,39 +363,37 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       throw new RuntimeException(e);
     }
 
-    // TODO(b/137379942): Enable compression.
-    GenQueryOutputStream outputStream = new GenQueryOutputStream(/*compressionEnabled=*/ false);
+    ByteString.Output outputStream = ByteString.newOutput();
     try {
       QueryOutputUtils
           .output(queryOptions, queryResult, targets.getResult(), formatter, outputStream,
           queryOptions.aspectDeps.createResolver(packageProvider, getEventHandler(ruleContext)));
-      outputStream.close();
     } catch (ClosedByInterruptException e) {
       throw new InterruptedException(e.getMessage());
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
 
-    return outputStream.getResult();
+    return outputStream.toByteString();
   }
 
   @Immutable // assuming no other reference to result
   private static final class QueryResultAction extends AbstractFileWriteAction {
-    private final GenQueryResult result;
+    private final ByteString result;
 
-    private QueryResultAction(ActionOwner owner, Artifact output, GenQueryResult result) {
+    private QueryResultAction(ActionOwner owner, Artifact output, ByteString result) {
       super(owner, ImmutableList.<Artifact>of(), output, /*makeExecutable=*/false);
       this.result = result;
     }
 
     @Override
     public DeterministicWriter newDeterministicWriter(ActionExecutionContext ctx) {
-      return new GenQueryResultWriter(result);
+      return new ByteStringDeterministicWriter(result);
     }
 
     @Override
     protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-      result.fingerprint(fp);
+      fp.addBytes(result.toByteArray());
     }
   }
 
@@ -581,24 +564,6 @@ public class GenQuery implements RuleConfiguredTargetFactory {
   private static class BrokenQueryScopeException extends Exception {
     public BrokenQueryScopeException(String message) {
       super(message);
-    }
-  }
-
-  private static class GenQueryResultWriter implements DeterministicWriter {
-    private final GenQueryResult genQueryResult;
-
-    GenQueryResultWriter(GenQueryResult genQueryResult) {
-      this.genQueryResult = genQueryResult;
-    }
-
-    @Override
-    public void writeOutputFile(OutputStream out) throws IOException {
-      genQueryResult.writeTo(out);
-    }
-
-    @Override
-    public ByteString getBytes() throws IOException {
-      return genQueryResult.getBytes();
     }
   }
 }

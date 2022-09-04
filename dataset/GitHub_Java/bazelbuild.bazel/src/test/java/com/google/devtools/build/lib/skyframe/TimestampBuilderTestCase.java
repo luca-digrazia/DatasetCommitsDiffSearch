@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.ArtifactSkyKey;
 import com.google.devtools.build.lib.actions.BasicActionLookupValue;
 import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.devtools.build.lib.actions.Executor;
@@ -46,6 +47,8 @@ import com.google.devtools.build.lib.actions.FileStateValue;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
+import com.google.devtools.build.lib.actions.ResourceManager;
+import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics;
@@ -138,7 +141,6 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
   protected OptionsParser options;
 
   protected final ActionKeyContext actionKeyContext = new ActionKeyContext();
-  private TopDownActionCache topDownActionCache;
 
   @Before
   public final void initialize() throws Exception  {
@@ -149,13 +151,9 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     options.parse();
     inMemoryCache = new InMemoryActionCache();
     tsgm = new TimestampGranularityMonitor(clock);
+    ResourceManager.instance().setAvailableResources(ResourceSet.createWithRamCpu(100, 1));
     actions = new LinkedHashSet<>();
     actionTemplateExpansionFunction = new ActionTemplateExpansionFunction(actionKeyContext);
-    topDownActionCache = initTopDownActionCache();
-  }
-
-  protected TopDownActionCache initTopDownActionCache() {
-    return null;
   }
 
   protected void clearActions() {
@@ -265,7 +263,6 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
                 .put(
                     SkyFunctions.ACTION_TEMPLATE_EXPANSION,
                     new DelegatingActionTemplateExpansionFunction())
-                .put(SkyFunctions.ACTION_SKETCH, new ActionSketchFunction(actionKeyContext))
                 .build(),
             differencer,
             evaluationProgressReceiver);
@@ -314,14 +311,13 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
             options,
             new ActionCacheChecker(
                 actionCache, null, actionKeyContext, ALWAYS_EXECUTE_FILTER, null),
-            topDownActionCache,
             null);
         skyframeActionExecutor.setActionExecutionProgressReportingObjects(
             EMPTY_PROGRESS_SUPPLIER, EMPTY_COMPLETION_RECEIVER);
 
         List<SkyKey> keys = new ArrayList<>();
         for (Artifact artifact : artifacts) {
-          keys.add(Artifact.key(artifact));
+          keys.add(ArtifactSkyKey.key(artifact, true));
         }
 
         try {
@@ -449,7 +445,9 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
   }
 
   protected void buildArtifacts(Builder builder, Executor executor, Artifact... artifacts)
-      throws BuildFailedException, AbruptExitException, InterruptedException, TestExecException {
+      throws BuildFailedException, AbruptExitException, InterruptedException, TestExecException,
+          OptionsParsingException {
+
     tsgm.setCommandStartTime();
     Set<Artifact> artifactsToBuild = Sets.newHashSet(artifacts);
     Set<ConfiguredTargetKey> builtTargets = new HashSet<>();

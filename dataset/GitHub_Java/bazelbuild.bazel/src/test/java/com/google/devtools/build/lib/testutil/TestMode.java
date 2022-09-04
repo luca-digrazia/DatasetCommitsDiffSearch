@@ -15,17 +15,18 @@ package com.google.devtools.build.lib.testutil;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkModules;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
-import com.google.devtools.build.lib.syntax.Module;
+import com.google.devtools.build.lib.syntax.Environment;
+import com.google.devtools.build.lib.syntax.Environment.GlobalFrame;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.common.options.OptionsParser;
 import java.util.Map;
 
 /**
- * Describes a particular testing mode by determining how the appropriate {@code StarlarkThread} has
- * to be created
+ * Describes a particular testing mode by determining how the
+ * appropriate {@code Environment} has to be created
  */
 public abstract class TestMode {
   private static StarlarkSemantics parseSkylarkSemantics(String... skylarkOptions)
@@ -39,50 +40,41 @@ public abstract class TestMode {
   public static final TestMode BUILD =
       new TestMode() {
         @Override
-        public StarlarkThread createStarlarkThread(
-            StarlarkThread.PrintHandler printHandler,
+        public Environment createEnvironment(EventHandler eventHandler,
             Map<String, Object> builtins,
             String... skylarkOptions)
             throws Exception {
-          StarlarkThread thread =
-              StarlarkThread.builder(Mutability.create("build test"))
-                  .setGlobals(createModule(builtins))
-                  .setSemantics(TestMode.parseSkylarkSemantics(skylarkOptions))
-                  .build();
-          thread.setPrintHandler(printHandler);
-          return thread;
+          return Environment.builder(Mutability.create("build test"))
+              .setGlobals(createGlobalFrame(builtins))
+              .setEventHandler(eventHandler)
+              .setSemantics(TestMode.parseSkylarkSemantics(skylarkOptions))
+              .build();
         }
       };
 
   public static final TestMode SKYLARK =
       new TestMode() {
         @Override
-        public StarlarkThread createStarlarkThread(
-            StarlarkThread.PrintHandler printHandler,
-            Map<String, Object> builtins,
-            String... skylarkOptions)
+        public Environment createEnvironment(EventHandler eventHandler,
+            Map<String, Object> builtins, String... skylarkOptions)
             throws Exception {
-          StarlarkThread thread =
-              StarlarkThread.builder(Mutability.create("skylark test"))
-                  .setGlobals(createModule(builtins))
-                  .setSemantics(TestMode.parseSkylarkSemantics(skylarkOptions))
-                  .build();
-          thread.setPrintHandler(printHandler);
-          return thread;
+          return Environment.builder(Mutability.create("skylark test"))
+              .setGlobals(createGlobalFrame(builtins))
+              .setEventHandler(eventHandler)
+              .setSemantics(TestMode.parseSkylarkSemantics(skylarkOptions))
+              .build();
         }
       };
 
-  private static Module createModule(Map<String, Object> builtins) {
+  private static GlobalFrame createGlobalFrame(Map<String, Object> builtins) {
     ImmutableMap.Builder<String, Object> envBuilder = ImmutableMap.builder();
 
     SkylarkModules.addSkylarkGlobalsToBuilder(envBuilder);
     envBuilder.putAll(builtins);
-    return Module.createForBuiltins(envBuilder.build());
+    return GlobalFrame.createForBuiltins(envBuilder.build());
   }
 
-  public abstract StarlarkThread createStarlarkThread(
-      StarlarkThread.PrintHandler printHandler,
+  public abstract Environment createEnvironment(EventHandler eventHandler,
       Map<String, Object> builtins,
-      String... skylarkOptions)
-      throws Exception;
+      String... skylarkOptions) throws Exception;
 }

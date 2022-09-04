@@ -66,7 +66,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
@@ -568,8 +567,8 @@ public final class BuildOptions implements Cloneable, Serializable {
   public static OptionsDiff diff(OptionsDiff diff, BuildOptions first, BuildOptions second) {
     if (diff.hasStarlarkOptions) {
       throw new IllegalStateException(
-          "OptionsDiff cannot handle multiple 'second' BuildOptions with Starlark options "
-              + "and is trying to diff against a second BuildOptions with Starlark options.");
+          "OptionsDiff cannot handle multiple 'second' BuildOptions with skylark options "
+              + "and is trying to diff against a second BuildOptions with skylark options.");
     }
     if (first == null || second == null) {
       throw new IllegalArgumentException("Cannot diff null BuildOptions");
@@ -1155,14 +1154,12 @@ public final class BuildOptions implements Cloneable, Serializable {
           int optionsDiffSize = byteStringOut.size();
           bytes = byteStringOut.toByteString();
           cache.putBytesFromOptionsDiff(diff, bytes);
-          if (logger.isLoggable(Level.FINE)) {
-            logger.fine(
-                "Serialized OptionsDiffForReconstruction "
-                    + diff
-                    + ". Diff took "
-                    + optionsDiffSize
-                    + " bytes.");
-          }
+          logger.info(
+              "Serialized OptionsDiffForReconstruction "
+                  + diff.toString()
+                  + ". Diff took "
+                  + optionsDiffSize
+                  + " bytes.");
         }
         codedOut.writeBytesNoTag(bytes);
       }

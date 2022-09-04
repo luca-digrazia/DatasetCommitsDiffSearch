@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionContext.LostInputsCheck;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -43,7 +42,6 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.BlazeExecutor;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
-import com.google.devtools.build.lib.exec.RunfilesTreeUpdater;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
 import com.google.devtools.build.lib.exec.SpawnActionContextMaps;
 import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
@@ -65,7 +63,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Mockito;
 
 /**
  * Test StandaloneSpawnStrategy.
@@ -145,8 +142,8 @@ public class StandaloneSpawnStrategyTest {
                                 localExecutionOptions,
                                 resourceManager,
                                 (env, unusedBinTools, unusedFallbackTempDir) -> env,
-                                BinTools.forIntegrationTesting(directories, ImmutableList.of()),
-                                Mockito.mock(RunfilesTreeUpdater.class)))))),
+                                BinTools.forIntegrationTesting(
+                                    directories, ImmutableList.of())))))),
             ImmutableList.of());
 
     executor.getExecRoot().createDirectoryAndParents();
@@ -191,7 +188,6 @@ public class StandaloneSpawnStrategyTest {
         ActionInputPrefetcher.NONE,
         new ActionKeyContext(),
         /*metadataHandler=*/ null,
-        LostInputsCheck.NONE,
         outErr,
         reporter,
         /*clientEnv=*/ ImmutableMap.of(),
