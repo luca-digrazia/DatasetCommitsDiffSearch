@@ -165,8 +165,6 @@ public final class AndroidRuleClasses {
       fromTemplates("%{name}_files/deploy_info_incremental.deployinfo.pb");
   public static final SafeImplicitOutputsFunction DEPLOY_INFO_SPLIT =
       fromTemplates("%{name}_files/deploy_info_split.deployinfo.pb");
-  public static final SafeImplicitOutputsFunction REX_OUTPUT_PACKAGE_MAP =
-      fromTemplates("%{name}_rex/rex_output_package.map");
 
   // This needs to be in its own directory because ApkBuilder only has a function (-rf) for source
   // folders but not source files, and it's easiest to guarantee that nothing gets put beside this
@@ -291,9 +289,10 @@ public final class AndroidRuleClasses {
   }
 
   /**
-   * Turns off dynamic resource filtering for non-Android targets. This prevents unnecessary build
-   * graph bloat. For example, there's no point analyzing distinct cc_library targets for different
-   * resource filter configurations because cc_library semantics doesn't care about filters.
+   * Turns off dynamic resource filtering for non-Android targets. This prevents unnecessary
+   * build graph bloat. For example, there's no point analyzing distinct cc_library targets for
+   * different resource filter configurations because cc_library semantics doesn't care about
+   * filters.
    */
   public static final RuleTransitionFactory REMOVE_DYNAMIC_RESOURCE_FILTERING =
       new RuleTransitionFactory() {
@@ -304,8 +303,7 @@ public final class AndroidRuleClasses {
         @Override
         public Attribute.Transition buildTransitionFor(Rule depRule) {
           return keepFilterRuleClasses.contains(depRule.getRuleClass())
-              ? null
-              : ResourceFilterFactory.REMOVE_DYNAMICALLY_CONFIGURED_RESOURCE_FILTERING_TRANSITION;
+              ? null : ResourceFilter.REMOVE_DYNAMICALLY_CONFIGURED_RESOURCE_FILTERING_TRANSITION;
         }
       };
 
@@ -950,11 +948,6 @@ public final class AndroidRuleClasses {
                   .undocumented("blocked by android_instrumentation_test")
                   .allowedRuleClasses("android_binary")
                   .allowedFileTypes(NO_FILE))
-          .add(
-              attr("$zip_filter", LABEL)
-                  .cfg(HOST)
-                  .exec()
-                  .value(env.getToolsLabel("//tools/android:zip_filter")))
           .advertiseSkylarkProvider(SkylarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
           .build();
       }
