@@ -28,7 +28,6 @@ import io.netty.channel.DefaultChannelPromise;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.ByteToMessageDecoder.Cumulator;
 import io.netty.handler.ssl.ApplicationProtocolConfig;
-import io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior;
 import io.netty.handler.ssl.CipherSuiteFilter;
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.JdkAlpnApplicationProtocolNegotiator;
@@ -226,22 +225,12 @@ final class Target_io_netty_handler_ssl_JdkSslContext{
             return (JdkApplicationProtocolNegotiator)(Object)Target_io_netty_handler_ssl_JdkDefaultApplicationProtocolNegotiator.INSTANCE;
         case ALPN:
             if (isServer) {
-            	// GRAAL RC9 bug: https://github.com/oracle/graal/issues/813
-//                switch(config.selectorFailureBehavior()) {
-//                case FATAL_ALERT:
-//                    return new JdkAlpnApplicationProtocolNegotiator(true, config.supportedProtocols());
-//                case NO_ADVERTISE:
-//                    return new JdkAlpnApplicationProtocolNegotiator(false, config.supportedProtocols());
-//                default:
-//                    throw new UnsupportedOperationException(new StringBuilder("JDK provider does not support ")
-//                    .append(config.selectorFailureBehavior()).append(" failure behavior").toString());
-//                }
-                SelectorFailureBehavior behavior = config.selectorFailureBehavior();
-                if(behavior == SelectorFailureBehavior.FATAL_ALERT)
+                switch(config.selectorFailureBehavior()) {
+                case FATAL_ALERT:
                     return new JdkAlpnApplicationProtocolNegotiator(true, config.supportedProtocols());
-                else if(behavior == SelectorFailureBehavior.NO_ADVERTISE)
+                case NO_ADVERTISE:
                     return new JdkAlpnApplicationProtocolNegotiator(false, config.supportedProtocols());
-                else {
+                default:
                     throw new UnsupportedOperationException(new StringBuilder("JDK provider does not support ")
                     .append(config.selectorFailureBehavior()).append(" failure behavior").toString());
                 }
