@@ -46,12 +46,12 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
+import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
-import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -81,7 +81,7 @@ public final class AnalysisPhaseRunner {
           InvalidConfigurationException {
 
     // Target pattern evaluation.
-    TargetPatternPhaseValue loadingResult;
+    LoadingResult loadingResult;
     Profiler.instance().markPhase(ProfilePhase.LOAD);
     try (SilentCloseable c = Profiler.instance().profile("evaluateTargetPatterns")) {
       loadingResult = evaluateTargetPatterns(request, validator);
@@ -90,22 +90,17 @@ public final class AnalysisPhaseRunner {
 
     // Compute the heuristic instrumentation filter if needed.
     if (request.needsInstrumentationFilter()) {
-      try (SilentCloseable c = Profiler.instance().profile("Compute instrumentation filter")) {
-        String instrumentationFilter =
-            InstrumentationFilterSupport.computeInstrumentationFilter(
-                env.getReporter(),
-                // TODO(ulfjack): Expensive. Make this part of the TargetPatternPhaseValue or write
-                // a new SkyFunction to compute it?
-                loadingResult.getTestsToRun(env.getReporter(), env.getPackageManager()));
-        try {
-          // We're modifying the buildOptions in place, which is not ideal, but we also don't want
-          // to pay the price for making a copy. Maybe reconsider later if this turns out to be a
-          // problem (and the performance loss may not be a big deal).
-          buildOptions.get(BuildConfiguration.Options.class).instrumentationFilter =
-              new RegexFilter.RegexFilterConverter().convert(instrumentationFilter);
-        } catch (OptionsParsingException e) {
-          throw new InvalidConfigurationException(e);
-        }
+      String instrumentationFilter =
+          InstrumentationFilterSupport.computeInstrumentationFilter(
+              env.getReporter(), loadingResult.getTestsToRun());
+      try {
+        // We're modifying the buildOptions in place, which is not ideal, but we also don't want
+        // to pay the price for making a copy. Maybe reconsider later if this turns out to be a
+        // problem (and the performance loss may not be a big deal).
+        buildOptions.get(BuildConfiguration.Options.class).instrumentationFilter =
+            new RegexFilter.RegexFilterConverter().convert(instrumentationFilter);
+      } catch (OptionsParsingException e) {
+        throw new InvalidConfigurationException(e);
       }
     }
 
@@ -186,11 +181,11 @@ public final class AnalysisPhaseRunner {
     return analysisResult;
   }
 
-  private final TargetPatternPhaseValue evaluateTargetPatterns(
+  private final LoadingResult evaluateTargetPatterns(
       final BuildRequest request, final TargetValidator validator)
       throws LoadingFailedException, TargetParsingException, InterruptedException {
     boolean keepGoing = request.getKeepGoing();
-    TargetPatternPhaseValue result =
+    LoadingResult result =
         env.getSkyframeExecutor()
             .loadTargetPatterns(
                 env.getReporter(),
@@ -200,8 +195,7 @@ public final class AnalysisPhaseRunner {
                 keepGoing,
                 request.shouldRunTests());
     if (validator != null) {
-      Collection<Target> targets =
-          result.getTargets(env.getReporter(), env.getSkyframeExecutor().getPackageManager());
+      Collection<Target> targets = result.getTargets();
       validator.validateTargets(targets, keepGoing);
     }
     return result;
@@ -219,7 +213,7 @@ public final class AnalysisPhaseRunner {
    */
   private AnalysisResult runAnalysisPhase(
       BuildRequest request,
-      TargetPatternPhaseValue loadingResult,
+      LoadingResult loadingResult,
       BuildConfigurationCollection configurations)
       throws InterruptedException, ViewCreationFailedException {
     Stopwatch timer = Stopwatch.createStarted();

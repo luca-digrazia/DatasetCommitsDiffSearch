@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,12 @@ package com.google.devtools.build.lib.runtime;
 
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Action;
+import com.google.devtools.build.lib.actions.ActionOwner;
+import com.google.devtools.build.lib.clock.Clock;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
-
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 
 /**
@@ -24,18 +28,36 @@ import javax.annotation.Nullable;
  */
 @ThreadCompatible
 public class AbstractCriticalPathComponent<C extends AbstractCriticalPathComponent<C>> {
+  /**
+   * Converts from nanos to millis since the epoch. In particular, note that {@link System#nanoTime}
+   * does not specify any particular time reference but only notes that returned values are only
+   * meaningful when taking in relation to each other.
+   */
+  public interface NanosToEpochConverter {
+    /** Converts from nanos to millis since the epoch. */
+    long toEpoch(long timeNanos);
+  }
 
-  /** Wall time start time for the action. In milliseconds. */
-  private final long startTime;
-  /** Wall time finish time for the action. In milliseconds. */
-  private long finishTime = 0;
+  /**
+   * Creates a {@link NanosToEpochConverter} from clock by taking the current time in millis and the
+   * current time in nanos to compute the appropriate offset.
+   */
+  public static NanosToEpochConverter fromClock(Clock clock) {
+    long nowInMillis = clock.currentTimeMillis();
+    long nowInNanos = clock.nanoTime();
+    return (startNanos) -> nowInMillis - TimeUnit.NANOSECONDS.toMillis((nowInNanos - startNanos));
+  }
+
+  // These two fields are values of BlazeClock.nanoTime() at the relevant points in time.
+  private long startNanos;
+  private long finishNanos = 0;
   protected volatile boolean isRunning = true;
 
   /** We keep here the critical path time for the most expensive child. */
-  private long childAggregatedWallTime = 0;
+  private long childAggregatedElapsedTime = 0;
 
-  /** The action for which we are storing the stat. */
-  private final Action action;
+  /** May be nulled out after finished running to allow the action to be GC'ed. */
+  @Nullable protected Action action;
 
   /**
    * Child with the maximum critical path.
@@ -43,56 +65,111 @@ public class AbstractCriticalPathComponent<C extends AbstractCriticalPathCompone
   @Nullable
   private C child;
 
-  public AbstractCriticalPathComponent(Action action, long startTime) {
+  public AbstractCriticalPathComponent(Action action, long startNanos) {
     this.action = action;
-    this.startTime = startTime;
-  }
-
-  /** Sets the finish time for the action in milliseconds. */
-  public void setFinishTimeMillis(long finishTime) {
-    Preconditions.checkState(isRunning, "Already stopped! %s.", action);
-    this.finishTime = finishTime;
-    isRunning = false;
-  }
-
-  /** The action for which we are storing the stat. */
-  public Action getAction() {
-    return action;
+    this.startNanos = startNanos;
   }
 
   /**
-   * Add statistics for one dependency of this action.
+   * Record the elapsed time in case the new duration is greater. This method could be called
+   * multiple times if we run shared action concurrently and the one that really gets executed takes
+   * more time to send the finish event and the one that was a cache hit manages to send the event
+   * before. In this case we overwrite the time with the greater time.
+   *
+   * <p>This logic is known to be incorrect, as other actions that depend on this action will not
+   * necessarily use the correct getElapsedTimeNanos(). But we do not want to block action execution
+   * because of this. So in certain conditions we might see another path as the critical path.
    */
-  public void addDepInfo(C dep) {
-    Preconditions.checkState(!dep.isRunning,
-        "Cannot add critical path stats when the action is not finished. %s. %s", action,
-        dep.getAction());
-    long childAggregatedWallTime = dep.getAggregatedWallTime();
-    // Replace the child if its critical path had the maximum wall time.
-    if (child == null || childAggregatedWallTime > this.childAggregatedWallTime) {
-      this.childAggregatedWallTime = childAggregatedWallTime;
+  public synchronized boolean finishActionExecution(long startNanos, long finishNanos) {
+    if (isRunning || finishNanos - startNanos > getElapsedTimeNanos()) {
+      this.startNanos = startNanos;
+      this.finishNanos = finishNanos;
+      isRunning = false;
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * The action for which we are storing the stat. May be null if the action has finished running.
+   */
+  @Nullable
+  public final Action maybeGetAction() {
+    return action;
+  }
+
+  public String prettyPrintAction() {
+    return getActionNotNull().prettyPrint();
+  }
+
+  @Nullable
+  public Label getOwner() {
+    ActionOwner owner = getActionNotNull().getOwner();
+    if (owner != null && owner.getLabel() != null) {
+      return owner.getLabel();
+    }
+    return null;
+  }
+
+  public String getMnemonic() {
+    return getActionNotNull().getMnemonic();
+  }
+
+  private Action getActionNotNull() {
+    return Preconditions.checkNotNull(action, this);
+  }
+
+  /**
+   * Add statistics for one dependency of this action. Caller should ensure {@code dep} not
+   * running.
+   */
+  synchronized void addDepInfo(C dep) {
+    long childAggregatedWallTime = dep.getAggregatedElapsedTimeNanos();
+    // Replace the child if its critical path had the maximum elapsed time.
+    if (child == null || childAggregatedWallTime > this.childAggregatedElapsedTime) {
+      this.childAggregatedElapsedTime = childAggregatedWallTime;
       child = dep;
     }
   }
 
-  public long getActionWallTime() {
-    Preconditions.checkState(!isRunning, "Still running %s", action);
-    return finishTime - startTime;
+  public long getStartTimeNanos() {
+    return startNanos;
+  }
+
+  public long getStartTimeMillisSinceEpoch(NanosToEpochConverter converter) {
+    return converter.toEpoch(startNanos);
+  }
+
+  public Duration getElapsedTime() {
+    return Duration.ofNanos(getElapsedTimeNanos());
+  }
+
+  long getElapsedTimeNanos() {
+    Preconditions.checkState(!isRunning, "Still running %s", this);
+    return getElapsedTimeNanosNoCheck();
+  }
+
+  /** To be used only in debugging: skips state invariance checks to avoid crash-looping. */
+  protected Duration getElapsedTimeNoCheck() {
+    return Duration.ofNanos(getElapsedTimeNanosNoCheck());
+  }
+
+  private long getElapsedTimeNanosNoCheck() {
+    return finishNanos - startNanos;
   }
 
   /**
-   * Returns the current critical path for the action in milliseconds.
+   * Returns the current critical path for the action.
    *
    * <p>Critical path is defined as : action_execution_time + max(child_critical_path).
    */
-  public long getAggregatedWallTime() {
-    Preconditions.checkState(!isRunning, "Still running %s", action);
-    return getActionWallTime() + childAggregatedWallTime;
+  public Duration getAggregatedElapsedTime() {
+    return Duration.ofNanos(getAggregatedElapsedTimeNanos());
   }
 
-  /** Time when the action started to execute. Milliseconds since epoch time. */
-  public long getStartTime() {
-    return startTime;
+  long getAggregatedElapsedTimeNanos() {
+    Preconditions.checkState(!isRunning, "Still running %s", this);
+    return getElapsedTimeNanos() + childAggregatedElapsedTime;
   }
 
   /**
@@ -105,6 +182,12 @@ public class AbstractCriticalPathComponent<C extends AbstractCriticalPathCompone
     return child;
   }
 
+  /** Returns a string representation of the action. Only for use in crash messages and the like. */
+  protected String getActionString() {
+    Action action = maybeGetAction();
+    return (action == null ? "(null action)" : action.prettyPrint());
+  }
+
   /**
    * Returns a human readable representation of the critical path stats with all the details.
    */
@@ -112,9 +195,9 @@ public class AbstractCriticalPathComponent<C extends AbstractCriticalPathCompone
   public String toString() {
     String currentTime = "still running ";
     if (!isRunning) {
-      currentTime = String.format("%.2f", getActionWallTime() / 1000.0) + "s ";
+      currentTime = String.format("%.2f", getElapsedTimeNoCheck().toMillis() / 1000.0) + "s ";
     }
-    return currentTime + action.describe();
+    return currentTime + getActionString();
   }
 }
 
