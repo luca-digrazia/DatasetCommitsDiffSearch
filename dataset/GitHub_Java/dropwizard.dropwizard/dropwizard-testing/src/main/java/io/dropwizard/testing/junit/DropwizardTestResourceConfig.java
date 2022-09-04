@@ -2,9 +2,12 @@ package io.dropwizard.testing.junit;
 
 import com.codahale.metrics.MetricRegistry;
 import io.dropwizard.jersey.DropwizardResourceConfig;
-import io.dropwizard.jersey.jackson.JacksonBinder;
+import io.dropwizard.jersey.errors.EarlyEofExceptionMapper;
+import io.dropwizard.jersey.errors.LoggingExceptionMapper;
+import io.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
+import io.dropwizard.jersey.jackson.JsonProcessingExceptionMapper;
 import io.dropwizard.jersey.validation.HibernateValidationFeature;
-import io.dropwizard.setup.ExceptionMapperBinder;
+import io.dropwizard.jersey.validation.JerseyViolationExceptionMapper;
 import org.glassfish.jersey.server.ServerProperties;
 
 import javax.servlet.ServletConfig;
@@ -32,7 +35,11 @@ class DropwizardTestResourceConfig extends DropwizardResourceConfig {
         super(true, new MetricRegistry());
 
         if (configuration.registerDefaultExceptionMappers) {
-            register(new ExceptionMapperBinder(false));
+            register(new LoggingExceptionMapper<Throwable>() {
+            });
+            register(new JerseyViolationExceptionMapper());
+            register(new JsonProcessingExceptionMapper());
+            register(new EarlyEofExceptionMapper());
         }
         for (Class<?> provider : configuration.providers) {
             register(provider);
@@ -41,7 +48,7 @@ class DropwizardTestResourceConfig extends DropwizardResourceConfig {
         for (Map.Entry<String, Object> property : configuration.properties.entrySet()) {
             property(property.getKey(), property.getValue());
         }
-        register(new JacksonBinder(configuration.mapper));
+        register(new JacksonMessageBodyProvider(configuration.mapper));
         register(new HibernateValidationFeature(configuration.validator));
         for (Object singleton : configuration.singletons) {
             register(singleton);
