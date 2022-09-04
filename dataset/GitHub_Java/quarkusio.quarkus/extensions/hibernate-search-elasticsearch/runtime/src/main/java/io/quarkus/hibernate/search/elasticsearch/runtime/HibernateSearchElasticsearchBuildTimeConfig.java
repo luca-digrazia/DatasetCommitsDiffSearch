@@ -3,8 +3,10 @@ package io.quarkus.hibernate.search.elasticsearch.runtime;
 import java.util.Map;
 import java.util.Optional;
 
-import org.hibernate.search.backend.elasticsearch.cfg.ElasticsearchVersion;
+import org.hibernate.search.backend.elasticsearch.ElasticsearchVersion;
 
+import io.quarkus.runtime.annotations.ConfigDocMapKey;
+import io.quarkus.runtime.annotations.ConfigDocSection;
 import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
@@ -14,21 +16,38 @@ import io.quarkus.runtime.annotations.ConfigRoot;
 public class HibernateSearchElasticsearchBuildTimeConfig {
 
     /**
-     * Configuration of the default backend.
+     * Default backend
      */
-    public ElasticsearchBackendBuildTimeConfig elasticsearch;
+    @ConfigItem(name = "elasticsearch")
+    @ConfigDocSection
+    public ElasticsearchBackendBuildTimeConfig defaultBackend;
 
     /**
-     * If not using the default backend configuration, the name of the default backend that is part of the
-     * {@link #additionalBackends}.
+     * Named backends
      */
-    public Optional<String> defaultBackend;
+    @ConfigItem(name = "elasticsearch")
+    @ConfigDocSection
+    public ElasticsearchNamedBackendsBuildTimeConfig namedBackends;
 
     /**
-     * Configuration of optional additional backends.
+     * The class or the name of the bean that should be notified of any failure occurring in a background process
+     * (mainly index operations).
+     * <p>
+     * Must implement {@link org.hibernate.search.engine.reporting.FailureHandler}.
      */
-    @ConfigItem(name = "elasticsearch.backends")
-    public Map<String, ElasticsearchBackendBuildTimeConfig> additionalBackends;
+    @ConfigItem
+    public Optional<Class<?>> backgroundFailureHandler;
+
+    @ConfigGroup
+    public static class ElasticsearchNamedBackendsBuildTimeConfig {
+
+        /**
+         * Named backends
+         */
+        @ConfigDocMapKey("backend-name")
+        public Map<String, ElasticsearchBackendBuildTimeConfig> backends;
+
+    }
 
     @ConfigGroup
     public static class ElasticsearchBackendBuildTimeConfig {
@@ -48,9 +67,49 @@ public class HibernateSearchElasticsearchBuildTimeConfig {
         public Optional<ElasticsearchVersion> version;
 
         /**
+         * Configuration for the index layout.
+         */
+        @ConfigItem
+        public LayoutConfig layout;
+
+        /**
+         * The default configuration for the Elasticsearch indexes.
+         */
+        @ConfigItem(name = ConfigItem.PARENT)
+        public ElasticsearchIndexBuildTimeConfig indexDefaults;
+
+        /**
+         * Per-index specific configuration.
+         */
+        @ConfigItem
+        @ConfigDocMapKey("index-name")
+        public Map<String, ElasticsearchIndexBuildTimeConfig> indexes;
+    }
+
+    @ConfigGroup
+    public static class ElasticsearchIndexBuildTimeConfig {
+        /**
+         * Configuration for full-text analysis.
+         */
+        @ConfigItem
+        public AnalysisConfig analysis;
+    }
+
+    @ConfigGroup
+    public static class AnalysisConfig {
+        /**
          * The class or the name of the bean used to configure full text analysis (e.g. analyzers, normalizers).
          */
         @ConfigItem
-        public Optional<Class<?>> analysisConfigurer;
+        public Optional<Class<?>> configurer;
+    }
+
+    @ConfigGroup
+    public static class LayoutConfig {
+        /**
+         * The class or the name of the bean used to configure layout (e.g. index names, index aliases).
+         */
+        @ConfigItem
+        public Optional<Class<?>> strategy;
     }
 }
