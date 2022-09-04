@@ -162,8 +162,8 @@ public abstract class DelegatingNodeEntry implements NodeEntry {
   }
 
   @Override
-  public boolean hasAtLeastOneDep() throws InterruptedException {
-    return getDelegate().hasAtLeastOneDep();
+  public int getNumberOfDirectDepGroups() throws InterruptedException {
+    return getDelegate().getNumberOfDirectDepGroups();
   }
 
   @Override

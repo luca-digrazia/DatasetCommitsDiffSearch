@@ -260,7 +260,7 @@ public final class Dict<K, V>
       extraKeywords = @Param(name = "kwargs", doc = "Dictionary of additional entries."),
       useStarlarkThread = true)
   @SuppressWarnings("unchecked")
-  public NoneType update(Object args, Dict<String, Object> kwargs, StarlarkThread thread)
+  public NoneType update(Object args, Dict<?, ?> kwargs, StarlarkThread thread)
       throws EvalException {
     // TODO(adonovan): opt: don't materialize dict; call put directly.
 
@@ -281,7 +281,7 @@ public final class Dict<K, V>
               + "<pre class=\"language-python\">"
               + "{2: \"a\", 4: \"b\", 1: \"c\"}.values() == [\"a\", \"b\", \"c\"]</pre>\n",
       useStarlarkThread = true)
-  public StarlarkList<?> values0(StarlarkThread thread) throws EvalException {
+  public StarlarkList<?> invoke(StarlarkThread thread) throws EvalException {
     return StarlarkList.copyOf(thread.mutability(), values());
   }
 
@@ -523,7 +523,9 @@ public final class Dict<K, V>
   @Override
   public final boolean containsKey(Object key, Location loc, StarlarkThread thread)
       throws EvalException {
-    EvalUtils.checkHashable(key);
+    if (thread.getSemantics().incompatibleDisallowDictLookupUnhashableKeys()) {
+      EvalUtils.checkHashable(key);
+    }
     return this.containsKey(key);
   }
 

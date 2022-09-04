@@ -229,7 +229,7 @@ public final class CallUtils {
   static Object[] convertStarlarkArgumentsToJavaMethodArguments(
       StarlarkThread thread,
       String methodName,
-      Location loc,
+      FuncallExpression call,
       MethodDescriptor method,
       Class<?> objClass,
       Object[] positional,
@@ -253,8 +253,9 @@ public final class CallUtils {
     }
 
     ImmutableList<ParamDescriptor> parameters = method.getParameters();
+    // *args, **kwargs, location, call, thread, skylark semantics
     // TODO(adonovan): opt: compute correct size and use an array.
-    final int extraArgsCount = 5; // *args, **kwargs, Location, StarlarkThread, StarlarkSemantics
+    final int extraArgsCount = 6;
     List<Object> builder = new ArrayList<>(parameters.size() + extraArgsCount);
 
     int argIndex = 0;
@@ -282,7 +283,7 @@ public final class CallUtils {
         value = positional[argIndex];
         if (!type.contains(value)) {
           throw argumentMismatchException(
-              loc,
+              call,
               String.format(
                   "expected value of type '%s' for parameter '%s'", type, param.getName()),
               method,
@@ -290,7 +291,7 @@ public final class CallUtils {
         }
         if (namedValue != null) {
           throw argumentMismatchException(
-              loc,
+              call,
               String.format("got multiple values for keyword argument '%s'", param.getName()),
               method,
               objClass);
@@ -302,7 +303,7 @@ public final class CallUtils {
           value = namedValue;
           if (!type.contains(value)) {
             throw argumentMismatchException(
-                loc,
+                call,
                 String.format(
                     "expected value of type '%s' for parameter '%s'", type, param.getName()),
                 method,
@@ -310,14 +311,17 @@ public final class CallUtils {
           }
         } else { // Param not specified by user. Use default value.
           if (param.getDefaultValue().isEmpty()) {
-            throw unspecifiedParameterException(loc, param, method, objClass, kwargs);
+            throw unspecifiedParameterException(call, param, method, objClass, kwargs);
           }
           value = evalDefault(param.getName(), param.getDefaultValue());
         }
       }
       if (value == Starlark.NONE && !param.isNoneable()) {
         throw argumentMismatchException(
-            loc, String.format("parameter '%s' cannot be None", param.getName()), method, objClass);
+            call,
+            String.format("parameter '%s' cannot be None", param.getName()),
+            method,
+            objClass);
       }
       builder.add(value);
     }
@@ -327,7 +331,7 @@ public final class CallUtils {
       builder.add(Tuple.wrap(Arrays.copyOfRange(positional, argIndex, positional.length)));
     } else if (argIndex < positional.length) {
       throw argumentMismatchException(
-          loc,
+          call,
           String.format(
               "expected no more than %s positional arguments, but got %s",
               argIndex, positional.length),
@@ -339,30 +343,30 @@ public final class CallUtils {
     if (method.isAcceptsExtraKwargs()) {
       builder.add(Dict.wrap(thread.mutability(), kwargs));
     } else if (!kwargs.isEmpty()) {
-      throw unexpectedKeywordArgumentException(loc, kwargs.keySet(), method, objClass, thread);
+      throw unexpectedKeywordArgumentException(call, kwargs.keySet(), method, objClass, thread);
     }
 
     // Add Location, FuncallExpression, and/or StarlarkThread.
-    appendExtraInterpreterArgs(builder, method, loc, thread);
+    appendExtraInterpreterArgs(builder, method, call, call.getLocation(), thread);
 
     return builder.toArray();
   }
 
   private static EvalException unspecifiedParameterException(
-      Location loc,
+      FuncallExpression call,
       ParamDescriptor param,
       MethodDescriptor method,
       Class<?> objClass,
       Map<String, Object> kwargs) {
     if (kwargs.containsKey(param.getName())) {
       return argumentMismatchException(
-          loc,
+          call,
           String.format("parameter '%s' may not be specified by name", param.getName()),
           method,
           objClass);
     } else {
       return argumentMismatchException(
-          loc,
+          call,
           String.format("parameter '%s' has no default value", param.getName()),
           method,
           objClass);
@@ -370,7 +374,7 @@ public final class CallUtils {
   }
 
   private static EvalException unexpectedKeywordArgumentException(
-      Location loc,
+      FuncallExpression call,
       Set<String> unexpectedKeywords,
       MethodDescriptor method,
       Class<?> objClass,
@@ -384,14 +388,14 @@ public final class CallUtils {
         // If the flag is True, it must be a deprecation flag. Otherwise it's an experimental flag.
         if (thread.getSemantics().flagValue(flagIdentifier)) {
           return new EvalException(
-              loc,
+              call.getLocation(),
               String.format(
                   "parameter '%s' is deprecated and will be removed soon. It may be "
                       + "temporarily re-enabled by setting --%s=false",
                   param.getName(), flagIdentifier.getFlagName()));
         } else {
           return new EvalException(
-              loc,
+              call.getLocation(),
               String.format(
                   "parameter '%s' is experimental and thus unavailable with the current "
                       + "flags. It may be enabled by setting --%s",
@@ -401,7 +405,7 @@ public final class CallUtils {
     }
 
     return argumentMismatchException(
-        loc,
+        call,
         String.format(
             "unexpected keyword%s %s",
             unexpectedKeywords.size() > 1 ? "s" : "",
@@ -411,16 +415,19 @@ public final class CallUtils {
   }
 
   private static EvalException argumentMismatchException(
-      Location loc, String errorDescription, MethodDescriptor methodDescriptor, Class<?> objClass) {
+      FuncallExpression call,
+      String errorDescription,
+      MethodDescriptor methodDescriptor,
+      Class<?> objClass) {
     if (methodDescriptor.isSelfCall() || SkylarkInterfaceUtils.hasSkylarkGlobalLibrary(objClass)) {
       return new EvalException(
-          loc,
+          call.getLocation(),
           String.format(
               "%s, for call to function %s",
               errorDescription, formatMethod(objClass, methodDescriptor)));
     } else {
       return new EvalException(
-          loc,
+          call.getLocation(),
           String.format(
               "%s, for call to method %s of '%s'",
               errorDescription,
@@ -432,10 +439,17 @@ public final class CallUtils {
   private static void appendExtraInterpreterArgs(
       List<Object> builder,
       MethodDescriptor method,
+      @Nullable FuncallExpression call,
       Location loc,
       StarlarkThread thread) {
     if (method.isUseLocation()) {
       builder.add(loc);
+    }
+    if (method.isUseAst()) {
+      if (call == null) {
+        throw new IllegalArgumentException("Callable expects to receive ast: " + method.getName());
+      }
+      builder.add(call);
     }
     if (method.isUseStarlarkThread()) {
       builder.add(thread);

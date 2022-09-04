@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -224,7 +223,7 @@ public final class Starlark {
   public static Object call(
       StarlarkThread thread,
       Object fn,
-      Location loc, // TODO(adonovan): eliminate
+      @Nullable FuncallExpression call,
       List<Object> args,
       Map<String, Object> kwargs)
       throws EvalException, InterruptedException {
@@ -234,7 +233,7 @@ public final class Starlark {
       named[i++] = e.getKey();
       named[i++] = e.getValue();
     }
-    return fastcall(thread, fn, loc, args.toArray(), named);
+    return fastcall(thread, fn, call, args.toArray(), named);
   }
 
   /**
@@ -242,9 +241,13 @@ public final class Starlark {
    * positional and named arguments in the "fastcall" array representation.
    */
   public static Object fastcall(
-      StarlarkThread thread, Object fn, Location loc, Object[] positional, Object[] named)
+      StarlarkThread thread,
+      Object fn,
+      @Nullable FuncallExpression call,
+      Object[] positional,
+      Object[] named)
       throws EvalException, InterruptedException {
-    Preconditions.checkNotNull(loc);
+    Location loc = call != null ? call.getLocation() : null;
 
     StarlarkCallable callable;
     if (fn instanceof StarlarkCallable) {
@@ -262,7 +265,7 @@ public final class Starlark {
 
     thread.push(callable, loc);
     try {
-      return callable.fastcall(thread, loc, positional, named);
+      return callable.fastcall(thread, call, positional, named);
     } catch (EvalException ex) {
       throw ex.ensureLocation(loc);
     } finally {

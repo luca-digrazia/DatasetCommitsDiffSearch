@@ -422,17 +422,13 @@ public final class EvalUtils {
   }
 
   /** Returns the named field or method of value {@code x}, or null if not found. */
-  // TODO(adonovan): publish this method as Starlark.getattr(Semantics, Mutability, Object, String).
-  static Object getAttr(StarlarkThread thread, Object x, String name)
+  static Object getAttr(StarlarkThread thread, Location loc, Object x, String name)
       throws EvalException, InterruptedException {
-    StarlarkSemantics semantics = thread.getSemantics();
-    Mutability mu = thread.mutability();
-
     // @SkylarkCallable-annotated field or method?
-    MethodDescriptor method = CallUtils.getMethod(semantics, x.getClass(), name);
+    MethodDescriptor method = CallUtils.getMethod(thread.getSemantics(), x.getClass(), name);
     if (method != null) {
       if (method.isStructField()) {
-        return method.callField(x, semantics, mu);
+        return method.callField(x, loc, thread.getSemantics(), thread.mutability());
       } else {
         return new BuiltinCallable(x, name, method);
       }
@@ -440,10 +436,13 @@ public final class EvalUtils {
 
     // user-defined field?
     if (x instanceof ClassObject) {
-      // TODO(adonovan): merge SkylarkClassObject and ClassObject, using a default implementation.
+      // TODO(adonovan): get rid of SkylarkClassObject once
+      // --incompatible_disable_target_provider_fields goes away,
+      // then remove the thread and loc parameters and publish
+      // this method as Starlark.getattr.
       Object field =
           x instanceof SkylarkClassObject
-              ? ((SkylarkClassObject) x).getValue(semantics, name)
+              ? ((SkylarkClassObject) x).getValue(loc, thread.getSemantics(), name)
               : ((ClassObject) x).getValue(name);
       if (field != null) {
         return Starlark.checkValid(field);
@@ -858,8 +857,8 @@ public final class EvalUtils {
    * options defined by {@code thread.getSemantics}, and returns the syntax tree. It uses Starlark
    * (not BUILD) validation semantics.
    *
-   * <p>The thread is primarily used for its Module. Scan/parse/validate errors are recorded in the
-   * StarlarkFile. It is the caller's responsibility to inspect them.
+   * <p>The thread is primarily used for its GlobalFrame. Scan/parse/validate errors are recorded in
+   * the StarlarkFile. It is the caller's responsibility to inspect them.
    */
   public static StarlarkFile parseAndValidateSkylark(ParserInput input, StarlarkThread thread) {
     StarlarkFile file = StarlarkFile.parse(input);
@@ -879,24 +878,15 @@ public final class EvalUtils {
     if (!file.ok()) {
       throw new SyntaxError(file.errors());
     }
+    // TODO(adonovan): turn toplevel statements into a StarlarkFunction, and call it.
+    // This ensures we have an entry in the call stack even for the toplevel.
     exec(file, thread);
   }
 
   /** Executes a parsed, validated Starlark file in a given StarlarkThread. */
   public static void exec(StarlarkFile file, StarlarkThread thread)
       throws EvalException, InterruptedException {
-    StarlarkFunction toplevel =
-        new StarlarkFunction(
-            "<toplevel>",
-            file.getStartLocation(),
-            FunctionSignature.NOARGS,
-            /*defaultValues=*/ Tuple.empty(),
-            file.getStatements(),
-            thread.getGlobals());
-    // Hack: assume unresolved identifiers are globals.
-    toplevel.isToplevel = true;
-
-    Starlark.fastcall(thread, toplevel, NOARGS, NOARGS);
+    Eval.execFile(thread, file);
   }
 
   /**
@@ -908,18 +898,9 @@ public final class EvalUtils {
       throws SyntaxError, EvalException, InterruptedException {
     Expression expr = Expression.parse(input);
     ValidationEnvironment.validateExpr(expr, thread.getGlobals(), thread.getSemantics());
-
-    // Turn expression into a no-arg StarlarkFunction and call it.
-    StarlarkFunction fn =
-        new StarlarkFunction(
-            "<expr>",
-            expr.getStartLocation(),
-            FunctionSignature.NOARGS,
-            /*defaultValues=*/ Tuple.empty(),
-            ImmutableList.<Statement>of(new ReturnStatement(expr)),
-            thread.getGlobals());
-
-    return Starlark.fastcall(thread, fn, NOARGS, NOARGS);
+    // TODO(adonovan): turn expr into a StarlarkFunction, and call it.
+    // This ensures we have an entry in the call stack even for the toplevel.
+    return Eval.eval(thread, expr);
   }
 
   /**
@@ -936,38 +917,19 @@ public final class EvalUtils {
   public static Object execAndEvalOptionalFinalExpression(ParserInput input, StarlarkThread thread)
       throws SyntaxError, EvalException, InterruptedException {
     StarlarkFile file = StarlarkFile.parse(input);
+    List<Statement> stmts = file.getStatements();
+    Expression expr = null;
+    int n = stmts.size();
+    if (n > 0 && stmts.get(n - 1) instanceof ExpressionStatement) {
+      expr = ((ExpressionStatement) stmts.get(n - 1)).getExpression();
+      stmts = stmts.subList(0, n - 1);
+    }
     ValidationEnvironment.validateFile(
         file, thread.getGlobals(), thread.getSemantics(), /*isBuildFile=*/ false);
     if (!file.ok()) {
       throw new SyntaxError(file.errors());
     }
-
-    // If the final statement is an expression, synthesize a return statement.
-    ImmutableList<Statement> stmts = file.getStatements();
-    int n = stmts.size();
-    if (n > 0 && stmts.get(n - 1) instanceof ExpressionStatement) {
-      Expression expr = ((ExpressionStatement) stmts.get(n - 1)).getExpression();
-      stmts =
-          ImmutableList.<Statement>builder()
-              .addAll(stmts.subList(0, n - 1))
-              .add(new ReturnStatement(expr))
-              .build();
-    }
-
-    // Turn the file into a no-arg function and call it.
-    StarlarkFunction toplevel =
-        new StarlarkFunction(
-            "<toplevel>",
-            file.getStartLocation(),
-            FunctionSignature.NOARGS,
-            /*defaultValues=*/ Tuple.empty(),
-            stmts,
-            thread.getGlobals());
-    // Hack: assume unresolved identifiers are globals.
-    toplevel.isToplevel = true;
-
-    return Starlark.fastcall(thread, toplevel, NOARGS, NOARGS);
+    Eval.execStatements(thread, stmts);
+    return expr != null ? Eval.eval(thread, expr) : null;
   }
-
-  private static final Object[] NOARGS = {};
 }
