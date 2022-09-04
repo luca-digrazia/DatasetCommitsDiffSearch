@@ -53,7 +53,6 @@ import javax.lang.model.util.Elements;
 import org.androidannotations.annotations.EActivity;
 import org.androidannotations.annotations.EBean;
 import org.androidannotations.annotations.EFragment;
-import org.androidannotations.annotations.EIntentService;
 import org.androidannotations.annotations.Trace;
 import org.androidannotations.annotations.ViewById;
 import org.androidannotations.annotations.rest.Delete;
@@ -91,12 +90,9 @@ public class ValidatorHelper {
 
 	public final ValidatorParameterHelper param;
 
-	private final ThirdPartyLibHelper thirdPartyLibHelper;
-
 	public ValidatorHelper(TargetAnnotationHelper targetAnnotationHelper) {
 		annotationHelper = targetAnnotationHelper;
 		param = new ValidatorParameterHelper(annotationHelper);
-		thirdPartyLibHelper = new ThirdPartyLibHelper(annotationHelper);
 	}
 
 	public void isNotFinal(Element element, IsValid valid) {
@@ -182,11 +178,6 @@ public class ValidatorHelper {
 	public void enclosingElementHasEFragment(Element element, AnnotationElements validatedElements, IsValid valid) {
 		Element enclosingElement = element.getEnclosingElement();
 		hasClassAnnotation(element, enclosingElement, validatedElements, EFragment.class, valid);
-	}
-
-	public void enclosingElementHasEIntentService(Element element, AnnotationElements validatedElements, IsValid valid) {
-		Element enclosingElement = element.getEnclosingElement();
-		hasClassAnnotation(element, enclosingElement, validatedElements, EIntentService.class, valid);
 	}
 
 	public void hasEActivity(Element element, AnnotationElements validatedElements, IsValid valid) {
@@ -478,10 +469,6 @@ public class ValidatorHelper {
 		extendsType(element, CanonicalNameConstants.SERVICE, valid);
 	}
 
-	public void extendsIntentService(Element element, IsValid valid) {
-		extendsType(element, CanonicalNameConstants.INTENT_SERVICE, valid);
-	}
-
 	public void extendsReceiver(Element element, IsValid valid) {
 		extendsType(element, CanonicalNameConstants.BROADCAST_RECEIVER, valid);
 	}
@@ -508,20 +495,6 @@ public class ValidatorHelper {
 
 	public void extendsContext(Element element, IsValid valid) {
 		extendsType(element, CanonicalNameConstants.CONTEXT, valid);
-	}
-
-	public void extendsMenuItem(Element element, IsValid valid) {
-		Element enclosingElement = element.getEnclosingElement();
-		String enclosingQualifiedName = enclosingElement.asType().toString();
-		TypeElement enclosingTypeElement = annotationHelper.typeElementFromQualifiedName(enclosingQualifiedName);
-
-		if (enclosingTypeElement != null) {
-			if (thirdPartyLibHelper.usesActionBarSherlock(enclosingTypeElement)) {
-				extendsType(element, CanonicalNameConstants.SHERLOCK_MENU_ITEM, valid);
-			} else {
-				extendsType(element, CanonicalNameConstants.MENU_ITEM, valid);
-			}
-		}
 	}
 
 	public void extendsOrmLiteDaoWithValidModelParameter(Element element, IsValid valid) {
