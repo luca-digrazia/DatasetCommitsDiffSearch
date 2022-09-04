@@ -20,13 +20,14 @@ import com.google.inject.AbstractModule;
 import com.google.inject.multibindings.Multibinder;
 import org.graylog2.events.ClusterEventCleanupPeriodical;
 import org.graylog2.events.ClusterEventPeriodical;
-import org.graylog2.indexer.fieldtypes.IndexFieldTypePollerPeriodical;
 import org.graylog2.periodical.AlarmCallbacksMigrationPeriodical;
 import org.graylog2.periodical.AlertScannerThread;
 import org.graylog2.periodical.BatchedElasticSearchOutputFlushThread;
 import org.graylog2.periodical.ClusterHealthCheckThread;
 import org.graylog2.periodical.ClusterIdGeneratorPeriodical;
 import org.graylog2.periodical.ConfigurationManagementPeriodical;
+import org.graylog2.periodical.ContentPackLoaderPeriodical;
+import org.graylog2.periodical.EmailAlarmCallbackMigrationPeriodical;
 import org.graylog2.periodical.GarbageCollectionWarningThread;
 import org.graylog2.periodical.IndexFailuresPeriodical;
 import org.graylog2.periodical.IndexRangesCleanupPeriodical;
@@ -37,7 +38,6 @@ import org.graylog2.periodical.IndexerClusterCheckerThread;
 import org.graylog2.periodical.LdapGroupMappingMigration;
 import org.graylog2.periodical.NodePingThread;
 import org.graylog2.periodical.ThrottleStateUpdaterThread;
-import org.graylog2.periodical.TrafficCounterCalculator;
 import org.graylog2.periodical.UserPermissionMigrationPeriodical;
 import org.graylog2.periodical.VersionCheckThread;
 import org.graylog2.plugin.periodical.Periodical;
@@ -49,6 +49,7 @@ public class PeriodicalBindings extends AbstractModule {
         periodicalBinder.addBinding().to(AlertScannerThread.class);
         periodicalBinder.addBinding().to(BatchedElasticSearchOutputFlushThread.class);
         periodicalBinder.addBinding().to(ClusterHealthCheckThread.class);
+        periodicalBinder.addBinding().to(ContentPackLoaderPeriodical.class);
         periodicalBinder.addBinding().to(GarbageCollectionWarningThread.class);
         periodicalBinder.addBinding().to(IndexerClusterCheckerThread.class);
         periodicalBinder.addBinding().to(IndexRetentionThread.class);
@@ -66,7 +67,6 @@ public class PeriodicalBindings extends AbstractModule {
         periodicalBinder.addBinding().to(ConfigurationManagementPeriodical.class);
         periodicalBinder.addBinding().to(LdapGroupMappingMigration.class);
         periodicalBinder.addBinding().to(IndexFailuresPeriodical.class);
-        periodicalBinder.addBinding().to(TrafficCounterCalculator.class);
-        periodicalBinder.addBinding().to(IndexFieldTypePollerPeriodical.class);
+        periodicalBinder.addBinding().to(EmailAlarmCallbackMigrationPeriodical.class);
     }
 }

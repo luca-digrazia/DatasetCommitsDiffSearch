@@ -77,7 +77,6 @@ import org.graylog.plugins.pipelineprocessor.parser.errors.IncompatibleIndexType
 import org.graylog.plugins.pipelineprocessor.parser.errors.IncompatibleType;
 import org.graylog.plugins.pipelineprocessor.parser.errors.IncompatibleTypes;
 import org.graylog.plugins.pipelineprocessor.parser.errors.InvalidFunctionArgument;
-import org.graylog.plugins.pipelineprocessor.parser.errors.InvalidOperation;
 import org.graylog.plugins.pipelineprocessor.parser.errors.MissingRequiredParam;
 import org.graylog.plugins.pipelineprocessor.parser.errors.NonIndexableType;
 import org.graylog.plugins.pipelineprocessor.parser.errors.OptionalParametersMustBeNamed;
@@ -87,9 +86,6 @@ import org.graylog.plugins.pipelineprocessor.parser.errors.UndeclaredFunction;
 import org.graylog.plugins.pipelineprocessor.parser.errors.UndeclaredVariable;
 import org.graylog.plugins.pipelineprocessor.parser.errors.WrongNumberOfArgs;
 import org.graylog.plugins.pipelineprocessor.processors.ConfigurationStateUpdater;
-import org.joda.time.DateTime;
-import org.joda.time.Duration;
-import org.joda.time.Period;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -172,14 +168,10 @@ public class PipelineRuleParser {
 
         if (parseContext.getErrors().isEmpty()) {
             Rule parsedRule = parseContext.getRules().get(0).withId(id);
-            if (ruleClassLoader != null && ConfigurationStateUpdater.isAllowCodeGeneration()) {
-                try {
-                    final Class<? extends GeneratedRule> generatedClass = codeGenerator.generateCompiledRule(parsedRule, ruleClassLoader);
-                    if (generatedClass != null) {
-                        parsedRule = parsedRule.toBuilder().generatedRuleClass(generatedClass).build();
-                    }
-                } catch (Exception e) {
-                    log.warn("Unable to compile rule {} to native code, falling back to interpreting it: {}", parsedRule.name(), e.getMessage());
+            if (ruleClassLoader != null || ConfigurationStateUpdater.isAllowCodeGeneration()) {
+                final Class<? extends GeneratedRule> generatedClass = codeGenerator.generateCompiledRule(parsedRule, ruleClassLoader);
+                if (generatedClass != null) {
+                    parsedRule = parsedRule.toBuilder().generatedRuleClass(generatedClass).build();
                 }
             }
             return parsedRule;
@@ -699,11 +691,6 @@ public class PipelineRuleParser {
             if (leftType.equals(rightType)) {
                 // propagate left type
                 expr.setType(leftType);
-            } else if (DateTime.class.equals(leftType) && DateTime.class.equals(rightType)) {
-                // fine to subtract two dates from each other, this results in a Duration
-                expr.setType(Duration.class);
-            } else if (DateTime.class.equals(leftType) && Period.class.equals(rightType) || Period.class.equals(leftType) && DateTime.class.equals(rightType)) {
-                expr.setType(DateTime.class);
             } else {
                 // this will be detected as an error later
                 expr.setType(Void.class);
@@ -756,24 +743,6 @@ public class PipelineRuleParser {
 
         @Override
         public void exitAddition(RuleLangParser.AdditionContext ctx) {
-            final AdditionExpression addExpression = (AdditionExpression) parseContext.expressions().get(ctx);
-            final Class leftType = addExpression.left().getType();
-            final Class rightType = addExpression.right().getType();
-
-            // special case for DateTime/Period, which are all compatible
-            final boolean leftDate = DateTime.class.equals(leftType);
-            final boolean rightDate = DateTime.class.equals(rightType);
-            final boolean leftPeriod = Period.class.equals(leftType);
-            final boolean rightPeriod = Period.class.equals(rightType);
-            if (leftDate && rightDate) {
-                if (addExpression.isPlus()) {
-                    parseContext.addError(new InvalidOperation(ctx, addExpression, "Unable to add two dates"));
-                }
-                return;
-            } else if (leftDate && rightPeriod || leftPeriod && rightDate || leftPeriod && rightPeriod) {
-                return;
-            }
-            // otherwise check generic binary expression
             checkBinaryExpression(ctx);
         }
 

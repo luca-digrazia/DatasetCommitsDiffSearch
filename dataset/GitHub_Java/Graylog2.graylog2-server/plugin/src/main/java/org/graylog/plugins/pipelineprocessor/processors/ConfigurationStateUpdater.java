@@ -1,6 +1,5 @@
 package org.graylog.plugins.pipelineprocessor.processors;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSetMultimap;
@@ -12,7 +11,6 @@ import com.codahale.metrics.MetricRegistry;
 
 import org.graylog.plugins.pipelineprocessor.ast.Pipeline;
 import org.graylog.plugins.pipelineprocessor.ast.Rule;
-import org.graylog.plugins.pipelineprocessor.codegen.PipelineClassloader;
 import org.graylog.plugins.pipelineprocessor.db.PipelineService;
 import org.graylog.plugins.pipelineprocessor.db.PipelineStreamConnectionsService;
 import org.graylog.plugins.pipelineprocessor.db.RuleService;
@@ -31,7 +29,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
@@ -58,7 +55,7 @@ public class ConfigurationStateUpdater {
     /**
      * non-null if the update has successfully loaded a state
      */
-    private final AtomicReference<PipelineInterpreter.State> latestState = new AtomicReference<>();
+    private PipelineInterpreter.State latestState;
     private static boolean allowCodeGeneration = false;
 
     @Inject
@@ -87,10 +84,11 @@ public class ConfigurationStateUpdater {
         // listens to cluster wide Rule, Pipeline and pipeline stream connection changes
         serverEventBus.register(this);
 
-        reloadAndSave();
+        // eagerly propagate initial state
+        serverEventBus.post(reloadAndSave());
     }
 
-    private static void setAllowCodeGeneration(Boolean allowCodeGeneration) {
+    public static void setAllowCodeGeneration(Boolean allowCodeGeneration) {
         if (allowCodeGeneration && ToolProvider.getSystemJavaCompiler() == null) {
             log.warn("Your Java runtime does not have a compiler available, turning off dynamic " +
                     "code generation. Please consider running Graylog in a JDK, not a JRE, to " +
@@ -107,8 +105,14 @@ public class ConfigurationStateUpdater {
     // only the singleton instance should mutate itself, others are welcome to reload a new state, but we don't
     // currently allow direct global state updates from external sources (if you need to, send an event on the bus instead)
     private synchronized PipelineInterpreter.State reloadAndSave() {
+        latestState = reload();
+        return latestState;
+    }
+
+    // this should not run in parallel to avoid useless database traffic
+    public synchronized PipelineInterpreter.State reload() {
         // this classloader will hold all generated rule classes
-        PipelineClassloader commonClassLoader = allowCodeGeneration ? new PipelineClassloader() : null;
+        ClassLoader commonClassLoader = allowCodeGeneration ? new ClassLoader() {} : null;
 
         // read all rules and parse them
         Map<String, Rule> ruleNameMap = Maps.newHashMap();
@@ -147,11 +151,8 @@ public class ConfigurationStateUpdater {
         }
         ImmutableSetMultimap<String, Pipeline> streamPipelineConnections = ImmutableSetMultimap.copyOf(connections);
 
-        final PipelineInterpreter.State newState = stateFactory.newState(currentPipelines, streamPipelineConnections, commonClassLoader);
-        latestState.set(newState);
-        return newState;
+        return stateFactory.newState(currentPipelines, streamPipelineConnections, commonClassLoader);
     }
-
 
     /**
      * Can be used to inspect or use the current state of the pipeline system.
@@ -159,7 +160,7 @@ public class ConfigurationStateUpdater {
      * @return the currently loaded state of the updater
      */
     public PipelineInterpreter.State getLatestState() {
-        return latestState.get();
+        return latestState;
     }
 
     @Nonnull
@@ -218,8 +219,4 @@ public class ConfigurationStateUpdater {
         scheduler.schedule(() -> serverEventBus.post(reloadAndSave()), 0, TimeUnit.SECONDS);
     }
 
-    @VisibleForTesting
-    PipelineInterpreter.State reload() {
-        return reloadAndSave();
-    }
 }
