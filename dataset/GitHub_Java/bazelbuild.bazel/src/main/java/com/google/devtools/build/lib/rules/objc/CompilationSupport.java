@@ -64,7 +64,6 @@ import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.ShToolchain;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
@@ -1417,11 +1416,10 @@ public class CompilationSupport {
                     debugSymbolFileZipEntry,
                     debugSymbolFile.getExecPathString()));
 
-    PathFragment shExecutable = ShToolchain.getPathOrError(ruleContext);
     ruleContext.registerAction(
         new SpawnAction.Builder()
             .setMnemonic("UnzipDsym")
-            .setShellCommand(shExecutable, unzipDsymCommand.toString())
+            .setShellCommand(unzipDsymCommand.toString())
             .addInput(tempDsymBundleZip)
             .addOutput(dsymPlist)
             .addOutput(debugSymbolFile)

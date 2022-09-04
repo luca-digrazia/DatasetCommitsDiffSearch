@@ -51,7 +51,6 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.Builder;
@@ -575,7 +574,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             configuration.isHostConfiguration());
 
     TemplateVariableInfo templateVariableInfo =
-        createMakeVariableProvider(cppConfiguration, sysroot, ruleContext.getRule().getLocation());
+        createMakeVariableProvider(cppConfiguration, sysroot);
 
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext)
@@ -821,7 +820,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
   }
 
   private TemplateVariableInfo createMakeVariableProvider(
-      CppConfiguration cppConfiguration, PathFragment sysroot, Location location) {
+      CppConfiguration cppConfiguration, PathFragment sysroot) {
 
     HashMap<String, String> makeVariables =
         new HashMap<>(cppConfiguration.getAdditionalMakeVariables());
@@ -833,7 +832,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       ccFlags = ccFlags.isEmpty() ? sysrootFlag : ccFlags + " " + sysrootFlag;
       makeVariables.put(CppConfiguration.CC_FLAGS_MAKE_VARIABLE_NAME, ccFlags);
     }
-    return new TemplateVariableInfo(ImmutableMap.copyOf(makeVariables), location);
+    return new TemplateVariableInfo(ImmutableMap.copyOf(makeVariables));
   }
 
   /**

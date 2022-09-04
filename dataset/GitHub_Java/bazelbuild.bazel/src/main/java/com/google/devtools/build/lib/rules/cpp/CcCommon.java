@@ -54,7 +54,6 @@ import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Pair;
@@ -688,45 +687,15 @@ public final class CcCommon {
   }
 
   /**
-   * Creates a feature configuration for a given rule. Assumes strictly cc sources.
-   *
-   * @param ruleContext the context of the rule we want the feature configuration for.
-   * @param toolchain C++ toolchain provider.
-   * @return the feature configuration for the given {@code ruleContext}.
-   */
-  public static FeatureConfiguration configureFeaturesOrReportRuleError(
-      RuleContext ruleContext, CcToolchainProvider toolchain) {
-    return configureFeaturesOrReportRuleError(
-        ruleContext,
-        /* requestedFeatures= */ ruleContext.getFeatures(),
-        /* unsupportedFeatures= */ ruleContext.getDisabledFeatures(),
-        toolchain);
-  }
-
-  /**
    * Creates the feature configuration for a given rule.
    *
    * @return the feature configuration for the given {@code ruleContext}.
    */
-  public static FeatureConfiguration configureFeaturesOrReportRuleError(
+  public static FeatureConfiguration configureFeatures(
       RuleContext ruleContext,
       ImmutableSet<String> requestedFeatures,
       ImmutableSet<String> unsupportedFeatures,
       CcToolchainProvider toolchain) {
-    try {
-      return configureFeaturesOrThrowEvalException(
-          requestedFeatures, unsupportedFeatures, toolchain);
-    } catch (EvalException e) {
-      ruleContext.ruleError(e.getMessage());
-      return FeatureConfiguration.EMPTY;
-    }
-  }
-
-  public static FeatureConfiguration configureFeaturesOrThrowEvalException(
-      ImmutableSet<String> requestedFeatures,
-      ImmutableSet<String> unsupportedFeatures,
-      CcToolchainProvider toolchain)
-      throws EvalException {
     CppConfiguration cppConfiguration = toolchain.getCppConfiguration();
     ImmutableSet.Builder<String> allRequestedFeaturesBuilder = ImmutableSet.builder();
     ImmutableSet.Builder<String> unsupportedFeaturesBuilder = ImmutableSet.builder();
@@ -826,10 +795,11 @@ public final class CcCommon {
           toolchain.getFeatures().getFeatureConfiguration(allRequestedFeaturesBuilder.build());
       for (String feature : unsupportedFeatures) {
         if (featureConfiguration.isEnabled(feature)) {
-          throw new EvalException(
-              /* location= */ null,
+          ruleContext.ruleError(
               "The C++ toolchain '"
-                  + toolchain.getCcToolchainLabel()
+                  + ruleContext
+                  .getPrerequisite(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, Mode.TARGET)
+                  .getLabel()
                   + "' unconditionally implies feature '"
                   + feature
                   + "', which is unsupported by this rule. "
@@ -838,12 +808,29 @@ public final class CcCommon {
       }
       if ((cppConfiguration.forcePic() || toolchain.toolchainNeedsPic())
           && !featureConfiguration.isEnabled(CppRuleClasses.PIC)) {
-        throw new EvalException(/* location= */ null, PIC_CONFIGURATION_ERROR);
+        ruleContext.ruleError(PIC_CONFIGURATION_ERROR);
       }
       return featureConfiguration;
     } catch (CollidingProvidesException e) {
-      throw new EvalException(/* location= */ null, e.getMessage());
+      ruleContext.ruleError(e.getMessage());
+      return FeatureConfiguration.EMPTY;
     }
+  }
+
+  /**
+   * Creates a feature configuration for a given rule.  Assumes strictly cc sources.
+   *
+   * @param ruleContext the context of the rule we want the feature configuration for.
+   * @param toolchain C++ toolchain provider.
+   * @return the feature configuration for the given {@code ruleContext}.
+   */
+  public static FeatureConfiguration configureFeatures(
+      RuleContext ruleContext, CcToolchainProvider toolchain) {
+    return configureFeatures(
+        ruleContext,
+        /* requestedFeatures= */ ruleContext.getFeatures(),
+        /* unsupportedFeatures= */ ruleContext.getDisabledFeatures(),
+        toolchain);
   }
 
   /**
@@ -854,7 +841,7 @@ public final class CcCommon {
     CcToolchainProvider toolchainProvider =
         (CcToolchainProvider) toolchain.get(ToolchainInfo.PROVIDER);
     FeatureConfiguration featureConfiguration =
-        CcCommon.configureFeaturesOrReportRuleError(ruleContext, toolchainProvider);
+        CcCommon.configureFeatures(ruleContext, toolchainProvider);
     if (!featureConfiguration.actionIsConfigured(
         CppCompileAction.CC_FLAGS_MAKE_VARIABLE_ACTION_NAME)) {
       return null;

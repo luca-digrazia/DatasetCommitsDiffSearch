@@ -433,10 +433,6 @@ public final class CcToolchainProvider extends ToolchainInfo {
     return toolchainInfo.getFeatures();
   }
 
-  public Label getCcToolchainLabel() {
-    return toolchainInfo.getCcToolchainLabel();
-  }
-
   /**
    * Returns whether shared libraries must be compiled with position independent code on this
    * platform.
