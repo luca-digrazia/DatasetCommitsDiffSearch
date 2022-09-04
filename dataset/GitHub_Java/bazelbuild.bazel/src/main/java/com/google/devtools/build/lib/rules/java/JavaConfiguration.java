@@ -147,7 +147,6 @@ public final class JavaConfiguration extends Fragment {
   private final boolean useIjars;
   private final boolean useHeaderCompilation;
   private final boolean headerCompilationDirectClasspath;
-  private final boolean headerCompilationDisableJavacFallback;
   private final boolean generateJavaDeps;
   private final boolean strictDepsJavaProtos;
   private final OneVersionEnforcementLevel enforceOneVersion;
@@ -180,7 +179,6 @@ public final class JavaConfiguration extends Fragment {
     this.useIjars = javaOptions.useIjars;
     this.useHeaderCompilation = javaOptions.headerCompilation;
     this.headerCompilationDirectClasspath = javaOptions.headerCompilationDirectClasspath;
-    this.headerCompilationDisableJavacFallback = javaOptions.headerCompilationDisableJavacFallback;
     this.generateJavaDeps = generateJavaDeps;
     this.javaClasspath = javaOptions.javaClasspath;
     this.defaultJvmFlags = ImmutableList.copyOf(defaultJvmFlags);
@@ -264,14 +262,6 @@ public final class JavaConfiguration extends Fragment {
   /** Returns true if header compilations should use direct dependencies only. */
   public boolean headerCompilationDirectClasspath() {
     return headerCompilationDirectClasspath;
-  }
-
-  /**
-   * If --java_header_compilation is set, report diagnostics from turbine instead of falling back to
-   * javac. Diagnostics will be produced more quickly, but may be less helpful.
-   */
-  public boolean headerCompilationDisableJavacFallback() {
-    return headerCompilationDisableJavacFallback;
   }
 
   /**
