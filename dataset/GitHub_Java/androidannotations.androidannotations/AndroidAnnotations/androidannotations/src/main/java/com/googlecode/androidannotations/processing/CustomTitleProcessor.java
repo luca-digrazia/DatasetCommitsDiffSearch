@@ -1,8 +1,9 @@
 package com.googlecode.androidannotations.processing;
 
 import com.googlecode.androidannotations.annotations.CustomTitle;
-import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JFieldRef;
+import com.googlecode.androidannotations.annotations.Extra;
+import com.googlecode.androidannotations.annotations.NoTitle;
+import com.sun.codemodel.*;
 
 import javax.lang.model.element.Element;
 import java.lang.annotation.Annotation;
@@ -21,7 +22,7 @@ public class CustomTitleProcessor implements DecoratingElementProcessor {
         JFieldRef customTitleFeature = holder.classes().WINDOW.staticRef("FEATURE_CUSTOM_TITLE");
 
         holder.init.body().invoke("requestWindowFeature").arg(customTitleFeature);
-        holder.afterSetContentView.body().directStatement("getWindow().setFeatureInt(Window.FEATURE_CUSTOM_TITLE, " + annotation.value() + ");");
+        holder.init.body().directStatement("getWindow().setFeatureInt(Window.FEATURE_CUSTOM_TITLE, " + annotation.value() + ");");
     }
 
 }
