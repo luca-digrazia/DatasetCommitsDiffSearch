@@ -31,8 +31,8 @@ public class ThreadPoolConfig {
     /**
      * The queue size. For most applications this should be unbounded
      */
-    @ConfigItem
-    public OptionalInt queueSize;
+    @ConfigItem(defaultValue = "0")
+    public int queueSize;
 
     /**
      * The executor growth resistance.
