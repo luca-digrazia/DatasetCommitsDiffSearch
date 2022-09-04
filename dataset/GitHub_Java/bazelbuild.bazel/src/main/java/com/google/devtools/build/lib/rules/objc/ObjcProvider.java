@@ -222,13 +222,6 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
   public static final Key<Flag> FLAG = new Key<>(STABLE_ORDER, "flag", Flag.class);
 
   /**
-   * Clang umbrella header. Public headers are #included in umbrella headers to be compatible with
-   * J2ObjC segmented headers.
-   */
-  public static final Key<Artifact> UMBRELLA_HEADER =
-      new Key<>(STABLE_ORDER, "umbrella_header", Artifact.class);
-
-  /**
    * Clang module maps, used to enforce proper use of private header files.
    */
   public static final Key<Artifact> MODULE_MAP =
@@ -447,7 +440,6 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
           STATIC_FRAMEWORK_FILE,
           STORYBOARD,
           STRINGS,
-          UMBRELLA_HEADER,
           WEAK_SDK_FRAMEWORK,
           XCASSETS_DIR,
           XCDATAMODEL,
@@ -1004,19 +996,27 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
 
       ImmutableMap.Builder<String, Object> skylarkFields = new ImmutableMap.Builder<>();
       for (Key<?> key : KEYS_FOR_SKYLARK) {
-        NestedSetBuilder union = new NestedSetBuilder(key.order);
-        if (propagated.containsKey(key)) {
-          union.addTransitive((NestedSet<?>) propagated.get(key));
+        if (propagated.containsKey(key) && strictDependency.containsKey(key)) {
+          NestedSet<?> union = new NestedSetBuilder(STABLE_ORDER)
+              .addTransitive(propagated.get(key))
+              .addTransitive(strictDependency.get(key))
+              .build();
+          skylarkFields.put(
+              key.getSkylarkKeyName(), ObjcProviderSkylarkConverters.convertToSkylark(key, union));
+        } else if (items.containsKey(key)) {
+          skylarkFields.put(
+              key.getSkylarkKeyName(),
+              ObjcProviderSkylarkConverters.convertToSkylark(key, propagated.get(key)));
+        } else if (strictDependency.containsKey(key)) {
+          skylarkFields.put(
+              key.getSkylarkKeyName(),
+              ObjcProviderSkylarkConverters.convertToSkylark(key, strictDependency.get(key)));
+        } else {
+          skylarkFields.put(
+              key.getSkylarkKeyName(),
+              ObjcProviderSkylarkConverters.convertToSkylark(
+                  key, new NestedSetBuilder(STABLE_ORDER).build()));
         }
-        if (strictDependency.containsKey(key)) {
-          union.addTransitive(strictDependency.get(key));
-        }
-        if (nonPropagated.containsKey(key)) {
-          union.addTransitive(nonPropagated.get(key));
-        }
-        skylarkFields.put(
-            key.getSkylarkKeyName(),
-            ObjcProviderSkylarkConverters.convertToSkylark(key, union.build()));
       }
 
       return new ObjcProvider(propagated, nonPropagated, strictDependency, skylarkFields.build());
