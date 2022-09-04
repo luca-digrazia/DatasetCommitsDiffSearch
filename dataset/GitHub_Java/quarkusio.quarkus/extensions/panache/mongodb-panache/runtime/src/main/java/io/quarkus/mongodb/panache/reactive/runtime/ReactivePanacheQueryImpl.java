@@ -22,6 +22,10 @@ public class ReactivePanacheQueryImpl<Entity> implements ReactivePanacheQuery<En
     private Document sort;
     private Document projections;
 
+    /*
+     * We store the pageSize and apply it for each request because getFirstResult()
+     * sets the page size to 1
+     */
     private Page page;
     private Uni<Long> count;
 
@@ -31,15 +35,7 @@ public class ReactivePanacheQueryImpl<Entity> implements ReactivePanacheQuery<En
         this.collection = collection;
         this.mongoQuery = mongoQuery;
         this.sort = sort;
-    }
-
-    private ReactivePanacheQueryImpl(ReactivePanacheQueryImpl previousQuery, Document projections) {
-        this.collection = previousQuery.collection;
-        this.mongoQuery = previousQuery.mongoQuery;
-        this.sort = previousQuery.sort;
-        this.projections = projections;
-        this.page = previousQuery.page;
-        this.count = previousQuery.count;
+        page = new Page(0, Integer.MAX_VALUE);
     }
 
     // Builder
@@ -50,12 +46,12 @@ public class ReactivePanacheQueryImpl<Entity> implements ReactivePanacheQuery<En
         Set<String> fieldNames = MongoPropertyUtil.collectFields(type);
 
         // create the projection document
-        Document projections = new Document();
+        this.projections = new Document();
         for (String fieldName : fieldNames) {
-            projections.append(fieldName, 1);
+            this.projections.append(fieldName, 1);
         }
 
-        return new ReactivePanacheQueryImpl(this, projections);
+        return (ReactivePanacheQuery<T>) this;
     }
 
     @Override
@@ -73,43 +69,43 @@ public class ReactivePanacheQueryImpl<Entity> implements ReactivePanacheQuery<En
 
     @Override
     public <T extends Entity> ReactivePanacheQuery<T> nextPage() {
-        checkPagination();
+        checkNotInRange();
         return page(page.next());
     }
 
     @Override
     public <T extends Entity> ReactivePanacheQuery<T> previousPage() {
-        checkPagination();
+        checkNotInRange();
         return page(page.previous());
     }
 
     @Override
     public <T extends Entity> ReactivePanacheQuery<T> firstPage() {
-        checkPagination();
+        checkNotInRange();
         return page(page.first());
     }
 
     @Override
     public <T extends Entity> Uni<ReactivePanacheQuery<T>> lastPage() {
-        checkPagination();
+        checkNotInRange();
         return pageCount().map(pageCount -> page(page.index(pageCount - 1)));
     }
 
     @Override
     public Uni<Boolean> hasNextPage() {
-        checkPagination();
+        checkNotInRange();
         return pageCount().map(pageCount -> page.index < (pageCount - 1));
     }
 
     @Override
     public boolean hasPreviousPage() {
-        checkPagination();
+        checkNotInRange();
         return page.index > 0;
     }
 
     @Override
     public Uni<Integer> pageCount() {
-        checkPagination();
+        checkNotInRange();
         return count().map(count -> {
             if (count == 0)
                 return 1; // a single page of zero results
@@ -119,16 +115,11 @@ public class ReactivePanacheQueryImpl<Entity> implements ReactivePanacheQuery<En
 
     @Override
     public Page page() {
-        checkPagination();
+        checkNotInRange();
         return page;
     }
 
-    private void checkPagination() {
-        if (page == null) {
-            throw new UnsupportedOperationException(
-                    "Cannot call a page related method, "
-                            + "call page(Page) or page(int, int) to initiate pagination first");
-        }
+    private void checkNotInRange() {
         if (range != null) {
             throw new UnsupportedOperationException("Cannot call a page related method in a ranged query, " +
                     "call page(Page) or page(int, int) to initiate pagination first");
@@ -139,7 +130,7 @@ public class ReactivePanacheQueryImpl<Entity> implements ReactivePanacheQuery<En
     public <T extends Entity> ReactivePanacheQuery<T> range(int startIndex, int lastIndex) {
         this.range = Range.of(startIndex, lastIndex);
         // reset the page to its default to be able to switch from page to range
-        this.page = null;
+        this.page = new Page(0, Integer.MAX_VALUE);
         return (ReactivePanacheQuery<T>) this;
     }
 
@@ -213,7 +204,7 @@ public class ReactivePanacheQueryImpl<Entity> implements ReactivePanacheQuery<En
         if (range != null) {
             // range is 0 based, so we add 1 to the limit
             options.skip(range.getStartIndex()).limit(range.getLastIndex() - range.getStartIndex() + 1);
-        } else if (page != null) {
+        } else {
             options.skip(page.index * page.size).limit(page.size);
         }
         if (projections != null) {
@@ -227,13 +218,13 @@ public class ReactivePanacheQueryImpl<Entity> implements ReactivePanacheQuery<En
         options.sort(sort);
         if (range != null) {
             // range is 0 based, so we add 1 to the limit
-            options.skip(range.getStartIndex());
-        } else if (page != null) {
-            options.skip(page.index * page.size);
+            options.skip(range.getStartIndex()).limit(maxResults);
+        } else {
+            options.skip(page.index * page.size).limit(maxResults);
         }
         if (projections != null) {
             options.projection(this.projections);
         }
-        return options.limit(maxResults);
+        return options;
     }
 }
