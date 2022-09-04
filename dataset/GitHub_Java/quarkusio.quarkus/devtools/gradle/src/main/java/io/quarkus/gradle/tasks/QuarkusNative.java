@@ -1,7 +1,5 @@
 package io.quarkus.gradle.tasks;
 
-import static java.util.stream.Collectors.joining;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,7 +72,7 @@ public class QuarkusNative extends QuarkusTask {
 
     private boolean fullStackTraces = true;
 
-    private boolean enableReports;
+    private boolean disableReports;
 
     private List<String> additionalBuildArgs;
 
@@ -345,19 +343,13 @@ public class QuarkusNative extends QuarkusTask {
 
     @Optional
     @Input
-    public boolean isEnableReports() {
-        return enableReports;
+    public boolean isDisableReports() {
+        return disableReports;
     }
 
-    @Deprecated
     @Option(description = "Disable reports", option = "disable-reports")
     public void setDisableReports(boolean disableReports) {
-        this.enableReports = !disableReports;
-    }
-
-    @Option(description = "Enable reports", option = "enable-reports")
-    public void setEnableReports(boolean enableReports) {
-        this.enableReports = enableReports;
+        this.disableReports = disableReports;
     }
 
     @Optional
@@ -435,11 +427,7 @@ public class QuarkusNative extends QuarkusTask {
                 configs.add("quarkus.native.add-all-charsets", addAllCharsets);
 
                 if (additionalBuildArgs != null) {
-                    configs.add("quarkus.native.additional-build-args",
-                            additionalBuildArgs.stream()
-                                    .map(val -> val.replace("\\", "\\\\"))
-                                    .map(val -> val.replace(",", "\\,"))
-                                    .collect(joining(",")));
+                    configs.add("quarkus.native.additional-build-args", additionalBuildArgs);
                 }
                 configs.add("quarkus.native.auto-service-loader-registration", autoServiceLoaderRegistration);
 
@@ -447,7 +435,7 @@ public class QuarkusNative extends QuarkusTask {
                 configs.add("quarkus.native.debug-build-process", debugBuildProcess);
 
                 configs.add("quarkus.native.debug-symbols", debugSymbols);
-                configs.add("quarkus.native.enable-reports", enableReports);
+                configs.add("quarkus.native.disable-reports", disableReports);
                 if (dockerBuild != null) {
                     configs.add("quarkus.native.docker-build", dockerBuild);
                 }
