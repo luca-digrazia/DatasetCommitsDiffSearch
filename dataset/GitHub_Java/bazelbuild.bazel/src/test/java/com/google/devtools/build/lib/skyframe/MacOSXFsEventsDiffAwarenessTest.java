@@ -132,7 +132,7 @@ public class MacOSXFsEventsDiffAwarenessTest {
   }
 
   @Test
-  @Ignore("Test is flaky; see https://github.com/bazelbuild/bazel/issues/10776")
+  @Ignore("test is flaky, see https://github.com/bazelbuild/bazel/issues/10776")
   public void testSimple() throws Exception {
     View view1 = underTest.getCurrentView(watchFsEnabledProvider);
 
