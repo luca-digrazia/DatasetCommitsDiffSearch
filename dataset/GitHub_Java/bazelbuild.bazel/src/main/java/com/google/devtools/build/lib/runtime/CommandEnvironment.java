@@ -566,6 +566,7 @@ public final class CommandEnvironment {
   void beforeCommand(
       OptionsProvider options,
       CommonCommandOptions commonOptions,
+      long execStartTimeNanos,
       long waitTimeInMs,
       InvocationPolicy invocationPolicy)
       throws AbruptExitException {
@@ -621,7 +622,7 @@ public final class CommandEnvironment {
         reporter);
 
     // Start the performance and memory profilers.
-    runtime.beforeCommand(this, commonOptions);
+    runtime.beforeCommand(this, commonOptions, execStartTimeNanos);
 
     eventBus.post(new CommandStartEvent(
         command.name(), getCommandId(), getClientEnv(), workingDirectory, getDirectories(),
