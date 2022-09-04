@@ -13,46 +13,62 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+import com.google.devtools.build.lib.events.Location;
+import java.io.IOException;
 import javax.annotation.Nullable;
 
-/** A syntax node for return statements. */
+/** A wrapper Statement class for return expressions. */
 public final class ReturnStatement extends Statement {
 
-  private final int returnOffset;
-  @Nullable private final Expression result;
+  /**
+   * Exception sent by the return statement, to be caught by the function body.
+   */
+  public static class ReturnException extends EvalException {
+    private final Object value;
 
-  ReturnStatement(FileLocations locs, int returnOffset, @Nullable Expression result) {
-    super(locs);
-    this.returnOffset = returnOffset;
-    this.result = result;
+    public ReturnException(Location location, Object value) {
+      super(
+          location,
+          "return statements must be inside a function",
+          /*dueToIncompleteAST=*/false,
+          /*fillInJavaStackTrace=*/false);
+      this.value = value;
+    }
+
+    public Object getValue() {
+      return value;
+    }
+
+    @Override
+    public boolean canBeAddedToStackTrace() {
+      return false;
+    }
   }
 
-  /**
-   * Returns a new return statement that returns expr. It has a dummy file offset and line number
-   * table. It is provided only for use by the evaluator, and will be removed when it switches to a
-   * compiled representation.
-   */
-  public static ReturnStatement make(Expression expr) {
-    return new ReturnStatement(expr.locs, 0, expr);
+  @Nullable private final Expression returnExpression;
+
+  ReturnStatement(@Nullable Expression returnExpression) {
+    this.returnExpression = returnExpression;
   }
 
   @Nullable
-  public Expression getResult() {
-    return result;
+  public Expression getReturnExpression() {
+    return returnExpression;
   }
 
   @Override
-  public int getStartOffset() {
-    return returnOffset;
+  public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
+    printIndent(buffer, indentLevel);
+    buffer.append("return");
+    if (returnExpression != null) {
+      buffer.append(' ');
+      returnExpression.prettyPrint(buffer, indentLevel);
+    }
+    buffer.append('\n');
   }
 
   @Override
-  public int getEndOffset() {
-    return result != null ? result.getEndOffset() : returnOffset + "return".length();
-  }
-
-  @Override
-  public void accept(NodeVisitor visitor) {
+  public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
   }
 

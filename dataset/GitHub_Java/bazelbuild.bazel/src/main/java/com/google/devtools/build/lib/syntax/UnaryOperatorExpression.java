@@ -56,8 +56,7 @@ public final class UnaryOperatorExpression extends Expression {
     return (op == TokenKind.NOT ? "not " : op.toString()) + x;
   }
 
-  // TODO(adonovan): move to EvalUtils.unary.
-  static Object evaluate(TokenKind op, Object value, Location loc)
+  private static Object evaluate(TokenKind op, Object value, Location loc)
       throws EvalException, InterruptedException {
     switch (op) {
       case NOT:
@@ -95,7 +94,12 @@ public final class UnaryOperatorExpression extends Expression {
   }
 
   @Override
-  public void accept(NodeVisitor visitor) {
+  Object doEval(Environment env) throws EvalException, InterruptedException {
+    return evaluate(op, x.eval(env), getLocation());
+  }
+
+  @Override
+  public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
   }
 

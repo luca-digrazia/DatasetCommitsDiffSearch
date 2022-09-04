@@ -14,50 +14,47 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import com.google.devtools.build.lib.events.Location;
+import java.io.IOException;
 
 /** Syntax node for an augmented assignment statement. */
+// TODO(adonovan): merge with AssignmentStatement.
 public final class AugmentedAssignmentStatement extends Statement {
 
-  private final Operator operator;
+  private final Expression lhs; // same constraint as AssignmentStatement
+  private final TokenKind op;
+  private final Expression rhs;
 
-  private final LValue lvalue;
-
-  private final Expression expression;
-
-  /** Constructs an augmented assignment: "lvalue ::= value". */
-  AugmentedAssignmentStatement(Operator operator, Expression lhs, Expression expression) {
-    this.operator = operator;
-    this.lvalue = new LValue(lhs);
-    this.expression = expression;
+  /** Constructs an augmented assignment. */
+  AugmentedAssignmentStatement(TokenKind op, Expression lhs, Expression rhs) {
+    this.lhs = lhs;
+    this.op = op;
+    this.rhs = rhs;
   }
 
   /** Returns the operator of the assignment. */
-  public Operator getOperator() {
-    return operator;
+  public TokenKind getOperator() {
+    return op;
   }
 
-  /** Returns the LValue of the assignment. */
-  public LValue getLValue() {
-    return lvalue;
+  /** Returns the LHS of the assignment. */
+  public Expression getLHS() {
+    return lhs;
   }
 
   /** Returns the RHS of the assignment. */
-  public Expression getExpression() {
-    return expression;
+  public Expression getRHS() {
+    return rhs;
   }
 
   @Override
-  public String toString() {
-    return String.format("%s %s= %s\n", lvalue, operator, expression);
-  }
-
-  @Override
-  void doExec(Environment env) throws EvalException, InterruptedException {
-    Location loc = getLocation();
-    Object result =
-        BinaryOperatorExpression.evaluate(operator, lvalue.getExpression(), expression, env, loc);
-    lvalue.assign(env, loc, result);
+  public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
+    printIndent(buffer, indentLevel);
+    lhs.prettyPrint(buffer);
+    buffer.append(' ');
+    buffer.append(op.toString());
+    buffer.append("= ");
+    rhs.prettyPrint(buffer);
+    buffer.append('\n');
   }
 
   @Override
@@ -66,8 +63,7 @@ public final class AugmentedAssignmentStatement extends Statement {
   }
 
   @Override
-  void validate(ValidationEnvironment env) throws EvalException {
-    lvalue.validate(env, getLocation());
-    expression.validate(env);
+  public Kind kind() {
+    return Kind.AUGMENTED_ASSIGNMENT;
   }
 }

@@ -30,16 +30,16 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.packages.WorkspaceFactoryHelper;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.syntax.BuiltinFunction;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Expression;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
-import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.Parser;
+import com.google.devtools.build.lib.syntax.ParserInputSource;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.Path;
@@ -102,8 +102,10 @@ public class SkylarkRepositoryContextTest {
             RootedPath.toRootedPath(root, workspaceFile),
             "runfiles");
     ExtendedEventHandler listener = Mockito.mock(ExtendedEventHandler.class);
-    ParserInput input = ParserInput.fromLines("test()");
-    FuncallExpression ast = (FuncallExpression) Expression.parse(input);
+    FuncallExpression ast =
+        (FuncallExpression)
+            Parser.parseExpression(
+                ParserInputSource.create("test()", PathFragment.create("<builtin>")), listener);
     Rule rule =
         WorkspaceFactoryHelper.createAndAddRepositoryRule(
             packageBuilder, buildRuleClass(attributes), null, kwargs, ast);

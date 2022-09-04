@@ -135,20 +135,41 @@ public final class BinaryOperatorExpression extends Expression {
   }
 
   /**
+   * Evaluates a short-circuiting binary operator, i.e. boolean {@code and} or {@code or}.
+   *
+   * <p>In contrast to {@link #evaluate}, this method takes unevaluated expressions. The left-hand
+   * side expression is evaluated exactly once, and the right-hand side expression is evaluated
+   * either once or not at all.
+   *
+   * @throws IllegalArgumentException if {@code op} is not {@link Operator#AND} or {@link
+   *     Operator#OR}.
+   */
+  public static Object evaluateWithShortCircuiting(
+      TokenKind op, Expression x, Expression y, Environment env, Location loc)
+      throws EvalException, InterruptedException {
+    Object xval = x.eval(env);
+    switch (op) {
+      case AND:
+        return EvalUtils.toBoolean(xval) ? y.eval(env) : xval;
+      case OR:
+        return EvalUtils.toBoolean(xval) ? xval : y.eval(env);
+      default:
+        throw new IllegalArgumentException("Not a short-circuiting operator: " + op);
+    }
+  }
+
+  /**
    * Evaluates {@code x @ y}, where {@code @} is the operator, and returns the result.
    *
    * <p>This method does not implement any short-circuiting logic for boolean operations, as the
    * parameters are already evaluated.
    */
-  // TODO(adonovan): move to EvalUtils.binary.
-  static Object evaluate(TokenKind op, Object x, Object y, Environment env, Location loc)
+  public static Object evaluate(TokenKind op, Object x, Object y, Environment env, Location loc)
       throws EvalException, InterruptedException {
     return evaluate(op, x, y, env, loc, /*isAugmented=*/ false);
   }
 
-  // TODO(adonovan): eliminate isAugmented parameter; make the caller handle the list+=iterable
-  // special case and desugar the rest to y=y+x.
-  static Object evaluate(
+  private static Object evaluate(
       TokenKind op, Object x, Object y, Environment env, Location location, boolean isAugmented)
       throws EvalException, InterruptedException {
     try {
@@ -236,13 +257,23 @@ public final class BinaryOperatorExpression extends Expression {
    * <p>Whether or not {@code x} is mutated depends on its type. If it is mutated, then it is also
    * the return value.
    */
-  static Object evaluateAugmented(TokenKind op, Object x, Object y, Environment env, Location loc)
+  public static Object evaluateAugmented(
+      TokenKind op, Object x, Object y, Environment env, Location loc)
       throws EvalException, InterruptedException {
     return evaluate(op, x, y, env, loc, /*isAugmented=*/ true);
   }
 
   @Override
-  public void accept(NodeVisitor visitor) {
+  Object doEval(Environment env) throws EvalException, InterruptedException {
+    if (op == TokenKind.AND || op == TokenKind.OR) {
+      return evaluateWithShortCircuiting(op, x, y, env, getLocation());
+    } else {
+      return evaluate(op, x.eval(env), y.eval(env), env, getLocation());
+    }
+  }
+
+  @Override
+  public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
   }
 
@@ -252,8 +283,8 @@ public final class BinaryOperatorExpression extends Expression {
   }
 
   /** Implements 'x + y'. */
-  // TODO(adonovan): move to EvalUtils.plus.
-  static Object plus(Object x, Object y, Environment env, Location location, boolean isAugmented)
+  private static Object plus(
+      Object x, Object y, Environment env, Location location, boolean isAugmented)
       throws EvalException {
     // int + int
     if (x instanceof Integer && y instanceof Integer) {

@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,17 +14,15 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
-
-import java.util.LinkedHashMap;
+import com.google.devtools.build.lib.events.Location;
+import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 
-/**
- * Syntax node for dictionary literals.
- */
-public class DictionaryLiteral extends Expression {
+/** Syntax node for dictionary literals. */
+public final class DictionaryLiteral extends Expression {
 
-  static final class DictionaryEntryLiteral extends ASTNode {
+  /** Node for an individual key-value pair in a dictionary literal. */
+  public static final class DictionaryEntryLiteral extends ASTNode {
 
     private final Expression key;
     private final Expression value;
@@ -34,21 +32,19 @@ public class DictionaryLiteral extends Expression {
       this.value = value;
     }
 
-    Expression getKey() {
+    public Expression getKey() {
       return key;
     }
 
-    Expression getValue() {
+    public Expression getValue() {
       return value;
     }
 
     @Override
-    public String toString() {
-      StringBuilder sb = new StringBuilder();
-      sb.append(key);
-      sb.append(": ");
-      sb.append(value);
-      return sb.toString();
+    public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
+      key.prettyPrint(buffer);
+      buffer.append(": ");
+      value.prettyPrint(buffer);
     }
 
     @Override
@@ -59,40 +55,36 @@ public class DictionaryLiteral extends Expression {
 
   private final ImmutableList<DictionaryEntryLiteral> entries;
 
-  public DictionaryLiteral(List<DictionaryEntryLiteral> exprs) {
-    this.entries = ImmutableList.copyOf(exprs);
-  }
-
-  /** A new literal for an empty dictionary, onto which a new location can be specified */
-  public static DictionaryLiteral emptyDict() {
-    return new DictionaryLiteral(ImmutableList.<DictionaryEntryLiteral>of());
+  DictionaryLiteral(List<DictionaryEntryLiteral> entries) {
+    this.entries = ImmutableList.copyOf(entries);
   }
 
   @Override
-  Object eval(Environment env) throws EvalException, InterruptedException {
-    // We need LinkedHashMap to maintain the order during iteration (e.g. for loops)
-    Map<Object, Object> map = new LinkedHashMap<>();
+  Object doEval(Environment env) throws EvalException, InterruptedException {
+    SkylarkDict<Object, Object> dict = SkylarkDict.of(env);
+    Location loc = getLocation();
     for (DictionaryEntryLiteral entry : entries) {
-      if (entry == null) {
-        throw new EvalException(getLocation(), "null expression in " + this);
+      Object key = entry.key.eval(env);
+      Object val = entry.value.eval(env);
+      if (dict.containsKey(key)) {
+        throw new EvalException(
+            loc, "Duplicated key " + Printer.repr(key) + " when creating dictionary");
       }
-      map.put(entry.key.eval(env), entry.value.eval(env));
+      dict.put(key, val, loc, env);
     }
-    return map;
+    return dict;
   }
 
   @Override
-  public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("{");
+  public void prettyPrint(Appendable buffer) throws IOException {
+    buffer.append("{");
     String sep = "";
     for (DictionaryEntryLiteral e : entries) {
-      sb.append(sep);
-      sb.append(e);
+      buffer.append(sep);
+      e.prettyPrint(buffer);
       sep = ", ";
     }
-    sb.append("}");
-    return sb.toString();
+    buffer.append("}");
   }
 
   @Override
@@ -100,22 +92,12 @@ public class DictionaryLiteral extends Expression {
     visitor.visit(this);
   }
 
-  public ImmutableList<DictionaryEntryLiteral> getEntries() {
-    return entries;
+  @Override
+  public Kind kind() {
+    return Kind.DICTIONARY_LITERAL;
   }
 
-  @Override
-  SkylarkType validate(ValidationEnvironment env) throws EvalException {
-    SkylarkType type = SkylarkType.UNKNOWN;
-    for (DictionaryEntryLiteral entry : entries) {
-      SkylarkType nextType = entry.key.validate(env);
-      entry.value.validate(env);
-      if (!nextType.isSimple()) {
-        throw new EvalException(getLocation(),
-            String.format("Dict cannot contain composite type '%s' as key", nextType));
-      }
-      type = type.infer(nextType, "dict literal", entry.getLocation(), getLocation());
-    }
-    return SkylarkType.of(SkylarkType.MAP, type);
+  public ImmutableList<DictionaryEntryLiteral> getEntries() {
+    return entries;
   }
 }

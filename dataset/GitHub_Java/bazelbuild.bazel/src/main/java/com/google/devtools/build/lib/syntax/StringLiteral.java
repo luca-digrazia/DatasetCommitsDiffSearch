@@ -30,7 +30,13 @@ public final class StringLiteral extends Expression {
     return value;
   }
 
-  StringLiteral(String value) {
+  @Override
+  Object doEval(Environment env) {
+    return value;
+  }
+
+  // TODO(adonovan): lock down, after removing last use in skyframe serialization.
+  public StringLiteral(String value) {
     this.value = value;
   }
 
@@ -40,7 +46,7 @@ public final class StringLiteral extends Expression {
   }
 
   @Override
-  public void accept(NodeVisitor visitor) {
+  public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
   }
 

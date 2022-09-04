@@ -16,7 +16,9 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nullable;
@@ -43,10 +45,10 @@ import javax.annotation.Nullable;
 public abstract class AbstractComprehension extends Expression {
 
   /**
-   * The interface implemented by ForClause and (later) IfClause. A comprehension consists of one or
-   * more Clauses.
+   * The interface implemented by ForClause and (later) IfClause.
+   * A comprehension consists of one or many Clause.
    */
-  public interface Clause {
+  public interface Clause extends Serializable {
 
     /** Enum for distinguishing clause types. */
     enum Kind {
@@ -91,6 +93,7 @@ public abstract class AbstractComprehension extends Expression {
   }
 
   /** A for clause in a comprehension, e.g. "for a in b" in the example above. */
+  @AutoCodec
   public static final class ForClause implements Clause {
     private final Expression lhs;
     private final Expression iterable;
@@ -154,6 +157,7 @@ public abstract class AbstractComprehension extends Expression {
   }
 
   /** A if clause in a comprehension, e.g. "if c" in the example above. */
+  @AutoCodec
   public static final class IfClause implements Clause {
     private final Expression condition;
 

@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,71 +13,64 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.syntax.SkylarkType.SkylarkFunctionType;
+import java.io.IOException;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+/** Syntax node for a function definition. */
+// TODO(adonovan): rename DefStatement.
+public final class FunctionDefStatement extends Statement {
 
-/**
- * Syntax node for a function definition.
- */
-public class FunctionDefStatement extends Statement {
-
-  private final Ident ident;
-  private final FunctionSignature.WithValues<Expression, Expression> args;
+  private final Identifier identifier;
+  private final FunctionSignature.WithValues<Expression, Expression> signature;
   private final ImmutableList<Statement> statements;
+  private final ImmutableList<Parameter<Expression, Expression>> parameters;
 
-  public FunctionDefStatement(Ident ident,
-      FunctionSignature.WithValues<Expression, Expression> args,
-      Collection<Statement> statements) {
-
-    // TODO(bazel-team): lift the following limitation from {@link MixedModeFunction}
-    FunctionSignature.Shape shape = args.getSignature().getShape();
-    Preconditions.checkArgument(!shape.hasKwArg() && !shape.hasStarArg()
-        && shape.getNamedOnly() == 0, "no star, star-star or named-only parameters (for now)");
-
-    this.ident = ident;
-    this.args = args;
+  FunctionDefStatement(
+      Identifier identifier,
+      Iterable<Parameter<Expression, Expression>> parameters,
+      FunctionSignature.WithValues<Expression, Expression> signature,
+      Iterable<Statement> statements) {
+    this.identifier = identifier;
+    this.parameters = ImmutableList.copyOf(parameters);
+    this.signature = signature;
     this.statements = ImmutableList.copyOf(statements);
   }
 
   @Override
-  void exec(Environment env) throws EvalException, InterruptedException {
-    List<Expression> defaultExpressions = args.getDefaultValues();
-    ArrayList<Object> defaultValues = null;
-    ArrayList<SkylarkType> types = null;
-
-    if (defaultExpressions != null) {
-      defaultValues = new ArrayList<Object>(defaultExpressions.size());
-      for (Expression expr : defaultExpressions) {
-        defaultValues.add(expr.eval(env));
-      }
+  public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
+    printIndent(buffer, indentLevel);
+    buffer.append("def ");
+    identifier.prettyPrint(buffer);
+    buffer.append('(');
+    String sep = "";
+    for (Parameter<?, ?> param : parameters) {
+      buffer.append(sep);
+      param.prettyPrint(buffer);
+      sep = ", ";
     }
-    env.update(ident.getName(), new UserDefinedFunction(
-        ident, FunctionSignature.WithValues.<Object, SkylarkType>create(
-            args.getSignature(), defaultValues, types),
-        statements, (SkylarkEnvironment) env));
+    buffer.append("):\n");
+    printSuite(buffer, statements, indentLevel);
   }
 
   @Override
   public String toString() {
-    return "def " + ident + "(" + args + "):\n";
+    return "def " + identifier + "(" + signature + "): ...\n";
   }
 
-  public Ident getIdent() {
-    return ident;
+  public Identifier getIdentifier() {
+    return identifier;
   }
 
   public ImmutableList<Statement> getStatements() {
     return statements;
   }
 
-  public FunctionSignature.WithValues<Expression, Expression> getArgs() {
-    return args;
+  public ImmutableList<Parameter<Expression, Expression>> getParameters() {
+    return parameters;
+  }
+
+  public FunctionSignature.WithValues<Expression, Expression> getSignature() {
+    return signature;
   }
 
   @Override
@@ -86,51 +79,7 @@ public class FunctionDefStatement extends Statement {
   }
 
   @Override
-  void validate(final ValidationEnvironment env) throws EvalException {
-    SkylarkFunctionType type = SkylarkFunctionType.of(ident.getName());
-    ValidationEnvironment localEnv = new ValidationEnvironment(env, type);
-    FunctionSignature sig = args.getSignature();
-    FunctionSignature.Shape shape = sig.getShape();
-    ImmutableList<String> names = sig.getNames();
-    List<Expression> defaultExpressions = args.getDefaultValues();
-
-    int positionals = shape.getPositionals();
-    int mandatoryPositionals = shape.getMandatoryPositionals();
-    int namedOnly = shape.getNamedOnly();
-    int mandatoryNamedOnly = shape.getMandatoryNamedOnly();
-    boolean starArg = shape.hasStarArg();
-    boolean hasStar = starArg || (namedOnly > 0);
-    boolean kwArg = shape.hasKwArg();
-    int named = positionals + namedOnly;
-    int args = named + (starArg ? 1 : 0) + (kwArg ? 1 : 0);
-    int startOptionals = mandatoryPositionals;
-    int endOptionals = named - mandatoryNamedOnly;
-    int iStarArg = named;
-    int iKwArg = args - 1;
-
-    int j = 0; // index for the defaultExpressions
-    for (int i = 0; i < args; i++) {
-      String name = names.get(i);
-      SkylarkType argType = SkylarkType.UNKNOWN;
-      if (hasStar && i == iStarArg) {
-        argType = SkylarkType.of(SkylarkList.class, Object.class);
-      } else if (kwArg && i == iKwArg) {
-        argType = SkylarkType.of(Map.class, Object.class);
-      } else {
-        if (startOptionals <= i && i < endOptionals) {
-          argType = defaultExpressions.get(j++).validate(env);
-          if (argType.equals(SkylarkType.NONE)) {
-            argType = SkylarkType.UNKNOWN;
-          }
-        }
-      }
-      localEnv.update(name, argType, getLocation());
-    }
-    for (Statement stmts : statements) {
-      stmts.validate(localEnv);
-    }
-    env.updateFunction(ident.getName(), type, getLocation());
-    // Register a dummy return value with an incompatible type if there was no return statement.
-    type.setReturnType(SkylarkType.NONE, getLocation());
+  public Kind kind() {
+    return Kind.FUNCTION_DEF;
   }
 }

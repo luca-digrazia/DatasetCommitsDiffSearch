@@ -18,8 +18,10 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -54,6 +56,8 @@ final class Lexer {
           .put('&', TokenKind.AMPERSAND_EQUALS)
           .put('|', TokenKind.PIPE_EQUALS)
           .build();
+
+  private final EventHandler eventHandler;
 
   // Input buffer and position
   private final char[] buffer;
@@ -93,9 +97,7 @@ final class Lexer {
   // the stream. Whitespace is handled differently when this is nonzero.
   private int openParenStackDepth = 0;
 
-  // List of errors appended to by Lexer and Parser.
-  private final List<Event> errors;
-
+  private boolean containsErrors;
   /**
    * True after a NEWLINE token.
    * In other words, we are outside an expression and we have to check the indentation.
@@ -112,19 +114,26 @@ final class Lexer {
    */
   private final List<Event> stringEscapeEvents = new ArrayList<>();
 
-  /** Constructs a lexer which tokenizes the parser input. Errors are appended to {@code errors}. */
-  Lexer(ParserInput input, List<Event> errors) {
-    LineNumberTable lnt = LineNumberTable.create(input.getContent(), input.getPath());
+  /**
+   * Constructs a lexer which tokenizes the contents of the specified InputBuffer. Any errors during
+   * lexing are reported on "handler".
+   */
+  public Lexer(
+      ParserInputSource input, EventHandler eventHandler, LineNumberTable lineNumberTable) {
     this.buffer = input.getContent();
     this.pos = 0;
-    this.errors = errors;
-    this.locationInfo = new LocationInfo(input.getPath(), lnt);
+    this.eventHandler = eventHandler;
+    this.locationInfo = new LocationInfo(input.getPath(), lineNumberTable);
     this.checkIndentation = true;
     this.comments = new ArrayList<>();
     this.dents = 0;
     this.token = new Token(null, -1, -1);
 
     indentStack.push(0);
+  }
+
+  public Lexer(ParserInputSource input, EventHandler eventHandler) {
+    this(input, eventHandler, LineNumberTable.create(input.getContent(), input.getPath()));
   }
 
   List<Comment> getComments() {
@@ -139,15 +148,24 @@ final class Lexer {
    * Returns the filename from which the lexer's input came. Returns an empty value if the input
    * came from a string.
    */
-  PathFragment getFilename() {
+  public PathFragment getFilename() {
     return locationInfo.filename != null ? locationInfo.filename : PathFragment.EMPTY_FRAGMENT;
+  }
+
+  /**
+   * Returns true if there were errors during scanning of this input file or
+   * string. The Lexer may attempt to recover from errors, but clients should
+   * not rely on the results of scanning if this flag is set.
+   */
+  public boolean containsErrors() {
+    return containsErrors;
   }
 
   /**
    * Returns the next token, or EOF if it is the end of the file. It is an error to call nextToken()
    * after EOF has been returned.
    */
-  Token nextToken() {
+  public Token nextToken() {
     boolean afterNewline = token.kind == TokenKind.NEWLINE;
     token.kind = null;
     tokenize();
@@ -173,7 +191,8 @@ final class Lexer {
   }
 
   private void error(String message, int start, int end) {
-    errors.add(Event.error(createLocation(start, end), message));
+    this.containsErrors = true;
+    eventHandler.handle(Event.error(createLocation(start, end), message));
   }
 
   Location createLocation(int start, int end) {
@@ -935,6 +954,17 @@ final class Lexer {
   }
 
   /**
+   * Returns the string at the current line, minus the new line.
+   *
+   * @param line the line from which to retrieve the String, 1-based
+   * @return the text of the line
+   */
+  public String stringAtLine(int line) {
+    Pair<Integer, Integer> offsets = locationInfo.lineNumberTable.getOffsetsForLine(line);
+    return bufferSlice(offsets.first, offsets.second);
+  }
+
+  /**
    * Returns parts of the source buffer based on offsets
    *
    * @param start the beginning offset for the slice
@@ -946,6 +976,6 @@ final class Lexer {
   }
 
   private void makeComment(int start, int end, String content) {
-    comments.add(Node.setLocation(createLocation(start, end), new Comment(content)));
+    comments.add(ASTNode.setLocation(createLocation(start, end), new Comment(content)));
   }
 }

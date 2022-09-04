@@ -28,12 +28,17 @@ public final class IntegerLiteral extends Expression {
   }
 
   @Override
+  Object doEval(Environment env) {
+    return value;
+  }
+
+  @Override
   public void prettyPrint(Appendable buffer) throws IOException {
     buffer.append(String.valueOf(value));
   }
 
   @Override
-  public void accept(NodeVisitor visitor) {
+  public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
   }
 

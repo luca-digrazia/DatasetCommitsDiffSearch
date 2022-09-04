@@ -15,32 +15,25 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import java.io.IOException;
 import java.util.List;
 
 /** Syntax node for a for loop statement. */
 public final class ForStatement extends Statement {
 
-  private final int forOffset;
-  private final Expression vars;
+  private final Expression lhs;
   private final Expression collection;
-  private final ImmutableList<Statement> body; // non-empty if well formed
+  private final ImmutableList<Statement> block;
 
   /** Constructs a for loop statement. */
-  ForStatement(
-      FileLocations locs,
-      int forOffset,
-      Expression vars,
-      Expression collection,
-      List<Statement> body) {
-    super(locs);
-    this.forOffset = forOffset;
-    this.vars = Preconditions.checkNotNull(vars);
+  ForStatement(Expression lhs, Expression collection, List<Statement> block) {
+    this.lhs = Preconditions.checkNotNull(lhs);
     this.collection = Preconditions.checkNotNull(collection);
-    this.body = ImmutableList.copyOf(body);
+    this.block = ImmutableList.copyOf(block);
   }
 
-  public Expression getVars() {
-    return vars;
+  public Expression getLHS() {
+    return lhs;
   }
 
   /**
@@ -50,29 +43,28 @@ public final class ForStatement extends Statement {
     return collection;
   }
 
-  public ImmutableList<Statement> getBody() {
-    return body;
+  public ImmutableList<Statement> getBlock() {
+    return block;
   }
 
   @Override
-  public int getStartOffset() {
-    return forOffset;
-  }
-
-  @Override
-  public int getEndOffset() {
-    return body.isEmpty()
-        ? collection.getEndOffset() // wrong, but tree is ill formed
-        : body.get(body.size() - 1).getEndOffset();
+  public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
+    printIndent(buffer, indentLevel);
+    buffer.append("for ");
+    lhs.prettyPrint(buffer);
+    buffer.append(" in ");
+    collection.prettyPrint(buffer);
+    buffer.append(":\n");
+    printSuite(buffer, block, indentLevel);
   }
 
   @Override
   public String toString() {
-    return "for " + vars + " in " + collection + ": ...\n";
+    return "for " + lhs + " in " + collection + ": ...\n";
   }
 
   @Override
-  public void accept(NodeVisitor visitor) {
+  public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
   }
 

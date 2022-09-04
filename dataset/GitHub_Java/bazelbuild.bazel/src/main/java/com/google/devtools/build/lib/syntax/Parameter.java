@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import java.io.IOException;
 import javax.annotation.Nullable;
 
@@ -81,13 +82,15 @@ public abstract class Parameter<V, T> extends Argument {
   }
 
   /** mandatory parameter (positional or key-only depending on position): Ident */
+  @AutoCodec
   public static final class Mandatory<V, T> extends Parameter<V, T> {
 
     Mandatory(Identifier identifier) {
       this(identifier, null);
     }
 
-    Mandatory(Identifier identifier, @Nullable T type) {
+    @AutoCodec.Instantiator
+    public Mandatory(Identifier identifier, @Nullable T type) {
       super(identifier, type);
     }
 
@@ -103,6 +106,7 @@ public abstract class Parameter<V, T> extends Argument {
   }
 
   /** optional parameter (positional or key-only depending on position): Ident = Value */
+  @AutoCodec
   public static final class Optional<V, T> extends Parameter<V, T> {
 
     public final V defaultValue;
@@ -111,7 +115,8 @@ public abstract class Parameter<V, T> extends Argument {
       this(identifier, null, defaultValue);
     }
 
-    Optional(Identifier identifier, @Nullable T type, @Nullable V defaultValue) {
+    @AutoCodec.Instantiator
+    public Optional(Identifier identifier, @Nullable T type, @Nullable V defaultValue) {
       super(identifier, type);
       this.defaultValue = defaultValue;
     }
@@ -145,8 +150,10 @@ public abstract class Parameter<V, T> extends Argument {
   }
 
   /** extra positionals parameter (star): *identifier */
+  @AutoCodec
   public static final class Star<V, T> extends Parameter<V, T> {
 
+    @AutoCodec.Instantiator
     Star(@Nullable Identifier identifier, @Nullable T type) {
       super(identifier, type);
     }
@@ -175,8 +182,10 @@ public abstract class Parameter<V, T> extends Argument {
   }
 
   /** extra keywords parameter (star_star): **identifier */
+  @AutoCodec
   public static final class StarStar<V, T> extends Parameter<V, T> {
 
+    @AutoCodec.Instantiator
     StarStar(Identifier identifier, @Nullable T type) {
       super(identifier, type);
     }
