@@ -1,6 +1,5 @@
 package io.quarkus.deployment.util;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -42,14 +41,14 @@ public class WebJarUtil {
 
     private static final Logger LOG = Logger.getLogger(WebJarUtil.class);
 
-    private static final String TMP_DIR = System.getProperty("java.io.tmpdir");
+    private final static String tmpDir = System.getProperty("java.io.tmpdir");
     private static final String CUSTOM_MEDIA_FOLDER = "META-INF/branding/";
     private static final List<String> IGNORE_LIST = Arrays.asList("logo.png", "favicon.ico", "style.css");
 
     private WebJarUtil() {
     }
 
-    public static Path devOrTest(CurateOutcomeBuildItem curateOutcomeBuildItem, LaunchModeBuildItem launchMode,
+    public static Path devOrTest(CurateOutcomeBuildItem curateOutcomeBuildItem, LaunchModeBuildItem launch,
             AppArtifact artifact, String rootFolderInJar)
             throws IOException {
 
@@ -59,7 +58,7 @@ public class WebJarUtil {
                 artifact.getVersion());
 
         // Clean on non dev mode
-        if (!launchMode.getLaunchMode().equals(LaunchMode.DEVELOPMENT)) {
+        if (!launch.getLaunchMode().equals(LaunchMode.DEVELOPMENT)) {
             IoUtils.createOrEmptyDir(path);
         }
 
@@ -91,12 +90,6 @@ public class WebJarUtil {
             }
         }
         return path;
-    }
-
-    public static void updateFile(Path original, byte[] newContent) throws IOException {
-        try (ByteArrayInputStream bais = new ByteArrayInputStream(newContent)) {
-            createFile(bais, original);
-        }
     }
 
     public static void updateUrl(Path original, String path, String lineStartsWith, String format) throws IOException {
@@ -267,14 +260,11 @@ public class WebJarUtil {
     }
 
     private static void createFile(InputStream source, Path targetDir, String filename) throws IOException {
-        createFile(source, targetDir.resolve(filename));
-    }
-
-    private static void createFile(InputStream source, Path targetFile) throws IOException {
+        Path target = targetDir.resolve(filename);
         FileLock lock = null;
         FileOutputStream fos = null;
         try {
-            fos = new FileOutputStream(targetFile.toString());
+            fos = new FileOutputStream(target.toString());
             FileChannel channel = fos.getChannel();
             lock = channel.tryLock();
             if (lock != null) {
@@ -292,7 +282,7 @@ public class WebJarUtil {
 
     private static Path createDir(String appName, String libgroupId, String libartifactId, String libversion) {
         try {
-            Path path = Paths.get(TMP_DIR, "quarkus", appName, libgroupId, libartifactId, libversion);
+            Path path = Paths.get(tmpDir, "quarkus", appName, libgroupId, libartifactId, libversion);
 
             if (!Files.exists(path)) {
                 Files.createDirectories(path);

@@ -56,7 +56,7 @@ public class DevModeTask {
                     .setAppArtifact(existingModel.getAppArtifact())
                     .setExistingModel(existingModel)
                     .setIsolateDeployment(true)
-                    .setMode(QuarkusBootstrap.Mode.REMOTE_DEV_SERVER)
+                    .setMode(QuarkusBootstrap.Mode.DEV)
                     .setBuildSystemProperties(buildSystemProperties)
                     .setBaseName(appModel.getBaseName())
                     .setApplicationRoot(existingModel.getAppArtifact().getPath())

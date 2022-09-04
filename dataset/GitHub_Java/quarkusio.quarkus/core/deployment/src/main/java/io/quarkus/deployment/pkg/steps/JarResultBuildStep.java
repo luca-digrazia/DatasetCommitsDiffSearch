@@ -140,6 +140,7 @@ public class JarResultBuildStep {
     public static final String APP = "app";
     public static final String QUARKUS = "quarkus";
     public static final String DEFAULT_FAST_JAR_DIRECTORY_NAME = "quarkus-app";
+    public static final String RENAMED_JAR_EXTENSION = ".jar.original";
 
     @BuildStep
     OutputTargetBuildItem outputTarget(BuildSystemTargetBuildItem bst, PackageConfig packageConfig) {
@@ -255,7 +256,13 @@ public class JarResultBuildStep {
         final Path standardJar = outputTargetBuildItem.getOutputDirectory()
                 .resolve(outputTargetBuildItem.getBaseName() + ".jar");
 
-        final Path originalJar = Files.exists(standardJar) ? standardJar : null;
+        final Path originalJar;
+        if (Files.exists(standardJar)) {
+            originalJar = outputTargetBuildItem.getOutputDirectory()
+                    .resolve(outputTargetBuildItem.getBaseName() + RENAMED_JAR_EXTENSION);
+        } else {
+            originalJar = null;
+        }
 
         return new JarBuildItem(runnerJar, originalJar, null, PackageConfig.UBER_JAR,
                 suffixToClassifier(packageConfig.runnerSuffix));
@@ -602,11 +609,7 @@ public class JarResultBuildStep {
                     ObjectOutputStream obj = new ObjectOutputStream(out);
                     List<String> paths = new ArrayList<>();
                     for (AppDependency i : curateOutcomeBuildItem.getEffectiveModel().getFullDeploymentDeps()) {
-                        final List<String> list = relativePaths.get(i.getArtifact().getKey());
-                        // some of the dependencies may have been filtered out
-                        if (list != null) {
-                            paths.addAll(list);
-                        }
+                        paths.addAll(relativePaths.get(i.getArtifact().getKey()));
                     }
                     obj.writeObject(paths);
                     obj.close();
