@@ -162,7 +162,7 @@ public abstract class ResourceTestBase {
   public void setup() {
     errorConsumer = new FakeRuleErrorConsumer();
     fileSystem = new InMemoryFileSystem();
-    root = Root.asSourceRoot(fileSystem.getRootDirectory());
+    root = Root.asDerivedRoot(fileSystem.getRootDirectory());
   }
 
   @After
