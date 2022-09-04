@@ -1,13 +1,6 @@
 package io.quarkus.reactive.pg.client.runtime;
 
-import static io.quarkus.credentials.CredentialsProvider.PASSWORD_PROPERTY_NAME;
-import static io.quarkus.credentials.CredentialsProvider.USER_PROPERTY_NAME;
-
-import java.util.Map;
-
 import io.quarkus.arc.runtime.BeanContainer;
-import io.quarkus.credentials.CredentialsProvider;
-import io.quarkus.credentials.runtime.CredentialsProviderFinder;
 import io.quarkus.datasource.runtime.DataSourceRuntimeConfig;
 import io.quarkus.datasource.runtime.DataSourcesRuntimeConfig;
 import io.quarkus.datasource.runtime.LegacyDataSourceRuntimeConfig;
@@ -96,22 +89,6 @@ public class PgPoolRecorder {
 
         if (dataSourceRuntimeConfig.password.isPresent()) {
             pgConnectOptions.setPassword(dataSourceRuntimeConfig.password.get());
-        }
-
-        // credentials provider
-        if (dataSourceRuntimeConfig.credentialsProvider.isPresent()) {
-            String beanName = dataSourceRuntimeConfig.credentialsProviderName.orElse(null);
-            CredentialsProvider credentialsProvider = CredentialsProviderFinder.find(beanName);
-            String name = dataSourceRuntimeConfig.credentialsProvider.get();
-            Map<String, String> credentials = credentialsProvider.getCredentials(name);
-            String user = credentials.get(USER_PROPERTY_NAME);
-            String password = credentials.get(PASSWORD_PROPERTY_NAME);
-            if (user != null) {
-                pgConnectOptions.setUser(user);
-            }
-            if (password != null) {
-                pgConnectOptions.setPassword(password);
-            }
         }
 
         if (dataSourceReactivePostgreSQLConfig.cachePreparedStatements.isPresent()) {

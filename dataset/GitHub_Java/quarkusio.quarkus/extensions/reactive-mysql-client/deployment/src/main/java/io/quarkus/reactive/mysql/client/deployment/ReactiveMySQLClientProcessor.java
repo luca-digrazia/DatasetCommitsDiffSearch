@@ -11,7 +11,6 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.reactive.datasource.runtime.DataSourceReactiveBuildTimeConfig;
 import io.quarkus.reactive.datasource.runtime.DataSourceReactiveRuntimeConfig;
@@ -31,8 +30,7 @@ class ReactiveMySQLClientProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    ServiceStartBuildItem build(BuildProducer<FeatureBuildItem> feature, BuildProducer<MySQLPoolBuildItem> mysqlPool,
-            MySQLPoolRecorder recorder,
+    void build(BuildProducer<FeatureBuildItem> feature, BuildProducer<MySQLPoolBuildItem> mysqlPool, MySQLPoolRecorder recorder,
             VertxBuildItem vertx,
             BeanContainerBuildItem beanContainer, ShutdownContextBuildItem shutdown,
             DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig, DataSourcesRuntimeConfig dataSourcesRuntimeConfig,
@@ -43,15 +41,13 @@ class ReactiveMySQLClientProcessor {
             LegacyDataSourceReactiveMySQLConfig legacyDataSourceReactiveMySQLConfig) {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.REACTIVE_MYSQL_CLIENT));
-        // Make sure the MySQLPoolProducer is initialized before the StartupEvent is fired
-        ServiceStartBuildItem serviceStart = new ServiceStartBuildItem("reactive-mysql-client");
 
         // Note: we had to tweak that logic to support the legacy configuration
         if (dataSourcesBuildTimeConfig.defaultDataSource.dbKind.isPresent()
                 && ((!DatabaseKind.isMySQL(dataSourcesBuildTimeConfig.defaultDataSource.dbKind.get())
                         && !DatabaseKind.isMariaDB(dataSourcesBuildTimeConfig.defaultDataSource.dbKind.get()))
                         || !dataSourceReactiveBuildTimeConfig.enabled)) {
-            return serviceStart;
+            return;
         }
 
         boolean isLegacy = !dataSourcesBuildTimeConfig.defaultDataSource.dbKind.isPresent();
@@ -60,7 +56,5 @@ class ReactiveMySQLClientProcessor {
                 dataSourcesRuntimeConfig, dataSourceReactiveRuntimeConfig, dataSourceReactiveMySQLConfig,
                 legacyDataSourcesRuntimeConfig, legacyDataSourceReactiveMySQLConfig, isLegacy,
                 shutdown)));
-
-        return serviceStart;
     }
 }
