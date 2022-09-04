@@ -1,5 +1,6 @@
 package io.quarkus.qute;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -132,7 +133,7 @@ public final class ValueResolverBuilder {
         this.resolve = new Function<EvalContext, CompletionStage<Object>>() {
             @Override
             public CompletionStage<Object> apply(EvalContext context) {
-                return CompletedStage.of(fun.apply(context));
+                return CompletableFuture.completedFuture(fun.apply(context));
             }
         };
         return this;
@@ -144,7 +145,7 @@ public final class ValueResolverBuilder {
     }
 
     public ValueResolverBuilder resolveWith(Object value) {
-        return resolveAsync(ec -> CompletedStage.of(value));
+        return resolveAsync(ec -> CompletableFuture.completedFuture(value));
     }
 
     public ValueResolver build() {
