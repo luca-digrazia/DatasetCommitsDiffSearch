@@ -17,7 +17,6 @@
 package org.graylog.security.idp.provider;
 
 import org.graylog.security.idp.IDPAuthCredentials;
-import org.graylog.security.idp.IdentityProvider;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.plugin.security.PasswordAlgorithm;
 import org.graylog2.security.PasswordAlgorithmFactory;
@@ -28,7 +27,7 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import java.util.Optional;
 
-public class MongoDBIdentityProvider implements IdentityProvider {
+public class MongoDBIdentityProvider {
     private static final Logger LOG = LoggerFactory.getLogger(MongoDBIdentityProvider.class);
 
     private final UserService userService;
@@ -40,7 +39,6 @@ public class MongoDBIdentityProvider implements IdentityProvider {
         this.passwordAlgorithmFactory = passwordAlgorithmFactory;
     }
 
-    @Override
     public Optional<String> authenticate(IDPAuthCredentials authCredentials) {
         final String username = authCredentials.username();
 
@@ -70,12 +68,10 @@ public class MongoDBIdentityProvider implements IdentityProvider {
         return passwordAlgorithm.matches(user.getHashedPassword(), password);
     }
 
-    @Override
     public String providerId() {
         return "000000000000000000000001";
     }
 
-    @Override
     public String providerTitle() {
         return "Internal MongoDB";
     }
