@@ -20,9 +20,6 @@ import static java.util.stream.Collectors.joining;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.test.AnalysisFailure;
-import com.google.devtools.build.lib.analysis.test.AnalysisFailureInfo;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
@@ -36,7 +33,6 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics.FlagIdentifier;
 import com.google.devtools.build.lib.testutil.TestMode;
 import java.util.List;
 import java.util.Map;
@@ -2271,106 +2267,5 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     checkEvalErrorDoesNotContain(
         "First argument of 'load' must be a label and start with either '//', ':', or '@'.",
         "load(':foo.bzl', 'arg')");
-  }
-
-  @Test
-  public void testAnalysisFailureInfo() throws Exception {
-    AnalysisFailure cause = new AnalysisFailure(Label.create("test", "test"), "ErrorMessage");
-
-    AnalysisFailureInfo info = AnalysisFailureInfo.forAnalysisFailures(ImmutableList.of(cause));
-
-    new SkylarkTest("--experimental_analysis_testing_improvements=true")
-        .update("val", info)
-        .setUp(
-            "causes = val.causes",
-            "label = causes.to_list()[0].label",
-            "message = causes.to_list()[0].message")
-        .testLookup("label", Label.create("test", "test"))
-        .testLookup("message", "ErrorMessage");
-
-    new SkylarkTest()
-        .update("val", info)
-        .testIfErrorContains("'AnalysisFailureInfo' has no field 'causes'", "val.causes");
-
-    new SkylarkTest()
-        .update("val", cause)
-        .testIfErrorContains("'AnalysisFailure' has no field 'message'", "val.message")
-        .testIfErrorContains("'AnalysisFailure' has no field 'label'", "val.label");
-  }
-
-  @Test
-  public void testExperimentalFlagGuardedValue() throws Exception {
-    // This test uses an arbitrary experimental flag to verify this functionality. If this
-    // experimental flag were to go away, this test may be updated to use any experimental flag.
-    // The flag itself is unimportant to the test.
-    FlagGuardedValue val = FlagGuardedValue.onlyWhenExperimentalFlagIsTrue(
-        FlagIdentifier.EXPERIMENTAL_ANALYSIS_TESTING_IMPROVEMENTS,
-        "foo");
-    String errorMessage = "GlobalSymbol is experimental and thus unavailable with the current "
-        + "flags. It may be enabled by setting --experimental_analysis_testing_improvements";
-
-    new SkylarkTest(
-            ImmutableMap.of("GlobalSymbol", val),
-            "--experimental_analysis_testing_improvements=true")
-        .setUp("var = GlobalSymbol")
-        .testLookup("var", "foo");
-
-    new SkylarkTest(
-            ImmutableMap.of("GlobalSymbol", val),
-            "--experimental_analysis_testing_improvements=false")
-        .testIfErrorContains(errorMessage,
-            "var = GlobalSymbol");
-
-    new SkylarkTest(
-            ImmutableMap.of("GlobalSymbol", val),
-            "--experimental_analysis_testing_improvements=false")
-        .testIfErrorContains(errorMessage,
-            "def my_function():",
-            "  var = GlobalSymbol");
-
-    new SkylarkTest(
-            ImmutableMap.of("GlobalSymbol", val),
-            "--experimental_analysis_testing_improvements=false")
-        .setUp("GlobalSymbol = 'other'",
-            "var = GlobalSymbol")
-        .testLookup("var", "other");
-  }
-
-  @Test
-  public void testIncompatibleFlagGuardedValue() throws Exception {
-    // This test uses an arbitrary incompatible flag to verify this functionality. If this
-    // incompatible flag were to go away, this test may be updated to use any incompatible flag.
-    // The flag itself is unimportant to the test.
-    FlagGuardedValue val = FlagGuardedValue.onlyWhenIncompatibleFlagIsFalse(
-        FlagIdentifier.INCOMPATIBLE_NO_TARGET_OUTPUT_GROUP,
-        "foo");
-    String errorMessage = "GlobalSymbol is deprecated and will be removed soon. It may be "
-        + "temporarily re-enabled by setting --incompatible_no_target_output_group=false";
-
-    new SkylarkTest(
-            ImmutableMap.of("GlobalSymbol", val),
-            "--incompatible_no_target_output_group=false")
-        .setUp("var = GlobalSymbol")
-        .testLookup("var", "foo");
-
-    new SkylarkTest(
-            ImmutableMap.of("GlobalSymbol", val),
-            "--incompatible_no_target_output_group=true")
-        .testIfErrorContains(errorMessage,
-            "var = GlobalSymbol");
-
-    new SkylarkTest(
-            ImmutableMap.of("GlobalSymbol", val),
-            "--incompatible_no_target_output_group=true")
-        .testIfErrorContains(errorMessage,
-            "def my_function():",
-            "  var = GlobalSymbol");
-
-    new SkylarkTest(
-            ImmutableMap.of("GlobalSymbol", val),
-            "--incompatible_no_target_output_group=true")
-        .setUp("GlobalSymbol = 'other'",
-            "var = GlobalSymbol")
-        .testLookup("var", "other");
   }
 }
