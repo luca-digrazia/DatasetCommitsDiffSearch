@@ -15,8 +15,8 @@
 package com.google.devtools.common.options;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -1871,9 +1871,6 @@ public class OptionsParserTest {
     parser.parse("--old_name=foo");
     OldNameExample result = parser.getOptions(OldNameExample.class);
     assertThat(result.flag).isEqualTo("foo");
-    // Using old option name should cause a warning
-    assertThat(parser.getWarnings())
-        .contains("Option 'old_name' is deprecated: Use --new_name instead");
 
     // Should also work by its new name.
     parser = OptionsParser.builder().optionsClasses(OldNameExample.class).build();

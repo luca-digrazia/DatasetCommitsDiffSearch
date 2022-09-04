@@ -172,7 +172,7 @@ public class PlatformOptions extends FragmentOptions {
 
   @Option(
       name = "incompatible_use_toolchain_resolution_for_java_rules",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = OptionEffectTag.UNKNOWN,
       metadataTags = {
@@ -218,19 +218,6 @@ public class PlatformOptions extends FragmentOptions {
               + " 'test'.")
   public List<Map.Entry<RegexFilter, List<Label>>> targetFilterToAdditionalExecConstraints;
 
-  @Option(
-      name = "incompatible_override_toolchain_transition",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = OptionEffectTag.LOADING_AND_ANALYSIS,
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "If set to true, all rules will use the toolchain transition for toolchain dependencies.")
-  public boolean overrideToolchainTransition;
-
   @Override
   public PlatformOptions getHost() {
     PlatformOptions host = (PlatformOptions) getDefault();
@@ -245,7 +232,6 @@ public class PlatformOptions extends FragmentOptions {
     host.autoConfigureHostPlatform = this.autoConfigureHostPlatform;
     host.useToolchainResolutionForJavaRules = this.useToolchainResolutionForJavaRules;
     host.targetPlatformFallback = this.targetPlatformFallback;
-    host.overrideToolchainTransition = this.overrideToolchainTransition;
     return host;
   }
 

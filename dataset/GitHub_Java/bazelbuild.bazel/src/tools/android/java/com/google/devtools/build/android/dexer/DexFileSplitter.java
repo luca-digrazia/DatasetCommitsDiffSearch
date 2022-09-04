@@ -20,7 +20,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import com.android.dex.Dex;
 import com.android.dex.DexFormat;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -33,10 +32,11 @@ import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import java.io.BufferedOutputStream;
+import com.google.devtools.common.options.ShellQuotedParamsFilePreProcessor;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -44,9 +44,9 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 /**
  * Shuffles .class.dex files from input archives into 1 or more archives each to be merged into a
@@ -60,16 +60,15 @@ class DexFileSplitter implements Closeable {
    */
   public static class Options extends OptionsBase {
     @Option(
-      name = "input",
-      allowMultiple = true,
-      defaultValue = "",
-      category = "input",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      converter = ExistingPathConverter.class,
-      abbrev = 'i',
-      help = "Input dex archive."
-    )
+        name = "input",
+        allowMultiple = true,
+        defaultValue = "null",
+        category = "input",
+        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+        effectTags = {OptionEffectTag.UNKNOWN},
+        converter = ExistingPathConverter.class,
+        abbrev = 'i',
+        help = "Input dex archive.")
     public List<Path> inputArchives;
 
     @Option(
@@ -116,12 +115,26 @@ class DexFileSplitter implements Closeable {
       help = "Limit on fields and methods in a single dex file."
     )
     public int maxNumberOfIdxPerDex;
+
+    @Option(
+      name = "inclusion_filter_jar",
+      defaultValue = "null",
+      category = "input",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      converter = ExistingPathConverter.class,
+      help = "If given, only classes in the given Jar are included in outputs."
+    )
+    public Path inclusionFilterJar;
   }
 
   public static void main(String[] args) throws Exception {
     OptionsParser optionsParser =
-        OptionsParser.newOptionsParser(Options.class);
-    optionsParser.setAllowResidue(false);
+        OptionsParser.builder()
+            .optionsClasses(Options.class)
+            .allowResidue(false)
+            .argsPreProcessor(new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()))
+            .build();
     optionsParser.parseAndExitUponError(args);
 
     splitIntoShards(optionsParser.getOptions(Options.class));
@@ -137,9 +150,12 @@ class DexFileSplitter implements Closeable {
       Files.createDirectories(options.outputDirectory);
     }
 
-    ImmutableSet<String> classesInMainDex = options.mainDexListFile != null
-        ? ImmutableSet.copyOf(Files.readAllLines(options.mainDexListFile, UTF_8))
-        : null;
+    ImmutableSet<String> classesInMainDex =
+        options.mainDexListFile != null
+            ? ImmutableSet.copyOf(Files.readAllLines(options.mainDexListFile, UTF_8))
+            : null;
+    ImmutableSet<String> expected =
+        options.inclusionFilterJar != null ? expectedEntries(options.inclusionFilterJar) : null;
     try (Closer closer = Closer.create();
         DexFileSplitter out =
             new DexFileSplitter(options.outputDirectory, options.maxNumberOfIdxPerDex)) {
@@ -148,11 +164,15 @@ class DexFileSplitter implements Closeable {
       // if presented with a single jar containing all the given inputs.
       // TODO(kmb): Abandon alphabetic sorting to process each input fully before moving on (still
       // requires scanning inputs twice for main dex list).
+      Predicate<ZipEntry> inclusionFilter = ZipEntryPredicates.suffixes(".dex", ".class");
+      if (expected != null) {
+        inclusionFilter = inclusionFilter.and(e -> expected.contains(e.getName()));
+      }
       LinkedHashMap<String, ZipFile> deduped = new LinkedHashMap<>();
       for (Path inputArchive : options.inputArchives) {
         ZipFile zip = closer.register(new ZipFile(inputArchive.toFile()));
         zip.stream()
-            .filter(ZipEntryPredicates.suffixes(".dex", ".class"))
+            .filter(inclusionFilter)
             .forEach(e -> deduped.putIfAbsent(e.getName(), zip));
       }
       ImmutableList<Map.Entry<String, ZipFile>> files =
@@ -166,6 +186,10 @@ class DexFileSplitter implements Closeable {
       if (classesInMainDex == null || classesInMainDex.isEmpty()) {
         out.processDexFiles(files, Predicates.alwaysTrue());
       } else {
+        checkArgument(classesInMainDex.stream().noneMatch(s -> s.startsWith("j$/")),
+            "%s lists classes in package 'j$', which can't be included in classes.dex and can "
+                + "cause runtime errors. Please avoid needing these classes in the main dex file.",
+            options.mainDexListFile);
         // To honor --main_dex_list make two passes:
         // 1. process only the classes listed in the given file
         // 2. process the remaining files
@@ -177,17 +201,30 @@ class DexFileSplitter implements Closeable {
         if (options.minimalMainDex) {
           out.nextShard(); // Start new .dex file if requested
         }
-        out.processDexFiles(files, Predicates.not(mainDexFilter));
+        out.processDexFiles(files, mainDexFilter.negate());
       }
+    }
+  }
+
+  private static ImmutableSet<String> expectedEntries(Path filterJar) throws IOException {
+    try (ZipFile zip = new ZipFile(filterJar.toFile())) {
+      return zip.stream()
+          .filter(ZipEntryPredicates.suffixes(".class"))
+          .map(e -> e.getName() + ".dex")
+          .collect(ImmutableSet.toImmutableSet());
     }
   }
 
   private final int maxNumberOfIdxPerDex;
   private final Path outputDirectory;
+  /** Collect written zip files so we can conveniently wait for all of them to close when done. */
+  private final Closer closer = Closer.create();
 
   private int curShard = 0;
-  private ZipOutputStream out;
+  /** Currently written file. */
+  private AsyncZipOut curOut;
   private DexLimitTracker tracker;
+  private Boolean inCoreLib;
 
   private DexFileSplitter(Path outputDirectory, int maxNumberOfIdxPerDex) throws IOException {
     checkArgument(!Files.isRegularFile(outputDirectory), "Must be a directory: ", outputDirectory);
@@ -197,20 +234,21 @@ class DexFileSplitter implements Closeable {
   }
 
   private void nextShard() throws IOException {
-    out.close();  // will NPE if called after close()
+    // Eagerly tell the last shard that it's done so it can finish writing the zip file and release
+    // resources as soon as possible, without blocking the start of the next shard.
+    curOut.finishAsync();  // will NPE if called after close()
     ++curShard;
     startShard();
   }
 
   private void startShard() throws IOException {
     tracker = new DexLimitTracker(maxNumberOfIdxPerDex);
-    out =
-        new ZipOutputStream(
-            new BufferedOutputStream(
-                Files.newOutputStream(
-                    outputDirectory.resolve((curShard + 1) + ".shard.zip"),
-                    StandardOpenOption.CREATE_NEW,
-                    StandardOpenOption.WRITE)));
+    curOut =
+        closer.register(
+            new AsyncZipOut(
+                outputDirectory.resolve((curShard + 1) + ".shard.zip"),
+                StandardOpenOption.CREATE_NEW,
+                StandardOpenOption.WRITE));
   }
 
   private int shardsWritten() {
@@ -219,11 +257,14 @@ class DexFileSplitter implements Closeable {
 
   @Override
   public void close() throws IOException {
-    if (out != null) {
-      out.close();
-      out = null;
+    if (curOut != null) {
+      curOut.finishAsync();
+      curOut = null;
       ++curShard;
     }
+    // Wait for all shards to finish writing.  We told them to finish already but need to wait for
+    // any pending writes so we're sure all output was successfully written.
+    closer.close();
   }
 
   private void processDexFiles(
@@ -231,7 +272,7 @@ class DexFileSplitter implements Closeable {
       throws IOException {
     for (Map.Entry<String, ZipFile> entry : filesToProcess) {
       String filename = entry.getKey();
-      if (filter.apply(filename)) {
+      if (filter.test(filename)) {
         ZipFile zipFile = entry.getValue();
         processDexEntry(zipFile, zipFile.getEntry(filename));
       }
@@ -243,6 +284,19 @@ class DexFileSplitter implements Closeable {
     checkState(filename.endsWith(".class.dex"),
         "%s isn't a dex archive: %s", zip.getName(), filename);
     checkState(entry.getMethod() == ZipEntry.STORED, "Expect to process STORED: %s", filename);
+    if (inCoreLib == null) {
+      inCoreLib = filename.startsWith("j$/");
+    } else if (inCoreLib != filename.startsWith("j$/")) {
+      // Put j$.xxx classes in separate file.  This shouldn't normally happen (b/134705306).
+      nextShard();
+      inCoreLib = !inCoreLib;
+    }
+    if (inCoreLib) {
+      System.err.printf(
+          "WARNING: Unexpected file %s found. Please ensure this only happens in test APKs.%n",
+          filename);
+    }
+
     try (InputStream entryStream = zip.getInputStream(entry)) {
       // We don't want to use the Dex(InputStream) constructor because it closes the stream,
       // which will break the for loop, and it has its own bespoke way of reading the file into
@@ -258,9 +312,7 @@ class DexFileSplitter implements Closeable {
         nextShard();
         tracker.track(dexFile);
       }
-      out.putNextEntry(entry);
-      out.write(content);
-      out.closeEntry();
+      curOut.writeAsync(entry, content);
     }
   }
 }

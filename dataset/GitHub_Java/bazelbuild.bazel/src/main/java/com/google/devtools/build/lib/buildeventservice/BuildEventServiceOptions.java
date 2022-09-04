@@ -14,61 +14,61 @@
 
 package com.google.devtools.build.lib.buildeventservice;
 
-import com.google.devtools.common.options.Converter;
+import com.google.devtools.common.options.Converters;
+import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
+import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
-import com.google.devtools.common.options.OptionsParsingException;
-import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import org.joda.time.Duration;
+import java.time.Duration;
+import java.util.List;
 
 /** Options used by {@link BuildEventServiceModule}. */
 public class BuildEventServiceOptions extends OptionsBase {
 
   @Option(
-    name = "bes_backend",
-    defaultValue = "",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    help =
-        "Specifies the build event service (BES) backend endpoint as HOST or HOST:PORT. "
-            + "Disabled by default."
-  )
+      name = "bes_backend",
+      defaultValue = "",
+      documentationCategory = OptionDocumentationCategory.LOGGING,
+      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      help =
+          "Specifies the build event service (BES) backend endpoint as HOST or HOST:PORT. Disabled"
+              + " by default.The supported schemas are grpc and grpcs (grpc with TLS enabled). If"
+              + " no schema is provided bazel'll default to grpcs. Specify grpc:// schema to"
+              + " disable TLS.")
   public String besBackend;
 
   @Option(
     name = "bes_timeout",
     defaultValue = "0s",
-    converter = DurationConverter.class,
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
+    documentationCategory = OptionDocumentationCategory.LOGGING,
+    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
     help =
         "Specifies how long bazel should wait for the BES/BEP upload to complete after the "
             + "build and tests have finished. A valid timeout is a natural number followed by a "
             + "unit: Days (d), hours (h), minutes (m), seconds (s), and milliseconds (ms). The "
-            + "default value is '0' which means that there is no timeout and that the upload will "
-            + "continue in the background after a build has finished."
+            + "default value is '0' which means that there is no timeout."
   )
   public Duration besTimeout;
 
   @Option(
-    name = "bes_best_effort",
-    defaultValue = "true",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    help =
-        "Specifies whether a failure to upload the BES protocol should also result in a build "
-            + "failure. If 'true', bazel exits with ExitCode.PUBLISH_ERROR. (defaults to 'true')."
-  )
+      name = "bes_best_effort",
+      defaultValue = "false",
+      deprecationWarning =
+          "BES best effort upload has been removed. The flag has no more "
+              + "functionality attached to it and will be removed in a future release.",
+      documentationCategory = OptionDocumentationCategory.LOGGING,
+      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      help =
+          "BES best effort upload has been removed. The flag has no more "
+              + "functionality attached to it and will be removed in a future release.")
   public boolean besBestEffort;
 
   @Option(
     name = "bes_lifecycle_events",
     defaultValue = "true",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
+    documentationCategory = OptionDocumentationCategory.LOGGING,
+    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Specifies whether to publish BES lifecycle events. (defaults to 'true')."
   )
   public boolean besLifecycleEvents;
@@ -76,52 +76,94 @@ public class BuildEventServiceOptions extends OptionsBase {
   @Option(
     name = "project_id",
     defaultValue = "null",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
+    documentationCategory = OptionDocumentationCategory.LOGGING,
+    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Specifies the BES project identifier. Defaults to null."
   )
   public String projectId;
 
-  /**
-   * Simple String to Duration Converter.
-   */
-  public static class DurationConverter implements Converter<Duration> {
+  @Option(
+      name = "bes_keywords",
+      defaultValue = "null",
+      converter = Converters.CommaSeparatedOptionListConverter.class,
+      documentationCategory = OptionDocumentationCategory.LOGGING,
+      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      allowMultiple = true,
+      help =
+          "Specifies a list of notification keywords to be added the default set of keywords "
+              + "published to BES (\"command_name=<command_name> \", \"protocol_name=BEP\"). "
+              + "Defaults to none.")
+  public List<String> besKeywords;
 
-    private final Pattern durationRegex = Pattern.compile("^([0-9]+)(d|h|m|s|ms)$");
+  @Option(
+      name = "bes_outerr_buffer_size",
+      defaultValue = "10240",
+      documentationCategory = OptionDocumentationCategory.LOGGING,
+      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      help =
+          "Specifies the maximal size of stdout or stderr to be buffered in BEP, before it is "
+              + "reported as a progress event. Individual writes are still reported in a single "
+              + "event, even if larger than the specified value up to --bes_outerr_chunk_size.")
+  public int besOuterrBufferSize;
 
-    @Override
-    public Duration convert(String input) throws OptionsParsingException {
-      // To be compatible with the previous parser, '0' doesn't need a unit.
-      if ("0".equals(input)) {
-        return Duration.ZERO;
-      }
-      Matcher m = durationRegex.matcher(input);
-      if (!m.matches()) {
-        throw new OptionsParsingException("Illegal duration '" + input + "'.");
-      }
-      long duration = Long.parseLong(m.group(1));
-      String unit = m.group(2);
-      switch(unit) {
-        case "d":
-          return Duration.standardDays(duration);
-        case "h":
-          return Duration.standardHours(duration);
-        case "m":
-          return Duration.standardMinutes(duration);
-        case "s":
-          return Duration.standardSeconds(duration);
-        case "ms":
-          return Duration.millis(duration);
-        default:
-          throw new IllegalStateException("This must not happen. Did you update the regex without "
-              + "the switch case?");
-      }
-    }
+  @Option(
+      name = "bes_outerr_chunk_size",
+      defaultValue = "1048576", // 2^20 = 1MB
+      documentationCategory = OptionDocumentationCategory.LOGGING,
+      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      help =
+          "Specifies the maximal size of stdout or stderr to be sent to BEP in a single message.")
+  public int besOuterrChunkSize;
 
-    @Override
-    public String getTypeDescription() {
-      return "An immutable length of time.";
-    }
+  @Option(
+      name = "bes_results_url",
+      defaultValue = "",
+      documentationCategory = OptionDocumentationCategory.LOGGING,
+      effectTags = {OptionEffectTag.TERMINAL_OUTPUT},
+      help =
+          "Specifies the base URL where a user can view the information streamed to the BES"
+              + " backend. Bazel will output the URL appended by the invocation id to the"
+              + " terminal.")
+  public String besResultsUrl;
+
+  @Option(
+      name = "bes_upload_mode",
+      defaultValue = "wait_for_upload_complete",
+      converter = BesUploadModeConverter.class,
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.EAGERNESS_TO_EXIT},
+      help =
+          "Specifies whether the Build Event Service upload should block the build completion "
+              + "or should end the invocation immediately and finish the upload in the background.")
+  public BesUploadMode besUploadMode;
+
+  @Option(
+      name = "bes_proxy",
+      defaultValue = "null",
+      documentationCategory = OptionDocumentationCategory.LOGGING,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help =
+          "Connect to the Build Event Service through a proxy. Currently this flag can only be"
+              + " used to configure a Unix domain socket (unix:/path/to/socket).")
+  public String besProxy;
+
+  /** Determines the mode that will be used to upload data to the Build Event Service. */
+  public enum BesUploadMode {
+    /** Block at the end of the build waiting for the upload to complete */
+    WAIT_FOR_UPLOAD_COMPLETE,
+    /** Block at the beginning of the next build waiting for upload completion */
+    NOWAIT_FOR_UPLOAD_COMPLETE,
+    /**
+     * Block at the beginning of the next build waiting for the client to finish uploading the data,
+     * but possibly not blocking on the server acknowledgement.
+     */
+    FULLY_ASYNC,
   }
 
+  /** Converter for {@link BesUploadMode} */
+  public static class BesUploadModeConverter extends EnumConverter<BesUploadMode> {
+    public BesUploadModeConverter() {
+      super(BesUploadMode.class, "Mode for uploading to the Build Event Service");
+    }
+  }
 }

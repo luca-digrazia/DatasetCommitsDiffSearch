@@ -32,6 +32,14 @@ public class SkydocOptions extends OptionsBase {
   public String targetFileLabel;
 
   @Option(
+      name = "workspace_name",
+      defaultValue = "",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = OptionEffectTag.UNKNOWN,
+      help = "The name of the workspace in which the input file resides")
+  public String workspaceName;
+
+  @Option(
       name = "output",
       defaultValue = "",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
@@ -42,9 +50,22 @@ public class SkydocOptions extends OptionsBase {
   @Option(
       name = "symbols",
       allowMultiple = true,
-      defaultValue = "",
+      defaultValue = "null",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = OptionEffectTag.UNKNOWN,
-      help = "The path of the file to output documentation into")
+      help =
+          "A list of symbol names to generate documentation for. These should correspond to the"
+              + " names of rule, provider, or function definitions in the input file. If this list"
+              + " is empty, then documentation for all exported rule definitions will be"
+              + " generated.")
   public List<String> symbolNames;
+
+  @Option(
+      name = "dep_roots",
+      allowMultiple = true,
+      defaultValue = "null",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = OptionEffectTag.UNKNOWN,
+      help = "File path roots to search when resolving transitive bzl dependencies")
+  public List<String> depRoots;
 }

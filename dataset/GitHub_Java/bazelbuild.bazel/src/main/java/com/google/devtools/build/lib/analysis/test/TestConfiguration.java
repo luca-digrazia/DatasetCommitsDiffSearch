@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.LabelC
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
-import com.google.devtools.build.lib.analysis.test.TestShardingStrategy.ShardingStrategyConverter;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.TestTimeout;
 import com.google.devtools.build.lib.util.RegexFilter;
@@ -155,14 +154,14 @@ public class TestConfiguration extends Fragment {
     @Option(
         name = "test_sharding_strategy",
         defaultValue = "explicit",
-        converter = ShardingStrategyConverter.class,
+        converter = TestActionBuilder.ShardingStrategyConverter.class,
         documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
         effectTags = {OptionEffectTag.UNKNOWN},
         help =
             "Specify strategy for test sharding: "
                 + "'explicit' to only use sharding if the 'shard_count' BUILD attribute is "
                 + "present. 'disabled' to never use test sharding.")
-    public TestShardingStrategy testShardingStrategy;
+    public TestActionBuilder.TestShardingStrategy testShardingStrategy;
 
     @Option(
         name = "experimental_persistent_test_runner",
@@ -325,7 +324,7 @@ public class TestConfiguration extends Fragment {
     return options.testArguments;
   }
 
-  public TestShardingStrategy testShardingStrategy() {
+  public TestActionBuilder.TestShardingStrategy testShardingStrategy() {
     return options.testShardingStrategy;
   }
 

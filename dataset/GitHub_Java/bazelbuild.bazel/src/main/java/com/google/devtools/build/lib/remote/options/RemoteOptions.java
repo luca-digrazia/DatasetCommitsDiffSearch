@@ -410,7 +410,7 @@ public final class RemoteOptions extends OptionsBase {
 
   @Option(
       name = "remote_default_exec_properties",
-      defaultValue = "null",
+      defaultValue = "[]",
       documentationCategory = OptionDocumentationCategory.REMOTE,
       effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
       converter = AssignmentConverter.class,

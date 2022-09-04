@@ -325,6 +325,20 @@ public class SandboxOptions extends OptionsBase {
   public boolean defaultSandboxAllowNetwork;
 
   @Option(
+      name = "incompatible_symlinked_sandbox_expands_tree_artifacts_in_runfiles_tree",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
+      effectTags = {OptionEffectTag.EXECUTION},
+      metadataTags = {
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES,
+        OptionMetadataTag.INCOMPATIBLE_CHANGE
+      },
+      help =
+          "If enabled, the sandbox will expand tree artifacts in runfiles, thus the files that "
+              + "are contained in the tree artifact will be symlinked as individual files.")
+  public boolean symlinkedSandboxExpandsTreeArtifactsInRunfilesTree;
+
+  @Option(
       name = "experimental_sandbox_async_tree_delete_idle_threads",
       defaultValue = "0",
       converter = AsyncTreeDeletesConverter.class,
@@ -347,21 +361,6 @@ public class SandboxOptions extends OptionsBase {
               + "not in the execroot, which fixes a race condition when using the dynamic "
               + "scheduler. This flag exists purely to support rolling this bug fix out.")
   public boolean delayVirtualInputMaterialization;
-
-  @Option(
-      name = "incompatible_legacy_local_fallback",
-      defaultValue = "true",
-      documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
-      effectTags = {OptionEffectTag.EXECUTION},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "If set to true, enables the legacy implicit fallback from sandboxed to local strategy."
-              + " This flag will eventually default to false and then become a no-op. You should"
-              + " use --strategy or --spawn_strategy to configure fallbacks instead.")
-  public boolean legacyLocalFallback;
 
   /** Converter for the number of threads used for asynchronous tree deletion. */
   public static final class AsyncTreeDeletesConverter extends ResourceConverter {
