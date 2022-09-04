@@ -54,8 +54,7 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
     implements SkyFunction {
 
   interface PathResolverFactory {
-    ArtifactPathResolver createPathResolverForArtifactValues(
-        ActionInputMap actionInputMap, Map<Artifact, Collection<Artifact>> expandedArtifacts);
+    ArtifactPathResolver createPathResolverForArtifactValues(ActionInputMap actionInputMap);
 
     boolean shouldCreatePathResolverForArtifactValues();
   }
@@ -402,7 +401,7 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
 
     ArtifactPathResolver pathResolver =
         createPathResolver
-            ? pathResolverFactory.createPathResolverForArtifactValues(inputMap, expandedArtifacts)
+            ? pathResolverFactory.createPathResolverForArtifactValues(inputMap)
             : ArtifactPathResolver.IDENTITY;
 
     ExtendedEventHandler.Postable postable =

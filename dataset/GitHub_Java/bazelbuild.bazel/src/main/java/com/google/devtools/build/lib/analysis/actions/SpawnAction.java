@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis.actions;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.CharMatcher;
-import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -307,7 +306,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           failMessage =
               "error executing shell command: "
                   + "'"
-                  + truncate(Joiner.on(" ").join(getArguments()), 200)
+                  + truncate(Iterables.get(getArguments(), 2), 200)
                   + "'";
         } catch (CommandLineExpansionException commandLineExpansionException) {
           failMessage =
@@ -363,7 +362,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
   Spawn getSpawn(
       ArtifactExpander artifactExpander,
       Map<String, String> clientEnv,
-      Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings)
+      Map<PathFragment, ImmutableList<FilesetOutputSymlink>> filesetMappings)
       throws CommandLineExpansionException {
     ExpandedCommandLines expandedCommandLines =
         commandLines.expand(artifactExpander, getPrimaryOutput().getExecPath(), commandLineLimits);
@@ -501,7 +500,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
   private class ActionSpawn extends BaseSpawn {
 
     private final ImmutableList<ActionInput> inputs;
-    private final Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings;
+    private final Map<PathFragment, ImmutableList<FilesetOutputSymlink>> filesetMappings;
     private final ImmutableMap<String, String> effectiveEnvironment;
 
     /**
@@ -514,7 +513,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
         ImmutableList<String> arguments,
         Map<String, String> clientEnv,
         Iterable<? extends ActionInput> additionalInputs,
-        Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings) {
+        Map<PathFragment, ImmutableList<FilesetOutputSymlink>> filesetMappings) {
       super(
           arguments,
           ImmutableMap.<String, String>of(),
@@ -543,7 +542,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     }
 
     @Override
-    public ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> getFilesetMappings() {
+    public ImmutableMap<PathFragment, ImmutableList<FilesetOutputSymlink>> getFilesetMappings() {
       return ImmutableMap.copyOf(filesetMappings);
     }
 
@@ -667,8 +666,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
               ? configuration.getActionEnvironment()
               : ActionEnvironment.create(environment, inheritedEnvironment);
       Action spawnAction =
-          buildSpawnAction(
-              owner, commandLines, configuration.getCommandLineLimits(), configuration, env);
+          buildSpawnAction(owner, commandLines, configuration.getCommandLineLimits(), env);
       actions[0] = spawnAction;
       return actions;
     }
@@ -685,7 +683,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           owner,
           result.build(),
           CommandLineLimits.UNLIMITED,
-          null,
           ActionEnvironment.create(environment, inheritedEnvironment));
     }
 
@@ -774,7 +771,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
         ActionOwner owner,
         CommandLines commandLines,
         CommandLineLimits commandLineLimits,
-        @Nullable BuildConfiguration configuration,
         ActionEnvironment env) {
       NestedSet<Artifact> tools = toolsBuilder.build();
 
@@ -803,9 +799,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           commandLineLimits,
           isShellCommand,
           env,
-          configuration == null
-              ? executionInfo
-              : configuration.modifiedExecutionInfo(executionInfo, mnemonic),
+          ImmutableMap.copyOf(executionInfo),
           progressMessage,
           new CompositeRunfilesSupplier(
               Iterables.concat(this.inputRunfilesSuppliers, this.toolRunfilesSuppliers)),
