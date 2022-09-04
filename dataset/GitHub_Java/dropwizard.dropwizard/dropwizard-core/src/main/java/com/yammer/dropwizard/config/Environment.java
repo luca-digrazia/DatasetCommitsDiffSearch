@@ -58,23 +58,21 @@ public class Environment extends AbstractLifeCycle {
 
     /**
      * Creates a new environment.
-     *
+     * 
+     * @param configuration    the service's {@link Configuration}
      * @param service          the service
-     * @param configuration    the service's {@link com.yammer.dropwizard.config.Configuration}
      */
-    public <T extends Configuration> Environment(AbstractService<T> service, T configuration) {
+    public Environment(Configuration configuration, AbstractService<?> service) {
         this.service = service;
-        this.config = new DropwizardResourceConfig(false) {
+        this.config = new DropwizardResourceConfig() {
             @Override
             public void validate() {
                 super.validate();
-                if (LOG.isDebugEnabled()) {
-                    logResources();
-                    logProviders();
-                    logHealthChecks();
-                    logManagedObjects();
-                    logEndpoints();
-                }
+                logResources();
+                logProviders();
+                logHealthChecks();
+                logManagedObjects();
+                logEndpoints();
             }
         };
         this.healthChecks = ImmutableSet.builder();
@@ -84,7 +82,7 @@ public class Environment extends AbstractLifeCycle {
         this.tasks = ImmutableSet.builder();
         this.lifeCycle = new AggregateLifeCycle();
         
-        final HttpServlet jerseyContainer = service.getJerseyContainer(config, configuration);
+        final HttpServlet jerseyContainer = service.getJerseyContainer(config);
         if (jerseyContainer != null) {
             addServlet(jerseyContainer, configuration.getHttpConfiguration().getRootPath()).setInitOrder(Integer.MAX_VALUE);
         }
@@ -377,13 +375,8 @@ public class Environment extends AbstractLifeCycle {
 
     private void logHealthChecks() {
         final ImmutableSet.Builder<String> builder = ImmutableSet.builder();
-        for (final HealthCheck healthCheck : healthChecks.build()) {
-            final String canonicalName = healthCheck.getClass().getCanonicalName();
-            if (canonicalName == null) {
-                builder.add(String.format("%s(\"%s\")", HealthCheck.class.getCanonicalName(), healthCheck.getName()));
-            } else {
-                builder.add(canonicalName);
-            }
+        for (HealthCheck healthCheck : healthChecks.build()) {
+            builder.add(healthCheck.getClass().getCanonicalName());
         }
         LOG.debug("health checks = {}", builder.build());
     }
