@@ -167,7 +167,7 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
               "structured_resources",
               "xibs");
       for (String attribute : resourceAttributes) {
-        if (ruleContext.attributes().isAttributeValueExplicitlySpecified(attribute)) {
+        if (!ruleContext.getPrerequisites(attribute, Mode.TARGET).isEmpty()) {
           ruleContext.throwWithAttributeError(
               attribute,
               "objc_library resource attributes are not allowed. Please use the 'data' "
