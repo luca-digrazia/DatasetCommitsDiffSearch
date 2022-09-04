@@ -19,7 +19,7 @@ class ConfigMapConfigSourceUtilTest {
     void testEmptyData() {
         ConfigMap configMap = configMapBuilder("testEmptyData").build();
 
-        List<ConfigSource> configSources = sut.toConfigSources(configMap.getMetadata(), configMap.getData(), 0);
+        List<ConfigSource> configSources = sut.toConfigSources(configMap.getMetadata().getName(), configMap.getData());
 
         assertThat(configSources).isEmpty();
     }
@@ -29,14 +29,12 @@ class ConfigMapConfigSourceUtilTest {
         ConfigMap configMap = configMapBuilder("testOnlyLiteralData")
                 .addToData("some.key", "someValue").addToData("some.other", "someOtherValue").build();
 
-        List<ConfigSource> configSources = sut.toConfigSources(configMap.getMetadata(), configMap.getData(), 0);
+        List<ConfigSource> configSources = sut.toConfigSources(configMap.getMetadata().getName(), configMap.getData());
 
         assertThat(configSources).singleElement().satisfies(c -> {
             assertThat(c.getProperties()).containsOnly(entry("some.key", "someValue"),
                     entry("some.other", "someOtherValue"));
             assertThat(c.getName()).contains("testOnlyLiteralData");
-            assertThat(c.getName()).isEqualTo(
-                    "ConfigMapLiteralDataPropertiesConfigSource[configMap=namespace/testOnlyLiteralData/uid/version]");
         });
     }
 
@@ -45,13 +43,12 @@ class ConfigMapConfigSourceUtilTest {
         ConfigMap configMap = configMapBuilder("testOnlySingleMatchingPropertiesData")
                 .addToData("application.properties", "key1=value1\nkey2=value2\nsome.key=someValue").build();
 
-        List<ConfigSource> configSources = sut.toConfigSources(configMap.getMetadata(), configMap.getData(), 0);
+        List<ConfigSource> configSources = sut.toConfigSources(configMap.getMetadata().getName(), configMap.getData());
 
         assertThat(configSources).singleElement().satisfies(c -> {
             assertThat(c.getProperties()).containsOnly(entry("key1", "value1"), entry("key2", "value2"),
                     entry("some.key", "someValue"));
             assertThat(c.getName()).contains("testOnlySingleMatchingPropertiesData");
-            assertThat(c.getOrdinal()).isEqualTo(270);
         });
     }
 
@@ -60,7 +57,7 @@ class ConfigMapConfigSourceUtilTest {
         ConfigMap configMap = configMapBuilder("testOnlySingleMatchingPropertiesData")
                 .addToData("app.properties", "key1=value1\nkey2=value2\nsome.key=someValue").build();
 
-        List<ConfigSource> configSources = sut.toConfigSources(configMap.getMetadata(), configMap.getData(), 0);
+        List<ConfigSource> configSources = sut.toConfigSources(configMap.getMetadata().getName(), configMap.getData());
 
         assertThat(configSources).isNotEmpty();
     }
@@ -70,7 +67,7 @@ class ConfigMapConfigSourceUtilTest {
         ConfigMap configMap = configMapBuilder("testOnlySingleMatchingYamlData")
                 .addToData("application.yaml", "key1: value1\nkey2: value2\nsome:\n  key: someValue").build();
 
-        List<ConfigSource> configSources = sut.toConfigSources(configMap.getMetadata(), configMap.getData(), 0);
+        List<ConfigSource> configSources = sut.toConfigSources(configMap.getMetadata().getName(), configMap.getData());
 
         assertThat(configSources).singleElement().satisfies(c -> {
             assertThat(c.getProperties()).containsOnly(entry("key1", "value1"), entry("key2", "value2"),
@@ -84,7 +81,7 @@ class ConfigMapConfigSourceUtilTest {
         ConfigMap configMap = configMapBuilder("testOnlySingleMatchingPropertiesData")
                 .addToData("app.yaml", "key1: value1\nkey2: value2\nsome:\n  key: someValue").build();
 
-        List<ConfigSource> configSources = sut.toConfigSources(configMap.getMetadata(), configMap.getData(), 0);
+        List<ConfigSource> configSources = sut.toConfigSources(configMap.getMetadata().getName(), configMap.getData());
 
         assertThat(configSources).isNotEmpty();
     }
@@ -101,7 +98,7 @@ class ConfigMapConfigSourceUtilTest {
                 .addToData("app.yml", "ignored3: ignoredValue3")
                 .build();
 
-        List<ConfigSource> configSources = sut.toConfigSources(configMap.getMetadata(), configMap.getData(), 0);
+        List<ConfigSource> configSources = sut.toConfigSources(configMap.getMetadata().getName(), configMap.getData());
 
         assertThat(configSources).hasSize(4);
 
@@ -133,8 +130,7 @@ class ConfigMapConfigSourceUtilTest {
 
     private ConfigMapBuilder configMapBuilder(String name) {
         return new ConfigMapBuilder().withNewMetadata()
-                .withName(name).withNamespace("namespace").withUid("uid")
-                .withResourceVersion("version").endMetadata();
+                .withName(name).endMetadata();
     }
 
 }
