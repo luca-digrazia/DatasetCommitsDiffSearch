@@ -178,7 +178,7 @@ public class VertxHttpRecorder {
             //we shut it down in this case, as we have no idea what state it is in
             final Handler<RoutingContext> prevHotReplacementHandler = hotReplacementHandler;
             shutDownDevMode();
-            // reset back to the older live reload handler, so that it can be used
+            // reset back to the older hot replacement handler, so that it can be used
             // to watch any artifacts that need hot deployment to fix the reason which caused
             // the server start to fail
             hotReplacementHandler = prevHotReplacementHandler;
@@ -264,13 +264,13 @@ public class VertxHttpRecorder {
 
     public void finalizeRouter(BeanContainer container, Consumer<Route> defaultRouteHandler,
             List<Filter> filterList, Supplier<Vertx> vertx,
-            LiveReloadConfig liveReloadConfig, Optional<RuntimeValue<Router>> mainRouterRuntimeValue,
-            RuntimeValue<Router> httpRouterRuntimeValue, String rootPath, LaunchMode launchMode, boolean requireBodyHandler,
+            LiveReloadConfig liveReloadConfig,
+            RuntimeValue<Router> runtimeValue, String rootPath, LaunchMode launchMode, boolean requireBodyHandler,
             Handler<RoutingContext> bodyHandler, HttpConfiguration httpConfiguration,
             GracefulShutdownFilter gracefulShutdownFilter, ShutdownConfig shutdownConfig,
             Executor executor) {
         // install the default route at the end
-        Router httpRouteRouter = httpRouterRuntimeValue.getValue();
+        Router router = runtimeValue.getValue();
 
         //allow the router to be modified programmatically
         Event<Object> event = Arc.container().beanManager().getEvent();
@@ -282,26 +282,26 @@ public class VertxHttpRecorder {
         filterList.addAll(filters.getFilters());
 
         // Then, fire the resuming router
-        event.select(Router.class).fire(httpRouteRouter);
+        event.select(Router.class).fire(router);
 
         for (Filter filter : filterList) {
             if (filter.getHandler() != null) {
                 // Filters with high priority gets called first.
-                httpRouteRouter.route().order(-1 * filter.getPriority()).handler(filter.getHandler());
+                router.route().order(-1 * filter.getPriority()).handler(filter.getHandler());
             }
         }
 
         if (defaultRouteHandler != null) {
-            defaultRouteHandler.accept(httpRouteRouter.route().order(DEFAULT_ROUTE_ORDER));
+            defaultRouteHandler.accept(router.route().order(DEFAULT_ROUTE_ORDER));
         }
 
-        container.instance(RouterProducer.class).initialize(httpRouteRouter);
-        httpRouteRouter.route().last().failureHandler(new QuarkusErrorHandler(launchMode.isDevOrTest()));
+        container.instance(RouterProducer.class).initialize(router);
+        router.route().last().failureHandler(new QuarkusErrorHandler(launchMode.isDevOrTest()));
 
         if (requireBodyHandler) {
             //if this is set then everything needs the body handler installed
             //TODO: config etc
-            httpRouteRouter.route().order(Integer.MIN_VALUE + 1).handler(new Handler<RoutingContext>() {
+            router.route().order(Integer.MIN_VALUE + 1).handler(new Handler<RoutingContext>() {
                 @Override
                 public void handle(RoutingContext routingContext) {
                     routingContext.request().resume();
@@ -313,7 +313,7 @@ public class VertxHttpRecorder {
         if (httpConfiguration.limits.maxBodySize.isPresent()) {
             long limit = httpConfiguration.limits.maxBodySize.get().asLongValue();
             Long limitObj = limit;
-            httpRouteRouter.route().order(-2).handler(new Handler<RoutingContext>() {
+            router.route().order(-2).handler(new Handler<RoutingContext>() {
                 @Override
                 public void handle(RoutingContext event) {
                     String lengthString = event.request().headers().get(HttpHeaderNames.CONTENT_LENGTH);
@@ -345,7 +345,7 @@ public class VertxHttpRecorder {
             if (hotReplacementHandler != null) {
                 //recorders are always executed in the current CL
                 ClassLoader currentCl = Thread.currentThread().getContextClassLoader();
-                httpRouteRouter.route().order(Integer.MIN_VALUE).handler(new Handler<RoutingContext>() {
+                router.route().order(Integer.MIN_VALUE).handler(new Handler<RoutingContext>() {
                     @Override
                     public void handle(RoutingContext event) {
                         Thread.currentThread().setContextClassLoader(currentCl);
@@ -353,11 +353,10 @@ public class VertxHttpRecorder {
                     }
                 });
             }
-            root = httpRouteRouter;
+            root = router;
         } else {
-            Router mainRouter = mainRouterRuntimeValue.isPresent() ? mainRouterRuntimeValue.get().getValue()
-                    : Router.router(vertx.get());
-            mainRouter.mountSubRouter(rootPath, httpRouteRouter);
+            Router mainRouter = Router.router(vertx.get());
+            mainRouter.mountSubRouter(rootPath, router);
             if (hotReplacementHandler != null) {
                 ClassLoader currentCl = Thread.currentThread().getContextClassLoader();
                 mainRouter.route().order(Integer.MIN_VALUE).handler(new Handler<RoutingContext>() {
@@ -401,7 +400,7 @@ public class VertxHttpRecorder {
                 receiver = new JBossLoggingAccessLogReceiver(accessLog.category);
             }
             AccessLogHandler handler = new AccessLogHandler(receiver, accessLog.pattern, getClass().getClassLoader());
-            httpRouteRouter.route().order(Integer.MIN_VALUE).handler(handler);
+            router.route().order(Integer.MIN_VALUE).handler(handler);
             quarkusWrapperNeeded = true;
         }
 
@@ -430,7 +429,7 @@ public class VertxHttpRecorder {
             }
         };
         if (httpConfiguration.recordRequestStartTime) {
-            httpRouteRouter.route().order(Integer.MIN_VALUE).handler(new Handler<RoutingContext>() {
+            router.route().order(Integer.MIN_VALUE).handler(new Handler<RoutingContext>() {
                 @Override
                 public void handle(RoutingContext event) {
                     event.put(REQUEST_START_TIME, System.nanoTime());
@@ -784,14 +783,14 @@ public class VertxHttpRecorder {
         nonApplicationRedirectHandler = new Handler<RoutingContext>() {
             @Override
             public void handle(RoutingContext context) {
-                String absoluteURI = context.request().path();
-                String target = absoluteURI.substring(rootPath.length());
-                String redirectTo = nonApplicationPath + target;
-
-                String query = context.request().query();
-                if (query != null && !query.isEmpty()) {
-                    redirectTo += '?' + query;
+                String absoluteURI = context.request().absoluteURI();
+                int pathStart = absoluteURI.indexOf(context.request().path());
+                if (rootPath.length() > 1 && absoluteURI.contains(rootPath)) {
+                    // Only do this when rootPath is not '/'
+                    pathStart = pathStart + rootPath.length();
                 }
+                String redirectTo = absoluteURI.substring(0, pathStart) + nonApplicationPath
+                        + absoluteURI.substring(pathStart);
 
                 context.response()
                         .setStatusCode(HttpResponseStatus.MOVED_PERMANENTLY.code())
