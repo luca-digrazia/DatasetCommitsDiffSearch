@@ -1,29 +1,17 @@
 package io.quarkus.annotation.processor.generate_doc;
 
-import static io.quarkus.annotation.processor.Constants.ALL_CG_GENERATED_DOC;
 import static io.quarkus.annotation.processor.Constants.ANNOTATION_CONFIG_DOC_MAP_KEY;
 import static io.quarkus.annotation.processor.Constants.ANNOTATION_CONFIG_DOC_SECTION;
 import static io.quarkus.annotation.processor.Constants.ANNOTATION_CONFIG_ITEM;
 import static io.quarkus.annotation.processor.Constants.ANNOTATION_CONVERT_WITH;
 import static io.quarkus.annotation.processor.Constants.ANNOTATION_DEFAULT_CONVERTER;
-import static io.quarkus.annotation.processor.Constants.DOT;
-import static io.quarkus.annotation.processor.Constants.EMPTY;
 import static io.quarkus.annotation.processor.Constants.HYPHENATED_ELEMENT_NAME;
-import static io.quarkus.annotation.processor.Constants.LIST_OF_CONFIG_ITEMS_TYPE_REF;
-import static io.quarkus.annotation.processor.Constants.NO_DEFAULT;
-import static io.quarkus.annotation.processor.Constants.OBJECT_MAPPER;
-import static io.quarkus.annotation.processor.Constants.PARENT;
 import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.getJavaDocSiteLink;
 import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.getKnownGenericType;
 import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.hyphenate;
 import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.hyphenateEnumValue;
 import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.stringifyType;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -46,68 +34,42 @@ import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-
-import io.quarkus.annotation.processor.generate_doc.JavaDocParser.SectionHolder;
+import io.quarkus.annotation.processor.Constants;
 
 class ConfigDoItemFinder {
 
     private static String COMMA = ",";
-    private static final String BACK_TICK = "`";
     private static final String NAMED_MAP_CONFIG_ITEM_FORMAT = ".\"%s\"";
 
     private final JavaDocParser javaDocParser = new JavaDocParser();
     private final ScannedConfigDocsItemHolder holder = new ScannedConfigDocsItemHolder();
 
     private final Set<ConfigRootInfo> configRoots;
+    private final Map<String, TypeElement> configGroups;
     private final Properties javaDocProperties;
-    private final Properties configGroupDocs = new Properties();
-    private final Map<String, TypeElement> configGroupQualifiedNameToTypeElementMap;
 
-    public ConfigDoItemFinder(Set<ConfigRootInfo> configRoots,
-            Map<String, TypeElement> configGroupQualifiedNameToTypeElementMap,
+    public ConfigDoItemFinder(Set<ConfigRootInfo> configRoots, Map<String, TypeElement> configGroups,
             Properties javaDocProperties) {
         this.configRoots = configRoots;
-        this.configGroupQualifiedNameToTypeElementMap = configGroupQualifiedNameToTypeElementMap;
+        this.configGroups = configGroups;
         this.javaDocProperties = javaDocProperties;
     }
 
     /**
-     * Find configuration items from current encountered configuration roots.
-     * Scan configuration group first and record them in a properties file as they can be shared across
-     * different modules.
+     * Find configuration items from current encountered configuration roots
      */
-    ScannedConfigDocsItemHolder findInMemoryConfigurationItems() throws IOException {
-        if (ALL_CG_GENERATED_DOC.exists()) {
-            try (BufferedReader bufferedReader = Files.newBufferedReader(ALL_CG_GENERATED_DOC.toPath(),
-                    StandardCharsets.UTF_8)) {
-                configGroupDocs.load(bufferedReader);
-            }
-        }
-
-        for (Map.Entry<String, TypeElement> entry : configGroupQualifiedNameToTypeElementMap.entrySet()) {
-            ConfigPhase buildTime = ConfigPhase.BUILD_TIME;
-            final List<ConfigDocItem> configDocItems = recursivelyFindConfigItems(
-                    entry.getValue(), EMPTY, EMPTY, buildTime,
-                    false, 1, false);
-            configGroupDocs.put(entry.getKey(), OBJECT_MAPPER.writeValueAsString(configDocItems));
-        }
-
-        /**
-         * Update stored generated config group doc for each configuration
-         */
-        try (BufferedWriter bufferedWriter = Files.newBufferedWriter(ALL_CG_GENERATED_DOC.toPath(),
-                StandardCharsets.UTF_8)) {
-            configGroupDocs.store(bufferedWriter, EMPTY);
-        }
-
+    ScannedConfigDocsItemHolder findInMemoryConfigurationItems() {
         for (ConfigRootInfo configRootInfo : configRoots) {
-            final int sectionLevel = 0;
             final TypeElement element = configRootInfo.getClazz();
+            /**
+             * Config sections will start at level 2 i.e the section title will be prefixed with
+             * ('='* (N + 1)) where N is section level.
+             */
+            final int sectionLevel = 2;
             String rootName = configRootInfo.getName();
             ConfigPhase configPhase = configRootInfo.getConfigPhase();
             final List<ConfigDocItem> configDocItems = recursivelyFindConfigItems(element, rootName, rootName, configPhase,
-                    false, sectionLevel, true);
+                    false, sectionLevel);
             holder.addConfigRootItems(configRootInfo.getClazz().getQualifiedName().toString(), configDocItems);
         }
 
@@ -115,11 +77,17 @@ class ConfigDoItemFinder {
     }
 
     /**
-     * Recursively find config item found in a config root or config group given as {@link Element}
+     * Recursively find config item found in a config root given as {@link Element}
+     *
+     * @param element - root element
+     * @param rootName - root name
+     * @param parentName - parent name
+     * @param configPhase - configuration phase see {@link ConfigPhase}
+     * @param withinAMap - indicates if a a key is within a map or is a map configuration key
+     * @param sectionLevel - section sectionLevel
      */
     private List<ConfigDocItem> recursivelyFindConfigItems(Element element, String rootName, String parentName,
-            ConfigPhase configPhase, boolean withinAMap, int sectionLevel, boolean generateSeparateConfigGroupDocsFiles)
-            throws JsonProcessingException {
+            ConfigPhase configPhase, boolean withinAMap, int sectionLevel) {
         List<ConfigDocItem> configDocItems = new ArrayList<>();
         for (Element enclosedElement : element.getEnclosedElements()) {
             if (!enclosedElement.getKind().isField()) {
@@ -135,15 +103,18 @@ class ConfigDoItemFinder {
                 continue;
             }
 
-            String name = null;
-            String defaultValue = NO_DEFAULT;
-            String defaultValueDoc = EMPTY;
+            String name = Constants.EMPTY;
+            String defaultValue = Constants.NO_DEFAULT;
+            String defaultValueDoc = Constants.EMPTY;
             final TypeMirror typeMirror = enclosedElement.asType();
             String type = typeMirror.toString();
             List<String> acceptedValues = null;
+            Element configGroup = configGroups.get(type);
+            ConfigDocSection configSection = null;
+            boolean isConfigGroup = configGroup != null;
             final TypeElement clazz = (TypeElement) element;
             final String fieldName = enclosedElement.getSimpleName().toString();
-            final String javaDocKey = clazz.getQualifiedName().toString() + DOT + fieldName;
+            final String javaDocKey = clazz.getQualifiedName().toString() + Constants.DOT + fieldName;
             final List<? extends AnnotationMirror> annotationMirrors = enclosedElement.getAnnotationMirrors();
             final String rawJavaDoc = javaDocProperties.getProperty(javaDocKey);
             boolean useHyphenateEnumValue = true;
@@ -151,10 +122,6 @@ class ConfigDoItemFinder {
             String hyphenatedFieldName = hyphenate(fieldName);
             String configDocMapKey = hyphenatedFieldName;
             boolean isDeprecated = false;
-            ConfigDocSection configSection = new ConfigDocSection();
-            configSection.setTopLevelGrouping(rootName);
-            configSection.setWithinAMap(withinAMap);
-            configSection.setConfigPhase(configPhase);
 
             for (AnnotationMirror annotationMirror : annotationMirrors) {
                 String annotationName = annotationMirror.getAnnotationType().toString();
@@ -174,13 +141,13 @@ class ConfigDoItemFinder {
                             if ("name()".equals(key)) {
                                 switch (value) {
                                     case HYPHENATED_ELEMENT_NAME:
-                                        name = parentName + DOT + hyphenatedFieldName;
+                                        name = parentName + Constants.DOT + hyphenatedFieldName;
                                         break;
-                                    case PARENT:
+                                    case Constants.PARENT:
                                         name = parentName;
                                         break;
                                     default:
-                                        name = parentName + DOT + value;
+                                        name = parentName + Constants.DOT + value;
                                 }
                             } else if ("defaultValue()".equals(key)) {
                                 defaultValue = value;
@@ -190,11 +157,16 @@ class ConfigDoItemFinder {
                         }
                     }
                 } else if (annotationName.equals(ANNOTATION_CONFIG_DOC_SECTION)) {
-                    final SectionHolder sectionHolder = javaDocParser.parseConfigSection(rawJavaDoc, sectionLevel);
-                    configSection.setShowSection(true);
+                    final JavaDocParser.SectionHolder sectionHolder = javaDocParser.parseConfigSection(rawJavaDoc,
+                            sectionLevel);
+
+                    configSection = new ConfigDocSection();
+                    configSection.setWithinAMap(withinAMap);
+                    configSection.setTopLevelGrouping(rootName);
+                    configSection.setConfigPhase(configPhase);
                     configSection.setSectionDetails(sectionHolder.details);
                     configSection.setSectionDetailsTitle(sectionHolder.title);
-                    configSection.setName(parentName + DOT + hyphenatedFieldName);
+                    configSection.setName(parentName + Constants.DOT + hyphenatedFieldName);
                 } else if (annotationName.equals(ANNOTATION_DEFAULT_CONVERTER)
                         || annotationName.equals(ANNOTATION_CONVERT_WITH)) {
                     useHyphenateEnumValue = false;
@@ -205,20 +177,21 @@ class ConfigDoItemFinder {
                 continue; // do not include deprecated config items
             }
 
-            if (name == null) {
-                name = parentName + DOT + hyphenatedFieldName;
+            if (name.isEmpty()) {
+                name = parentName + Constants.DOT + hyphenatedFieldName;
             }
 
-            if (NO_DEFAULT.equals(defaultValue)) {
-                defaultValue = EMPTY;
+            if (Constants.NO_DEFAULT.equals(defaultValue)) {
+                defaultValue = Constants.EMPTY;
             }
-            if (EMPTY.equals(defaultValue)) {
+            if (Constants.EMPTY.equals(defaultValue)) {
                 defaultValue = defaultValueDoc;
             }
 
-            if (isConfigGroup(type)) {
-                List<ConfigDocItem> groupConfigItems = readConfigGroupItems(configPhase, rootName, name, type,
-                        configSection, withinAMap, generateSeparateConfigGroupDocsFiles);
+            if (isConfigGroup) {
+                List<ConfigDocItem> groupConfigItems = recordConfigItemsFromConfigGroup(configPhase, rootName, name,
+                        configGroup,
+                        configSection, withinAMap, sectionLevel);
                 configDocItems.addAll(groupConfigItems);
             } else {
                 final ConfigDocKey configDocKey = new ConfigDocKey();
@@ -238,14 +211,16 @@ class ConfigDoItemFinder {
                         // FIXME: this is super dodgy: we should check the type!!
                         if (typeArguments.size() == 2) {
                             type = typeArguments.get(1).toString();
-                            if (isConfigGroup(type)) {
+                            configGroup = configGroups.get(type);
+
+                            if (configGroup != null) {
                                 name += String.format(NAMED_MAP_CONFIG_ITEM_FORMAT, configDocMapKey);
-                                List<ConfigDocItem> groupConfigItems = readConfigGroupItems(configPhase, rootName, name, type,
-                                        configSection, true, generateSeparateConfigGroupDocsFiles);
+                                List<ConfigDocItem> groupConfigItems = recordConfigItemsFromConfigGroup(configPhase,
+                                        rootName, name, configGroup, configSection, true, sectionLevel);
                                 configDocItems.addAll(groupConfigItems);
                                 continue;
                             } else {
-                                type = BACK_TICK + stringifyType(declaredType) + BACK_TICK;
+                                type = "`" + stringifyType(declaredType) + "`";
                                 configDocKey.setPassThroughMap(true);
                                 configDocKey.setWithinAMap(true);
                             }
@@ -255,19 +230,23 @@ class ConfigDoItemFinder {
                             String typeInString = realTypeMirror.toString();
 
                             if (optional) {
-                                if (isConfigGroup(typeInString)) {
-                                    if (!configSection.isShowSection()) {
-                                        final SectionHolder sectionHolder = javaDocParser.parseConfigSection(
+                                configGroup = configGroups.get(typeInString);
+                                if (configGroup != null) {
+                                    if (configSection == null) {
+                                        final JavaDocParser.SectionHolder sectionHolder = javaDocParser.parseConfigSection(
                                                 rawJavaDoc,
                                                 sectionLevel);
+                                        configSection = new ConfigDocSection();
+                                        configSection.setWithinAMap(withinAMap);
+                                        configSection.setTopLevelGrouping(rootName);
+                                        configSection.setConfigPhase(configPhase);
                                         configSection.setSectionDetails(sectionHolder.details);
                                         configSection.setSectionDetailsTitle(sectionHolder.title);
-                                        configSection.setName(parentName + DOT + hyphenatedFieldName);
-                                        configSection.setShowSection(true);
+                                        configSection.setName(parentName + Constants.DOT + hyphenatedFieldName);
                                     }
                                     configSection.setOptional(true);
-                                    List<ConfigDocItem> groupConfigItems = readConfigGroupItems(configPhase, rootName, name,
-                                            typeInString, configSection, withinAMap, generateSeparateConfigGroupDocsFiles);
+                                    List<ConfigDocItem> groupConfigItems = recordConfigItemsFromConfigGroup(
+                                            configPhase, rootName, name, configGroup, configSection, withinAMap, sectionLevel);
                                     configDocItems.addAll(groupConfigItems);
                                     continue;
                                 } else if ((typeInString.startsWith(List.class.getName())
@@ -309,7 +288,7 @@ class ConfigDoItemFinder {
                 configDocKey.setType(type);
                 configDocKey.setList(list);
                 configDocKey.setOptional(optional);
-                configDocKey.setWithinAConfigGroup(sectionLevel > 0);
+                configDocKey.setWithinAConfigGroup(sectionLevel > 2);
                 configDocKey.setTopLevelGrouping(rootName);
                 configDocKey.setConfigPhase(configPhase);
                 configDocKey.setDefaultValue(defaultValue);
@@ -326,11 +305,34 @@ class ConfigDoItemFinder {
         return configDocItems;
     }
 
-    private boolean isConfigGroup(String type) {
-        return configGroupDocs.containsKey(type) || configGroupQualifiedNameToTypeElementMap.containsKey(type);
+    private List<ConfigDocItem> recordConfigItemsFromConfigGroup(
+            ConfigPhase configPhase, String rootName, String name, Element configGroup, ConfigDocSection configSection,
+            boolean withinAMap, int sectionLevel) {
+        final List<ConfigDocItem> configDocItems = new ArrayList<>();
+        final List<ConfigDocItem> groupConfigItems = recursivelyFindConfigItems(configGroup, rootName, name, configPhase,
+                withinAMap, sectionLevel + 1);
+        if (configSection == null) {
+            configDocItems.addAll(groupConfigItems);
+        } else {
+            final ConfigDocItem configDocItem = new ConfigDocItem();
+            configDocItem.setConfigDocSection(configSection);
+            configDocItems.add(configDocItem);
+            configSection.addConfigDocItems(groupConfigItems);
+        }
+
+        String configGroupName = configGroup.asType().toString();
+        List<ConfigDocItem> previousConfigGroupConfigItems = holder.getConfigGroupConfigItems().get(configGroupName);
+        if (previousConfigGroupConfigItems == null) {
+            holder.addConfigGroupItems(configGroupName, groupConfigItems);
+        } else {
+            previousConfigGroupConfigItems.addAll(configDocItems);
+        }
+
+        return configDocItems;
     }
 
     private String simpleTypeToString(TypeMirror typeMirror) {
+
         if (typeMirror.getKind().isPrimitive()) {
             return typeMirror.toString();
         } else if (typeMirror.getKind() == TypeKind.ARRAY) {
@@ -368,116 +370,5 @@ class ConfigDoItemFinder {
     private boolean isEnumType(TypeMirror realTypeMirror) {
         return realTypeMirror instanceof DeclaredType
                 && ((DeclaredType) realTypeMirror).asElement().getKind() == ElementKind.ENUM;
-    }
-
-    /**
-     * Scan or parse configuration items of a given configuration group.
-     * <p>
-     * If the configuration group is already scanned, retrieve the scanned items and parse them
-     * If not, make sure that items of a given configuration group are properly scanned and the record of scanned
-     * configuration group if properly updated afterwards.
-     * 
-     */
-    private List<ConfigDocItem> readConfigGroupItems(ConfigPhase configPhase, String topLevelRootName, String parentName,
-            String configGroup, ConfigDocSection configSection, boolean withinAMap,
-            boolean generateSeparateConfigGroupDocs) throws JsonProcessingException {
-
-        configSection.setConfigGroupType(configGroup);
-        if (configSection.getSectionDetailsTitle() == null) {
-            configSection.setSectionDetailsTitle(parentName);
-        }
-
-        if (configSection.getName() == null) {
-            configSection.setName(EMPTY);
-        }
-
-        final List<ConfigDocItem> configDocItems = new ArrayList<>();
-        String property = configGroupDocs.getProperty(configGroup);
-        List<ConfigDocItem> groupConfigItems;
-        if (property != null) {
-            groupConfigItems = OBJECT_MAPPER.readValue(property, LIST_OF_CONFIG_ITEMS_TYPE_REF);
-        } else {
-            TypeElement configGroupTypeElement = configGroupQualifiedNameToTypeElementMap.get(configGroup);
-            groupConfigItems = recursivelyFindConfigItems(configGroupTypeElement, EMPTY, EMPTY, configPhase,
-                    false, 1, generateSeparateConfigGroupDocs);
-            configGroupDocs.put(configGroup, OBJECT_MAPPER.writeValueAsString(groupConfigItems));
-        }
-
-        groupConfigItems = decorateGroupItems(groupConfigItems, configPhase, topLevelRootName, parentName, withinAMap,
-                generateSeparateConfigGroupDocs);
-
-        // make sure that the config section is added  if it is to be shown or when scanning parent configuration group 
-        // priory to scanning configuration roots. This is useful as we get indication of whether the config items are part 
-        // of a configuration section (i.e configuration group) we are current scanning. 
-        if (configSection.isShowSection() || !generateSeparateConfigGroupDocs) {
-            final ConfigDocItem configDocItem = new ConfigDocItem();
-            configDocItem.setConfigDocSection(configSection);
-            configDocItems.add(configDocItem);
-            configSection.addConfigDocItems(groupConfigItems);
-        } else {
-            configDocItems.addAll(groupConfigItems);
-        }
-
-        if (generateSeparateConfigGroupDocs) {
-            addConfigGroupItemToHolder(configDocItems, configGroup);
-        }
-
-        return configDocItems;
-    }
-
-    /**
-     * Add some information which are missing from configuration items scanned from configuration groups.
-     * The missing information come from configuration roots and these are config phase, top level root name and parent name (as
-     * we are traversing down the tree)
-     */
-    private List<ConfigDocItem> decorateGroupItems(List<ConfigDocItem> groupConfigItems, ConfigPhase configPhase,
-            String topLevelRootName, String parentName, boolean withinAMap, boolean generateSeparateConfigGroupDocs) {
-        List<ConfigDocItem> decoratedItems = new ArrayList<>();
-        for (ConfigDocItem configDocItem : groupConfigItems) {
-            if (configDocItem.isConfigKey()) {
-                ConfigDocKey configDocKey = configDocItem.getConfigDocKey();
-                configDocKey.setConfigPhase(configPhase);
-                configDocKey.setWithinAMap(configDocKey.isWithinAMap() || withinAMap);
-                configDocKey.setWithinAConfigGroup(true);
-                configDocKey.setTopLevelGrouping(topLevelRootName);
-                configDocKey.setKey(parentName + configDocKey.getKey());
-                decoratedItems.add(configDocItem);
-            } else {
-                ConfigDocSection section = configDocItem.getConfigDocSection();
-                section.setConfigPhase(configPhase);
-                section.setTopLevelGrouping(topLevelRootName);
-                section.setWithinAMap(section.isWithinAMap() || withinAMap);
-                section.setName(parentName + section.getName());
-                List<ConfigDocItem> configDocItems = decorateGroupItems(
-                        section.getConfigDocItems(),
-                        configPhase,
-                        topLevelRootName,
-                        parentName,
-                        section.isWithinAMap(),
-                        generateSeparateConfigGroupDocs);
-                String configGroupType = section.getConfigGroupType();
-                if (generateSeparateConfigGroupDocs) {
-                    addConfigGroupItemToHolder(configDocItems, configGroupType);
-                }
-
-                if (section.isShowSection()) {
-                    decoratedItems.add(configDocItem);
-                } else {
-                    decoratedItems.addAll(configDocItems);
-                }
-            }
-        }
-
-        return decoratedItems;
-    }
-
-    private void addConfigGroupItemToHolder(List<ConfigDocItem> configDocItems, String configGroupType) {
-        List<ConfigDocItem> previousConfigGroupConfigItems = holder.getConfigGroupConfigItems()
-                .get(configGroupType);
-        if (previousConfigGroupConfigItems == null) {
-            holder.addConfigGroupItems(configGroupType, configDocItems);
-        } else {
-            previousConfigGroupConfigItems.addAll(configDocItems);
-        }
     }
 }
