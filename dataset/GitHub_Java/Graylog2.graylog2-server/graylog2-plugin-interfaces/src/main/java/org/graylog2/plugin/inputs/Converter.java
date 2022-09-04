@@ -36,8 +36,7 @@ public abstract class Converter {
         HASH,
         SPLIT_AND_COUNT,
         SYSLOG_PRI_LEVEL,
-        SYSLOG_PRI_FACILITY,
-        IP_ANONYMIZER
+        SYSLOG_PRI_FACILITY
     }
 
     private final Type type;
