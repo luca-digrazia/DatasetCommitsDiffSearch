@@ -49,14 +49,7 @@ public class DateConverter extends Converter {
             return value;
         }
 
-        DateTime localNow = new DateTime();
-
-        return DateTime.parse(value,DateTimeFormat.forPattern(dateFormat).withDefaultYear(localNow.getYear()));
-    }
-
-    @Override
-    public boolean buildsMultipleFields() {
-        return false;
+        return DateTime.parse(value, DateTimeFormat.forPattern(dateFormat));
     }
 
 }
