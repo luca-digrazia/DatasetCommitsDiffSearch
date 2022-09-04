@@ -443,7 +443,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     // This may be recreated if we discover inputs.
     // TODO(shahan): this isn't used when using ActionFileSystem so we can avoid creating some
     // unused objects.
-    MetadataProvider perActionFileCache = skyframeActionExecutor.usePerActionFileCache()
+    MetadataProvider perActionFileCache = skyframeActionExecutor.usePerFileActionCache()
         ? new PerActionFileCache(
             state.inputArtifactData, /*missingArtifactsAllowed=*/ action.discoversInputs())
         : metadataHandler;
@@ -487,7 +487,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       // Set the MetadataHandler to accept output information.
       metadataHandler.discardOutputMetadata();
 
-      perActionFileCache = skyframeActionExecutor.usePerActionFileCache()
+      perActionFileCache = skyframeActionExecutor.usePerFileActionCache()
           ? new PerActionFileCache(state.inputArtifactData, /*missingArtifactsAllowed=*/ false)
           : metadataHandler;
     }
