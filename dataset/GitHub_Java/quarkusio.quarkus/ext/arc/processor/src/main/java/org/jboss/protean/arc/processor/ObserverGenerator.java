@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.protean.arc.processor;
 
 import static org.objectweb.asm.Opcodes.ACC_FINAL;
@@ -32,7 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Predicate;
 
 import javax.enterprise.inject.spi.EventContext;
 import javax.enterprise.inject.spi.ObserverMethod;
@@ -70,15 +53,12 @@ public class ObserverGenerator extends AbstractGenerator {
 
     private final AnnotationLiteralProcessor annotationLiterals;
 
-    private final Predicate<DotName> applicationClassPredicate;
     /**
      *
      * @param annotationLiterals
-     * @param applicationClassPredicate
      */
-    public ObserverGenerator(AnnotationLiteralProcessor annotationLiterals, Predicate<DotName> applicationClassPredicate) {
+    public ObserverGenerator(AnnotationLiteralProcessor annotationLiterals) {
         this.annotationLiterals = annotationLiterals;
-        this.applicationClassPredicate = applicationClassPredicate;
     }
 
     /**
@@ -99,7 +79,7 @@ public class ObserverGenerator extends AbstractGenerator {
         String baseName = declaringClassBase + OBSERVER_SUFFIX + OBSERVER_INDEX.incrementAndGet();
         String generatedName = DotNames.packageName(declaringClass.name()).replace('.', '/') + "/" + baseName;
 
-        ResourceClassOutput classOutput = new ResourceClassOutput(applicationClassPredicate.test(observer.getObserverMethod().declaringClass().name()), name -> name.equals(generatedName) ? SpecialType.OBSERVER : null);
+        ResourceClassOutput classOutput = new ResourceClassOutput(name -> name.equals(generatedName) ? SpecialType.OBSERVER : null);
 
         // Foo_Observer1 implements ObserverMethod<T>
         ClassCreator observerCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName).interfaces(InjectableObserverMethod.class)

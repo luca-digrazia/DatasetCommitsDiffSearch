@@ -1,46 +1,41 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.protean.arc.processor;
 
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Predicate;
 
 import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.DotName;
-import org.jboss.protean.arc.processor.AnnotationStore.TransformationContextImpl;
-import org.jboss.protean.arc.processor.AnnotationsTransformer.TransformationContext;
 
 /**
  * Convenient helper class.
  */
 public final class Transformation {
 
-    private final TransformationContextImpl transformationContext;
+    /**
+     *
+     * @param target
+     * @param annotations
+     * @return a new transformation
+     */
+    public static Transformation with(AnnotationTarget target, Collection<AnnotationInstance> annotations) {
+        Objects.requireNonNull(target);
+        Objects.requireNonNull(annotations);
+        return new Transformation(target, annotations);
+    }
+
+    private final AnnotationTarget target;
 
     private final List<AnnotationInstance> modified;
 
-    public Transformation(TransformationContextImpl transformationContext) {
-        this.transformationContext = transformationContext;
-        this.modified = new ArrayList<>(transformationContext.getAnnotations());
+    public Transformation(AnnotationTarget target, Collection<AnnotationInstance> annotations) {
+        this.target = target;
+        this.modified = new ArrayList<>(annotations);
     }
 
     public Transformation add(AnnotationInstance annotation) {
@@ -48,23 +43,13 @@ public final class Transformation {
         return this;
     }
 
-    public Transformation addAll(Collection<AnnotationInstance> annotations) {
-        modified.addAll(annotations);
-        return this;
-    }
-    
-    public Transformation addAll(AnnotationInstance... annotations) {
-        Collections.addAll(modified, annotations);
-        return this;
-    }
-    
     public Transformation add(Class<? extends Annotation> annotationType, AnnotationValue... values) {
         add(DotNames.create(annotationType.getName()), values);
         return this;
     }
 
     public Transformation add(DotName name, AnnotationValue... values) {
-        add(AnnotationInstance.create(name, transformationContext.getTarget(), values));
+        add(AnnotationInstance.create(name, target, values));
         return this;
     }
 
@@ -72,19 +57,9 @@ public final class Transformation {
         modified.removeIf(predicate);
         return this;
     }
-    
-    public Transformation removeAll() {
-        modified.clear();
-        return this;
-    }
 
-    /**
-     * Applies the transformation.
-     * 
-     * @see TransformationContext#getAnnotations()
-     */
-    public void done() {
-        transformationContext.setAnnotations(modified);
+    public Collection<AnnotationInstance> done() {
+        return modified;
     }
 
 }

@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.protean.arc.processor;
 
 import static org.objectweb.asm.Opcodes.ACC_FINAL;
@@ -26,14 +10,12 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Predicate;
 
 import javax.enterprise.inject.spi.InterceptionType;
 import javax.interceptor.InvocationContext;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
-import org.jboss.jandex.DotName;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
@@ -64,8 +46,8 @@ public class InterceptorGenerator extends BeanGenerator {
      *
      * @param annotationLiterals
      */
-    public InterceptorGenerator(AnnotationLiteralProcessor annotationLiterals, Predicate<DotName> applicationClassPredicate) {
-        super(annotationLiterals, applicationClassPredicate);
+    public InterceptorGenerator(AnnotationLiteralProcessor annotationLiterals) {
+        super(annotationLiterals);
     }
 
     /**
@@ -89,7 +71,7 @@ public class InterceptorGenerator extends BeanGenerator {
         String targetPackage = DotNames.packageName(providerType.name());
         String generatedName = targetPackage.replace('.', '/') + "/" + baseName + BEAN_SUFFIX;
 
-        ResourceClassOutput classOutput = new ResourceClassOutput(applicationClassPredicate.test(interceptor.getBeanClass()), name -> name.equals(generatedName) ? SpecialType.INTERCEPTOR_BEAN : null);
+        ResourceClassOutput classOutput = new ResourceClassOutput(name -> name.equals(generatedName) ? SpecialType.INTERCEPTOR_BEAN : null);
 
         // MyInterceptor_Bean implements InjectableInterceptor<T>
         ClassCreator interceptorCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName).interfaces(InjectableInterceptor.class)
@@ -106,8 +88,6 @@ public class InterceptorGenerator extends BeanGenerator {
         createProviderFields(interceptorCreator, interceptor, injectionPointToProviderField, interceptorToProviderField);
         createConstructor(classOutput, interceptorCreator, interceptor, baseName, injectionPointToProviderField, interceptorToProviderField,
                 bindings.getFieldDescriptor());
-
-        implementGetIdentifier(interceptor, interceptorCreator);
         implementCreate(classOutput, interceptorCreator, interceptor, providerTypeName, baseName, injectionPointToProviderField, interceptorToProviderField,
                 reflectionRegistration, targetPackage);
         implementGet(interceptor, interceptorCreator, providerTypeName);

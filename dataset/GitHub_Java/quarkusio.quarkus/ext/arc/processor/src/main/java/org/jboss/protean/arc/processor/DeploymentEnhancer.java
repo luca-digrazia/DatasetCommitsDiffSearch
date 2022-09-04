@@ -5,7 +5,7 @@ package org.jboss.protean.arc.processor;
  *
  * @author Martin Kouba
  */
-public interface DeploymentEnhancer extends BuildExtension {
+public interface DeploymentEnhancer extends BuildProcessor {
 
     /**
      *
@@ -13,7 +13,7 @@ public interface DeploymentEnhancer extends BuildExtension {
      */
     void enhance(DeploymentContext deploymentContext);
 
-    interface DeploymentContext extends BuildContext {
+    interface DeploymentContext {
 
         /**
          *

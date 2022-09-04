@@ -56,7 +56,7 @@ public final class BeanConfigurator<T> {
      * @param beanDeployment
      * @param beanConsumer
      */
-    BeanConfigurator(Class<?> implClass, BeanDeployment beanDeployment, Consumer<BeanInfo> beanConsumer) {
+    BeanConfigurator(Class<T> implClass, BeanDeployment beanDeployment, Consumer<BeanInfo> beanConsumer) {
         this.beanDeployment = beanDeployment;
         this.beanConsumer = beanConsumer;
         this.implClass = beanDeployment.getIndex().getClassByName(DotName.createSimple(implClass.getName()));
@@ -129,7 +129,7 @@ public final class BeanConfigurator<T> {
         return this;
     }
 
-    public <U extends T> BeanConfigurator<U> creator(Class<? extends BeanCreator<U>> creatorClazz) {
+    public BeanConfigurator<T> creator(Class<? extends BeanCreator<T>> creatorClazz) {
         return creator(mc -> {
             // return new FooBeanCreator().create(context, params)
             // TODO verify, optimize, etc.
@@ -143,12 +143,12 @@ public final class BeanConfigurator<T> {
         });
     }
 
-    public <U extends T> BeanConfigurator<U> creator(Consumer<MethodCreator> methodCreatorConsumer) {
+    public BeanConfigurator<T> creator(Consumer<MethodCreator> methodCreatorConsumer) {
         this.creatorConsumer = methodCreatorConsumer;
-        return cast(this);
+        return this;
     }
 
-    public <U extends T> BeanConfigurator<U> destroyer(Class<? extends BeanDestroyer<U>> destroyerClazz) {
+    public BeanConfigurator<T> destroyer(Class<? extends BeanDestroyer<T>> destroyerClazz) {
         return destroyer(mc -> {
             // new FooBeanDestroyer().destroy(instance, context, params)
             // TODO verify, optimize, etc.
@@ -162,9 +162,9 @@ public final class BeanConfigurator<T> {
         });
     }
 
-    public <U extends T> BeanConfigurator<U> destroyer(Consumer<MethodCreator> methodCreatorConsumer) {
+    public BeanConfigurator<T> destroyer(Consumer<MethodCreator> methodCreatorConsumer) {
         this.destroyerConsumer = methodCreatorConsumer;
-        return cast(this);
+        return this;
     }
 
     // TODO stereotypes?
@@ -176,11 +176,6 @@ public final class BeanConfigurator<T> {
         // TODO sanity checks
         beanConsumer.accept(new BeanInfo.Builder().implClazz(implClass).beanDeployment(beanDeployment).scope(scope).types(types).qualifiers(qualifiers)
                 .alternativePriority(alternativePriority).creator(creatorConsumer).destroyer(destroyerConsumer).params(params).build());
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T> T cast(Object obj) {
-        return (T) obj;
     }
 
 }
