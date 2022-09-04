@@ -266,7 +266,7 @@ public class ServerIntFloatRow extends ServerFloatRow {
   }
 
   @Override protected void serializeRow(ByteBuf buf) {
-    if (useDenseSerialize()) {
+    if (isDense()) {
       float[] values = getValues();
       for (int i = 0; i < values.length; i++) {
         buf.writeFloat(values[i]);
@@ -286,9 +286,10 @@ public class ServerIntFloatRow extends ServerFloatRow {
     startColInt = (int) startCol;
     endColInt = (int) endCol;
     intFloatRow = (IntFloatVector) row;
-    if (useDenseSerialize()) {
+    if (intFloatRow.isDense()) {
+      float[] values = getValues();
       for (int i = 0; i < size; i++) {
-        intFloatRow.set(i, buf.readFloat());
+        values[i] = buf.readFloat();
       }
     } else {
       for (int i = 0; i < size; i++) {
@@ -298,7 +299,7 @@ public class ServerIntFloatRow extends ServerFloatRow {
   }
 
   @Override protected int getRowSpace() {
-    if (useDenseSerialize()) {
+    if (isDense()) {
       return 4 * size();
     } else {
       return 8 * size();

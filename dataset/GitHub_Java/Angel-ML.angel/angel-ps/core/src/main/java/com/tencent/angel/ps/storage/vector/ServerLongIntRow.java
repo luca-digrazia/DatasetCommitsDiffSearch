@@ -274,43 +274,38 @@ public class ServerLongIntRow extends ServerIntRow {
   }
 
   @Override protected void serializeRow(ByteBuf buf) {
-    if(useIntKeySerialize()) {
-      if(useDenseSerialize()) {
-        int[] values = getValues();
-        for (int i = 0; i < values.length; i++) {
-          buf.writeInt(values[i]);
-        }
-      } else {
+    if(isDense()) {
+      int[] values = getValues();
+      for (int i = 0; i < values.length; i++) {
+        buf.writeLong(i);
+        buf.writeInt(values[i]);
+      }
+    } else {
+      if(useIntKey) {
         ObjectIterator<Int2IntMap.Entry> iter = ((IntIntVector) row).getStorage().entryIterator();
         Int2IntMap.Entry entry;
         while (iter.hasNext()) {
           entry = iter.next();
-          buf.writeInt(entry.getIntKey());
+          buf.writeLong(entry.getIntKey());
           buf.writeInt(entry.getIntValue());
         }
-      }
-    } else {
-      ObjectIterator<Long2IntMap.Entry> iter = ((LongIntVector) row).getStorage().entryIterator();
-      Long2IntMap.Entry entry;
-      while (iter.hasNext()) {
-        entry = iter.next();
-        buf.writeLong(entry.getLongKey());
-        buf.writeInt(entry.getIntValue());
+      } else {
+        ObjectIterator<Long2IntMap.Entry> iter = ((LongIntVector) row).getStorage().entryIterator();
+        Long2IntMap.Entry entry;
+        while (iter.hasNext()) {
+          entry = iter.next();
+          buf.writeLong(entry.getLongKey());
+          buf.writeInt(entry.getIntValue());
+        }
       }
     }
   }
 
   @Override protected void deserializeRow(ByteBuf buf) {
-    if(useIntKeySerialize()) {
+    if(useIntKey) {
       IntIntVector intIntRow = (IntIntVector) row;
-      if(useDenseSerialize()) {
-        for (int i = 0; i < size; i++) {
-          intIntRow.set(i, buf.readInt());
-        }
-      } else {
-        for (int i = 0; i < size; i++) {
-          intIntRow.set(buf.readInt(), buf.readInt());
-        }
+      for (int i = 0; i < size; i++) {
+        intIntRow.set((int)buf.readLong(), buf.readInt());
       }
     } else {
       LongIntVector longIntRow = (LongIntVector) row;
@@ -321,15 +316,7 @@ public class ServerLongIntRow extends ServerIntRow {
   }
 
   @Override protected int getRowSpace() {
-    if(useIntKeySerialize()) {
-      if(useDenseSerialize()) {
-        return size * 4;
-      } else {
-        return size * 8;
-      }
-    } else {
-      return size * 12;
-    }
+    return size() * 16;
   }
 
   @Override public ServerRow clone() {

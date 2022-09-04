@@ -281,43 +281,38 @@ public class ServerLongLongRow extends ServerRow {
   }
 
   @Override protected void serializeRow(ByteBuf buf) {
-    if(useIntKeySerialize()) {
-      if(useDenseSerialize()) {
-        long[] values = getValues();
-        for (int i = 0; i < values.length; i++) {
-          buf.writeLong(values[i]);
-        }
-      } else {
+    if(isDense()) {
+      long[] values = getValues();
+      for (int i = 0; i < values.length; i++) {
+        buf.writeLong(i);
+        buf.writeLong(values[i]);
+      }
+    } else {
+      if(useIntKey) {
         ObjectIterator<Int2LongMap.Entry> iter = ((IntLongVector) row).getStorage().entryIterator();
         Int2LongMap.Entry entry;
         while (iter.hasNext()) {
           entry = iter.next();
-          buf.writeInt(entry.getIntKey());
+          buf.writeLong(entry.getIntKey());
           buf.writeLong(entry.getLongValue());
         }
-      }
-    } else {
-      ObjectIterator<Long2LongMap.Entry> iter = ((LongLongVector) row).getStorage().entryIterator();
-      Long2LongMap.Entry entry;
-      while (iter.hasNext()) {
-        entry = iter.next();
-        buf.writeLong(entry.getLongKey());
-        buf.writeLong(entry.getLongValue());
+      } else {
+        ObjectIterator<Long2LongMap.Entry> iter = ((LongLongVector) row).getStorage().entryIterator();
+        Long2LongMap.Entry entry;
+        while (iter.hasNext()) {
+          entry = iter.next();
+          buf.writeLong(entry.getLongKey());
+          buf.writeLong(entry.getLongValue());
+        }
       }
     }
   }
 
   @Override protected void deserializeRow(ByteBuf buf) {
-    if(useIntKeySerialize()) {
+    if(useIntKey) {
       IntLongVector IntLongRow = (IntLongVector) row;
-      if(useDenseSerialize()) {
-        for (int i = 0; i < size; i++) {
-          IntLongRow.set(i, buf.readLong());
-        }
-      } else {
-        for (int i = 0; i < size; i++) {
-          IntLongRow.set(buf.readInt(), buf.readLong());
-        }
+      for (int i = 0; i < size; i++) {
+        IntLongRow.set((int)buf.readLong(), buf.readLong());
       }
     } else {
       LongLongVector longLongRow = (LongLongVector) row;

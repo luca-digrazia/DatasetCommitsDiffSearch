@@ -276,43 +276,38 @@ public class ServerLongDoubleRow extends ServerDoubleRow {
   }
 
   @Override protected void serializeRow(ByteBuf buf) {
-    if(useIntKeySerialize()) {
-      if(useDenseSerialize()) {
-        double[] values = getValues();
-        for (int i = 0; i < values.length; i++) {
-          buf.writeDouble(values[i]);
-        }
-      } else {
+    if(isDense()) {
+      double[] values = getValues();
+      for (int i = 0; i < values.length; i++) {
+        buf.writeLong(i);
+        buf.writeDouble(values[i]);
+      }
+    } else {
+      if(useIntKey) {
         ObjectIterator<Int2DoubleMap.Entry> iter = ((IntDoubleVector) row).getStorage().entryIterator();
         Int2DoubleMap.Entry entry;
         while (iter.hasNext()) {
           entry = iter.next();
-          buf.writeInt(entry.getIntKey());
+          buf.writeLong(entry.getIntKey());
           buf.writeDouble(entry.getDoubleValue());
         }
-      }
-    } else {
-      ObjectIterator<Long2DoubleMap.Entry> iter = ((LongDoubleVector) row).getStorage().entryIterator();
-      Long2DoubleMap.Entry entry;
-      while (iter.hasNext()) {
-        entry = iter.next();
-        buf.writeLong(entry.getLongKey());
-        buf.writeDouble(entry.getDoubleValue());
+      } else {
+        ObjectIterator<Long2DoubleMap.Entry> iter = ((LongDoubleVector) row).getStorage().entryIterator();
+        Long2DoubleMap.Entry entry;
+        while (iter.hasNext()) {
+          entry = iter.next();
+          buf.writeLong(entry.getLongKey());
+          buf.writeDouble(entry.getDoubleValue());
+        }
       }
     }
   }
 
   @Override protected void deserializeRow(ByteBuf buf) {
-    if(useIntKeySerialize()) {
+    if(useIntKey) {
       IntDoubleVector intDoubleRow = (IntDoubleVector) row;
-      if(useDenseSerialize()) {
-        for (int i = 0; i < size; i++) {
-          intDoubleRow.set(i, buf.readDouble());
-        }
-      } else {
-        for (int i = 0; i < size; i++) {
-          intDoubleRow.set(buf.readInt(), buf.readDouble());
-        }
+      for (int i = 0; i < size; i++) {
+        intDoubleRow.set((int)buf.readLong(), buf.readDouble());
       }
     } else {
       LongDoubleVector longDoubleRow = (LongDoubleVector) row;
@@ -323,15 +318,7 @@ public class ServerLongDoubleRow extends ServerDoubleRow {
   }
 
   @Override protected int getRowSpace() {
-    if(useIntKeySerialize()) {
-      if(useDenseSerialize()) {
-        return size * 8;
-      } else {
-        return size * 12;
-      }
-    } else {
-      return size * 16;
-    }
+    return size() * 16;
   }
 
   @Override public ServerRow clone() {
