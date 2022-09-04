@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,12 +13,14 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.base.mlp;
 
 /**
  * The builder of layers.
+ *
+ * @author Haifeng Li
  */
 public abstract class LayerBuilder {
 
@@ -33,7 +35,10 @@ public abstract class LayerBuilder {
         this.n = n;
     }
 
-    /** Returns the number of neurons. */
+    /**
+     * Returns the number of neurons.
+     * @return the number of neurons.
+     */
     public int neurons() {
         return n;
     }
@@ -42,6 +47,7 @@ public abstract class LayerBuilder {
      * Creates a hidden layer.
      *
      * @param p the number of input variables (not including bias value).
+     * @return a hidden layer.
      */
     public abstract Layer build(int p);
 }

@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,24 +13,27 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.base.mlp;
 
 /**
  * The builder of output layers.
+ *
+ * @author Haifeng Li
  */
-class OutputLayerBuilder extends LayerBuilder {
+public class OutputLayerBuilder extends LayerBuilder {
 
     /** The output function. */
-    private OutputFunction f;
+    private final OutputFunction f;
     /** The cost function. */
-    private Cost cost;
+    private final Cost cost;
 
     /**
      * Constructor.
      * @param n the number of neurons.
      * @param f the activation function.
+     * @param cost the cost function.
      */
     public OutputLayerBuilder(int n, OutputFunction f, Cost cost) {
         super(n);

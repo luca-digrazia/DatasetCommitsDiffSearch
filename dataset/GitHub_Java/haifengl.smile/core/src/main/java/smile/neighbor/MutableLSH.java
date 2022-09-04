@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,16 +13,21 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.neighbor;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import smile.neighbor.lsh.Bucket;
 import smile.neighbor.lsh.Hash;
 
-/** Mutable LSH. */
+/**
+ * Mutable LSH.
+ *
+ * @author Haifeng Li
+ */
 public class MutableLSH<E> extends LSH<E> {
     /**
      * Constructor.
@@ -62,6 +67,8 @@ public class MutableLSH<E> extends LSH<E> {
 
     /**
      * Remove an entry from the hash table.
+     * @param key the key.
+     * @param value the value.
      */
     public void remove(double[] key, E value) {
         int n = data.size();
@@ -85,8 +92,10 @@ public class MutableLSH<E> extends LSH<E> {
     }
 
     /**
-     * Update an entry with new key.
-     */
+     * Update an entry with new key. Note that the new key and old key
+     * should not be the same object.
+     * @param key the key.
+     * @param value the value.     */
     public void update(double[] key, E value) {
         int n = data.size();
         for (int i = 0; i < n; i++) {
@@ -109,13 +118,19 @@ public class MutableLSH<E> extends LSH<E> {
         throw new IllegalArgumentException("Update non-exist element");
     }
 
-    /** Returns the keys. */
+    /**
+     * Returns the keys.
+     * @return the keys.
+     */
     public List<double[]> keys() {
-        return keys.stream().filter(key -> key != null).collect(Collectors.toList());
+        return keys.stream().filter(Objects::nonNull).collect(Collectors.toList());
     }
 
-    /** Returns the values. */
+    /**
+     * Returns the values.
+     * @return the values.
+     */
     public List<E> values() {
-        return data.stream().filter(value -> value != null).collect(Collectors.toList());
+        return data.stream().filter(Objects::nonNull).collect(Collectors.toList());
     }
 }

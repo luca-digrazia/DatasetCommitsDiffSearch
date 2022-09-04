@@ -95,8 +95,8 @@ public abstract class Layer implements Serializable {
      * @param bias the bias vector.
      */
     public Layer(Matrix weight, double[] bias) {
-        this.n = weight.nrow();
-        this.p = weight.ncol();
+        this.n = weight.nrows();
+        this.p = weight.ncols();
         this.weight = weight;
         this.bias = bias;
 
@@ -105,9 +105,6 @@ public abstract class Layer implements Serializable {
 
     /**
      * Initializes the workspace when deserializing the object.
-     * @param in the input stream.
-     * @throws IOException when fails to read the stream.
-     * @throws ClassNotFoundException when fails to load the class.
      */
     private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
         in.defaultReadObject();

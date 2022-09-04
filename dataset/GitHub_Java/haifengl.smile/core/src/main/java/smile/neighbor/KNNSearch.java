@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.neighbor;
 
@@ -31,10 +31,11 @@ package smile.neighbor;
  */
 public interface KNNSearch<K, V> {
     /**
-     * Search the k nearest neighbors to the query.
+     * Search the k nearest neighbors to the query key.
      *
      * @param q the query key.
      * @param k the number of nearest neighbors to search for.
+     * @return the k nearest neighbors
      */
     Neighbor<K,V>[] knn(K q, int k);
 }

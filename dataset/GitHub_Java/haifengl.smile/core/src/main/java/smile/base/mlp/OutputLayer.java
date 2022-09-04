@@ -27,40 +27,40 @@ public class OutputLayer extends Layer {
 
     /** The cost function. */
     private final Cost cost;
-    /** The output activation function. */
-    private final OutputFunction activation;
+    /** The output function. */
+    private final OutputFunction f;
 
     /**
      * Constructor.
      * @param n the number of neurons.
      * @param p the number of input variables (not including bias value).
-     * @param activation the output activation function.
+     * @param f the output function.
      * @param cost the cost function.
      */
-    public OutputLayer(int n, int p, OutputFunction activation, Cost cost) {
+    public OutputLayer(int n, int p, OutputFunction f, Cost cost) {
         super(n, p);
 
         switch (cost) {
             case MEAN_SQUARED_ERROR:
-                if (activation == OutputFunction.SOFTMAX) {
+                if (f == OutputFunction.SOFTMAX) {
                     throw new IllegalArgumentException("Softmax output function is not allowed with mean squared error cost function");
                 }
                 break;
 
             case LIKELIHOOD:
-                if (activation == OutputFunction.LINEAR) {
+                if (f == OutputFunction.LINEAR) {
                     throw new IllegalArgumentException("Linear output function is not allowed with likelihood cost function");
                 }
                 break;
         }
 
-        this.activation = activation;
+        this.f = f;
         this.cost = cost;
     }
 
     @Override
     public String toString() {
-        return String.format("%s(%d) | %s", activation.name(), n, cost);
+        return String.format("%s(%d) | %s", f.name(), n, cost);
     }
 
     /**
@@ -72,8 +72,8 @@ public class OutputLayer extends Layer {
     }
 
     @Override
-    public void transform(double[] x) {
-        activation.f(x);
+    public void f(double[] x) {
+        f.f(x);
     }
 
     @Override
@@ -99,7 +99,7 @@ public class OutputLayer extends Layer {
             outputGradient[i] = target[i] - output[i];
         }
 
-        activation.g(cost, outputGradient, output);
+        f.g(cost, outputGradient, output);
 
         if (weight > 0.0 && weight != 1.0) {
             for (int i = 0; i < n; i++) {
