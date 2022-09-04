@@ -44,8 +44,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static com.codahale.metrics.MetricRegistry.name;
-
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
@@ -211,7 +209,6 @@ public class ExtractorsResource extends RestResource {
         map.put("extractor_config", extractor.getExtractorConfig());
         map.put("creator_user_id", extractor.getCreatorUserId());
         map.put("converters", extractor.converterConfigMap());
-        map.put("metrics", buildMetricsMap(core.metrics().getTimers().get(extractor.getTotalTimerName())));
 
         return map;
     }
