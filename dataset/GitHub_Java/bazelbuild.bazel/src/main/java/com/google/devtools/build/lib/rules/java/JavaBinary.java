@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
-import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -543,23 +542,19 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
       commandLine.addFormatted("-XX:SharedArchiveConfigFile=%s", configFile.getExecPath());
     }
     commandLine.add("-cp").addExecPath(merged);
-    SpawnAction.Builder spawnAction = new SpawnAction.Builder();
     if (ruleContext.getRule().isAttrDefined("jvm_flags_for_cds_image_creation", Type.STRING_LIST)) {
       commandLine.addAll(
-          ruleContext
-              .getExpander()
-              .withDataExecLocations()
-              .list("jvm_flags_for_cds_image_creation"));
-      spawnAction.addTransitiveInputs(
-          PrerequisiteArtifacts.nestedSet(ruleContext, "data", TransitionMode.TARGET));
+          ruleContext.getExpander().withDataLocations().list("jvm_flags_for_cds_image_creation"));
     }
-    spawnAction
-        .setExecutable(javaRuntime.javaBinaryExecPathFragment())
-        .addCommandLine(commandLine.build())
-        .addOutput(jsa)
-        .addInput(classlist)
-        .addInput(merged)
-        .addTransitiveInputs(javaRuntime.javaBaseInputsMiddleman());
+
+    SpawnAction.Builder spawnAction =
+        new SpawnAction.Builder()
+            .setExecutable(javaRuntime.javaBinaryExecPathFragment())
+            .addCommandLine(commandLine.build())
+            .addOutput(jsa)
+            .addInput(classlist)
+            .addInput(merged)
+            .addTransitiveInputs(javaRuntime.javaBaseInputsMiddleman());
     if (configFile != null) {
       spawnAction.addInput(configFile);
     }
