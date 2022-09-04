@@ -19,6 +19,8 @@
  */
 package org.graylog2.rest.resources.users.requests;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.List;
 
 /**
@@ -28,7 +30,9 @@ public class CreateRequest {
 
     public String username;
     public String password;
-    public String email;
-    public String fullname;
+
+    @JsonProperty("full_name")
+    public String fullName;
+
     public List<String> permissions;
 }

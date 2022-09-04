@@ -62,7 +62,7 @@ public class MongoDbRealm extends AuthorizingRealm {
             throw new IllegalArgumentException("Only implemented for UsernamePasswordToken currently.");
         }
         UsernamePasswordToken token = (UsernamePasswordToken) authToken;
-        log.debug("Retrieving authc info for user {}", token.getUsername());
+        log.info("Retrieving authc info for user {}", token.getUsername());
 
         final SimpleAccount simpleAccount;
         if (User.exists(token.getUsername(), new String(token.getPassword()), core)) {
@@ -70,7 +70,7 @@ public class MongoDbRealm extends AuthorizingRealm {
                     token.getCredentials(),
                     ByteSource.Util.bytes(core.getConfiguration().getPasswordSecret()),
                     "graylog2MongoDbRealm");
-            log.debug("User {} authenticated by hashed password", token.getUsername());
+            log.info("User {} authenticated by hashed password", token.getUsername());
         } else {
             log.warn("User {} could not be authenticated", token.getUsername());
             throw new AuthenticationException("Unknown user or wrong credentials.");

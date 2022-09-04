@@ -20,13 +20,12 @@
 package org.graylog2.security;
 
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.apache.shiro.authz.annotation.RequiresGuest;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.apache.shiro.util.ThreadContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.container.*;
+import javax.ws.rs.container.DynamicFeature;
+import javax.ws.rs.container.ResourceInfo;
 import javax.ws.rs.core.FeatureContext;
 import java.lang.reflect.Method;
 
@@ -43,12 +42,8 @@ public class ShiroSecurityBinding implements DynamicFeature {
 
         if (resourceMethod.isAnnotationPresent(RequiresAuthentication.class) ||
                 resourceClass.isAnnotationPresent(RequiresAuthentication.class)) {
-            if (resourceMethod.isAnnotationPresent(RequiresGuest.class)) {
-                log.info("Resource method {}#{} is marked as unauthenticated, skipping setting filter.");
-            } else {
-                log.info("Resource method {}#{} requires an authenticated user.", resourceClass.getCanonicalName(), resourceMethod.getName());
-                context.register(new ShiroAuthenticationFilter());
-            }
+            log.info("Resource method {}#{} requires an authenticated user.", resourceClass.getCanonicalName(), resourceMethod.getName());
+            context.register(new ShiroAuthenticationFilter());
         }
         if (resourceMethod.isAnnotationPresent(RequiresPermissions.class) ||
                 resourceClass.isAnnotationPresent(RequiresPermissions.class)) {
@@ -59,12 +54,5 @@ public class ShiroSecurityBinding implements DynamicFeature {
             log.info("Resource method {}#{} requires an authorization checks.", resourceClass.getCanonicalName(), resourceMethod.getName());
             context.register(new ShiroAuthorizationFilter(a));
         }
-        // TODO this is the wrong approach, we should have an Environment and proper request wrapping
-        context.register(new ContainerResponseFilter() {
-            @Override
-            public void filter(ContainerRequestContext requestContext, ContainerResponseContext responseContext) {
-                ThreadContext.unbindSubject();
-            }
-        });
     }
 }
