@@ -1,6 +1,6 @@
 /**
  * The MIT License
- * Copyright (c) 2012 Graylog, Inc.
+ * Copyright (c) 2012 TORCH GmbH
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,9 @@ package org.graylog2.plugin.periodical;
 
 import org.slf4j.Logger;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public abstract class Periodical implements Runnable {
 
     /**
@@ -50,7 +53,7 @@ public abstract class Periodical implements Runnable {
     public abstract boolean masterOnly();
 
     /**
-     * Start on this node? Useful to decide if to start the periodical based on local configuration.
+     * Start on thise node? Useful to decide if to start the periodical based on local configuration.
      * @return
      */
     public abstract boolean startOnThisNode();
