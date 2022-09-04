@@ -10,13 +10,13 @@ import javax.ws.rs.sse.Sse;
 
 import io.quarkus.qrs.runtime.core.QrsRequestContext;
 import io.quarkus.qrs.runtime.jaxrs.QrsSse;
-import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
+import io.vertx.ext.web.RoutingContext;
 
 @Singleton
 public class ContextProducers {
 
     @Inject
-    CurrentVertxRequest currentVertxRequest;
+    RoutingContext currentVertxRequest;
 
     @RequestScoped
     @Produces
@@ -37,6 +37,7 @@ public class ContextProducers {
     }
 
     private QrsRequestContext getContext() {
-        return (QrsRequestContext) currentVertxRequest.getOtherHttpContextObject();
+        return (QrsRequestContext) currentVertxRequest.data()
+                .get(QrsRequestContext.CURRENT_REQUEST_KEY);
     }
 }
