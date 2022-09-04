@@ -59,8 +59,7 @@ public abstract class AndroidSkylarkData
         AndroidResourcesInfo,
         AndroidManifestInfo,
         AndroidLibraryAarInfo,
-        AndroidBinaryDataInfo,
-        ValidatedAndroidResources> {
+        AndroidBinaryDataInfo> {
 
   public abstract AndroidSemantics getAndroidSemantics();
 
@@ -464,11 +463,6 @@ public abstract class AndroidSkylarkData
             shrinkResources, Boolean.class, ctx.getAndroidConfig().useAndroidResourceShrinking()),
         ResourceFilterFactory.from(aaptVersion, resourceConfigurationFilters, densities),
         noCompressExtensions.getImmutableList());
-  }
-
-  @Override
-  public Artifact resourcesFromValidatedRes(ValidatedAndroidResources resources) {
-    return resources.getMergedResources();
   }
 
   /**
