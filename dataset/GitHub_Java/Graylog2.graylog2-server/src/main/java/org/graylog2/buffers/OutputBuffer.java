@@ -26,7 +26,6 @@ import com.lmax.disruptor.SleepingWaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.graylog2.Core;
 import org.graylog2.buffers.processors.OutputBufferProcessor;
 import org.graylog2.plugin.GraylogServer;
@@ -38,13 +37,11 @@ import org.graylog2.plugin.logmessage.LogMessage;
  */
 public class OutputBuffer implements Buffer {
 
-    protected static RingBuffer<LogMessageEvent> ringBuffer;
+    protected static final int RING_SIZE = 524288;
+    protected RingBuffer<LogMessageEvent> ringBuffer;
 
-    protected ExecutorService executor = Executors.newCachedThreadPool(
-            new BasicThreadFactory.Builder()
-                .namingPattern("outputbufferprocessor-%d")
-                .build()
-    );
+    protected ExecutorService executor = Executors.newCachedThreadPool();
+
     Core server;
 
     public OutputBuffer(Core server) {
@@ -55,7 +52,7 @@ public class OutputBuffer implements Buffer {
         Disruptor disruptor = new Disruptor<LogMessageEvent>(
                 LogMessageEvent.EVENT_FACTORY,
                 executor,
-                new MultiThreadedClaimStrategy(server.getConfiguration().getRingSize()),
+                new MultiThreadedClaimStrategy(RING_SIZE),
                 new SleepingWaitStrategy()
         );
 

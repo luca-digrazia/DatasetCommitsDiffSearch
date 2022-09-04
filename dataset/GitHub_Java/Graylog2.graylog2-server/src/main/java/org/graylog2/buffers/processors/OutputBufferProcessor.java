@@ -21,7 +21,6 @@
 package org.graylog2.buffers.processors;
 
 import com.google.common.collect.Lists;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.lmax.disruptor.EventHandler;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Histogram;
@@ -29,22 +28,11 @@ import com.yammer.metrics.core.Meter;
 import org.apache.log4j.Logger;
 import org.graylog2.Core;
 import org.graylog2.buffers.LogMessageEvent;
-import org.graylog2.plugin.outputs.MessageOutput;
+import org.graylog2.outputs.MessageOutput;
 import org.graylog2.plugin.logmessage.LogMessage;
 
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import org.bson.types.ObjectId;
-import org.elasticsearch.common.collect.Maps;
-import org.graylog2.outputs.ElasticSearchOutput;
-import org.graylog2.outputs.OutputRouter;
-import org.graylog2.outputs.OutputStreamConfigurationImpl;
-import org.graylog2.plugin.outputs.OutputStreamConfiguration;
-import org.graylog2.plugin.streams.Stream;
-import org.graylog2.streams.StreamImpl;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -53,13 +41,10 @@ public class OutputBufferProcessor implements EventHandler<LogMessageEvent> {
 
     private static final Logger LOG = Logger.getLogger(OutputBufferProcessor.class);
 
-    private static final OutputRouter ROUTER = new OutputRouter();
-    
     private Core server;
 
     private List<LogMessage> buffer = Lists.newArrayList();
     private final Meter incomingMessages = Metrics.newMeter(OutputBufferProcessor.class, "IncomingMessages", "messages", TimeUnit.SECONDS);
-    
     private final Histogram batchSize = Metrics.newHistogram(OutputBufferProcessor.class, "BatchSize");
 
     private final long ordinal;
@@ -78,7 +63,6 @@ public class OutputBufferProcessor implements EventHandler<LogMessageEvent> {
             return;
         }
         
-        server.outputBufferWatermark().decrementAndGet();
         incomingMessages.mark();
 
         LogMessage msg = event.getMessage();
@@ -89,24 +73,23 @@ public class OutputBufferProcessor implements EventHandler<LogMessageEvent> {
         buffer.add(msg);
 
         if (endOfBatch || buffer.size() >= server.getConfiguration().getOutputBatchSize()) {
-            for (MessageOutput output : server.getOutputs()) {
-                String typeClass = output.getClass().getCanonicalName();
-                // Always write to ElasticSearch, but only write to other outputs if enabled for one of its streams.
-                if (output instanceof ElasticSearchOutput || ROUTER.checkRouting(typeClass, msg)) {
-                    try {
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("Writing message batch to [" + output.getName() + "]. Size <" + buffer.size() + ">");
-                        }
+            for (Class<? extends MessageOutput> outputType : server.getOutputs()) {
+                try {
+                    // Always create a new instance of this filter.
+                    MessageOutput output = outputType.newInstance();
 
-                        batchSize.update(buffer.size());
-                        output.write(buffer, buildStreamConfigs(buffer, typeClass), server);
-                    } catch (Exception e) {
-                        LOG.error("Could not write message batch to output [" + output.getName() +"].", e);
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Writing message batch to [" + outputType.getSimpleName() + "]. Size <" + buffer.size() + ">");
                     }
+
+                    batchSize.update(buffer.size());
+                    output.write(buffer, server);
+                } catch (Exception e) {
+                    LOG.error("Could not write message batch to output [" + outputType.getSimpleName() +"].", e);
+                } finally {
+                    buffer.clear();
                 }
             }
-            
-            buffer.clear();
         }
 
         if (LOG.isDebugEnabled()) {
@@ -114,22 +97,4 @@ public class OutputBufferProcessor implements EventHandler<LogMessageEvent> {
         }
     }
 
-    private OutputStreamConfiguration buildStreamConfigs(List<LogMessage> messages, String className) {
-        OutputStreamConfiguration configs = new OutputStreamConfigurationImpl();
-        Map<ObjectId, Stream> distinctStreams = Maps.newHashMap();
-        
-        for (LogMessage message : messages) {
-            for (Stream stream : message.getStreams()) {
-                distinctStreams.put(stream.getId(), stream);
-            }
-        }
-        
-        for (Map.Entry<ObjectId, Stream> e : distinctStreams.entrySet()) {
-            StreamImpl stream = (StreamImpl) e.getValue();
-            configs.add(e.getKey(), stream.getOutputConfigurations(className));
-        }
-        
-        return configs;
-    }
-    
 }
