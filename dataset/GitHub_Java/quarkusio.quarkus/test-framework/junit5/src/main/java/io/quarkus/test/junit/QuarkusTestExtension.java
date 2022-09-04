@@ -4,12 +4,10 @@ import static io.quarkus.test.common.PathTestHelper.getAppClassLocationForTestLo
 import static io.quarkus.test.common.PathTestHelper.getTestClassesLocation;
 
 import java.io.Closeable;
-import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.AbstractMap;
@@ -22,7 +20,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.ServiceLoader;
-import java.util.Set;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -60,7 +57,6 @@ import io.quarkus.bootstrap.app.QuarkusBootstrap;
 import io.quarkus.bootstrap.app.RunningQuarkusApplication;
 import io.quarkus.bootstrap.app.StartupAction;
 import io.quarkus.bootstrap.model.PathsCollection;
-import io.quarkus.bootstrap.resolver.model.QuarkusModel;
 import io.quarkus.bootstrap.runner.Timing;
 import io.quarkus.bootstrap.utils.BuildToolHelper;
 import io.quarkus.builder.BuildChainBuilder;
@@ -69,7 +65,6 @@ import io.quarkus.builder.BuildStep;
 import io.quarkus.deployment.builditem.TestAnnotationBuildItem;
 import io.quarkus.deployment.builditem.TestClassBeanBuildItem;
 import io.quarkus.deployment.builditem.TestClassPredicateBuildItem;
-import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.configuration.ProfileManager;
 import io.quarkus.runtime.test.TestHttpEndpointProvider;
 import io.quarkus.test.common.PathTestHelper;
@@ -200,25 +195,9 @@ public class QuarkusTestExtension
 
             // If gradle project running directly with IDE
             if (System.getProperty(BootstrapConstants.SERIALIZED_APP_MODEL) == null) {
-                QuarkusModel model = BuildToolHelper.enableGradleAppModelForTest(projectRoot);
-                if (model != null) {
-                    final Set<File> classDirectories = model.getWorkspace().getMainModule().getSourceSet()
-                            .getSourceDirectories();
-                    for (File classes : classDirectories) {
-                        if (classes.exists() && !rootBuilder.contains(classes.toPath())) {
-                            rootBuilder.add(classes.toPath());
-                        }
-                    }
-                }
-            } else if (System.getProperty(BootstrapConstants.OUTPUT_SOURCES_DIR) != null) {
-                final String[] sourceDirectories = System.getProperty(BootstrapConstants.OUTPUT_SOURCES_DIR).split(",");
-                for (String sourceDirectory : sourceDirectories) {
-                    final Path directory = Paths.get(sourceDirectory);
-                    if (Files.exists(directory) && !rootBuilder.contains(directory)) {
-                        rootBuilder.add(directory);
-                    }
-                }
+                BuildToolHelper.enableGradleAppModelForTest(projectRoot);
             }
+
             runnerBuilder.setApplicationRoot(rootBuilder.build());
 
             CuratedApplication curatedApplication = runnerBuilder
@@ -569,8 +548,6 @@ public class QuarkusTestExtension
 
     @Override
     public void beforeAll(ExtensionContext context) throws Exception {
-        //set the right launch mode in the outer CL, used by the HTTP host config source
-        ProfileManager.setLaunchMode(LaunchMode.TEST);
         if (isNativeTest(context)) {
             return;
         }
