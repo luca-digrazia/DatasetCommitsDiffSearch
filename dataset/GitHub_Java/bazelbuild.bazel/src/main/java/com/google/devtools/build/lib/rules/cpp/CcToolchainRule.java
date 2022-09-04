@@ -21,12 +21,12 @@ import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
 import static com.google.devtools.build.lib.packages.Type.STRING;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.analysis.Allowlist;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
+import com.google.devtools.build.lib.analysis.Whitelist;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
@@ -145,7 +145,7 @@ public final class CcToolchainRule implements RuleDefinition {
 
   @Override
   public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
-    final Label zipper = env.getToolsLabel("//tools/zip:unzip_fdo");
+    final Label zipper = env.getToolsLabel("//tools/zip:zipper");
     return builder
         .requiresConfigurationFragments(CppConfiguration.class, PlatformConfiguration.class)
         .advertiseProvider(TemplateVariableInfo.class)
@@ -273,7 +273,7 @@ public final class CcToolchainRule implements RuleDefinition {
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(module_map) -->
         Module map artifact to be used for modular builds.
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-        .add(attr("module_map", LABEL).legacyAllowAnyFileType())
+        .add(attr("module_map", LABEL).legacyAllowAnyFileType().cfg(HostTransition.createFactory()))
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(supports_param_files) -->
         Set to True when cc_toolchain supports using param files for linking actions.
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
@@ -357,12 +357,9 @@ public final class CcToolchainRule implements RuleDefinition {
                 .mandatoryProviders(CcToolchainConfigInfo.PROVIDER.id())
                 .mandatory())
         .add(
-            Allowlist.getAttributeFromAllowlistName(
-                    CcToolchain.ALLOWED_LAYERING_CHECK_FEATURES_ALLOWLIST)
+            Whitelist.getAttributeFromWhitelistName(
+                    CcToolchain.ALLOWED_LAYERING_CHECK_FEATURES_WHITELIST)
                 .value(CcToolchain.ALLOWED_LAYERING_CHECK_FEATURES_LABEL))
-        .add(
-            Allowlist.getAttributeFromAllowlistName(CcToolchain.LOOSE_HEADER_CHECK_ALLOWLIST)
-                .value(CcToolchain.LOOSE_HEADER_CHECK_LABEL))
         .build();
   }
 
