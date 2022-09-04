@@ -18,6 +18,7 @@ package org.graylog2.cluster;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.EventBus;
 import com.mongodb.DBCollection;
 import com.mongodb.WriteConcern;
@@ -26,16 +27,20 @@ import org.graylog2.database.MongoConnection;
 import org.graylog2.events.ClusterEventBus;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.system.NodeId;
+import org.graylog2.shared.plugins.ChainingClassLoader;
 import org.graylog2.shared.utilities.AutoValueUtils;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
+import org.mongojack.DBCursor;
 import org.mongojack.DBQuery;
 import org.mongojack.DBSort;
 import org.mongojack.JacksonDBCollection;
+import org.mongojack.WriteResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
+import java.util.Set;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -49,25 +54,28 @@ public class ClusterConfigServiceImpl implements ClusterConfigService {
     private final JacksonDBCollection<ClusterConfig, String> dbCollection;
     private final NodeId nodeId;
     private final ObjectMapper objectMapper;
+    private final ChainingClassLoader chainingClassLoader;
     private final EventBus clusterEventBus;
 
     @Inject
     public ClusterConfigServiceImpl(final MongoJackObjectMapperProvider mapperProvider,
                                     final MongoConnection mongoConnection,
                                     final NodeId nodeId,
-                                    final ObjectMapper objectMapper,
-                                    @ClusterEventBus final EventBus clusterEventBus) {
+                                    final ChainingClassLoader chainingClassLoader,
+                                    final ClusterEventBus clusterEventBus) {
         this(JacksonDBCollection.wrap(prepareCollection(mongoConnection), ClusterConfig.class, String.class, mapperProvider.get()),
-                nodeId, objectMapper, clusterEventBus);
+                nodeId, mapperProvider.get(), chainingClassLoader, clusterEventBus);
     }
 
-    ClusterConfigServiceImpl(final JacksonDBCollection<ClusterConfig, String> dbCollection,
-                             final NodeId nodeId,
-                             final ObjectMapper objectMapper,
-                             final EventBus clusterEventBus) {
+    private ClusterConfigServiceImpl(final JacksonDBCollection<ClusterConfig, String> dbCollection,
+                                     final NodeId nodeId,
+                                     final ObjectMapper objectMapper,
+                                     final ChainingClassLoader chainingClassLoader,
+                                     final EventBus clusterEventBus) {
         this.nodeId = checkNotNull(nodeId);
         this.dbCollection = checkNotNull(dbCollection);
         this.objectMapper = checkNotNull(objectMapper);
+        this.chainingClassLoader = chainingClassLoader;
         this.clusterEventBus = checkNotNull(clusterEventBus);
     }
 
@@ -75,7 +83,7 @@ public class ClusterConfigServiceImpl implements ClusterConfigService {
     static DBCollection prepareCollection(final MongoConnection mongoConnection) {
         DBCollection coll = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
         coll.createIndex(DBSort.asc("type"), "unique_type", true);
-        coll.setWriteConcern(WriteConcern.MAJORITY);
+        coll.setWriteConcern(WriteConcern.JOURNALED);
 
         return coll;
     }
@@ -84,26 +92,31 @@ public class ClusterConfigServiceImpl implements ClusterConfigService {
         try {
             return objectMapper.convertValue(payload, type);
         } catch (IllegalArgumentException e) {
-            LOG.debug("Error while deserializing payload", e);
+            LOG.error("Error while deserializing payload", e);
             return null;
         }
     }
 
     @Override
-    public <T> T get(Class<T> type) {
-        ClusterConfig config = dbCollection.findOne(DBQuery.is("type", type.getCanonicalName()));
+    public <T> T get(String key, Class<T> type) {
+        ClusterConfig config = dbCollection.findOne(DBQuery.is("type", key));
 
         if (config == null) {
-            LOG.warn("Couldn't find cluster config of type {}", type.getCanonicalName());
+            LOG.debug("Couldn't find cluster config of type {}", key);
             return null;
         }
 
         T result = extractPayload(config.payload(), type);
         if (result == null) {
-            LOG.error("Couldn't extract payload from cluster config (type: {})", type.getCanonicalName());
+            LOG.error("Couldn't extract payload from cluster config (type: {})", key);
         }
 
         return result;
+    }
+
+    @Override
+    public <T> T get(Class<T> type) {
+        return get(type.getCanonicalName(), type);
     }
 
     @Override
@@ -119,12 +132,48 @@ public class ClusterConfigServiceImpl implements ClusterConfigService {
         }
 
         String canonicalClassName = AutoValueUtils.getCanonicalName(payload.getClass());
-        ClusterConfig clusterConfig = ClusterConfig.create(canonicalClassName, payload, nodeId.toString());
+        write(canonicalClassName, payload);
+    }
 
-        dbCollection.update(DBQuery.is("type", canonicalClassName), clusterConfig, true, false, WriteConcern.MAJORITY);
+    @Override
+    public <T> void write(String key, T payload) {
+        if (payload == null) {
+            LOG.debug("Payload was null. Skipping.");
+            return;
+        }
+
+        ClusterConfig clusterConfig = ClusterConfig.create(key, payload, nodeId.toString());
+
+        dbCollection.update(DBQuery.is("type", key), clusterConfig, true, false, WriteConcern.JOURNALED);
 
         ClusterConfigChangedEvent event = ClusterConfigChangedEvent.create(
-                DateTime.now(DateTimeZone.UTC), nodeId.toString(), canonicalClassName);
+                DateTime.now(DateTimeZone.UTC), nodeId.toString(), key);
         clusterEventBus.post(event);
+    }
+
+    @Override
+    public <T> int remove(Class<T> type) {
+        final String canonicalName = type.getCanonicalName();
+        final WriteResult<ClusterConfig, String> result = dbCollection.remove(DBQuery.is("type", canonicalName));
+        return result.getN();
+    }
+
+    @Override
+    public Set<Class<?>> list() {
+        final ImmutableSet.Builder<Class<?>> classes = ImmutableSet.builder();
+
+        try (DBCursor<ClusterConfig> clusterConfigs = dbCollection.find()) {
+            for (ClusterConfig clusterConfig : clusterConfigs) {
+                final String type = clusterConfig.type();
+                try {
+                    final Class<?> cls = chainingClassLoader.loadClass(type);
+                    classes.add(cls);
+                } catch (ClassNotFoundException e) {
+                    LOG.debug("Couldn't find configuration class \"{}\"", type, e);
+                }
+            }
+        }
+
+        return classes.build();
     }
 }

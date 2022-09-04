@@ -16,74 +16,55 @@
  */
 package org.graylog2.cluster;
 
-import com.codahale.metrics.json.MetricsModule;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategy;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.fasterxml.jackson.datatype.guava.GuavaModule;
-import com.fasterxml.jackson.datatype.joda.JodaModule;
-import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
-import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
-import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
-import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
 import com.mongodb.BasicDBObjectBuilder;
+import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
 import com.mongodb.WriteConcern;
+import org.graylog.testing.mongodb.MongoDBInstance;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
-import org.graylog2.database.MongoConnectionRule;
-import org.graylog2.database.ObjectIdSerializer;
+import org.graylog2.events.ClusterEventBus;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.system.NodeId;
-import org.graylog2.shared.jackson.SizeSerializer;
-import org.graylog2.shared.rest.RangeJsonSerializer;
+import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
+import org.graylog2.shared.plugins.ChainingClassLoader;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
 import org.joda.time.DateTimeZone;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.Spy;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
-import static com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb.InMemoryMongoRuleBuilder.newInMemoryMongoDbRule;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
 public class ClusterConfigServiceImplTest {
-    @ClassRule
-    public static final InMemoryMongoDb IN_MEMORY_MONGO_DB = newInMemoryMongoDbRule().build();
+    @Rule
+    public final MongoDBInstance mongodb = MongoDBInstance.createForClass();
+
     private static final DateTime TIME = new DateTime(2015, 4, 1, 0, 0, DateTimeZone.UTC);
     private static final String COLLECTION_NAME = ClusterConfigServiceImpl.COLLECTION_NAME;
 
     @Rule
-    public MongoConnectionRule mongoRule = MongoConnectionRule.build("test");
-    private final ObjectMapper objectMapper = new ObjectMapper()
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-            .setPropertyNamingStrategy(new PropertyNamingStrategy.LowerCaseWithUnderscoresStrategy())
-            .registerModule(new JodaModule())
-            .registerModule(new GuavaModule())
-            .registerModule(new MetricsModule(TimeUnit.SECONDS, TimeUnit.SECONDS, false))
-            .registerModule(new SimpleModule()
-                    .addSerializer(new ObjectIdSerializer())
-                    .addSerializer(new RangeJsonSerializer())
-                    .addSerializer(new SizeSerializer()));
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
+
+    private final ObjectMapper objectMapper = new ObjectMapperProvider().get();
+
     @Mock
     private NodeId nodeId;
     @Spy
-    private EventBus clusterEventBus;
+    private ClusterEventBus clusterEventBus;
     private MongoConnection mongoConnection;
     private ClusterConfigService clusterConfigService;
 
@@ -91,16 +72,16 @@ public class ClusterConfigServiceImplTest {
     public void setUpService() throws Exception {
         DateTimeUtils.setCurrentMillisFixed(TIME.getMillis());
 
-        this.mongoConnection = mongoRule.getMongoConnection();
+        this.mongoConnection = mongodb.mongoConnection();
 
         MongoJackObjectMapperProvider provider = new MongoJackObjectMapperProvider(objectMapper);
         when(nodeId.toString()).thenReturn("ID");
 
         this.clusterConfigService = new ClusterConfigServiceImpl(
                 provider,
-                mongoRule.getMongoConnection(),
+                mongodb.mongoConnection(),
                 nodeId,
-                objectMapper,
+                new ChainingClassLoader(getClass().getClassLoader()),
                 clusterEventBus
         );
     }
@@ -108,10 +89,10 @@ public class ClusterConfigServiceImplTest {
     @After
     public void tearDown() {
         DateTimeUtils.setCurrentMillisSystem();
+        mongoConnection.getMongoDatabase().drop();
     }
 
     @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void getReturnsExistingConfig() throws Exception {
         DBObject dbObject = new BasicDBObjectBuilder()
                 .add("type", CustomConfig.class.getCanonicalName())
@@ -119,6 +100,7 @@ public class ClusterConfigServiceImplTest {
                 .add("last_updated", TIME.toString())
                 .add("last_updated_by", "ID")
                 .get();
+        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
         collection.save(dbObject);
 
@@ -129,8 +111,8 @@ public class ClusterConfigServiceImplTest {
     }
 
     @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void getReturnsNullOnNonExistingConfig() throws Exception {
+        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
         assertThat(collection.count()).isEqualTo(0L);
 
@@ -138,7 +120,6 @@ public class ClusterConfigServiceImplTest {
     }
 
     @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void getReturnsNullOnInvalidPayload() throws Exception {
         DBObject dbObject = new BasicDBObjectBuilder()
                 .add("type", CustomConfig.class.getCanonicalName())
@@ -146,6 +127,7 @@ public class ClusterConfigServiceImplTest {
                 .add("last_updated", TIME.toString())
                 .add("last_updated_by", "ID")
                 .get();
+        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
         collection.save(dbObject);
 
@@ -155,7 +137,34 @@ public class ClusterConfigServiceImplTest {
     }
 
     @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
+    public void getWithKeyReturnsExistingConfig() throws Exception {
+        DBObject dbObject = new BasicDBObjectBuilder()
+                .add("type", "foo")
+                .add("payload", Collections.singletonMap("text", "TEST"))
+                .add("last_updated", TIME.toString())
+                .add("last_updated_by", "ID")
+                .get();
+        @SuppressWarnings("deprecation")
+        final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
+        collection.save(dbObject);
+
+        assertThat(collection.count()).isEqualTo(1L);
+
+        CustomConfig customConfig = clusterConfigService.get("foo", CustomConfig.class);
+        assertThat(customConfig).isInstanceOf(CustomConfig.class);
+        assertThat(customConfig.text).isEqualTo("TEST");
+    }
+
+    @Test
+    public void getWithKeyReturnsNullOnNonExistingConfig() throws Exception {
+        @SuppressWarnings("deprecation")
+        final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
+        assertThat(collection.count()).isEqualTo(0L);
+
+        assertThat(clusterConfigService.get("foo", CustomConfig.class)).isNull();
+    }
+
+    @Test
     public void getOrDefaultReturnsExistingConfig() throws Exception {
         DBObject dbObject = new BasicDBObjectBuilder()
                 .add("type", CustomConfig.class.getCanonicalName())
@@ -163,6 +172,7 @@ public class ClusterConfigServiceImplTest {
                 .add("last_updated", TIME.toString())
                 .add("last_updated_by", "ID")
                 .get();
+        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
         collection.save(dbObject);
 
@@ -176,8 +186,8 @@ public class ClusterConfigServiceImplTest {
     }
 
     @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void getOrDefaultReturnsDefaultValueOnNonExistingConfig() throws Exception {
+        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
         assertThat(collection.count()).isEqualTo(0L);
 
@@ -188,7 +198,6 @@ public class ClusterConfigServiceImplTest {
     }
 
     @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void getOrDefaultReturnsDefaultValueOnInvalidPayload() throws Exception {
         DBObject dbObject = new BasicDBObjectBuilder()
                 .add("type", CustomConfig.class.getCanonicalName())
@@ -196,6 +205,7 @@ public class ClusterConfigServiceImplTest {
                 .add("last_updated", TIME.toString())
                 .add("last_updated_by", "ID")
                 .get();
+        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
         collection.save(dbObject);
 
@@ -208,8 +218,8 @@ public class ClusterConfigServiceImplTest {
     }
 
     @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void writeIgnoresNull() throws Exception {
+        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
         assertThat(collection.count()).isEqualTo(0L);
 
@@ -219,11 +229,11 @@ public class ClusterConfigServiceImplTest {
     }
 
     @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void writePersistsClusterConfig() throws Exception {
         CustomConfig customConfig = new CustomConfig();
         customConfig.text = "TEST";
 
+        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
         assertThat(collection.count()).isEqualTo(0L);
 
@@ -237,7 +247,24 @@ public class ClusterConfigServiceImplTest {
     }
 
     @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
+    public void writeWithCustomKeyPersistsClusterConfig() throws Exception {
+        CustomConfig customConfig = new CustomConfig();
+        customConfig.text = "TEST";
+
+        @SuppressWarnings("deprecation")
+        final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
+        assertThat(collection.count()).isEqualTo(0L);
+
+        clusterConfigService.write("foobar", customConfig);
+
+        assertThat(collection.count()).isEqualTo(1L);
+
+        DBObject dbObject = collection.findOne();
+        assertThat((String) dbObject.get("type")).isEqualTo("foobar");
+        assertThat((String) dbObject.get("last_updated_by")).isEqualTo("ID");
+    }
+
+    @Test
     public void writeUpdatesExistingClusterConfig() throws Exception {
         CustomConfig customConfig = new CustomConfig();
         customConfig.text = "TEST";
@@ -248,6 +275,7 @@ public class ClusterConfigServiceImplTest {
                 .add("last_updated", TIME.toString())
                 .add("last_updated_by", "NOT ID")
                 .get();
+        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
         collection.save(seedObject);
         assertThat(collection.count()).isEqualTo(1L);
@@ -267,14 +295,14 @@ public class ClusterConfigServiceImplTest {
     }
 
     @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void writePostsClusterConfigChangedEvent() throws Exception {
         CustomConfig customConfig = new CustomConfig();
         customConfig.text = "TEST";
 
         final ClusterConfigChangedEventHandler eventHandler = new ClusterConfigChangedEventHandler();
-        clusterEventBus.register(eventHandler);
+        clusterEventBus.registerClusterEventSubscriber(eventHandler);
 
+        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
         assertThat(collection.count()).isEqualTo(0L);
 
@@ -291,7 +319,8 @@ public class ClusterConfigServiceImplTest {
 
     @Test
     public void prepareCollectionCreatesIndexesOnExistingCollection() throws Exception {
-        DBCollection original = mongoConnection.getDatabase().createCollection(COLLECTION_NAME, null);
+        @SuppressWarnings("deprecation")
+        DBCollection original = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
         original.dropIndexes();
         assertThat(original.getName()).isEqualTo(COLLECTION_NAME);
         assertThat(original.getIndexInfo()).hasSize(1);
@@ -299,23 +328,98 @@ public class ClusterConfigServiceImplTest {
         DBCollection collection = ClusterConfigServiceImpl.prepareCollection(mongoConnection);
         assertThat(collection.getName()).isEqualTo(COLLECTION_NAME);
         assertThat(collection.getIndexInfo()).hasSize(2);
-        assertThat(collection.getWriteConcern()).isEqualTo(WriteConcern.MAJORITY);
+        assertThat(collection.getWriteConcern()).isEqualTo(WriteConcern.JOURNALED);
     }
 
     @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void prepareCollectionCreatesCollectionIfItDoesNotExist() throws Exception {
-        assertThat(mongoConnection.getDatabase().collectionExists(COLLECTION_NAME)).isFalse();
+        @SuppressWarnings("deprecation")
+        final DB database = mongoConnection.getDatabase();
+        database.getCollection(COLLECTION_NAME).drop();
+        assertThat(database.collectionExists(COLLECTION_NAME)).isFalse();
         DBCollection collection = ClusterConfigServiceImpl.prepareCollection(mongoConnection);
 
         assertThat(collection.getName()).isEqualTo(COLLECTION_NAME);
         assertThat(collection.getIndexInfo()).hasSize(2);
-        assertThat(collection.getWriteConcern()).isEqualTo(WriteConcern.MAJORITY);
+        assertThat(collection.getWriteConcern()).isEqualTo(WriteConcern.JOURNALED);
+    }
+
+    @Test
+    public void removeDoesNothingIfConfigDoesNotExist() throws Exception {
+        @SuppressWarnings("deprecation")
+        final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
+
+        assertThat(collection.count()).isEqualTo(0L);
+        assertThat(clusterConfigService.remove(CustomConfig.class)).isEqualTo(0);
+    }
+
+    @Test
+    public void removeSuccessfullyRemovesConfig() throws Exception {
+        DBObject dbObject = new BasicDBObjectBuilder()
+                .add("type", CustomConfig.class.getCanonicalName())
+                .add("payload", Collections.singletonMap("text", "TEST"))
+                .add("last_updated", TIME.toString())
+                .add("last_updated_by", "ID")
+                .get();
+        @SuppressWarnings("deprecation")
+        final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
+        collection.save(dbObject);
+
+        assertThat(collection.count()).isEqualTo(1L);
+        assertThat(clusterConfigService.remove(CustomConfig.class)).isEqualTo(1);
+        assertThat(collection.count()).isEqualTo(0L);
+    }
+
+    @Test
+    public void listReturnsAllClasses() throws Exception {
+        @SuppressWarnings("deprecation")
+        final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
+        collection.save(new BasicDBObjectBuilder()
+                .add("type", CustomConfig.class.getCanonicalName())
+                .add("payload", Collections.singletonMap("text", "TEST"))
+                .add("last_updated", TIME.toString())
+                .add("last_updated_by", "ID")
+                .get());
+        collection.save(new BasicDBObjectBuilder()
+                .add("type", AnotherCustomConfig.class.getCanonicalName())
+                .add("payload", Collections.singletonMap("text", "TEST"))
+                .add("last_updated", TIME.toString())
+                .add("last_updated_by", "ID")
+                .get());
+
+        assertThat(collection.count()).isEqualTo(2L);
+        assertThat(clusterConfigService.list())
+                .hasSize(2)
+                .containsOnly(CustomConfig.class, AnotherCustomConfig.class);
+    }
+
+    @Test
+    public void listIgnoresInvalidClasses() throws Exception {
+        @SuppressWarnings("deprecation")
+        final DBCollection collection = mongoConnection.getDatabase().getCollection(COLLECTION_NAME);
+        collection.save(new BasicDBObjectBuilder()
+                .add("type", CustomConfig.class.getCanonicalName())
+                .add("payload", Collections.singletonMap("text", "TEST"))
+                .add("last_updated", TIME.toString())
+                .add("last_updated_by", "ID")
+                .get());
+        collection.save(new BasicDBObjectBuilder()
+                .add("type", "invalid.ClassName")
+                .add("payload", Collections.emptyMap())
+                .add("last_updated", TIME.toString())
+                .add("last_updated_by", "ID")
+                .get());
+
+        assertThat(collection.count()).isEqualTo(2L);
+        assertThat(clusterConfigService.list())
+                .hasSize(1)
+                .containsOnly(CustomConfig.class);
     }
 
     public static class ClusterConfigChangedEventHandler {
         public volatile ClusterConfigChangedEvent event;
 
+        @SuppressWarnings("unused")
         @Subscribe
         public void handleSimpleEvent(ClusterConfigChangedEvent event) {
             this.event = ClusterConfigChangedEvent.create(
