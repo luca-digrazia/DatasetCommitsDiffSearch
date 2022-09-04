@@ -185,16 +185,14 @@ public class CppLinkActionBuilder {
    *
    * @param ruleContext the rule that owns the action
    * @param output the output artifact
-   * @param toolchain the C++ toolchain provider
    */
-  public CppLinkActionBuilder(RuleContext ruleContext, Artifact output,
-      CcToolchainProvider toolchain) {
+  public CppLinkActionBuilder(RuleContext ruleContext, Artifact output) {
     this(
         ruleContext,
         output,
         ruleContext.getConfiguration(),
         ruleContext.getAnalysisEnvironment(),
-        toolchain);
+        CppHelper.getToolchain(ruleContext));
   }
 
   /**
@@ -202,8 +200,6 @@ public class CppLinkActionBuilder {
    *
    * @param ruleContext the rule that owns the action
    * @param output the output artifact
-   * @param configuration build configuration
-   * @param toolchain C++ toolchain provider
    */
   public CppLinkActionBuilder(
       RuleContext ruleContext,
@@ -245,15 +241,12 @@ public class CppLinkActionBuilder {
    * @param ruleContext the rule that owns the action
    * @param output the output artifact
    * @param linkContext an immutable CppLinkAction.Context from the original builder
-   * @param configuration build configuration
-   * @param toolchain the C++ toolchain provider
    */
   public CppLinkActionBuilder(
       RuleContext ruleContext,
       Artifact output,
       Context linkContext,
-      BuildConfiguration configuration,
-      CcToolchainProvider toolchain) {
+      BuildConfiguration configuration) {
     // These Builder-only fields get set in the constructor:
     //   ruleContext, analysisEnvironment, outputPath, configuration, runtimeSolibDir
     this(
@@ -261,7 +254,7 @@ public class CppLinkActionBuilder {
         output,
         configuration,
         ruleContext.getAnalysisEnvironment(),
-        toolchain);
+        CppHelper.getToolchain(ruleContext));
     Preconditions.checkNotNull(linkContext);
 
     // All linkContext fields should be transferred to this Builder.
@@ -511,7 +504,7 @@ public class CppLinkActionBuilder {
         featureConfiguration =
             CcCommon.configureFeatures(ruleContext, toolchain, CcLibraryHelper.SourceCategory.CC);
       } else {
-        featureConfiguration = CcCommon.configureFeatures(ruleContext, toolchain);
+        featureConfiguration = CcCommon.configureFeatures(ruleContext);
       }
     }
 
@@ -1400,7 +1393,7 @@ public class CppLinkActionBuilder {
 
       // Variables arising from the toolchain
       buildVariables
-          .addAllStringVariables(toolchain.getBuildVariables())
+          .addAllStringVariables(CppHelper.getToolchain(ruleContext).getBuildVariables())
           .build();
       CppHelper.getFdoSupport(ruleContext).getLinkOptions(featureConfiguration, buildVariables);
     }

@@ -242,9 +242,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
           public Action generate(int i) throws InterruptedException {
             CppLinkActionBuilder builder =
                 new CppLinkActionBuilder(
-                    ruleContext,
-                    (i & 2) == 0 ? dynamicOutputFile : staticOutputFile,
-                    CppHelper.getToolchain(ruleContext, ":cc_toolchain")) {
+                    ruleContext, (i & 2) == 0 ? dynamicOutputFile : staticOutputFile) {
                   @Override
                   protected Artifact getInterfaceSoBuilder() {
                     return interfaceSoBuilder;
@@ -294,9 +292,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
           public Action generate(int i) throws InterruptedException {
             CppLinkActionBuilder builder =
                 new CppLinkActionBuilder(
-                    ruleContext,
-                    (i & 2) == 0 ? staticOutputFile : dynamicOutputFile,
-                    CppHelper.getToolchain(ruleContext, ":cc_toolchain")) {
+                    ruleContext, (i & 2) == 0 ? staticOutputFile : dynamicOutputFile) {
                   @Override
                   protected Artifact getInterfaceSoBuilder() {
                     return interfaceSoBuilder;
@@ -324,8 +320,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
         new PathFragment("output/path.ifso"), getTargetConfiguration().getBinDirectory(
             RepositoryName.MAIN),
         ActionsTestUtil.NULL_ARTIFACT_OWNER);
-    CppLinkActionBuilder builder = new CppLinkActionBuilder(
-        ruleContext, output, CppHelper.getToolchain(ruleContext, ":cc_toolchain"));
+    CppLinkActionBuilder builder = new CppLinkActionBuilder(ruleContext, output);
     builder.setLinkType(LinkTargetType.STATIC_LIBRARY);
     assertTrue(builder.canSplitCommandLine());
 
@@ -413,7 +408,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                     getTargetConfiguration()
                         .getBinDirectory(ruleContext.getRule().getRepository())),
                 ruleContext.getConfiguration(),
-                CppHelper.getToolchain(ruleContext, ":cc_toolchain"))
+                CppHelper.getToolchain(ruleContext))
             .addObjectFiles(nonLibraryInputs)
             .addLibraries(NestedSetBuilder.wrap(Order.LINK_ORDER, libraryInputs))
             .setLinkType(type)
