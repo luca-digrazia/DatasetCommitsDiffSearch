@@ -35,7 +35,7 @@ public class FunqyCloudFunctionsBindingRecorder {
 
         for (FunctionInvoker invoker : FunctionRecorder.registry.invokers()) {
             if (invoker.hasInput()) {
-                JavaType javaInputType = objectMapper.constructType(invoker.getInputType());
+                JavaType javaInputType = objectMapper.constructType(invoker.getInputGenericType());
                 ObjectReader reader = objectMapper.readerFor(javaInputType);
                 invoker.getBindingContext().put(ObjectReader.class.getName(), reader);
             }
