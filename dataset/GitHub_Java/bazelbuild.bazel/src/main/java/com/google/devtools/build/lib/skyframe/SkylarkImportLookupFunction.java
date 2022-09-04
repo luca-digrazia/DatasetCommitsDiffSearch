@@ -120,7 +120,12 @@ public class SkylarkImportLookupFunction implements SkyFunction {
     if (cachedSkylarkImportLookupValueAndDeps == null) {
       return null;
     }
-    cachedSkylarkImportLookupValueAndDeps.traverse(env::registerDependencies);
+    for (Iterable<SkyKey> depGroup : cachedSkylarkImportLookupValueAndDeps.deps) {
+      // Because we automatically filter out deps we've seen before and we don't expect this to be
+      // a super large DAG of dependencies, we iterate through without checking for already visited
+      // deps.
+      env.registerDependencies(depGroup);
+    }
     return cachedSkylarkImportLookupValueAndDeps.getValue();
   }
 
@@ -574,6 +579,15 @@ public class SkylarkImportLookupFunction implements SkyFunction {
     static SkylarkImportFailedException skylarkErrors(PathFragment file) {
       return new SkylarkImportFailedException(String.format("Extension '%s' has errors", file));
     }
+
+   static final String NO_EXT_WORKSPACE_LOAD_MSG_TEMPLATE =
+       "Extension file '%s' may not be loaded from a WORKSPACE file "
+           + "since the extension file is located in an external repository.";
+   static SkylarkImportFailedException noExternalLoadsFromWorkspace(Label fileLabel) {
+      return new SkylarkImportFailedException(String.format(NO_EXT_WORKSPACE_LOAD_MSG_TEMPLATE,
+          fileLabel));
+    }
+
   }
 
   private static final class SkylarkImportLookupFunctionException extends SkyFunctionException {

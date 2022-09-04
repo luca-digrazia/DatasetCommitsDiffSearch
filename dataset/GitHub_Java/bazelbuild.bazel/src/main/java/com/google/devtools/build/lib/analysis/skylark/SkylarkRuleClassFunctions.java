@@ -273,7 +273,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       FuncallExpression ast,
       Environment funcallEnv)
       throws EvalException, ConversionException {
-    SkylarkUtils.checkLoadingOrWorkspacePhase(funcallEnv, "rule", ast.getLocation());
+    funcallEnv.checkLoadingOrWorkspacePhase("rule", ast.getLocation());
     RuleClassType type = test ? RuleClassType.TEST : RuleClassType.NORMAL;
     RuleClass parent =
         test
@@ -573,7 +573,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     // to be a PackageContext
     public Object call(Object[] args, FuncallExpression ast, Environment env)
         throws EvalException, InterruptedException, ConversionException {
-      SkylarkUtils.checkLoadingPhase(env, getName(), ast.getLocation());
+      env.checkLoadingPhase(getName(), ast.getLocation());
       if (ruleClass == null) {
         throw new EvalException(ast.getLocation(),
             "Invalid rule class hasn't been exported by a Skylark file");

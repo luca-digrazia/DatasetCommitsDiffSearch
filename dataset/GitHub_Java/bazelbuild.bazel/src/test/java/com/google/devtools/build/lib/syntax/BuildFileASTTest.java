@@ -1,4 +1,4 @@
-// Copyright 2006 Google Inc. All Rights Reserved.
+// Copyright 2006 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,43 +13,32 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static com.google.common.truth.Truth.assertThat;
 
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.EventCollector;
-import com.google.devtools.build.lib.events.EventKind;
-import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
-import com.google.devtools.build.lib.packages.CachingPackageLocator;
-import com.google.devtools.build.lib.testutil.JunitTestUtils;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
+import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
+import com.google.devtools.build.lib.testutil.MoreAsserts;
+import com.google.devtools.build.lib.testutil.Scratch;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.util.FsApparatus;
-
+import java.io.IOException;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.io.IOException;
-import java.util.Arrays;
-
+/**
+ * Unit tests for BuildFileAST.
+ */
 @RunWith(JUnit4.class)
-public class BuildFileASTTest {
+public class BuildFileASTTest extends EvaluationTestCase {
 
-  private FsApparatus scratch = FsApparatus.newInMemory();
+  private Scratch scratch = new Scratch();
 
-  private EventCollectionApparatus events = new EventCollectionApparatus(EventKind.ALL_EVENTS);
-
-  private class ScratchPathPackageLocator implements CachingPackageLocator {
-    @Override
-    public Path getBuildFileForPackage(String packageName) {
-      return scratch.path(packageName).getRelative("BUILD");
-    }
+  @Override
+  public Environment newEnvironment() throws Exception {
+    return newBuildEnvironment();
   }
-
-  private CachingPackageLocator locator = new ScratchPathPackageLocator();
 
   /**
    * Parses the contents of the specified string (using DUMMY_PATH as the fake
@@ -57,268 +46,101 @@ public class BuildFileASTTest {
    */
   private BuildFileAST parseBuildFile(String... lines) throws IOException {
     Path file = scratch.file("/a/build/file/BUILD", lines);
-    return BuildFileAST.parseBuildFile(file, events.reporter(), locator, false);
+    byte[] bytes = FileSystemUtils.readWithKnownFileSize(file, file.getFileSize());
+    ParserInputSource inputSource = ParserInputSource.create(bytes, file.asFragment());
+    return BuildFileAST.parseBuildFile(inputSource, getEventHandler());
   }
 
   @Test
   public void testParseBuildFileOK() throws Exception {
-    Path buildFile = scratch.file("/BUILD",
+    BuildFileAST buildfile = parseBuildFile(
         "# a file in the build language",
         "",
         "x = [1,2,'foo',4] + [1,2, \"%s%d\" % ('foo', 1)]");
 
-    Environment env = new Environment();
-    Reporter reporter = new Reporter();
-    BuildFileAST buildfile = BuildFileAST.parseBuildFile(buildFile, reporter, null, false);
-
-    assertTrue(buildfile.exec(env, reporter));
+    assertThat(buildfile.exec(env, getEventHandler())).isTrue();
 
     // Test final environment is correctly modified:
     //
     // input1.BUILD contains:
     // x = [1,2,'foo',4] + [1,2, "%s%d" % ('foo', 1)]
-    assertEquals(Arrays.<Object>asList(1, 2, "foo", 4, 1, 2, "foo1"),
-                 env.lookup("x"));
+    assertThat(env.moduleLookup("x"))
+        .isEqualTo(SkylarkList.createImmutable(Tuple.of(1, 2, "foo", 4, 1, 2, "foo1")));
   }
 
   @Test
   public void testEvalException() throws Exception {
-    Path buildFile = scratch.file("/input1.BUILD",
+    setFailFast(false);
+    BuildFileAST buildfile = parseBuildFile(
         "x = 1",
         "y = [2,3]",
         "",
         "z = x + y");
 
-    Environment env = new Environment();
-    Reporter reporter = new Reporter();
-    EventCollector collector = new EventCollector(EventKind.ALL_EVENTS);
-    reporter.addHandler(collector);
-    BuildFileAST buildfile = BuildFileAST.parseBuildFile(buildFile, reporter, null, false);
-
-    assertFalse(buildfile.exec(env, reporter));
-    Event e = JunitTestUtils.assertContainsEvent(collector,
-        "unsupported operand type(s) for +: 'int' and 'list'");
-    assertEquals(4, e.getLocation().getStartLineAndColumn().getLine());
+    assertThat(buildfile.exec(env, getEventHandler())).isFalse();
+    Event e = assertContainsError("unsupported operand type(s) for +: 'int' and 'list'");
+    assertThat(e.getLocation().getStartLineAndColumn().getLine()).isEqualTo(4);
   }
 
   @Test
   public void testParsesFineWithNewlines() throws Exception {
-    BuildFileAST buildFileAST = parseBuildFile("foo()\n"
-                                               + "bar()\n"
-                                               + "something = baz()\n"
-                                               + "bar()");
-    assertEquals(4, buildFileAST.getStatements().size());
+    BuildFileAST buildFileAST = parseBuildFile("foo()", "bar()", "something = baz()", "bar()");
+    assertThat(buildFileAST.getStatements()).hasSize(4);
   }
 
   @Test
   public void testFailsIfNewlinesAreMissing() throws Exception {
-    events.setFailFast(false);
+    setFailFast(false);
 
     BuildFileAST buildFileAST =
       parseBuildFile("foo() bar() something = baz() bar()");
 
-    Event event = events.collector().iterator().next();
-    assertEquals("syntax error at \'bar\'", event.getMessage());
-    assertEquals("/a/build/file/BUILD",
-                 event.getLocation().getPath().toString());
-    assertEquals(1, event.getLocation().getStartLineAndColumn().getLine());
-    assertTrue(buildFileAST.containsErrors());
+    Event event = assertContainsError("syntax error at \'bar\': expected newline");
+    assertThat(event.getLocation().getPath().toString()).isEqualTo("/a/build/file/BUILD");
+    assertThat(event.getLocation().getStartLineAndColumn().getLine()).isEqualTo(1);
+    assertThat(buildFileAST.containsErrors()).isTrue();
   }
 
   @Test
   public void testImplicitStringConcatenationFails() throws Exception {
-    events.setFailFast(false);
+    setFailFast(false);
     BuildFileAST buildFileAST = parseBuildFile("a = 'foo' 'bar'");
-    Event event = events.collector().iterator().next();
-    assertEquals("Implicit string concatenation is forbidden, use the + operator",
-        event.getMessage());
-    assertEquals("/a/build/file/BUILD",
-                 event.getLocation().getPath().toString());
-    assertEquals(1, event.getLocation().getStartLineAndColumn().getLine());
-    assertEquals(10, event.getLocation().getStartLineAndColumn().getColumn());
-    assertTrue(buildFileAST.containsErrors());
+    Event event = assertContainsError(
+        "Implicit string concatenation is forbidden, use the + operator");
+    assertThat(event.getLocation().getPath().toString()).isEqualTo("/a/build/file/BUILD");
+    assertThat(event.getLocation().getStartLineAndColumn().getLine()).isEqualTo(1);
+    assertThat(event.getLocation().getStartLineAndColumn().getColumn()).isEqualTo(10);
+    assertThat(buildFileAST.containsErrors()).isTrue();
   }
 
   @Test
   public void testImplicitStringConcatenationAcrossLinesIsIllegal() throws Exception {
-    events.setFailFast(false);
+    setFailFast(false);
     BuildFileAST buildFileAST = parseBuildFile("a = 'foo'\n  'bar'");
 
-    Event event = events.collector().iterator().next();
-    assertEquals("indentation error", event.getMessage());
-    assertEquals("/a/build/file/BUILD",
-                 event.getLocation().getPath().toString());
-    assertEquals(2, event.getLocation().getStartLineAndColumn().getLine());
-    assertEquals(2, event.getLocation().getStartLineAndColumn().getColumn());
-    assertTrue(buildFileAST.containsErrors());
-  }
-
-  /**
-   * If the specified EventCollector does contain an event which has
-   * 'expectedEvent' as a substring, the matching event is
-   * returned. Otherwise this will return null.
-   */
-  public static Event findEvent(EventCollector eventCollector,
-                                String expectedEvent) {
-    for (Event event : eventCollector) {
-      if (event.getMessage().contains(expectedEvent)) {
-        return event;
-      }
-    }
-    return null;
+    Event event = assertContainsError("indentation error");
+    assertThat(event.getLocation().getPath().toString()).isEqualTo("/a/build/file/BUILD");
+    assertThat(event.getLocation().getStartLineAndColumn().getLine()).isEqualTo(2);
+    assertThat(event.getLocation().getStartLineAndColumn().getColumn()).isEqualTo(2);
+    assertThat(buildFileAST.containsErrors()).isTrue();
   }
 
   @Test
   public void testWithSyntaxErrorsDoesNotPrintDollarError() throws Exception {
-    events.setFailFast(false);
+    setFailFast(false);
     BuildFileAST buildFile = parseBuildFile(
-        "abi = cxx_abi + '-glibc-' + glibc_version + '-' + "
-        + "generic_cpu + '-' + sysname",
+        "abi = '$(ABI)-glibc-' + glibc_version + '-' + $(TARGET_CPU) + '-linux'",
         "libs = [abi + opt_level + '/lib/libcc.a']",
         "shlibs = [abi + opt_level + '/lib/libcc.so']",
         "+* shlibs", // syntax error at '+'
         "cc_library(name = 'cc',",
         "           srcs = libs,",
         "           includes = [ abi + opt_level + '/include' ])");
-    assertTrue(buildFile.containsErrors());
-    Event event = events.collector().iterator().next();
-    assertEquals("syntax error at '+'", event.getMessage());
-    Environment env = new Environment();
-    assertFalse(buildFile.exec(env, events.reporter()));
-    assertNull(findEvent(events.collector(), "$error$"));
+    assertThat(buildFile.containsErrors()).isTrue();
+    assertContainsError("syntax error at '+': expected expression");
+    assertThat(buildFile.exec(env, getEventHandler())).isFalse();
+    MoreAsserts.assertDoesNotContainEvent(getEventCollector(), "$error$");
     // This message should not be printed anymore.
-    Event event2 = findEvent(events.collector(), "contains syntax error(s)");
-    assertNull(event2);
-  }
-
-  @Test
-  public void testInclude() throws Exception {
-    scratch.file("/foo/bar/BUILD",
-        "c = 4\n"
-        + "d = 5\n");
-    Path buildFile = scratch.file("/BUILD",
-        "a = 2\n"
-        + "include(\"//foo/bar:BUILD\")\n"
-        + "b = 4\n");
-
-    BuildFileAST buildFileAST = BuildFileAST.parseBuildFile(buildFile, events.reporter(),
-                                                            locator, false);
-
-    assertFalse(buildFileAST.containsErrors());
-    assertEquals(5, buildFileAST.getStatements().size());
-  }
-
-  @Test
-  public void testInclude2() throws Exception {
-    scratch.file("/foo/bar/defs",
-        "a = 1\n");
-    Path buildFile = scratch.file("/BUILD",
-        "include(\"//foo/bar:defs\")\n"
-        + "b = a + 1\n");
-
-    BuildFileAST buildFileAST = BuildFileAST.parseBuildFile(buildFile, events.reporter(),
-                                                            locator, false);
-
-    assertFalse(buildFileAST.containsErrors());
-    assertEquals(3, buildFileAST.getStatements().size());
-
-    Environment env = new Environment();
-    Reporter reporter = new Reporter();
-    assertFalse(buildFileAST.exec(env, reporter));
-    assertEquals(2, env.lookup("b"));
-  }
-
-  @Test
-  public void testMultipleIncludes() throws Exception {
-    String fileA =
-        "include(\"//foo:fileB\")\n"
-        + "include(\"//foo:fileC\")\n";
-    scratch.file("/foo/fileB",
-        "b = 3\n"
-        + "include(\"//foo:fileD\")\n");
-    scratch.file("/foo/fileC",
-        "include(\"//foo:fileD\")\n"
-        + "c = b + 2\n");
-    scratch.file("/foo/fileD",
-        "b = b + 1\n"); // this code is included twice
-
-    BuildFileAST buildFileAST = parseBuildFile(fileA);
-    assertFalse(buildFileAST.containsErrors());
-    assertEquals(8, buildFileAST.getStatements().size());
-
-    Environment env = new Environment();
-    Reporter reporter = new Reporter();
-    assertFalse(buildFileAST.exec(env, reporter));
-    assertEquals(5, env.lookup("b"));
-    assertEquals(7, env.lookup("c"));
-  }
-
-  @Test
-  public void testFailInclude() throws Exception {
-    events.setFailFast(false);
-    BuildFileAST buildFileAST = parseBuildFile("include(\"//nonexistent\")");
-    assertEquals(1, buildFileAST.getStatements().size());
-    events.assertContainsEvent("Include of '//nonexistent' failed");
-  }
-
-
-  private class EmptyPackageLocator implements CachingPackageLocator {
-    @Override
-    public Path getBuildFileForPackage(String packageName) {
-      return null;
-    }
-  }
-
-  private CachingPackageLocator emptyLocator = new EmptyPackageLocator();
-
-  @Test
-  public void testFailInclude2() throws Exception {
-    events.setFailFast(false);
-    Path buildFile = scratch.file("/foo/bar/BUILD",
-        "include(\"//nonexistent:foo\")\n");
-    BuildFileAST buildFileAST = BuildFileAST.parseBuildFile(buildFile, events.reporter(),
-                                                            emptyLocator, false);
-    assertEquals(1, buildFileAST.getStatements().size());
-    events.assertContainsEvent("Package 'nonexistent' not found");
-  }
-
-  @Test
-  public void testInvalidInclude() throws Exception {
-    events.setFailFast(false);
-    BuildFileAST buildFileAST = parseBuildFile("include(2)");
-    assertEquals(0, buildFileAST.getStatements().size());
-    events.assertContainsEvent("syntax error at '2'");
-  }
-
-  @Test
-  public void testRecursiveInclude() throws Exception {
-    events.setFailFast(false);
-    Path buildFile = scratch.file("/foo/bar/BUILD",
-        "include(\"//foo/bar:BUILD\")\n");
-
-    BuildFileAST.parseBuildFile(buildFile, events.reporter(), locator, false);
-    events.assertContainsEvent("Recursive inclusion");
-  }
-
-  @Test
-  public void testParseErrorInclude() throws Exception {
-    events.setFailFast(false);
-
-    scratch.file("/foo/bar/file",
-        "a = 2 + % 3\n"); // parse error
-
-    parseBuildFile("include(\"//foo/bar:file\")");
-
-    // Check the location is properly reported
-    Event event = events.collector().iterator().next();
-    assertEquals("/foo/bar/file:1:9", event.getLocation().print());
-    assertEquals("syntax error at '%'", event.getMessage());
-  }
-
-  @Test
-  public void testNonExistentIncludeReported() throws Exception {
-    events.setFailFast(false);
-    BuildFileAST buildFileAST = parseBuildFile("include('//foo:bar')");
-    assertEquals(1, buildFileAST.getStatements().size());
+    MoreAsserts.assertDoesNotContainEvent(getEventCollector(), "contains syntax error(s)");
   }
 }
