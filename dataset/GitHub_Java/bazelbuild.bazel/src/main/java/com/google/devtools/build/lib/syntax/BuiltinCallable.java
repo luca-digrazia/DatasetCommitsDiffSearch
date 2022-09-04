@@ -18,9 +18,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.syntax.Environment.LexicalFrame;
+import com.google.devtools.build.lib.syntax.FuncallExpression.MethodDescriptor;
 import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nullable;
@@ -52,7 +52,7 @@ public class BuiltinCallable extends BaseFunction {
     super(name);
     this.obj = obj;
     this.descriptor = descriptor;
-    this.extraArgs = getExtraArgs(descriptor);
+    this.extraArgs = getExtraArgs(descriptor.getAnnotation());
     configure(obj, descriptor);
   }
 
@@ -61,18 +61,18 @@ public class BuiltinCallable extends BaseFunction {
     return innerArgumentCount;
   }
 
-  private static List<ExtraArgKind> getExtraArgs(MethodDescriptor method) {
+  private static List<ExtraArgKind> getExtraArgs(SkylarkCallable annotation) {
     ImmutableList.Builder<ExtraArgKind> extraArgs = ImmutableList.builder();
-    if (method.isUseLocation()) {
+    if (annotation.useLocation()) {
       extraArgs.add(ExtraArgKind.LOCATION);
     }
-    if (method.isUseAst()) {
+    if (annotation.useAst()) {
       extraArgs.add(ExtraArgKind.SYNTAX_TREE);
     }
-    if (method.isUseEnvironment()) {
+    if (annotation.useEnvironment()) {
       extraArgs.add(ExtraArgKind.ENVIRONMENT);
     }
-    if (method.isUseSkylarkSemantics()) {
+    if (annotation.useSkylarkSemantics()) {
       extraArgs.add(ExtraArgKind.SEMANTICS);
     }
     return extraArgs.build();
@@ -92,7 +92,8 @@ public class BuiltinCallable extends BaseFunction {
 
   @Override
   @Nullable
-  public Object call(Object[] args, @Nullable FuncallExpression ast, Environment env)
+  public Object call(Object[] args,
+      FuncallExpression ast, Environment env)
       throws EvalException, InterruptedException {
     Preconditions.checkNotNull(env);
 
@@ -122,12 +123,14 @@ public class BuiltinCallable extends BaseFunction {
       index++;
     }
 
-    try (SilentCloseable c =
-        Profiler.instance().profile(ProfilerTask.SKYLARK_BUILTIN_FN, getName())) {
+    Profiler.instance().startTask(ProfilerTask.SKYLARK_BUILTIN_FN, getName());
+
+    try {
       env.enterScope(this, SHARED_LEXICAL_FRAME_FOR_BUILTIN_METHOD_CALLS, ast, env.getGlobals());
       return FuncallExpression.callMethod(
           descriptor, getName(), obj, args, ast.getLocation(), env);
     } finally {
+      Profiler.instance().completeTask(ProfilerTask.SKYLARK_BUILTIN_FN);
       env.exitScope();
     }
   }
