@@ -47,7 +47,6 @@ public class StreamRule {
             for (Type type : Type.values())
                 if (type.id == id)
                     return type;
-            return null;
         }
     }
 
