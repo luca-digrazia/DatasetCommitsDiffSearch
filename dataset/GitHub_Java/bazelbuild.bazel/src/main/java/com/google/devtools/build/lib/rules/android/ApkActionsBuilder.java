@@ -333,7 +333,8 @@ public class ApkActionsBuilder {
 
     ImmutableList<String> noCompressExtensions =
         ruleContext.getTokenizedStringListAttr("nocompress_extensions");
-    if (!noCompressExtensions.isEmpty()) {
+    if (ruleContext.getFragment(AndroidConfiguration.class).useNocompressExtensionsOnApk()
+        && !noCompressExtensions.isEmpty()) {
       compressedApkCommandLine.addAll("--nocompress_suffixes", noCompressExtensions);
       singleJarCommandLine.addAll("--nocompress_suffixes", noCompressExtensions);
     }
