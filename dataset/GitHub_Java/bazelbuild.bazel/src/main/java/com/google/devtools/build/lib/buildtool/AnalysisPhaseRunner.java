@@ -21,10 +21,12 @@ import com.google.devtools.build.lib.analysis.AnalysisPhaseCompleteEvent;
 import com.google.devtools.build.lib.analysis.AnalysisResult;
 import com.google.devtools.build.lib.analysis.BuildView;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.LicensesProvider;
+import com.google.devtools.build.lib.analysis.LicensesProvider.TargetLicense;
+import com.google.devtools.build.lib.analysis.StaticallyLinkedMarkerProvider;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.buildeventstream.AbortedEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
@@ -33,13 +35,19 @@ import com.google.devtools.build.lib.buildtool.buildevent.NoAnalyzeEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.TestFilteringCompleteEvent;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.packages.InputFile;
+import com.google.devtools.build.lib.packages.License;
+import com.google.devtools.build.lib.packages.License.DistributionType;
+import com.google.devtools.build.lib.packages.NoSuchPackageException;
+import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
-import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
@@ -91,7 +99,7 @@ public final class AnalysisPhaseRunner {
           // We're modifying the buildOptions in place, which is not ideal, but we also don't want
           // to pay the price for making a copy. Maybe reconsider later if this turns out to be a
           // problem (and the performance loss may not be a big deal).
-          buildOptions.get(CoreOptions.class).instrumentationFilter =
+          buildOptions.get(BuildConfiguration.Options.class).instrumentationFilter =
               new RegexFilter.RegexFilterConverter().convert(instrumentationFilter);
         } catch (OptionsParsingException e) {
           throw new InvalidConfigurationException(e);
@@ -110,13 +118,16 @@ public final class AnalysisPhaseRunner {
             runAnalysisPhase(request, loadingResult, buildOptions, request.getMultiCpus());
       }
 
-      for (BlazeModule module : env.getRuntime().getBlazeModules()) {
-        module.afterAnalysis(
-            env,
-            request,
-            buildOptions,
-            analysisResult.getTargetsToBuild(),
-            analysisResult.getAspects());
+      // Check licenses.
+      // We check licenses if the first target configuration has license checking enabled. Right
+      // now, it is not possible to have multiple target configurations with different settings
+      // for this flag, which allows us to take this short cut.
+      boolean checkLicenses = buildOptions.get(BuildConfiguration.Options.class).checkLicenses;
+      if (checkLicenses) {
+        Profiler.instance().markPhase(ProfilePhase.LICENSE);
+        try (SilentCloseable c = Profiler.instance().profile("validateLicensingForTargets")) {
+          validateLicensingForTargets(analysisResult.getTargetsToBuild(), request.getKeepGoing());
+        }
       }
 
       reportTargets(analysisResult);
@@ -275,6 +286,75 @@ public final class AnalysisPhaseRunner {
           .handle(
               Event.info(
                   "Found " + targetCount + (targetCount == 1 ? " target..." : " targets...")));
+    }
+  }
+
+  /**
+   * Takes a set of configured targets, and checks if the distribution methods declared for the
+   * targets are compatible with the constraints imposed by their prerequisites' licenses.
+   *
+   * @param configuredTargets the targets to check
+   * @param keepGoing if false, and a licensing error is encountered, both generates an error
+   *     message on the reporter, <em>and</em> throws an exception. If true, then just generates a
+   *     message on the reporter.
+   * @throws ViewCreationFailedException if the license checking failed (and not --keep_going)
+   */
+  private void validateLicensingForTargets(
+      Iterable<ConfiguredTarget> configuredTargets, boolean keepGoing)
+      throws ViewCreationFailedException {
+    for (ConfiguredTarget configuredTarget : configuredTargets) {
+      Target target = null;
+      try {
+        target = env.getPackageManager().getTarget(env.getReporter(), configuredTarget.getLabel());
+      } catch (NoSuchPackageException | NoSuchTargetException | InterruptedException e) {
+        env.getReporter().handle(Event.error("Failed to get target to validate license"));
+        throw new ViewCreationFailedException(
+            "Build aborted due to issue getting targets to validate licenses", e);
+      }
+
+      if (TargetUtils.isTestRule(target)) {
+        continue; // Tests are exempt from license checking
+      }
+
+      final Set<DistributionType> distribs = target.getDistributions();
+      StaticallyLinkedMarkerProvider markerProvider =
+          configuredTarget.getProvider(StaticallyLinkedMarkerProvider.class);
+      boolean staticallyLinked = markerProvider != null && markerProvider.isLinkedStatically();
+
+      LicensesProvider provider = configuredTarget.getProvider(LicensesProvider.class);
+      if (provider != null) {
+        NestedSet<TargetLicense> licenses = provider.getTransitiveLicenses();
+        for (TargetLicense targetLicense : licenses) {
+          if (!targetLicense
+              .getLicense()
+              .checkCompatibility(
+                  distribs,
+                  target,
+                  targetLicense.getLabel(),
+                  env.getReporter(),
+                  staticallyLinked)) {
+            if (!keepGoing) {
+              throw new ViewCreationFailedException("Build aborted due to licensing error");
+            }
+          }
+        }
+      } else if (target instanceof InputFile) {
+        // Input file targets do not provide licenses because they do not
+        // depend on the rule where their license is taken from. This is usually
+        // not a problem, because the transitive collection of licenses always
+        // hits the rule they come from, except when the input file is a
+        // top-level target. Thus, we need to handle that case specially here.
+        //
+        // See FileTarget#getLicense for more information about the handling of
+        // license issues with File targets.
+        License license = target.getLicense();
+        if (!license.checkCompatibility(
+            distribs, target, configuredTarget.getLabel(), env.getReporter(), staticallyLinked)) {
+          if (!keepGoing) {
+            throw new ViewCreationFailedException("Build aborted due to licensing error");
+          }
+        }
+      }
     }
   }
 }
