@@ -22,8 +22,6 @@ public class VertxHttpHotReplacementSetup implements HotReplacementSetup {
 
     @Override
     public void setupHotDeployment(HotReplacementContext context) {
-        // ensure that Vert.x runs in dev mode, this prevents Vert.x from caching static resources
-        System.setProperty("vertxweb.environment", "dev");
         this.hotReplacementContext = context;
         VertxHttpRecorder.setHotReplacement(this::handleHotReplacementRequest, hotReplacementContext);
         hotReplacementContext.addPreScanStep(new Runnable() {

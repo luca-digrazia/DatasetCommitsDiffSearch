@@ -43,12 +43,9 @@ import io.quarkus.builder.BuildStep;
 import io.quarkus.deployment.CodeGenerator;
 import io.quarkus.deployment.builditem.ApplicationClassPredicateBuildItem;
 import io.quarkus.deployment.codegen.CodeGenData;
-import io.quarkus.deployment.dev.testing.TestSupport;
 import io.quarkus.deployment.steps.ClassTransformingBuildStep;
 import io.quarkus.deployment.util.FSWatchUtil;
 import io.quarkus.dev.console.DevConsoleManager;
-import io.quarkus.dev.console.InputHandler;
-import io.quarkus.dev.console.QuarkusConsole;
 import io.quarkus.dev.spi.DevModeType;
 import io.quarkus.dev.spi.HotReplacementSetup;
 import io.quarkus.runner.bootstrap.AugmentActionImpl;
@@ -71,11 +68,8 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
     private static volatile boolean restarting;
     private static volatile boolean firstStartCompleted;
     private static final CountDownLatch shutdownLatch = new CountDownLatch(1);
-    private Thread shutdownThread;
-    private final FSWatchUtil fsWatchUtil = new FSWatchUtil();
 
     private synchronized void firstStart(QuarkusClassLoader deploymentClassLoader, List<CodeGenData> codeGens) {
-
         ClassLoader old = Thread.currentThread().getContextClassLoader();
         try {
 
@@ -95,31 +89,17 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
                                         || context.isAbortOnFailedStart()) {
                                     return;
                                 }
-                                final CountDownLatch latch = new CountDownLatch(1);
-                                QuarkusConsole.INSTANCE.pushInputHandler(new InputHandler() {
-                                    @Override
-                                    public void handleInput(int[] keys) {
-                                        for (int i : keys) {
-                                            if (i == 'q') {
-                                                System.exit(0);
-                                            } else {
-                                                QuarkusConsole.INSTANCE.popInputHandler();
-                                                latch.countDown();
-                                            }
-                                        }
-                                    }
-
-                                    @Override
-                                    public void promptHandler(ConsoleStatus promptHandler) {
-                                        promptHandler.setPrompt("\u001B[91mQuarkus application exited with code " + integer
-                                                + "\nPress [q] or Ctrl + C to quit, any other key to restart");
-                                    }
-                                });
+                                System.out.println("Quarkus application exited with code " + integer);
+                                System.out.println("Press Enter to restart or Ctrl + C to quit");
                                 try {
-                                    latch.await();
+                                    while (System.in.read() != '\n') {
+                                        //noop
+                                    }
+                                    while (System.in.available() > 0) {
+                                        System.in.read();
+                                    }
                                     System.out.println("Restarting...");
-                                    RuntimeUpdatesProcessor.INSTANCE.checkForChangedClasses(false);
-                                    RuntimeUpdatesProcessor.INSTANCE.checkForChangedTestClasses(false);
+                                    RuntimeUpdatesProcessor.INSTANCE.checkForChangedClasses();
                                     restartApp(RuntimeUpdatesProcessor.INSTANCE.checkForFileChange(), null);
                                 } catch (Exception e) {
                                     log.error("Failed to restart", e);
@@ -188,7 +168,7 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
                         }
                     }));
         }
-        fsWatchUtil.observe(watchers, 500);
+        FSWatchUtil.observe(watchers, 500);
     }
 
     public void restartCallback(Set<String> changedResources, ClassScanResult result) {
@@ -237,19 +217,21 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
                 compilationProviders.add(provider);
                 context.getAllModules().forEach(moduleInfo -> moduleInfo.addSourcePaths(provider.handledSourcePaths()));
             }
-            QuarkusCompiler compiler = new QuarkusCompiler(curatedApplication, compilationProviders, context);
-            TestSupport testSupport = null;
-            if (devModeType == DevModeType.LOCAL && context.getApplicationRoot().getTest().isPresent()) {
-                testSupport = new TestSupport(curatedApplication, compilationProviders, context);
+            ClassLoaderCompiler compiler;
+            try {
+                compiler = new ClassLoaderCompiler(Thread.currentThread().getContextClassLoader(), curatedApplication,
+                        compilationProviders, context);
+            } catch (Exception e) {
+                log.error("Failed to create compiler, runtime compilation will be unavailable", e);
+                return null;
             }
-
             RuntimeUpdatesProcessor processor = new RuntimeUpdatesProcessor(appRoot, context, compiler,
                     devModeType, this::restartCallback, null, new BiFunction<String, byte[], byte[]>() {
                         @Override
                         public byte[] apply(String s, byte[] bytes) {
                             return ClassTransformingBuildStep.transform(s, bytes);
                         }
-                    }, testSupport);
+                    });
 
             for (HotReplacementSetup service : ServiceLoader.load(HotReplacementSetup.class,
                     curatedApplication.getBaseRuntimeClassLoader())) {
@@ -294,7 +276,6 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
     public void close() {
         //don't attempt to restart in the exit code handler
         restarting = true;
-        fsWatchUtil.shutdown();
         try {
             stop();
         } finally {
@@ -308,19 +289,7 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
                     i.close();
                 }
             } finally {
-                try {
-                    curatedApplication.close();
-                } finally {
-                    if (shutdownThread != null) {
-                        try {
-                            Runtime.getRuntime().removeShutdownHook(shutdownThread);
-                        } catch (IllegalStateException ignore) {
-
-                        }
-                        shutdownThread = null;
-                    }
-                    shutdownLatch.countDown();
-                }
+                curatedApplication.close();
             }
         }
     }
@@ -328,7 +297,7 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
     //the main entry point, but loaded inside the augmentation class loader
     @Override
     public void accept(CuratedApplication o, Map<String, Object> params) {
-        Timing.staticInitStarted(o.getBaseRuntimeClassLoader(), false);
+        Timing.staticInitStarted(o.getBaseRuntimeClassLoader());
         //https://github.com/quarkusio/quarkus/issues/9748
         //if you have an app with all daemon threads then the app thread
         //may be the only thread keeping the JVM alive
@@ -390,7 +359,7 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
             QuarkusClassLoader deploymentClassLoader = curatedApplication.createDeploymentClassLoader();
 
             for (DevModeContext.ModuleInfo module : context.getAllModules()) {
-                if (!module.getSourceParents().isEmpty() && module.getPreBuildOutputDir() != null) { // it's null for remote dev
+                if (module.getSourceParents() != null) { // it's null for remote dev
                     codeGens.addAll(
                             CodeGenerator.init(
                                     deploymentClassLoader,
@@ -404,7 +373,7 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
                     (DevModeType) params.get(DevModeType.class.getName()));
             if (RuntimeUpdatesProcessor.INSTANCE != null) {
                 RuntimeUpdatesProcessor.INSTANCE.checkForFileChange();
-                RuntimeUpdatesProcessor.INSTANCE.checkForChangedClasses(true);
+                RuntimeUpdatesProcessor.INSTANCE.checkForChangedClasses();
             }
             firstStart(deploymentClassLoader, codeGens);
 
@@ -416,7 +385,7 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
                                     : deploymentProblem);
                 }
             }
-            shutdownThread = new Thread(new Runnable() {
+            Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
                 @Override
                 public void run() {
                     shutdownLatch.countDown();
@@ -430,8 +399,7 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
                         }
                     }
                 }
-            }, "Quarkus Shutdown Thread");
-            Runtime.getRuntime().addShutdownHook(shutdownThread);
+            }, "Quarkus Shutdown Thread"));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
