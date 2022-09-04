@@ -52,9 +52,14 @@ public class ClassComparisonUtil {
                 return false;
             }
         }
-        for (MethodInfo method : clazz.methods()) {
+        List<MethodInfo> methods = clazz.methods();
+        List<MethodInfo> oldMethods = old.methods();
+        if (methods.size() != oldMethods.size()) {
+            return false;
+        }
+        for (MethodInfo method : methods) {
             MethodInfo om = null;
-            for (MethodInfo i : old.methods()) {
+            for (MethodInfo i : oldMethods) {
                 if (!i.name().equals(method.name())) {
                     continue;
                 }
@@ -68,9 +73,6 @@ public class ClassComparisonUtil {
                     continue;
                 }
                 if (!Objects.equals(i.defaultValue(), method.defaultValue())) {
-                    continue;
-                }
-                if (!compareAnnotations(i.annotations(), method.annotations())) {
                     continue;
                 }
                 boolean paramEqual = true;
@@ -159,9 +161,14 @@ public class ClassComparisonUtil {
     }
 
     private static boolean compareAnnotation(AnnotationInstance a, AnnotationInstance b) {
-        for (AnnotationValue i : a.values()) {
-            AnnotationValue j = b.value(i.name());
-            if (!i.equals(j)) {
+        List<AnnotationValue> valuesA = a.values();
+        List<AnnotationValue> valuesB = b.values();
+        if (valuesA.size() != valuesB.size()) {
+            return false;
+        }
+        for (AnnotationValue valueA : valuesA) {
+            AnnotationValue valueB = b.value(valueA.name());
+            if (!valueA.equals(valueB)) {
                 return false;
             }
         }
