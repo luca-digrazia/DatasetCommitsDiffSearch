@@ -393,6 +393,18 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
   public boolean incompatibleVisibilityPrivateAttributesAtDefinition;
 
   @Option(
+      name = "incompatible_disallow_unverified_http_downloads",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help = "If set, disallow downloads via plain http if no checksum is given")
+  public boolean incompatibleDisallowUnverifiedHttpDownloads;
+
+  @Option(
       name = "incompatible_new_actions_api",
       defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
@@ -417,19 +429,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
       },
       help = "If set to true, disables the function `attr.license`.")
   public boolean incompatibleNoAttrLicense;
-
-  @Option(
-      name = "incompatible_applicable_licenses",
-      defaultValue = "false",
-      // TODO(aiuto): change to OptionDocumentationCategory.STARLARK_SEMANTICS,
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "If set to true, enables the function `attr.applicable_licenses`.")
-  public boolean incompatibleApplicableLicenses;
 
   @Option(
       name = "incompatible_no_implicit_file_export",
@@ -499,6 +498,19 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
       },
       help = "If set to true, disables the output_group field of the 'Target' Starlark type.")
   public boolean incompatibleNoTargetOutputGroup;
+
+  @Option(
+      name = "incompatible_remap_main_repo",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
+      effectTags = OptionEffectTag.LOADING_AND_ANALYSIS,
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      oldName = "experimental_remap_main_repo",
+      help = "If set to true, will treat references to '@<main repo name>' the same as '@'.")
+  public boolean incompatibleRemapMainRepo;
 
   @Option(
       name = "incompatible_remove_enabled_toolchain_types",
@@ -633,7 +645,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .experimentalStarlarkUnusedInputsList(experimentalStarlarkUnusedInputsList)
             .experimentalCcSharedLibrary(experimentalCcSharedLibrary)
             .experimentalRepoRemoteExec(experimentalRepoRemoteExec)
-            .incompatibleApplicableLicenses(incompatibleApplicableLicenses)
             .incompatibleBzlDisallowLoadAfterStatement(incompatibleBzlDisallowLoadAfterStatement)
             .incompatibleDepsetUnion(incompatibleDepsetUnion)
             .incompatibleDisableTargetProviderFields(incompatibleDisableTargetProviderFields)
@@ -644,6 +655,8 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .incompatibleDisableDepsetItems(incompatibleDisableDepsetItems)
             .incompatibleDisallowEmptyGlob(incompatibleDisallowEmptyGlob)
             .incompatibleDisallowStructProviderSyntax(incompatibleDisallowStructProviderSyntax)
+            .incompatibleDisallowUnverifiedHttpDownloads(
+                incompatibleDisallowUnverifiedHttpDownloads)
             .incompatibleNewActionsApi(incompatibleNewActionsApi)
             .incompatibleNoAttrLicense(incompatibleNoAttrLicense)
             .incompatibleNoImplicitFileExport(incompatibleNoImplicitFileExport)
@@ -651,6 +664,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .incompatibleNoRuleOutputsParam(incompatibleNoRuleOutputsParam)
             .incompatibleNoSupportToolsInActionInputs(incompatibleNoSupportToolsInActionInputs)
             .incompatibleNoTargetOutputGroup(incompatibleNoTargetOutputGroup)
+            .incompatibleRemapMainRepo(incompatibleRemapMainRepo)
             .incompatibleRemoveEnabledToolchainTypes(incompatibleRemoveEnabledToolchainTypes)
             .incompatibleRestrictNamedParams(incompatibleRestrictNamedParams)
             .incompatibleRunShellCommandString(incompatibleRunShellCommandString)
