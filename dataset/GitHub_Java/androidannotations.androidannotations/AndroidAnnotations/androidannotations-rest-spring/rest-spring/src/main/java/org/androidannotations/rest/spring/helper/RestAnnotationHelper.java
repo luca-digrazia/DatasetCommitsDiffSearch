@@ -21,11 +21,9 @@ import static org.androidannotations.rest.spring.helper.RestSpringClasses.MEDIA_
 import static org.androidannotations.rest.spring.helper.RestSpringClasses.RESPONSE_ENTITY;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeSet;
@@ -36,7 +34,6 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
@@ -48,7 +45,6 @@ import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.helper.TargetAnnotationHelper;
 import org.androidannotations.rest.spring.annotations.Accept;
-import org.androidannotations.rest.spring.annotations.Path;
 import org.androidannotations.rest.spring.annotations.RequiresAuthentication;
 import org.androidannotations.rest.spring.annotations.RequiresCookie;
 import org.androidannotations.rest.spring.annotations.RequiresCookieInUrl;
@@ -78,15 +74,9 @@ public class RestAnnotationHelper extends TargetAnnotationHelper {
 	private static final Pattern NAMES_PATTERN = Pattern.compile("\\{([^/]+?)\\}");
 
 	public Set<String> extractUrlVariableNames(ExecutableElement element) {
-		String uriTemplate = extractAnnotationValueParameter(element);
-
-		return extractUrlVariableNames(uriTemplate);
-	}
-
-
-	public Set<String> extractUrlVariableNames(String uriTemplate) {
 
 		Set<String> variableNames = new HashSet<>();
+		String uriTemplate = extractAnnotationValueParameter(element);
 
 		boolean hasValueInAnnotation = uriTemplate != null;
 		if (hasValueInAnnotation) {
@@ -100,11 +90,6 @@ public class RestAnnotationHelper extends TargetAnnotationHelper {
 	}
 
 	public JVar declareUrlVariables(ExecutableElement element, RestHolder holder, JBlock methodBody, SortedMap<String, JVar> methodParams) {
-		Map<String, String> urlNameToElementName = new HashMap<>();
-		for (VariableElement variableElement : element.getParameters()) {
-			urlNameToElementName.put(getUrlVariableCorrespondingTo(variableElement), variableElement.getSimpleName().toString());
-		}
-
 		Set<String> urlVariables = extractUrlVariableNames(element);
 
 		// cookies in url?
@@ -119,16 +104,10 @@ public class RestAnnotationHelper extends TargetAnnotationHelper {
 		if (!urlVariables.isEmpty()) {
 			JVar hashMapVar = methodBody.decl(hashMapClass, "urlVariables", JExpr._new(hashMapClass));
 			for (String urlVariable : urlVariables) {
-				String elementName = urlNameToElementName.get(urlVariable);
-				JVar methodParam = null;
-
-				if (elementName != null) {
-					methodParam = methodParams.get(elementName);
-				}
-
+				JVar methodParam = methodParams.get(urlVariable);
 				if (methodParam != null) {
 					methodBody.invoke(hashMapVar, "put").arg(urlVariable).arg(methodParam);
-					methodParams.remove(elementName);
+					methodParams.remove(urlVariable);
 				} else {
 					// cookie from url
 					JInvocation cookieValue = holder.getAvailableCookiesField().invoke("get").arg(JExpr.lit(urlVariable));
@@ -267,25 +246,12 @@ public class RestAnnotationHelper extends TargetAnnotationHelper {
 
 	public JVar getEntitySentToServer(ExecutableElement element, SortedMap<String, JVar> params) {
 		Set<String> urlVariables = extractUrlVariableNames(element);
-		for (VariableElement parameter : element.getParameters()) {
-			String parametername = getUrlVariableCorrespondingTo(parameter);
-
-			if (!urlVariables.contains(parametername)) {
-				return params.get(parametername);
+		for (String paramName : params.keySet()) {
+			if (!urlVariables.contains(paramName)) {
+				return params.get(paramName);
 			}
 		}
 		return null;
-	}
-
-	public String getUrlVariableCorrespondingTo(VariableElement parameter) {
-		Path path = parameter.getAnnotation(Path.class);
-		String parameterName;
-		if (path != null && !path.value().equals("")) {
-			parameterName = path.value();
-		} else {
-			parameterName = parameter.getSimpleName().toString();
-		}
-		return parameterName;
 	}
 
 	public JExpression declareHttpEntity(JBlock body, JVar entitySentToServer, JVar httpHeaders) {
