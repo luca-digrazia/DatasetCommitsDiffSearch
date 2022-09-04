@@ -31,11 +31,8 @@ import io.quarkus.qrs.runtime.jaxrs.QrsRequest;
 import io.quarkus.qrs.runtime.jaxrs.QrsUriInfo;
 import io.quarkus.qrs.runtime.mapping.RuntimeResource;
 import io.quarkus.qrs.runtime.mapping.URITemplate;
-import io.quarkus.qrs.runtime.spi.BeanFactory;
 import io.quarkus.qrs.runtime.util.EmptyInputStream;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
-import io.vertx.core.AsyncResult;
-import io.vertx.core.Handler;
 import io.vertx.core.net.impl.ConnectionBase;
 import io.vertx.ext.web.RoutingContext;
 
@@ -72,12 +69,13 @@ public class QrsRequestContext implements Runnable, Closeable {
     /**
      * The endpoint to invoke
      */
-    private BeanFactory.BeanInstance<Object> endpointInstance;
+    private Object endpointInstance;
     /**
      * The result of the invocation
      */
     private Object result;
     private boolean suspended = false;
+    private volatile boolean resetRequestContext = false;
     private volatile boolean running = false;
     private volatile Executor executor;
     private int position;
@@ -118,12 +116,6 @@ public class QrsRequestContext implements Runnable, Closeable {
         this.target = target;
         this.handlers = target.getHandlerChain();
         this.parameters = new Object[target.getParameterTypes().length];
-        context.addEndHandler(new Handler<AsyncResult<Void>>() {
-            @Override
-            public void handle(AsyncResult<Void> event) {
-                close();
-            }
-        });
     }
 
     public QrsRequestContext(QrsDeployment deployment, RoutingContext context, ManagedContext requestContext,
@@ -134,12 +126,6 @@ public class QrsRequestContext implements Runnable, Closeable {
         this.currentVertxRequest = currentVertxRequest;
         this.handlers = handlerChain;
         this.parameters = EMPTY_ARRAY;
-        context.addEndHandler(new Handler<AsyncResult<Void>>() {
-            @Override
-            public void handle(AsyncResult<Void> event) {
-                close();
-            }
-        });
     }
 
     public QrsDeployment getDeployment() {
@@ -173,6 +159,7 @@ public class QrsRequestContext implements Runnable, Closeable {
             }
         } else {
             suspended = false;
+            resetRequestContext = true;
             if (executor == null) {
                 ((ConnectionBase) context.request().connection()).getContext().nettyEventLoop().execute(this);
             } else {
@@ -186,14 +173,15 @@ public class QrsRequestContext implements Runnable, Closeable {
         running = true;
         //if this is a blocking target we don't activate for the initial non-blocking part
         //unless there are pre-mapping filters as these may require CDI
-        boolean activationRequired = target == null || (target.isBlocking() && executor == null);
+        boolean activationRequired = target == null || (target.isBlocking() && executor == null) || resetRequestContext;
         if (activationRequired) {
             if (currentRequestScope == null) {
                 requestContext.activate();
-                currentVertxRequest.setCurrent(context);
+                currentVertxRequest.setCurrent(context, this);
             } else {
                 requestContext.activate(currentRequestScope);
             }
+            resetRequestContext = false;
         }
         try {
             while (position < handlers.length) {
@@ -231,11 +219,13 @@ public class QrsRequestContext implements Runnable, Closeable {
             }
         } catch (Throwable t) {
             handleException(t);
+            close();
         } finally {
             running = false;
             if (activationRequired) {
                 if (position == handlers.length) {
                     requestContext.terminate();
+                    close();
                 } else {
                     currentRequestScope = requestContext.getState();
                     requestContext.deactivate();
@@ -353,13 +343,10 @@ public class QrsRequestContext implements Runnable, Closeable {
     }
 
     public Object getEndpointInstance() {
-        if (endpointInstance == null) {
-            return null;
-        }
-        return endpointInstance.getInstance();
+        return endpointInstance;
     }
 
-    public QrsRequestContext setEndpointInstance(BeanFactory.BeanInstance<Object> endpointInstance) {
+    public QrsRequestContext setEndpointInstance(Object endpointInstance) {
         this.endpointInstance = endpointInstance;
         return this;
     }
@@ -441,10 +428,7 @@ public class QrsRequestContext implements Runnable, Closeable {
 
     @Override
     public void close() {
-        // FIXME: close filter instances somehow?
-        if (endpointInstance != null) {
-            endpointInstance.close();
-        }
+        //TODO: do we even have any resources to close?
     }
 
     public Response getResponse() {
