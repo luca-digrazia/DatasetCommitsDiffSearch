@@ -17,10 +17,10 @@ import static com.google.devtools.build.lib.analysis.skylark.FunctionTransitionU
 import static com.google.devtools.build.lib.packages.RuleClass.Builder.SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.ComposingTransition;
@@ -32,20 +32,20 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.rules.Alias;
 import com.google.devtools.build.lib.skyframe.PackageValue;
+import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
@@ -232,9 +232,6 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
    * is how we ensure that an unset build setting and a set-to-default build settings represent the
    * same configuration.
    *
-   * <p>Deduplicate redundant build settings from the result of split transitions. The first
-   * encountered split key is used to represent the deduped build setting.
-   *
    * @param root transition that was applied. Likely a {@link ComposingTransition} so we decompose
    *     and post-process all StarlarkTransitions out of whatever transition is passed here.
    * @param buildSettingPackages PackageValue.Key/Values of packages that contain all
@@ -248,10 +245,10 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
   // final result. I.e. if a transition that writes a non int --//int-build-setting is composed
   // with another transition that writes --//int-build-setting (without reading it first), then
   // the bad output of transition 1 is masked.
-  public static Map<String, BuildOptions> validate(
+  public static List<BuildOptions> validate(
       ConfigurationTransition root,
       Map<PackageValue.Key, PackageValue> buildSettingPackages,
-      Map<String, BuildOptions> toOptions)
+      List<BuildOptions> toOptions)
       throws TransitionException {
     // collect settings changed during this transition and their types
     Map<Label, Rule> changedSettingToRule = Maps.newHashMap();
@@ -283,13 +280,12 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
 
     // Verify changed settings were changed to something reasonable for their type and filter out
     // default values.
-    ImmutableMap.Builder<String, BuildOptions> cleanedOptionMap = ImmutableMap.builder();
-    Set<BuildOptions> cleanedOptionSet = Sets.newLinkedHashSetWithExpectedSize(toOptions.size());
-    for (String splitKey : toOptions.keySet()) {
+    Set<BuildOptions> cleanedOptionList = new LinkedHashSet<>(toOptions.size());
+    for (BuildOptions options : toOptions) {
       // Lazily initialized to optimize for the common case where we don't modify anything.
       BuildOptions.Builder cleanedOptions = null;
       // Clean up aliased values.
-      BuildOptions options = unalias(toOptions.get(splitKey), aliasToActual);
+      options = unalias(options, aliasToActual);
       for (Map.Entry<Label, Rule> changedSettingWithRule : changedSettingToRule.entrySet()) {
         Label setting = changedSettingWithRule.getKey();
         Rule rule = changedSettingWithRule.getValue();
@@ -310,12 +306,9 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
         }
       }
       // Keep the same instance if we didn't do anything to maintain reference equality later on.
-      options = cleanedOptions != null ? cleanedOptions.build() : options;
-      if (cleanedOptionSet.add(options)) {
-        cleanedOptionMap.put(splitKey, options);
-      }
+      cleanedOptionList.add(cleanedOptions != null ? cleanedOptions.build() : options);
     }
-    return cleanedOptionMap.build();
+    return ImmutableList.copyOf(cleanedOptionList);
   }
 
   /*
@@ -547,18 +540,6 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
   @Override
   public int hashCode() {
     return Objects.hashCode(starlarkDefinedConfigTransition);
-  }
-
-  /** Given a transition, figures out if it composes any Starlark transitions. */
-  public static boolean doesStarlarkTransition(ConfigurationTransition root)
-      throws TransitionException {
-    AtomicBoolean doesStarlarkTransition = new AtomicBoolean(false);
-    root.visit(
-        (StarlarkTransitionVisitor)
-            transition -> {
-              doesStarlarkTransition.set(true);
-            });
-    return doesStarlarkTransition.get();
   }
 
   @FunctionalInterface

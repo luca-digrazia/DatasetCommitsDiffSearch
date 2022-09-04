@@ -534,22 +534,16 @@ public final class ConfigurationResolver {
       Map<PackageValue.Key, PackageValue> buildSettingPackages,
       ExtendedEventHandler eventHandler)
       throws TransitionException {
-    boolean doesStarlarkTransition = StarlarkTransition.doesStarlarkTransition(transition);
-    if (doesStarlarkTransition) {
-      fromOptions =
-          addDefaultStarlarkOptions(
-              fromOptions,
-              StarlarkTransition.getDefaultInputValues(buildSettingPackages, transition));
-    }
+    BuildOptions fromOptionsWithDefaults =
+        addDefaultStarlarkOptions(
+            fromOptions,
+            StarlarkTransition.getDefaultInputValues(buildSettingPackages, transition));
 
     // TODO(bazel-team): safety-check that this never mutates fromOptions.
-    List<BuildOptions> result = transition.apply(fromOptions);
+    List<BuildOptions> result = transition.apply(fromOptionsWithDefaults);
 
-    if (doesStarlarkTransition) {
-      StarlarkTransition.replayEvents(eventHandler, transition);
-      result = StarlarkTransition.validate(transition, buildSettingPackages, result);
-    }
-    return result;
+    StarlarkTransition.replayEvents(eventHandler, transition);
+    return StarlarkTransition.validate(transition, buildSettingPackages, result);
   }
 
   private static BuildOptions addDefaultStarlarkOptions(
@@ -658,8 +652,8 @@ public final class ConfigurationResolver {
    * <p>Resolution consists of two steps:
    *
    * <ol>
-   *   <li>Apply the per-target transitions specified in {@code targetsToEvaluate}. This can be
-   *       used, e.g., to apply {@link
+   *   <li>Apply the per-target transitions specified in {@code asDeps}. This can be used, e.g., to
+   *       apply {@link
    *       com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory}s over global
    *       top-level configurations.
    *   <li>(Optionally) trim configurations to only the fragments the targets actually need. This is

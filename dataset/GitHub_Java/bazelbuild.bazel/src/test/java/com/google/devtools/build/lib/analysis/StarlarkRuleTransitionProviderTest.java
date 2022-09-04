@@ -18,10 +18,10 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.EmptyToNullLabelConverter;
-import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration.TestOptions;
@@ -54,34 +54,10 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
         effectTags = {OptionEffectTag.NO_OP},
         help = "An option that is sometimes set to null.")
     public Label nullable;
-
-    @Option(
-        name = "foo",
-        defaultValue = "",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {OptionEffectTag.NO_OP},
-        help = "A regular string-typed option")
-    public String foo;
-
-    @Option(
-        name = "bar",
-        defaultValue = "",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {OptionEffectTag.NO_OP},
-        help = "A regular string-typed option")
-    public String bar;
-
-    @Option(
-        name = "bool",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {OptionEffectTag.NO_OP},
-        help = "A regular bool-typed option")
-    public boolean bool;
   }
 
   /** Loads a new {link @DummyTestFragment} instance. */
-  protected static class DummyTestLoader implements ConfigurationFragmentFactory {
+  private static class DummyTestLoader implements ConfigurationFragmentFactory {
 
     @Override
     public Fragment create(BuildOptions buildOptions) throws InvalidConfigurationException {
@@ -1202,88 +1178,5 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
     assertContainsEvent(
         "transition outputs [//command_line_option:test_arg] were "
             + "not defined by transition function");
-  }
-
-  @Test
-  public void composingTransitionReportsAllStarlarkErrors() throws Exception {
-    writeWhitelistFile();
-    scratch.file(
-        "test/build_settings.bzl",
-        "def _impl(ctx):",
-        "  return []",
-        "string_flag = rule(implementation = _impl, build_setting = config.string(flag=True))");
-    scratch.file(
-        "test/transitions.bzl",
-        "def _impl(settings, attr):",
-        "  return {}",
-        "attr_transition = transition(implementation = _impl, inputs = [],",
-        "  outputs = ['//test:attr_transition_output_flag'])",
-        "self_transition = transition(implementation = _impl, inputs = [],",
-        "  outputs = ['//test:self_transition_output_flag'])");
-    scratch.file(
-        "test/rules.bzl",
-        "load('//test:transitions.bzl', 'attr_transition', 'self_transition')",
-        "def _impl(ctx):",
-        "  return []",
-        "rule_with_attr_transition = rule(",
-        "  implementation = _impl,",
-        "  attrs = {",
-        "    '_whitelist_function_transition': attr.label(",
-        "        default = '//tools/whitelists/function_transition_whitelist'),",
-        "    'deps': attr.label_list(cfg = attr_transition),",
-        "  })",
-        "rule_with_self_transition = rule(",
-        "  implementation = _impl,",
-        "  cfg = self_transition,",
-        "  attrs = {",
-        "    '_whitelist_function_transition': attr.label(",
-        "        default = '//tools/whitelists/function_transition_whitelist'),",
-        "  })");
-    scratch.file(
-        "test/BUILD",
-        "load('//test:rules.bzl', 'rule_with_attr_transition', 'rule_with_self_transition')",
-        "load('//test:build_settings.bzl', 'string_flag')",
-        "string_flag(name = 'attr_transition_output_flag', build_setting_default='')",
-        "string_flag(name = 'self_transition_output_flag', build_setting_default='')",
-        "rule_with_attr_transition(name = 'buildme', deps = [':adep'])",
-        "rule_with_self_transition(name = 'adep')");
-
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test:buildme");
-    assertContainsEvent(
-        "transition outputs [//test:attr_transition_output_flag] were not defined by transition "
-            + "function");
-    assertContainsEvent(
-        "transition outputs [//test:self_transition_output_flag] were not defined by transition "
-            + "function");
-  }
-
-  @Test
-  public void testTransitionOnDefine() throws Exception {
-    writeWhitelistFile();
-    scratch.file(
-        "test/transitions.bzl",
-        "def _impl(settings, attr):",
-        "  return {'//command_line_option:define': 'chonky=true'}",
-        "my_transition = transition(implementation = _impl, inputs = [],",
-        "  outputs = ['//command_line_option:define'])");
-    scratch.file(
-        "test/rules.bzl",
-        "load('//test:transitions.bzl', 'my_transition')",
-        "def _impl(ctx):",
-        "  return []",
-        "my_rule = rule(",
-        "  implementation = _impl,",
-        "  cfg = my_transition,",
-        "  attrs = {",
-        "    '_whitelist_function_transition': attr.label(",
-        "        default = '//tools/whitelists/function_transition_whitelist',",
-        "    ),",
-        "  })");
-    scratch.file("test/BUILD", "load('//test:rules.bzl', 'my_rule')", "my_rule(name = 'test')");
-
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test");
-    assertContainsEvent("Starlark transition on --define not supported - try using build settings");
   }
 }

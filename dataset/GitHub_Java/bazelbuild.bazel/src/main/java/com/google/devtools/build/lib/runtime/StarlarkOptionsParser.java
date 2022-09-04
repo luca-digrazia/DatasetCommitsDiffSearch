@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.runtime;
 
 import static com.google.devtools.build.lib.analysis.config.CoreOptionConverters.BUILD_SETTING_CONVERTERS;
 import static com.google.devtools.build.lib.packages.RuleClass.Builder.SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME;
-import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -29,9 +29,10 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.BuildSetting;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.pkgcache.LoadingOptions;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Converter;
@@ -79,7 +80,8 @@ public class StarlarkOptionsParser {
   // OptionsParserImpl.identifyOptionAndPossibleArgument. Consider combining. This would probably
   // require multiple rounds of parsing to fit starlark-defined options into native option format.
   @VisibleForTesting
-  public void parse(ExtendedEventHandler eventHandler) throws OptionsParsingException {
+  public void parse(Command command, ExtendedEventHandler eventHandler)
+      throws OptionsParsingException {
     ImmutableList.Builder<String> residue = new ImmutableList.Builder<>();
     // Map of <option name (label), <unparsed option value, loaded option>>.
     Map<String, Pair<String, Target>> unparsedOptions =
@@ -96,7 +98,7 @@ public class StarlarkOptionsParser {
         continue;
       }
 
-      parseArg(arg, unparsedArgs, unparsedOptions, eventHandler);
+      parseArg(arg, unparsedArgs, unparsedOptions, command, eventHandler);
     }
     residue.addAll(nativeOptionsParser.getPostDoubleDashResidue());
     nativeOptionsParser.setResidue(residue.build());
@@ -144,6 +146,7 @@ public class StarlarkOptionsParser {
       String arg,
       Iterator<String> unparsedArgs,
       Map<String, Pair<String, Target>> unparsedOptions,
+      Command command,
       ExtendedEventHandler eventHandler)
       throws OptionsParsingException {
     int equalsAt = arg.indexOf('=');
@@ -155,7 +158,8 @@ public class StarlarkOptionsParser {
 
     if (value != null) {
       // --flag=value or -flag=value form
-      Target buildSettingTarget = loadBuildSetting(name, nativeOptionsParser, eventHandler);
+      Target buildSettingTarget =
+          loadBuildSetting(name, nativeOptionsParser, command, eventHandler);
       unparsedOptions.put(name, new Pair<>(value, buildSettingTarget));
     } else {
       boolean booleanValue = true;
@@ -164,7 +168,8 @@ public class StarlarkOptionsParser {
         booleanValue = false;
         name = name.substring(2);
       }
-      Target buildSettingTarget = loadBuildSetting(name, nativeOptionsParser, eventHandler);
+      Target buildSettingTarget =
+          loadBuildSetting(name, nativeOptionsParser, command, eventHandler);
       BuildSetting current =
           buildSettingTarget.getAssociatedRule().getRuleClassObject().getBuildSetting();
       if (current.getType().equals(BOOLEAN)) {
@@ -189,17 +194,20 @@ public class StarlarkOptionsParser {
   private Target loadBuildSetting(
       String targetToBuild,
       OptionsParser optionsParser,
+      Command command,
       ExtendedEventHandler eventHandler)
       throws OptionsParsingException {
     Target buildSetting;
     try {
       TargetPatternPhaseValue result =
-          skyframeExecutor.loadTargetPatternsWithoutFilters(
+          skyframeExecutor.loadTargetPatterns(
               reporter,
               Collections.singletonList(targetToBuild),
               relativeWorkingDirectory,
+              optionsParser.getOptions(LoadingOptions.class),
               SkyframeExecutor.DEFAULT_THREAD_COUNT,
-              optionsParser.getOptions(KeepGoingOption.class).keepGoing);
+              optionsParser.getOptions(KeepGoingOption.class).keepGoing,
+              command.name().equals("test"));
       buildSetting =
           Iterables.getOnlyElement(
               result.getTargets(eventHandler, skyframeExecutor.getPackageManager()));
