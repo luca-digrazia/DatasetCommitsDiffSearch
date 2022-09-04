@@ -257,7 +257,7 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
       assertThat(text).isEqualTo(Joiner.on('\n').join(expected));
     }
 
-    // Check that annotation processing doesn't interfere with stripping
+    // sanity-check that annotation processing doesn't interfere with stripping
     {
       String text = textify(outputs.get("Hello.class"));
       String[] expected = {
@@ -1470,7 +1470,7 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
 
   @Test
   public void processJavacopts_useSourceByDefault() {
-    TurbineOptions options = TurbineOptions.builder().setOutput("/out").build();
+    TurbineOptions options = TurbineOptions.builder().setOutput("/out").setTempDir("/tmp").build();
     ImmutableList<String> javacopts = JavacTurbine.processJavacopts(options);
     assertThat(javacopts).contains("-source");
     assertThat(javacopts).doesNotContain("--release");
@@ -1481,6 +1481,7 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
     TurbineOptions options =
         TurbineOptions.builder()
             .setOutput("/out")
+            .setTempDir("/tmp")
             .addAllJavacOpts(ImmutableList.of("--release", "9"))
             .build();
     ImmutableList<String> javacopts = JavacTurbine.processJavacopts(options);
@@ -1492,6 +1493,7 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
     TurbineOptions options =
         TurbineOptions.builder()
             .setOutput("/out")
+            .setTempDir("/tmp")
             .addAllJavacOpts(ImmutableList.of("-source", "8", "-target", "8", "--release", "9"))
             .build();
     ImmutableList<String> javacopts = JavacTurbine.processJavacopts(options);
@@ -1504,6 +1506,7 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
     TurbineOptions options =
         TurbineOptions.builder()
             .setOutput("/out")
+            .setTempDir("/tmp")
             .addAllJavacOpts(ImmutableList.of("-Xmyopt", "-Xdoclint:reference"))
             .build();
     ImmutableList<String> javacopts = JavacTurbine.processJavacopts(options);
