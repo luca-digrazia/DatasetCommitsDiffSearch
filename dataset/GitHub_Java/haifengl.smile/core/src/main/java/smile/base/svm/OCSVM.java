@@ -17,9 +17,7 @@
 
 package smile.base.svm;
 
-import java.util.ArrayList;
 import java.util.stream.IntStream;
-
 import smile.math.MathEx;
 import smile.math.kernel.MercerKernel;
 
@@ -83,18 +81,8 @@ public class OCSVM<T> {
      */
     private int svmin = -1;
     private int svmax = -1;
-    private double gmin = Double.MAX_VALUE;
-    private double gmax = -Double.MAX_VALUE;
-
-    /** Returns true if the support vector violates KKT conditions. */
-    private boolean violateKKT(int i) {
-        return (O[i] - rho) * alpha[i] > 0.0 || (rho - O[i]) * (C - alpha[i]) > 0.0;
-    }
-
-    /** Returns true if the support vector is not bounded. */
-    private boolean unbounded(int i) {
-        return alpha[i] > 0 && alpha[i] < C;
-    }
+    private double omin = Double.MAX_VALUE;
+    private double omax = -Double.MAX_VALUE;
 
     /**
      * Constructor.
@@ -124,8 +112,8 @@ public class OCSVM<T> {
      * @return the model.
      */
     public KernelMachine<T> fit(T[] x) {
-        int n = x.length;
         this.x = x;
+        int n = x.length;
         K = new double[n][n];
         IntStream.range(0, n).parallel().forEach(i -> {
             T xi = x[i];
@@ -146,14 +134,17 @@ public class OCSVM<T> {
         }
 
         O = new double[n];
+        rho = Double.NEGATIVE_INFINITY;
         for (int i = 0; i < n; i++) {
             double[] Ki = K[i];
             for (int j = 0; j < n; j++) {
                 O[i] += Ki[j] * alpha[j];
             }
-        }
 
-        rho = MathEx.max(O);
+            if (alpha[i] > 0 && rho < O[i]) {
+                rho = O[i];
+            }
+        }
 
         minmax();
         int phase = Math.min(n, 1000);
@@ -167,7 +158,7 @@ public class OCSVM<T> {
         int bsv = 0;
 
         for (int i = 0; i < n; i++) {
-            if (alpha[i] != 0.0) {
+            if (alpha[i] > 0.0) {
                 nsv++;
                 if (alpha[i] == C) {
                     bsv++;
@@ -175,40 +166,47 @@ public class OCSVM<T> {
             }
         }
 
-        double[] alpha = new double[nsv];
         @SuppressWarnings("unchecked")
         T[] vectors = (T[]) java.lang.reflect.Array.newInstance(x.getClass().getComponentType(), nsv);
+        double[] weight = new double[nsv];
+        // Since we want the final decision function to evaluate to 1 for points
+        // which lie on the margin, we need to subtract this tol from the offset rho.
+        // Note that in the paper, the decision function is w * x - rho. But in
+        // other SVM and KernelMachine class, we have w * x + b. So we set b = -rho.
+        double b = -(rho - tol);
 
-        for (int i = 0; i < n; i++) {
-            if (alpha[i] != 0.0) {
-                vectors[i] = this.x[i];
-                alpha[i++] = this.alpha[i];
+        for (int i = 0, j = 0; i < n; i++) {
+            if (alpha[i] > 0.0) {
+                vectors[j] = x[i];
+                weight[j++] = alpha[i];
             }
         }
 
         logger.info("{} samples, {} support vectors, {} bounded", n, nsv, bsv);
 
-        return new KernelMachine<>(kernel, vectors, alpha, -rho);
+        return new KernelMachine<>(kernel, vectors, weight, b);
     }
 
     /**
      * Find support vectors with smallest (of I_up) and largest (of I_down) gradients.
      */
     private void minmax() {
-        gmin = Double.MAX_VALUE;
-        gmax = -Double.MAX_VALUE;
+        svmin = -1;
+        svmax = -1;
+        omin = Double.MAX_VALUE;
+        omax = -Double.MAX_VALUE;
 
         int n = x.length;
         for (int i = 0; i < n; i++) {
-            double g = O[i];
-            double a = alpha[i];
-            if (g < gmin && a > 0.0) {
+            double oi = O[i];
+            double ai = alpha[i];
+            if (oi < omin && ai < C) {
                 svmin = i;
-                gmin = g;
+                omin = oi;
             }
-            if (g > gmax && a < C) {
+            if (oi > omax && ai > 0) {
                 svmax = i;
-                gmax = g;
+                omax = oi;
             }
         }
     }
@@ -217,64 +215,103 @@ public class OCSVM<T> {
      * Sequential minimal optimization.
      */
     private boolean smo(double epsgr) {
-        int v1 = svmax;
-        int v2 = svmin;
+        int v1 = svmin;
+        int v2 = svmax;
 
-        double old_alpha_i = alpha[v1];
-        double old_alpha_j = alpha[v2];
+        // Second order working set selection.
+        int n = x.length;
+        if (v2 < 0) {
+            // determine imax
+            double O1 = O[v1];
+            double[] K1 = K[v1];
+            double k11 = K1[v1];
+            double best = 0.0;
+            for (int i = 0; i < n; i++) {
+                double Z = O[i] - O1;
+                double curv = k11 + K[i][i] - 2 * K1[i];
+                if (curv <= 0.0) curv = TAU;
+
+                double mu = Z / curv;
+                if (O[i] > O1 && alpha[i] > 0) {
+                    double gain = -Z * mu;
+                    if (gain < best) {
+                        best = gain;
+                        v2 = i;
+                    }
+                }
+            }
+        }
+
+        if (v1 < 0) {
+            // determine imin
+            double O2 = O[v2];
+            double[] K2 = K[v2];
+            double k22 = K2[v2];
+            double best = 0.0;
+            for (int i = 0; i < n; i++) {
+                double Z = O2 - O[i];
+                double curv = k22 + K[i][i] - 2.0 * K2[i];
+                if (curv <= 0.0) curv = TAU;
+
+                double mu = Z / curv;
+                if (O[i] < O2 && alpha[i] < C) {
+                    double gain = -Z * mu;
+                    if (gain < best) {
+                        best = gain;
+                        v1 = i;
+                    }
+                }
+            }
+        }
+
+        if (v1 < 0 || v2 < 0) return false;
+
+        double old_alpha1 = alpha[v1];
+        double old_alpha2 = alpha[v2];
         double[] k1 = K[v1];
         double[] k2 = K[v2];
 
         // Determine curvature
-        double curv = k1[v1] + k2[v2] - 2 * k1[v2];
+        double curv = K[v1][v1] + K[v2][v2] - 2 * K[v1][v2];
         if (curv <= 0.0) curv = TAU;
-
         double delta = (O[v1] - O[v2]) / curv;
+        double sum = alpha[v1] + alpha[v2];
         alpha[v2] += delta;
+        alpha[v1] -= delta;
 
-        double diff = alpha[v1] - alpha[v2];
-        alpha[v1] += delta;
-        alpha[v2] += delta;
-
-        if (diff > 0.0) {
-            // Region III
-            if (alpha[v2] < 0.0) {
-                alpha[v2] = 0.0;
-                alpha[v1] = diff;
-            }
-        } else {
-            // Region IV
-            if (alpha[v1] < 0.0) {
-                alpha[v1] = 0.0;
-                alpha[v2] = -diff;
-            }
-        }
-
-        if (diff > 0) {
-            // Region I
+        if (sum > C) {
             if (alpha[v1] > C) {
                 alpha[v1] = C;
-                alpha[v2] = C - diff;
+                alpha[v2] = sum - C;
             }
         } else {
-            // Region II
-            if (alpha[v2] > C) {
-                alpha[v2] = C;
-                alpha[v1] = C + diff;
+            if (alpha[v2] < 0) {
+                alpha[v2] = 0;
+                alpha[v1] = sum;
             }
         }
 
-        double delta_alpha_i = alpha[v1] - old_alpha_i;
-        double delta_alpha_j = alpha[v2] - old_alpha_j;
-
-        int n = x.length;
-        for (int i = 0; i < n; i++) {
-            alpha[i] -= k1[i] * delta_alpha_i + k2[i] * delta_alpha_j;
+        if (sum > C) {
+            if (alpha[v2] > C) {
+                alpha[v2] = C;
+                alpha[v1] = sum - C;
+            }
+        } else {
+            if (alpha[v1] < 0) {
+                alpha[v1] = 0.0;
+                alpha[v2] = sum;
+            }
         }
 
+        double delta_alpha1 = alpha[v1] - old_alpha1;
+        double delta_alpha2 = alpha[v2] - old_alpha2;
+        for (int i = 0; i < n; i++) {
+            O[i] += k1[i] * delta_alpha1 + k2[i] * delta_alpha2;
+        }
+
+        rho = (omax + omin) / 2;
         // optimality test
         minmax();
-        rho = -(gmax + gmin) / 2;
-        return gmax - gmin > epsgr;
+        return omax - omin > epsgr;
     }
 }
