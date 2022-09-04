@@ -29,8 +29,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
-import com.google.devtools.build.lib.analysis.config.TransitionFactories;
-import com.google.devtools.build.lib.analysis.config.transitions.ComposingTransition;
+import com.google.devtools.build.lib.analysis.config.TransitionResolver;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
@@ -107,30 +106,24 @@ public class ConfigurationsForTargetsWithTrimmedConfigurationsTest
               builder.requiresConfigurationFragments(TestConfiguration.class).build());
 
   /** A rule with an empty split transition on an attribute. */
-  private static final MockRule EMPTY_SPLIT_RULE =
-      () ->
-          MockRule.ancestor(TEST_BASE_RULE.getClass())
-              .factory(DummyRuleFactory.class)
-              .define(
-                  "empty_split",
-                  attr("with_empty_transition", LABEL)
-                      .allowedFileTypes(FileTypeSet.ANY_FILE)
-                      .cfg(TransitionFactories.of(new NoopSplitTransition())));
+  private static final MockRule EMPTY_SPLIT_RULE = () ->
+      MockRule.ancestor(TEST_BASE_RULE.getClass()).factory(DummyRuleFactory.class).define(
+          "empty_split",
+          attr("with_empty_transition", LABEL)
+              .allowedFileTypes(FileTypeSet.ANY_FILE)
+              .cfg(new NoopSplitTransition()));
 
   /** Rule with a split transition on an attribute. */
-  private static final MockRule ATTRIBUTE_TRANSITION_RULE =
-      () ->
-          MockRule.ancestor(TEST_BASE_RULE.getClass())
-              .factory(DummyRuleFactory.class)
-              .define(
-                  "attribute_transition",
-                  attr("without_transition", LABEL).allowedFileTypes(FileTypeSet.ANY_FILE),
-                  attr("with_cpu_transition", LABEL)
-                      .allowedFileTypes(FileTypeSet.ANY_FILE)
-                      .cfg(TransitionFactories.of(new SetsCpuSplitTransition())),
-                  attr("with_host_cpu_transition", LABEL)
-                      .allowedFileTypes(FileTypeSet.ANY_FILE)
-                      .cfg(TransitionFactories.of(new SetsHostCpuSplitTransition())));
+  private static final MockRule ATTRIBUTE_TRANSITION_RULE = () ->
+      MockRule.ancestor(TEST_BASE_RULE.getClass()).factory(DummyRuleFactory.class).define(
+          "attribute_transition",
+          attr("without_transition", LABEL).allowedFileTypes(FileTypeSet.ANY_FILE),
+          attr("with_cpu_transition", LABEL)
+              .allowedFileTypes(FileTypeSet.ANY_FILE)
+              .cfg(new SetsCpuSplitTransition()),
+          attr("with_host_cpu_transition", LABEL)
+              .allowedFileTypes(FileTypeSet.ANY_FILE)
+              .cfg(new SetsHostCpuSplitTransition()));
 
   /** Rule with rule class configuration transition. */
   private static final MockRule RULE_CLASS_TRANSITION_RULE = () ->
@@ -208,9 +201,7 @@ public class ConfigurationsForTargetsWithTrimmedConfigurationsTest
                   "add_test_arg_for_deps",
                   attr("deps", LABEL_LIST)
                       .allowedFileTypes(FileTypeSet.ANY_FILE)
-                      .cfg(
-                          TransitionFactories.of(
-                              new AddArgumentToTestArgsTransition("deps transition"))));
+                      .cfg(new AddArgumentToTestArgsTransition("deps transition")));
 
   /** Rule which adds an argument to the --test_args flag for itself. */
   private static final MockRule ADD_TEST_ARG_FOR_SELF_RULE =
@@ -590,36 +581,40 @@ public class ConfigurationsForTargetsWithTrimmedConfigurationsTest
   @Test
   public void composedStraightTransitions() throws Exception {
     update(); // Creates the target configuration.
-    assertThat(
-            getTestFilterOptionValue(
-                ComposingTransition.of(newPatchTransition("foo"), newPatchTransition("bar"))))
+    assertThat(getTestFilterOptionValue(
+        TransitionResolver.composeTransitions(
+            newPatchTransition("foo"),
+            newPatchTransition("bar"))))
         .containsExactly("foobar");
   }
 
   @Test
   public void composedStraightTransitionThenSplitTransition() throws Exception {
     update(); // Creates the target configuration.
-    assertThat(
-            getTestFilterOptionValue(
-                ComposingTransition.of(newPatchTransition("foo"), newSplitTransition("split"))))
+    assertThat(getTestFilterOptionValue(
+        TransitionResolver.composeTransitions(
+            newPatchTransition("foo"),
+            newSplitTransition("split"))))
         .containsExactly("foosplit1", "foosplit2");
   }
 
   @Test
   public void composedSplitTransitionThenStraightTransition() throws Exception {
     update(); // Creates the target configuration.
-    assertThat(
-            getTestFilterOptionValue(
-                ComposingTransition.of(newSplitTransition("split"), newPatchTransition("foo"))))
+    assertThat(getTestFilterOptionValue(
+        TransitionResolver.composeTransitions(
+            newSplitTransition("split"),
+            newPatchTransition("foo"))))
         .containsExactly("split1foo", "split2foo");
   }
 
   @Test
   public void composedSplitTransitions() throws Exception {
     update(); // Creates the target configuration.
-    assertThat(
-            getTestFilterOptionValue(
-                ComposingTransition.of(newSplitTransition("s"), newSplitTransition("t"))))
+    assertThat(getTestFilterOptionValue(
+        TransitionResolver.composeTransitions(
+            newSplitTransition("s"),
+            newSplitTransition("t"))))
         .containsExactly("s1t1", "s1t2", "s2t1", "s2t2");
   }
 
