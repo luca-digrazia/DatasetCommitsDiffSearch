@@ -202,8 +202,7 @@ class ArtifactFunction implements SkyFunction {
 
       for (TreeFileArtifact treeFileArtifact : treeFileArtifacts) {
         FileArtifactValue value =
-            ActionExecutionValue.createSimpleFileArtifactValue(
-                treeFileArtifact, actionExecutionValue);
+            createSimpleFileArtifactValue(treeFileArtifact, actionExecutionValue);
         map.put(treeFileArtifact, value);
       }
     }
@@ -282,6 +281,22 @@ class ArtifactFunction implements SkyFunction {
     return new MissingFileArtifactValue(ex);
   }
 
+  /**
+   * Create {@link FileArtifactValue} for artifact that must be non-middleman non-tree derived
+   * artifact.
+   */
+  static FileArtifactValue createSimpleFileArtifactValue(
+      Artifact.DerivedArtifact artifact, ActionExecutionValue actionValue) {
+    Preconditions.checkState(!artifact.isMiddlemanArtifact(), "%s %s", artifact, actionValue);
+    Preconditions.checkState(!artifact.isTreeArtifact(), "%s %s", artifact, actionValue);
+    return Preconditions.checkNotNull(
+        actionValue.getArtifactValue(artifact),
+        "%s %s %s",
+        artifact,
+        artifact.getGeneratingActionKey(),
+        actionValue);
+  }
+
   @Nullable
   private static AggregatingArtifactValue createAggregatingValue(
       Artifact artifact,
@@ -307,7 +322,7 @@ class ArtifactFunction implements SkyFunction {
         fileInputsBuilder.add(
             Pair.of(
                 input,
-                ActionExecutionValue.createSimpleFileArtifactValue(
+                createSimpleFileArtifactValue(
                     (DerivedArtifact) input, (ActionExecutionValue) inputValue)));
       } else if (inputValue instanceof TreeArtifactValue) {
         directoryInputsBuilder.add(Pair.of(input, (TreeArtifactValue) inputValue));
