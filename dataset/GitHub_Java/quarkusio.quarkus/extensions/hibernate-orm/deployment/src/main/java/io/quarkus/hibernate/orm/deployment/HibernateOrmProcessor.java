@@ -552,7 +552,7 @@ public final class HibernateOrmProcessor {
                 .filter(i -> i.isDefault())
                 .findFirst();
 
-        Set<String> storageEngines = new HashSet<>();
+        Set<Optional<String>> storageEngines = new HashSet<>();
 
         if ((defaultJdbcDataSource.isPresent() && hibernateOrmConfig.persistenceUnits.isEmpty()) ||
                 hibernateOrmConfig.defaultPersistenceUnit.isAnyPropertySet()) {
@@ -564,9 +564,7 @@ public final class HibernateOrmProcessor {
                     jdbcDataSources, applicationArchivesBuildItem, launchMode,
                     systemProperties, nativeImageResources, hotDeploymentWatchedFiles, persistenceUnitDescriptors);
 
-            if (hibernateOrmConfig.defaultPersistenceUnit.dialect.storageEngine.isPresent()) {
-                storageEngines.add(hibernateOrmConfig.defaultPersistenceUnit.dialect.storageEngine.get());
-            }
+            storageEngines.add(hibernateOrmConfig.defaultPersistenceUnit.dialect.storageEngine);
         }
 
         for (Entry<String, HibernateOrmConfigPersistenceUnit> persistenceUnitEntry : hibernateOrmConfig.persistenceUnits
@@ -577,9 +575,7 @@ public final class HibernateOrmProcessor {
                     jdbcDataSources, applicationArchivesBuildItem, launchMode,
                     systemProperties, nativeImageResources, hotDeploymentWatchedFiles, persistenceUnitDescriptors);
 
-            if (persistenceUnitEntry.getValue().dialect.storageEngine.isPresent()) {
-                storageEngines.add(persistenceUnitEntry.getValue().dialect.storageEngine.get());
-            }
+            storageEngines.add(persistenceUnitEntry.getValue().dialect.storageEngine);
         }
 
         if (storageEngines.size() > 1) {
