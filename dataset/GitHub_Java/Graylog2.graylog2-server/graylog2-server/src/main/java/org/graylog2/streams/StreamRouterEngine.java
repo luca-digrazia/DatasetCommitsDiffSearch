@@ -17,6 +17,7 @@
 
 package org.graylog2.streams;
 
+import com.codahale.metrics.Timer;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -25,11 +26,7 @@ import com.google.common.util.concurrent.SimpleTimeLimiter;
 import com.google.common.util.concurrent.TimeLimiter;
 import com.google.common.util.concurrent.UncheckedTimeoutException;
 import com.google.inject.assistedinject.Assisted;
-
-import com.codahale.metrics.Timer;
-
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.streams.DefaultStream;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.plugin.streams.StreamRuleType;
@@ -37,6 +34,8 @@ import org.graylog2.streams.matchers.StreamRuleMatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+import javax.inject.Inject;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -44,10 +43,6 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
-
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Provider;
 
 /**
  * Stream routing engine to select matching streams for a message.
@@ -57,14 +52,13 @@ import javax.inject.Provider;
 public class StreamRouterEngine {
     private static final Logger LOG = LoggerFactory.getLogger(StreamRouterEngine.class);
 
-    private final EnumSet<StreamRuleType> ruleTypesNotNeedingFieldPresence = EnumSet.of(StreamRuleType.PRESENCE, StreamRuleType.EXACT, StreamRuleType.REGEX, StreamRuleType.ALWAYS_MATCH);
+    private final EnumSet<StreamRuleType> ruleTypesNotNeedingFieldPresence = EnumSet.of(StreamRuleType.PRESENCE, StreamRuleType.EXACT, StreamRuleType.REGEX);
     private final List<Stream> streams;
     private final StreamFaultManager streamFaultManager;
     private final StreamMetrics streamMetrics;
     private final TimeLimiter timeLimiter;
     private final long streamProcessingTimeout;
     private final String fingerprint;
-    private final Provider<Stream> defaultStreamProvider;
 
     private final List<Rule> rulesList;
 
@@ -76,17 +70,14 @@ public class StreamRouterEngine {
     public StreamRouterEngine(@Assisted List<Stream> streams,
                               @Assisted ExecutorService executorService,
                               StreamFaultManager streamFaultManager,
-                              StreamMetrics streamMetrics,
-                              @DefaultStream Provider<Stream> defaultStreamProvider) {
+                              StreamMetrics streamMetrics) {
         this.streams = streams;
         this.streamFaultManager = streamFaultManager;
         this.streamMetrics = streamMetrics;
         this.timeLimiter = new SimpleTimeLimiter(executorService);
         this.streamProcessingTimeout = streamFaultManager.getStreamProcessingTimeout();
         this.fingerprint = new StreamListFingerprint(streams).getFingerprint();
-        this.defaultStreamProvider = defaultStreamProvider;
 
-        final List<Rule> alwaysMatchRules = Lists.newArrayList();
         final List<Rule> presenceRules = Lists.newArrayList();
         final List<Rule> exactRules = Lists.newArrayList();
         final List<Rule> greaterRules = Lists.newArrayList();
@@ -104,9 +95,6 @@ public class StreamRouterEngine {
                     continue;
                 }
                 switch (streamRule.getType()) {
-                    case ALWAYS_MATCH:
-                        alwaysMatchRules.add(rule);
-                        break;
                     case PRESENCE:
                         presenceRules.add(rule);
                         break;
@@ -129,9 +117,8 @@ public class StreamRouterEngine {
             }
         }
 
-        final int size = alwaysMatchRules.size() + presenceRules.size() + exactRules.size() + greaterRules.size() + smallerRules.size() + containsRules.size() + regexRules.size();
+        final int size = presenceRules.size() + exactRules.size() + greaterRules.size() + smallerRules.size() + containsRules.size() + regexRules.size();
         this.rulesList = Lists.newArrayListWithCapacity(size);
-        this.rulesList.addAll(alwaysMatchRules);
         this.rulesList.addAll(presenceRules);
         this.rulesList.addAll(exactRules);
         this.rulesList.addAll(greaterRules);
@@ -209,22 +196,8 @@ public class StreamRouterEngine {
             }
         }
 
-        final Stream defaultStream = defaultStreamProvider.get();
-        boolean alreadyRemovedDefaultStream = false;
         for (Stream stream : result) {
             streamMetrics.markIncomingMeter(stream.getId());
-            if (stream.getRemoveMatchesFromDefaultStream()) {
-                if (alreadyRemovedDefaultStream || message.removeStream(defaultStream)) {
-                    alreadyRemovedDefaultStream = true;
-                    if (LOG.isTraceEnabled()) {
-                        LOG.trace("Successfully removed default stream <{}> from message <{}>", defaultStream.getId(), message.getId());
-                    }
-                } else {
-                    if (LOG.isWarnEnabled()) {
-                        LOG.warn("Couldn't remove default stream <{}> from message <{}>", defaultStream.getId(), message.getId());
-                    }
-                }
-            }
         }
 
         return ImmutableList.copyOf(result);
