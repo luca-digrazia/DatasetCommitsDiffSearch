@@ -22,9 +22,7 @@ import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintValueInfoApi;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.util.Fingerprint;
-import java.util.Objects;
 
 /** Provider for a platform constraint value that fulfills a {@link ConstraintSettingInfo}. */
 @Immutable
@@ -58,12 +56,6 @@ public class ConstraintValueInfo extends NativeInfo implements ConstraintValueIn
     return label;
   }
 
-  @Override
-  public void repr(SkylarkPrinter printer) {
-    printer.format(
-        "ConstraintValueInfo(setting=%s, %s)", constraint.label().toString(), label.toString());
-  }
-
   /** Returns a new {@link ConstraintValueInfo} with the given data. */
   public static ConstraintValueInfo create(ConstraintSettingInfo constraint, Label value) {
     return create(constraint, value, Location.BUILTIN);
@@ -79,20 +71,5 @@ public class ConstraintValueInfo extends NativeInfo implements ConstraintValueIn
   public void addTo(Fingerprint fp) {
     this.constraint.addTo(fp);
     fp.addString(label.getCanonicalForm());
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (!(o instanceof ConstraintValueInfo)) {
-      return false;
-    }
-    ConstraintValueInfo that = (ConstraintValueInfo) o;
-    return Objects.equals(constraint, that.constraint)
-        && Objects.equals(label, that.label);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(constraint, label);
   }
 }

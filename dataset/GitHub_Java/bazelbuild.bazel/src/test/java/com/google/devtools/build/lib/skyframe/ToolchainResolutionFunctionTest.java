@@ -58,10 +58,7 @@ public class ToolchainResolutionFunctionTest extends ToolchainTestCase {
   private static ConfiguredTargetValue createConfiguredTargetValue(
       ConfiguredTarget configuredTarget) {
     return new NonRuleConfiguredTargetValue(
-        configuredTarget,
-        GeneratingActions.EMPTY,
-        NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-        /*nonceVersion=*/ null);
+        configuredTarget, GeneratingActions.EMPTY, NestedSetBuilder.emptySet(Order.STABLE_ORDER));
   }
 
   private EvaluationResult<ToolchainResolutionValue> invokeToolchainResolution(SkyKey key)
@@ -92,7 +89,7 @@ public class ToolchainResolutionFunctionTest extends ToolchainTestCase {
   public void testResolution_singleExecutionPlatform() throws Exception {
     SkyKey key =
         ToolchainResolutionValue.key(
-            targetConfigKey, testToolchainTypeLabel, LINUX_CTKEY, ImmutableList.of(MAC_CTKEY));
+            targetConfigKey, testToolchainType, LINUX_CTKEY, ImmutableList.of(MAC_CTKEY));
     EvaluationResult<ToolchainResolutionValue> result = invokeToolchainResolution(key);
 
     assertThatEvaluationResult(result).hasNoError();
@@ -119,7 +116,7 @@ public class ToolchainResolutionFunctionTest extends ToolchainTestCase {
     SkyKey key =
         ToolchainResolutionValue.key(
             targetConfigKey,
-            testToolchainTypeLabel,
+            testToolchainType,
             LINUX_CTKEY,
             ImmutableList.of(LINUX_CTKEY, MAC_CTKEY));
     EvaluationResult<ToolchainResolutionValue> result = invokeToolchainResolution(key);
@@ -142,7 +139,7 @@ public class ToolchainResolutionFunctionTest extends ToolchainTestCase {
 
     SkyKey key =
         ToolchainResolutionValue.key(
-            targetConfigKey, testToolchainTypeLabel, LINUX_CTKEY, ImmutableList.of(MAC_CTKEY));
+            targetConfigKey, testToolchainType, LINUX_CTKEY, ImmutableList.of(MAC_CTKEY));
     EvaluationResult<ToolchainResolutionValue> result = invokeToolchainResolution(key);
 
     assertThatEvaluationResult(result)
@@ -157,30 +154,24 @@ public class ToolchainResolutionFunctionTest extends ToolchainTestCase {
     new EqualsTester()
         .addEqualityGroup(
             ToolchainResolutionValue.create(
-                testToolchainType,
                 ImmutableMap.of(LINUX_CTKEY, makeLabel("//test:toolchain_impl_1"))),
             ToolchainResolutionValue.create(
-                testToolchainType,
                 ImmutableMap.of(LINUX_CTKEY, makeLabel("//test:toolchain_impl_1"))))
         // Different execution platform, same label.
         .addEqualityGroup(
             ToolchainResolutionValue.create(
-                testToolchainType,
                 ImmutableMap.of(MAC_CTKEY, makeLabel("//test:toolchain_impl_1"))))
         // Same execution platform, different label.
         .addEqualityGroup(
             ToolchainResolutionValue.create(
-                testToolchainType,
                 ImmutableMap.of(LINUX_CTKEY, makeLabel("//test:toolchain_impl_2"))))
         // Different execution platform, different label.
         .addEqualityGroup(
             ToolchainResolutionValue.create(
-                testToolchainType,
                 ImmutableMap.of(MAC_CTKEY, makeLabel("//test:toolchain_impl_2"))))
         // Multiple execution platforms.
         .addEqualityGroup(
             ToolchainResolutionValue.create(
-                testToolchainType,
                 ImmutableMap.<ConfiguredTargetKey, Label>builder()
                     .put(LINUX_CTKEY, makeLabel("//test:toolchain_impl_1"))
                     .put(MAC_CTKEY, makeLabel("//test:toolchain_impl_1"))

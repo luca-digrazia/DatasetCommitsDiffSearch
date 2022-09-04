@@ -21,6 +21,7 @@ import static java.util.stream.Collectors.joining;
 import com.google.common.base.Functions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -31,19 +32,17 @@ import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.platform.PlatformInfoApi;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.util.Fingerprint;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import javax.annotation.Nullable;
 
 /** Provider for a platform, which is a group of constraints and values. */
 @Immutable
 @AutoCodec
-public class PlatformInfo extends NativeInfo
-    implements PlatformInfoApi<ConstraintSettingInfo, ConstraintValueInfo> {
+public class PlatformInfo extends NativeInfo implements PlatformInfoApi<ConstraintValueInfo> {
   /** Name used in Skylark for accessing this provider. */
   public static final String SKYLARK_NAME = "PlatformInfo";
 
@@ -52,14 +51,14 @@ public class PlatformInfo extends NativeInfo
       new NativeProvider<PlatformInfo>(PlatformInfo.class, SKYLARK_NAME) {};
 
   private final Label label;
-  private final ConstraintCollection constraints;
+  private final ImmutableMap<ConstraintSettingInfo, ConstraintValueInfo> constraints;
   private final String remoteExecutionProperties;
 
   @AutoCodec.Instantiator
   @VisibleForSerialization
   PlatformInfo(
       Label label,
-      ConstraintCollection constraints,
+      ImmutableMap<ConstraintSettingInfo, ConstraintValueInfo> constraints,
       String remoteExecutionProperties,
       Location location) {
     super(PROVIDER, location);
@@ -69,24 +68,41 @@ public class PlatformInfo extends NativeInfo
     this.remoteExecutionProperties = remoteExecutionProperties;
   }
 
+  static PlatformInfo create(
+      Label label,
+      ImmutableList<ConstraintValueInfo> constraints,
+      String remoteExecutionProperties,
+      Location location) {
+    ImmutableMap.Builder<ConstraintSettingInfo, ConstraintValueInfo> constraintsBuilder =
+        new ImmutableMap.Builder<>();
+    for (ConstraintValueInfo constraint : constraints) {
+      constraintsBuilder.put(constraint.constraint(), constraint);
+    }
+    return new PlatformInfo(label, constraintsBuilder.build(), remoteExecutionProperties, location);
+  }
+
   @Override
   public Label label() {
     return label;
   }
 
   @Override
-  public ConstraintCollection constraints() {
-    return constraints;
+  public Iterable<ConstraintValueInfo> constraints() {
+    return constraints.values().asList();
+  }
+
+  /**
+   * Returns the {@link ConstraintValueInfo} for the given {@link ConstraintSettingInfo}, or {@code
+   * null} if none exists.
+   */
+  @Nullable
+  public ConstraintValueInfo getConstraint(ConstraintSettingInfo constraint) {
+    return constraints.get(constraint);
   }
 
   @Override
   public String remoteExecutionProperties() {
     return remoteExecutionProperties;
-  }
-
-  @Override
-  public void repr(SkylarkPrinter printer) {
-    printer.format("PlatformInfo(%s, constraints=%s)", label.toString(), constraints.toString());
   }
 
   /** Returns a new {@link Builder} for creating a fresh {@link PlatformInfo} instance. */
@@ -98,7 +114,8 @@ public class PlatformInfo extends NativeInfo
   public void addTo(Fingerprint fp) {
     fp.addString(label.toString());
     fp.addNullableString(remoteExecutionProperties);
-    constraints.addToFingerprint(fp);
+    fp.addInt(constraints.size());
+    constraints.values().forEach(constraintValue -> constraintValue.addTo(fp));
   }
 
   /** Builder class to facilitate creating valid {@link PlatformInfo} instances. */
@@ -179,8 +196,7 @@ public class PlatformInfo extends NativeInfo
      */
     public PlatformInfo build() throws DuplicateConstraintException {
       ImmutableList<ConstraintValueInfo> validatedConstraints = validateConstraints(constraints);
-      ConstraintCollection platformConstraints = new ConstraintCollection(validatedConstraints);
-      return new PlatformInfo(label, platformConstraints, remoteExecutionProperties, location);
+      return PlatformInfo.create(label, validatedConstraints, remoteExecutionProperties, location);
     }
 
     public static ImmutableList<ConstraintValueInfo> validateConstraints(
@@ -209,22 +225,6 @@ public class PlatformInfo extends NativeInfo
     }
   }
 
-  @Override
-  public boolean equals(Object o) {
-    if (!(o instanceof PlatformInfo)) {
-      return false;
-    }
-    PlatformInfo that = (PlatformInfo) o;
-    return Objects.equals(label, that.label)
-        && Objects.equals(constraints, that.constraints)
-        && Objects.equals(remoteExecutionProperties, that.remoteExecutionProperties);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(label, constraints, remoteExecutionProperties);
-  }
-
   /**
    * Exception class used when more than one {@link ConstraintValueInfo} for the same {@link
    * ConstraintSettingInfo} is added to a {@link Builder}.
@@ -233,7 +233,7 @@ public class PlatformInfo extends NativeInfo
     private final ImmutableListMultimap<ConstraintSettingInfo, ConstraintValueInfo>
         duplicateConstraints;
 
-    DuplicateConstraintException(
+    public DuplicateConstraintException(
         ListMultimap<ConstraintSettingInfo, ConstraintValueInfo> duplicateConstraints) {
       super(formatError(duplicateConstraints));
       this.duplicateConstraints = ImmutableListMultimap.copyOf(duplicateConstraints);
@@ -248,8 +248,11 @@ public class PlatformInfo extends NativeInfo
         ListMultimap<ConstraintSettingInfo, ConstraintValueInfo> duplicateConstraints) {
       return String.format(
           "Duplicate constraint_values detected: %s",
-          duplicateConstraints.asMap().entrySet().stream()
-              .map(DuplicateConstraintException::describeSingleDuplicateConstraintSetting)
+          duplicateConstraints
+              .asMap()
+              .entrySet()
+              .stream()
+              .map(e -> describeSingleDuplicateConstraintSetting(e))
               .collect(joining(", ")));
     }
 

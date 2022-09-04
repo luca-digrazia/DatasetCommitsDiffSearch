@@ -15,62 +15,46 @@
 package com.google.devtools.build.lib.analysis.platform;
 
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.analysis.ProviderCollection;
-import javax.annotation.Nullable;
+import com.google.devtools.build.lib.analysis.SkylarkProviderCollection;
 
 /** Utility methods to help locate platform-related providers. */
 public class PlatformProviderUtils {
 
   /** Retrieves and casts the {@link PlatformInfo} provider from the given target. */
-  @Nullable
-  public static PlatformInfo platform(@Nullable ProviderCollection target) {
-    if (target == null) {
-      return null;
-    }
+  public static PlatformInfo platform(SkylarkProviderCollection target) {
     return target.get(PlatformInfo.PROVIDER);
   }
 
   /** Retrieves and casts {@link PlatformInfo} providers from the given targets. */
-  public static Iterable<PlatformInfo> platforms(Iterable<? extends ProviderCollection> targets) {
+  public static Iterable<PlatformInfo> platforms(
+      Iterable<? extends SkylarkProviderCollection> targets) {
     return Iterables.transform(targets, PlatformProviderUtils::platform);
   }
 
   /** Retrieves and casts the {@link ConstraintSettingInfo} provider from the given target. */
-  @Nullable
-  public static ConstraintSettingInfo constraintSetting(@Nullable ProviderCollection target) {
-    if (target == null) {
-      return null;
-    }
+  public static ConstraintSettingInfo constraintSetting(SkylarkProviderCollection target) {
     return target.get(ConstraintSettingInfo.PROVIDER);
   }
 
   /** Retrieves and casts {@link ConstraintSettingInfo} providers from the given targets. */
   public static Iterable<ConstraintSettingInfo> constraintSettings(
-      Iterable<? extends ProviderCollection> targets) {
+      Iterable<? extends SkylarkProviderCollection> targets) {
     return Iterables.transform(targets, PlatformProviderUtils::constraintSetting);
   }
 
   /** Retrieves and casts the {@link ConstraintValueInfo} provider from the given target. */
-  @Nullable
-  public static ConstraintValueInfo constraintValue(@Nullable ProviderCollection target) {
-    if (target == null) {
-      return null;
-    }
+  public static ConstraintValueInfo constraintValue(SkylarkProviderCollection target) {
     return target.get(ConstraintValueInfo.PROVIDER);
   }
 
   /** Retrieves and casts {@link ConstraintValueInfo} providers from the given targets. */
   public static Iterable<ConstraintValueInfo> constraintValues(
-      Iterable<? extends ProviderCollection> targets) {
+      Iterable<? extends SkylarkProviderCollection> targets) {
     return Iterables.transform(targets, PlatformProviderUtils::constraintValue);
   }
 
   /** Retrieves and casts the {@link ToolchainInfo} provider from the given target. */
-  @Nullable
-  public static ToolchainInfo toolchain(@Nullable ProviderCollection target) {
-    if (target == null) {
-      return null;
-    }
+  public static ToolchainInfo toolchain(SkylarkProviderCollection target) {
     return target.get(ToolchainInfo.PROVIDER);
   }
 }
