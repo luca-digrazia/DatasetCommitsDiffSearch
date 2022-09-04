@@ -4,16 +4,14 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.graphite.Graphite;
 import com.codahale.metrics.graphite.GraphiteReporter;
 import com.codahale.metrics.graphite.GraphiteUDP;
-
-import io.dropwizard.configuration.YamlConfigurationFactory;
+import com.google.common.base.Optional;
+import io.dropwizard.configuration.ConfigurationFactory;
 import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.validation.BaseValidator;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
-
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -38,10 +36,10 @@ public class GraphiteReporterFactoryTest {
 
     @Test
     public void createDefaultFactory() throws Exception {
-        final GraphiteReporterFactory factory = new YamlConfigurationFactory<>(GraphiteReporterFactory.class,
-             BaseValidator.newValidator(), Jackson.newObjectMapper(), "dw")
+        final GraphiteReporterFactory factory = new ConfigurationFactory<>(GraphiteReporterFactory.class,
+            BaseValidator.newValidator(), Jackson.newObjectMapper(), "dw")
             .build();
-        assertThat(factory.getFrequency()).isEqualTo(Optional.empty());
+        assertThat(factory.getFrequency()).isEqualTo(Optional.absent());
     }
 
     @Test
