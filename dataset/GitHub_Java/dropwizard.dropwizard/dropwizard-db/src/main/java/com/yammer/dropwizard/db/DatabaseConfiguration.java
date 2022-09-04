@@ -4,14 +4,14 @@ import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableMap;
 import com.yammer.dropwizard.util.Duration;
 import com.yammer.dropwizard.validation.ValidationMethod;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import org.codehaus.jackson.annotate.JsonProperty;
 
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import java.util.Map;
 
-@SuppressWarnings("UnusedDeclaration")
+@SuppressWarnings({ "FieldMayBeFinal", "UnusedDeclaration" })
 public class DatabaseConfiguration {
     @NotNull
     @JsonProperty
