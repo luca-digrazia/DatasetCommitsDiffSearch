@@ -26,17 +26,46 @@ import org.graylog2.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
 import org.joda.time.DateTime;
 import org.joda.time.Seconds;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class StatisticalCountWidget extends SearchResultCountWidget {
-    private static final Logger log = LoggerFactory.getLogger(StatisticalCountWidget.class);
+    public enum StatisticalFunction {
+        COUNT("count"),
+        MEAN("mean"),
+        STANDARD_DEVIATION("std_deviation"),
+        MIN("min"),
+        MAX("max"),
+        SUM("sum"),
+        VARIANCE("variance"),
+        SUM_OF_SQUARES("squares"),
+        CARDINALITY("cardinality");
 
-    private final String statsFunction;
+        private final String function;
+
+        StatisticalFunction(String function) {
+            this.function = function;
+        }
+
+        @Override
+        public String toString() {
+            return this.function;
+        }
+
+        public static StatisticalFunction fromString(String function) {
+            for (StatisticalFunction statisticalFunction : StatisticalFunction.values()) {
+                if (statisticalFunction.toString().equals(function)) {
+                    return statisticalFunction;
+                }
+            }
+
+            throw new IllegalArgumentException("Statistic function " + function + " is not supported");
+        }
+    }
+
+    private final StatisticalFunction statsFunction;
     private final String field;
     private final String streamId;
 
@@ -60,7 +89,9 @@ public class StatisticalCountWidget extends SearchResultCountWidget {
               timeRange,
               creatorUserId);
         this.field = (String) config.get("field");
-        this.statsFunction = (String) config.get("stats_function");
+        String statsFunction = (String) config.get("stats_function");
+        // We accidentally modified the standard deviation function name, we need this to make old widgets work again
+        this.statsFunction = (statsFunction.equals("stddev")) ? StatisticalFunction.STANDARD_DEVIATION : StatisticalFunction.fromString(statsFunction);
         this.streamId = (String) config.get("stream_id");
     }
 
@@ -70,7 +101,7 @@ public class StatisticalCountWidget extends SearchResultCountWidget {
         final ImmutableMap.Builder<String, Object> persistedConfig = ImmutableMap.builder();
         persistedConfig.putAll(inheritedConfig);
         persistedConfig.put("field", field);
-        persistedConfig.put("stats_function", statsFunction);
+        persistedConfig.put("stats_function", statsFunction.toString());
         if (!isNullOrEmpty(streamId)) {
             persistedConfig.put("stream_id", streamId);
         }
@@ -80,23 +111,23 @@ public class StatisticalCountWidget extends SearchResultCountWidget {
 
     private Number getStatisticalValue(FieldStatsResult fieldStatsResult) {
         switch (statsFunction) {
-            case "count":
+            case COUNT:
                 return fieldStatsResult.getCount();
-            case "mean":
+            case MEAN:
                 return fieldStatsResult.getMean();
-            case "stddev":
+            case STANDARD_DEVIATION:
                 return fieldStatsResult.getStdDeviation();
-            case "min":
+            case MIN:
                 return fieldStatsResult.getMin();
-            case "max":
+            case MAX:
                 return fieldStatsResult.getMax();
-            case "sum":
+            case SUM:
                 return fieldStatsResult.getSum();
-            case "variance":
+            case VARIANCE:
                 return fieldStatsResult.getVariance();
-            case "squares":
+            case SUM_OF_SQUARES:
                 return fieldStatsResult.getSumOfSquares();
-            case "cardinality":
+            case CARDINALITY:
                 return fieldStatsResult.getCardinality();
             default:
                 throw new IllegalArgumentException("Statistic function " + statsFunction + " is not supported");
@@ -112,15 +143,15 @@ public class StatisticalCountWidget extends SearchResultCountWidget {
             } else {
                 filter = null;
             }
-            boolean needsCardinality = "cardinality".equals(statsFunction);
-            boolean needsCount = "count".equals(statsFunction);
+            // if we only need the cardinality, we can skip calculating the extended stats and vice versa
+            boolean isCardinalityFunction = statsFunction.equals(StatisticalFunction.CARDINALITY);
             final FieldStatsResult fieldStatsResult =
                     getSearches().fieldStats(field,
                                              query,
                                              filter,
                                              timeRange,
-                                             needsCardinality,
-                                             !(needsCount || needsCardinality));
+                                             isCardinalityFunction,
+                                             isCardinalityFunction);
             if (trend && timeRange instanceof RelativeRange) {
                 DateTime toPrevious = timeRange.getFrom();
                 DateTime fromPrevious = toPrevious.minus(Seconds.seconds(((RelativeRange) timeRange).getRange()));
@@ -131,8 +162,8 @@ public class StatisticalCountWidget extends SearchResultCountWidget {
                                                  query,
                                                  filter,
                                                  previousTimeRange,
-                                                 needsCardinality,
-                                                 !(needsCount || needsCardinality));
+                                                 isCardinalityFunction,
+                                                 isCardinalityFunction);
                 Map<String, Object> results = Maps.newHashMap();
                 results.put("now", getStatisticalValue(fieldStatsResult));
                 results.put("previous", getStatisticalValue(previousFieldStatsResult));
@@ -143,8 +174,7 @@ public class StatisticalCountWidget extends SearchResultCountWidget {
                 return new ComputationResult(getStatisticalValue(fieldStatsResult), fieldStatsResult.took().millis());
             }
         } catch (Searches.FieldTypeException e) {
-            log.warn("Invalid field provided, returning 'NaN'", e);
-            return new ComputationResult(Double.NaN, 0);
+            throw new RuntimeException("Invalid field provided.", e);
         }
     }
 }
