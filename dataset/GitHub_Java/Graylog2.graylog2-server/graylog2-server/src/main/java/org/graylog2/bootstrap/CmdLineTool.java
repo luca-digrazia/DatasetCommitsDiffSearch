@@ -159,6 +159,10 @@ public abstract class CmdLineTool implements CliCommand {
 
     protected abstract List<Object> getCommandConfigurationBeans();
 
+    /**
+     * Things that have to run before the {@link #startCommand()} method is being called.
+     */
+    protected void beforeStart() {}
 
     @Override
     public void run() {
@@ -180,6 +184,8 @@ public abstract class CmdLineTool implements CliCommand {
             LOG.error("Validating configuration file failed - exiting.");
             System.exit(1);
         }
+
+        beforeStart();
 
         final List<String> arguments = ManagementFactory.getRuntimeMXBean().getInputArguments();
         LOG.info("Running with JVM arguments: {}", Joiner.on(' ').join(arguments));
@@ -274,8 +280,18 @@ public abstract class CmdLineTool implements CliCommand {
     }
 
     private String getPluginPath(String configFile) {
-        final PluginLoaderConfig pluginLoaderConfig = new PluginLoaderConfig();
-        processConfiguration(new JadConfig(getConfigRepositories(configFile), pluginLoaderConfig));
+        PluginLoaderConfig pluginLoaderConfig = new PluginLoaderConfig();
+        JadConfig jadConfig = new JadConfig(getConfigRepositories(configFile), pluginLoaderConfig);
+
+        try {
+            jadConfig.process();
+        } catch (RepositoryException e) {
+            LOG.error("Couldn't load configuration: {}", e.getMessage());
+            System.exit(1);
+        } catch (ParameterException | ValidationException e) {
+            LOG.error("Invalid configuration", e);
+            System.exit(1);
+        }
 
         return pluginLoaderConfig.getPluginDir();
     }
@@ -335,17 +351,6 @@ public abstract class CmdLineTool implements CliCommand {
         jadConfig.setRepositories(getConfigRepositories(configFile));
 
         LOG.debug("Loading configuration from config file: {}", configFile);
-        processConfiguration(jadConfig);
-
-        if (configuration.getRestTransportUri() == null) {
-            configuration.setRestTransportUri(configuration.getDefaultRestTransportUri());
-            LOG.debug("No rest_transport_uri set. Using default [{}].", configuration.getRestTransportUri());
-        }
-
-        return new NamedConfigParametersModule(jadConfig.getConfigurationBeans());
-    }
-
-    private void processConfiguration(JadConfig jadConfig) {
         try {
             jadConfig.process();
         } catch (RepositoryException e) {
@@ -355,6 +360,13 @@ public abstract class CmdLineTool implements CliCommand {
             LOG.error("Invalid configuration", e);
             System.exit(1);
         }
+
+        if (configuration.getRestTransportUri() == null) {
+            configuration.setRestTransportUri(configuration.getDefaultRestTransportUri());
+            LOG.debug("No rest_transport_uri set. Using default [{}].", configuration.getRestTransportUri());
+        }
+
+        return new NamedConfigParametersModule(jadConfig.getConfigurationBeans());
     }
 
     protected List<Module> getSharedBindingsModules() {
