@@ -9,7 +9,6 @@ import java.util.Properties;
 
 import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Model;
-import org.apache.maven.model.Profile;
 
 import io.quarkus.bootstrap.model.AppArtifact;
 
@@ -63,27 +62,6 @@ public class TsArtifact {
     protected ContentProvider content;
 
     protected Properties pomProps;
-    protected List<Profile> pomProfiles = Collections.emptyList();
-
-    public TsArtifact(String artifactId) {
-        this(artifactId, DEFAULT_VERSION);
-    }
-
-    public TsArtifact(String artifactId, String version) {
-        this(DEFAULT_GROUP_ID, artifactId, EMPTY, TYPE_TXT, version);
-    }
-
-    public TsArtifact(String groupId, String artifactId, String version) {
-        this(groupId, artifactId, EMPTY, TYPE_TXT, version);
-    }
-
-    public TsArtifact(String groupId, String artifactId, String classifier, String type, String version) {
-        this.groupId = groupId;
-        this.artifactId = artifactId;
-        this.classifier = classifier;
-        this.type = type;
-        this.version = version;
-    }
 
     public String getGroupId() {
         return groupId;
@@ -103,6 +81,26 @@ public class TsArtifact {
 
     public String getVersion() {
         return version;
+    }
+
+    public TsArtifact(String artifactId) {
+        this(artifactId, DEFAULT_VERSION);
+    }
+
+    public TsArtifact(String artifactId, String version) {
+        this(DEFAULT_GROUP_ID, artifactId, EMPTY, TYPE_TXT, version);
+    }
+
+    public TsArtifact(String groupId, String artifactId, String version) {
+        this(groupId, artifactId, EMPTY, TYPE_TXT, version);
+    }
+
+    public TsArtifact(String groupId, String artifactId, String classifier, String type, String version) {
+        this.groupId = groupId;
+        this.artifactId = artifactId;
+        this.classifier = classifier;
+        this.type = type;
+        this.version = version;
     }
 
     public TsArtifact setContent(ContentProvider content) {
@@ -135,14 +133,6 @@ public class TsArtifact {
             managedDeps = new ArrayList<>();
         }
         managedDeps.add(dep);
-        return this;
-    }
-
-    public TsArtifact addProfile(Profile profile) {
-        if(pomProfiles.isEmpty()) {
-            pomProfiles = new ArrayList<>(1);
-        }
-        pomProfiles.add(profile);
         return this;
     }
 
@@ -195,9 +185,6 @@ public class TsArtifact {
             }
         }
 
-        if(!pomProfiles.isEmpty()) {
-            model.setProfiles(pomProfiles);
-        }
         return model;
     }
 

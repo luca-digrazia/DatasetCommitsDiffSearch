@@ -187,7 +187,9 @@ public class BootstrapAppModelFactory {
                         .setDevMode(devMode);
             }
 
-            final LocalProject localProject = loadProject();
+            final LocalProject localProject = localProjectsDiscovery || enableClasspathCache
+                    ? LocalProject.loadWorkspace(appClasses, false)
+                    : LocalProject.load(appClasses, false);
 
             final MavenArtifactResolver mvn;
             if (mavenArtifactResolver == null) {
@@ -238,7 +240,10 @@ public class BootstrapAppModelFactory {
             return createAppModelForJar(appClasses);
         }
 
-        final LocalProject localProject = loadProject();
+        final LocalProject localProject = localProjectsDiscovery || enableClasspathCache
+                ? LocalProject.loadWorkspace(appClasses, false)
+                : LocalProject.load(appClasses, false);
+
         if (localProject == null) {
             log.warn("Unable to locate maven project, falling back to classpath discovery");
             return doClasspathDiscovery();
@@ -286,12 +291,6 @@ public class BootstrapAppModelFactory {
         } catch (Exception e) {
             throw new BootstrapException("Failed to create the application model for " + localProject.getAppArtifact(), e);
         }
-    }
-
-    private LocalProject loadProject() throws BootstrapException {
-        return localProjectsDiscovery || enableClasspathCache
-                ? LocalProject.loadWorkspace(appClasses, false)
-                : LocalProject.load(appClasses, false);
     }
 
     /**

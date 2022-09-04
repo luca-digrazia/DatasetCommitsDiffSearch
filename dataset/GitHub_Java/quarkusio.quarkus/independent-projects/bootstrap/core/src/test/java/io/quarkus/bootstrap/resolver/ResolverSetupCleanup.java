@@ -2,7 +2,6 @@ package io.quarkus.bootstrap.resolver;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Properties;
 import java.util.UUID;
 
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
@@ -22,8 +21,6 @@ public class ResolverSetupCleanup {
     protected BootstrapAppModelResolver resolver;
     protected TsRepoBuilder repo;
 
-    protected Properties originalProps;
-
     @BeforeEach
     public void setup() throws Exception {
         workDir = initWorkDir();
@@ -37,16 +34,6 @@ public class ResolverSetupCleanup {
         if(cleanWorkDir() && workDir != null) {
             IoUtils.recursiveDelete(workDir);
         }
-        if(originalProps != null) {
-            System.setProperties(originalProps);
-        }
-    }
-
-    protected void setSystemProperty(String name, String value) {
-        if(originalProps == null) {
-            originalProps = new Properties(System.getProperties());
-        }
-        System.setProperty(name, value);
     }
 
     protected Path initWorkDir() {
