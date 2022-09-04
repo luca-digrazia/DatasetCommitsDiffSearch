@@ -159,10 +159,7 @@ public class RowMajorMatrixTest {
 
         RowMajorMatrix a = new RowMajorMatrix(A);
         RowMajorMatrix b = new RowMajorMatrix(B);
-        assertTrue(Math.equals(a.abmm(b).array(), C, 1E-7));
-        Math.abtmm(A, B, C);
-        assertTrue(Math.equals(a.abtmm(b).array(), C, 1E-7));
-        Math.atbmm(A, B, C);
-        assertTrue(Math.equals(a.atbmm(b).array(), C, 1E-7));
+        RowMajorMatrix c = new RowMajorMatrix(C);
+        assertTrue(Math.equals(a.mm(b).array(), c.array(), 1E-7));
     }
 }
