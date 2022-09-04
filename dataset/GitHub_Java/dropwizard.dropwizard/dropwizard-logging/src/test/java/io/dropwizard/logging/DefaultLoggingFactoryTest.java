@@ -1,7 +1,5 @@
 package io.dropwizard.logging;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.codahale.metrics.MetricRegistry;
@@ -12,15 +10,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Files;
 import com.google.common.io.Resources;
-
+import io.dropwizard.configuration.ConfigurationFactory;
 import io.dropwizard.configuration.FileConfigurationSourceProvider;
 import io.dropwizard.configuration.SubstitutingSourceProvider;
-import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.logging.filter.FilterFactory;
 import io.dropwizard.validation.BaseValidator;
-import java.io.File;
-import java.nio.charset.StandardCharsets;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.text.StrSubstitutor;
 import org.assertj.core.data.MapEntry;
@@ -30,9 +25,14 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
 public class DefaultLoggingFactoryTest {
     private final ObjectMapper objectMapper = Jackson.newObjectMapper();
-    private final YamlConfigurationFactory<DefaultLoggingFactory> factory = new YamlConfigurationFactory<>(
+    private final ConfigurationFactory<DefaultLoggingFactory> factory = new ConfigurationFactory<>(
             DefaultLoggingFactory.class,
             BaseValidator.newValidator(),
             objectMapper, "dw");
@@ -90,11 +90,9 @@ public class DefaultLoggingFactoryTest {
     @Test
     public void testConfigure() throws Exception {
         final File newAppLog = folder.newFile("example-new-app.log");
-        final File newAppNotAdditiveLog = folder.newFile("example-new-app-not-additive.log");
         final File defaultLog = folder.newFile("example.log");
         final StrSubstitutor substitutor = new StrSubstitutor(ImmutableMap.of(
                 "new_app", StringUtils.removeEnd(newAppLog.getAbsolutePath(), ".log"),
-                "new_app_not_additive", StringUtils.removeEnd(newAppNotAdditiveLog.getAbsolutePath(), ".log"),
                 "default", StringUtils.removeEnd(defaultLog.getAbsolutePath(), ".log")
         ));
 
@@ -124,11 +122,9 @@ public class DefaultLoggingFactoryTest {
 
         assertThat(Files.readLines(newAppLog, StandardCharsets.UTF_8)).containsOnly(
                 "DEBUG com.example.newApp: New application debug log",
-                "INFO  com.example.newApp: New application info log");
-
-        assertThat(Files.readLines(newAppNotAdditiveLog, StandardCharsets.UTF_8)).containsOnly(
-            "DEBUG com.example.notAdditive: Not additive application debug log",
-            "INFO  com.example.notAdditive: Not additive application info log");
+                "INFO  com.example.newApp: New application info log",
+                "DEBUG com.example.notAdditive: Not additive application debug log",
+                "INFO  com.example.notAdditive: Not additive application info log");
     }
 
 }
