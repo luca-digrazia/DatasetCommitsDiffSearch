@@ -306,28 +306,13 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             /* unsupportedFeatures= */ ruleContext.getDisabledFeatures(),
             ccToolchain);
 
-    ImmutableList<TransitiveInfoCollection> deps =
-        ImmutableList.<TransitiveInfoCollection>builder()
-            .addAll(ruleContext.getPrerequisites("deps", Mode.TARGET))
-            .add(CppHelper.mallocForTarget(ruleContext))
-            .build();
-
-    CppHelper.checkProtoLibrariesInDeps(ruleContext, deps);
-    if (ruleContext.hasErrors()) {
-      return null;
-    }
     CcCompilationHelper compilationHelper =
         new CcCompilationHelper(
                 ruleContext, semantics, featureConfiguration, ccToolchain, fdoContext)
             .fromCommon(common, /* additionalCopts= */ ImmutableList.of())
             .addPrivateHeaders(common.getPrivateHeaders())
             .addSources(common.getSources())
-            .addCcCompilationContexts(CppHelper.getCompilationContextsFromDeps(deps))
-            .addCcCompilationContexts(
-                ImmutableList.of(CcCompilationHelper.getStlCcCompilationContext(ruleContext)))
-            .addQuoteIncludeDirs(semantics.getQuoteIncludes(ruleContext))
-            .setHeadersCheckingMode(semantics.determineHeadersCheckingMode(ruleContext))
-            .setCodeCoverageEnabled(CcCompilationHelper.isCodeCoverageEnabled(ruleContext))
+            .addDeps(ImmutableList.of(CppHelper.mallocForTarget(ruleContext)))
             .setFake(fake);
     CompilationInfo compilationInfo = compilationHelper.compile();
     CcCompilationContext ccCompilationContext = compilationInfo.getCcCompilationContext();
