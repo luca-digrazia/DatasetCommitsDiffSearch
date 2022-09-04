@@ -195,7 +195,7 @@ public final class FilesetEntryFunction implements SkyFunction {
         maybeStoreSymlink(
             linkName,
             targetName,
-            f.getMetadataHash(),
+            metadata,
             t.getDestPath(),
             direct.isGenerated(),
             f.getValueForDerivedArtifacts(),
@@ -214,7 +214,7 @@ public final class FilesetEntryFunction implements SkyFunction {
     maybeStoreSymlink(
         nestedLink.getName(),
         nestedLink.getTargetPath(),
-        nestedLink.getMetadataHash(),
+        nestedLink.getMetadata(),
         destPath,
         nestedLink.isGeneratedTarget(),
         nestedLink.getTargetArtifactValue(),
@@ -225,7 +225,7 @@ public final class FilesetEntryFunction implements SkyFunction {
   private static void maybeStoreSymlink(
       PathFragment linkName,
       PathFragment linkTarget,
-      int metadataHash,
+      String metadata,
       PathFragment destPath,
       boolean isGenerated,
       FileArtifactValue targetArtifactValue,
@@ -236,11 +236,10 @@ public final class FilesetEntryFunction implements SkyFunction {
         result.put(
             linkName,
             FilesetOutputSymlink.createForDerivedTarget(
-                linkName, linkTarget, metadataHash, targetArtifactValue));
+                linkName, linkTarget, metadata, targetArtifactValue));
       } else {
         result.put(
-            linkName,
-            FilesetOutputSymlink.createForSourceTarget(linkName, linkTarget, metadataHash));
+            linkName, FilesetOutputSymlink.createForSourceTarget(linkName, linkTarget, metadata));
       }
     }
   }
