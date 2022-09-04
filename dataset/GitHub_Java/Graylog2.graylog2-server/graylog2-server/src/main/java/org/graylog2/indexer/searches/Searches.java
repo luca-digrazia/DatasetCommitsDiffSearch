@@ -20,8 +20,9 @@ import com.codahale.metrics.Counter;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableSortedSet;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import io.searchbox.client.JestClient;
 import io.searchbox.client.JestResult;
 import io.searchbox.core.Count;
@@ -51,6 +52,7 @@ import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.IndexSet;
 import org.graylog2.indexer.cluster.jest.JestUtils;
+import org.graylog2.indexer.gson.GsonUtils;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeService;
@@ -76,6 +78,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
@@ -90,6 +93,9 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
 import static org.elasticsearch.index.query.QueryBuilders.queryStringQuery;
+import static org.graylog2.indexer.gson.GsonUtils.asJsonArray;
+import static org.graylog2.indexer.gson.GsonUtils.asJsonObject;
+import static org.graylog2.indexer.gson.GsonUtils.asString;
 
 @Singleton
 public class Searches {
@@ -289,13 +295,22 @@ public class Searches {
     public TermsResult terms(String field, int size, String query, String filter, TimeRange range, Sorting.Direction sorting) {
         final Terms.Order termsOrder = sorting == Sorting.Direction.DESC ? Terms.Order.count(false) : Terms.Order.count(true);
 
-        final SearchSourceBuilder searchSourceBuilder = filteredSearchRequest(query, filter, range)
-                .aggregation(AggregationBuilders.terms(AGG_TERMS)
-                        .field(field)
-                        .size(size > 0 ? size : 50)
-                        .order(termsOrder))
-                .aggregation(AggregationBuilders.missing("missing")
-                        .field(field));
+        final SearchSourceBuilder searchSourceBuilder = filter == null ? standardSearchRequest(query, range) : filteredSearchRequest(query, filter, range);
+
+        final FilterAggregationBuilder filterBuilder = AggregationBuilders.filter(AGG_FILTER)
+            .subAggregation(
+                AggregationBuilders.terms(AGG_TERMS)
+                    .field(field)
+                    .size(size > 0 ? size : 50)
+                    .order(termsOrder)
+            )
+            .subAggregation(
+                AggregationBuilders.missing("missing")
+                    .field(field)
+            )
+            .filter(standardAggregationFilters(range, filter));
+
+        searchSourceBuilder.aggregation(filterBuilder);
 
         final Set<String> affectedIndices = determineAffectedIndices(range, filter);
         if (affectedIndices.isEmpty()) {
@@ -312,13 +327,14 @@ public class Searches {
 
         recordEsMetrics(tookMs, range);
 
-        final TermsAggregation termsAggregation = searchResult.getAggregations().getTermsAggregation(AGG_TERMS);
-        final MissingAggregation missing = searchResult.getAggregations().getMissingAggregation("missing");
+        final FilterAggregation filterAggregation = searchResult.getAggregations().getFilterAggregation(AGG_FILTER);
+        final TermsAggregation termsAggregation = filterAggregation.getTermsAggregation(AGG_TERMS);
+        final MissingAggregation missing = filterAggregation.getMissingAggregation("missing");
 
         return new TermsResult(
                 termsAggregation,
                 missing.getMissing(),
-                searchResult.getTotal(),
+                filterAggregation.getCount(),
                 query,
                 searchSourceBuilder.toString(),
                 tookMs
@@ -442,20 +458,31 @@ public class Searches {
                                        TimeRange range,
                                        boolean includeCardinality,
                                        boolean includeStats,
-                                       boolean includeCount) {
-        final SearchSourceBuilder searchSourceBuilder = filteredSearchRequest(query, filter, range);
+                                       boolean includeCount)
+        {
+        SearchSourceBuilder searchSourceBuilder;
 
         final Set<String> affectedIndices = indicesContainingField(determineAffectedIndices(range, filter), field);
 
+        if (filter == null) {
+            searchSourceBuilder = standardSearchRequest(query, range);
+        } else {
+            searchSourceBuilder = filteredSearchRequest(query, filter, range);
+        }
+
+        final FilterAggregationBuilder filterBuilder = AggregationBuilders.filter(AGG_FILTER)
+                .filter(standardAggregationFilters(range, filter));
         if (includeCount) {
-            searchSourceBuilder.aggregation(AggregationBuilders.count(AGG_VALUE_COUNT).field(field));
+            filterBuilder.subAggregation(AggregationBuilders.count(AGG_VALUE_COUNT).field(field));
         }
         if (includeStats) {
-            searchSourceBuilder.aggregation(AggregationBuilders.extendedStats(AGG_EXTENDED_STATS).field(field));
+            filterBuilder.subAggregation(AggregationBuilders.extendedStats(AGG_EXTENDED_STATS).field(field));
         }
         if (includeCardinality) {
-            searchSourceBuilder.aggregation(AggregationBuilders.cardinality(AGG_CARDINALITY).field(field));
+            filterBuilder.subAggregation(AggregationBuilders.cardinality(AGG_CARDINALITY).field(field));
         }
+
+        searchSourceBuilder.aggregation(filterBuilder);
 
         final Search.Builder searchBuilder = new Search.Builder(searchSourceBuilder.toString())
             .addType(IndexMapping.TYPE_MESSAGE)
@@ -473,9 +500,10 @@ public class Searches {
         final long tookMs = tookMsFromSearchResult(searchResponse);
         recordEsMetrics(tookMs, range);
 
-        final ExtendedStatsAggregation extendedStatsAggregation = searchResponse.getAggregations().getExtendedStatsAggregation(AGG_EXTENDED_STATS);
-        final ValueCountAggregation valueCountAggregation = searchResponse.getAggregations().getValueCountAggregation(AGG_VALUE_COUNT);
-        final CardinalityAggregation cardinalityAggregation = searchResponse.getAggregations().getCardinalityAggregation(AGG_CARDINALITY);
+        final FilterAggregation filterAggregation = searchResponse.getAggregations().getFilterAggregation(AGG_FILTER);
+        final ExtendedStatsAggregation extendedStatsAggregation = filterAggregation.getExtendedStatsAggregation(AGG_EXTENDED_STATS);
+        final ValueCountAggregation valueCountAggregation = filterAggregation.getValueCountAggregation(AGG_VALUE_COUNT);
+        final CardinalityAggregation cardinalityAggregation = filterAggregation.getCardinalityAggregation(AGG_CARDINALITY);
 
         return new FieldStatsResult(
                 valueCountAggregation,
@@ -502,12 +530,20 @@ public class Searches {
     }
 
     public HistogramResult histogram(String query, DateHistogramInterval interval, String filter, TimeRange range) {
-        final DateHistogramBuilder histogramBuilder = AggregationBuilders.dateHistogram(AGG_HISTOGRAM)
-                .field(Message.FIELD_TIMESTAMP)
-                .interval(interval.toESInterval());
+        final FilterAggregationBuilder builder = AggregationBuilders.filter(AGG_FILTER)
+            .subAggregation(
+                AggregationBuilders.dateHistogram(AGG_HISTOGRAM)
+                    .field(Message.FIELD_TIMESTAMP)
+                    .interval(interval.toESInterval())
+            )
+            .filter(standardAggregationFilters(range, filter));
 
-        final SearchSourceBuilder searchSourceBuilder = filteredSearchRequest(query, filter, range)
-            .aggregation(histogramBuilder);
+        final QueryStringQueryBuilder qs = queryStringQuery(query)
+            .allowLeadingWildcard(configuration.isAllowLeadingWildcardSearches());
+
+        final SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
+            .query(qs)
+            .aggregation(builder);
 
         final Set<String> affectedIndices = determineAffectedIndices(range, filter);
         if (affectedIndices.isEmpty()) {
@@ -525,7 +561,8 @@ public class Searches {
         final long tookMs = tookMsFromSearchResult(searchResult);
         recordEsMetrics(tookMs, range);
 
-        final HistogramAggregation histogramAggregation = searchResult.getAggregations().getHistogramAggregation(AGG_HISTOGRAM);
+        final FilterAggregation filterAggregation = searchResult.getAggregations().getFilterAggregation(AGG_FILTER);
+        final HistogramAggregation histogramAggregation = filterAggregation.getHistogramAggregation(AGG_HISTOGRAM);
 
         return new DateHistogramResult(
             histogramAggregation,
@@ -551,8 +588,16 @@ public class Searches {
             dateHistogramBuilder.subAggregation(AggregationBuilders.cardinality(AGG_CARDINALITY).field(field));
         }
 
-        final SearchSourceBuilder searchSourceBuilder = filteredSearchRequest(query, filter, range)
-            .aggregation(dateHistogramBuilder);
+        final FilterAggregationBuilder filterBuilder = AggregationBuilders.filter(AGG_FILTER)
+                .subAggregation(dateHistogramBuilder)
+                .filter(standardAggregationFilters(range, filter));
+
+        final QueryStringQueryBuilder qs = queryStringQuery(query)
+            .allowLeadingWildcard(configuration.isAllowLeadingWildcardSearches());
+
+        final SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
+            .query(qs)
+            .aggregation(filterBuilder);
 
         final Set<String> affectedIndices = determineAffectedIndices(range, filter);
         if (affectedIndices.isEmpty()) {
@@ -567,7 +612,8 @@ public class Searches {
         final long tookMs = tookMsFromSearchResult(searchResult);
         recordEsMetrics(tookMs, range);
 
-        final HistogramAggregation histogramAggregation = searchResult.getAggregations().getHistogramAggregation(AGG_HISTOGRAM);
+        final FilterAggregation filterAggregation = searchResult.getAggregations().getFilterAggregation(AGG_FILTER);
+        final HistogramAggregation histogramAggregation = filterAggregation.getHistogramAggregation(AGG_HISTOGRAM);
 
         return new FieldHistogramResult(
                 histogramAggregation,
@@ -582,13 +628,27 @@ public class Searches {
         // if at least one of the index sets comes back with a result, the overall result will have the aggregation
         // but not considered failed entirely. however, if one shard has the error, we will refuse to respond
         // otherwise we would be showing empty graphs for non-numeric fields.
-        final JsonNode shards = result.getJsonObject().path("_shards");
-        final double failedShards = shards.path("failed").asDouble();
+        final JsonObject jsonObject = result.getJsonObject();
+        final Optional<JsonElement> shards = Optional.of(jsonObject.get("_shards"));
+        final double failedShards = shards
+            .map(JsonElement::getAsJsonObject)
+            .map(json -> json.get("failed"))
+            .map(JsonElement::getAsDouble)
+            .orElse(0.0);
 
         if (failedShards > 0) {
-            final List<String> errors = StreamSupport.stream(shards.path("failures").spliterator(), false)
-                .map(failure -> failure.path("reason").path("reason").asText())
-                .filter(String::isEmpty)
+            final List<String> errors = shards
+                .map(GsonUtils::asJsonObject)
+                .map(json -> asJsonArray(json.get("failures")))
+                .map(Iterable::spliterator)
+                .map(x -> StreamSupport.stream(x, false))
+                .orElse(java.util.stream.Stream.empty())
+                .map(GsonUtils::asJsonObject)
+                .map(failure -> Optional.ofNullable(asJsonObject(failure.get("reason")))
+                    .map(reason -> asString(reason.get("reason")))
+                    .orElse(null)
+                )
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
             final List<String> nonNumericFieldErrors = errors.stream()
