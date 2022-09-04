@@ -5,9 +5,9 @@ import android.content.Context;
 import android.media.AudioManager;
 import android.os.Handler;
 import android.os.Looper;
-import androidx.annotation.AttrRes;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
+import android.support.annotation.AttrRes;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.GestureDetector;
@@ -323,9 +323,9 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
                     releasePauseCover();
                     mBufferPoint = 0;
                     mSaveChangeViewTIme = 0;
-                    if (mAudioManager != null) {
-                        mAudioManager.abandonAudioFocus(onAudioFocusChangeListener);
-                    }
+                }
+                if (mAudioManager != null) {
+                    mAudioManager.abandonAudioFocus(onAudioFocusChangeListener);
                 }
                 releaseNetWorkState();
                 break;
@@ -369,9 +369,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     protected void setSmallVideoTextureView(View.OnTouchListener onTouchListener) {
         super.setSmallVideoTextureView(onTouchListener);
         //小窗口播放停止了也可以移动
-        if(mThumbImageViewLayout != null) {
-            mThumbImageViewLayout.setOnTouchListener(onTouchListener);
-        }
+        mThumbImageViewLayout.setOnTouchListener(onTouchListener);
     }
 
     @Override

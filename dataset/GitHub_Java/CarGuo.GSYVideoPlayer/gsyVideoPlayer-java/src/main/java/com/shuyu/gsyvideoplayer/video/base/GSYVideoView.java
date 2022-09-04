@@ -9,9 +9,9 @@ import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Handler;
 import android.os.Looper;
-import androidx.annotation.AttrRes;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
+import android.support.annotation.AttrRes;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.util.AttributeSet;
 import android.view.InflateException;
 import android.view.Surface;
@@ -522,7 +522,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
         mPauseBeforePrepared = false;
         if (mCurrentState == CURRENT_STATE_PAUSE) {
             try {
-                if (mCurrentPosition >= 0 && getGSYVideoManager() != null) {
+                if (mCurrentPosition > 0 && getGSYVideoManager() != null) {
                     if (seek) {
                         getGSYVideoManager().seekTo(mCurrentPosition);
                     }
