@@ -16,10 +16,12 @@
  */
 package org.graylog2.restclient.lib.timeranges;
 
-import com.google.common.collect.ImmutableMap;
-
+import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class RelativeRange extends TimeRange {
 
     private final int range;
@@ -38,18 +40,23 @@ public class RelativeRange extends TimeRange {
 
     @Override
     public Map<String, String> getQueryParams() {
-        return ImmutableMap.of(
-                "range_type", getType().toString().toLowerCase(),
-                "range", String.valueOf(range));
+        return new HashMap<String, String>() {{
+            put("range_type", getType().toString().toLowerCase());
+            put("range", String.valueOf(range));
+        }};
     }
 
     @Override
     public String toString() {
-        return "Relative time range [" + this.getClass().getCanonicalName() + "] - range: " + this.range;
+        StringBuilder sb =  new StringBuilder("Relative time range [").append(this.getClass().getCanonicalName()).append("] - ");
+        sb.append("range: ").append(this.range);
+
+        return sb.toString();
     }
 
     /* Indicates if the range value is 0 */
     public boolean isEmptyRange() {
         return range == 0;
     }
+
 }

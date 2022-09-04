@@ -18,8 +18,10 @@ package org.graylog2.restclient.models;
 
 import org.graylog2.restclient.models.api.responses.system.SystemMessageSummaryResponse;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class SystemMessage {
 
     // This must match the messages returned per page by server or things will go horribly wrong.
@@ -31,7 +33,7 @@ public class SystemMessage {
     private String nodeId;
 
     public SystemMessage(SystemMessageSummaryResponse sms) {
-        this.timestamp = new DateTime(sms.timestamp, DateTimeZone.UTC);
+        this.timestamp = new DateTime(sms.timestamp);
         this.caller = sms.caller;
         this.content = sms.content;
         this.nodeId = sms.nodeId;

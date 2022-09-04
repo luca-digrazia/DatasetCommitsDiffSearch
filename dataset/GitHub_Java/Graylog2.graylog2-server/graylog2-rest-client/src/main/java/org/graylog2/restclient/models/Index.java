@@ -86,7 +86,7 @@ public class Index {
         }
     }
 
-    public static class Info {
+    public class Info {
 
         private final int openSearchContexts;
         private final long storeSizeBytes;
@@ -146,7 +146,7 @@ public class Index {
             return isReopened;
         }
 
-        public static class ShardMeter {
+        public class ShardMeter {
 
             private final ShardMeterResponse indexMeter;
             private final ShardMeterResponse flushMeter;
@@ -195,9 +195,10 @@ public class Index {
             }
 
         }
+
     }
 
-    public static class Range {
+    public class Range {
 
         private final DateTime starts;
         private final boolean providesCalculationInfo;
@@ -233,4 +234,5 @@ public class Index {
             return calculatedAt;
         }
     }
+
 }

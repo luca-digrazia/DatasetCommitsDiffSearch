@@ -84,15 +84,21 @@ public class DateTools {
         return DateTime.now(DateTimeZone.UTC);
     }
 
-    public static int getUserTimeZoneOffset(User currentUser) {
+    public static int getUserTimeZoneOffset() {
         DateTimeZone tz = globalTimezone;
+
+        final User currentUser = UserService.current();
 
         if (currentUser != null && currentUser.getTimeZone() != null) {
             tz = currentUser.getTimeZone();
         }
 
-        int offset = tz.getOffset(new DateTime().getMillis());
+        int offsetMillis = tz.toTimeZone().getRawOffset() / 1000;
 
-        return ((offset  / 1000) / 60) * -1;
+        if (tz.toTimeZone().useDaylightTime()) {
+            offsetMillis += 3600;
+        }
+
+        return (offsetMillis / 60) * -1;
     }
 }

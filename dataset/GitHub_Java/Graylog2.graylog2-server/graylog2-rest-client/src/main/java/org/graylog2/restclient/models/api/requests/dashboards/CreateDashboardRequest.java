@@ -16,14 +16,22 @@
  */
 package org.graylog2.restclient.models.api.requests.dashboards;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.graylog2.restclient.models.api.requests.ApiRequest;
 import play.data.validation.Constraints;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class CreateDashboardRequest extends ApiRequest {
+
     @Constraints.Required
     public String title;
     @Constraints.Required
     public String description;
+
+    @JsonProperty("creator_user_id")
+    public String creatorUserId;
 
     public String getTitle() {
         return title;
@@ -39,5 +47,13 @@ public class CreateDashboardRequest extends ApiRequest {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getCreatorUserId() {
+        return creatorUserId;
+    }
+
+    public void setCreatorUserId(String creatorUserId) {
+        this.creatorUserId = creatorUserId;
     }
 }

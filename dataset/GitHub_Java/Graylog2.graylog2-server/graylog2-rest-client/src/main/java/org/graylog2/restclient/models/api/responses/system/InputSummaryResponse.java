@@ -58,9 +58,6 @@ public class InputSummaryResponse {
     @JsonProperty("created_at")
     public String createdAt;
 
-    @JsonProperty("content_pack")
-    public String contentPack;
-
     public Boolean global;
 
     @JsonProperty("static_fields")

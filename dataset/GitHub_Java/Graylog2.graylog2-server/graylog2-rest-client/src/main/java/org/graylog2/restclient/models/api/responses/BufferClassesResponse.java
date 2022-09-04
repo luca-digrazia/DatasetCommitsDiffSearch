@@ -26,8 +26,4 @@ public class BufferClassesResponse {
     public String processBufferClass;
     @JsonProperty("output_buffer")
     public String outputBufferClass;
-
-    public static BufferClassesResponse buildEmpty() {
-        return new BufferClassesResponse();
-    }
 }

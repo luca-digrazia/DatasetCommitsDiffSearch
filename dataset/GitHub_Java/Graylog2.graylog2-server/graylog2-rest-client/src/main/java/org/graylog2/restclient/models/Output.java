@@ -39,7 +39,6 @@ public class Output {
     private final Map<String, Object> configuration;
     private final String type;
     private final String createdAt;
-    private final String contentPack;
 
     @AssistedInject
 
@@ -55,7 +54,6 @@ public class Output {
         this.configuration = outputSummaryResponse.configuration;
         this.type = outputSummaryResponse.type;
         this.createdAt = outputSummaryResponse.createdAt;
-        this.contentPack = outputSummaryResponse.contentPack;
     }
 
     public ApiClient getApi() {
@@ -88,10 +86,6 @@ public class Output {
 
     public String getCreatedAt() {
         return createdAt;
-    }
-
-    public String getContentPack() {
-        return contentPack;
     }
 
     @Override

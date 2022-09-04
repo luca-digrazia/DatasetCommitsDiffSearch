@@ -16,19 +16,30 @@
  */
 package org.graylog2.restclient.models.api.requests.dashboards;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import org.graylog2.restclient.models.User;
 import org.graylog2.restclient.models.api.requests.ApiRequest;
 import org.graylog2.restclient.models.dashboards.widgets.DashboardWidget;
 
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class AddWidgetRequest extends ApiRequest {
+
     public String type;
     public String description;
     public Map<String, Object> config;
 
-    public AddWidgetRequest(DashboardWidget widget) {
+    @JsonProperty("creator_user_id")
+    public String creatorUserId;
+
+    public AddWidgetRequest(DashboardWidget widget, User user) {
         this.type = widget.getType().toString().toLowerCase();
         this.description = widget.getDescription();
         this.config = widget.getConfig();
+        this.creatorUserId = user.getName();
     }
+
 }

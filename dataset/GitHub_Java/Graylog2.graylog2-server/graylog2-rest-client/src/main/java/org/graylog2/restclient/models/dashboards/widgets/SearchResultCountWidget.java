@@ -31,24 +31,12 @@ public class SearchResultCountWidget extends DashboardWidget {
     private static final int WIDTH = 1;
     private static final int HEIGHT = 1;
 
-    private final boolean trend;
-    private final int intervalAmount;
-    private final String intervalUnit;
-
-    public SearchResultCountWidget(Dashboard dashboard, String query, TimeRange timerange, String description, boolean trend, int intervalAmount, String intervalUnit) {
-        this(dashboard, null, description, 0, query, timerange, trend, intervalAmount, intervalUnit, null);
-    }
-
     public SearchResultCountWidget(Dashboard dashboard, String query, TimeRange timerange, String description) {
-        this(dashboard, query, timerange, description, false, -1, null);
+        this(dashboard, null, description, 0, query, timerange, null);
     }
 
-    public SearchResultCountWidget(Dashboard dashboard, String id, String description, int cacheTime, String query, TimeRange timerange, boolean trend, int intervalAmount, String intervalUnit, String creatorUserId) {
+    public SearchResultCountWidget(Dashboard dashboard, String id, String description, int cacheTime, String query, TimeRange timerange, String creatorUserId) {
         super(Type.SEARCH_RESULT_COUNT, id, description, cacheTime, dashboard, creatorUserId, query, timerange);
-
-        this.trend = trend;
-        this.intervalAmount = intervalAmount;
-        this.intervalUnit = intervalUnit;
     }
 
     @Override
@@ -56,9 +44,6 @@ public class SearchResultCountWidget extends DashboardWidget {
         Map<String, Object> config = Maps.newHashMap();
         config.putAll(getTimerange().getQueryParams());
         config.put("query", getQuery());
-        config.put("trend", trend);
-        config.put("intervalAmount", intervalAmount);
-        config.put("intervalUnit", intervalUnit);
 
         return config;
     }

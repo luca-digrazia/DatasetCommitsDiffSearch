@@ -16,14 +16,15 @@
  */
 package org.graylog2.restclient.lib.metrics;
 
-import com.google.common.collect.ImmutableMap;
 import org.graylog2.restclient.models.api.responses.metrics.RateMetricsResponse;
 
 import java.text.DecimalFormat;
+import java.util.HashMap;
 import java.util.Map;
 
 public class Meter extends Metric {
-    private static final DecimalFormat DF = new DecimalFormat("#.##");
+
+    DecimalFormat df = new DecimalFormat("#.##");
 
     public final double total;
     public final double mean;
@@ -42,13 +43,13 @@ public class Meter extends Metric {
     }
 
     public Meter(final RateMetricsResponse rate) {
-        this(ImmutableMap.<String, Object>builder()
-                .put("total", rate.total)
-                .put("mean", rate.mean)
-                .put("one_minute", rate.oneMinute)
-                .put("five_minute", rate.fiveMinute)
-                .put("fifteen_minute", rate.fifteenMinute)
-                .build());
+        this(new HashMap<String, Object>() {{
+            put("total", rate.total);
+            put("mean", rate.mean);
+            put("one_minute", rate.oneMinute);
+            put("five_minute", rate.fiveMinute);
+            put("fifteen_minute", rate.fifteenMinute);
+        }});
     }
 
     public double getTotal() {
@@ -72,18 +73,19 @@ public class Meter extends Metric {
     }
 
     public String getMeanFormatted() {
-        return DF.format(mean);
+        return df.format(mean);
     }
 
     public String getOneMinuteFormatted() {
-        return DF.format(oneMinute);
+        return df.format(oneMinute);
     }
 
     public String getFiveMinuteFormatted() {
-        return DF.format(fiveMinute);
+        return df.format(fiveMinute);
     }
 
     public String getFifteenMinuteFormatted() {
-        return DF.format(fifteenMinute);
+        return df.format(fifteenMinute);
     }
+
 }

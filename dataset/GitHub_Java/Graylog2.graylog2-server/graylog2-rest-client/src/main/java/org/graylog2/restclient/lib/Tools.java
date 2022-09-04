@@ -17,14 +17,18 @@
 package org.graylog2.restclient.lib;
 
 import com.google.common.collect.Maps;
+import play.api.templates.Html;
 import play.data.Form;
 import play.mvc.Controller;
 import play.mvc.Http;
-import play.twirl.api.Html;
+import scala.collection.mutable.StringBuilder;
 
 import java.util.Map;
 import java.util.Random;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class Tools {
 
     private Tools() { /* pure utility class */ }
@@ -57,13 +61,13 @@ public class Tools {
      */
     public static Object orNbsp(Object x) {
         if (x == null) {
-            return new Html("&nbsp;");
+            return new Html(new StringBuilder("&nbsp;"));
         }
 
         if (x instanceof String) {
             final String s = x.toString();
             if (s.isEmpty()) {
-                return new Html("&nbsp;");
+                return new Html(new StringBuilder("&nbsp;"));
             }
         }
         return x;

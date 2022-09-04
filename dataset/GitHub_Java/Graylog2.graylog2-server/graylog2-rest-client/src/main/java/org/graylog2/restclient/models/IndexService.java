@@ -103,7 +103,7 @@ public class IndexService {
 
     // Not part an Index model instance method because opening/closing can be applied to indices without calculated ranges.
     public void delete(String index) throws APIException, IOException {
-        api.path(routes.IndicesResource().delete(index))
+        api.path(routes.IndicesResource().single(index))
                 .timeout(apiTimeout("index_delete", 60, TimeUnit.SECONDS))
                 .expect(204)
                 .execute();

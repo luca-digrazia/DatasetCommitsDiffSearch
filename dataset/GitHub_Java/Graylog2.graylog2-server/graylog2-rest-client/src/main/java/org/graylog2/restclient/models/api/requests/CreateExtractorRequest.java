@@ -20,6 +20,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class CreateExtractorRequest extends ApiRequest {
 
     public String title;
@@ -35,6 +38,9 @@ public class CreateExtractorRequest extends ApiRequest {
 
     @JsonProperty("extractor_type")
     public String extractorType;
+
+    @JsonProperty("creator_user_id")
+    public String creatorUserId;
 
     @JsonProperty("extractor_config")
     public Map<String, Object> extractorConfig;

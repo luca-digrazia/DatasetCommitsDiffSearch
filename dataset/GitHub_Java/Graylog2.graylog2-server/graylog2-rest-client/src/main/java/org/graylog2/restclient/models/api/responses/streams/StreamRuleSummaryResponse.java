@@ -16,8 +16,9 @@
  */
 package org.graylog2.restclient.models.api.responses.streams;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public class StreamRuleSummaryResponse {
     public String id;
     public String field;
@@ -26,7 +27,4 @@ public class StreamRuleSummaryResponse {
     public Boolean inverted;
 
     public String stream_id;
-
-    @JsonProperty("content_pack")
-    public String contentPack;
 }
