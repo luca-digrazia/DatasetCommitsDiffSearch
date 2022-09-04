@@ -24,7 +24,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
-import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
 import com.mongodb.QueryBuilder;
 import org.bson.types.ObjectId;
@@ -48,7 +47,6 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -379,41 +377,5 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
                 new BasicDBObject(MessageInput.FIELD_RADIO_ID, nodeId));
 
         return count(InputImpl.class, new BasicDBObject("$or", query));
-    }
-
-    @Override
-    public long totalExtractorCount() {
-        final DBObject query = new BasicDBObject(InputImpl.EMBEDDED_EXTRACTORS, new BasicDBObject("$exists", true));
-        final DBCursor inputs = collection(InputImpl.class).find(query, new BasicDBObject(InputImpl.EMBEDDED_EXTRACTORS, 1));
-
-        long extractorsCount = 0;
-        for (DBObject input : inputs) {
-            final BasicDBList extractors = (BasicDBList) input.get(InputImpl.EMBEDDED_EXTRACTORS);
-            extractorsCount += extractors.size();
-        }
-
-        return extractorsCount;
-    }
-
-    @Override
-    public Map<Extractor.Type, Long> totalExtractorCountByType() {
-        final Map<Extractor.Type, Long> extractorsCountByType = new HashMap<>();
-        final DBObject query = new BasicDBObject(InputImpl.EMBEDDED_EXTRACTORS, new BasicDBObject("$exists", true));
-        final DBCursor inputs = collection(InputImpl.class).find(query, new BasicDBObject(InputImpl.EMBEDDED_EXTRACTORS, 1));
-
-        for (DBObject input : inputs) {
-            final BasicDBList extractors = (BasicDBList) input.get(InputImpl.EMBEDDED_EXTRACTORS);
-            for (Object fuckYouMongoDb : extractors) {
-                final DBObject extractor = (DBObject) fuckYouMongoDb;
-                final Extractor.Type type = Extractor.Type.fuzzyValueOf(((String) extractor.get(Extractor.FIELD_TYPE)));
-                if (type != null) {
-                    final Long oldValue = extractorsCountByType.get(type);
-                    final Long newValue = (oldValue == null) ? 1 : oldValue + 1;
-                    extractorsCountByType.put(type, newValue);
-                }
-            }
-        }
-
-        return extractorsCountByType;
     }
 }
