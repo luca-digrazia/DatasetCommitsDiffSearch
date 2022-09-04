@@ -29,7 +29,6 @@ import com.danikula.videocache.HttpProxyCacheServer;
 import com.danikula.videocache.file.Md5FileNameGenerator;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
-import com.shuyu.gsyvideoplayer.utils.NetInfoModule;
 import com.shuyu.gsyvideoplayer.utils.StorageUtils;
 import com.shuyu.gsyvideoplayer.video.GSYBaseVideoPlayer;
 
@@ -83,11 +82,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
     protected String mPlayTag = ""; //播放的tag，防止错误，因为普通的url也可能重复
 
-    protected String mNetSate = "NORMAL";
-
     protected Matrix mTransformCover = null;
-
-    protected NetInfoModule mNetInfoModule;
 
     protected int mPlayPosition = -22; //播放的tag，防止错误，因为普通的url也可能重复
 
@@ -134,8 +129,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     protected boolean mBrightness = false;//是否改变亮度
 
     protected boolean mFirstTouch = false;//是否首次触摸
-
-    protected boolean mNetChanged = false; //是否发送了网络改变
 
 
     /**
@@ -304,7 +297,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
                 if (mAudioManager != null) {
                     mAudioManager.abandonAudioFocus(onAudioFocusChangeListener);
                 }
-                releaseNetWorkState();
                 break;
             case CURRENT_STATE_PREPAREING:
                 resetProgressAndTime();
@@ -494,11 +486,11 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         mTextureView.setSurfaceTextureListener(this);
         mTextureView.setRotation(mRotate);
 
-        if (mTextureViewContainer instanceof RelativeLayout) {
+        if(mTextureViewContainer instanceof RelativeLayout) {
             RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
             layoutParams.addRule(RelativeLayout.CENTER_IN_PARENT);
             mTextureViewContainer.addView(mTextureView, layoutParams);
-        } else if (mTextureViewContainer instanceof FrameLayout) {
+        } else if(mTextureViewContainer instanceof FrameLayout) {
             FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
             layoutParams.gravity = Gravity.CENTER;
             mTextureViewContainer.addView(mTextureView, layoutParams);
@@ -632,7 +624,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
                     }
                     if (mChangePosition) {
                         int totalTimeDuration = getDuration();
-                        mSeekTimePosition = (int) (mDownPosition + (deltaX * totalTimeDuration / mScreenWidth) / mSeekRatio);
+                        mSeekTimePosition = (int) (mDownPosition + deltaX * totalTimeDuration / mScreenWidth);
                         if (mSeekTimePosition > totalTimeDuration)
                             mSeekTimePosition = totalTimeDuration;
                         String seekTime = CommonUtil.stringForTime(mSeekTimePosition);
@@ -660,7 +652,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
                     dismissProgressDialog();
                     dismissVolumeDialog();
                     dismissBrightnessDialog();
-                    if (mChangePosition && GSYVideoManager.instance().getMediaPlayer() != null && (mCurrentState == CURRENT_STATE_PLAYING || mCurrentState == CURRENT_STATE_PAUSE)) {
+                    if (mChangePosition && GSYVideoManager.instance().getMediaPlayer() != null) {
                         GSYVideoManager.instance().getMediaPlayer().seekTo(mSeekTimePosition);
                         int duration = getDuration();
                         int progress = mSeekTimePosition * 100 / (duration == 0 ? 1 : duration);
@@ -722,7 +714,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
                     && !mFullPauseBitmap.isRecycled() && mShowPauseCover) {
                 mCoverImageView.setRotation(mTextureView.getRotation());
                 mCoverImageView.setImageBitmap(mFullPauseBitmap);
-                if (mTransformCover != null) {
+                if(mTransformCover != null) {
                     mCoverImageView.setScaleType(ImageView.ScaleType.MATRIX);
                     mCoverImageView.setImageMatrix(mTransformCover);
                 }
@@ -857,8 +849,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
             GSYVideoManager.instance().getMediaPlayer().seekTo(mSeekOnStart);
             mSeekOnStart = 0;
         }
-        createNetWorkState();
-        listenerNetWorkState();
+
         mHadPlay = true;
     }
 
@@ -932,16 +923,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
     @Override
     public void onError(int what, int extra) {
-
-        if (mNetChanged) {
-            mNetChanged = false;
-            netWorkErrorLogic();
-            if (mVideoAllCallBack != null) {
-                mVideoAllCallBack.onPlayError(mUrl, mObjects);
-            }
-            return;
-        }
-
         if (what != 38 && what != -38) {
             setStateAndUi(CURRENT_STATE_ERROR);
             deleteCacheFileWhenError();
@@ -986,22 +967,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     @Override
     public void onBackFullscreen() {
 
-    }
-
-    /**
-     * 处理因切换网络而导致的问题
-     */
-    protected void netWorkErrorLogic() {
-        final long currentPosition = getCurrentPositionWhenPlaying();
-        Debuger.printfError("******* Net State Changed. renew player to connect *******" + currentPosition);
-        GSYVideoManager.instance().releaseMediaPlayer();
-        new Handler().postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                setSeekOnStart(currentPosition);
-                startPlayLogic();
-            }
-        }, 500);
     }
 
     /**
@@ -1190,55 +1155,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         }
         showBrightnessDialog(lpa.screenBrightness);
         ((Activity) (mContext)).getWindow().setAttributes(lpa);
-    }
-
-    /**
-     * 创建网络监听
-     */
-    protected void createNetWorkState() {
-        if (mNetInfoModule == null) {
-            mNetInfoModule = new NetInfoModule(getContext().getApplicationContext(), new NetInfoModule.NetChangeListener() {
-                @Override
-                public void changed(String state) {
-                    if ("WIFI".equals(state) || "MOBILE".equals(state)) {
-                        if (!mNetSate.equals(state)) {
-                            mNetChanged = true;
-                            Debuger.printfError("******* change network state *******");
-                        }
-                    }
-                    mNetSate = state;
-                }
-            });
-            mNetSate = mNetInfoModule.getCurrentConnectionType();
-        }
-    }
-
-    /**
-     * 监听网络状态
-     */
-    protected void listenerNetWorkState() {
-        if (mNetInfoModule != null) {
-            mNetInfoModule.onHostResume();
-        }
-    }
-
-    /**
-     * 取消网络监听
-     */
-    protected void unListenerNetWorkState() {
-        if (mNetInfoModule != null) {
-            mNetInfoModule.onHostPause();
-        }
-    }
-
-    /**
-     * 释放网络监听
-     */
-    protected void releaseNetWorkState() {
-        if (mNetInfoModule != null) {
-            mNetInfoModule.onHostPause();
-            mNetInfoModule = null;
-        }
     }
 
 
