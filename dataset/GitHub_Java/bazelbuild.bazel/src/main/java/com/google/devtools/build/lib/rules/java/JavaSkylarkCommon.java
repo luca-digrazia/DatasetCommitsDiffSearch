@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.rules.java.proto.StrictDepsUtils;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import java.util.List;
 
@@ -162,14 +161,6 @@ public class JavaSkylarkCommon {
         type = ConfiguredTarget.class,
         doc = "A label pointing to a JDK to be used for this compilation. Mandatory."
       ),
-      @Param(
-        name = "sourcepath",
-        positional = false,
-        named = true,
-        type = SkylarkList.class,
-        generic1 = Artifact.class,
-        defaultValue = "[]"
-      )
     }
   )
   public JavaProvider createJavaCompileAction(
@@ -181,15 +172,12 @@ public class JavaSkylarkCommon {
       SkylarkList<JavaProvider> deps,
       String strictDepsMode,
       ConfiguredTarget javaToolchain,
-      ConfiguredTarget hostJavabase,
-      SkylarkList<Artifact> sourcepathEntries) {
-
+      ConfiguredTarget hostJavabase) {
     JavaLibraryHelper helper =
         new JavaLibraryHelper(skylarkRuleContext.getRuleContext())
             .setOutput(outputJar)
             .addSourceJars(sourceJars)
             .addSourceFiles(sourceFiles)
-            .setSourcePathEntries(sourcepathEntries)
             .setJavacOpts(javacOpts);
 
     List<JavaCompilationArgsProvider> compilationArgsProviders =
@@ -244,7 +232,7 @@ public class JavaSkylarkCommon {
       }
   )
   public static List<String> getDefaultJavacOpts(
-      SkylarkRuleContext skylarkRuleContext, String javaToolchainAttr) throws EvalException {
+      SkylarkRuleContext skylarkRuleContext, String javaToolchainAttr) {
     RuleContext ruleContext = skylarkRuleContext.getRuleContext();
     ConfiguredTarget javaToolchainConfigTarget =
         (ConfiguredTarget) checkNotNull(skylarkRuleContext.getAttr().getValue(javaToolchainAttr));
