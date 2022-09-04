@@ -13,7 +13,6 @@ import java.util.function.Supplier;
 
 import org.jboss.logging.Logger;
 
-import io.quarkus.runtime.BlockingOperationControl;
 import io.quarkus.security.AuthenticationFailedException;
 import io.quarkus.security.identity.AuthenticationRequestContext;
 import io.quarkus.security.identity.IdentityProvider;
@@ -33,33 +32,17 @@ public class QuarkusIdentityProviderManagerImpl implements IdentityProviderManag
     private final List<SecurityIdentityAugmentor> augmenters;
     private final Executor blockingExecutor;
 
-    private final AuthenticationRequestContext blockingRequestContext = new AuthenticationRequestContext() {
+    private static final AuthenticationRequestContext blockingRequestContext = new AuthenticationRequestContext() {
         @Override
         public CompletionStage<SecurityIdentity> runBlocking(Supplier<SecurityIdentity> function) {
-
-            if (BlockingOperationControl.isBlockingAllowed()) {
-                CompletableFuture<SecurityIdentity> ret = new CompletableFuture<>();
-                try {
-                    SecurityIdentity result = function.get();
-                    ret.complete(result);
-                } catch (Throwable t) {
-                    ret.completeExceptionally(t);
-                }
-                return ret;
-            } else {
-                CompletableFuture<SecurityIdentity> cf = new CompletableFuture<>();
-                blockingExecutor.execute(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            cf.complete(function.get());
-                        } catch (Throwable t) {
-                            cf.completeExceptionally(t);
-                        }
-                    }
-                });
-                return cf;
+            CompletableFuture<SecurityIdentity> ret = new CompletableFuture<>();
+            try {
+                SecurityIdentity result = function.get();
+                ret.complete(result);
+            } catch (Throwable t) {
+                ret.completeExceptionally(t);
             }
+            return ret;
         }
     };
 
@@ -86,7 +69,7 @@ public class QuarkusIdentityProviderManagerImpl implements IdentityProviderManag
                     "No IdentityProviders were registered to handle AuthenticationRequest " + request));
             return cf;
         }
-        return handleProvider(0, (List) providers, request, blockingRequestContext);
+        return handleProvider(0, (List) providers, request, new AsyncAuthenticationRequestContext());
     }
 
     /**
@@ -228,4 +211,31 @@ public class QuarkusIdentityProviderManagerImpl implements IdentityProviderManag
         }
     }
 
+    private class AsyncAuthenticationRequestContext implements AuthenticationRequestContext {
+
+        private boolean inBlocking = false;
+
+        @Override
+        public CompletionStage<SecurityIdentity> runBlocking(Supplier<SecurityIdentity> function) {
+            if (inBlocking) {
+                return blockingRequestContext.runBlocking(function);
+            }
+            CompletableFuture<SecurityIdentity> cf = new CompletableFuture<>();
+            blockingExecutor.execute(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        inBlocking = true;
+                        cf.complete(function.get());
+                    } catch (Throwable t) {
+                        cf.completeExceptionally(t);
+                    } finally {
+                        inBlocking = false;
+                    }
+                }
+            });
+
+            return cf;
+        }
+    }
 }
