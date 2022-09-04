@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.analysis.actions;
 
-import static com.google.devtools.build.lib.analysis.ToolchainCollection.DEFAULT_EXEC_GROUP_NAME;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Joiner;
@@ -256,7 +254,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
   }
 
   @Override
-  public Sequence<String> getStarlarkArgv() throws EvalException {
+  public Sequence<String> getSkylarkArgv() throws EvalException {
     try {
       return StarlarkList.immutableCopyOf(getArguments());
     } catch (CommandLineExpansionException exception) {
@@ -623,7 +621,6 @@ public class SpawnAction extends AbstractAction implements CommandAction {
     private String mnemonic = "Unknown";
     protected ExtraActionInfoSupplier extraActionInfoSupplier = null;
     private boolean disableSandboxing = false;
-    private String execGroup = DEFAULT_EXEC_GROUP_NAME;
 
     private Consumer<Pair<ActionExecutionContext, List<SpawnResult>>> resultConsumer = null;
 
@@ -671,7 +668,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
      */
     @CheckReturnValue
     public Action[] build(ActionConstructionContext context) {
-      return build(context.getActionOwner(execGroup), context.getConfiguration());
+      return build(context.getActionOwner(), context.getConfiguration());
     }
 
     @VisibleForTesting @CheckReturnValue
@@ -1291,11 +1288,6 @@ public class SpawnAction extends AbstractAction implements CommandAction {
 
     public Builder disableSandboxing() {
       this.disableSandboxing = true;
-      return this;
-    }
-
-    public Builder setExecGroup(String execGroup) {
-      this.execGroup = execGroup;
       return this;
     }
 
