@@ -26,14 +26,13 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.MetricSet;
 import com.codahale.metrics.Timer;
-import com.fasterxml.jackson.annotation.JsonValue;
 import com.google.common.collect.Maps;
-import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.AbstractDescriptor;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.Stoppable;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.buffers.InputBuffer;
+import org.graylog2.plugin.buffers.Buffer;
+import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
+import org.graylog2.plugin.buffers.ProcessingDisabledException;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
@@ -50,7 +49,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public abstract class MessageInput implements Stoppable {
+public abstract class MessageInput {
     private static final Logger LOG = LoggerFactory.getLogger(MessageInput.class);
 
     public static final String CK_OVERRIDE_SOURCE = "override_source";
@@ -78,7 +77,6 @@ public abstract class MessageInput implements Stoppable {
     private final MetricRegistry localRegistry;
     private final Codec codec;
     private final Descriptor descriptor;
-    private final ServerStatus serverStatus;
     private final Meter failures;
     private final Meter incompleteMessages;
     private final Meter incomingMessages;
@@ -87,12 +85,6 @@ public abstract class MessageInput implements Stoppable {
     private final Meter rawSize;
     private final Map<String, String> staticFields = Maps.newConcurrentMap();
     private final ConfigurationRequest requestedConfiguration;
-    /**
-     * This is being used to decide which minimal set of configuration values need to be serialized when a message
-     * is written to the journal. The message input's config contains transport configuration as well, but we want to
-     * avoid serialising those parts of the configuration in order to save bytes on disk/network.
-     */
-    private final Configuration codecConfig;
 
     protected String title;
     protected String creatorUserId;
@@ -102,19 +94,17 @@ public abstract class MessageInput implements Stoppable {
     protected String contentPack;
 
     protected Configuration configuration;
-    protected InputBuffer inputBuffer;
+    protected Buffer processBuffer;
 
     public MessageInput(MetricRegistry metricRegistry,
                         Transport transport,
-                        MetricRegistry localRegistry, Codec codec, Config config, Descriptor descriptor, ServerStatus serverStatus) {
+                        MetricRegistry localRegistry, Codec codec, Config config, Descriptor descriptor) {
         this.metricRegistry = metricRegistry;
         this.transport = transport;
         this.localRegistry = localRegistry;
         this.codec = codec;
         this.descriptor = descriptor;
-        this.serverStatus = serverStatus;
-        this.requestedConfiguration = config.combinedRequestedConfiguration();
-        this.codecConfig = config.codecConfig.getRequestedConfiguration().filter(codec.getConfiguration());
+        this.requestedConfiguration = config.getRequestedConfiguration();
         parseTime = localRegistry.timer("parseTime");
         processedMessages = localRegistry.meter("processedMessages");
         failures = localRegistry.meter("failures");
@@ -145,14 +135,14 @@ public abstract class MessageInput implements Stoppable {
         cr.check(getConfiguration());
     }
 
-    public void launch(final InputBuffer buffer) throws MisfireException {
-        this.inputBuffer = buffer;
+    public void launch(final Buffer buffer) throws MisfireException {
+        this.processBuffer = buffer;
         try {
             transport.setMessageAggregator(codec.getAggregator());
 
             transport.launch(this);
         } catch (Exception e) {
-            inputBuffer = null;
+            processBuffer = null;
             throw new MisfireException(e);
         }
     }
@@ -219,7 +209,6 @@ public abstract class MessageInput implements Stoppable {
         return configuration;
     }
 
-    // TODO pass in via constructor
     public void setConfiguration(Configuration configuration) {
         this.configuration = configuration;
     }
@@ -273,7 +262,6 @@ public abstract class MessageInput implements Stoppable {
         return result;
     }
 
-    @JsonValue
     public Map<String, Object> asMap() {
         final Map<String, Object> inputMap = Maps.newHashMap();
 
@@ -328,15 +316,77 @@ public abstract class MessageInput implements Stoppable {
     }
 
     public void processRawMessage(RawMessage rawMessage) {
-        // add the common message metadata for this input/codec
-        rawMessage.setCodecName(codec.getName());
-        rawMessage.setCodecConfig(codecConfig);
-        rawMessage.addSourceNode(getId(), serverStatus.getNodeId(), serverStatus.hasCapability(ServerStatus.Capability.SERVER));
-
-        inputBuffer.insert(rawMessage);
-
         incomingMessages.mark();
+
+        final Message message;
+
+        try (Timer.Context ignored = parseTime.time()) {
+            message = codec.decode(rawMessage);
+        } catch (RuntimeException e) {
+            LOG.warn("Codec " + codec + " threw exception", e);
+            failures.mark();
+            return;
+        }
+
+        if (message == null) {
+            failures.mark();
+            LOG.warn("Could not decode message. Dropping message {}", rawMessage.getId());
+            return;
+        }
+        if (!message.isComplete()) {
+            incompleteMessages.mark();
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Dropping incomplete message. Parsed fields: [{}]", message.getFields());
+            }
+            return;
+        }
+
+        processedMessages.mark();
         rawSize.mark(rawMessage.getPayload().length);
+        processBuffer.insertCached(message, this);
+    }
+
+    /**
+     * Basically a reordered version of {@link #processRawMessage(org.graylog2.plugin.journal.RawMessage)} that only records a message
+     * as processed when adding it to processbuffer has worked.
+     *
+     * @param rawMessage
+     * @return true if the message was malformed and discarded. do not try to re-insert the message in that case but discard it.
+     * false if the message was successfully processed, exception is raised otherwise
+     */
+    public boolean processRawMessageFailFast(RawMessage rawMessage) throws BufferOutOfCapacityException, ProcessingDisabledException {
+        final Message message;
+
+        try (Timer.Context ignored = parseTime.time()) {
+            message = codec.decode(rawMessage);
+        } catch (RuntimeException e) {
+            LOG.warn("Codec " + codec + " threw exception", e);
+            incomingMessages.mark();
+            failures.mark();
+            return false;
+        }
+
+        if (message == null) {
+            incomingMessages.mark();
+            failures.mark();
+            LOG.warn("Could not decode message. Dropping message {}", rawMessage.getId());
+            return false;
+        }
+        if (!message.isComplete()) {
+            incomingMessages.mark();
+            incompleteMessages.mark();
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Dropping incomplete message. Parsed fields: [{}]", message.getFields());
+            }
+            return false;
+        }
+
+        processBuffer.insertFailFast(message, this);
+        // the following statements are only executed if insertFailFail does not throw!
+        incomingMessages.mark();
+        processedMessages.mark();
+        rawSize.mark(rawMessage.getPayload().length);
+        return true;
     }
 
     public interface Factory<M> {
@@ -348,8 +398,8 @@ public abstract class MessageInput implements Stoppable {
     }
 
     public static class Config {
-        public final Transport.Config transportConfig;
-        public final Codec.Config codecConfig;
+        private final Transport.Config transportConfig;
+        private final Codec.Config codecConfig;
 
         // required for guice, but isn't called.
         Config() {
@@ -361,14 +411,13 @@ public abstract class MessageInput implements Stoppable {
             this.codecConfig = codecConfig;
         }
 
-        public ConfigurationRequest combinedRequestedConfiguration() {
+        public ConfigurationRequest getRequestedConfiguration() {
             final ConfigurationRequest transport = transportConfig.getRequestedConfiguration();
             final ConfigurationRequest codec = codecConfig.getRequestedConfiguration();
             final ConfigurationRequest r = new ConfigurationRequest();
             r.putAll(transport.getFields());
             r.putAll(codec.getFields());
 
-            // TODO implement universal override (in raw message maybe?)
             r.addField(new TextField(
                     CK_OVERRIDE_SOURCE,
                     "Override source",

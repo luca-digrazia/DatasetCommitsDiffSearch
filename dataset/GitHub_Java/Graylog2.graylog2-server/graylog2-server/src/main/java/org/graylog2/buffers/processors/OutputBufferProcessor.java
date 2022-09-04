@@ -127,7 +127,6 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
         LOG.debug("Processing message <{}> from OutputBuffer.", msg.getId());
 
         final Set<MessageOutput> messageOutputs = outputRouter.getOutputsForMessage(msg);
-        msg.recordCounter(serverStatus, "matched-outputs", messageOutputs.size());
         final CountDownLatch doneSignal = new CountDownLatch(messageOutputs.size());
         for (final MessageOutput output : messageOutputs) {
             if (output == null) {
@@ -169,9 +168,6 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
             LOG.warn("Timeout reached. Not waiting any longer for writer threads to complete.");
         }
 
-        if (msg.hasRecordings()) {
-            LOG.debug("Message event trace: {}", msg.recordingsAsString());
-        }
         if (serverStatus.hasCapability(ServerStatus.Capability.STATSMODE)) {
             throughputStats.getBenchmarkCounter().increment();
         }

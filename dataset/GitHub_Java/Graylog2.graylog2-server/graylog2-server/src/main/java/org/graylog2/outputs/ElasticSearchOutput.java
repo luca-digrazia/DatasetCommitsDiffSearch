@@ -30,8 +30,8 @@ import org.graylog2.plugin.Message;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.outputs.MessageOutput;
+import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.shared.journal.Journal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,24 +48,20 @@ public class ElasticSearchOutput implements MessageOutput {
     private final Meter writes;
     private final Timer processTime;
     private final Messages messages;
-    private final Journal journal;
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
     @AssistedInject
     public ElasticSearchOutput(MetricRegistry metricRegistry,
                                Messages messages,
-                               Journal journal,
                                @Assisted Stream stream,
                                @Assisted Configuration configuration) {
-        this(metricRegistry, messages, journal);
+        this(metricRegistry, messages);
     }
 
     @Inject
     public ElasticSearchOutput(MetricRegistry metricRegistry,
-                               Messages messages,
-                               Journal journal) {
+                               Messages messages) {
         this.messages = messages;
-        this.journal = journal;
         // Only constructing metrics here. write() get's another Core reference. (because this technically is a plugin)
         this.writes = metricRegistry.meter(name(ElasticSearchOutput.class, "writes"));
         this.processTime = metricRegistry.timer(name(ElasticSearchOutput.class, "processTime"));
@@ -93,9 +89,6 @@ public class ElasticSearchOutput implements MessageOutput {
         writes.mark(messageList.size());
         try (final Timer.Context ignored = processTime.time()) {
             messages.bulkIndex(messageList);
-        }
-        for (final Message message : messageList) {
-            journal.markJournalOffsetCommitted(message.getJournalOffset());
         }
     }
 

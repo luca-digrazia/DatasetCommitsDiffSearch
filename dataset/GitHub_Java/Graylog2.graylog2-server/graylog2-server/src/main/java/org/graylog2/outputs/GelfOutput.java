@@ -140,7 +140,7 @@ public class GelfOutput implements MessageOutput {
         final String forwarder = GelfOutput.class.getCanonicalName();
 
         final GelfMessageBuilder builder = new GelfMessageBuilder(message.getMessage(), message.getSource())
-                .timestamp(timestamp.getMillis() / 1000.0d)
+                .timestamp(timestamp.getMillis())
                 .level(messageLevel)
                 .additionalField("_forwarder", forwarder)
                 .additionalFields(message.getFields());

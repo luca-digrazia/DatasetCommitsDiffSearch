@@ -1,6 +1,6 @@
 /**
  * The MIT License
- * Copyright (c) 2012 Graylog, Inc.
+ * Copyright (c) 2012 TORCH GmbH
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,6 @@ package org.graylog2.plugin.outputs;
 
 import org.graylog2.plugin.AbstractDescriptor;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.Stoppable;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.streams.Stream;
@@ -34,7 +33,7 @@ import java.util.List;
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public interface MessageOutput extends Stoppable {
+public interface MessageOutput {
     public interface Factory<T> {
         T create(Stream stream, Configuration configuration);
         Config getConfig();

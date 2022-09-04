@@ -17,7 +17,6 @@
 package org.graylog2.rest.resources.system.outputs;
 
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
@@ -29,6 +28,7 @@ import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.ValidationException;
 import org.graylog2.outputs.MessageOutputFactory;
+import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.outputs.MessageOutput;
@@ -53,11 +53,13 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
-import java.net.URI;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 @RequiresAuthentication
 @Api(value = "System/Outputs", description = "Manage outputs")
 @Path("/system/outputs")
@@ -83,13 +85,15 @@ public class OutputResource extends RestResource {
         checkPermission(RestPermissions.OUTPUTS_READ);
         final Set<Output> outputs = outputService.loadAll();
 
-        return ImmutableMap.of(
-                "total", outputs.size(),
-                "outputs", filterPasswordFields(outputs));
+        return new HashMap<String, Object>() {
+            {
+                put("total", outputs.size());
+                put("outputs", filterPasswordFields(outputs));
+            }
+        };
     }
 
-    @GET
-    @Path("/{outputId}")
+    @GET @Path("/{outputId}")
     @Timed
     @ApiOperation(value = "Get specific output")
     @RequiresPermissions(RestPermissions.OUTPUTS_CREATE)
@@ -126,21 +130,17 @@ public class OutputResource extends RestResource {
         // Make sure the config values will be stored with the correct type.
         csor.configuration = ConfigurationMapConverter.convertValues(csor.configuration, outputSummary.requestedConfiguration);
 
-        final Output output = outputService.create(csor, getCurrentUser().getName());
-        final URI outputUri = UriBuilder.fromResource(OutputResource.class)
-                .path("{outputId}")
-                .build(output.getId());
+        Output output = outputService.create(csor, getCurrentUser().getName());
 
         try {
-            return Response.created(outputUri).entity(filterPasswordFields(output)).build();
+            return Response.status(Response.Status.CREATED).entity(filterPasswordFields(output)).build();
         } catch (MessageOutputConfigurationException e) {
             LOG.error("Unable to filter configuration fields for output {}: ", output.getId(), e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
         }
     }
 
-    @DELETE
-    @Path("/{outputId}")
+    @DELETE @Path("/{outputId}")
     @Timed
     @ApiOperation(value = "Delete output")
     @RequiresPermissions(RestPermissions.OUTPUTS_TERMINATE)
@@ -148,21 +148,25 @@ public class OutputResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "No such stream/output on this node.")
     })
-    public void delete(@ApiParam(name = "outputId", value = "The id of the output that should be deleted", required = true)
-                       @PathParam("outputId") String outputId) throws org.graylog2.database.NotFoundException {
+    public Response delete(@ApiParam(name = "outputId", value = "The id of the output that should be deleted", required = true) @PathParam("outputId") String outputId) throws org.graylog2.database.NotFoundException {
         checkPermission(RestPermissions.OUTPUTS_TERMINATE);
         Output output = outputService.load(outputId);
         outputService.destroy(output);
+
+        return Response.status(Response.Status.OK).build();
     }
 
-    @GET
-    @Path("/available")
+    @GET @Path("/available")
     @Timed
     @ApiOperation(value = "Get all available output modules")
     @RequiresPermissions(RestPermissions.STREAMS_READ)
     @Produces(MediaType.APPLICATION_JSON)
-    public Map<String, Map<String, AvailableOutputSummary>> available() {
-        return ImmutableMap.of("types", messageOutputFactory.getAvailableOutputs());
+    public Map<String, Object> available() {
+        return new HashMap<String, Object>() {
+            {
+                put("types", messageOutputFactory.getAvailableOutputs());
+            }
+        };
     }
 
     private Set<Map<String, Object>> filterPasswordFields(final Set<Output> outputs) {
