@@ -131,10 +131,8 @@ public class OutputDirectories {
 
   private final boolean mergeGenfilesDirectory;
 
+  @SuppressWarnings("unused")
   private final boolean siblingRepositoryLayout;
-
-  private final Path execRoot;
-  private final RepositoryName mainRepository;
 
   OutputDirectories(
       BlazeDirectories directories,
@@ -163,8 +161,6 @@ public class OutputDirectories {
 
     this.mergeGenfilesDirectory = options.mergeGenfilesDirectory;
     this.siblingRepositoryLayout = siblingRepositoryLayout;
-    this.execRoot = directories.getExecRoot(mainRepositoryName.strippedName());
-    this.mainRepository = mainRepositoryName;
   }
 
   private String buildMnemonic(
@@ -182,54 +178,24 @@ public class OutputDirectories {
     return Joiner.on('-').skipNulls().join(nameParts);
   }
 
-  private ArtifactRoot buildDerivedRoot(String nameFragment, RepositoryName repository) {
-    // e.g., execroot/mainRepoName/bazel-out/[repoName/]config/bin
-    // TODO(jungjw): Ideally, we would like to do execroot_base/repoName/bazel-out/config/bin
-    // instead. However, it requires individually symlinking the top-level elements of external
-    // repositories, which is blocked by a Windows symlink issue #8704.
-    return ArtifactRoot.asDerivedRoot(
-        execRoot,
-        directories.getRelativeOutputPath(),
-        repository.equals(mainRepository) ? "" : repository.strippedName(),
-        outputDirName,
-        nameFragment);
-  }
-
-  // TODO(jungjw): Refactor the ArtifactRoot#middlemanRoot method signature and dedupe this method.
-  private ArtifactRoot buildMiddlemanRoot(RepositoryName repository) {
-    // e.g., execroot/mainRepoName/bazel-out/[repoName/]config
-    Path outputDir =
-        execRoot
-            .getRelative(directories.getRelativeOutputPath())
-            .getRelative(repository.equals(mainRepository) ? "" : repository.strippedName())
-            .getRelative(outputDirName);
-    return ArtifactRoot.middlemanRoot(execRoot, outputDir);
-  }
-
   /** Returns the output directory for this build configuration. */
-  ArtifactRoot getOutputDirectory(RepositoryName repositoryName) {
-    return siblingRepositoryLayout ? buildDerivedRoot("", repositoryName) : outputDirectory;
+  ArtifactRoot getOutputDirectory() {
+    return outputDirectory;
   }
 
   /** Returns the bin directory for this build configuration. */
   ArtifactRoot getBinDirectory(RepositoryName repositoryName) {
-    return siblingRepositoryLayout ? buildDerivedRoot("bin", repositoryName) : binDirectory;
+    return binDirectory;
   }
 
   /** Returns the include directory for this build configuration. */
   ArtifactRoot getIncludeDirectory(RepositoryName repositoryName) {
-    return siblingRepositoryLayout
-        ? buildDerivedRoot(BlazeDirectories.RELATIVE_INCLUDE_DIR, repositoryName)
-        : includeDirectory;
+    return includeDirectory;
   }
 
   /** Returns the genfiles directory for this build configuration. */
   ArtifactRoot getGenfilesDirectory(RepositoryName repositoryName) {
-    return mergeGenfilesDirectory
-        ? getBinDirectory(repositoryName)
-        : siblingRepositoryLayout
-            ? buildDerivedRoot("genfiles", repositoryName)
-            : genfilesDirectory;
+    return mergeGenfilesDirectory ? getBinDirectory(repositoryName) : genfilesDirectory;
   }
 
   /**
@@ -238,16 +204,12 @@ public class OutputDirectories {
    * tools.
    */
   ArtifactRoot getCoverageMetadataDirectory(RepositoryName repositoryName) {
-    return siblingRepositoryLayout
-        ? buildDerivedRoot("coverage-metadata", repositoryName)
-        : coverageDirectory;
+    return coverageDirectory;
   }
 
   /** Returns the testlogs directory for this build configuration. */
   ArtifactRoot getTestLogsDirectory(RepositoryName repositoryName) {
-    return siblingRepositoryLayout
-        ? buildDerivedRoot("testlogs", repositoryName)
-        : testlogsDirectory;
+    return testlogsDirectory;
   }
 
   /** Returns a relative path to the genfiles directory at execution time. */
@@ -268,7 +230,7 @@ public class OutputDirectories {
 
   /** Returns the internal directory (used for middlemen) for this build configuration. */
   ArtifactRoot getMiddlemanDirectory(RepositoryName repositoryName) {
-    return siblingRepositoryLayout ? buildMiddlemanRoot(repositoryName) : middlemanDirectory;
+    return middlemanDirectory;
   }
 
   String getMnemonic() {

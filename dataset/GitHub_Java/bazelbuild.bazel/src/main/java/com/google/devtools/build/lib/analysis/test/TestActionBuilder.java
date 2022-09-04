@@ -14,14 +14,12 @@
 
 package com.google.devtools.build.lib.analysis.test;
 
-import static com.google.devtools.build.lib.analysis.BaseRuleClasses.TEST_RUNNER_EXEC_GROUP;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
@@ -149,11 +147,6 @@ public final class TestActionBuilder {
         && persistentTestRunnerRunfiles != null;
   }
 
-  private ActionOwner getOwner() {
-    ActionOwner owner = ruleContext.getActionOwner(TEST_RUNNER_EXEC_GROUP);
-    return owner == null ? ruleContext.getActionOwner() : owner;
-  }
-
   /**
    * Creates a test action and artifacts for the given rule. The test action will
    * use the specified executable and runfiles.
@@ -208,9 +201,6 @@ public final class TestActionBuilder {
 
     int runsPerTest = testConfiguration.getRunsPerTestForLabel(ruleContext.getLabel());
 
-    NestedSetBuilder<Artifact> lcovMergerFilesToRun = NestedSetBuilder.compileOrder();
-    RunfilesSupplier lcovMergerRunfilesSupplier = null;
-
     TestTargetExecutionSettings executionSettings;
     if (collectCodeCoverage) {
       collectCoverageScript = ruleContext.getHostPrerequisiteArtifact("$collect_coverage_script");
@@ -261,12 +251,6 @@ public final class TestActionBuilder {
         if (lcovFilesToRun != null) {
           extraTestEnv.put(LCOV_MERGER, lcovFilesToRun.getExecutable().getExecPathString());
           inputsBuilder.addTransitive(lcovFilesToRun.getFilesToRun());
-
-          lcovMergerFilesToRun.addTransitive(lcovFilesToRun.getFilesToRun());
-          if (lcovFilesToRun.getRunfilesSupport() != null) {
-            lcovMergerFilesToRun.add(lcovFilesToRun.getRunfilesSupport().getRunfilesMiddleman());
-          }
-          lcovMergerRunfilesSupplier = lcovFilesToRun.getRunfilesSupplier();
         } else {
           NestedSet<Artifact> filesToBuild =
               lcovMerger.getProvider(FileProvider.class).getFilesToBuild();
@@ -275,7 +259,6 @@ public final class TestActionBuilder {
             Artifact lcovMergerArtifact = filesToBuild.getSingleton();
             extraTestEnv.put(LCOV_MERGER, lcovMergerArtifact.getExecPathString());
             inputsBuilder.add(lcovMergerArtifact);
-            lcovMergerFilesToRun.add(lcovMergerArtifact);
           } else {
             ruleContext.attributeError(
                 lcovMergerAttr,
@@ -389,10 +372,9 @@ public final class TestActionBuilder {
           tools.add(executionSettings.getExecutable());
           tools.addAll(additionalTools.build());
         }
-        boolean splitCoveragePostProcessing = testConfiguration.splitCoveragePostProcessing();
         TestRunnerAction testRunnerAction =
             new TestRunnerAction(
-                getOwner(),
+                ruleContext.getActionOwner(),
                 inputs,
                 testRunfilesSupplier,
                 testActionExecutable,
@@ -414,10 +396,7 @@ public final class TestActionBuilder {
                     ? ShToolchain.getPathOrError(ruleContext)
                     : null,
                 cancelConcurrentTests,
-                tools.build(),
-                splitCoveragePostProcessing,
-                lcovMergerFilesToRun,
-                lcovMergerRunfilesSupplier);
+                tools.build());
 
         testOutputs.addAll(testRunnerAction.getSpawnOutputs());
         testOutputs.addAll(testRunnerAction.getOutputs());

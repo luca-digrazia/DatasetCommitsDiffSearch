@@ -193,18 +193,12 @@ public class CppHelper {
       RuleContext ruleContext, CppConfiguration cppConfiguration, CcToolchainProvider toolchain)
       throws RuleErrorException {
     if (cppConfiguration.collectCodeCoverage()) {
-      String llvmCov = toolchain.getToolPathStringOrNull(Tool.LLVM_COV);
-      if (llvmCov == null) {
-        llvmCov = "";
-      }
       NestedSetBuilder<Pair<String, String>> coverageEnvironment =
           NestedSetBuilder.<Pair<String, String>>stableOrder()
               .add(
                   Pair.of(
                       "COVERAGE_GCOV_PATH",
-                      toolchain.getToolPathFragment(Tool.GCOV, ruleContext).getPathString()))
-              .add(Pair.of("LLVM_COV", llvmCov))
-              .add(Pair.of("GENERATE_LLVM_LCOV", cppConfiguration.generateLlvmLCov() ? "1" : "0"));
+                      toolchain.getToolPathFragment(Tool.GCOV, ruleContext).getPathString()));
       if (cppConfiguration.getFdoInstrument() != null) {
         coverageEnvironment.add(Pair.of("FDO_DIR", cppConfiguration.getFdoInstrument()));
       }
@@ -363,25 +357,22 @@ public class CppHelper {
   }
 
   /** Returns the directory where object files are created. */
-  public static PathFragment getObjDirectory(Label ruleLabel, boolean siblingRepositoryLayout) {
-    return getObjDirectory(ruleLabel, false, siblingRepositoryLayout);
-  }
-
-  /** Returns the directory where object files are created. */
-  public static PathFragment getObjDirectory(
-      Label ruleLabel, boolean usePic, boolean siblingRepositoryLayout) {
+  public static PathFragment getObjDirectory(Label ruleLabel, boolean usePic) {
     if (usePic) {
-      return AnalysisUtils.getUniqueDirectory(ruleLabel, PIC_OBJS, siblingRepositoryLayout);
+      return AnalysisUtils.getUniqueDirectory(ruleLabel, PIC_OBJS);
     } else {
-      return AnalysisUtils.getUniqueDirectory(ruleLabel, OBJS, siblingRepositoryLayout);
+      return AnalysisUtils.getUniqueDirectory(ruleLabel, OBJS);
     }
   }
 
   /** Returns the directory where object files are created. */
-  private static PathFragment getDotdDirectory(
-      Label ruleLabel, boolean usePic, boolean siblingRepositoryLayout) {
-    return AnalysisUtils.getUniqueDirectory(
-        ruleLabel, usePic ? PIC_DOTD_FILES : DOTD_FILES, siblingRepositoryLayout);
+  private static PathFragment getDotdDirectory(Label ruleLabel, boolean usePic) {
+    return AnalysisUtils.getUniqueDirectory(ruleLabel, usePic ? PIC_DOTD_FILES : DOTD_FILES);
+  }
+
+  /** Returns the directory where object files are created. */
+  public static PathFragment getObjDirectory(Label ruleLabel) {
+    return getObjDirectory(ruleLabel, false);
   }
 
   /**
@@ -779,7 +770,7 @@ public class CppHelper {
       Label label,
       String outputName,
       BuildConfiguration config) {
-    PathFragment objectDir = getObjDirectory(label, config.isSiblingRepositoryLayout());
+    PathFragment objectDir = getObjDirectory(label);
     return actionConstructionContext.getDerivedArtifact(
         objectDir.getRelative(outputName),
         config.getBinDirectory(label.getPackageIdentifier().getRepository()));
@@ -793,12 +784,7 @@ public class CppHelper {
       String outputName,
       boolean usePic) {
     return actionConstructionContext.getTreeArtifact(
-        getObjDirectory(
-                label,
-                usePic,
-                actionConstructionContext.getConfiguration().isSiblingRepositoryLayout())
-            .getRelative(outputName),
-        sourceTreeArtifact.getRoot());
+        getObjDirectory(label, usePic).getRelative(outputName), sourceTreeArtifact.getRoot());
   }
 
   /** Returns the corresponding dotd files TreeArtifact given the source TreeArtifact. */
@@ -809,12 +795,7 @@ public class CppHelper {
       String outputName,
       boolean usePic) {
     return actionConstructionContext.getTreeArtifact(
-        getDotdDirectory(
-                label,
-                usePic,
-                actionConstructionContext.getConfiguration().isSiblingRepositoryLayout())
-            .getRelative(outputName),
-        sourceTreeArtifact.getRoot());
+        getDotdDirectory(label, usePic).getRelative(outputName), sourceTreeArtifact.getRoot());
   }
 
   public static String getArtifactNameForCategory(
