@@ -166,8 +166,13 @@ class RequestContext implements ManagedContext {
                 } catch (Exception e) {
                     LOGGER.warn("An error occurred during delivery of the @BeforeDestroyed(RequestScoped.class) event", e);
                 }
-                //Performance: avoid an iterator on the map elements
-                currentContext.forEach(this::destroyContextElement);
+                for (Map.Entry<Contextual<?>, ContextInstanceHandle<?>> entry : currentContext.entrySet()) {
+                    try {
+                        entry.getValue().destroy();
+                    } catch (Exception e) {
+                        throw new IllegalStateException("Unable to destroy instance" + entry.getValue().get(), e);
+                    }
+                }
                 // Fire an event with qualifier @Destroyed(RequestScoped.class) if there are any observers for it
                 try {
                     fireIfNotEmpty(destroyedNotifier);
@@ -176,14 +181,6 @@ class RequestContext implements ManagedContext {
                 }
                 currentContext.clear();
             }
-        }
-    }
-
-    private void destroyContextElement(Contextual<?> contextual, ContextInstanceHandle<?> contextInstanceHandle) {
-        try {
-            contextInstanceHandle.destroy();
-        } catch (Exception e) {
-            throw new IllegalStateException("Unable to destroy instance" + contextInstanceHandle.get(), e);
         }
     }
 
