@@ -75,12 +75,6 @@ public final class MeasureHelper {
 
         mCurrentAspectRatio = GSYVideoType.getShowType();
 
-        if (mVideoHeight == 0 || mVideoWidth == 0) {
-            mMeasuredWidth = 1;
-            mMeasuredHeight = 1;
-            return;
-        }
-
         if (mVideoRotationDegree == 90 || mVideoRotationDegree == 270) {
             int tempSpec = widthMeasureSpec;
             widthMeasureSpec = heightMeasureSpec;
