@@ -51,13 +51,21 @@ public class RestAnnotationHelper extends TargetAnnotationHelper {
 		}
 	}
 
-	public void urlVariableNamesExistInParameters(ExecutableElement element, IsValid valid) {
+	public void urlVariableNamesExistInParametersAndHasNoOneMoreParameter(ExecutableElement element, IsValid valid) {
 		if (valid.isValid()) {
 			List<String> variableNames = extractUrlVariableNames(element);
 			urlVariableNamesExistInParameters(element, variableNames, valid);
+			if (valid.isValid()) {
+				List<? extends VariableElement> parameters = element.getParameters();
+
+				if (parameters.size() > variableNames.size()) {
+					valid.invalidate();
+					printAnnotationError(element, "%s annotated method has only url variables in the method parameters");
+				}
+			}
 		}
 	}
-
+	
 	public void urlVariableNamesExistInParametersAndHasOnlyOneMoreParameter(ExecutableElement element, IsValid valid) {
 		if (valid.isValid()) {
 			List<String> variableNames = extractUrlVariableNames(element);
@@ -86,12 +94,15 @@ public class RestAnnotationHelper extends TargetAnnotationHelper {
 		// String urlSuffix = extractAnnotationValue(element);
 		// String uriTemplate = urlPrefix + urlSuffix;
 
+		List<String> variableNames = new ArrayList<String>();
 		String uriTemplate = extractAnnotationValue(element);
 
-		Matcher m = NAMES_PATTERN.matcher(uriTemplate);
-		List<String> variableNames = new ArrayList<String>();
-		while (m.find()) {
-			variableNames.add(m.group(1));
+		boolean hasValueInAnnotation = uriTemplate != null;
+		if (hasValueInAnnotation) {
+			Matcher m = NAMES_PATTERN.matcher(uriTemplate);
+			while (m.find()) {
+				variableNames.add(m.group(1));
+			}
 		}
 
 		return variableNames;
