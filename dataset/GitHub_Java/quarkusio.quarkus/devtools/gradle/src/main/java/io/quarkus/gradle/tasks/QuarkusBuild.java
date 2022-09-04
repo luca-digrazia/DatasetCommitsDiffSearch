@@ -1,7 +1,6 @@
 package io.quarkus.gradle.tasks;
 
 import java.io.File;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -77,29 +76,6 @@ public class QuarkusBuild extends QuarkusTask {
         return mainSourceSet.getCompileClasspath().plus(mainSourceSet.getRuntimeClasspath())
                 .plus(mainSourceSet.getAnnotationProcessorPath())
                 .plus(mainSourceSet.getResources());
-    }
-
-    @Input
-    public Map<Object, Object> getQuarkusBuildSystemProperties() {
-        Map<Object, Object> quarkusSystemProperties = new HashMap<>();
-        for (Map.Entry<Object, Object> systemProperty : System.getProperties().entrySet()) {
-            if (systemProperty.getKey().toString().startsWith("quarkus.") &&
-                    systemProperty.getValue() instanceof Serializable) {
-                quarkusSystemProperties.put(systemProperty.getKey(), systemProperty.getValue());
-            }
-        }
-        return quarkusSystemProperties;
-    }
-
-    @Input
-    public Map<String, String> getQuarkusBuildEnvProperties() {
-        Map<String, String> quarkusEnvProperties = new HashMap<>();
-        for (Map.Entry<String, String> systemProperty : System.getenv().entrySet()) {
-            if (systemProperty.getKey() != null && systemProperty.getKey().startsWith("QUARKUS_")) {
-                quarkusEnvProperties.put(systemProperty.getKey(), systemProperty.getValue());
-            }
-        }
-        return quarkusEnvProperties;
     }
 
     @OutputFile
