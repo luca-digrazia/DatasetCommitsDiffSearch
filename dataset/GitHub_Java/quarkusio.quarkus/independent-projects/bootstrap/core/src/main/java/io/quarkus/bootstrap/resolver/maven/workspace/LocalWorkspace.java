@@ -108,9 +108,7 @@ public class LocalWorkspace implements WorkspaceModelResolver, WorkspaceReader {
             if (Files.exists(path)) {
                 return path.toFile();
             }
-
-            // it could be a project with no sources/resources, in which case Maven will create an empty JAR
-            // if it has previously been packaged we can return it
+            // in some cases the project might not have the classes dir but only the test classes, for example
             path = lp.getOutputDir().resolve(lp.getArtifactId() + "-" + lp.getVersion() + ".jar");
             if (Files.exists(path)) {
                 return path.toFile();
