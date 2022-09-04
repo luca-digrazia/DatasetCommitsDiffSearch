@@ -22,13 +22,13 @@ public interface ThreadBound {
    * Checks whether the current thread has access to this object.
    * @return true if this thread has access to this object; otherwise false
    */
-  boolean checkThreadAccess();
+  public boolean checkThreadAccess();
 
   /**
    * Enforces that the current thread has access to this object.
    * @throws IllegalStateException if the current thread does not have access to this object
    */
-  void verifyThreadAccess();
+  public void verifyThreadAccess();
 
   /**
    * Synchronously executes an {@link UncheckedCallable} on the thread that this object is bound to,
@@ -40,7 +40,7 @@ public interface ThreadBound {
    * will be null), or if {@link UncheckedCallable#call()} threw an exception (the cause will be the
    * exception that it threw).
    */
-  <V> V postAndWait(UncheckedCallable<V> c);
+  public <V> V postAndWait(UncheckedCallable<V> c);
 
   /**
    * Synchronously executes a {@link Runnable} on the thread that this object is bound to.
@@ -49,7 +49,7 @@ public interface ThreadBound {
    * null), or if {@link Runnable#run()} threw an exception (the cause will be the exception that
    * it threw).
    */
-  void postAndWait(Runnable r);
+  public void postAndWait(Runnable r);
 
   /**
    * Asynchronously executes a {@link Runnable} on the thread that this object is bound to
@@ -58,12 +58,12 @@ public interface ThreadBound {
    * @param delayMillis The delay (in milliseconds) until the {@link Runnable} will be executed.
    * @throws RuntimeException if the {@link Runnable} could not be enqueued.
    */
-  void postDelayed(Runnable r, long delayMillis);
+  public void postDelayed(Runnable r, long delayMillis);
 
   /**
    * Removes any pending posts of the given {@link Runnable} that are in the queue.
    * @param r the {@link Runnable} to remove from the queue
    */
-  void removeCallbacks(Runnable r);
+  public void removeCallbacks(Runnable r);
 }
 

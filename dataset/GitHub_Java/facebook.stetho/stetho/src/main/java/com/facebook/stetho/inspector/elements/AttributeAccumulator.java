@@ -10,5 +10,5 @@
 package com.facebook.stetho.inspector.elements;
 
 public interface AttributeAccumulator {
-  void store(String name, String value);
+  public void store(String name, String value);
 }

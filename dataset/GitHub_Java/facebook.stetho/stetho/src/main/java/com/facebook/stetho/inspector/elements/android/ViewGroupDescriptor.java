@@ -20,20 +20,10 @@ import com.facebook.stetho.inspector.elements.ChainedDescriptor;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Map;
-import java.util.WeakHashMap;
 
 final class ViewGroupDescriptor extends ChainedDescriptor<ViewGroup> {
   private final Map<ViewGroup, ElementContext> mElementToContextMap =
       Collections.synchronizedMap(new IdentityHashMap<ViewGroup, ElementContext>());
-
-  /**
-   * This is a cache that maps from a View to the Fragment that contains it. If the View isn't
-   * contained by a Fragment, then this maps the View to itself. For Views contained by Fragments,
-   * we emit the Fragment instead, and then let the Fragment's descriptor emit the View as its sole
-   * child. This allows us to see Fragments in the inspector as part of the UI tree.
-   */
-  private final Map<View, Object> mViewToElementMap =
-      Collections.synchronizedMap(new WeakHashMap<View, Object>());
 
   public ViewGroupDescriptor() {
   }
@@ -64,25 +54,6 @@ final class ViewGroupDescriptor extends ChainedDescriptor<ViewGroup> {
     context.unhook();
   }
 
-  private Object getElementForView(ViewGroup parentView, View view) {
-    Object element = mViewToElementMap.get(view);
-    if (element != null) {
-      if (view.getParent() == parentView) {
-        return element;
-      }
-      mViewToElementMap.remove(view);
-    }
-
-    Object fragment = FragmentCompatUtil.findFragmentForView(view);
-    if (fragment != null) {
-      mViewToElementMap.put(view, fragment);
-      return fragment;
-    } else {
-      mViewToElementMap.put(view, view);
-      return view;
-    }
-  }
-
   @Override
   protected void onGetChildren(ViewGroup element, Accumulator<Object> children) {
     ElementContext context = mElementToContextMap.get(element);
@@ -90,6 +61,14 @@ final class ViewGroupDescriptor extends ChainedDescriptor<ViewGroup> {
   }
 
   private final class ElementContext {
+    // This is a cache that maps from a View to the Fragment that contains it. If the
+    // View isn't contained by a Fragment, then this maps the View to itself.
+    // For Views contained by Fragments, we emit the Fragment instead, and then let
+    // the Fragment's descriptor emit the View as its sole child. This allows us to
+    // see Fragments in the inspector as part of the UI tree.
+    private final Map<View, Object> mViewToElementMap =
+        Collections.synchronizedMap(new IdentityHashMap<View, Object>());
+
     private ViewGroup mElement;
     private boolean mIsDecorView;
 
@@ -100,6 +79,7 @@ final class ViewGroupDescriptor extends ChainedDescriptor<ViewGroup> {
     public void unhook() {
       if (mElement != null) {
         mElement = null;
+        mViewToElementMap.clear();
       }
     }
 
@@ -111,7 +91,7 @@ final class ViewGroupDescriptor extends ChainedDescriptor<ViewGroup> {
       for (int i = 0, N = mElement.getChildCount(); i < N; ++i) {
         final View child = mElement.getChildAt(i);
         if (isChildVisible(child)) {
-          final Object element = getElementForView(mElement, child);
+          final Object element = getElementForView(child);
           children.store(element);
         }
       }
@@ -119,6 +99,26 @@ final class ViewGroupDescriptor extends ChainedDescriptor<ViewGroup> {
 
     private boolean isChildVisible(View child) {
       return !mIsDecorView || !(child instanceof DOMHiddenView);
+    }
+
+    private Object getElementForView(View view) {
+      if (view == null) {
+        return null;
+      }
+
+      Object element = mViewToElementMap.get(view);
+      if (element != null) {
+        return element;
+      }
+
+      Object fragment = FragmentCompatUtil.findFragmentForView(view);
+      if (fragment != null) {
+        mViewToElementMap.put(view, fragment);
+        return fragment;
+      } else {
+        mViewToElementMap.put(view, view);
+        return view;
+      }
     }
   }
 }

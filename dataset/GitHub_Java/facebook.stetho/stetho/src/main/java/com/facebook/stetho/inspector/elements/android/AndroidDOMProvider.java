@@ -11,7 +11,6 @@ package com.facebook.stetho.inspector.elements.android;
 
 import android.app.Activity;
 import android.app.Application;
-import android.app.Dialog;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.os.Handler;
@@ -78,9 +77,7 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
         .beginInit()
         .register(Activity.class, new ActivityDescriptor())
         .register(AndroidDOMRoot.class, mDOMRoot)
-        .register(Application.class, new ApplicationDescriptor())
-        .register(Dialog.class, new DialogDescriptor());
-    DialogFragmentDescriptor.register(mDescriptorMap);
+        .register(Application.class, new ApplicationDescriptor());
     FragmentDescriptor.register(mDescriptorMap)
         .register(Object.class, new ObjectDescriptor())
         .register(TextView.class, new TextViewDescriptor())

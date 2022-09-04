@@ -10,10 +10,12 @@
 package com.facebook.stetho.inspector.elements.android;
 
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 
 import com.facebook.stetho.common.Accumulator;
 import com.facebook.stetho.inspector.elements.ChainedDescriptor;
+import com.facebook.stetho.inspector.elements.Descriptor;
 
 import javax.annotation.Nullable;
 
@@ -23,6 +25,7 @@ final class WindowDescriptor extends ChainedDescriptor<Window> implements Highli
     View decorView = element.peekDecorView();
     if (decorView != null) {
       children.store(decorView);
+      registerDecorView(decorView);
     }
   }
 
@@ -31,5 +34,14 @@ final class WindowDescriptor extends ChainedDescriptor<Window> implements Highli
   public View getViewForHighlighting(Object element) {
     Window window = (Window) element;
     return window.peekDecorView();
+  }
+
+  private void registerDecorView(View decorView) {
+    if (decorView instanceof ViewGroup) {
+      Descriptor descriptor = getHost().getDescriptor(decorView);
+      if (descriptor instanceof ViewGroupDescriptor) {
+        ((ViewGroupDescriptor) descriptor).registerDecorView((ViewGroup) decorView);
+      }
+    }
   }
 }
