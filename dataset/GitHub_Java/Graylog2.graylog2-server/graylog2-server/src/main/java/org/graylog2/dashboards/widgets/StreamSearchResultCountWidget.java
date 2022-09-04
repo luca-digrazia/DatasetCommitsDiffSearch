@@ -16,29 +16,20 @@
  */
 package org.graylog2.dashboards.widgets;
 
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableMap;
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.indexer.searches.Searches;
-import org.graylog2.plugin.dashboards.widgets.ComputationResult;
-import org.graylog2.plugin.dashboards.widgets.WidgetStrategy;
-import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
+import org.graylog2.indexer.searches.timeranges.TimeRange;
 
 import java.util.Map;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class StreamSearchResultCountWidget extends SearchResultCountWidget {
-    public interface Factory extends WidgetStrategy.Factory<StreamSearchResultCountWidget> {
-        @Override
-        StreamSearchResultCountWidget create(Map<String, Object> config, TimeRange timeRange, String widgetId);
-    }
-
     private final String streamId;
 
-    @AssistedInject
-    public StreamSearchResultCountWidget(Searches searches, @Assisted Map<String, Object> config, @Assisted TimeRange timeRange, @Assisted String widgetId) {
-        super(searches, config, timeRange, widgetId);
+    public StreamSearchResultCountWidget(MetricRegistry metricRegistry, Searches searches, String id, String description, WidgetCacheTime cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) {
+        super(metricRegistry, DashboardWidget.Type.STREAM_SEARCH_RESULT_COUNT, searches, id, description, cacheTime, config, query, timeRange, creatorUserId);
         this.streamId = (String) config.get("stream_id");
     }
 
@@ -55,7 +46,7 @@ public class StreamSearchResultCountWidget extends SearchResultCountWidget {
     }
 
     @Override
-    public ComputationResult compute() {
+    protected ComputationResult compute() {
         String filter = null;
         if (!isNullOrEmpty(streamId)) {
             filter = "streams:" + streamId;

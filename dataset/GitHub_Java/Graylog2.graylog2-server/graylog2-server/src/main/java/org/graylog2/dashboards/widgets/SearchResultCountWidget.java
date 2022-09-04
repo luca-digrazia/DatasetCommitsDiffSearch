@@ -78,13 +78,13 @@ public class SearchResultCountWidget extends DashboardWidget {
             CountResult previousCr = searches.count(query, previousTimeRange);
 
             Map<String, Object> results = Maps.newHashMap();
-            results.put("now", cr.count());
-            results.put("previous", previousCr.count());
-            long tookMs = cr.tookMs() + previousCr.tookMs();
+            results.put("now", cr.getCount());
+            results.put("previous", previousCr.getCount());
+            long tookMs = cr.getTookMs() + previousCr.getTookMs();
 
             return new ComputationResult(results, tookMs);
         } else {
-            return new ComputationResult(cr.count(), cr.tookMs());
+            return new ComputationResult(cr.getCount(), cr.getTookMs());
         }
     }
 }
