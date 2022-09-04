@@ -19,10 +19,17 @@ package org.graylog2.indexer.searches;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.joschi.nosqlunit.elasticsearch.http.ElasticsearchConfiguration;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
-import org.graylog.testing.elasticsearch.ElasticsearchBaseTest;
+import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
+import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
+import org.elasticsearch.index.query.RangeQueryBuilder;
+import org.graylog2.Configuration;
+import org.graylog2.ElasticsearchBase;
 import org.graylog2.buffers.processors.fakestreams.FakeStream;
+import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.IndexSet;
 import org.graylog2.indexer.IndexSetRegistry;
 import org.graylog2.indexer.TestIndexSet;
@@ -34,13 +41,17 @@ import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.indexer.ranges.MongoIndexRange;
 import org.graylog2.indexer.results.CountResult;
 import org.graylog2.indexer.results.FieldStatsResult;
+import org.graylog2.indexer.results.HistogramResult;
 import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.indexer.results.ScrollResult;
 import org.graylog2.indexer.results.SearchResult;
+import org.graylog2.indexer.results.TermsResult;
+import org.graylog2.indexer.results.TermsStatsResult;
 import org.graylog2.indexer.retention.strategies.DeletionRetentionStrategy;
 import org.graylog2.indexer.retention.strategies.DeletionRetentionStrategyConfig;
 import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategy;
 import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategyConfig;
+import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.plugin.indexer.searches.timeranges.KeywordRange;
 import org.graylog2.plugin.indexer.searches.timeranges.RelativeRange;
@@ -60,8 +71,8 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.stream.Collectors;
@@ -75,7 +86,7 @@ import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public abstract class SearchesIT extends ElasticsearchBaseTest {
+public class SearchesIT extends ElasticsearchBase {
     private static final String REQUEST_TIMER_NAME = "org.graylog2.indexer.searches.Searches.elasticsearch.requests";
     private static final String RANGES_HISTOGRAM_NAME = "org.graylog2.indexer.searches.Searches.elasticsearch.ranges";
 
@@ -137,34 +148,57 @@ public abstract class SearchesIT extends ElasticsearchBaseTest {
     private static final IndexSet indexSet = new TestIndexSet(indexSetConfig);
 
     @Mock
-    protected IndexRangeService indexRangeService;
+    private IndexRangeService indexRangeService;
 
     @Mock
-    protected StreamService streamService;
+    private StreamService streamService;
 
     @Mock
-    protected Indices indices;
+    private Indices indices;
 
     @Mock
-    protected IndexSetRegistry indexSetRegistry;
+    private IndexSetRegistry indexSetRegistry;
 
-    protected MetricRegistry metricRegistry;
-    protected Searches searches;
+    private MetricRegistry metricRegistry;
+    private Searches searches;
+
+    @Override
+    protected ElasticsearchConfiguration.Builder elasticsearchConfiguration() {
+        final Map<String, Map<String, Object>> messageTemplates = Collections.singletonMap("graylog-test-internal", indexMapping().messageTemplate("*", "standard"));
+        return super.elasticsearchConfiguration()
+                .indexTemplates(messageTemplates)
+                .deleteAllIndices(true);
+    }
 
     @Before
     public void setUp() throws Exception {
         when(indexRangeService.find(any(DateTime.class), any(DateTime.class))).thenReturn(INDEX_RANGES);
         when(indices.getAllMessageFieldsForIndices(any(String[].class))).thenReturn(ImmutableMap.of(INDEX_NAME, Collections.singleton("n")));
         metricRegistry = new MetricRegistry();
-        this.searches = createSearches();
+        searches = new Searches(
+            new Configuration(),
+            indexRangeService,
+            metricRegistry,
+            streamService,
+            indices,
+            indexSetRegistry,
+            client(),
+            new ScrollResult.Factory() {
+                @Override
+                public ScrollResult create(io.searchbox.core.SearchResult initialResult, String query, List<String> fields) {
+                    return new ScrollResult(client(), new ObjectMapper(), initialResult, query, fields);
+                }
+                @Override
+                public ScrollResult create(io.searchbox.core.SearchResult initialResult, String query, String scroll, List<String> fields) {
+                    return new ScrollResult(client(), new ObjectMapper(), initialResult, query, scroll, fields);
+                }
+            }
+        );
     }
 
-    public abstract Searches createSearches();
-
     @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void testCountWithoutFilter() throws Exception {
-        importFixture("org/graylog2/indexer/searches/SearchesIT.json");
-
         CountResult result = searches.count("*", AbsoluteRange.create(
                 new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
                 new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC)));
@@ -173,9 +207,8 @@ public abstract class SearchesIT extends ElasticsearchBaseTest {
     }
 
     @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void testCountWithFilter() throws Exception {
-        importFixture("org/graylog2/indexer/searches/SearchesIT.json");
-
         final IndexSetConfig indexSetConfig = IndexSetConfig.builder()
                 .id("id")
                 .title("title")
@@ -208,9 +241,8 @@ public abstract class SearchesIT extends ElasticsearchBaseTest {
     }
 
     @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void testCountWithInvalidFilter() throws Exception {
-        importFixture("org/graylog2/indexer/searches/SearchesIT.json");
-
         CountResult result = searches.count("*", AbsoluteRange.create(
                 new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
                 new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC)),
@@ -220,9 +252,8 @@ public abstract class SearchesIT extends ElasticsearchBaseTest {
     }
 
     @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void countRecordsMetrics() throws Exception {
-        importFixture("org/graylog2/indexer/searches/SearchesIT.json");
-
         CountResult result = searches.count("*", AbsoluteRange.create(
                 new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
                 new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC)));
@@ -235,33 +266,304 @@ public abstract class SearchesIT extends ElasticsearchBaseTest {
     }
 
     @Test
-    public void testFieldStats() throws Exception {
-        importFixture("org/graylog2/indexer/searches/SearchesIT.json");
-
-        FieldStatsResult fieldStats = searches.fieldStats("n", "*", AbsoluteRange.create(
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testTerms() throws Exception {
+        TermsResult result = searches.terms("n", 25, "*", AbsoluteRange.create(
                 new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
                 new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC)));
 
-        assertThat(fieldStats).satisfies(result -> {
-            assertThat(result.searchHits()).hasSize(10);
-            assertThat(result.count()).isEqualTo(8);
-            assertThat(result.min()).isEqualTo(1.0);
-            assertThat(result.max()).isEqualTo(4.0);
-            assertThat(result.mean()).isEqualTo(2.375);
-            assertThat(result.sum()).isEqualTo(19.0);
-            assertThat(result.sumOfSquares()).isEqualTo(53.0);
-            assertThat(result.variance()).isEqualTo(0.984375);
-            assertThat(result.stdDeviation()).isEqualTo(0.9921567416492215);
-        });
+        assertThat(result.getTotal()).isEqualTo(10L);
+        assertThat(result.getMissing()).isEqualTo(2L);
+        assertThat(result.getTerms())
+                .hasSize(4)
+                .containsEntry("1", 2L)
+                .containsEntry("2", 2L)
+                .containsEntry("3", 3L)
+                .containsEntry("4", 1L);
     }
 
     @Test
-    public void fieldStatsRecordsMetrics() throws Exception {
-        importFixture("org/graylog2/indexer/searches/SearchesIT.json");
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testTermsWithNonExistingIndex() throws Exception {
+        final SortedSet<IndexRange> indexRanges = ImmutableSortedSet
+                .orderedBy(IndexRange.COMPARATOR)
+                .add(MongoIndexRange.create(INDEX_NAME,
+                        new DateTime(0L, UTC),
+                        new DateTime(2015, 1, 1, 0, 0, UTC),
+                        DateTime.now(UTC),
+                        0,
+                        null))
+                .add(MongoIndexRange.create("does-not-exist",
+                        new DateTime(0L, UTC),
+                        new DateTime(2015, 1, 1, 0, 0, UTC),
+                        DateTime.now(UTC),
+                        0,
+                        null))
+                .build();
+        when(indexRangeService.find(any(DateTime.class), any(DateTime.class))).thenReturn(indexRanges);
 
+        TermsResult result = searches.terms("n", 25, "*", AbsoluteRange.create(
+                new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
+                new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC)));
+
+        assertThat(result.getTotal()).isEqualTo(10L);
+        assertThat(result.getMissing()).isEqualTo(2L);
+        assertThat(result.getTerms())
+                .hasSize(4)
+                .containsEntry("1", 2L)
+                .containsEntry("2", 2L)
+                .containsEntry("3", 3L)
+                .containsEntry("4", 1L);
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void termsRecordsMetrics() throws Exception {
+        TermsResult result = searches.terms("n", 25, "*", AbsoluteRange.create(
+                new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
+                new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC)));
+
+        assertThat(metricRegistry.getTimers()).containsKey(REQUEST_TIMER_NAME);
+        assertThat(metricRegistry.getHistograms()).containsKey(RANGES_HISTOGRAM_NAME);
+
+        Timer timer = metricRegistry.timer(REQUEST_TIMER_NAME);
+        assertThat(timer.getCount()).isEqualTo(1L);
+
+        Histogram histogram = metricRegistry.histogram(RANGES_HISTOGRAM_NAME);
+        assertThat(histogram.getCount()).isEqualTo(1L);
+        assertThat(histogram.getSnapshot().getValues()).containsExactly(86400L);
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testTermsAscending() throws Exception {
+        TermsResult result = searches.terms("n", 1, "*", null, AbsoluteRange.create(
+            new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
+            new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC)), Sorting.Direction.ASC);
+
+        assertThat(result.getTotal()).isEqualTo(10L);
+        assertThat(result.getMissing()).isEqualTo(2L);
+        assertThat(result.getTerms())
+            .hasSize(1)
+            .containsEntry("4", 1L);
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT, locations = "SearchesIT-terms_stats.json")
+    public void testTermsStats() throws Exception {
+        TermsStatsResult r = searches.termsStats("f", "n", Searches.TermsStatsOrder.COUNT, 25, "*",
+                AbsoluteRange.create(
+                        new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
+                        new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC))
+        );
+
+        assertThat(r.getResults()).hasSize(2);
+        assertThat(r.getResults().get(0))
+                .hasSize(7)
+                .containsEntry("key_field", "Ho");
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT, locations = "SearchesIT-terms_stats.json")
+    public void termsStatsRecordsMetrics() throws Exception {
+        TermsStatsResult r = searches.termsStats("f", "n", Searches.TermsStatsOrder.COUNT, 25, "*",
+                AbsoluteRange.create(
+                        new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
+                        new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC))
+        );
+
+        assertThat(metricRegistry.getTimers()).containsKey(REQUEST_TIMER_NAME);
+        assertThat(metricRegistry.getHistograms()).containsKey(RANGES_HISTOGRAM_NAME);
+
+        Timer timer = metricRegistry.timer(REQUEST_TIMER_NAME);
+        assertThat(timer.getCount()).isEqualTo(1L);
+
+        Histogram histogram = metricRegistry.histogram(RANGES_HISTOGRAM_NAME);
+        assertThat(histogram.getCount()).isEqualTo(1L);
+        assertThat(histogram.getSnapshot().getValues()).containsExactly(86400L);
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testFieldStats() throws Exception {
         FieldStatsResult result = searches.fieldStats("n", "*", AbsoluteRange.create(
                 new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
                 new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC)));
+
+        assertThat(result.getSearchHits()).hasSize(10);
+        assertThat(result.getCount()).isEqualTo(8);
+        assertThat(result.getMin()).isEqualTo(1.0);
+        assertThat(result.getMax()).isEqualTo(4.0);
+        assertThat(result.getMean()).isEqualTo(2.375);
+        assertThat(result.getSum()).isEqualTo(19.0);
+        assertThat(result.getSumOfSquares()).isEqualTo(53.0);
+        assertThat(result.getVariance()).isEqualTo(0.984375);
+        assertThat(result.getStdDeviation()).isEqualTo(0.9921567416492215);
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void fieldStatsRecordsMetrics() throws Exception {
+        FieldStatsResult result = searches.fieldStats("n", "*", AbsoluteRange.create(
+                new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
+                new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC)));
+
+        assertThat(metricRegistry.getTimers()).containsKey(REQUEST_TIMER_NAME);
+        assertThat(metricRegistry.getHistograms()).containsKey(RANGES_HISTOGRAM_NAME);
+
+        Timer timer = metricRegistry.timer(REQUEST_TIMER_NAME);
+        assertThat(timer.getCount()).isEqualTo(1L);
+
+        Histogram histogram = metricRegistry.histogram(RANGES_HISTOGRAM_NAME);
+        assertThat(histogram.getCount()).isEqualTo(1L);
+        assertThat(histogram.getSnapshot().getValues()).containsExactly(86400L);
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    @SuppressWarnings("unchecked")
+    public void testHistogram() throws Exception {
+        final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).withZone(UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC).withZone(UTC));
+        HistogramResult h = searches.histogram("*", Searches.DateHistogramInterval.HOUR, range);
+
+        assertThat(h.getInterval()).isEqualTo(Searches.DateHistogramInterval.HOUR);
+        assertThat(h.getHistogramBoundaries()).isEqualTo(range);
+        assertThat(h.getResults())
+                .hasSize(5)
+                .containsEntry(new DateTime(2015, 1, 1, 1, 0, UTC).getMillis() / 1000L, 2L)
+                .containsEntry(new DateTime(2015, 1, 1, 2, 0, UTC).getMillis() / 1000L, 2L)
+                .containsEntry(new DateTime(2015, 1, 1, 3, 0, UTC).getMillis() / 1000L, 2L)
+                .containsEntry(new DateTime(2015, 1, 1, 4, 0, UTC).getMillis() / 1000L, 2L)
+                .containsEntry(new DateTime(2015, 1, 1, 5, 0, UTC).getMillis() / 1000L, 2L);
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    @SuppressWarnings("unchecked")
+    public void testHistogramWithNonExistingIndex() throws Exception {
+        final SortedSet<IndexRange> indexRanges = ImmutableSortedSet
+                .orderedBy(IndexRange.COMPARATOR)
+                .add(MongoIndexRange.create(INDEX_NAME,
+                        new DateTime(0L, UTC),
+                        new DateTime(2015, 1, 1, 0, 0, UTC),
+                        DateTime.now(UTC),
+                        0,
+                        null))
+                .add(MongoIndexRange.create("does-not-exist",
+                        new DateTime(0L, UTC),
+                        new DateTime(2015, 1, 1, 0, 0, UTC),
+                        DateTime.now(UTC),
+                        0,
+                        null))
+                .build();
+        when(indexRangeService.find(any(DateTime.class), any(DateTime.class))).thenReturn(indexRanges);
+
+        final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).withZone(UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC).withZone(UTC));
+        HistogramResult h = searches.histogram("*", Searches.DateHistogramInterval.HOUR, range);
+
+        assertThat(h.getInterval()).isEqualTo(Searches.DateHistogramInterval.HOUR);
+        assertThat(h.getHistogramBoundaries()).isEqualTo(range);
+        assertThat(h.getResults())
+                .hasSize(5)
+                .containsEntry(new DateTime(2015, 1, 1, 1, 0, UTC).getMillis() / 1000L, 2L)
+                .containsEntry(new DateTime(2015, 1, 1, 2, 0, UTC).getMillis() / 1000L, 2L)
+                .containsEntry(new DateTime(2015, 1, 1, 3, 0, UTC).getMillis() / 1000L, 2L)
+                .containsEntry(new DateTime(2015, 1, 1, 4, 0, UTC).getMillis() / 1000L, 2L)
+                .containsEntry(new DateTime(2015, 1, 1, 5, 0, UTC).getMillis() / 1000L, 2L);
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void histogramRecordsMetrics() throws Exception {
+        final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC));
+        HistogramResult h = searches.histogram("*", Searches.DateHistogramInterval.MINUTE, range);
+
+        assertThat(metricRegistry.getTimers()).containsKey(REQUEST_TIMER_NAME);
+        assertThat(metricRegistry.getHistograms()).containsKey(RANGES_HISTOGRAM_NAME);
+
+        Timer timer = metricRegistry.timer(REQUEST_TIMER_NAME);
+        assertThat(timer.getCount()).isEqualTo(1L);
+
+        Histogram histogram = metricRegistry.histogram(RANGES_HISTOGRAM_NAME);
+        assertThat(histogram.getCount()).isEqualTo(1L);
+        assertThat(histogram.getSnapshot().getValues()).containsExactly(86400L);
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    @SuppressWarnings("unchecked")
+    public void testFieldHistogram() throws Exception {
+        final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).withZone(UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC).withZone(UTC));
+        HistogramResult h = searches.fieldHistogram("*", "n", Searches.DateHistogramInterval.HOUR, null, range, false);
+
+        assertThat(h.getInterval()).isEqualTo(Searches.DateHistogramInterval.HOUR);
+        assertThat(h.getHistogramBoundaries()).isEqualTo(range);
+        assertThat(h.getResults()).hasSize(5);
+        assertThat((Map<String, Number>) h.getResults().get(new DateTime(2015, 1, 1, 1, 0, UTC).getMillis() / 1000L))
+                .containsEntry("total_count", 2L)
+                .containsEntry("total", 0.0);
+        assertThat((Map<String, Number>) h.getResults().get(new DateTime(2015, 1, 1, 2, 0, UTC).getMillis() / 1000L))
+                .containsEntry("total_count", 2L)
+                .containsEntry("total", 4.0)
+                .containsEntry("mean", 2.0);
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    @SuppressWarnings("unchecked")
+    public void testFieldHistogramWithMonth() throws Exception {
+        final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).withZone(UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC).withZone(UTC));
+        HistogramResult h = searches.fieldHistogram("*", "n", Searches.DateHistogramInterval.MONTH, null, range, false);
+
+        assertThat(h.getInterval()).isEqualTo(Searches.DateHistogramInterval.MONTH);
+        assertThat(h.getHistogramBoundaries()).isEqualTo(range);
+        assertThat(h.getResults()).hasSize(1);
+        assertThat((Map<String, Number>) h.getResults().get(new DateTime(2015, 1, 1, 0, 0, UTC).getMillis() / 1000L))
+                .containsEntry("total_count", 10L)
+                .containsEntry("total", 19.0)
+                .containsEntry("min", 1.0)
+                .containsEntry("max", 4.0);
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    @SuppressWarnings("unchecked")
+    public void testFieldHistogramWithQuarter() throws Exception {
+        final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).withZone(UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC).withZone(UTC));
+        HistogramResult h = searches.fieldHistogram("*", "n", Searches.DateHistogramInterval.QUARTER, null, range, false);
+
+        assertThat(h.getInterval()).isEqualTo(Searches.DateHistogramInterval.QUARTER);
+        assertThat(h.getHistogramBoundaries()).isEqualTo(range);
+        assertThat(h.getResults()).hasSize(1);
+        assertThat((Map<String, Number>) h.getResults().get(new DateTime(2015, 1, 1, 0, 0, UTC).getMillis() / 1000L))
+                .containsEntry("total_count", 10L)
+                .containsEntry("total", 19.0)
+                .containsEntry("min", 1.0)
+                .containsEntry("max", 4.0);
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    @SuppressWarnings("unchecked")
+    public void testFieldHistogramWithYear() throws Exception {
+        final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).withZone(UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC).withZone(UTC));
+        HistogramResult h = searches.fieldHistogram("*", "n", Searches.DateHistogramInterval.YEAR, null, range, false);
+
+        assertThat(h.getInterval()).isEqualTo(Searches.DateHistogramInterval.YEAR);
+        assertThat(h.getHistogramBoundaries()).isEqualTo(range);
+        assertThat(h.getResults()).hasSize(1);
+        assertThat((Map<String, Number>) h.getResults().get(new DateTime(2015, 1, 1, 0, 0, UTC).getMillis() / 1000L))
+                .containsEntry("total_count", 10L)
+                .containsEntry("total", 19.0)
+                .containsEntry("min", 1.0)
+                .containsEntry("max", 4.0);
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void fieldHistogramRecordsMetrics() throws Exception {
+        final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC));
+        HistogramResult h = searches.fieldHistogram("*", "n", Searches.DateHistogramInterval.MINUTE, null, range, false);
 
         assertThat(metricRegistry.getTimers()).containsKey(REQUEST_TIMER_NAME);
         assertThat(metricRegistry.getHistograms()).containsKey(RANGES_HISTOGRAM_NAME);
@@ -401,6 +703,23 @@ public abstract class SearchesIT extends ElasticsearchBaseTest {
     }
 
     @Test
+    public void getTimestampRangeFilterReturnsNullIfTimeRangeIsNull() {
+        assertThat(IndexHelper.getTimestampRangeFilter(null)).isNull();
+    }
+
+    @Test
+    public void getTimestampRangeFilterReturnsRangeQueryWithGivenTimeRange() {
+        final DateTime from = new DateTime(2016, 1, 15, 12, 0, DateTimeZone.UTC);
+        final DateTime to = from.plusHours(1);
+        final TimeRange timeRange = AbsoluteRange.create(from, to);
+        final RangeQueryBuilder queryBuilder = (RangeQueryBuilder) IndexHelper.getTimestampRangeFilter(timeRange);
+        assertThat(queryBuilder).isNotNull();
+        assertThat(queryBuilder.fieldName()).isEqualTo("timestamp");
+        assertThat(queryBuilder.from()).isEqualTo(Tools.buildElasticSearchTimeFormat(from));
+        assertThat(queryBuilder.to()).isEqualTo(Tools.buildElasticSearchTimeFormat(to));
+    }
+
+    @Test
     public void determineAffectedIndicesFilterIndexPrefix() throws Exception {
         final DateTime now = DateTime.now(DateTimeZone.UTC);
         final MongoIndexRange indexRange0 = MongoIndexRange.create("graylog_0", now, now.plusDays(1), now, 0);
@@ -429,9 +748,8 @@ public abstract class SearchesIT extends ElasticsearchBaseTest {
     }
 
     @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void searchDoesNotIncludeJestMetadata() throws Exception {
-        importFixture("org/graylog2/indexer/searches/SearchesIT.json");
-
         final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).withZone(UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC).withZone(UTC));
         final SearchResult searchResult = searches.search("_id:1", range, 0, 0, Sorting.DEFAULT);
 
@@ -441,23 +759,21 @@ public abstract class SearchesIT extends ElasticsearchBaseTest {
     }
 
     @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void fieldStatsDoesNotIncludeJestMetadata() throws Exception {
-        importFixture("org/graylog2/indexer/searches/SearchesIT.json");
-
         final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).withZone(UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC).withZone(UTC));
         final FieldStatsResult fieldStatsResult = searches.fieldStats("n", "_id:1", range);
 
         assertThat(fieldStatsResult).isNotNull();
-        assertThat(fieldStatsResult.searchHits()).isNotNull();
-        assertThat(fieldStatsResult.searchHits()).hasSize(1);
-        final ResultMessage resultMessage = fieldStatsResult.searchHits().get(0);
+        assertThat(fieldStatsResult.getSearchHits()).isNotNull();
+        assertThat(fieldStatsResult.getSearchHits()).hasSize(1);
+        final ResultMessage resultMessage = fieldStatsResult.getSearchHits().get(0);
         assertThat(resultMessage.getMessage().getFields()).doesNotContainKeys("es_metadata_id", "es_metadata_version");
     }
 
     @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void searchReturnsCorrectTotalHits() throws Exception {
-        importFixture("org/graylog2/indexer/searches/SearchesIT.json");
-
         final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).withZone(UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC).withZone(UTC));
         final SearchResult searchResult = searches.search("*", range, 5, 0, Sorting.DEFAULT);
 
@@ -468,9 +784,8 @@ public abstract class SearchesIT extends ElasticsearchBaseTest {
     }
 
     @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void searchReturnsResultWithSelectiveFields() throws Exception {
-        importFixture("org/graylog2/indexer/searches/SearchesIT.json");
-
         final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).withZone(UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC).withZone(UTC));
         final SearchesConfig searchesConfig = SearchesConfig.builder()
                 .query("*")
@@ -487,9 +802,8 @@ public abstract class SearchesIT extends ElasticsearchBaseTest {
     }
 
     @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void scrollReturnsResultWithSelectiveFields() throws Exception {
-        importFixture("org/graylog2/indexer/searches/SearchesIT.json");
-
         when(indexSetRegistry.getForIndices(Collections.singleton("graylog_0"))).thenReturn(Collections.singleton(indexSet));
         final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).withZone(UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC).withZone(UTC));
         final ScrollResult scrollResult = searches.scroll("*", range, 5, 0, Collections.singletonList("source"), null);
@@ -503,54 +817,5 @@ public abstract class SearchesIT extends ElasticsearchBaseTest {
         assertThat(firstChunk.getMessages()).hasSize(5);
         assertThat(firstChunk.isFirstChunk()).isTrue();
         assertThat(firstChunk.getFields()).containsExactly("source");
-    }
-
-    @Test
-    public void scrollReturnsMultipleChunksRespectingBatchSize() throws Exception {
-        importFixture("org/graylog2/indexer/searches/SearchesIT.json");
-
-        when(indexSetRegistry.getForIndices(Collections.singleton("graylog_0"))).thenReturn(Collections.singleton(indexSet));
-        final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).withZone(UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC).withZone(UTC));
-        final ScrollResult scrollResult = searches.scroll("*", range, -1, 0, Collections.singletonList("source"), null, 2);
-
-        assertThat(scrollResult).isNotNull();
-        assertThat(scrollResult.totalHits()).isEqualTo(10L);
-
-        ScrollResult.ScrollChunk scrollChunk = scrollResult.nextChunk();
-        assertThat(scrollChunk.isFirstChunk()).isTrue();
-
-        final Set<ResultMessage> resultMessages = new HashSet<>(5);
-        while (scrollChunk != null && !scrollChunk.getMessages().isEmpty()) {
-            assertThat(scrollChunk.getMessages()).hasSize(2);
-            assertThat(scrollChunk.getFields()).containsExactly("source");
-
-            resultMessages.addAll(scrollChunk.getMessages());
-            scrollChunk = scrollResult.nextChunk();
-        }
-
-        assertThat(resultMessages).hasSize(10);
-    }
-
-    @Test
-    public void scrollReturnsMultipleChunksRespectingLimit() throws Exception {
-        importFixture("org/graylog2/indexer/searches/SearchesIT.json");
-
-        when(indexSetRegistry.getForIndices(Collections.singleton("graylog_0"))).thenReturn(Collections.singleton(indexSet));
-        final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).withZone(UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC).withZone(UTC));
-        final ScrollResult scrollResult = searches.scroll("*", range, 5, 0, Collections.singletonList("source"), null, 2);
-
-        assertThat(scrollResult).isNotNull();
-        assertThat(scrollResult.totalHits()).isEqualTo(10L);
-
-        ScrollResult.ScrollChunk scrollChunk = scrollResult.nextChunk();
-        assertThat(scrollChunk.isFirstChunk()).isTrue();
-
-        final Set<ResultMessage> resultMessages = new HashSet<>(5);
-        while (scrollChunk != null && !scrollChunk.getMessages().isEmpty()) {
-            resultMessages.addAll(scrollChunk.getMessages());
-            scrollChunk = scrollResult.nextChunk();
-        }
-
-        assertThat(resultMessages).hasSize(5);
     }
 }

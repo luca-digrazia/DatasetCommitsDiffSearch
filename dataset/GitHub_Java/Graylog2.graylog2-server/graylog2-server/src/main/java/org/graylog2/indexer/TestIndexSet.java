@@ -24,19 +24,35 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.graylog2.indexer.MongoIndexSet.RESTORED_ARCHIVE_SUFFIX;
+
+/**
+ * This class is being used in plugins for testing, DO NOT move it to the test/ directory without changing the plugins.
+ */
 public class TestIndexSet implements IndexSet {
     private static final String SEPARATOR = "_";
     private static final String DEFLECTOR_SUFFIX = "deflector";
 
     private final IndexSetConfig config;
+    private final Pattern indexPattern;
 
     public TestIndexSet(IndexSetConfig config) {
         this.config = config;
+        // Part of the pattern can be configured in IndexSetConfig. If set we use the indexMatchPattern from the config.
+        if (isNullOrEmpty(config.indexMatchPattern())) {
+            // This pattern requires that we check that each index prefix is unique and unambiguous to avoid false matches.
+            this.indexPattern = Pattern.compile("^" + config.indexPrefix() + SEPARATOR + "\\d+(?:" + RESTORED_ARCHIVE_SUFFIX + ")?");
+        } else {
+            // This pattern requires that we check that each index prefix is unique and unambiguous to avoid false matches.
+            this.indexPattern = Pattern.compile("^" + config.indexMatchPattern() + SEPARATOR + "\\d+(?:" + RESTORED_ARCHIVE_SUFFIX + ")?");
+        }
     }
 
     @Override
-    public String[] getManagedIndicesNames() {
+    public String[] getManagedIndices() {
         return new String[0];
     }
 
@@ -46,22 +62,22 @@ public class TestIndexSet implements IndexSet {
     }
 
     @Override
-    public String getWriteIndexWildcard() {
+    public String getIndexWildcard() {
         return config.indexPrefix() + SEPARATOR + "*";
     }
 
     @Override
-    public String getNewestTargetName() throws NoTargetIndexException {
+    public String getNewestIndex() throws NoTargetIndexException {
         return null;
     }
 
     @Override
-    public String getCurrentActualTargetIndex() throws TooManyAliasesException {
+    public String getActiveWriteIndex() throws TooManyAliasesException {
         return null;
     }
 
     @Override
-    public Map<String, Set<String>> getAllDeflectorAliases() {
+    public Map<String, Set<String>> getAllIndexAliases() {
         return null;
     }
 
@@ -76,13 +92,13 @@ public class TestIndexSet implements IndexSet {
     }
 
     @Override
-    public boolean isDeflectorAlias(String index) {
+    public boolean isWriteIndexAlias(String index) {
         return false;
     }
 
     @Override
     public boolean isManagedIndex(String index) {
-        return false;
+        return !isNullOrEmpty(index) && !isWriteIndexAlias(index) && indexPattern.matcher(index).matches();
     }
 
     @Override
@@ -106,7 +122,7 @@ public class TestIndexSet implements IndexSet {
 
     @Override
     public Optional<Integer> extractIndexNumber(String index) {
-        return null;
+        return Optional.empty();
     }
 
     @Override
