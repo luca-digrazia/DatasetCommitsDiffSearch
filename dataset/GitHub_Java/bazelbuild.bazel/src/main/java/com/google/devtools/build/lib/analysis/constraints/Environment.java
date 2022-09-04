@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.analysis.constraints;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
@@ -32,8 +31,7 @@ import com.google.devtools.build.lib.packages.EnvironmentGroup;
 public class Environment implements RuleConfiguredTargetFactory {
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+  public ConfiguredTarget create(RuleContext ruleContext) throws RuleErrorException {
 
     // The main analysis work to do here is to simply fill in SupportedEnvironmentsProvider to
     // pass the environment itself to depending rules.
@@ -47,8 +45,7 @@ public class Environment implements RuleConfiguredTargetFactory {
       return null;
     }
 
-    EnvironmentCollection env =
-        new EnvironmentCollection.Builder().put(group.getEnvironmentLabels(), label).build();
+    EnvironmentCollection env = new EnvironmentCollection.Builder().put(group, label).build();
     return new RuleConfiguredTargetBuilder(ruleContext)
         .addProvider(SupportedEnvironmentsProvider.class,
             new SupportedEnvironments(env, env, ImmutableMap.of()))

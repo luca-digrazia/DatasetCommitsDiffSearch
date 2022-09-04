@@ -20,10 +20,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.actions.Actions;
-import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.constraints.ConstraintSemantics;
 import com.google.devtools.build.lib.analysis.constraints.EnvironmentCollection;
@@ -79,8 +76,10 @@ public final class RuleConfiguredTargetBuilder {
     add(VisibilityProvider.class, new VisibilityProviderImpl(ruleContext.getVisibility()));
   }
 
-  /** Constructs the RuleConfiguredTarget instance based on the values set for this Builder. */
-  public ConfiguredTarget build() throws ActionConflictException {
+  /**
+   * Constructs the RuleConfiguredTarget instance based on the values set for this Builder.
+   */
+  public ConfiguredTarget build() {
     if (ruleContext.getConfiguration().enforceConstraints()) {
       checkConstraints();
     }
@@ -141,15 +140,8 @@ public final class RuleConfiguredTargetBuilder {
     }
 
     TransitiveInfoProviderMap providers = providersBuilder.build();
-    AnalysisEnvironment analysisEnvironment = ruleContext.getAnalysisEnvironment();
-    GeneratingActions generatingActions =
-        Actions.filterSharedActionsAndThrowActionConflict(
-            analysisEnvironment.getActionKeyContext(), analysisEnvironment.getRegisteredActions());
-    return new RuleConfiguredTarget(
-        ruleContext,
-        providers,
-        generatingActions.getActions(),
-        generatingActions.getGeneratingActionIndex());
+
+    return new RuleConfiguredTarget(ruleContext, providers);
   }
 
   /**
