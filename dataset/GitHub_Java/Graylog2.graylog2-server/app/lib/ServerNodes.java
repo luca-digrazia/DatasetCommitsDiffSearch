@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Kay Roepke <kay@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,12 +15,10 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package lib;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Maps;
+import com.google.common.collect.*;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import com.google.inject.name.Named;
@@ -28,57 +26,196 @@ import models.Node;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.atomic.AtomicReference;
+import java.net.URI;
+import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 @Singleton
 public class ServerNodes {
     private static final Logger log = LoggerFactory.getLogger(ServerNodes.class);
-
+    private final CopyOnWriteArrayList<Node> serverNodes = Lists.newCopyOnWriteArrayList();
+    private final BiMap<Node, Node> configuredNodes = Maps.synchronizedBiMap(HashBiMap.<Node, Node>create());
     private final Random random = new Random();
 
-    private AtomicReference<ImmutableList<Node>> nodes = new AtomicReference<>();
-
-    private static ServerNodes INSTANCE;
-    private static ImmutableList<Node> initialNodes;
-
     @Inject
-    private ServerNodes(@Named("Initial Nodes") Node[] nodes) {
-        log.info("Creating ServerNodes with initial nodes {}", (Object)nodes);
-        initialNodes = ImmutableList.copyOf(nodes);
-        setCurrentNodes(initialNodes);
-        INSTANCE = this;
-    }
-
-    public static ServerNodes getInstance() {
-        if (INSTANCE == null) {
-            throw new IllegalStateException("ServerNodes.initialize() was not called.");
+    private ServerNodes(Node.Factory nodeFactory, @Named("Initial Nodes") URI[] nodeAddresses) {
+        for (URI nodeAddress : nodeAddresses) {
+            final Node configuredNode = nodeFactory.fromTransportAddress(nodeAddress);
+            configuredNodes.put(configuredNode, configuredNode);
         }
-        return INSTANCE;
+
+        log.debug("Creating ServerNodes with initial nodes {}", configuredNodes.keySet());
+        // resolve the configured nodes:
+        // we only know a transport address where we can reach them, but we don't know any node ids yet.
+        // thus we do not know anything about them, and cannot even match them to node information coming
+        // back from /system/cluster -> those all have node ids
+        // ServerNodesRefreshService will do this for us, this class only deals with picking nodes from a list,
+        // but does not update itself from external sources, this makes testing much easier
     }
 
-    public static List<Node> all() {
-        return getInstance().nodes.get();
+    /**
+     * Retrieves all currently active nodes.
+     *
+     * @return list of currently active nodes
+     */
+    public List<Node> all() {
+        return all(false);
     }
 
-    public static Node any() {
-        final ServerNodes instance = getInstance();
-        final ImmutableList<Node> nodeList = instance.nodes.get();
-        return nodeList.get(instance.random.nextInt(nodeList.size()));
+    public List<Node> all(boolean allowInactive) {
+        final Iterator<Node> nodeIterator;
+        if (allowInactive) {
+            nodeIterator = serverNodes.iterator();
+        }
+        else {
+            nodeIterator = skipInactive(serverNodes);
+        }
+        final ImmutableList<Node> nodes = ImmutableList.copyOf(nodeIterator);
+        if (!allowInactive && nodes.isEmpty()) {
+            throw new Graylog2ServerUnavailableException();
+        }
+        return nodes;
     }
 
-    public static Map<String, Node> asMap() {
+    public Node master() {
+        final List<Node> all = all(false);
+
+        if (all.isEmpty()) {
+            throw new Graylog2ServerUnavailableException();
+        }
+
+        for (Node node : all) {
+            if (node.isMaster()) {
+                return node;
+            }
+        }
+
+        // No active master node was found.
+        throw new Graylog2MasterUnavailableException();
+    }
+
+    /**
+     * Retrieve a random single active node.
+     *
+     * @return an active node
+     */
+    public Node any() {
+        return any(false);
+    }
+
+    public Node any(boolean allowInactive) {
+        final List<Node> all = all(allowInactive);
+        if (all.isEmpty()) {
+            throw new Graylog2ServerUnavailableException();
+        }
+        final int i = random.nextInt(all.size());
+        return all.get(i);
+    }
+
+    /**
+     * Register nodes in the list of active nodes.
+     *
+     * The passed nodes are taken to be active, until this process knows it cannot reach them.
+     *
+     * @param nodes Nodes known to exist in the cluster
+     */
+    public void put(Collection<Node> nodes) {
+        HashSet<Node> existingNodes = Sets.newHashSet(serverNodes);
+        for (Node newNode : nodes) {
+            for (Node serverNode : existingNodes) {
+                log.debug("Checking new node {} against existing node {}", newNode, serverNode);
+                if (newNode.equals(serverNode)) {
+                    serverNode.merge(newNode);
+                    existingNodes.remove(serverNode);
+                    break;
+                }
+            }
+        }
+
+        serverNodes.addAllAbsent(nodes);
+        logServerNodesState();
+    }
+
+    private void logServerNodesState() {
+        if (log.isDebugEnabled()) {
+            StringBuilder b = new StringBuilder();
+            b.append("Node List").append('\n');
+            for (Node serverNode : serverNodes) {
+                b.append(' ');
+                if (serverNode.isMaster()) {
+                    b.append("* ");
+                } else {
+                    b.append("  ");
+                }
+                b.append(serverNode.getNodeId())
+                        .append('\t')
+                        .append(serverNode.getTransportAddress())
+                        .append('\t')
+                        .append(serverNode.isActive() ? "active" : "inactive");
+                if (serverNode.getFailureCount() > 0) {
+                    b.append('\t').append("failures: ").append(serverNode.getFailureCount());
+                }
+                final Node linkedNode = configuredNodes.inverse().get(serverNode);
+                if (linkedNode != null) {
+                    b.append('\t').append("via config node ").append(linkedNode.getTransportAddress());
+                }
+                b.append('\n');
+            }
+            log.debug(b.toString());
+        }
+    }
+
+    public Map<String, Node> asMap() {
         Map<String, Node> map = Maps.newHashMap();
-        for (Node node : all()) {
-            map.put(node.getNodeId(), node);
+        for (Node serverNode : ImmutableList.copyOf(skipInactive(serverNodes))) {
+            map.put(serverNode.getNodeId(), serverNode);
         }
 
         return map;
     }
 
-    public void setCurrentNodes(List<Node> nodeList) {
-        nodes.set(ImmutableList.copyOf(nodeList));
+    private Iterator<Node> skipInactive(final Iterable<Node> iterable) {
+        return new AbstractIterator<Node>() {
+            Iterator<Node> in = iterable.iterator();
+            @Override
+            protected Node computeNext() {
+                while (in.hasNext()) {
+                    final Node next = in.next();
+                    if (next.isActive()) {
+                        return next;
+                    }
+                }
+                return endOfData();
+            }
+        };
+    }
+
+    public List<Node> getConfiguredNodes() {
+        return ImmutableList.copyOf(configuredNodes.keySet());
+    }
+
+    public void linkConfiguredNode(Node configuredNode, Node resolvedNode) {
+        configuredNodes.put(configuredNode, resolvedNode);
+    }
+
+    public Node getDiscoveredNodeVia(Node configuredNode) {
+        final Node node = configuredNodes.get(configuredNode);
+        return node;
+    }
+
+    public Node getConfigNodeOf(Node serverNode) {
+        return configuredNodes.inverse().get(serverNode);
+    }
+
+    public int connectedNodesCount() {
+        return Iterators.size(skipInactive(serverNodes));
+    }
+
+    public int totalNodesCount() {
+        return serverNodes.size();
+    }
+
+    public boolean isConnected() {
+        return skipInactive(serverNodes).hasNext();
     }
 }
