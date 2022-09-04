@@ -82,13 +82,11 @@ public abstract class SkylarkMethodDoc extends SkylarkDoc {
   }
 
   protected String getSignature(String objectName, String methodName, Method method) {
-    String objectDotExpressionPrefix =
-        objectName.isEmpty() ? "" : objectName + ".";
     String args = SkylarkInterfaceUtils.getSkylarkCallable(method).structField()
         ? "" : "(" + getParameterString(method) + ")";
 
-    return String.format("%s %s%s%s",
-        getTypeAnchor(method.getReturnType()), objectDotExpressionPrefix, methodName, args);
+    return String.format("%s %s.%s%s",
+        getTypeAnchor(method.getReturnType()), objectName, methodName, args);
   }
 
   protected String getSignature(String objectName, SkylarkSignature method) {

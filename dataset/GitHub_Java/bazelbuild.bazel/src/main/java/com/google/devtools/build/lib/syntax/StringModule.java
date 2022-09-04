@@ -545,8 +545,9 @@ public final class StringModule {
   @SkylarkCallable(
       name = "rfind",
       doc =
-          "Returns the last index where <code>sub</code> is found, or -1 if no such index exists, "
-              + "optionally restricting to <code>[start:end]</code>, "
+          "Returns the last index where <code>sub</code> is found, "
+              + "or -1 if no such index exists, optionally restricting to "
+              + "[<code>start</code>:<code>end</code>], "
               + "<code>start</code> being inclusive and <code>end</code> being exclusive.",
       parameters = {
         @Param(name = "self", type = String.class, doc = "This string."),
@@ -574,8 +575,9 @@ public final class StringModule {
   @SkylarkCallable(
       name = "find",
       doc =
-          "Returns the first index where <code>sub</code> is found, or -1 if no such index exists, "
-              + "optionally restricting to <code>[start:end]</code>, "
+          "Returns the first index where <code>sub</code> is found, "
+              + "or -1 if no such index exists, optionally restricting to "
+              + "[<code>start</code>:<code>end]</code>, "
               + "<code>start</code> being inclusive and <code>end</code> being exclusive.",
       parameters = {
         @Param(name = "self", type = String.class, doc = "This string."),
@@ -603,8 +605,9 @@ public final class StringModule {
   @SkylarkCallable(
       name = "rindex",
       doc =
-          "Returns the last index where <code>sub</code> is found, or raises an error if no such "
-              + "index exists, optionally restricting to <code>[start:end]</code>, "
+          "Returns the last index where <code>sub</code> is found, "
+              + "or raises an error if no such index exists, optionally restricting to "
+              + "[<code>start</code>:<code>end</code>], "
               + "<code>start</code> being inclusive and <code>end</code> being exclusive.",
       parameters = {
         @Param(name = "self", type = String.class, doc = "This string."),
@@ -637,8 +640,9 @@ public final class StringModule {
   @SkylarkCallable(
       name = "index",
       doc =
-          "Returns the first index where <code>sub</code> is found, or raises an error if no such "
-              + " index exists, optionally restricting to <code>[start:end]</code>"
+          "Returns the first index where <code>sub</code> is found, "
+              + "or raises an error if no such index exists, optionally restricting to "
+              + "[<code>start</code>:<code>end]</code>, "
               + "<code>start</code> being inclusive and <code>end</code> being exclusive.",
       parameters = {
         @Param(name = "self", type = String.class, doc = "This string."),
@@ -834,8 +838,8 @@ public final class StringModule {
       name = "count",
       doc =
           "Returns the number of (non-overlapping) occurrences of substring <code>sub</code> in "
-              + "string, optionally restricting to <code>[start:end]</code>, <code>start</code> "
-              + "being inclusive and <code>end</code> being exclusive.",
+              + "string, optionally restricting to [<code>start</code>:<code>end</code>], "
+              + "<code>start</code> being inclusive and <code>end</code> being exclusive.",
       parameters = {
         @Param(name = "self", type = String.class, doc = "This string."),
         @Param(name = "sub", type = String.class, legacyNamed = true,
@@ -887,8 +891,9 @@ public final class StringModule {
   @SkylarkCallable(
       name = "endswith",
       doc =
-          "Returns True if the string ends with <code>sub</code>, otherwise False, optionally "
-              + "restricting to <code>[start:end]</code>, <code>start</code> being inclusive "
+          "Returns True if the string ends with <code>sub</code>, "
+              + "otherwise False, optionally restricting to "
+              + "[<code>start</code>:<code>end</code>], <code>start</code> being inclusive "
               + "and <code>end</code> being exclusive.",
       parameters = {
         @Param(name = "self", type = String.class, doc = "This string."),
@@ -960,8 +965,9 @@ public final class StringModule {
   @SkylarkCallable(
       name = "startswith",
       doc =
-          "Returns True if the string starts with <code>sub</code>, otherwise False, optionally "
-              + "restricting to <code>[start:end]</code>, <code>start</code> being inclusive and "
+          "Returns True if the string starts with <code>sub</code>, "
+              + "otherwise False, optionally restricting to "
+              + "[<code>start</code>:<code>end</code>], <code>start</code> being inclusive and "
               + "<code>end</code> being exclusive.",
       parameters = {
         @Param(name = "self", type = String.class, doc = "This string."),
