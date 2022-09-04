@@ -67,6 +67,7 @@ import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
+import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
@@ -193,17 +194,22 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
   protected SkyframeExecutor createSkyframeExecutor(
       PackageFactory pkgFactory, ImmutableList<BuildInfoFactory> buildInfoFactories) {
-    return BazelSkyframeExecutorConstants.newBazelSkyframeExecutorBuilder()
-        .setPkgFactory(pkgFactory)
-        .setFileSystem(fileSystem)
-        .setDirectories(directories)
-        .setActionKeyContext(actionKeyContext)
-        .setBuildInfoFactories(buildInfoFactories)
-        .setDefaultBuildOptions(
-            DefaultBuildOptionsForTesting.getDefaultBuildOptionsForTest(ruleClassProvider))
-        .setWorkspaceStatusActionFactory(workspaceStatusActionFactory)
-        .setExtraSkyFunctions(analysisMock.getSkyFunctions(directories))
-        .build();
+    return SequencedSkyframeExecutor.create(
+        pkgFactory,
+        fileSystem,
+        directories,
+        actionKeyContext,
+        workspaceStatusActionFactory,
+        buildInfoFactories,
+        ImmutableList.of(),
+        analysisMock.getSkyFunctions(directories),
+        ImmutableList.of(),
+        BazelSkyframeExecutorConstants.HARDCODED_BLACKLISTED_PACKAGE_PREFIXES,
+        BazelSkyframeExecutorConstants.ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE,
+        BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
+        BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
+        BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE,
+        DefaultBuildOptionsForTesting.getDefaultBuildOptionsForTest(ruleClassProvider));
   }
 
   /**
