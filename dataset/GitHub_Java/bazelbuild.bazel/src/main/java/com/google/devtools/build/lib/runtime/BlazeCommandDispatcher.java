@@ -238,14 +238,18 @@ public class BlazeCommandDispatcher {
 
     StoredEventHandler storedEventHandler = new StoredEventHandler();
     BlazeOptionHandler optionHandler =
-        new BlazeOptionHandler(
+        BlazeOptionHandler.getHandler(
             runtime,
             workspace,
             command,
             commandAnnotation,
             // Provide the options parser so that we can cache OptionsData here.
             createOptionsParser(command),
-            invocationPolicy);
+            invocationPolicy,
+            runtime
+                .getStartupOptionsProvider()
+                .getOptions(BlazeServerStartupOptions.class)
+                .expandConfigsInPlace);
     ExitCode earlyExitCode = optionHandler.parseOptions(args, storedEventHandler);
     OptionsProvider options = optionHandler.getOptionsResult();
 
@@ -488,6 +492,12 @@ public class BlazeCommandDispatcher {
 
       System.setOut(savedOut);
       System.setErr(savedErr);
+      reporter.removeHandler(handler);
+      releaseHandler(handler);
+      if (!eventHandlerOptions.useColor()) {
+        reporter.removeHandler(ansiAllowingHandler);
+        releaseHandler(ansiAllowingHandler);
+      }
       env.getTimestampGranularityMonitor().waitForTimestampGranularity(outErr);
     }
   }
@@ -594,6 +604,15 @@ public class BlazeCommandDispatcher {
     }
 
     return RateLimitingEventHandler.create(eventHandler, eventOptions.showProgressRateLimit);
+  }
+
+  /** Unsets the event handler. */
+  private void releaseHandler(EventHandler eventHandler) {
+    if (eventHandler instanceof FancyTerminalEventHandler) {
+      // Make sure that the terminal state of the old event handler is clear
+      // before creating a new one.
+      ((FancyTerminalEventHandler) eventHandler).resetTerminal();
+    }
   }
 
   /**
