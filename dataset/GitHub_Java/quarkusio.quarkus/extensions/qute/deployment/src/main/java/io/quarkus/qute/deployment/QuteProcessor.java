@@ -70,7 +70,6 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
 import io.quarkus.gizmo.ClassOutput;
 import io.quarkus.qute.Engine;
-import io.quarkus.qute.EngineBuilder;
 import io.quarkus.qute.Expression;
 import io.quarkus.qute.Expression.VirtualMethodPart;
 import io.quarkus.qute.LoopSectionHelper;
@@ -83,7 +82,6 @@ import io.quarkus.qute.TemplateException;
 import io.quarkus.qute.TemplateExtension;
 import io.quarkus.qute.TemplateInstance;
 import io.quarkus.qute.TemplateLocator;
-import io.quarkus.qute.UserTagSectionHelper;
 import io.quarkus.qute.Variant;
 import io.quarkus.qute.api.ResourcePath;
 import io.quarkus.qute.api.VariantTemplate;
@@ -175,23 +173,8 @@ public class QuteProcessor {
         long start = System.currentTimeMillis();
         List<TemplateAnalysis> analysis = new ArrayList<>();
 
-        // A dummy engine instance is used to parse and validate all templates during the build
-        // The real engine instance is created at startup
-        EngineBuilder builder = Engine.builder().addDefaultSectionHelpers();
-
-        // Register user tags
-        for (TemplatePathBuildItem path : templatePaths) {
-            if (path.isTag()) {
-                String tagPath = path.getPath();
-                String tagName = tagPath.substring(TemplatePathBuildItem.TAGS.length(), tagPath.length());
-                if (tagName.contains(".")) {
-                    tagName = tagName.substring(0, tagName.lastIndexOf('.'));
-                }
-                builder.addSectionHelper(new UserTagSectionHelper.Factory(tagName, tagPath));
-            }
-        }
-
-        builder.computeSectionHelper(name -> {
+        // A dummy engine instance is used to parse and validate all templates during the build. The real engine instance is created at startup.
+        Engine dummyEngine = Engine.builder().addDefaultSectionHelpers().computeSectionHelper(name -> {
             // Create a dummy section helper factory for an uknown section that could be potentially registered at runtime 
             return new SectionHelperFactory<SectionHelper>() {
                 @Override
@@ -204,9 +187,8 @@ public class QuteProcessor {
                     };
                 }
             };
-        });
+        }).addLocator(new TemplateLocator() {
 
-        builder.addLocator(new TemplateLocator() {
             @Override
             public Optional<TemplateLocation> locate(String id) {
                 TemplatePathBuildItem found = templatePaths.stream().filter(p -> p.getPath().equals(id)).findAny().orElse(null);
@@ -228,13 +210,14 @@ public class QuteProcessor {
                         LOGGER.warn("Unable to read the template from path: " + found.getFullPath(), e);
                     }
                 }
+                ;
                 return Optional.empty();
             }
-        });
+        }).build();
 
-        Engine dummyEngine = builder.build();
+        for (
 
-        for (TemplatePathBuildItem path : templatePaths) {
+        TemplatePathBuildItem path : templatePaths) {
             Template template = dummyEngine.getTemplate(path.getPath());
             if (template != null) {
                 analysis.add(new TemplateAnalysis(template.getGeneratedId(), template.getExpressions(), path));
