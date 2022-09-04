@@ -22,7 +22,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import javax.enterprise.context.ContextNotActiveException;
@@ -63,7 +62,6 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
@@ -227,18 +225,9 @@ class VertxWebProcessor {
             LaunchModeBuildItem launchMode,
             BuildProducer<RouteDescriptionBuildItem> descriptions,
             Capabilities capabilities,
-            Optional<BeanValidationAnnotationsBuildItem> beanValidationAnnotations,
-            ApplicationIndexBuildItem applicationIndex) {
+            Optional<BeanValidationAnnotationsBuildItem> beanValidationAnnotations) {
 
-        Predicate<String> appClassPredicate = new Predicate<String>() {
-            @Override
-            public boolean test(String name) {
-                int idx = name.lastIndexOf(HANDLER_SUFFIX);
-                String className = idx != -1 ? name.substring(0, idx) : name;
-                return applicationIndex.getIndex().getClassByName(DotName.createSimple(className.replace("/", "."))) != null;
-            }
-        };
-        ClassOutput classOutput = new GeneratedClassGizmoAdaptor(generatedClass, appClassPredicate);
+        ClassOutput classOutput = new GeneratedClassGizmoAdaptor(generatedClass, true);
         IndexView index = beanArchive.getIndex();
         Map<RouteMatcher, MethodInfo> matchers = new HashMap<>();
         boolean validatorAvailable = capabilities.isPresent(Capability.HIBERNATE_VALIDATOR);
