@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaHelper;
-import com.google.devtools.build.lib.rules.java.JavaProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeJarProvider;
@@ -122,10 +121,9 @@ public class AarImport implements RuleConfiguredTargetFactory {
     ruleContext.registerAction(createAarNativeLibsFilterActions(ruleContext, aar, nativeLibs));
 
     JavaRuleOutputJarsProvider.Builder jarProviderBuilder = new JavaRuleOutputJarsProvider.Builder()
-        .addOutputJar(mergedJar, null, ImmutableList.<Artifact>of());
+        .addOutputJar(mergedJar, null, null);
     for (TransitiveInfoCollection export : ruleContext.getPrerequisites("exports", Mode.TARGET)) {
-      for (OutputJar jar :
-          JavaProvider.getProvider(JavaRuleOutputJarsProvider.class, export).getOutputJars()) {
+      for (OutputJar jar : export.getProvider(JavaRuleOutputJarsProvider.class).getOutputJars()) {
         jarProviderBuilder.addOutputJar(jar);
         filesToBuildBuilder.add(jar.getClassJar());
       }
