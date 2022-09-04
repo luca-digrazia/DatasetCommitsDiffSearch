@@ -5,11 +5,15 @@ import com.google.common.graph.GraphBuilder;
 import com.google.common.graph.ImmutableGraph;
 import com.google.common.graph.MutableGraph;
 import com.google.common.graph.Traverser;
+import one.util.streamex.StreamEx;
+import org.graylog.plugins.enterprise.search.Parameter;
 import org.graylog.plugins.enterprise.search.Query;
 import org.graylog.plugins.enterprise.search.QueryMetadata;
 import org.graylog.plugins.enterprise.search.Search;
 import org.graylog.plugins.enterprise.search.SearchJob;
+import org.graylog.plugins.enterprise.search.params.QueryReferenceBinding;
 
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
@@ -42,9 +46,24 @@ public class QueryPlan {
         for (Query currentQuery : search.queries()) {
             // if this query does not reference any others explicitly, we will use the rootNode as its source
             final QueryMetadata queryMetadata = queryEngine.parse(search, currentQuery);
+            final Stream<Parameter> parameterStream = queryMetadata.usedParameterNames().stream()
+                    .map(search::getParameter)
+                    .filter(Optional::isPresent)
+                    .map(Optional::get);
+            final Set<String> referencedQueryIds = StreamEx.of(parameterStream)
+                    .map(Parameter::binding)
+                    .filter(QueryReferenceBinding.class::isInstance)
+                    .map(binding -> (QueryReferenceBinding) binding)
+                    .map(QueryReferenceBinding::queryId)
+                    .toSetAndThen(ids -> {
+                        if (ids.isEmpty()) {
+                            ids.add(rootNode.id());
+                        }
+                        return ids;
+                    });
 
             // add edges from each source node to this one, typically this will be only a single source
-            for (String sourceQueryId : queryMetadata.referencedQueries()) {
+            for (String sourceQueryId : referencedQueryIds) {
                 final Query sourceQuery = search.getQuery(sourceQueryId).orElse(rootNode);
                 planGraph.addNode(sourceQuery);
                 planGraph.addNode(currentQuery);
