@@ -18,21 +18,10 @@ package org.graylog.plugins.views.search.views;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableSet;
 import org.graylog.autovalue.WithBeanGetter;
-import org.graylog.plugins.views.search.Search;
-import org.graylog2.contentpacks.ContentPackable;
-import org.graylog2.contentpacks.EntityDescriptorIds;
-import org.graylog2.contentpacks.model.ModelId;
-import org.graylog2.contentpacks.model.entities.EntityDescriptor;
-import org.graylog2.contentpacks.model.entities.EntityV1;
-import org.graylog2.contentpacks.model.entities.SearchEntity;
-import org.graylog2.contentpacks.model.entities.ViewEntity;
-import org.graylog2.contentpacks.model.entities.ViewStateEntity;
-import org.graylog2.contentpacks.model.entities.references.ValueReference;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.mongojack.Id;
@@ -42,7 +31,6 @@ import javax.annotation.Nullable;
 import javax.validation.constraints.NotBlank;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -51,7 +39,7 @@ import java.util.stream.Collectors;
 @AutoValue
 @JsonDeserialize(builder = ViewDTO.Builder.class)
 @WithBeanGetter
-public abstract class ViewDTO implements ContentPackable<ViewEntity.Builder> {
+public abstract class ViewDTO {
     public enum Type {
         SEARCH,
         DASHBOARD
@@ -63,7 +51,6 @@ public abstract class ViewDTO implements ContentPackable<ViewEntity.Builder> {
     public static final String FIELD_SUMMARY = "summary";
     public static final String FIELD_DESCRIPTION = "description";
     public static final String FIELD_SEARCH_ID = "search_id";
-    public static final String FIELD_CONTENT_PACK = "content_pack";
     public static final String FIELD_PROPERTIES = "properties";
     public static final String FIELD_REQUIRES = "requires";
     public static final String FIELD_STATE = "state";
@@ -95,9 +82,6 @@ public abstract class ViewDTO implements ContentPackable<ViewEntity.Builder> {
 
     @JsonProperty(FIELD_SEARCH_ID)
     public abstract String searchId();
-
-    @JsonProperty(FIELD_CONTENT_PACK)
-    public abstract Optional<String> contentPack();
 
     @JsonProperty(FIELD_PROPERTIES)
     public abstract ImmutableSet<String> properties();
@@ -166,9 +150,6 @@ public abstract class ViewDTO implements ContentPackable<ViewEntity.Builder> {
         @JsonProperty(FIELD_SEARCH_ID)
         public abstract Builder searchId(String searchId);
 
-        @JsonProperty(FIELD_CONTENT_PACK)
-        public abstract Builder contentPack(@Nullable String contentPack);
-
         abstract ImmutableSet.Builder<String> propertiesBuilder();
 
         @JsonProperty(FIELD_PROPERTIES)
@@ -181,7 +162,8 @@ public abstract class ViewDTO implements ContentPackable<ViewEntity.Builder> {
         public abstract Builder requires(Map<String, PluginMetadataSummary> requirements);
 
         @JsonProperty(FIELD_OWNER)
-        public abstract Builder owner(@Nullable String owner);
+        @Nullable
+        public abstract Builder owner(String owner);
 
         @JsonProperty(FIELD_CREATED_AT)
         public abstract Builder createdAt(DateTime createdAt);
@@ -201,31 +183,5 @@ public abstract class ViewDTO implements ContentPackable<ViewEntity.Builder> {
         }
 
         public abstract ViewDTO build();
-    }
-
-    @Override
-    public ViewEntity.Builder toContentPackEntity(EntityDescriptorIds entityDescriptorIds) {
-        final Map<String, ViewStateEntity> viewStateMap = new HashMap<>(this.state().size());
-        for (Map.Entry<String, ViewStateDTO> entry : this.state().entrySet()) {
-            final ViewStateDTO viewStateDTO = entry.getValue();
-            final ViewStateEntity viewStateEntity = viewStateDTO.toContentPackEntity(entityDescriptorIds);
-            viewStateMap.put(entry.getKey(), viewStateEntity);
-        }
-
-        final ViewEntity.Builder viewEntityBuilder = ViewEntity.builder()
-                .type(this.type())
-                .title(ValueReference.of(this.title()))
-                .summary(ValueReference.of(this.summary()))
-                .description(ValueReference.of(this.description()))
-                .state(viewStateMap)
-                .requires(this.requires())
-                .properties(this.properties())
-                .createdAt(this.createdAt());
-
-        if (this.owner().isPresent()) {
-            viewEntityBuilder.owner(this.owner().get());
-        }
-
-        return viewEntityBuilder;
     }
 }
