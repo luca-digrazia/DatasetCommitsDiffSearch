@@ -1,8 +1,26 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog2.restclient.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.restclient.lib.ApiClient;
+import org.graylog2.restclient.models.api.responses.AvailableOutputSummary;
 import org.graylog2.restclient.models.api.responses.system.OutputSummaryResponse;
 
 import java.util.Map;
@@ -10,7 +28,7 @@ import java.util.Map;
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
-public class Output {
+public class Output extends ConfigurableEntity {
     private final ApiClient api;
     private final UserService userService;
 
@@ -23,6 +41,7 @@ public class Output {
     private final Map<String, Object> configuration;
     private final String type;
     private final String createdAt;
+    private final String contentPack;
 
     @AssistedInject
 
@@ -38,8 +57,10 @@ public class Output {
         this.configuration = outputSummaryResponse.configuration;
         this.type = outputSummaryResponse.type;
         this.createdAt = outputSummaryResponse.createdAt;
+        this.contentPack = outputSummaryResponse.contentPack;
     }
 
+    @JsonIgnore
     public ApiClient getApi() {
         return api;
     }
@@ -56,12 +77,18 @@ public class Output {
         return creatorUserId;
     }
 
+    @JsonIgnore
     public User getCreatorUser() {
         return userService.load(getCreatorUserId());
     }
 
+    @Override
     public Map<String, Object> getConfiguration() {
         return configuration;
+    }
+
+    public Map<String, Object> getConfiguration(AvailableOutputSummary availableOutputSummary) {
+        return getConfiguration(availableOutputSummary.getRequestedConfiguration());
     }
 
     public String getType() {
@@ -70,6 +97,10 @@ public class Output {
 
     public String getCreatedAt() {
         return createdAt;
+    }
+
+    public String getContentPack() {
+        return contentPack;
     }
 
     @Override
