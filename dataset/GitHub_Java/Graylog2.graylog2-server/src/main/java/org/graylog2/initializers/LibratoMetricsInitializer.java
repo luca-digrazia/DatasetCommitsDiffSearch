@@ -20,27 +20,61 @@
 
 package org.graylog2.initializers;
 
-import org.graylog2.GraylogServer;
+import com.librato.metrics.LibratoReporter;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import org.graylog2.plugin.initializers.Initializer;
+import org.graylog2.Core;
 import org.graylog2.periodical.LibratoMetricsWriterThread;
+import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.initializers.InitializerConfigurationException;
 
 /**
- * LibratoMetricsInitializer.java: 08.05.2012 19:30:26
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class LibratoMetricsInitializer extends SimpleFixedRateScheduleInitializer implements Initializer {
 
-    public LibratoMetricsInitializer(GraylogServer graylogServer) {
-        this.graylogServer = graylogServer;
+    private static final String NAME = "Librato";
+    
+    @Override
+    public void initialize(GraylogServer server, Map<String, String> config) throws InitializerConfigurationException {
+        Core srv = (Core) server;
+        
+        if (srv.getConfiguration().isEnableLibratoSystemMetrics()) {
+            // Enable librato metrics reporter.
+            LibratoReporter.enable(
+                    LibratoReporter.builder(
+                        srv.getConfiguration().getLibratoMetricsAPIUser(),
+                        srv.getConfiguration().getLibratoMetricsAPIToken(),
+                        srv.getServerId() + "-" + srv.getConfiguration().getLibratoMetricsPrefix()
+                    ),
+                    srv.getConfiguration().getLibratoMetricsInterval(),
+                    TimeUnit.SECONDS
+            );
+        }
+        
+        configureScheduler(
+                (Core) server,
+                new LibratoMetricsWriterThread(srv),
+                LibratoMetricsWriterThread.INITIAL_DELAY,
+                srv.getConfiguration().getLibratoMetricsInterval()
+        );
     }
 
     @Override
-    public void initialize() {
-        configureScheduler(
-                new LibratoMetricsWriterThread(this.graylogServer),
-                LibratoMetricsWriterThread.INITIAL_DELAY,
-                graylogServer.getConfiguration().getLibratoMetricsInterval()
-        );
+    public Map<String, String> getRequestedConfiguration() {
+        // Built in initializer. This is just for plugin compat. No special configuration required.
+        return com.google.common.collect.Maps.newHashMap();
+    }
+    
+    @Override
+    public boolean masterOnly() {
+        return false;
+    }
+    
+    @Override
+    public String getName() {
+        return NAME;
     }
 
 }
