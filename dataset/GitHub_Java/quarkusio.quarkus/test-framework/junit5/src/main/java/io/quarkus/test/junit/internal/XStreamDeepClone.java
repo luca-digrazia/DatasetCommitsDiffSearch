@@ -7,11 +7,11 @@ import com.thoughtworks.xstream.XStream;
 /**
  * Super simple cloning strategy that just serializes to XML and deserializes it using xstream
  */
-class XStreamDeepClone implements DeepClone {
+public class XStreamDeepClone implements DeepClone {
 
     private final Supplier<XStream> xStreamSupplier;
 
-    XStreamDeepClone(ClassLoader classLoader) {
+    public XStreamDeepClone(ClassLoader classLoader) {
         // avoid doing any work eagerly since the cloner is rarely used
         xStreamSupplier = () -> {
             XStream result = new XStream();
@@ -22,7 +22,6 @@ class XStreamDeepClone implements DeepClone {
         };
     }
 
-    @Override
     public Object clone(Object objectToClone) {
         if (objectToClone == null) {
             return null;
