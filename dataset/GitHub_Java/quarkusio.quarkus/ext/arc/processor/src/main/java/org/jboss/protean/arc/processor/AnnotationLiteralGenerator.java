@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.protean.arc.processor;
 
 import java.util.Collection;
@@ -10,10 +26,13 @@ import java.util.stream.Collectors;
 import javax.enterprise.util.AnnotationLiteral;
 
 import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget.Kind;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ArrayType;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.MethodInfo;
+import org.jboss.jandex.PrimitiveType;
+import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 import org.jboss.protean.arc.ComputingCache;
 import org.jboss.protean.arc.processor.AnnotationLiteralProcessor.CacheKey;
@@ -35,6 +54,9 @@ public class AnnotationLiteralGenerator extends AbstractGenerator {
 
     private static final Logger LOGGER = Logger.getLogger(AnnotationLiteralGenerator.class);
 
+    private static final String INIT = "<init>";
+    private static final String CLINIT = "<clinit>";
+
     /**
      *
      * @param beanDeployment
@@ -42,7 +64,7 @@ public class AnnotationLiteralGenerator extends AbstractGenerator {
      * @return a collection of resources
      */
     Collection<Resource> generate(String name, BeanDeployment beanDeployment, ComputingCache<CacheKey, String> annotationLiteralsCache) {
-        ResourceClassOutput classOutput = new ResourceClassOutput();
+        ResourceClassOutput classOutput = new ResourceClassOutput(true);
 
         annotationLiteralsCache.forEachEntry(
                 (key, literalName) -> createAnnotationLiteral(classOutput, beanDeployment.getIndex().getClassByName(key.name), key.values, literalName));
@@ -59,60 +81,94 @@ public class AnnotationLiteralGenerator extends AbstractGenerator {
         Map<String, AnnotationValue> annotationValues = values.stream().collect(Collectors.toMap(AnnotationValue::name, Function.identity()));
 
         // Ljavax/enterprise/util/AnnotationLiteral<Lcom/foo/MyQualifier;>;Lcom/foo/MyQualifier;
-        String signature = String.format("Ljavax/enterprise/util/AnnotationLiteral<L%1$s;>;L%1$s;", annotationClass.name().toString().replace(".", "/"));
-        String generatedName = literalName.replace(".", "/");
+        String signature = String.format("Ljavax/enterprise/util/AnnotationLiteral<L%1$s;>;L%1$s;", annotationClass.name().toString().replace('.', '/'));
+        String generatedName = literalName.replace('.', '/');
 
         ClassCreator annotationLiteral = ClassCreator.builder().classOutput(classOutput).className(generatedName).superClass(AnnotationLiteral.class)
                 .interfaces(annotationClass.name().toString()).signature(signature).build();
 
         for (MethodInfo method : annotationClass.methods()) {
+            if(method.name().equals(CLINIT) || method.name().equals(INIT)) {
+                continue;
+            }
             MethodCreator valueMethod = annotationLiteral.getMethodCreator(MethodDescriptor.of(method));
             AnnotationValue value = annotationValues.get(method.name());
             if (value == null) {
                 value = method.defaultValue();
             }
             ResultHandle retValue = null;
-            if (value != null) {
+            if (value == null) {
+                switch (method.returnType().kind()) {
+                    case CLASS:
+                    case ARRAY:
+                        retValue = valueMethod.loadNull();
+                        break;
+                    case PRIMITIVE:
+                        PrimitiveType primitiveType = method.returnType().asPrimitiveType();
+                        switch (primitiveType.primitive()) {
+                            case BOOLEAN:
+                                retValue = valueMethod.load(false);
+                                break;
+                            case BYTE:
+                            case SHORT:
+                            case INT:
+                                retValue = valueMethod.load(0);
+                                break;
+                            case LONG:
+                                retValue = valueMethod.load(0L);
+                                break;
+                            case FLOAT:
+                                retValue = valueMethod.load(0.0f);
+                                break;
+                            case DOUBLE:
+                                retValue = valueMethod.load(0.0d);
+                                break;
+                            case CHAR:
+                                retValue = valueMethod.load('\u0000');
+                                break;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            } else {
                 switch (value.kind()) {
                     case BOOLEAN:
-                        retValue = value != null ? valueMethod.load(value.asBoolean()) : valueMethod.load(false);
+                        retValue = valueMethod.load(value.asBoolean());
                         break;
                     case STRING:
-                        retValue = value != null ? valueMethod.load(value.asString()) : valueMethod.loadNull();
+                        retValue = valueMethod.load(value.asString());
                         break;
                     case BYTE:
-                        retValue = value != null ? valueMethod.load(value.asByte()) : valueMethod.load(0);
+                        retValue = valueMethod.load(value.asByte());
                         break;
                     case SHORT:
-                        retValue = value != null ? valueMethod.load(value.asShort()) : valueMethod.load(0);
+                        retValue = valueMethod.load(value.asShort());
                         break;
                     case LONG:
-                        retValue = value != null ? valueMethod.load(value.asLong()) : valueMethod.load(0L);
+                        retValue = valueMethod.load(value.asLong());
                         break;
                     case INTEGER:
-                        retValue = value != null ? valueMethod.load(value.asInt()) : valueMethod.load(0);
+                        retValue = valueMethod.load(value.asInt());
                         break;
                     case FLOAT:
-                        retValue = value != null ? valueMethod.load(value.asFloat()) : valueMethod.load(0.0f);
+                        retValue = valueMethod.load(value.asFloat());
                         break;
                     case DOUBLE:
-                        retValue = value != null ? valueMethod.load(value.asDouble()) : valueMethod.load(0.0d);
+                        retValue = valueMethod.load(value.asDouble());
                         break;
                     case CHARACTER:
-                        retValue = value != null ? valueMethod.load(value.asChar()) : valueMethod.load('\u0000');
+                        retValue = valueMethod.load(value.asChar());
                         break;
                     case CLASS:
-                        retValue = value != null ? valueMethod.loadClass(value.asClass().toString()) : valueMethod.loadNull();
+                        retValue = valueMethod.loadClass(value.asClass().toString());
                         break;
                     case ARRAY:
-                        // Always return an empty array
-                        // Array members must be Nonbinding
-                        retValue = value != null ? valueMethod.newArray(componentType(method), valueMethod.load(0)) : valueMethod.loadNull();
+                        retValue = arrayValue(value, valueMethod, method, annotationClass);
                         break;
                     case ENUM:
-                        retValue = value != null
-                                ? valueMethod.readStaticField(FieldDescriptor.of(value.asEnumType().toString(), value.asEnum(), value.asEnumType().toString()))
-                                : valueMethod.loadNull();
+                        retValue = valueMethod
+                                .readStaticField(FieldDescriptor.of(value.asEnumType().toString(), value.asEnum(), value.asEnumType().toString()));
                         break;
                     case NESTED:
                     default:
@@ -122,7 +178,70 @@ public class AnnotationLiteralGenerator extends AbstractGenerator {
             valueMethod.returnValue(retValue);
         }
         annotationLiteral.close();
-        LOGGER.debugf("Annotation literal generated: " + literalName);
+        LOGGER.debugf("Annotation literal generated: %s", literalName);
+    }
+
+    private static ResultHandle arrayValue(AnnotationValue value, MethodCreator valueMethod, MethodInfo method, ClassInfo annotationClass) {
+        ResultHandle retValue;
+        switch (value.componentKind()) {
+            case CLASS:
+                Type[] classArray = value.asClassArray();
+                retValue = valueMethod.newArray(componentType(method), valueMethod.load(classArray.length));
+                for (int i = 0; i < classArray.length; i++) {
+                    valueMethod.writeArrayValue(retValue, i, valueMethod.loadClass(classArray[i].name()
+                            .toString()));
+                }
+                break;
+            case STRING:
+                String[] stringArray = value.asStringArray();
+                retValue = valueMethod.newArray(componentType(method), valueMethod.load(stringArray.length));
+                for (int i = 0; i < stringArray.length; i++) {
+                    valueMethod.writeArrayValue(retValue, i, valueMethod.load(stringArray[i]));
+                }
+                break;
+            case INTEGER:
+                int[] intArray = value.asIntArray();
+                retValue = valueMethod.newArray(componentType(method), valueMethod.load(intArray.length));
+                for (int i = 0; i < intArray.length; i++) {
+                    valueMethod.writeArrayValue(retValue, i, valueMethod.load(intArray[i]));
+                }
+                break;
+            case LONG:
+                long[] longArray = value.asLongArray();
+                retValue = valueMethod.newArray(componentType(method), valueMethod.load(longArray.length));
+                for (int i = 0; i < longArray.length; i++) {
+                    valueMethod.writeArrayValue(retValue, i, valueMethod.load(longArray[i]));
+                }
+                break;
+            case BYTE:
+                byte[] byteArray = value.asByteArray();
+                retValue = valueMethod.newArray(componentType(method), valueMethod.load(byteArray.length));
+                for (int i = 0; i < byteArray.length; i++) {
+                    valueMethod.writeArrayValue(retValue, i, valueMethod.load(byteArray[i]));
+                }
+                break;
+            case CHARACTER:
+                char[] charArray = value.asCharArray();
+                retValue = valueMethod.newArray(componentType(method), valueMethod.load(charArray.length));
+                for (int i = 0; i < charArray.length; i++) {
+                    valueMethod.writeArrayValue(retValue, i, valueMethod.load(charArray[i]));
+                }
+                break;
+            // TODO: handle other less common types of array components
+            default:
+                // Return empty array for empty arrays and unsupported types
+                // For an empty array the component kind is UNKNOWN
+                if (value.componentKind() != org.jboss.jandex.AnnotationValue.Kind.UNKNOWN) {
+                    // Unsupported type - check if it is @Nonbinding, @Nonbinding array members should not be a problem in CDI
+                    AnnotationInstance nonbinding = method.annotation(DotNames.NONBINDING);
+                    if (nonbinding == null || nonbinding.target()
+                            .kind() != Kind.METHOD) {
+                        LOGGER.warnf("Unsupported array component type %s on %s - literal returns an empty array", method, annotationClass);
+                    }
+                }
+                retValue = valueMethod.newArray(componentType(method), valueMethod.load(0));
+        }
+        return retValue;
     }
 
     static String componentType(MethodInfo method) {
