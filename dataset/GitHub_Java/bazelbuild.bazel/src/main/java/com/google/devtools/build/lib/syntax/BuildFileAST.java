@@ -201,7 +201,6 @@ public class BuildFileAST extends ASTNode {
     }
     return imports.build();
   }
-
   /**
    * Executes this build file in a given Environment.
    *
@@ -368,10 +367,10 @@ public class BuildFileAST extends ASTNode {
             .addAll(result.statements)
             .build(),
         result.containsErrors,
-        /* contentHashCode= */ null,
+        /* contentHashCode= */null,
         result.location,
         ImmutableList.copyOf(result.comments),
-        /* imports= */ null);
+        /* imports= */null);
   }
 
   /**

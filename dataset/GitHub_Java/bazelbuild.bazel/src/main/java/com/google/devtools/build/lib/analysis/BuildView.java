@@ -324,11 +324,6 @@ public class BuildView {
 
         String skylarkFunctionName = aspect.substring(delimiterPosition + 1);
         for (TargetAndConfiguration targetSpec : topLevelTargetsWithConfigs) {
-          if (targetSpec.getConfiguration() != null
-              && targetSpec.getConfiguration().trimConfigurationsRetroactively()) {
-            throw new ViewCreationFailedException(
-                "Aspects were requested, but are not supported in retroactive trimming mode.");
-          }
           aspectConfigurations.put(
               Pair.of(targetSpec.getLabel(), aspect), targetSpec.getConfiguration());
           aspectKeys.add(
@@ -347,11 +342,6 @@ public class BuildView {
 
         if (aspectFactoryClass != null) {
           for (TargetAndConfiguration targetSpec : topLevelTargetsWithConfigs) {
-            if (targetSpec.getConfiguration() != null
-                && targetSpec.getConfiguration().trimConfigurationsRetroactively()) {
-              throw new ViewCreationFailedException(
-                  "Aspects were requested, but are not supported in retroactive trimming mode.");
-            }
             // For invoking top-level aspects, use the top-level configuration for both the
             // aspect and the base target while the top-level configuration is untrimmed.
             BuildConfiguration configuration = targetSpec.getConfiguration();
