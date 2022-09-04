@@ -13,6 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
+import java.math.BigInteger;
+import javax.annotation.Nullable;
+
 /**
  *  A Version defines a value in a version tree used in persistent data structures.
  *  See http://en.wikipedia.org/wiki/Persistent_data_structure.
@@ -40,5 +43,10 @@ public interface Version {
    */
   default boolean lowerThan(Version other) {
     return atMost(other) && !equals(other);
+  }
+
+  @Nullable
+  default BigInteger getFingerprint() {
+    return null;
   }
 }
