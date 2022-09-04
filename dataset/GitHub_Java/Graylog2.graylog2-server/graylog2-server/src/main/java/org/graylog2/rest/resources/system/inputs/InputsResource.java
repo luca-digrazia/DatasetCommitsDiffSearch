@@ -300,6 +300,10 @@ public class InputsResource extends RestResource {
             messageInput.setPersistId(inputId);
             final Input mongoInput = getInput(messageInput);
             inputService.save(mongoInput);
+
+            final IOState<MessageInput> oldInputState = inputRegistry.getInputState(messageInput.getId());
+            inputRegistry.remove(oldInputState.getStoppable());
+            inputLauncher.launch(messageInput);
         } catch (NoSuchInputTypeException e) {
             e.printStackTrace();
         }
@@ -327,6 +331,7 @@ public class InputsResource extends RestResource {
             try {
                 final Input input = inputService.find(inputId);
                 messageInput = inputService.getMessageInput(input);
+                messageInput.initialize();
             } catch (NoSuchInputTypeException | org.graylog2.database.NotFoundException e) {
                 final String error = "Cannot launch input <" + inputId + ">. Input not found.";
                 LOG.info(error);
@@ -359,7 +364,7 @@ public class InputsResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "No such input on this node.")
     })
-    public IOState<MessageInput> stop(@ApiParam(name = "inputId", required = true) @PathParam("inputId") String inputId) {
+    public void stop(@ApiParam(name = "inputId", required = true) @PathParam("inputId") String inputId) {
         final MessageInput input = inputRegistry.getRunningInput(inputId);
         if (input == null) {
             LOG.info("Cannot stop input. Input not found.");
@@ -370,13 +375,11 @@ public class InputsResource extends RestResource {
         LOG.info(msg);
         activityWriter.write(new Activity(msg, InputsResource.class));
 
-        final IOState<MessageInput> inputState = inputRegistry.stop(input);
+        inputRegistry.stop(input);
 
         final String msg2 = "Stopped input [" + input.getName() + "]. Reason: REST request.";
         LOG.info(msg2);
         activityWriter.write(new Activity(msg2, InputsResource.class));
-
-        return inputState;
     }
 
     @POST
@@ -387,9 +390,7 @@ public class InputsResource extends RestResource {
             @ApiResponse(code = 404, message = "No such input on this node.")
     })
     public Response restart(@ApiParam(name = "inputId", required = true) @PathParam("inputId") String inputId) {
-        final IOState<MessageInput> oldState = stop(inputId);
-        inputRegistry.remove(oldState);
-
+        stop(inputId);
         launchExisting(inputId);
         return Response.status(Response.Status.ACCEPTED).build();
     }
