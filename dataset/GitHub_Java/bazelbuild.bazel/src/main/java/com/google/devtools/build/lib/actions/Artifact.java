@@ -22,8 +22,6 @@ import com.google.common.base.Functions;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Streams;
@@ -55,7 +53,6 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.ExecutionException;
 import javax.annotation.Nullable;
 
 /**
@@ -155,9 +152,6 @@ public class Artifact
   /** A Predicate that evaluates to true if the Artifact is not a middleman artifact. */
   public static final Predicate<Artifact> MIDDLEMAN_FILTER = input -> !input.isMiddlemanArtifact();
 
-  private static final Cache<InternedArtifact, Artifact> ARTIFACT_INTERNER =
-      CacheBuilder.newBuilder().weakValues().build();
-
   private final int hashCode;
   private final ArtifactRoot root;
   private final PathFragment execPath;
@@ -183,24 +177,11 @@ public class Artifact
               + ")");
     }
     PathFragment rootExecPath = root.getExecPath();
-    Artifact artifact = new Artifact(
+    return new Artifact(
         root,
         rootExecPath.isEmpty() ? rootRelativePath : rootExecPath.getRelative(rootRelativePath),
         rootRelativePath,
         owner);
-    if (artifact.isSourceArtifact()) {
-      return artifact;
-    } else {
-      return intern(artifact);
-    }
-  }
-
-  private static Artifact intern(Artifact artifact) {
-    try {
-      return ARTIFACT_INTERNER.get(new InternedArtifact(artifact), () -> artifact);
-    } catch (ExecutionException e) {
-      throw new IllegalStateException(e);
-    }
   }
 
   /**
@@ -598,34 +579,6 @@ public class Artifact
     @Override
     public PathFragment getParentRelativePath() {
       return parentRelativePath;
-    }
-  }
-
-  /**
-   * Wraps an artifact for interning because we need to check the artifact owner when doing equals.
-   */
-  private static final class InternedArtifact {
-    private final Artifact wrappedArtifact;
-
-    InternedArtifact(Artifact artifact) {
-      this.wrappedArtifact = artifact;
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      if (!(other instanceof InternedArtifact)) {
-        return false;
-      }
-      if (!getClass().equals(other.getClass())) {
-        return false;
-      }
-      InternedArtifact that = (InternedArtifact) other;
-      return Artifact.equalWithOwner(wrappedArtifact, that.wrappedArtifact);
-    }
-
-    @Override
-    public final int hashCode() {
-      return wrappedArtifact.hashCode();
     }
   }
 

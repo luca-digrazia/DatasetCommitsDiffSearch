@@ -23,7 +23,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ActionTemplate;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -33,14 +32,15 @@ import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactPrefixConflictException;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.ArtifactSkyKey;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
-import com.google.devtools.build.lib.actions.util.InjectedActionLookupKey;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate.OutputPathMapper;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.packages.Package;
@@ -192,7 +192,8 @@ public final class ActionTemplateExpansionFunctionTest extends FoundationTestCas
     }
   }
 
-  private static final ActionLookupValue.ActionLookupKey CTKEY = new InjectedActionLookupKey("key");
+  private static final ConfiguredTargetKey CTKEY =
+      ConfiguredTargetKey.of(Label.parseAbsoluteUnchecked("//foo:foo"), null);
 
   private List<Action> evaluate(SpawnActionTemplate spawnActionTemplate) throws Exception {
     ConfiguredTargetValue ctValue = createConfiguredTargetValue(spawnActionTemplate);
@@ -261,7 +262,9 @@ public final class ActionTemplateExpansionFunctionTest extends FoundationTestCas
     }
     @Override
     public SkyValue compute(SkyKey skyKey, Environment env) {
-      return Preconditions.checkNotNull(artifactValueMap.get(skyKey));
+      ArtifactSkyKey artifactSkyKey = (ArtifactSkyKey) skyKey.argument();
+      Artifact artifact = artifactSkyKey.getArtifact();
+      return Preconditions.checkNotNull(artifactValueMap.get(artifact));
     }
 
     @Override
