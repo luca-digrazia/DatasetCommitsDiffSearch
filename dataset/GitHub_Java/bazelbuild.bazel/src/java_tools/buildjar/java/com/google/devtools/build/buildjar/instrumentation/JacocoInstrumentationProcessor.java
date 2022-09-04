@@ -37,23 +37,24 @@ public final class JacocoInstrumentationProcessor {
 
   public static JacocoInstrumentationProcessor create(List<String> args)
       throws InvalidCommandLineException {
-    if (args.size() < 1) {
+    if (args.size() < 2) {
       throw new InvalidCommandLineException(
-          "Number of arguments for Jacoco instrumentation should be 1+ (given "
+          "Number of arguments for Jacoco instrumentation should be 2+ (given "
               + args.size()
-              + ": metadataOutput [filters*].");
+              + ": metadataOutput metadataDirectory [filters*].");
     }
 
     // ignoring filters, they weren't used in the previous implementation
     // TODO(bazel-team): filters should be correctly handled
-    return new JacocoInstrumentationProcessor(args.get(0));
+    return new JacocoInstrumentationProcessor(args.get(1), args.get(0));
   }
 
-  private Path instrumentedClassesDirectory;
+  private final String metadataDir;
   private final String coverageInformation;
   private final boolean isNewCoverageImplementation;
 
-  private JacocoInstrumentationProcessor(String coverageInfo) {
+  private JacocoInstrumentationProcessor(String metadataDir, String coverageInfo) {
+    this.metadataDir = metadataDir;
     this.coverageInformation = coverageInfo;
     // This is part of the new Java coverage implementation where JacocoInstrumentationProcessor
     // receives a file that includes the relative paths of the uninstrumented Java files, instead
@@ -70,35 +71,28 @@ public final class JacocoInstrumentationProcessor {
    * jacocoMetadataDir, to be zipped up in the output file jacocoMetadataOutput.
    */
   public void processRequest(JavaLibraryBuildRequest build, JarCreator jar) throws IOException {
-    // Use a directory for coverage metadata  that is unique to each built jar. Avoids
-    // multiple threads performing read/write/delete actions on the instrumented classes directory.
-    instrumentedClassesDirectory = getMetadataDirRelativeToJar(build.getOutputJar());
-    Files.createDirectories(instrumentedClassesDirectory);
+    // Clean up jacocoMetadataDir to be used by postprocessing steps. This is important when
+    // running JavaBuilder locally, to remove stale entries from previous builds.
+    if (metadataDir != null) {
+      Path workDir = Paths.get(metadataDir);
+      if (Files.exists(workDir)) {
+        recursiveRemove(workDir);
+      }
+      Files.createDirectories(workDir);
+    }
     if (jar == null) {
       jar = new JarCreator(coverageInformation);
     }
     jar.setNormalize(true);
     jar.setCompression(build.compressJar());
     Instrumenter instr = new Instrumenter(new OfflineInstrumentationAccessGenerator());
-    instrumentRecursively(instr, build.getClassDir());
-    jar.addDirectory(instrumentedClassesDirectory);
+    instrumentRecursively(instr, Paths.get(build.getClassDir()));
+    jar.addDirectory(metadataDir);
     if (isNewCoverageImplementation) {
       jar.addEntry(coverageInformation, coverageInformation);
     } else {
       jar.execute();
-      cleanup();
     }
-  }
-
-  public void cleanup() throws IOException {
-    if (Files.exists(instrumentedClassesDirectory)) {
-      recursiveRemove(instrumentedClassesDirectory);
-    }
-  }
-
-  // Return the path of the coverage metadata directory relative to the output jar path.
-  private static Path getMetadataDirRelativeToJar(Path outputJar) {
-    return outputJar.resolveSibling(outputJar + "-coverage-metadata");
   }
 
   /**
@@ -125,9 +119,9 @@ public final class JacocoInstrumentationProcessor {
             if (isNewCoverageImplementation) {
               Path absoluteUninstrumentedCopy = Paths.get(file + ".uninstrumented");
               uninstrumentedCopy =
-                  instrumentedClassesDirectory.resolve(root.relativize(absoluteUninstrumentedCopy));
+                  Paths.get(metadataDir).resolve(root.relativize(absoluteUninstrumentedCopy));
             } else {
-              uninstrumentedCopy = instrumentedClassesDirectory.resolve(root.relativize(file));
+              uninstrumentedCopy = Paths.get(metadataDir).resolve(root.relativize(file));
             }
             Files.createDirectories(uninstrumentedCopy.getParent());
             Files.move(file, uninstrumentedCopy);

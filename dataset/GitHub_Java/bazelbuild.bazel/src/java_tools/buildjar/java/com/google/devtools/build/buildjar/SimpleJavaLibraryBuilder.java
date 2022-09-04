@@ -29,11 +29,11 @@ import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
 import java.util.Map;
-import javax.annotation.Nullable;
 
 /** An implementation of the JavaBuilder that uses in-process javac to compile java files. */
 public class SimpleJavaLibraryBuilder implements Closeable {
@@ -50,45 +50,30 @@ public class SimpleJavaLibraryBuilder implements Closeable {
   }
 
   protected void prepareSourceCompilation(JavaLibraryBuildRequest build) throws IOException {
-    cleanupDirectory(build.getClassDir());
+    Path classDirectory = Paths.get(build.getClassDir());
+    if (Files.exists(classDirectory)) {
+      try {
+        // Necessary for local builds in order to discard previous outputs
+        cleanupDirectory(classDirectory);
+      } catch (IOException e) {
+        throw new IOException("Cannot clean output directory '" + classDirectory + "'", e);
+      }
+    }
+    Files.createDirectories(classDirectory);
 
     setUpSourceJars(build);
-    cleanupDirectory(build.getSourceGenDir());
-    cleanupDirectory(build.getNativeHeaderDir());
-  }
 
-  // Necessary for local builds in order to discard previous outputs
-  private static void cleanupDirectory(@Nullable Path directory) throws IOException {
-    if (directory == null) {
-      return;
-    }
-    if (!Files.exists(directory)) {
-      Files.createDirectories(directory);
-      return;
-    }
-    try {
-      // TODO(b/27069912): handle symlinks
-      Files.walkFileTree(
-          directory,
-          new SimpleFileVisitor<Path>() {
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                throws IOException {
-              Files.delete(file);
-              return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult postVisitDirectory(Path dir, IOException exc)
-                throws IOException {
-              if (!dir.equals(directory)) {
-                Files.delete(dir);
-              }
-              return FileVisitResult.CONTINUE;
-            }
-          });
-    } catch (IOException e) {
-      throw new IOException("Cannot clean '" + directory + "'", e);
+    // Create sourceGenDir if necessary.
+    if (build.getSourceGenDir() != null) {
+      Path sourceGenDir = Paths.get(build.getSourceGenDir());
+      if (Files.exists(sourceGenDir)) {
+        try {
+          cleanupDirectory(sourceGenDir);
+        } catch (IOException e) {
+          throw new IOException("Cannot clean output directory '" + sourceGenDir + "'", e);
+        }
+      }
+      Files.createDirectories(sourceGenDir);
     }
   }
 
@@ -132,7 +117,6 @@ public class SimpleJavaLibraryBuilder implements Closeable {
       result = compileJavaLibrary(build);
       if (result.isOk()) {
         buildJar(build);
-        nativeHeaderOutput(build);
       }
       if (!build.getProcessors().isEmpty()) {
         if (build.getGeneratedSourcesOutputJar() != null) {
@@ -152,25 +136,10 @@ public class SimpleJavaLibraryBuilder implements Closeable {
       jar.setNormalize(true);
       jar.setCompression(build.compressJar());
       jar.addDirectory(build.getClassDir());
-      jar.setJarOwner(build.getTargetLabel(), build.getInjectingRuleKind());
       JacocoInstrumentationProcessor processor = build.getJacocoInstrumentationProcessor();
       if (processor != null) {
         processor.processRequest(build, processor.isNewCoverageImplementation() ? jar : null);
       }
-    } finally {
-      jar.execute();
-    }
-  }
-
-  public void nativeHeaderOutput(JavaLibraryBuildRequest build) throws IOException {
-    if (build.getNativeHeaderOutput() == null) {
-      return;
-    }
-    JarCreator jar = new JarCreator(build.getNativeHeaderOutput());
-    try {
-      jar.setNormalize(true);
-      jar.setCompression(build.compressJar());
-      jar.addDirectory(build.getNativeHeaderDir());
     } finally {
       jar.execute();
     }
@@ -181,17 +150,20 @@ public class SimpleJavaLibraryBuilder implements Closeable {
    * the build request. Empties the temporary directory, if it exists.
    */
   private void setUpSourceJars(JavaLibraryBuildRequest build) throws IOException {
-    Path sourcesDir = build.getTempDir();
+    String sourcesDir = build.getTempDir();
 
-    cleanupDirectory(sourcesDir);
+    Path sourceDirFile = Paths.get(sourcesDir);
+    if (Files.exists(sourceDirFile)) {
+      cleanupDirectory(sourceDirFile);
+    }
 
     if (build.getSourceJars().isEmpty()) {
       return;
     }
 
     final ByteArrayOutputStream protobufMetadataBuffer = new ByteArrayOutputStream();
-    for (Path sourceJar : build.getSourceJars()) {
-      for (Path root : getJarFileSystem(sourceJar).getRootDirectories()) {
+    for (String sourceJar : build.getSourceJars()) {
+      for (Path root : getJarFileSystem(Paths.get(sourceJar)).getRootDirectories()) {
         Files.walkFileTree(
             root,
             new SimpleFileVisitor<Path>() {
@@ -209,7 +181,7 @@ public class SimpleJavaLibraryBuilder implements Closeable {
             });
       }
     }
-    Path output = build.getClassDir().resolve(PROTOBUF_META_NAME);
+    Path output = Paths.get(build.getClassDir(), PROTOBUF_META_NAME);
     if (protobufMetadataBuffer.size() > 0) {
       try (OutputStream outputStream = Files.newOutputStream(output)) {
         protobufMetadataBuffer.writeTo(outputStream);
@@ -226,6 +198,26 @@ public class SimpleJavaLibraryBuilder implements Closeable {
       filesystems.put(sourceJar, fs = FileSystems.newFileSystem(sourceJar, null));
     }
     return fs;
+  }
+
+  // TODO(b/27069912): handle symlinks
+  private static void cleanupDirectory(Path dir) throws IOException {
+    Files.walkFileTree(
+        dir,
+        new SimpleFileVisitor<Path>() {
+          @Override
+          public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+              throws IOException {
+            Files.delete(file);
+            return FileVisitResult.CONTINUE;
+          }
+
+          @Override
+          public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+            Files.delete(dir);
+            return FileVisitResult.CONTINUE;
+          }
+        });
   }
 
   @Override
