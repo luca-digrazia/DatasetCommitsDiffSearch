@@ -30,7 +30,6 @@ import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Properties;
-import org.graylog2.periodical.RRDThread;
 
 // TODO: indizes richtig setzen
 
@@ -159,13 +158,6 @@ public class Main {
             gelfThread.start();
             System.out.println("[x] GELF thread is up.");
         }
-
-         // Start RRD writer thread.
-        //if (GELF.isEnabled()) { XXX: TODO
-            RRDThread rrdThread = new RRDThread();
-            rrdThread.start();
-            System.out.println("[x] RRD writer thread is up.");
-        //}
 
         // Start the thread that distincts hosts.
         HostDistinctThread hostDistinctThread = new HostDistinctThread();
