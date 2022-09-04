@@ -1,6 +1,7 @@
 package io.quarkus.kubernetes.client.runtime;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 
 import io.quarkus.runtime.annotations.ConfigItem;
@@ -99,7 +100,7 @@ public class KubernetesClientBuildConfig {
      * By default there is no limit to the number of reconnect attempts
      */
     @ConfigItem(defaultValue = "-1") // default lifted from Kubernetes Client
-    int watchReconnectLimit;
+    Integer watchReconnectLimit;
 
     /**
      * Maximum amount of time to wait for a connection with the API server to be established
@@ -147,5 +148,5 @@ public class KubernetesClientBuildConfig {
      * IP addresses or hosts to exclude from proxying
      */
     @ConfigItem
-    Optional<String[]> noProxy;
+    List<Optional<String>> noProxy;
 }
