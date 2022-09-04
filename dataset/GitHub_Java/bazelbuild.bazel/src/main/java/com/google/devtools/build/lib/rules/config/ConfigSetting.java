@@ -25,14 +25,12 @@ import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multiset;
-import com.google.devtools.build.lib.analysis.AliasProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.LicensesProviderImpl;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
@@ -45,13 +43,17 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
+import com.google.devtools.build.lib.rules.AliasProvider;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.config.ConfigRuleClasses.ConfigSettingRule;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
+
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -160,6 +162,9 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
     // make sure to examine only the value we just parsed: not the entire list.
     Multiset<String> optionsCount = HashMultiset.create();
 
+    // Since OptionsParser instantiation involves reflection, let's try to minimize that happening.
+    Map<Class<? extends OptionsBase>, OptionsParser> parserCache = new HashMap<>();
+
     for (Map.Entry<String, String> setting : expectedSettings) {
       String optionName = setting.getKey();
       String expectedRawValue = setting.getValue();
@@ -174,9 +179,10 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
         continue;
       }
 
-      OptionsParser parser;
+      OptionsParser parser =
+          parserCache.computeIfAbsent(optionClass, OptionsParser::newOptionsParser);
+
       try {
-        parser = OptionsParser.newOptionsParser(optionClass);
         parser.parse("--" + optionName + "=" + expectedRawValue);
       } catch (OptionsParsingException ex) {
         errors.attributeError(
