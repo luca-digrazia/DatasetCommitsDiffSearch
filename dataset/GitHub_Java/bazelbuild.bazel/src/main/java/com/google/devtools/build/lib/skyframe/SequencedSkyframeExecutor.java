@@ -82,6 +82,7 @@ import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.BatchStat;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.BuildDriver;
@@ -163,7 +164,8 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories,
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
-      SkyFunction blacklistedPackagePrefixesFunction,
+      ImmutableSet<PathFragment> hardcodedBlacklistedPackagePrefixes,
+      PathFragment additionalBlacklistedPackagePrefixesFile,
       CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy,
       List<BuildFileName> buildFilesByPriority,
       ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile,
@@ -180,7 +182,8 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         workspaceStatusActionFactory,
         extraSkyFunctions,
         ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS,
-        blacklistedPackagePrefixesFunction,
+        hardcodedBlacklistedPackagePrefixes,
+        additionalBlacklistedPackagePrefixesFile,
         crossRepositoryLabelViolationStrategy,
         buildFilesByPriority,
         actionOnIOExceptionReadingBuildFile,
@@ -958,6 +961,8 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     protected BlazeDirectories directories;
     protected ActionKeyContext actionKeyContext;
     protected BuildOptions defaultBuildOptions;
+    private ImmutableSet<PathFragment> hardcodedBlacklistedPackagePrefixes;
+    private PathFragment additionalBlacklistedPackagePrefixesFile;
     private CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy;
     private List<BuildFileName> buildFilesByPriority;
     private ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile;
@@ -971,7 +976,6 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     private MutableArtifactFactorySupplier mutableArtifactFactorySupplier =
         new MutableArtifactFactorySupplier();
     private Consumer<SkyframeExecutor> skyframeExecutorConsumerOnInit = skyframeExecutor -> {};
-    private SkyFunction blacklistedPackagePrefixesFunction;
 
     private Builder() {}
 
@@ -982,10 +986,11 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       Preconditions.checkNotNull(directories);
       Preconditions.checkNotNull(actionKeyContext);
       Preconditions.checkNotNull(defaultBuildOptions);
+      Preconditions.checkNotNull(hardcodedBlacklistedPackagePrefixes);
+      Preconditions.checkNotNull(additionalBlacklistedPackagePrefixesFile);
       Preconditions.checkNotNull(crossRepositoryLabelViolationStrategy);
       Preconditions.checkNotNull(buildFilesByPriority);
       Preconditions.checkNotNull(actionOnIOExceptionReadingBuildFile);
-      Preconditions.checkNotNull(blacklistedPackagePrefixesFunction);
 
       SequencedSkyframeExecutor skyframeExecutor =
           new SequencedSkyframeExecutor(
@@ -999,7 +1004,8 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
               diffAwarenessFactories,
               extraSkyFunctions,
               customDirtinessCheckers,
-              blacklistedPackagePrefixesFunction,
+              hardcodedBlacklistedPackagePrefixes,
+              additionalBlacklistedPackagePrefixesFile,
               crossRepositoryLabelViolationStrategy,
               buildFilesByPriority,
               actionOnIOExceptionReadingBuildFile,
@@ -1035,12 +1041,6 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       return this;
     }
 
-    public Builder setBlacklistedPackagePrefixesFunction(
-        SkyFunction blacklistedPackagePrefixesFunction) {
-      this.blacklistedPackagePrefixesFunction = blacklistedPackagePrefixesFunction;
-      return this;
-    }
-
     public Builder setExtraSkyFunctions(
         ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions) {
       this.extraSkyFunctions = extraSkyFunctions;
@@ -1061,6 +1061,18 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     public Builder setCustomDirtinessCheckers(
         Iterable<SkyValueDirtinessChecker> customDirtinessCheckers) {
       this.customDirtinessCheckers = customDirtinessCheckers;
+      return this;
+    }
+
+    public Builder setHardcodedBlacklistedPackagePrefixes(
+        ImmutableSet<PathFragment> hardcodedBlacklistedPackagePrefixes) {
+      this.hardcodedBlacklistedPackagePrefixes = hardcodedBlacklistedPackagePrefixes;
+      return this;
+    }
+
+    public Builder setAdditionalBlacklistedPackagePrefixesFile(
+        PathFragment additionalBlacklistedPackagePrefixesFile) {
+      this.additionalBlacklistedPackagePrefixesFile = additionalBlacklistedPackagePrefixesFile;
       return this;
     }
 
