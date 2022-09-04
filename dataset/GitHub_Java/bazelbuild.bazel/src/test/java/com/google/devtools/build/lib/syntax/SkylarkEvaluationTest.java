@@ -428,8 +428,9 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         allowReturnNones = true)
     public ClassObject proxyMethodsObject() {
       ImmutableMap.Builder<String, Object> builder = new ImmutableMap.Builder<>();
-      for (String nativeFunction : CallUtils.getMethodNames(Mock.class)) {
-        builder.put(nativeFunction, CallUtils.getBuiltinCallable(this, nativeFunction));
+      for (String nativeFunction : FuncallExpression.getMethodNames(Mock.class)) {
+        builder.put(nativeFunction,
+            FuncallExpression.getBuiltinCallable(this, nativeFunction));
       }
       return StructProvider.STRUCT.create(builder.build(), "no native callable '%s'");
     }
@@ -1586,7 +1587,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @Test
-  public void testInvalidAugmentedAssignment_ListExpression() throws Exception {
+  public void testInvalidAugmentedAssignment_ListLiteral() throws Exception {
     new SkylarkTest().testIfErrorContains(
         "cannot perform augmented assignment on a list or tuple expression",
         "def f(a, b):",

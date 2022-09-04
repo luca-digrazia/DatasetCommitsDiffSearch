@@ -260,7 +260,7 @@ public abstract class StarlarkSemantics {
           .incompatibleDisableDepsetItems(false)
           .incompatibleDisallowDictPlus(true)
           .incompatibleDisallowEmptyGlob(false)
-          .incompatibleDisallowLegacyJavaProvider(true)
+          .incompatibleDisallowLegacyJavaProvider(false)
           .incompatibleDisallowOldStyleArgsAdd(true)
           .incompatibleDisallowRuleExecutionPlatformConstraintsAllowed(true)
           .incompatibleDisallowStructProviderSyntax(false)

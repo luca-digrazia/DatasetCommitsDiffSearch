@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.syntax;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.events.EventCollector;
-import com.google.devtools.build.lib.packages.BazelLibrary;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
@@ -51,30 +49,6 @@ public class EvaluationTest extends EvaluationTestCase {
    */
   protected ModalTestCase newTest(String... skylarkOptions) {
     return new BuildTest(skylarkOptions);
-  }
-
-  @Test
-  public void testExecutionStopsAtFirstError() throws Exception {
-    EventCollector printEvents = new EventCollector(); // for print events
-    StarlarkThread thread =
-        StarlarkThread.builder(mutability)
-            .useDefaultSemantics()
-            .setGlobals(BazelLibrary.GLOBALS) // for print... this should not be necessary
-            .setEventHandler(printEvents)
-            .build();
-    ParserInput input = ParserInput.fromLines("print('hello'); x = 1//0; print('goodbye')");
-    try {
-      StarlarkFile.eval(input, thread);
-      throw new AssertionError("execution succeeded unexpectedly");
-    } catch (EvalException ex) {
-      // ok, division by zero
-    }
-    if (!printEvents.toString().contains("hello")) {
-      throw new AssertionError("first print statement not executed: " + printEvents);
-    }
-    if (printEvents.toString().contains("goodbye")) {
-      throw new AssertionError("first print statement unexpected executed: " + printEvents);
-    }
   }
 
   @Test
@@ -144,21 +118,17 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testSumFunction() throws Exception {
-    BaseFunction sum =
-        new BaseFunction("sum") {
-          @Override
-          public Object call(
-              List<Object> args,
-              Map<String, Object> kwargs,
-              FuncallExpression ast,
-              StarlarkThread thread) {
-            int sum = 0;
-            for (Object arg : args) {
-              sum += (Integer) arg;
-            }
-            return sum;
-          }
-        };
+    BaseFunction sum = new BaseFunction("sum") {
+      @Override
+      public Object call(List<Object> args, Map<String, Object> kwargs,
+          FuncallExpression ast, Environment env) {
+        int sum = 0;
+        for (Object arg : args) {
+          sum += (Integer) arg;
+        }
+        return sum;
+      }
+    };
 
     newTest().update(sum.getName(), sum).testStatement("sum(1, 2, 3, 4, 5, 6)", 21)
         .testStatement("sum", sum).testStatement("sum(a=1, b=2)", 0);
@@ -181,17 +151,15 @@ public class EvaluationTest extends EvaluationTestCase {
   public void testKeywordArgs() throws Exception {
 
     // This function returns the map of keyword arguments passed to it.
-    BaseFunction kwargs =
-        new BaseFunction("kwargs") {
-          @Override
-          public Object call(
-              List<Object> args,
-              final Map<String, Object> kwargs,
-              FuncallExpression ast,
-              StarlarkThread thread) {
-            return SkylarkDict.copyOf(thread, kwargs);
-          }
-        };
+    BaseFunction kwargs = new BaseFunction("kwargs") {
+      @Override
+      public Object call(List<Object> args,
+          final Map<String, Object> kwargs,
+          FuncallExpression ast,
+          Environment env) {
+        return SkylarkDict.copyOf(env, kwargs);
+      }
+    };
 
     newTest()
         .update(kwargs.getName(), kwargs)
@@ -277,7 +245,7 @@ public class EvaluationTest extends EvaluationTestCase {
     // list
     Object x = eval("[1,2] + [3,4]");
     assertThat((Iterable<Object>) x).containsExactly(1, 2, 3, 4).inOrder();
-    assertThat(x).isEqualTo(MutableList.of(thread, 1, 2, 3, 4));
+    assertThat(x).isEqualTo(MutableList.of(env, 1, 2, 3, 4));
     assertThat(EvalUtils.isImmutable(x)).isFalse();
 
     // tuple
@@ -464,26 +432,26 @@ public class EvaluationTest extends EvaluationTestCase {
   @Test
   public void testListConcatenation() throws Exception {
     newTest()
-        .testStatement("[1, 2] + [3, 4]", MutableList.of(thread, 1, 2, 3, 4))
+        .testStatement("[1, 2] + [3, 4]", MutableList.of(env, 1, 2, 3, 4))
         .testStatement("(1, 2) + (3, 4)", Tuple.of(1, 2, 3, 4))
-        .testIfExactError(
-            "unsupported operand type(s) for +: 'list' and 'tuple'", "[1, 2] + (3, 4)")
-        .testIfExactError(
-            "unsupported operand type(s) for +: 'tuple' and 'list'", "(1, 2) + [3, 4]");
+        .testIfExactError("unsupported operand type(s) for +: 'list' and 'tuple'",
+            "[1, 2] + (3, 4)")
+        .testIfExactError("unsupported operand type(s) for +: 'tuple' and 'list'",
+            "(1, 2) + [3, 4]");
   }
 
   @Test
   public void testListMultiply() throws Exception {
     newTest()
-        .testStatement("[1, 2, 3] * 1", MutableList.of(thread, 1, 2, 3))
-        .testStatement("[1, 2] * 2", MutableList.of(thread, 1, 2, 1, 2))
-        .testStatement("[1, 2] * 3", MutableList.of(thread, 1, 2, 1, 2, 1, 2))
-        .testStatement("[1, 2] * 4", MutableList.of(thread, 1, 2, 1, 2, 1, 2, 1, 2))
-        .testStatement("[8] * 5", MutableList.of(thread, 8, 8, 8, 8, 8))
+        .testStatement("[1, 2, 3] * 1", MutableList.of(env, 1, 2, 3))
+        .testStatement("[1, 2] * 2", MutableList.of(env, 1, 2, 1, 2))
+        .testStatement("[1, 2] * 3", MutableList.of(env, 1, 2, 1, 2, 1, 2))
+        .testStatement("[1, 2] * 4", MutableList.of(env, 1, 2, 1, 2, 1, 2, 1, 2))
+        .testStatement("[8] * 5", MutableList.of(env, 8, 8, 8, 8, 8))
         .testStatement("[    ] * 10", MutableList.empty())
         .testStatement("[1, 2] * 0", MutableList.empty())
         .testStatement("[1, 2] * -4", MutableList.empty())
-        .testStatement("2 * [1, 2]", MutableList.of(thread, 1, 2, 1, 2))
+        .testStatement("2 * [1, 2]", MutableList.of(env, 1, 2, 1, 2))
         .testStatement("10 * []", MutableList.empty())
         .testStatement("0 * [1, 2]", MutableList.empty())
         .testStatement("-4 * [1, 2]", MutableList.empty());
@@ -558,7 +526,7 @@ public class EvaluationTest extends EvaluationTestCase {
   public void testListComprehensionOnDictionaryCompositeExpression() throws Exception {
     new BuildTest()
         .setUp("d = {1:'a',2:'b'}", "l = [d[x] for x in d]")
-        .testLookup("l", MutableList.of(thread, "a", "b"));
+        .testLookup("l", MutableList.of(env, "a", "b"));
   }
 
   @Test
