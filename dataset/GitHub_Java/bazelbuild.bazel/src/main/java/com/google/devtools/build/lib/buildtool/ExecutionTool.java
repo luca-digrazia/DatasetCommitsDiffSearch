@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.BuildFailedException;
+import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.LocalHostCapacity;
@@ -124,10 +125,10 @@ public class ExecutionTool {
     this.runtime = env.getRuntime();
     this.request = request;
 
-    try {
-      env.getExecRoot().createDirectoryAndParents();
-    } catch (IOException e) {
-      throw new ExecutorInitException("Execroot creation failed", e);
+    // Create tools before getting the strategies from the modules as some of them need tools to
+    // determine whether the host actually supports certain strategies (e.g. sandboxing).
+    try (SilentCloseable closeable = Profiler.instance().profile("createToolsSymlinks")) {
+      createToolsSymlinks();
     }
 
     ExecutorBuilder builder = new ExecutorBuilder();
@@ -435,6 +436,14 @@ public class ExecutionTool {
     }
   }
 
+  private void createToolsSymlinks() throws ExecutorInitException {
+    try {
+      env.getBlazeWorkspace().getBinTools().setupBuildTools(env.getWorkspaceName());
+    } catch (ExecException e) {
+      throw new ExecutorInitException("Tools symlink creation failed", e);
+    }
+  }
+
   private void createActionLogDirectory() throws ExecutorInitException {
     Path directory = env.getActionConsoleOutputDirectory();
     try {
@@ -625,6 +634,7 @@ public class ExecutionTool {
     resourceMgr.setAvailableResources(ResourceSet.create(
         resources.getMemoryMb(),
         resources.getCpuUsage(),
+        resources.getIoUsage(),
         request.getExecutionOptions().usingLocalTestJobs()
             ? request.getExecutionOptions().localTestJobs : Integer.MAX_VALUE
     ));
