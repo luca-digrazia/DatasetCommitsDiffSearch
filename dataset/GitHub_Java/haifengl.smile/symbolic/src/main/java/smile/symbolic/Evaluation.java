@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2017 Ernest DeFoy
+ * Copyright (c) 2017
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 package smile.symbolic;
 
 /**
+ * <code>Evaluation</code> computes the value of an expression for a particular value.
+ *
  * @author Ernest DeFoy
  */
 public class Evaluation {
@@ -30,9 +32,6 @@ public class Evaluation {
     }
 
     public double evaluate(String expression, double val) throws InvalidExpressionException {
-
-
-
         return 0.0;
     }
 }

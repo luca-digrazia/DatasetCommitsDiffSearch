@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2017 Ernest DeFoy
+ * Copyright (c) 2017
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package smile.symbolic.internal;
 
 /**
+ * Represents the trigonometric function Cosecant.
  * @author Ernest DeFoy
  */
 public class Cosecant extends UnaryNode {
