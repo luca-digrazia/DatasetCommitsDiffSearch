@@ -521,7 +521,7 @@ public class CRF implements SequenceLabeler<double[]> {
          *
          * @param maxLeaves the maximum number of leaf nodes in the tree.
          */
-        public Trainer setMaxNodes(int maxLeaves) {
+        public Trainer setMaximumLeafNodes(int maxLeaves) {
             if (maxLeaves < 2) {
                 throw new IllegalArgumentException("Invalid number of leaf nodes: " + maxLeaves);
             }
@@ -539,7 +539,7 @@ public class CRF implements SequenceLabeler<double[]> {
             return this;
         }
 
-        public Trainer setNumTrees(int iters) {
+        public Trainer setNumIterations(int iters) {
             if (iters < 1) {
                 throw new IllegalArgumentException("Invalid number of iterations: " + iters);
             }

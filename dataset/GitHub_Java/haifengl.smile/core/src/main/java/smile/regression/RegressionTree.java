@@ -422,7 +422,7 @@ public class RegressionTree implements Regression<double[]> {
                 }
             } else {
 
-                List<SplitTask> tasks = new ArrayList<>(mtry);
+                List<SplitTask> tasks = new ArrayList<SplitTask>(mtry);
                 for (int j = 0; j < mtry; j++) {
                     tasks.add(new SplitTask(n, sum, variables[j]));
                 }
@@ -490,13 +490,14 @@ public class RegressionTree implements Regression<double[]> {
          * @param j the attribute to split on.
          */
         public Node findBestSplit(int n, double sum, int j) {
+            int N = x.length;
             Node split = new Node(0.0);
             if (attributes[j].getType() == Attribute.Type.NOMINAL) {
                 int m = ((NominalAttribute) attributes[j]).size();
                 double[] trueSum = new double[m];
                 int[] trueCount = new int[m];
 
-                for (int i = 0; i < x.length; i++) {
+                for (int i = 0; i < N; i++) {
                     if (samples[i] > 0) {
                         double target = samples[i] * y[i];
 
@@ -965,7 +966,7 @@ public class RegressionTree implements Regression<double[]> {
         }
 
         // Priority queue for best-first tree growing.
-        PriorityQueue<TrainNode> nextSplits = new PriorityQueue<>();
+        PriorityQueue<TrainNode> nextSplits = new PriorityQueue<TrainNode>();
 
         int n = 0;
         double sum = 0.0;
@@ -1063,7 +1064,7 @@ public class RegressionTree implements Regression<double[]> {
         importance = new double[numFeatures];
         
         // Priority queue for best-first tree growing.
-        PriorityQueue<SparseBinaryTrainNode> nextSplits = new PriorityQueue<>();
+        PriorityQueue<SparseBinaryTrainNode> nextSplits = new PriorityQueue<SparseBinaryTrainNode>();
 
         int n = 0;
         double sum = 0.0;
