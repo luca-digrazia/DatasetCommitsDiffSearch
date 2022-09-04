@@ -19,10 +19,18 @@
  */
 package org.graylog2.restclient.lib;
 
+import com.google.common.io.Resources;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.FileReader;
+import java.util.Properties;
+
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class Version {
+    private static final Logger log = LoggerFactory.getLogger(Version.class);
 
     /*
      * Following semantic versioning.
@@ -49,23 +57,50 @@ public class Version {
     public static final Version v0_20_2_SNAPSHOT = new Version(0, 20, 2, "snapshot");
 
     public static final Version v0_21_0_SNAPSHOT = new Version(0, 21, 0, "snapshot");
+    public static final Version v0_21_0_BETA1 = new Version(0, 21, 0, "beta1");
+    public static final Version v0_21_0_BETA2 = new Version(0, 21, 0, "beta2");
+    public static final Version v0_21_0_BETA3 = new Version(0, 21, 0, "beta3");
+    public static final Version v0_21_0_BETA4_SNAPSHOT = new Version(0, 21, 0, "beta4-snapshot");
+    public static final Version v0_21_0_BETA4= new Version(0, 21, 0, "beta4");
+    public static final Version v0_21_0_BETA5_SNAPSHOT = new Version(0, 21, 0, "beta5-snapshot");
+    public static final Version v0_21_0_RC_1= new Version(0, 21, 0, "rc.1");
+    public static final Version v0_23_0_SNAPSHOT = new Version(0, 23, 0, "snapshot");
 
-    public static final Version VERSION = v0_21_0_SNAPSHOT;
+    public static final Version VERSION = v0_23_0_SNAPSHOT;
 
     public final int major;
     public final int minor;
     public final int patch;
     public final String additional;
+    private final String commitSha1;
 
     public Version(int major, int minor, int patch) {
-        this(major, minor, patch, null);
+        this(major, minor, patch, null, null);
+    }
+    public Version(int major, int minor, int patch, String additional) {
+        this(major, minor, patch, additional, null);
     }
 
-    public Version(int major, int minor, int patch, String additional) {
+    public Version(int major, int minor, int patch, String additional, String sha1) {
         this.major = major;
         this.minor = minor;
         this.patch = patch;
         this.additional = additional;
+
+        String commitSha = sha1;
+        if (sha1 == null) {
+            // try to read it from git.properties
+            try {
+                final Properties git = new Properties();
+                git.load(new FileReader(Resources.getResource("git.properties").getFile()));
+                commitSha = git.getProperty("git.sha1");
+                commitSha = commitSha.substring(0, 7); // 7 chars is enough usually
+            } catch (Exception e) {
+                log.info("Git commit details are not available, skipping the current sha", e);
+                commitSha = null;
+            }
+        }
+        commitSha1 = commitSha;
     }
 
 
@@ -81,6 +116,10 @@ public class Version {
 
         if (additional != null && !additional.isEmpty()) {
             sb.append("-").append(additional);
+        }
+
+        if (commitSha1 != null) {
+            sb.append(" (").append(commitSha1).append(")");
         }
 
         return sb.toString();
