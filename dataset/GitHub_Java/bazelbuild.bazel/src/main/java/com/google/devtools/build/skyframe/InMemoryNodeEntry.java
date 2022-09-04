@@ -73,7 +73,7 @@ import javax.annotation.Nullable;
 public class InMemoryNodeEntry implements NodeEntry {
 
   /** Actual data stored in this entry when it is done. */
-  protected SkyValue value = null;
+  private SkyValue value = null;
 
   /**
    * The last version of the graph at which this node's value was changed. In {@link #setValue} it
@@ -95,13 +95,13 @@ public class InMemoryNodeEntry implements NodeEntry {
 
   /**
    * This object represents the direct deps of the node, in groups if the {@code SkyFunction}
-   * requested them that way. It contains either the in-progress direct deps, stored as a {@code
-   * GroupedList<SkyKey>} before the node is finished building, or the full direct deps, compressed
-   * in a memory-efficient way (via {@link GroupedList#compress}, after the node is done.
+   * requested them that way. It contains either the in-progress direct deps, stored as a
+   * {@code GroupedList<SkyKey>} before the node is finished building, or the full direct deps,
+   * compressed in a memory-efficient way (via {@link GroupedList#compress}, after the node is done.
    *
    * <p>It is initialized lazily in getTemporaryDirectDeps() to save a little bit more memory.
    */
-  protected Object directDeps = null;
+  private Object directDeps = null;
 
   /**
    * This list stores the reverse dependencies of this node that have been declared so far.
@@ -175,12 +175,8 @@ public class InMemoryNodeEntry implements NodeEntry {
   }
 
   @Override
-  public KeepEdgesPolicy keepEdges() {
-    return KeepEdgesPolicy.ALL;
-  }
-
-  private boolean keepReverseDeps() {
-    return keepEdges() == KeepEdgesPolicy.ALL;
+  public boolean keepEdges() {
+    return true;
   }
 
   @Override
@@ -228,7 +224,7 @@ public class InMemoryNodeEntry implements NodeEntry {
    * added in {@link #addTemporaryDirectDeps}.
    */
   public synchronized GroupedList<SkyKey> getGroupedDirectDeps() {
-    assertKeepDeps();
+    assertKeepEdges();
     Preconditions.checkState(isDone(), "no deps until done. NodeEntry: %s", this);
     return GroupedList.create(directDeps);
   }
@@ -240,7 +236,7 @@ public class InMemoryNodeEntry implements NodeEntry {
     return ValueWithMetadata.getMaybeErrorInfo(value);
   }
 
-  protected DirtyBuildingState getDirtyBuildingState() {
+  private DirtyBuildingState getDirtyBuildingState() {
     return Preconditions.checkNotNull(dirtyBuildingState, "Didn't have state: %s", this);
   }
 
@@ -253,17 +249,19 @@ public class InMemoryNodeEntry implements NodeEntry {
     signaledDeps = NOT_EVALUATING_SENTINEL;
   }
 
-  protected final synchronized Set<SkyKey> setStateFinishedAndReturnReverseDepsToSignal() {
+  protected synchronized Set<SkyKey> setStateFinishedAndReturnReverseDepsToSignal() {
     Set<SkyKey> reverseDepsToSignal =
         ReverseDepsUtility.consolidateDataAndReturnNewElements(this, getOpToStoreBare());
     this.directDeps = getTemporaryDirectDeps().compress();
 
     markDone();
-    postProcessAfterDone();
+
+    if (!keepEdges()) {
+      this.directDeps = null;
+      this.reverseDeps = null;
+    }
     return reverseDepsToSignal;
   }
-
-  protected void postProcessAfterDone() {}
 
   @Override
   public synchronized Set<SkyKey> getInProgressReverseDeps() {
@@ -300,7 +298,7 @@ public class InMemoryNodeEntry implements NodeEntry {
   public synchronized DependencyState addReverseDepAndCheckIfDone(SkyKey reverseDep) {
     if (reverseDep != null) {
       if (isDone()) {
-        if (keepReverseDeps()) {
+        if (keepEdges()) {
           ReverseDepsUtility.addReverseDeps(this, ImmutableList.of(reverseDep));
         }
       } else {
@@ -358,13 +356,7 @@ public class InMemoryNodeEntry implements NodeEntry {
   @Override
   public synchronized DependencyState checkIfDoneForDirtyReverseDep(SkyKey reverseDep) {
     Preconditions.checkNotNull(reverseDep, this);
-    // Note that implementations of InMemoryNodeEntry that have
-    // #keepEdges == KeepEdgesPolicy.JUST_DEPS may override this entire method.
-    Preconditions.checkState(
-        keepEdges() == KeepEdgesPolicy.ALL,
-        "Incremental means keeping edges %s %s",
-        reverseDep,
-        this);
+    Preconditions.checkState(keepEdges(), "%s %s", reverseDep, this);
     if (isDone()) {
       ReverseDepsUtility.checkReverseDep(this, reverseDep);
     } else {
@@ -375,7 +367,7 @@ public class InMemoryNodeEntry implements NodeEntry {
 
   @Override
   public synchronized void removeReverseDep(SkyKey reverseDep) {
-    if (!keepReverseDeps()) {
+    if (!keepEdges()) {
       return;
     }
     if (isDone()) {
@@ -394,14 +386,14 @@ public class InMemoryNodeEntry implements NodeEntry {
 
   @Override
   public synchronized Set<SkyKey> getReverseDepsForDoneEntry() {
-    assertKeepRdeps();
+    assertKeepEdges();
     Preconditions.checkState(isDone(), "Called on not done %s", this);
     return ReverseDepsUtility.getReverseDeps(this);
   }
 
   @Override
   public synchronized Set<SkyKey> getAllReverseDepsForNodeBeingDeleted() {
-    assertKeepRdeps();
+    assertKeepEdges();
     if (!isDone()) {
       // This consolidation loses information about pending reverse deps to signal, but that is
       // unimportant since this node is being deleted.
@@ -437,19 +429,13 @@ public class InMemoryNodeEntry implements NodeEntry {
   }
 
   /** Checks that a caller is not trying to access not-stored graph edges. */
-  private void assertKeepDeps() {
-    Preconditions.checkState(keepEdges() != KeepEdgesPolicy.NONE, "Not keeping deps: %s", this);
-  }
-
-  /** Checks that a caller is not trying to access not-stored graph edges. */
-  private void assertKeepRdeps() {
-    Preconditions.checkState(keepEdges() == KeepEdgesPolicy.ALL, "Not keeping rdeps: %s", this);
+  private void assertKeepEdges() {
+    Preconditions.checkState(keepEdges(), "Graph edges not stored. %s", this);
   }
 
   @Override
   public synchronized MarkedDirtyResult markDirty(boolean isChanged) {
-    // Can't process a dirty node without its deps.
-    assertKeepDeps();
+    assertKeepEdges();
     if (isDone()) {
       dirtyBuildingState =
           DirtyBuildingState.create(isChanged, GroupedList.<SkyKey>create(directDeps), value);
@@ -615,24 +601,21 @@ public class InMemoryNodeEntry implements NodeEntry {
         .toString();
   }
 
-  protected synchronized InMemoryNodeEntry cloneNodeEntry(InMemoryNodeEntry newEntry) {
-    // As this is temporary, for now let's limit to done nodes.
-    Preconditions.checkState(isDone(), "Only done nodes can be copied: %s", this);
-    newEntry.value = value;
-    newEntry.lastChangedVersion = this.lastChangedVersion;
-    newEntry.lastEvaluatedVersion = this.lastEvaluatedVersion;
-    ReverseDepsUtility.addReverseDeps(newEntry, ReverseDepsUtility.getReverseDeps(this));
-    newEntry.directDeps = directDeps;
-    newEntry.dirtyBuildingState = null;
-    return newEntry;
-  }
-
   /**
    * Do not use except in custom evaluator implementations! Added only temporarily.
    *
    * <p>Clones a InMemoryMutableNodeEntry iff it is a done node. Otherwise it fails.
    */
   public synchronized InMemoryNodeEntry cloneNodeEntry() {
-    return cloneNodeEntry(new InMemoryNodeEntry());
+    // As this is temporary, for now let's limit to done nodes.
+    Preconditions.checkState(isDone(), "Only done nodes can be copied: %s", this);
+    InMemoryNodeEntry nodeEntry = new InMemoryNodeEntry();
+    nodeEntry.value = value;
+    nodeEntry.lastChangedVersion = this.lastChangedVersion;
+    nodeEntry.lastEvaluatedVersion = this.lastEvaluatedVersion;
+    ReverseDepsUtility.addReverseDeps(nodeEntry, ReverseDepsUtility.getReverseDeps(this));
+    nodeEntry.directDeps = directDeps;
+    nodeEntry.dirtyBuildingState = null;
+    return nodeEntry;
   }
 }
