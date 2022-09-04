@@ -15,13 +15,9 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.skyframe.AbstractSkyKey;
-import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
@@ -30,27 +26,15 @@ import com.google.devtools.build.skyframe.SkyValue;
 public class BlacklistedPackagePrefixesValue implements SkyValue {
   private final ImmutableSet<PathFragment> patterns;
 
-  @AutoCodec @AutoCodec.VisibleForSerialization
-  public static final BlacklistedPackagePrefixesValue NO_BLACKLIST =
-      new BlacklistedPackagePrefixesValue(ImmutableSet.of());
+  private static final SkyKey BLACKLIST_KEY =
+      LegacySkyKey.create(SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES, "");
 
-  private BlacklistedPackagePrefixesValue(ImmutableSet<PathFragment> patterns) {
+  public BlacklistedPackagePrefixesValue(ImmutableSet<PathFragment> patterns) {
     this.patterns = Preconditions.checkNotNull(patterns);
   }
 
-  @AutoCodec.Instantiator
-  public static BlacklistedPackagePrefixesValue of(ImmutableSet<PathFragment> patterns) {
-    return patterns.isEmpty() ? NO_BLACKLIST : new BlacklistedPackagePrefixesValue(patterns);
-  }
-
-  /** Creates a key from the main repository. */
   public static SkyKey key() {
-    return Key.create(RepositoryName.MAIN);
-  }
-
-  /** Creates a key from the given repository name. */
-  public static SkyKey key(RepositoryName repository) {
-    return Key.create(repository);
+    return BLACKLIST_KEY;
   }
 
   public ImmutableSet<PathFragment> getPatterns() {
@@ -69,26 +53,5 @@ public class BlacklistedPackagePrefixesValue implements SkyValue {
       return this.patterns.equals(other.patterns);
     }
     return false;
-  }
-
-  @AutoCodec.VisibleForSerialization
-  @AutoCodec
-  static class Key extends AbstractSkyKey<RepositoryName> {
-    private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
-
-    private Key(RepositoryName arg) {
-      super(arg);
-    }
-
-    @AutoCodec.VisibleForSerialization
-    @AutoCodec.Instantiator
-    static Key create(RepositoryName arg) {
-      return interner.intern(new Key(arg));
-    }
-
-    @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES;
-    }
   }
 }

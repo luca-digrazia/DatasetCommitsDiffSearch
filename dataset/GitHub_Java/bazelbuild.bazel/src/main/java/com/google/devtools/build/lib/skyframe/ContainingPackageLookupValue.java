@@ -28,7 +28,7 @@ import com.google.devtools.build.skyframe.SkyValue;
  */
 public abstract class ContainingPackageLookupValue implements SkyValue {
 
-  @AutoCodec public static final NoContainingPackage NONE = new NoContainingPackage();
+  public static final NoContainingPackage NONE = NoContainingPackage.INSTANCE;
 
   /** Returns whether there is a containing package. */
   public abstract boolean hasContainingPackage();
@@ -50,7 +50,10 @@ public abstract class ContainingPackageLookupValue implements SkyValue {
   }
 
   /** Value indicating there is no containing package. */
+  @AutoCodec(strategy = AutoCodec.Strategy.SINGLETON)
   public static class NoContainingPackage extends ContainingPackageLookupValue {
+    public static final NoContainingPackage INSTANCE = new NoContainingPackage();
+
     private NoContainingPackage() {}
 
     @Override

@@ -38,17 +38,12 @@ import com.google.devtools.build.skyframe.SkyValue;
  */
 public abstract class PackageLookupValue implements SkyValue {
 
-  @AutoCodec
   public static final NoBuildFilePackageLookupValue NO_BUILD_FILE_VALUE =
-      new NoBuildFilePackageLookupValue();
-
-  @AutoCodec
+      NoBuildFilePackageLookupValue.INSTANCE;
   public static final DeletedPackageLookupValue DELETED_PACKAGE_VALUE =
-      new DeletedPackageLookupValue();
-
-  @AutoCodec
+      DeletedPackageLookupValue.INSTANCE;
   public static final NoRepositoryPackageLookupValue NO_SUCH_REPOSITORY_VALUE =
-      new NoRepositoryPackageLookupValue();
+      NoRepositoryPackageLookupValue.INSTANCE;
 
   enum ErrorReason {
     /** There is no BUILD file. */
@@ -196,7 +191,10 @@ public abstract class PackageLookupValue implements SkyValue {
   }
 
   /** Marker value for no build file found. */
+  @AutoCodec(strategy = AutoCodec.Strategy.SINGLETON)
   public static class NoBuildFilePackageLookupValue extends UnsuccessfulPackageLookupValue {
+    static final NoBuildFilePackageLookupValue INSTANCE = new NoBuildFilePackageLookupValue();
+
     private NoBuildFilePackageLookupValue() {
     }
 
@@ -319,7 +317,10 @@ public abstract class PackageLookupValue implements SkyValue {
   }
 
   /** Marker value for a deleted package. */
+  @AutoCodec(strategy = AutoCodec.Strategy.SINGLETON)
   public static class DeletedPackageLookupValue extends UnsuccessfulPackageLookupValue {
+    static final DeletedPackageLookupValue INSTANCE = new DeletedPackageLookupValue();
+
     private DeletedPackageLookupValue() {
     }
 
@@ -338,7 +339,10 @@ public abstract class PackageLookupValue implements SkyValue {
    * Marker value for repository we could not find. This can happen when looking for a label that
    * specifies a non-existent repository.
    */
+  @AutoCodec(strategy = AutoCodec.Strategy.SINGLETON)
   public static class NoRepositoryPackageLookupValue extends UnsuccessfulPackageLookupValue {
+    static final NoRepositoryPackageLookupValue INSTANCE = new NoRepositoryPackageLookupValue();
+
     private NoRepositoryPackageLookupValue() {}
 
     @Override
