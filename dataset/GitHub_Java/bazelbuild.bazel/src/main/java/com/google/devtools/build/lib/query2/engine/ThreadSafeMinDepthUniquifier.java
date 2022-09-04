@@ -15,13 +15,12 @@ package com.google.devtools.build.lib.query2.engine;
 
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 
-/**
- * Helper for extracting a key of type {@code K} from an element of type {@code T}.
- *
- * <p>Depending on the choice of {@code K}, this enables potential memory optimizations.
- */
+/** Marker interface for a {@link ThreadSafe} {@link MinDepthUniquifier}. */
 @ThreadSafe
-public interface KeyExtractor<T, K> {
-  /** Extracts an unique key that can be used to dedupe the given {@code element}. */
-  K extractKey(T element);
+public interface ThreadSafeMinDepthUniquifier<T> extends MinDepthUniquifier<T> {
+  // There's a natural benign check-then-act race in all concurrent uses of this interface. Thread
+  // T1 may think it's about to be the first one to process an element at a depth no greater than
+  // d1. But before t1 finishes processing the element, Thread T2 may think _it's_ about to be first
+  // one to process an element at a depth no greater than d2. If d2 < d1, then T1's work is probably
+  // wasted.
 }

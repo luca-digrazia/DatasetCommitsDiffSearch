@@ -38,14 +38,19 @@ import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.query2.engine.Callback;
 import com.google.devtools.build.lib.query2.engine.DigraphQueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.MinDepthUniquifier;
+import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
-import com.google.devtools.build.lib.query2.engine.QueryUtil.MinDepthUniquifierImpl;
+import com.google.devtools.build.lib.query2.engine.QueryExpressionEvalListener;
+import com.google.devtools.build.lib.query2.engine.QueryUtil;
+import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllCallback;
+import com.google.devtools.build.lib.query2.engine.QueryUtil.ThreadSafeMinDepthUniquifierImpl;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.UniquifierImpl;
 import com.google.devtools.build.lib.query2.engine.SkyframeRestartQueryException;
-import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
+import com.google.devtools.build.lib.query2.engine.ThreadSafeCallback;
 import com.google.devtools.build.lib.query2.engine.Uniquifier;
+import com.google.devtools.build.lib.query2.engine.VariableContext;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
@@ -58,6 +63,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ForkJoinPool;
 
 /**
  * The environment of a Blaze query. Not thread-safe.
@@ -104,8 +110,10 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       Predicate<Label> labelFilter,
       ExtendedEventHandler eventHandler,
       Set<Setting> settings,
-      Iterable<QueryFunction> extraFunctions) {
-    super(keepGoing, strictScope, labelFilter, eventHandler, settings, extraFunctions);
+      Iterable<QueryFunction> extraFunctions,
+      QueryExpressionEvalListener<Target> evalListener) {
+    super(
+        keepGoing, strictScope, labelFilter, eventHandler, settings, extraFunctions, evalListener);
     this.targetPatternEvaluator = targetPatternEvaluator;
     this.transitivePackageLoader = transitivePackageLoader;
     this.targetProvider = targetProvider;
@@ -117,7 +125,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   @Override
   public DigraphQueryEvalResult<Target> evaluateQuery(
       QueryExpression expr,
-      ThreadSafeOutputFormatterCallback<Target> callback)
+      final OutputFormatterCallback<Target> callback)
           throws QueryException, InterruptedException, IOException {
     eventHandler.resetErrors();
     resolvedTargetPatterns.clear();
@@ -127,19 +135,8 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   @Override
-  public QueryTaskFuture<Void> getTargetsMatchingPattern(
-      QueryExpression owner, String pattern, Callback<Target> callback) {
-    try {
-      getTargetsMatchingPatternImpl(pattern, callback);
-      return immediateSuccessfulFuture(null);
-    } catch (QueryException e) {
-      return immediateFailedFuture(e);
-    } catch (InterruptedException e) {
-      return immediateCancelledFuture();
-    }
-  }
-
-  private void getTargetsMatchingPatternImpl(String pattern, Callback<Target> callback)
+  public void getTargetsMatchingPattern(
+      QueryExpression caller, String pattern, Callback<Target> callback)
       throws QueryException, InterruptedException {
     // We can safely ignore the boolean error flag. The evaluateQuery() method above wraps the
     // entire query computation in an error sensor.
@@ -194,6 +191,15 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       }
     }
     callback.process(result);
+  }
+
+  @Override
+  public void getTargetsMatchingPatternPar(
+      QueryExpression caller,
+      String pattern,
+      ThreadSafeCallback<Target> callback,
+      ForkJoinPool forkJoinPool) throws QueryException, InterruptedException {
+    getTargetsMatchingPattern(caller, pattern, callback);
   }
 
   @Override
@@ -289,13 +295,22 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   @Override
+  public void eval(QueryExpression expr, VariableContext<Target> context, Callback<Target> callback)
+      throws QueryException, InterruptedException {
+    AggregateAllCallback<Target> aggregator = QueryUtil.newAggregateAllCallback();
+    expr.eval(this, context, aggregator);
+    callback.process(aggregator.getResult());
+  }
+
+  @Override
   public Uniquifier<Target> createUniquifier() {
     return new UniquifierImpl<>(TargetKeyExtractor.INSTANCE);
   }
 
   @Override
   public MinDepthUniquifier<Target> createMinDepthUniquifier() {
-    return new MinDepthUniquifierImpl<>(TargetKeyExtractor.INSTANCE, /*concurrencyLevel=*/ 1);
+    return new ThreadSafeMinDepthUniquifierImpl<>(
+        TargetKeyExtractor.INSTANCE, /*concurrencyLevel=*/ 1);
   }
 
   private void preloadTransitiveClosure(Set<Target> targets, int maxDepth)
