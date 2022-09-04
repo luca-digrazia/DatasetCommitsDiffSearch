@@ -21,10 +21,10 @@ import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
 import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
 import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
+import org.graylog2.bindings.providers.ServerObjectMapperProvider;
 import org.graylog2.database.MongoConnectionRule;
 import org.graylog2.filters.blacklist.BlacklistPatternCondition;
 import org.graylog2.filters.blacklist.FilterDescription;
-import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -33,7 +33,7 @@ import org.junit.Test;
 import java.util.Set;
 
 import static com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb.InMemoryMongoRuleBuilder.newInMemoryMongoDbRule;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.*;
 
 public class FilterServiceImplTest {
     @ClassRule
@@ -46,7 +46,7 @@ public class FilterServiceImplTest {
 
     @Before
     public void setUp() throws Exception {
-        final ObjectMapper objectMapper = new ObjectMapperProvider().get();
+        final ObjectMapper objectMapper = new ServerObjectMapperProvider().get();
         this.filterService = new FilterServiceImpl(mongoRule.getMongoConnection(), new MongoJackObjectMapperProvider(objectMapper));
     }
 
@@ -58,6 +58,6 @@ public class FilterServiceImplTest {
 
         final FilterDescription filterDescription = filterDescriptionSet.iterator().next();
         assertThat(filterDescription).isNotNull();
-        assertThat(filterDescription).isInstanceOf(BlacklistPatternCondition.class);
+        assertThat(filterDescription instanceof BlacklistPatternCondition);
     }
 }
