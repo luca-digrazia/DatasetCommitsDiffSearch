@@ -123,8 +123,7 @@ public enum LinkBuildVariables {
       boolean isLegacyFullyStaticLinkingMode,
       boolean isStaticLinkingMode)
       throws EvalException {
-    CcToolchainVariables.Builder buildVariables =
-        new CcToolchainVariables.Builder(ccToolchainProvider.getBuildVariables());
+    CcToolchainVariables.Builder buildVariables = new CcToolchainVariables.Builder();
 
     // symbol counting
     if (symbolCounts != null) {
