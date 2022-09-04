@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,12 +13,20 @@
 // limitations under the License.
 package com.google.devtools.build.lib.pkgcache;
 
-import com.google.devtools.build.lib.events.EventHandler;
+import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.cmdline.RepositoryName;
+import com.google.devtools.build.lib.concurrent.ParallelVisitor.UnusedException;
+import com.google.devtools.build.lib.concurrent.ThreadSafeBatchCallback;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.packages.NoSuchPackageException;
+import com.google.devtools.build.lib.packages.NoSuchTargetException;
+import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.vfs.PathFragment;
-
-import java.util.concurrent.ThreadPoolExecutor;
-
-import javax.annotation.Nullable;
+import com.google.devtools.build.lib.vfs.RootedPath;
+import java.util.Map;
 
 /**
  * Support for resolving {@code package/...} target patterns.
@@ -26,32 +34,100 @@ import javax.annotation.Nullable;
 public interface RecursivePackageProvider extends PackageProvider {
 
   /**
-   * <p>Visits the names of all packages beneath the given directory recursively and concurrently.
+   * Calls the supplied callback with the name of each package under a given directory, as soon as
+   * that package is identified.
    *
-   * <p>Note: This operation needs to stat directories recursively. It could be very expensive when
-   * there is a big tree under the given directory.
+   * <p>Packages yielded by this method and passed into {@link #bulkGetPackages(Iterable)} are
+   * expected to return successful {@link Package} values.
    *
-   * <p>Over a single iteration, package names are unique.
-   *
-   * <p>This method uses the given thread pool to call the observer method, possibly concurrently
-   * (depending on the thread pool). When this method terminates, however, all such threads will
-   * have completed.
-   *
-   * <p>To abort the traversal, call {@link Thread#interrupt()} on the calling thread.
-   *
-   * <p>This method guarantees that all BUILD files it returns correspond to valid package names
-   * that are not marked as deleted within the current build.
-   *
-   * @param eventHandler an eventHandler which should be used to log any errors that occur while
-   *    scanning directories for BUILD files
-   * @param directory a relative, canonical path specifying the directory to search
-   * @param useTopLevelExcludes whether to skip a pre-set list of top level directories
-   * @param visitorPool the thread pool to use to visit packages in parallel
-   * @param observer is called for each path fragment found; thread-safe if the thread pool supports
-   *    multiple parallel threads
-   * @throws InterruptedException if the calling thread was interrupted.
+   * @param results callback invoked <em>from a single thread</em> for every eligible, loaded
+   *     package as it is discovered
+   * @param eventHandler any errors emitted during package lookup and loading for {@code directory}
+   *     and non-excluded directories beneath it will be reported here
+   * @param directory a {@link RootedPath} specifying the directory to search
+   * @param blacklistedSubdirectories a set of {@link PathFragment}s specifying transitive
+   *     subdirectories that have been blacklisted
+   * @param excludedSubdirectories a set of {@link PathFragment}s specifying transitive
    */
-  void visitPackageNamesRecursively(EventHandler eventHandler, PathFragment directory,
-      boolean useTopLevelExcludes, @Nullable ThreadPoolExecutor visitorPool,
-      PathPackageLocator.AcceptsPathFragment observer) throws InterruptedException;
+  void streamPackagesUnderDirectory(
+      ThreadSafeBatchCallback<PackageIdentifier, UnusedException> results,
+      ExtendedEventHandler eventHandler,
+      RepositoryName repository,
+      PathFragment directory,
+      ImmutableSet<PathFragment> blacklistedSubdirectories,
+      ImmutableSet<PathFragment> excludedSubdirectories)
+      throws InterruptedException;
+
+  /**
+   * Returns the {@link Package} corresponding to each Package in "pkgIds". If any of the packages
+   * does not exist (e.g. {@code isPackage(pkgIds)} returns false), throws a {@link
+   * NoSuchPackageException}.
+   *
+   * <p>The returned package may contain lexical/grammatical errors, in which case <code>
+   * pkg.containsErrors() == true</code>. Such packages may be missing some rules. Any rules that
+   * are present may soundly be used for builds, though.
+   *
+   * @param pkgIds an Iterable of PackageIdentifier objects.
+   * @throws NoSuchPackageException if any package could not be found.
+   * @throws InterruptedException if the package loading was interrupted.
+   */
+  Map<PackageIdentifier, Package> bulkGetPackages(Iterable<PackageIdentifier> pkgIds)
+      throws NoSuchPackageException, InterruptedException;
+
+  /**
+   * A {@link RecursivePackageProvider} in terms of a map of pre-fetched packages.
+   *
+   * <p>Note that this class implements neither {@link #streamPackagesUnderDirectory} nor {@link
+   * #bulkGetPackages}, so it can only be used for use cases that do not call either of these
+   * methods. When used for target pattern resolution, it can be used to resolve SINGLE_TARGET and
+   * TARGETS_IN_PACKAGE patterns by pre-fetching the corresponding packages. It can also be used to
+   * resolve PATH_AS_TARGET patterns either by finding the outermost package or by pre-fetching all
+   * possible packages.
+   *
+   * @see com.google.devtools.build.lib.cmdline.TargetPattern.Type
+   */
+  class PackageBackedRecursivePackageProvider implements RecursivePackageProvider {
+    private final Map<PackageIdentifier, Package> packages;
+
+    public PackageBackedRecursivePackageProvider(Map<PackageIdentifier, Package> packages) {
+      this.packages = packages;
+    }
+
+    @Override
+    public Package getPackage(ExtendedEventHandler eventHandler, PackageIdentifier packageName)
+        throws NoSuchPackageException {
+      Package pkg = packages.get(packageName);
+      if (pkg == null) {
+        throw new NoSuchPackageException(packageName, "");
+      }
+      return pkg;
+    }
+
+    @Override
+    public boolean isPackage(ExtendedEventHandler eventHandler, PackageIdentifier packageName) {
+      return packages.containsKey(packageName);
+    }
+
+    @Override
+    public Target getTarget(ExtendedEventHandler eventHandler, Label label)
+        throws NoSuchPackageException, NoSuchTargetException {
+      return getPackage(eventHandler, label.getPackageIdentifier()).getTarget(label.getName());
+    }
+
+    @Override
+    public void streamPackagesUnderDirectory(
+        ThreadSafeBatchCallback<PackageIdentifier, UnusedException> results,
+        ExtendedEventHandler eventHandler,
+        RepositoryName repository,
+        PathFragment directory,
+        ImmutableSet<PathFragment> blacklistedSubdirectories,
+        ImmutableSet<PathFragment> excludedSubdirectories) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Map<PackageIdentifier, Package> bulkGetPackages(Iterable<PackageIdentifier> pkgIds) {
+      throw new UnsupportedOperationException();
+    }
+  }
 }

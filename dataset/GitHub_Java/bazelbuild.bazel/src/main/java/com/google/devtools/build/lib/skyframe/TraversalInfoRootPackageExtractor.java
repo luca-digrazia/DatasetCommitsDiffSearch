@@ -119,8 +119,7 @@ public class TraversalInfoRootPackageExtractor implements RootPackageExtractor {
           processResultsBatchSize,
           minPendingTasks,
           resultBatchSize,
-          PACKAGE_ID_COLLECTING_EXECUTOR,
-          VisitTaskStatusCallback.NULL_INSTANCE);
+          PACKAGE_ID_COLLECTING_EXECUTOR);
       this.eventHandler = eventHandler;
       this.repository = repository;
       this.graph = graph;

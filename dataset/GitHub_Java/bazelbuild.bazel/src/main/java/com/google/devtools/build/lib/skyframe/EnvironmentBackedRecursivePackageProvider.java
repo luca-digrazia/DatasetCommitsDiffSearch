@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.pkgcache.AbstractRecursivePackageProvider;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
+import com.google.devtools.build.lib.pkgcache.RecursivePackageProvider;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
@@ -42,9 +43,9 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * A {@link com.google.devtools.build.lib.pkgcache.RecursivePackageProvider} backed by an {@link
- * Environment}. Its methods may throw {@link MissingDepException} if the package values this
- * depends on haven't been calculated and added to its environment.
+ * A {@link RecursivePackageProvider} backed by an {@link Environment}. Its methods may throw {@link
+ * MissingDepException} if the package values this depends on haven't been calculated and added to
+ * its environment.
  *
  * <p>This implementation never emits events through the {@link ExtendedEventHandler}s passed to its
  * methods. Instead, it emits events through its environment's {@link Environment#getListener()}.
@@ -61,9 +62,8 @@ public final class EnvironmentBackedRecursivePackageProvider
 
   /**
    * Whether any of the calls to {@link #getPackage}, {@link #getTarget}, {@link #bulkGetPackages},
-   * or {@link
-   * com.google.devtools.build.lib.pkgcache.RecursivePackageProvider#streamPackagesUnderDirectory}
-   * encountered a package in error.
+   * or {@link RecursivePackageProvider#streamPackagesUnderDirectory} encountered a package in
+   * error.
    *
    * <p>The client of {@link EnvironmentBackedRecursivePackageProvider} may want to check this. See
    * comments in {@link #getPackage} for details.
@@ -202,7 +202,7 @@ public final class EnvironmentBackedRecursivePackageProvider
         encounteredPackageErrors.set(true);
       }
 
-      for (String packageName : lookup.getPackages().toList()) {
+      for (String packageName : lookup.getPackages()) {
         // TODO(bazel-team): Make RecursivePkgValue return NestedSet<PathFragment> so this transform
         // is unnecessary.
         PathFragment packageNamePathFragment = PathFragment.create(packageName);

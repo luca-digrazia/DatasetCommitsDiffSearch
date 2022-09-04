@@ -55,7 +55,6 @@ public abstract class ParallelVisitor<
   private final int processResultsBatchSize;
   protected final int resultBatchSize;
   private final VisitingTaskExecutor executor;
-  private final VisitTaskStatusCallback visitTaskStatusCallback;
 
   /**
    * A queue to store pending visits. These should be unique wrt {@link
@@ -123,14 +122,12 @@ public abstract class ParallelVisitor<
       int processResultsBatchSize,
       long minPendingTasks,
       int batchCallbackSize,
-      ExecutorService executor,
-      VisitTaskStatusCallback visitTaskStatusCallback) {
+      ExecutorService executor) {
     this.callback = callback;
     this.exceptionClass = exceptionClass;
     this.visitBatchSize = visitBatchSize;
     this.processResultsBatchSize = processResultsBatchSize;
     this.resultBatchSize = batchCallbackSize;
-    this.visitTaskStatusCallback = visitTaskStatusCallback;
     this.executor =
         new VisitingTaskExecutor(executor, PARALLEL_VISITOR_ERROR_CLASSIFIER, batchCallbackSize);
     this.minPendingTasks = minPendingTasks;
@@ -145,22 +142,6 @@ public abstract class ParallelVisitor<
       ExceptionT extends Exception,
       CallbackT extends ThreadSafeBatchCallback<OutputResultT, ExceptionT>> {
     ParallelVisitor<InputT, VisitKeyT, OutputKeyT, OutputResultT, ExceptionT, CallbackT> create();
-  }
-
-  /** A hook for getting notified when a visitation is discovered or completed. */
-  public interface VisitTaskStatusCallback {
-    void onVisitTaskDiscovered();
-
-    void onVisitTaskCompleted();
-
-    VisitTaskStatusCallback NULL_INSTANCE =
-        new VisitTaskStatusCallback() {
-          @Override
-          public void onVisitTaskDiscovered() {}
-
-          @Override
-          public void onVisitTaskCompleted() {}
-        };
   }
 
   protected abstract Iterable<OutputResultT> outputKeysToOutputValues(
@@ -185,7 +166,7 @@ public abstract class ParallelVisitor<
 
   public void visitAndWaitForCompletion(Iterable<InputT> keys)
       throws ExceptionT, InterruptedException {
-    noteAndReturnUniqueVisitationKeys(preprocessInitialVisit(keys)).forEach(this::addToVisitQueue);
+    noteAndReturnUniqueVisitationKeys(preprocessInitialVisit(keys)).forEach(visitQueue::add);
     executor.visitAndWaitForCompletion();
   }
 
@@ -214,11 +195,6 @@ public abstract class ParallelVisitor<
     }
 
     return builder.build();
-  }
-
-  private void addToVisitQueue(VisitKeyT visitKey) {
-    visitQueue.add(visitKey);
-    visitTaskStatusCallback.onVisitTaskDiscovered();
   }
 
   /** A {@link Runnable} which handles {@link ExceptionT} and {@link InterruptedException}. */
@@ -272,10 +248,7 @@ public abstract class ParallelVisitor<
         executor.execute(
             new GetAndProcessUniqueResultsTask(keysToUseForResultBatch, exceptionClass));
       }
-      noteAndReturnUniqueVisitationKeys(visit.keysToVisit)
-          .forEach(ParallelVisitor.this::addToVisitQueue);
-      keysToVisit.forEach(
-          key -> ParallelVisitor.this.visitTaskStatusCallback.onVisitTaskCompleted());
+      noteAndReturnUniqueVisitationKeys(visit.keysToVisit).forEach(visitQueue::add);
     }
   }
 
@@ -328,7 +301,7 @@ public abstract class ParallelVisitor<
 
           Collection<VisitKeyT> pendingKeysToVisit = new ArrayList<>(visitQueue.size());
           visitQueue.drainTo(pendingKeysToVisit);
-          for (Task<?> task : getVisitTasks(pendingKeysToVisit)) {
+          for (Task task : getVisitTasks(pendingKeysToVisit)) {
             execute(task);
           }
         }
