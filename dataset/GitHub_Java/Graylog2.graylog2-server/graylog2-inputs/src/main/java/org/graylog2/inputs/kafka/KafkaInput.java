@@ -60,8 +60,8 @@ public class KafkaInput extends MessageInput {
 
     public static final String NAME = "Kafka Input";
 
-    protected InputHost server;
-    protected Configuration config;
+    private InputHost server;
+    private Configuration config;
     private ConsumerConnector cc;
 
     private boolean stopped = false;
@@ -182,6 +182,7 @@ public class KafkaInput extends MessageInput {
                 "192.168.1.1:2181",
                 "Host and port of the ZooKeeper that is managing your Kafka cluster.",
                 ConfigurationField.Optional.NOT_OPTIONAL
+
         ));
 
         cr.addField(new TextField(
