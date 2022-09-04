@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
-import com.google.devtools.build.lib.runtime.BlazeCommandResult;
 import com.google.devtools.build.lib.runtime.BlazeCommandUtils;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
@@ -48,7 +47,6 @@ import com.google.devtools.common.options.OptionFilterDescriptions;
 import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.OptionsParser.HelpVerbosity;
 import com.google.devtools.common.options.OptionsProvider;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -86,10 +84,11 @@ public final class HelpCommand implements BlazeCommand {
 
     @Option(
       name = "help_verbosity",
+      category = "help",
       defaultValue = "medium",
       converter = Converters.HelpVerbosityConverter.class,
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.TERMINAL_OUTPUT},
+        documentationCategory = OptionDocumentationCategory.LOGGING,
+        effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.TERMINAL_OUTPUT},
       help = "Select the verbosity of the help command."
     )
     public OptionsParser.HelpVerbosity helpVerbosity;
@@ -98,9 +97,10 @@ public final class HelpCommand implements BlazeCommand {
       name = "long",
       abbrev = 'l',
       defaultValue = "null",
+      category = "help",
       expansion = {"--help_verbosity=long"},
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.TERMINAL_OUTPUT},
+        documentationCategory = OptionDocumentationCategory.LOGGING,
+        effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.TERMINAL_OUTPUT},
       help = "Show full description of each option, instead of just its name."
     )
     public Void showLongFormOptions;
@@ -108,19 +108,75 @@ public final class HelpCommand implements BlazeCommand {
     @Option(
       name = "short",
       defaultValue = "null",
+      category = "help",
       expansion = {"--help_verbosity=short"},
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.TERMINAL_OUTPUT},
+        documentationCategory = OptionDocumentationCategory.LOGGING,
+        effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.TERMINAL_OUTPUT},
       help = "Show only the names of the options, not their types or meanings."
     )
     public Void showShortFormOptions;
+
+    @Option(
+      name = "use_new_category_enum",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.LOGGING,
+      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.TERMINAL_OUTPUT},
+      metadataTags = {OptionMetadataTag.EXPERIMENTAL}
+    )
+    public boolean useNewCategoryEnum;
+  }
+
+  /**
+   * Returns a map that maps option categories to descriptive help strings for categories that are
+   * not part of the Bazel core.
+   */
+  @Deprecated
+  private static ImmutableMap<String, String> getDeprecatedOptionCategoriesDescriptions(
+      String name) {
+    ImmutableMap.Builder<String, String> optionCategoriesBuilder = ImmutableMap.builder();
+    optionCategoriesBuilder
+        .put("checking", String.format(
+             "Checking options, which control %s's error checking and/or warnings", name))
+        .put("coverage", String.format(
+             "Options that affect how %s generates code coverage information", name))
+        .put("experimental",
+             "Experimental options, which control experimental (and potentially risky) features")
+        .put("flags",
+             "Flags options, for passing options to other tools")
+        .put("help",
+             "Help options")
+        .put("host jvm startup", String.format(
+            "Options that affect the startup of the %s server's JVM", name))
+        .put("misc",
+             "Miscellaneous options")
+        .put("package loading",
+             "Options that specify how to locate packages")
+        .put("query", String.format(
+            "Options affecting the '%s query' dependency query command", name))
+        .put("run", String.format(
+            "Options specific to '%s run'", name))
+        .put("semantics",
+             "Semantics options, which affect the build commands and/or output file contents")
+        .put("server startup", String.format(
+            "Startup options, which affect the startup of the %s server", name))
+        .put("strategy", String.format(
+            "Strategy options, which affect how %s will execute the build", name))
+        .put("testing", String.format(
+            "Options that affect how %s runs tests", name))
+        .put("verbosity", String.format(
+            "Verbosity options, which control what %s prints", name))
+        .put("version",
+             "Version options, for selecting which version of other tools will be used")
+        .put("what",
+             "Output selection options, for determining what to build/test");
+    return optionCategoriesBuilder.build();
   }
 
   @Override
   public void editOptions(OptionsParser optionsParser) {}
 
   @Override
-  public BlazeCommandResult exec(CommandEnvironment env, OptionsProvider options) {
+  public ExitCode exec(CommandEnvironment env, OptionsProvider options) {
     env.getEventBus().post(new NoBuildEvent());
 
     BlazeRuntime runtime = env.getRuntime();
@@ -129,11 +185,11 @@ public final class HelpCommand implements BlazeCommand {
     if (options.getResidue().isEmpty()) {
       emitBlazeVersionInfo(outErr, runtime.getProductName());
       emitGenericHelp(outErr, runtime);
-      return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+      return ExitCode.SUCCESS;
     }
     if (options.getResidue().size() != 1) {
       env.getReporter().handle(Event.error("You must specify exactly one command"));
-      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
+      return ExitCode.COMMAND_LINE_ERROR;
     }
     String helpSubject = options.getResidue().get(0);
     String productName = runtime.getProductName();
@@ -141,25 +197,34 @@ public final class HelpCommand implements BlazeCommand {
     switch (helpSubject) {
       case "startup_options":
         emitBlazeVersionInfo(outErr, runtime.getProductName());
-        emitStartupOptions(outErr, helpOptions.helpVerbosity, runtime);
-        return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+        emitStartupOptions(
+            outErr,
+            helpOptions.helpVerbosity,
+            runtime,
+            getDeprecatedOptionCategoriesDescriptions(productName),
+            helpOptions.useNewCategoryEnum);
+        return ExitCode.SUCCESS;
       case "target-syntax":
         emitBlazeVersionInfo(outErr, runtime.getProductName());
-        emitTargetSyntaxHelp(outErr, productName);
+        emitTargetSyntaxHelp(
+            outErr,
+            getDeprecatedOptionCategoriesDescriptions(productName),
+            productName,
+            helpOptions.useNewCategoryEnum);
 
-        return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+        return ExitCode.SUCCESS;
       case "info-keys":
         emitInfoKeysHelp(env, outErr);
-        return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+        return ExitCode.SUCCESS;
       case "completion":
         emitCompletionHelp(runtime, outErr);
-        return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+        return ExitCode.SUCCESS;
       case "flags-as-proto":
         emitFlagsAsProtoHelp(runtime, outErr);
-        return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+        return ExitCode.SUCCESS;
       case "everything-as-html":
-        new HtmlEmitter(runtime).emit(outErr);
-        return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+        new HtmlEmitter(runtime, helpOptions.useNewCategoryEnum).emit(outErr);
+        return ExitCode.SUCCESS;
       default: // fall out
     }
 
@@ -171,23 +236,25 @@ public final class HelpCommand implements BlazeCommand {
         // There is a rule with a corresponding name
         outErr.printOut(
             BlazeRuleHelpPrinter.getRuleDoc(helpSubject, runtime.getProductName(), provider));
-        return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+        return ExitCode.SUCCESS;
       } else {
         env.getReporter().handle(Event.error(
             null, "'" + helpSubject + "' is neither a command nor a build rule"));
-        return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
+        return ExitCode.COMMAND_LINE_ERROR;
       }
     }
     emitBlazeVersionInfo(outErr, productName);
     outErr.printOut(
         BlazeCommandUtils.getUsage(
             command.getClass(),
+            getDeprecatedOptionCategoriesDescriptions(productName),
             helpOptions.helpVerbosity,
             runtime.getBlazeModules(),
             runtime.getRuleClassProvider(),
-            productName));
+            productName,
+            helpOptions.useNewCategoryEnum));
 
-    return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+    return ExitCode.SUCCESS;
   }
 
   private void emitBlazeVersionInfo(OutErr outErr, String productName) {
@@ -197,15 +264,21 @@ public final class HelpCommand implements BlazeCommand {
   }
 
   private void emitStartupOptions(
-      OutErr outErr, HelpVerbosity helpVerbosity, BlazeRuntime runtime) {
+      OutErr outErr,
+      OptionsParser.HelpVerbosity helpVerbosity,
+      BlazeRuntime runtime,
+      ImmutableMap<String, String> optionCategories,
+      boolean useNewCategoryEnum) {
     outErr.printOut(
         BlazeCommandUtils.expandHelpTopic(
             "startup_options",
             "resource:startup_options.txt",
             getClass(),
             BlazeCommandUtils.getStartupOptions(runtime.getBlazeModules()),
+            optionCategories,
             helpVerbosity,
-            runtime.getProductName()));
+            runtime.getProductName(),
+            useNewCategoryEnum));
   }
 
   private void emitCompletionHelp(BlazeRuntime runtime, OutErr outErr) {
@@ -306,15 +379,21 @@ public final class HelpCommand implements BlazeCommand {
     return ImmutableSortedMap.copyOf(runtime.getCommandMap());
   }
 
-  private void emitTargetSyntaxHelp(OutErr outErr, String productName) {
+  private void emitTargetSyntaxHelp(
+      OutErr outErr,
+      ImmutableMap<String, String> optionCategories,
+      String productName,
+      boolean useNewCategoryEnum) {
     outErr.printOut(
         BlazeCommandUtils.expandHelpTopic(
             "target-syntax",
             "resource:target-syntax.txt",
             getClass(),
             ImmutableList.<Class<? extends OptionsBase>>of(),
+            optionCategories,
             OptionsParser.HelpVerbosity.MEDIUM,
-            productName));
+            productName,
+            useNewCategoryEnum));
   }
 
   private void emitInfoKeysHelp(CommandEnvironment env, OutErr outErr) {
@@ -361,9 +440,19 @@ public final class HelpCommand implements BlazeCommand {
 
   private static final class HtmlEmitter {
     private final BlazeRuntime runtime;
+    private final ImmutableMap<String, String> deprecatedOptionCategoryDescriptions;
+    private final boolean useNewCategoriesEnum;
 
-    private HtmlEmitter(BlazeRuntime runtime) {
+    private HtmlEmitter(BlazeRuntime runtime, boolean useNewCategoriesEnum) {
       this.runtime = runtime;
+      this.useNewCategoriesEnum = useNewCategoriesEnum;
+      String productName = runtime.getProductName();
+      if (useNewCategoriesEnum) {
+        this.deprecatedOptionCategoryDescriptions = null;
+      } else {
+        this.deprecatedOptionCategoryDescriptions =
+            getDeprecatedOptionCategoriesDescriptions(productName);
+      }
     }
 
     private void emit(OutErr outErr) {
@@ -439,6 +528,7 @@ public final class HelpCommand implements BlazeCommand {
       }
 
       // Describe the tags once, any mentions above should link to these descriptions.
+      if (useNewCategoriesEnum) {
         String productName = runtime.getProductName();
         ImmutableMap<OptionEffectTag, String> effectTagDescriptions =
             OptionFilterDescriptions.getOptionEffectTagDescription(productName);
@@ -476,7 +566,7 @@ public final class HelpCommand implements BlazeCommand {
           }
         }
         result.append("</table>\n");
-
+      }
 
       outErr.printOut(result.toString());
     }
@@ -485,10 +575,18 @@ public final class HelpCommand implements BlazeCommand {
         StringBuilder result, Iterable<Class<? extends OptionsBase>> optionsClasses) {
       OptionsParser parser = OptionsParser.newOptionsParser(optionsClasses);
       String productName = runtime.getProductName();
+      if (useNewCategoriesEnum) {
         result.append(
             parser
                 .describeOptionsHtml(HTML_ESCAPER, productName)
                 .replace("%{product}", productName));
+      } else {
+        result.append(
+            parser
+                .describeOptionsHtmlWithDeprecatedCategories(
+                    deprecatedOptionCategoryDescriptions, HTML_ESCAPER)
+                .replace("%{product}", productName));
+      }
     }
 
     private static String capitalize(String s) {
