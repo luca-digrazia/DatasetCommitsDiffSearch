@@ -37,8 +37,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
-import static com.codahale.metrics.MetricRegistry.name;
-
 
 @Singleton
 public class InputBufferImpl implements InputBuffer {
@@ -98,7 +96,7 @@ public class InputBufferImpl implements InputBuffer {
 
     private ExecutorService executorService(final MetricRegistry metricRegistry) {
         return new InstrumentedExecutorService(Executors.newCachedThreadPool(
-                threadFactory(metricRegistry)), metricRegistry, name(this.getClass(), "executor-service"));
+                threadFactory(metricRegistry)), metricRegistry);
     }
 
     private ThreadFactory threadFactory(MetricRegistry metricRegistry) {
