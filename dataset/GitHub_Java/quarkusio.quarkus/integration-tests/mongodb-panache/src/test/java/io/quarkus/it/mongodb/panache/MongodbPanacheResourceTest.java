@@ -10,9 +10,6 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.List;
-import java.util.Optional;
-
-import javax.inject.Inject;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -24,10 +21,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import io.quarkus.it.mongodb.panache.book.BookDetail;
 import io.quarkus.it.mongodb.panache.person.Person;
-import io.quarkus.it.mongodb.panache.person.PersonRepository;
-import io.quarkus.mongodb.panache.PanacheMongoRepositoryBase;
 import io.quarkus.test.common.QuarkusTestResource;
-import io.quarkus.test.junit.DisabledOnNativeImage;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.RestAssured;
 import io.restassured.common.mapper.TypeRef;
@@ -268,16 +262,6 @@ class MongodbPanacheResourceTest {
         //expected the firstname field to be null as we project on lastname only
         Assertions.assertNull(list.get(0).firstname);
 
-        //rename the Doe
-        RestAssured
-                .given()
-                .queryParam("previousName", "Doe").queryParam("newName", "Dupont")
-                .header("Content-Type", "application/json")
-                .when().post(endpoint + "/rename")
-                .then().statusCode(200);
-        list = get(endpoint + "/search/Dupont").as(LIST_OF_PERSON_TYPE_REF);
-        Assertions.assertEquals(2, list.size());
-
         //count
         Long count = get(endpoint + "/count").as(Long.class);
         Assertions.assertEquals(4, count);
@@ -349,37 +333,5 @@ class MongodbPanacheResourceTest {
     @Test
     public void testBug7415() {
         get("/bugs/7415").then().statusCode(200);
-    }
-
-    @Test
-    public void testMoreEntityFunctionalities() {
-        get("/test/imperative/entity").then().statusCode(200);
-    }
-
-    @Test
-    public void testMoreRepositoryFunctionalities() {
-        get("/test/imperative/repository").then().statusCode(200);
-    }
-
-    @Inject
-    PersonRepository realPersonRepository;
-
-    @DisabledOnNativeImage
-    @Test
-    public void testPanacheRepositoryBridges() {
-        // normal method call
-        Assertions.assertNull(realPersonRepository.findById(0l));
-        // bridge call
-        Assertions.assertNull(((PanacheMongoRepositoryBase) realPersonRepository).findById(0l));
-
-        // normal method call
-        Assertions.assertEquals(Optional.empty(), realPersonRepository.findByIdOptional(0l));
-        // bridge call
-        Assertions.assertEquals(Optional.empty(), ((PanacheMongoRepositoryBase) realPersonRepository).findByIdOptional(0l));
-
-        // normal method call
-        Assertions.assertEquals(false, realPersonRepository.deleteById(0l));
-        // bridge call
-        Assertions.assertEquals(false, ((PanacheMongoRepositoryBase) realPersonRepository).deleteById(0l));
     }
 }

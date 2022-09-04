@@ -25,9 +25,6 @@ final class CommonQueryBinder {
     }
 
     static String escape(Object value) {
-        if (value == null) {
-            return "null";
-        }
         if (Number.class.isAssignableFrom(value.getClass()) || value instanceof Boolean) {
             return value.toString();
         }
