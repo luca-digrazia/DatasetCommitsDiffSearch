@@ -50,8 +50,7 @@ public class TestExecutorBuilder {
   private final FileSystem fileSystem;
   private final BlazeDirectories directories;
   private Reporter reporter = new Reporter(new EventBus());
-  private OptionsParser optionsParser =
-      OptionsParser.builder().optionsClasses(DEFAULT_OPTIONS).build();
+  private OptionsParser optionsParser = OptionsParser.newOptionsParser(DEFAULT_OPTIONS);
   private List<ActionContext> strategies = new ArrayList<>();
   private final Map<String, List<SpawnActionContext>> spawnStrategyMap =
       new TreeMap<>(String.CASE_INSENSITIVE_ORDER);

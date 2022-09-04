@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.standalone;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -44,6 +44,7 @@ import com.google.devtools.build.lib.exec.BlazeExecutor;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
 import com.google.devtools.build.lib.exec.SpawnActionContextMaps;
+import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
 import com.google.devtools.build.lib.exec.local.LocalSpawnRunner;
 import com.google.devtools.build.lib.integration.util.IntegrationMock;
@@ -114,8 +115,7 @@ public class StandaloneSpawnStrategyTest {
             "mock-product-name");
     // This call implicitly symlinks the integration bin tools into the exec root.
     IntegrationMock.get().getIntegrationBinTools(fileSystem, directories);
-    OptionsParser optionsParser =
-        OptionsParser.builder().optionsClasses(ExecutionOptions.class).build();
+    OptionsParser optionsParser = OptionsParser.newOptionsParser(ExecutionOptions.class);
     optionsParser.parse("--verbose_failures");
     LocalExecutionOptions localExecutionOptions = Options.getDefaults(LocalExecutionOptions.class);
 
@@ -141,7 +141,7 @@ public class StandaloneSpawnStrategyTest {
                                 execRoot,
                                 localExecutionOptions,
                                 resourceManager,
-                                (env, unusedBinTools, unusedFallbackTempDir) -> env,
+                                LocalEnvProvider.UNMODIFIED,
                                 BinTools.forIntegrationTesting(
                                     directories, ImmutableList.of())))))),
             ImmutableList.of());
@@ -199,10 +199,14 @@ public class StandaloneSpawnStrategyTest {
 
   @Test
   public void testBinFalseYieldsException() throws Exception {
-    ExecException e = assertThrows(ExecException.class, () -> run(createSpawn(getFalseCommand())));
-    assertWithMessage("got: " + e.getMessage())
-        .that(e.getMessage().startsWith("false failed: error executing command"))
-        .isTrue();
+    try {
+      run(createSpawn(getFalseCommand()));
+      fail();
+    } catch (ExecException e) {
+      assertWithMessage("got: " + e.getMessage())
+          .that(e.getMessage().startsWith("false failed: error executing command"))
+          .isTrue();
+    }
   }
 
   private static String getFalseCommand() {
