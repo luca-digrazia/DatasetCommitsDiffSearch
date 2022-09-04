@@ -163,11 +163,13 @@ public class EActivityProcessor extends AnnotationHelper implements ElementProce
 		// GreenDroid support
 		if (isGreenDroidSupport) {
 			setActionBarContentView(codeModel, holder, new JType[] { codeModel.INT }, new String[] { "layoutResID" });
-			setActionBarContentView(codeModel, holder, new JType[] { viewClass, layoutParamsClass }, new String[] { "view", "params" });
+			setActionBarContentView(codeModel, holder, new JType[] { viewClass, layoutParamsClass }, new String[] {
+					"view", "params" });
 			setActionBarContentView(codeModel, holder, new JType[] { viewClass }, new String[] { "view" });
 		} else {
 			setContentViewMethod(codeModel, holder, new JType[] { codeModel.INT }, new String[] { "layoutResID" });
-			setContentViewMethod(codeModel, holder, new JType[] { viewClass, layoutParamsClass }, new String[] { "view", "params" });
+			setContentViewMethod(codeModel, holder, new JType[] { viewClass, layoutParamsClass }, new String[] {
+					"view", "params" });
 			setContentViewMethod(codeModel, holder, new JType[] { viewClass }, new String[] { "view" });
 		}
 
@@ -215,7 +217,8 @@ public class EActivityProcessor extends AnnotationHelper implements ElementProce
 					JVar constructorContextParam = constructor.param(contextClass, "context");
 					JBlock constructorBody = constructor.body();
 					constructorBody.assign(contextField, constructorContextParam);
-					constructorBody.assign(holder.intentField, _new(intentClass).arg(constructorContextParam).arg(holder.eBean.dotclass()));
+					constructorBody.assign(holder.intentField,
+							_new(intentClass).arg(constructorContextParam).arg(holder.eBean.dotclass()));
 				}
 
 				{
@@ -268,7 +271,8 @@ public class EActivityProcessor extends AnnotationHelper implements ElementProce
 		body.invoke(holder.afterSetContentView);
 	}
 
-	private void setActionBarContentView(JCodeModel codeModel, EBeanHolder holder, JType[] paramTypes, String[] paramNames) {
+	private void setActionBarContentView(JCodeModel codeModel, EBeanHolder holder, JType[] paramTypes,
+			String[] paramNames) {
 		JMethod method = holder.eBean.method(JMod.PUBLIC, codeModel.VOID, "setActionBarContentView");
 		method.annotate(Override.class);
 

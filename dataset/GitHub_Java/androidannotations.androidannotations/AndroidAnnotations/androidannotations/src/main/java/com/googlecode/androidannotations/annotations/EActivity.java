@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -41,10 +41,8 @@ import java.lang.annotation.Target;
  * AndroidAnnotations.
  * 
  */
-@Retention(RetentionPolicy.CLASS)
+@Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.TYPE)
 public @interface EActivity {
-	int value() default ResId.DEFAULT_VALUE;
-
-	String resName() default "";
+	int value() default Id.DEFAULT_VALUE;
 }
