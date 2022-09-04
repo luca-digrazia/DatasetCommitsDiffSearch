@@ -518,8 +518,7 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
 
       byte[] blob = tree.build().toByteArray();
       Digest digest = digestUtil.compute(blob);
-      Chunker chunker =
-          Chunker.builder(digestUtil).setInput(digest, blob).setChunkSize(blob.length).build();
+      Chunker chunker = new Chunker(blob, blob.length, digestUtil);
 
       if (result != null) {
         result
