@@ -1,26 +1,32 @@
 /**
- * This file is part of Graylog2.
+ * The MIT License
+ * Copyright (c) 2012 TORCH GmbH
  *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
 package org.graylog2.shared.initializers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.internal.util.$Nullable;
-import org.glassfish.jersey.jackson.JacksonFeature;
 import org.glassfish.jersey.message.GZipEncoder;
 import org.glassfish.jersey.server.ContainerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
@@ -34,7 +40,6 @@ import org.graylog2.plugin.rest.AnyExceptionClassMapper;
 import org.graylog2.plugin.rest.JacksonPropertyExceptionMapper;
 import org.graylog2.plugin.rest.PluginRestResource;
 import org.graylog2.plugin.rest.WebApplicationExceptionMapper;
-import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
 import org.graylog2.shared.rest.CORSFilter;
 import org.graylog2.shared.rest.PrintModelProcessor;
 import org.jboss.netty.bootstrap.ServerBootstrap;
@@ -72,15 +77,14 @@ import static com.google.common.base.Strings.emptyToNull;
 @Singleton
 public class RestApiService extends AbstractIdleService {
     private static final Logger LOG = LoggerFactory.getLogger(RestApiService.class);
-
     private final BaseConfiguration configuration;
     private final SecurityContextFactory securityContextFactory;
     private final Set<Class<? extends DynamicFeature>> dynamicFeatures;
     private final Set<Class<? extends ContainerResponseFilter>> containerResponseFilters;
     private final Set<Class<? extends ExceptionMapper>> exceptionMappers;
     private final Map<String, Set<PluginRestResource>> pluginRestResources;
-
-    private final ServerBootstrap bootstrap;
+    private final ObjectMapper objectMapper;
+    private ServerBootstrap bootstrap;
 
     @Inject
     public RestApiService(BaseConfiguration configuration,
@@ -90,51 +94,33 @@ public class RestApiService extends AbstractIdleService {
                           Set<Class<? extends ExceptionMapper>> exceptionMappers,
                           Map<String, Set<PluginRestResource>> pluginRestResources,
                           ObjectMapper objectMapper) {
-        this(configuration, securityContextFactory, dynamicFeatures, containerResponseFilters,
-                exceptionMappers, pluginRestResources,
-                Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("restapi-boss-%d").build()),
-                Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("restapi-worker-%d").build()));
-    }
-
-    private RestApiService(final BaseConfiguration configuration,
-                   final SecurityContextFactory securityContextFactory,
-                   final Set<Class<? extends DynamicFeature>> dynamicFeatures,
-                   final Set<Class<? extends ContainerResponseFilter>> containerResponseFilters,
-                   final Set<Class<? extends ExceptionMapper>> exceptionMappers,
-                   final Map<String, Set<PluginRestResource>> pluginRestResources,
-                   final ExecutorService bossExecutor,
-                   final ExecutorService workerExecutor) {
-        this(configuration, securityContextFactory, dynamicFeatures, containerResponseFilters, exceptionMappers, pluginRestResources, buildServerBootStrap(bossExecutor, workerExecutor));
-    }
-
-    private RestApiService(final BaseConfiguration configuration,
-                   final SecurityContextFactory securityContextFactory,
-                   final Set<Class<? extends DynamicFeature>> dynamicFeatures,
-                   final Set<Class<? extends ContainerResponseFilter>> containerResponseFilters,
-                   final Set<Class<? extends ExceptionMapper>> exceptionMappers,
-                   final Map<String, Set<PluginRestResource>> pluginRestResources,
-                   final ServerBootstrap bootstrap) {
         this.configuration = configuration;
         this.securityContextFactory = securityContextFactory;
         this.dynamicFeatures = dynamicFeatures;
         this.containerResponseFilters = containerResponseFilters;
         this.exceptionMappers = exceptionMappers;
         this.pluginRestResources = pluginRestResources;
-        this.bootstrap = bootstrap;
-    }
-
-    private static ServerBootstrap buildServerBootStrap(final ExecutorService bossExecutor, final ExecutorService workerExecutor) {
-        return new ServerBootstrap(new NioServerSocketChannelFactory(bossExecutor, workerExecutor));
+        this.objectMapper = objectMapper;
     }
 
     @Override
     protected void startUp() throws Exception {
-        final NettyContainer jerseyHandler = ContainerFactory.createContainer(NettyContainer.class,
-                buildResourceConfig(
-                        configuration.isRestEnableGzip(),
-                        configuration.isRestEnableCors(),
-                        prefixPluginResources("/plugins", pluginRestResources)));
+        final ExecutorService bossExecutor = Executors.newCachedThreadPool(
+                new ThreadFactoryBuilder()
+                        .setNameFormat("restapi-boss-%d")
+                        .build());
 
+        final ExecutorService workerExecutor = Executors.newCachedThreadPool(
+                new ThreadFactoryBuilder()
+                        .setNameFormat("restapi-worker-%d")
+                        .build());
+
+        bootstrap = new ServerBootstrap(new NioServerSocketChannelFactory(
+                bossExecutor,
+                workerExecutor
+        ));
+
+        final NettyContainer jerseyHandler = ContainerFactory.createContainer(NettyContainer.class, buildResourceConfig());
         if (securityContextFactory != null) {
             LOG.info("Adding security context factory: <{}>", securityContextFactory);
             jerseyHandler.setSecurityContextFactory(securityContextFactory);
@@ -148,7 +134,7 @@ public class RestApiService extends AbstractIdleService {
 
         final File tlsCertFile;
         final File tlsKeyFile;
-        if (configuration.isRestEnableTls() && (configuration.getRestTlsCertFile() == null || configuration.getRestTlsKeyFile() == null)) {
+        if (configuration.getRestTlsCertFile() == null || configuration.getRestTlsKeyFile() == null) {
             final SelfSignedCertificate ssc = new SelfSignedCertificate(configuration.getRestListenUri().getHost());
             tlsCertFile = ssc.certificate();
             tlsKeyFile = ssc.privateKey();
@@ -196,23 +182,13 @@ public class RestApiService extends AbstractIdleService {
         LOG.info("Started REST API at <{}>", configuration.getRestListenUri());
     }
 
-    private ResourceConfig buildResourceConfig(final boolean enableGzip,
-                                               final boolean enableCors,
-                                               final Set<Resource> additionalResources) {
-        ResourceConfig rc = new ResourceConfig()
+    private ResourceConfig buildResourceConfig() {
+        final ResourceConfig rc = new ResourceConfig()
                 .property(NettyContainer.PROPERTY_BASE_URI, configuration.getRestListenUri())
                 .registerClasses(
                         JacksonPropertyExceptionMapper.class,
                         AnyExceptionClassMapper.class,
-                        WebApplicationExceptionMapper.class)
-                .register(ObjectMapperProvider.class)
-                .register(JacksonFeature.class)
-                .registerFinder(new PackageNamesScanner(new String[]{
-                        "org.graylog2.rest.resources",
-                        "org.graylog2.radio.rest.resources",
-                        "org.graylog2.shared.rest.resources"
-                }, true))
-                .registerResources(additionalResources);
+                        WebApplicationExceptionMapper.class);
 
         for (Class<? extends ExceptionMapper> exceptionMapper : exceptionMappers) {
             rc.registerClasses(exceptionMapper);
@@ -226,14 +202,24 @@ public class RestApiService extends AbstractIdleService {
             rc.registerClasses(responseFilter);
         }
 
-        if (enableGzip) {
-            EncodingFilter.enableFor(rc, GZipEncoder.class);
+        rc.register(new JacksonJsonProvider(objectMapper));
+        rc.registerFinder(new PackageNamesScanner(new String[]{
+                "org.graylog2.rest.resources",
+                "org.graylog2.radio.rest.resources",
+                "org.graylog2.shared.rest.resources"},
+                true));
+
+        if (configuration.isRestEnableGzip()) {
+            LOG.info("Enabling GZip for REST API");
+            rc.registerClasses(GZipEncoder.class, EncodingFilter.class);
         }
 
-        if (enableCors) {
+        if (configuration.isRestEnableCors()) {
             LOG.info("Enabling CORS for REST API");
             rc.register(CORSFilter.class);
         }
+
+        rc.registerResources(prefixPluginResources("/plugins", pluginRestResources));
 
         if (LOG.isDebugEnabled()) {
             rc.register(PrintModelProcessor.class);
