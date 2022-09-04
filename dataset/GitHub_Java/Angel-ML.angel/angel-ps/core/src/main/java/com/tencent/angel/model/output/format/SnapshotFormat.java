@@ -49,11 +49,9 @@ import java.util.*;
 public class SnapshotFormat extends MatrixFormatImpl {
   private final static Log LOG = LogFactory.getLog(RowFormat.class);
 
-
   static enum SaveType {
     DENSE(0), SPARSE(1);
     public static Map<Integer, SaveType> typeIdToTypeMap;
-
     static {
       typeIdToTypeMap = new HashMap<Integer, SaveType>();
       typeIdToTypeMap.put(DENSE.typeId, DENSE);
@@ -108,7 +106,7 @@ public class SnapshotFormat extends MatrixFormatImpl {
       if (row != null) {
         rowMeta.setElementNum(row.size());
         rowMeta.setOffset(dataOutputStream.getPos());
-        if (row.isDense()) {
+        if(row.isDense()) {
           rowMeta.setSaveType(SaveType.DENSE.getTypeId());
         } else {
           rowMeta.setSaveType(SaveType.SPARSE.getTypeId());
@@ -131,8 +129,7 @@ public class SnapshotFormat extends MatrixFormatImpl {
    * @param out         output stream
    * @throws IOException
    */
-  public void save(ServerRow row, PSMatrixSaveContext saveContext, MatrixPartitionMeta meta,
-    DataOutputStream out) throws IOException {
+  public void save(ServerRow row, PSMatrixSaveContext saveContext, MatrixPartitionMeta meta, DataOutputStream out) throws IOException {
     if (saveContext.cloneFirst()) {
       row = row.clone();
     }
@@ -222,8 +219,8 @@ public class SnapshotFormat extends MatrixFormatImpl {
     }
   }
 
-  private void save(ServerIntFloatRow row, PSMatrixSaveContext saveContext,
-    MatrixPartitionMeta meta, DataOutputStream out) throws IOException {
+  private void save(ServerIntFloatRow row, PSMatrixSaveContext saveContext, MatrixPartitionMeta meta,
+    DataOutputStream out) throws IOException {
     int startCol = (int) meta.getStartCol();
     IntFloatVector vector = (IntFloatVector) row.getSplit();
     if (vector.isDense()) {
@@ -252,8 +249,8 @@ public class SnapshotFormat extends MatrixFormatImpl {
     }
   }
 
-  private void save(ServerIntDoubleRow row, PSMatrixSaveContext saveContext,
-    MatrixPartitionMeta meta, DataOutputStream out) throws IOException {
+  private void save(ServerIntDoubleRow row, PSMatrixSaveContext saveContext, MatrixPartitionMeta meta,
+    DataOutputStream out) throws IOException {
     int startCol = (int) meta.getStartCol();
     IntDoubleVector vector = (IntDoubleVector) row.getSplit();
     if (vector.isDense()) {
@@ -496,8 +493,8 @@ public class SnapshotFormat extends MatrixFormatImpl {
     }
   }
 
-  private void save(ServerLongLongRow row, PSMatrixSaveContext saveContext,
-    MatrixPartitionMeta meta, DataOutputStream out) throws IOException {
+  private void save(ServerLongLongRow row, PSMatrixSaveContext saveContext, MatrixPartitionMeta meta,
+    DataOutputStream out) throws IOException {
     long startCol = meta.getStartCol();
     if (row.getSplit() instanceof IntLongVector) {
       IntLongVector vector = (IntLongVector) row.getSplit();
@@ -547,18 +544,18 @@ public class SnapshotFormat extends MatrixFormatImpl {
     }
   }
 
-  private void load(ServerIntFloatRow row, PSMatrixLoadContext loadContext,
-    MatrixPartitionMeta meta, DataInputStream in) throws IOException {
+  private void load(ServerIntFloatRow row, PSMatrixLoadContext loadContext, MatrixPartitionMeta meta,
+    DataInputStream in) throws IOException {
     RowPartitionMeta rowMeta = meta.getRowMeta(row.getRowId());
     int elemNum = rowMeta.getElementNum();
     SaveType saveType = SaveType.valueOf(rowMeta.getSaveType());
-    int startCol = (int) meta.getStartCol();
-    if (saveType == SaveType.DENSE) {
-      for (int i = 0; i < elemNum; i++) {
+    int startCol = (int)meta.getStartCol();
+    if(saveType == SaveType.DENSE) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(i + startCol, in.readFloat());
       }
     } else {
-      for (int i = 0; i < elemNum; i++) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(in.readInt(), in.readFloat());
       }
     }
@@ -569,13 +566,13 @@ public class SnapshotFormat extends MatrixFormatImpl {
     RowPartitionMeta rowMeta = meta.getRowMeta(row.getRowId());
     int elemNum = rowMeta.getElementNum();
     SaveType saveType = SaveType.valueOf(rowMeta.getSaveType());
-    int startCol = (int) meta.getStartCol();
-    if (saveType == SaveType.DENSE) {
-      for (int i = 0; i < elemNum; i++) {
+    int startCol = (int)meta.getStartCol();
+    if(saveType == SaveType.DENSE) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(i + startCol, in.readDouble());
       }
     } else {
-      for (int i = 0; i < elemNum; i++) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(in.readInt(), in.readDouble());
       }
     }
@@ -586,13 +583,13 @@ public class SnapshotFormat extends MatrixFormatImpl {
     RowPartitionMeta rowMeta = meta.getRowMeta(row.getRowId());
     int elemNum = rowMeta.getElementNum();
     SaveType saveType = SaveType.valueOf(rowMeta.getSaveType());
-    int startCol = (int) meta.getStartCol();
-    if (saveType == SaveType.DENSE) {
-      for (int i = 0; i < elemNum; i++) {
+    int startCol = (int)meta.getStartCol();
+    if(saveType == SaveType.DENSE) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(i + startCol, in.readInt());
       }
     } else {
-      for (int i = 0; i < elemNum; i++) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(in.readInt(), in.readInt());
       }
     }
@@ -603,13 +600,13 @@ public class SnapshotFormat extends MatrixFormatImpl {
     RowPartitionMeta rowMeta = meta.getRowMeta(row.getRowId());
     int elemNum = rowMeta.getElementNum();
     SaveType saveType = SaveType.valueOf(rowMeta.getSaveType());
-    int startCol = (int) meta.getStartCol();
-    if (saveType == SaveType.DENSE) {
-      for (int i = 0; i < elemNum; i++) {
+    int startCol = (int)meta.getStartCol();
+    if(saveType == SaveType.DENSE) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(i + startCol, in.readLong());
       }
     } else {
-      for (int i = 0; i < elemNum; i++) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(in.readInt(), in.readLong());
       }
     }
@@ -621,12 +618,12 @@ public class SnapshotFormat extends MatrixFormatImpl {
     int elemNum = rowMeta.getElementNum();
     SaveType saveType = SaveType.valueOf(rowMeta.getSaveType());
     long startCol = meta.getStartCol();
-    if (saveType == SaveType.DENSE) {
-      for (int i = 0; i < elemNum; i++) {
+    if(saveType == SaveType.DENSE) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(i + startCol, in.readFloat());
       }
     } else {
-      for (int i = 0; i < elemNum; i++) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(in.readLong(), in.readFloat());
       }
     }
@@ -638,12 +635,12 @@ public class SnapshotFormat extends MatrixFormatImpl {
     int elemNum = rowMeta.getElementNum();
     SaveType saveType = SaveType.valueOf(rowMeta.getSaveType());
     long startCol = meta.getStartCol();
-    if (saveType == SaveType.DENSE) {
-      for (int i = 0; i < elemNum; i++) {
+    if(saveType == SaveType.DENSE) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(i + startCol, in.readDouble());
       }
     } else {
-      for (int i = 0; i < elemNum; i++) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(in.readLong(), in.readDouble());
       }
     }
@@ -655,29 +652,29 @@ public class SnapshotFormat extends MatrixFormatImpl {
     int elemNum = rowMeta.getElementNum();
     SaveType saveType = SaveType.valueOf(rowMeta.getSaveType());
     long startCol = meta.getStartCol();
-    if (saveType == SaveType.DENSE) {
-      for (int i = 0; i < elemNum; i++) {
+    if(saveType == SaveType.DENSE) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(i + startCol, in.readInt());
       }
     } else {
-      for (int i = 0; i < elemNum; i++) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(in.readLong(), in.readInt());
       }
     }
   }
 
-  private void load(ServerLongLongRow row, PSMatrixLoadContext loadContext,
-    MatrixPartitionMeta meta, DataInputStream in) throws IOException {
+  private void load(ServerLongLongRow row, PSMatrixLoadContext loadContext, MatrixPartitionMeta meta,
+    DataInputStream in) throws IOException {
     RowPartitionMeta rowMeta = meta.getRowMeta(row.getRowId());
     int elemNum = rowMeta.getElementNum();
     SaveType saveType = SaveType.valueOf(rowMeta.getSaveType());
     long startCol = meta.getStartCol();
-    if (saveType == SaveType.DENSE) {
-      for (int i = 0; i < elemNum; i++) {
+    if(saveType == SaveType.DENSE) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(i + startCol, in.readLong());
       }
     } else {
-      for (int i = 0; i < elemNum; i++) {
+      for(int i = 0; i < elemNum; i++) {
         row.set(in.readLong(), in.readLong());
       }
     }
