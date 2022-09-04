@@ -44,8 +44,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
@@ -62,39 +62,30 @@ import java.util.regex.Pattern;
 public final class UnixGlob {
   private UnixGlob() {}
 
-  private static List<Path> globInternal(
-      Path base,
-      Collection<String> patterns,
+  private static List<Path> globInternal(Path base, Collection<String> patterns,
       boolean excludeDirectories,
       Predicate<Path> dirPred,
       FilesystemCalls syscalls,
-      Executor executor)
+      ThreadPoolExecutor threadPool)
       throws IOException, InterruptedException {
-    GlobVisitor visitor = new GlobVisitor(executor);
+    GlobVisitor visitor = new GlobVisitor(threadPool);
     return visitor.glob(base, patterns, excludeDirectories, dirPred, syscalls);
   }
 
-  private static List<Path> globInternalUninterruptible(
-      Path base,
-      Collection<String> patterns,
-      boolean excludeDirectories,
-      Predicate<Path> dirPred,
-      FilesystemCalls syscalls,
-      Executor executor)
-      throws IOException {
-    GlobVisitor visitor = new GlobVisitor(executor);
+  private static List<Path> globInternalUninterruptible(Path base, Collection<String> patterns,
+      boolean excludeDirectories, Predicate<Path> dirPred, FilesystemCalls syscalls,
+      ThreadPoolExecutor threadPool) throws IOException {
+    GlobVisitor visitor = new GlobVisitor(threadPool);
     return visitor.globUninterruptible(base, patterns, excludeDirectories, dirPred, syscalls);
   }
 
   private static long globInternalAndReturnNumGlobTasksForTesting(
-      Path base,
-      Collection<String> patterns,
+      Path base, Collection<String> patterns,
       boolean excludeDirectories,
       Predicate<Path> dirPred,
       FilesystemCalls syscalls,
-      Executor executor)
-      throws IOException, InterruptedException {
-    GlobVisitor visitor = new GlobVisitor(executor);
+      ThreadPoolExecutor threadPool) throws IOException, InterruptedException {
+    GlobVisitor visitor = new GlobVisitor(threadPool);
     visitor.glob(base, patterns, excludeDirectories, dirPred, syscalls);
     return visitor.getNumGlobTasksForTesting();
   }
@@ -105,9 +96,9 @@ public final class UnixGlob {
       boolean excludeDirectories,
       Predicate<Path> dirPred,
       FilesystemCalls syscalls,
-      Executor executor) {
-    Preconditions.checkNotNull(executor, "%s %s", base, patterns);
-    return new GlobVisitor(executor)
+      ThreadPoolExecutor threadPool) {
+    Preconditions.checkNotNull(threadPool, "%s %s", base, patterns);
+    return new GlobVisitor(threadPool)
         .globAsync(base, patterns, excludeDirectories, dirPred, syscalls);
   }
 
@@ -298,7 +289,7 @@ public final class UnixGlob {
     private List<String> patterns;
     private boolean excludeDirectories;
     private Predicate<Path> pathFilter;
-    private Executor executor;
+    private ThreadPoolExecutor threadPool;
     private AtomicReference<? extends FilesystemCalls> syscalls =
         new AtomicReference<>(DEFAULT_SYSCALLS);
 
@@ -360,12 +351,13 @@ public final class UnixGlob {
       return this;
     }
 
+
     /**
-     * Sets the executor to use for parallel glob evaluation. If unset, evaluation is done
-     * in-thread.
+     * Sets the threadpool to use for parallel glob evaluation.
+     * If unset, evaluation is done in-thread.
      */
-    public Builder setExecutor(Executor pool) {
-      this.executor = pool;
+    public Builder setThreadPool(ThreadPoolExecutor pool) {
+      this.threadPool = pool;
       return this;
     }
 
@@ -384,8 +376,8 @@ public final class UnixGlob {
      * Executes the glob.
      */
     public List<Path> glob() throws IOException {
-      return globInternalUninterruptible(
-          base, patterns, excludeDirectories, pathFilter, syscalls.get(), executor);
+      return globInternalUninterruptible(base, patterns, excludeDirectories, pathFilter,
+          syscalls.get(), threadPool);
     }
 
     /**
@@ -394,23 +386,29 @@ public final class UnixGlob {
      * @throws InterruptedException if the thread is interrupted.
      */
     public List<Path> globInterruptible() throws IOException, InterruptedException {
-      return globInternal(base, patterns, excludeDirectories, pathFilter, syscalls.get(), executor);
+      return globInternal(base, patterns, excludeDirectories, pathFilter, syscalls.get(),
+          threadPool);
     }
 
     @VisibleForTesting
     public long globInterruptibleAndReturnNumGlobTasksForTesting()
         throws IOException, InterruptedException {
-      return globInternalAndReturnNumGlobTasksForTesting(
-          base, patterns, excludeDirectories, pathFilter, syscalls.get(), executor);
+      return globInternalAndReturnNumGlobTasksForTesting(base, patterns, excludeDirectories,
+          pathFilter, syscalls.get(), threadPool);
     }
 
     /**
-     * Executes the glob asynchronously. {@link #setExecutor} must have been called already with a
+     * Executes the glob asynchronously. {@link #setThreadPool} must have been called already with a
      * non-null argument.
      */
     public Future<List<Path>> globAsync() {
       return globAsyncInternal(
-          base, patterns, excludeDirectories, pathFilter, syscalls.get(), executor);
+          base,
+          patterns,
+          excludeDirectories,
+          pathFilter,
+          syscalls.get(),
+          threadPool);
     }
   }
 
@@ -460,7 +458,7 @@ public final class UnixGlob {
     private final ConcurrentHashMap<String, Pattern> cache = new ConcurrentHashMap<>();
 
     private final GlobFuture result;
-    private final Executor executor;
+    private final ThreadPoolExecutor executor;
     private final AtomicLong totalOps = new AtomicLong(0);
     private final AtomicLong pendingOps = new AtomicLong(0);
     private final AtomicReference<IOException> ioException = new AtomicReference<>();
@@ -468,7 +466,7 @@ public final class UnixGlob {
     private final AtomicReference<Error> error = new AtomicReference<>();
     private volatile boolean canceled = false;
 
-    GlobVisitor(Executor executor) {
+    GlobVisitor(ThreadPoolExecutor executor) {
       this.executor = executor;
       this.result = new GlobFuture(this);
     }

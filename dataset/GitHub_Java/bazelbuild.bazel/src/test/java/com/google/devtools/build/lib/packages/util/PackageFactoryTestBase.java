@@ -117,8 +117,7 @@ public abstract class PackageFactoryTestBase {
             null,
             TestUtils.getPool(),
             -1);
-    assertThat(globCache.globUnsorted(include, exclude, false, true))
-        .containsExactlyElementsIn(expected);
+    assertThat(globCache.globUnsorted(include, exclude, false)).containsExactlyElementsIn(expected);
   }
 
   @Before
