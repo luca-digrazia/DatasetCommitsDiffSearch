@@ -59,7 +59,6 @@ import io.quarkus.bootstrap.runner.SerializedApplication;
 import io.quarkus.bootstrap.util.IoUtils;
 import io.quarkus.bootstrap.util.ZipUtils;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.AdditionalApplicationArchiveBuildItem;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.ApplicationInfoBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
@@ -139,7 +138,6 @@ public class JarResultBuildStep {
     public static final String APP = "app";
     public static final String QUARKUS = "quarkus";
     public static final String DEFAULT_FAST_JAR_DIRECTORY_NAME = "quarkus-app";
-    public static final String RENAMED_JAR_EXTENSION = ".jar.original";
 
     @BuildStep
     OutputTargetBuildItem outputTarget(BuildSystemTargetBuildItem bst, PackageConfig packageConfig) {
@@ -170,17 +168,10 @@ public class JarResultBuildStep {
             List<GeneratedResourceBuildItem> generatedResources,
             List<UberJarRequiredBuildItem> uberJarRequired,
             QuarkusBuildCloseablesBuildItem closeablesBuildItem,
-            List<AdditionalApplicationArchiveBuildItem> additionalApplicationArchiveBuildItems,
             MainClassBuildItem mainClassBuildItem, Optional<AppCDSRequestedBuildItem> appCDS) throws Exception {
 
         if (appCDS.isPresent()) {
             handleAppCDSSupportFileGeneration(transformedClasses, generatedClasses, appCDS.get());
-        }
-        if (!(packageConfig.type.equalsIgnoreCase(PackageConfig.JAR) ||
-                packageConfig.type.equalsIgnoreCase(PackageConfig.UBER_JAR))
-                && packageConfig.uberJar) {
-            throw new RuntimeException(
-                    "Cannot set quarkus.package.uber-jar=true and quarkus.package.type, if you want an uber-jar set quarkus.package.type=uber-jar.");
         }
 
         if (!uberJarRequired.isEmpty() || packageConfig.uberJar
@@ -194,8 +185,7 @@ public class JarResultBuildStep {
                     packageConfig, applicationInfo, generatedClasses, generatedResources, mainClassBuildItem);
         } else {
             return buildThinJar(curateOutcomeBuildItem, outputTargetBuildItem, transformedClasses, applicationArchivesBuildItem,
-                    packageConfig, applicationInfo, generatedClasses, generatedResources,
-                    additionalApplicationArchiveBuildItems, mainClassBuildItem);
+                    packageConfig, applicationInfo, generatedClasses, generatedResources, mainClassBuildItem);
         }
     }
 
@@ -258,7 +248,7 @@ public class JarResultBuildStep {
         final Path originalJar;
         if (Files.exists(standardJar)) {
             originalJar = outputTargetBuildItem.getOutputDirectory()
-                    .resolve(outputTargetBuildItem.getBaseName() + RENAMED_JAR_EXTENSION);
+                    .resolve(outputTargetBuildItem.getBaseName() + ".jar.original");
         } else {
             originalJar = null;
         }
@@ -432,7 +422,6 @@ public class JarResultBuildStep {
             ApplicationInfoBuildItem applicationInfo,
             List<GeneratedClassBuildItem> generatedClasses,
             List<GeneratedResourceBuildItem> generatedResources,
-            List<AdditionalApplicationArchiveBuildItem> additionalApplicationArchiveBuildItems,
             MainClassBuildItem mainClassBuildItem) throws Exception {
 
         boolean rebuild = outputTargetBuildItem.isRebuild();
@@ -454,10 +443,6 @@ public class JarResultBuildStep {
 
         Path appDir = buildDir.resolve(APP);
         Path quarkus = buildDir.resolve(QUARKUS);
-        Path userProviders = null;
-        if (packageConfig.userProvidersDirectory.isPresent()) {
-            userProviders = buildDir.resolve(packageConfig.userProvidersDirectory.get());
-        }
         if (!rebuild) {
             IoUtils.recursiveDelete(buildDir);
             Files.createDirectories(buildDir);
@@ -465,12 +450,6 @@ public class JarResultBuildStep {
             Files.createDirectories(baseLib);
             Files.createDirectories(appDir);
             Files.createDirectories(quarkus);
-            if (userProviders != null) {
-                Files.createDirectories(userProviders);
-                //we add this dir so that it can be copied into container images if required
-                //and will still be copied even if empty
-                Files.createFile(userProviders.resolve(".keep"));
-            }
         } else {
             IoUtils.recursiveDelete(quarkus);
             Files.createDirectories(quarkus);
@@ -545,16 +524,6 @@ public class JarResultBuildStep {
                 bootJars.addAll(appDep.getArtifact().getPaths().toList());
             }
         }
-        for (AdditionalApplicationArchiveBuildItem i : additionalApplicationArchiveBuildItems) {
-            for (Path path : i.getPaths()) {
-                if (!path.getParent().equals(userProviders)) {
-                    throw new RuntimeException(
-                            "Additional application archives can only be provided from the user providers directory. " + path
-                                    + " is not present in " + userProviders);
-                }
-                jars.add(path);
-            }
-        }
         Path appInfo = buildDir.resolve(QuarkusEntryPoint.QUARKUS_APPLICATION_DAT);
         try (OutputStream out = Files.newOutputStream(appInfo)) {
             SerializedApplication.write(out, mainClassBuildItem.getClassName(), buildDir, jars, bootJars);
@@ -590,7 +559,7 @@ public class JarResultBuildStep {
                 //first the app model
                 PersistentAppModel model = new PersistentAppModel(outputTargetBuildItem.getBaseName(), relativePaths,
                         curateOutcomeBuildItem.getEffectiveModel(),
-                        packageConfig.userProvidersDirectory.orElse(null), buildDir.relativize(runnerJar).toString());
+                        buildDir.relativize(runnerJar).toString());
                 Path appmodelDat = deploymentLib.resolve(APPMODEL_DAT);
                 try (OutputStream out = Files.newOutputStream(appmodelDat)) {
                     ObjectOutputStream obj = new ObjectOutputStream(out);
@@ -616,9 +585,6 @@ public class JarResultBuildStep {
                     outputTargetBuildItem.getBuildSystemProperties().store(out, "The original build properties");
                 }
             }
-        } else {
-            //if it is a rebuild we might have classes
-
         }
         try (Stream<Path> files = Files.walk(buildDir)) {
             files.forEach(new Consumer<Path>() {
