@@ -20,7 +20,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.io.ByteStreams;
 import com.google.common.io.Files;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -33,9 +32,7 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.lang.reflect.Method;
 import java.net.URL;
-import java.net.URLClassLoader;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -77,54 +74,18 @@ public class JacocoCoverageRunner {
   private final File reportFile;
   private final boolean isNewCoverageImplementation;
   private ExecFileLoader execFileLoader;
-  private HashMap<String, byte[]> uninstrumentedClasses;
-  private ImmutableSet<String> pathsForCoverage = ImmutableSet.of();
 
   public JacocoCoverageRunner(InputStream jacocoExec, String reportPath, File... metadataJars) {
     this(false, jacocoExec, reportPath, metadataJars);
   }
 
-  /**
-   * Creates a new coverage runner extracting the classes jars from a wrapper file. Uses
-   * javaRunfilesRoot to compute the absolute path of the jars inside the wrapper file.
-   */
-  public JacocoCoverageRunner(
-      boolean isNewCoverageImplementation,
-      InputStream jacocoExec,
-      String reportPath,
-      File wrapperFile,
-      String javaRunfilesRoot)
-      throws IOException {
+  private JacocoCoverageRunner(boolean isNewCoverageImplementation,
+      InputStream jacocoExec, String reportPath, File... metadataJars) {
     executionData = jacocoExec;
     reportFile = new File(reportPath);
-    this.isNewCoverageImplementation = isNewCoverageImplementation;
-    this.classesJars = getFilesFromFileList(wrapperFile, javaRunfilesRoot);
-  }
 
-  public JacocoCoverageRunner(
-      boolean isNewCoverageImplementation,
-      InputStream jacocoExec,
-      String reportPath,
-      File... metadataJars) {
-    executionData = jacocoExec;
-    reportFile = new File(reportPath);
-    this.isNewCoverageImplementation = isNewCoverageImplementation;
     this.classesJars = ImmutableList.copyOf(metadataJars);
-  }
-
-  public JacocoCoverageRunner(
-      boolean isNewCoverageImplementation,
-      InputStream jacocoExec,
-      String reportPath,
-      HashMap<String, byte[]> uninstrumentedClasses,
-      ImmutableSet<String> pathsForCoverage,
-      File... metadataJars) {
-    executionData = jacocoExec;
-    reportFile = new File(reportPath);
     this.isNewCoverageImplementation = isNewCoverageImplementation;
-    this.classesJars = ImmutableList.copyOf(metadataJars);
-    this.uninstrumentedClasses = uninstrumentedClasses;
-    this.pathsForCoverage = pathsForCoverage;
   }
 
   public void create() throws IOException {
@@ -185,17 +146,11 @@ public class JacocoCoverageRunner {
     final CoverageBuilder coverageBuilder = new CoverageBuilder();
     final Analyzer analyzer = new Analyzer(execFileLoader.getExecutionDataStore(), coverageBuilder);
     Set<String> alreadyInstrumentedClasses = new HashSet<>();
-    if (uninstrumentedClasses == null) {
-      for (File classesJar : classesJars) {
-        if (isNewCoverageImplementation) {
-          analyzeUninstrumentedClassesFromJar(analyzer, classesJar, alreadyInstrumentedClasses);
-        } else {
-          analyzer.analyzeAll(classesJar);
-        }
-      }
-    } else {
-      for (Map.Entry<String, byte[]> entry : uninstrumentedClasses.entrySet()) {
-        analyzer.analyzeClass(entry.getValue(), entry.getKey());
+    for (File classesJar : classesJars) {
+      if (isNewCoverageImplementation) {
+        analyzeUninstrumentedClassesFromJar(analyzer, classesJar, alreadyInstrumentedClasses);
+      } else {
+        analyzer.analyzeAll(classesJar);
       }
     }
 
@@ -210,18 +165,11 @@ public class JacocoCoverageRunner {
 
     Map<String, BranchCoverageDetail> result = new TreeMap<>();
     Set<String> alreadyInstrumentedClasses = new HashSet<>();
-    if (uninstrumentedClasses == null) {
-      for (File classesJar : classesJars) {
-        if (isNewCoverageImplementation) {
-          analyzeUninstrumentedClassesFromJar(analyzer, classesJar, alreadyInstrumentedClasses);
-        } else {
-          analyzer.analyzeAll(classesJar);
-        }
-        result.putAll(analyzer.getBranchDetails());
-      }
-    } else {
-      for (Map.Entry<String, byte[]> entry : uninstrumentedClasses.entrySet()) {
-        analyzer.analyzeClass(entry.getValue(), entry.getKey());
+    for (File classesJar : classesJars) {
+      if (isNewCoverageImplementation) {
+        analyzeUninstrumentedClassesFromJar(analyzer, classesJar, alreadyInstrumentedClasses);
+      } else {
+        analyzer.analyzeAll(classesJar);
       }
       result.putAll(analyzer.getBranchDetails());
     }
@@ -236,9 +184,10 @@ public class JacocoCoverageRunner {
   private void analyzeUninstrumentedClassesFromJar(
       Analyzer analyzer, File jar, Set<String> alreadyInstrumentedClasses) throws IOException {
     JarFile jarFile = new JarFile(jar);
-    Enumeration<JarEntry> jarFileEntries = jarFile.entries();
-    while (jarFileEntries.hasMoreElements()) {
-      JarEntry jarEntry = jarFileEntries.nextElement();
+    JarInputStream jarInputStream = new JarInputStream(new FileInputStream(jar));
+    for (JarEntry jarEntry = jarInputStream.getNextJarEntry();
+        jarEntry != null;
+        jarEntry = jarInputStream.getNextJarEntry()) {
       String jarEntryName = jarEntry.getName();
       if (jarEntryName.endsWith(".class.uninstrumented")
           && !alreadyInstrumentedClasses.contains(jarEntryName)) {
@@ -262,15 +211,11 @@ public class JacocoCoverageRunner {
     if (!isNewCoverageImplementation) {
       return ImmutableSet.<String>of();
     }
-    if (!pathsForCoverage.isEmpty()) {
-      return pathsForCoverage;
-    }
     ImmutableSet.Builder<String> execPathsSetBuilder = ImmutableSet.builder();
     for (File classJar : classesJars) {
       addEntriesToExecPathsSet(classJar, execPathsSetBuilder);
     }
-    ImmutableSet<String> result = execPathsSetBuilder.build();
-    return result;
+    return execPathsSetBuilder.build();
   }
 
   /**
@@ -283,9 +228,10 @@ public class JacocoCoverageRunner {
   static void addEntriesToExecPathsSet(
       File jar, ImmutableSet.Builder<String> execPathsSetBuilder) throws IOException {
     JarFile jarFile = new JarFile(jar);
-    Enumeration<JarEntry> jarFileEntries = jarFile.entries();
-    while (jarFileEntries.hasMoreElements()) {
-      JarEntry jarEntry = jarFileEntries.nextElement();
+    JarInputStream jarInputStream = new JarInputStream(new FileInputStream(jar));
+    for (JarEntry jarEntry = jarInputStream.getNextJarEntry();
+        jarEntry != null;
+        jarEntry = jarInputStream.getNextJarEntry()) {
       String jarEntryName = jarEntry.getName();
       if (jarEntryName.endsWith("-paths-for-coverage.txt")) {
         BufferedReader bufferedReader =
@@ -298,13 +244,8 @@ public class JacocoCoverageRunner {
     }
   }
 
-  private static String getMainClass(String metadataJar, boolean isNewImplementation)
-      throws Exception {
-    final String jacocoMainClass = System.getenv("JACOCO_MAIN_CLASS");
-    if (jacocoMainClass != null) {
-      return jacocoMainClass;
-    }
-    if (!isNewImplementation && metadataJar != null) {
+  private static String getMainClass(String metadataJar) throws Exception {
+    if (metadataJar != null) {
       // Blaze guarantees that JACOCO_METADATA_JAR has a proper manifest with a Main-Class entry.
       try (JarInputStream jarStream = new JarInputStream(new FileInputStream(metadataJar))) {
         return jarStream.getManifest().getMainAttributes().getValue("Main-Class");
@@ -324,10 +265,24 @@ public class JacocoCoverageRunner {
         }
       }
       throw new IllegalStateException(
-          "JACOCO_METADATA_JAR/JACOCO_MAIN_CLASS environment variables not set, and no"
+          "JACOCO_METADATA_JAR environment variable is not set, and no"
               + " META-INF/MANIFEST.MF on the classpath has a Coverage-Main-Class attribute. "
               + " Cannot determine the name of the main class for the code under test.");
     }
+  }
+
+  /**
+   * Returns an immutable list containing all the file paths found in mainFile. It uses the
+   * javaRunfilesRoot prefix for every found file to compute its absolute path.
+   */
+  private static ImmutableList<File> getFilesFromFileList(File mainFile, String javaRunfilesRoot)
+      throws IOException {
+    List<String> metadataFiles = Files.readLines(mainFile, UTF_8);
+    ImmutableList.Builder<File> convertedMetadataFiles = new Builder<>();
+    for (String metadataFile : metadataFiles) {
+      convertedMetadataFiles.add(new File(javaRunfilesRoot + "/" + metadataFile));
+    }
+    return convertedMetadataFiles.build();
   }
 
   private static String getUniquePath(String pathTemplate, String suffix) throws IOException {
@@ -350,82 +305,14 @@ public class JacocoCoverageRunner {
     }
   }
 
-  /**
-   * Returns an immutable list containing all the file paths found in mainFile. It uses the
-   * javaRunfilesRoot prefix for every found file to compute its absolute path.
-   */
-  private static ImmutableList<File> getFilesFromFileList(File mainFile, String javaRunfilesRoot)
-      throws IOException {
-    List<String> metadataFiles = Files.readLines(mainFile, UTF_8);
-    ImmutableList.Builder<File> convertedMetadataFiles = new Builder<>();
-    for (String metadataFile : metadataFiles) {
-      convertedMetadataFiles.add(new File(javaRunfilesRoot + "/" + metadataFile));
-    }
-    return convertedMetadataFiles.build();
-  }
-
   public static void main(String[] args) throws Exception {
-    String metadataFile = System.getenv("JACOCO_METADATA_JAR");
-
-    String javaCoverageNewImplementationValue = System.getenv("JAVA_COVERAGE_NEW_IMPLEMENTATION");
+    final String metadataFile = System.getenv("JACOCO_METADATA_JAR");
     final boolean isNewImplementation =
-        (javaCoverageNewImplementationValue != null
-                && javaCoverageNewImplementationValue.equals("YES"))
-            || (metadataFile == null
-                ? false
-                : (metadataFile.endsWith(".txt") || metadataFile.endsWith("_merged_instr.jar")));
-
-    File[] metadataFiles = null;
-    final HashMap<String, byte[]> uninstrumentedClasses = new HashMap<>();
-    ImmutableSet.Builder<String> pathsForCoverageBuilder = new ImmutableSet.Builder<>();
-    if (isNewImplementation) {
-      ClassLoader classLoader = ClassLoader.getSystemClassLoader();
-      if (classLoader instanceof URLClassLoader) {
-        URL[] urls = ((URLClassLoader) classLoader).getURLs();
-        metadataFiles = new File[urls.length];
-        for (int i = 0; i < urls.length; i++) {
-          URL url = urls[i];
-          metadataFiles[i] = new File(url.getFile());
-          // Special case for deploy jars.
-          if (url.getFile().endsWith("_deploy.jar")) {
-            metadataFile = url.getFile();
-          } else if (url.getFile().endsWith(".jar")) {
-            // Collect
-            // - uninstrumented class files for coverage before starting the actual test
-            // - paths considered for coverage
-            // Collecting these in the shutdown hook is too expensive (we only have a 5s budget).
-            JarFile jarFile = new JarFile(url.getFile());
-            Enumeration<JarEntry> jarFileEntries = jarFile.entries();
-            while (jarFileEntries.hasMoreElements()) {
-              JarEntry jarEntry = jarFileEntries.nextElement();
-              String jarEntryName = jarEntry.getName();
-              if (jarEntryName.endsWith(".class.uninstrumented")
-                  && !uninstrumentedClasses.containsKey(jarEntryName)) {
-                uninstrumentedClasses.put(
-                    jarEntryName, ByteStreams.toByteArray(jarFile.getInputStream(jarEntry)));
-              } else if (jarEntryName.endsWith("-paths-for-coverage.txt")) {
-                BufferedReader bufferedReader =
-                    new BufferedReader(
-                        new InputStreamReader(jarFile.getInputStream(jarEntry), UTF_8));
-                String line;
-                while ((line = bufferedReader.readLine()) != null) {
-                  pathsForCoverageBuilder.add(line);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    final ImmutableSet<String> pathsForCoverage = pathsForCoverageBuilder.build();
-    final String metadataFileFinal = metadataFile;
-    final File[] metadataFilesFinal = metadataFiles;
+        metadataFile == null
+            ? false
+            : (metadataFile.endsWith(".txt") || metadataFile.endsWith("_merged_instr.jar"));
+    final boolean hasOneFile = !isNewImplementation || metadataFile.endsWith("_merged_instr.jar");
     final String javaRunfilesRoot = System.getenv("JACOCO_JAVA_RUNFILES_ROOT");
-
-    final boolean hasOneFile =
-        !isNewImplementation
-            || metadataFile.endsWith("_merged_instr.jar")
-            || metadataFile.endsWith("_deploy.jar");
 
     final String coverageReportBase = System.getenv("JAVA_COVERAGE_FILE");
 
@@ -483,32 +370,16 @@ public class JacocoCoverageRunner {
                     dataInputStream = new ByteArrayInputStream(new byte[0]);
                   }
 
-                  if (metadataFileFinal != null || metadataFilesFinal != null) {
-                    File[] metadataJars;
-                    if (metadataFilesFinal != null) {
-                      metadataJars = metadataFilesFinal;
-                    } else {
-                      metadataJars =
-                          hasOneFile
-                              ? new File[] {new File(metadataFileFinal)}
-                              : getFilesFromFileList(new File(metadataFileFinal), javaRunfilesRoot)
-                                  .toArray(new File[0]);
-                    }
+                  if (metadataFile != null) {
+                    File[] metadataJars =
+                        hasOneFile
+                            ? new File[] {new File(metadataFile)}
+                            : getFilesFromFileList(new File(metadataFile), javaRunfilesRoot)
+                                .toArray(new File[0]);
 
-                    if (uninstrumentedClasses.isEmpty()) {
-                      new JacocoCoverageRunner(
-                              isNewImplementation, dataInputStream, coverageReport, metadataJars)
-                          .create();
-                    } else {
-                      new JacocoCoverageRunner(
-                              isNewImplementation,
-                              dataInputStream,
-                              coverageReport,
-                              uninstrumentedClasses,
-                              pathsForCoverage,
-                              metadataJars)
-                          .create();
-                    }
+                    new JacocoCoverageRunner(
+                            isNewImplementation, dataInputStream, coverageReport, metadataJars)
+                        .create();
                   }
                 } catch (IOException e) {
                   e.printStackTrace();
@@ -523,9 +394,9 @@ public class JacocoCoverageRunner {
     // the subprocess to match all JVM flags, runtime classpath, bootclasspath, etc is doable.
     // We'd share the same limitation if the system under test uses shutdown hooks internally, as
     // there's no way to collect coverage data on that code.
-    String mainClass = getMainClass(metadataFile, isNewImplementation);
+    String mainClass =
+        isNewImplementation ? System.getenv("JACOCO_MAIN_CLASS") : getMainClass(metadataFile);
     Method main = Class.forName(mainClass).getMethod("main", String[].class);
-    main.setAccessible(true);
     main.invoke(null, new Object[] {args});
   }
 }
