@@ -20,7 +20,6 @@ package models;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.net.MediaType;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import lib.APIException;
@@ -33,8 +32,6 @@ import models.api.responses.cluster.NodeSummaryResponse;
 import models.api.responses.SystemOverviewResponse;
 import models.api.responses.metrics.MetricsListResponse;
 import models.api.responses.system.*;
-import models.api.responses.system.loggers.LoggerSubsystemSummary;
-import models.api.responses.system.loggers.LoggerSubsystemsResponse;
 import models.api.responses.system.loggers.LoggerSummary;
 import models.api.responses.system.loggers.LoggersResponse;
 import org.joda.time.DateTime;
@@ -74,7 +71,6 @@ public class Node extends ClusterEntity {
 
     private final boolean fromConfiguration;
     private SystemOverviewResponse systemInfo;
-    private NodeJVMStats jvmInfo;
 
     private AtomicInteger failureCount = new AtomicInteger(0);
 
@@ -89,7 +85,7 @@ public class Node extends ClusterEntity {
         this.inputFactory = inputFactory;
 
         transportAddress = normalizeUriPath(r.transportAddress);
-        lastSeen = new DateTime(r.lastSeen, DateTimeZone.UTC);
+        lastSeen = new DateTime(r.lastSeen);
         nodeId = r.id;
         shortNodeId = r.shortNodeId;
         isMaster = r.isMaster;
@@ -124,29 +120,6 @@ public class Node extends ClusterEntity {
         return null;
     }
 
-    public Map<String, InternalLoggerSubsystem> allLoggerSubsystems() {
-        Map<String, InternalLoggerSubsystem> subsystems = Maps.newHashMap();
-        try {
-            LoggerSubsystemsResponse response = api.get(LoggerSubsystemsResponse.class)
-                    .node(this)
-                    .path("/system/loggers/subsystems")
-                    .execute();
-
-            for (Map.Entry<String, LoggerSubsystemSummary> ss : response.subsystems.entrySet()) {
-                subsystems.put(ss.getKey(), new InternalLoggerSubsystem(
-                        ss.getValue().title,
-                        ss.getValue().level,
-                        ss.getValue().levelSyslog
-                ));
-            }
-        } catch (APIException e) {
-            log.error("Unable to load subsystems for node " + this, e);
-        } catch (IOException e) {
-            log.error("Unable to load subsystems for node " + this, e);
-        }
-        return subsystems;
-    }
-
     public List<InternalLogger> allLoggers() {
         List<InternalLogger> loggers = Lists.newArrayList();
         try {
@@ -166,18 +139,8 @@ public class Node extends ClusterEntity {
         return loggers;
     }
 
-    public void setSubsystemLoggerLevel(String subsystem, String level) throws APIException, IOException {
-        api.put().node(this)
-                .path("/system/loggers/subsystems/{0}/level/{1}", subsystem, level)
-                .execute();
-    }
-
     public String getThreadDump() throws IOException, APIException {
-        return api.get(String.class)
-                .node(this)
-                .path("/system/threaddump")
-                .accept(MediaType.ANY_TEXT_TYPE)
-                .execute();
+        return api.get(String.class).node(this).path("/system/threaddump").execute();
     }
 
     public List<Input> getInputs() {
@@ -230,7 +193,6 @@ public class Node extends ClusterEntity {
         return false;
     }
 
-    @Override
     public boolean terminateInput(String inputId) {
         try {
             api.delete().path("/system/inputs/{0}", inputId)
@@ -243,7 +205,6 @@ public class Node extends ClusterEntity {
         } catch (IOException e) {
             log.error("Could not terminate input " + inputId, e);
         }
-
         return false;
     }
 
@@ -269,21 +230,11 @@ public class Node extends ClusterEntity {
     // TODO nodes should not have state beyond their activity status
     public synchronized void loadSystemInformation() {
         try {
-            this.systemInfo = api.get(SystemOverviewResponse.class).path("/system").node(this).execute();
+            systemInfo = api.get(SystemOverviewResponse.class).path("/system").node(this).execute();
         } catch (APIException e) {
             log.error("Unable to load system information for node " + this, e);
         } catch (IOException e) {
             log.error("Unable to load system information for node " + this, e);
-        }
-    }
-
-    public synchronized void loadJVMInformation() {
-        try {
-            jvmInfo = new NodeJVMStats(api.get(ClusterEntityJVMStatsResponse.class).path("/system/jvm").node(this).execute());
-        } catch (APIException e) {
-            log.error("Unable to load JVM information for node " + this, e);
-        } catch (IOException e) {
-            log.error("Unable to load JVM information for node " + this, e);
         }
     }
 
@@ -304,14 +255,14 @@ public class Node extends ClusterEntity {
         return nodeId;
     }
 
-    @Override
     public String getShortNodeId() {
         return shortNodeId;
     }
 
-    @Override
     public String getHostname() {
-        requireSystemInfo();
+        if (systemInfo == null) {
+            loadSystemInformation();
+        }
         return systemInfo.hostname;
     }
 
@@ -320,33 +271,10 @@ public class Node extends ClusterEntity {
     }
 
     public boolean isProcessing() {
-        requireSystemInfo();
-        return this.systemInfo.isProcessing;
-    }
-
-    public String getVersion() {
-        requireSystemInfo();
-        return systemInfo.version;
-    }
-
-    public String getCodename() {
-        requireSystemInfo();
-        return systemInfo.codename;
-    }
-
-    public String getPid() {
-        requireJVMInfo();
-        return jvmInfo.getPid();
-    }
-
-    public String getJVMDescription() {
-        requireJVMInfo();
-        return jvmInfo.getInfo();
-    }
-
-    public NodeJVMStats jvm() {
-        requireJVMInfo();
-        return jvmInfo;
+        if (systemInfo == null) {
+            loadSystemInformation();
+        }
+        return systemInfo.isProcessing;
     }
 
     public Map<String, Metric> getMetrics(String namespace) throws APIException, IOException {
@@ -357,10 +285,6 @@ public class Node extends ClusterEntity {
                 .execute();
 
         return response.getMetrics();
-    }
-
-    public Metric getSingleMetric(String metricName) throws APIException, IOException {
-        return getMetrics(metricName).get(metricName);
     }
 
     public void pause() throws IOException, APIException {
@@ -379,7 +303,7 @@ public class Node extends ClusterEntity {
 
     public int getThroughput() {
         try {
-            return api.get(NodeThroughputResponse.class).node(this).path("/system/throughput").execute().throughput;
+            return api.get(ServerThroughputResponse.class).node(this).path("/system/throughput").execute().throughput;
         } catch (APIException e) {
             log.error("Could not load throughput for node " + this, e);
         } catch (IOException e) {
@@ -495,12 +419,5 @@ public class Node extends ClusterEntity {
         }
         b.append("}");
         return b.toString();
-    }
-
-    public void requireSystemInfo() {
-        loadSystemInformation();
-    }
-    public void requireJVMInfo() {
-        loadJVMInformation();
     }
 }

@@ -19,31 +19,18 @@
  */
 package models;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.net.MediaType;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import lib.APIException;
 import lib.ApiClient;
-import lib.ExclusiveInputException;
-import lib.metrics.Metric;
-import models.api.requests.InputLaunchRequest;
-import models.api.responses.BuffersResponse;
-import models.api.responses.EmptyResponse;
 import models.api.responses.SystemOverviewResponse;
 import models.api.responses.cluster.RadioSummaryResponse;
-import models.api.responses.metrics.MetricsListResponse;
-import models.api.responses.system.*;
+import models.api.responses.system.ClusterEntityJVMStatsResponse;
 import org.joda.time.DateTime;
 import org.slf4j.LoggerFactory;
-import play.Logger;
-import play.mvc.Http;
 
 import java.io.IOException;
 import java.net.URI;
-import java.util.List;
-import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -60,12 +47,12 @@ public class Radio extends ClusterEntity {
     private final Input.Factory inputFactory;
 
     private final URI transportAddress;
+    private DateTime lastSeen;
     private String id;
     private String shortNodeId;
 
     private NodeJVMStats jvmInfo;
     private SystemOverviewResponse systemInfo;
-    private BufferInfo bufferInfo;
 
     @AssistedInject
     public Radio(ApiClient api, Input.Factory inputFactory, @Assisted RadioSummaryResponse r) {
@@ -73,6 +60,7 @@ public class Radio extends ClusterEntity {
         this.inputFactory = inputFactory;
 
         transportAddress = normalizeUriPath(r.transportAddress);
+        lastSeen = new DateTime(r.lastSeen);
         id = r.id;
         shortNodeId = r.shortNodeId;
     }
@@ -103,30 +91,16 @@ public class Radio extends ClusterEntity {
         }
     }
 
-    public synchronized void loadBufferInformation() {
-        try {
-            bufferInfo = new BufferInfo(api.get(BuffersResponse.class)
-                    .path("/system/buffers")
-                    .radio(this)
-                    .execute());
-        } catch (APIException e) {
-            log.error("Unable to load buffer information for radio " + this, e);
-        } catch (IOException e) {
-            log.error("Unable to load buffer information for radio " + this, e);
-        }
-    }
-
-    public String getNodeId() {
-        return id;
-    }
-
-    @Override
     public String getShortNodeId() {
         return shortNodeId;
     }
 
     public String getId() {
         return id;
+    }
+
+    public DateTime getLastSeen() {
+        return lastSeen;
     }
 
     public NodeJVMStats jvm() {
@@ -137,72 +111,16 @@ public class Radio extends ClusterEntity {
         return jvmInfo;
     }
 
-    public String getPid() {
-        return jvm().getPid();
-    }
-
-    public String getJVMDescription() {
-        return jvm().getInfo();
-    }
-
-    public boolean launchExistingInput(String inputId) {
-        try {
-            api.get(EmptyResponse.class)
-                    .path("/system/inputs/{0}", inputId)
-                    .radio(this)
-                    .expect(Http.Status.ACCEPTED)
-                    .execute();
-            return true;
-        } catch (APIException e) {
-            log.error("Could not terminate input " + inputId, e);
-        } catch (IOException e) {
-            log.error("Could not terminate input " + inputId, e);
-        }
-
-        return false;
-    }
-
-    @Override
-    public boolean terminateInput(String inputId) {
-        try {
-            api.delete().path("/system/inputs/{0}", inputId)
-                    .radio(this)
-                    .expect(Http.Status.ACCEPTED)
-                    .execute();
-            return true;
-        } catch (APIException e) {
-            log.error("Could not terminate input " + inputId, e);
-        } catch (IOException e) {
-            log.error("Could not terminate input " + inputId, e);
-        }
-
-        return false;
-    }
-
     @Override
     public String getTransportAddress() {
         return transportAddress.toASCIIString();
     }
 
-    public URI getTransportAddressUri() {
-        return transportAddress;
-    }
-
-    @Override
     public String getHostname() {
         if (systemInfo == null) {
             loadSystemInformation();
         }
-
         return systemInfo.hostname;
-    }
-
-    public String getVersion() {
-        if (systemInfo == null) {
-            loadSystemInformation();
-        }
-
-        return systemInfo.version;
     }
 
     @Override
@@ -213,126 +131,6 @@ public class Radio extends ClusterEntity {
     @Override
     public void markFailure() {
         // No failure counting in radios for now.
-    }
-
-    public Map<String, InputTypeSummaryResponse> getAllInputTypeInformation() throws IOException, APIException {
-        Map<String, InputTypeSummaryResponse> types = Maps.newHashMap();
-
-        for (String type : getInputTypes().keySet()) {
-            InputTypeSummaryResponse itr = getInputTypeInformation(type);
-            types.put(itr.type, itr);
-        }
-
-        return types;
-    }
-
-    public Map<String, String> getInputTypes() throws IOException, APIException {
-        return api.get(InputTypesResponse.class).radio(this).path("/system/inputs/types").execute().types;
-    }
-
-    public InputTypeSummaryResponse getInputTypeInformation(String type) throws IOException, APIException {
-        return api.get(InputTypeSummaryResponse.class).radio(this).path("/system/inputs/types/{0}", type).execute();
-    }
-
-    public List<Input> getInputs() {
-        List<Input> inputs = Lists.newArrayList();
-
-        for (InputStateSummaryResponse input : inputs().inputs) {
-            inputs.add(inputFactory.fromSummaryResponse(input.messageinput, this));
-        }
-
-        return inputs;
-    }
-
-    public Input getInput(String inputId) throws IOException, APIException {
-        final InputSummaryResponse inputSummaryResponse = api.get(InputSummaryResponse.class).radio(this).path("/system/inputs/{0}", inputId).execute();
-        return inputFactory.fromSummaryResponse(inputSummaryResponse, this);
-    }
-
-
-    public int numberOfInputs() {
-        return inputs().total;
-    }
-
-    private InputsResponse inputs() {
-        try {
-            return api.get(InputsResponse.class).radio(this).path("/system/inputs").execute();
-        } catch (Exception e) {
-            Logger.error("Could not get inputs.", e);
-            throw new RuntimeException("Could not get inputs.", e);
-        }
-    }
-
-    @Override
-    public InputLaunchResponse launchInput(String title, String type, Boolean global, Map<String, Object> configuration, User creator, boolean isExclusive) throws ExclusiveInputException {
-        if (isExclusive) {
-            for (Input input : getInputs()) {
-                if (input.getType().equals(type)) {
-                    throw new ExclusiveInputException();
-                }
-            }
-        }
-
-        InputLaunchRequest request = new InputLaunchRequest();
-        request.title = title;
-        request.type = type;
-        request.global = global;
-        request.configuration = configuration;
-        request.creatorUserId = creator.getId();
-
-        InputLaunchResponse ilr = null;
-        try {
-            ilr = api.post(InputLaunchResponse.class)
-                    .path("/system/inputs")
-                    .radio(this)
-                    .body(request)
-                    .expect(Http.Status.ACCEPTED)
-                    .execute();
-
-            // TODO lolwut
-            return new InputLaunchResponse();
-        } catch (APIException e) {
-            log.error("Could not launch input " + title, e);
-        } catch (IOException e) {
-            log.error("Could not launch input " + title, e);
-        }
-        return ilr;
-    }
-
-    public BufferInfo getBuffers() {
-        if (bufferInfo == null) {
-            loadBufferInformation();
-        }
-        return bufferInfo;
-    }
-
-    public String getThreadDump() throws IOException, APIException {
-        return api.get(String.class)
-                .radio(this)
-                .path("/system/threaddump")
-                .accept(MediaType.ANY_TEXT_TYPE)
-                .execute();
-    }
-
-    public int getThroughput() {
-        try {
-            return api.get(NodeThroughputResponse.class).radio(this).path("/system/throughput").execute().throughput;
-        } catch (APIException e) {
-            log.error("Could not load throughput for radio " + this, e);
-        } catch (IOException e) {
-            log.error("Could not load throughput for radio " + this, e);
-        }
-        return 0;
-    }
-
-    public Map<String, Metric> getMetrics(String namespace) throws APIException, IOException {
-        MetricsListResponse response = api.get(MetricsListResponse.class)
-                .radio(this)
-                .path("/system/metrics/namespace/{0}", namespace)
-                .expect(200, 404)
-                .execute();
-
-        return response.getMetrics();
     }
 
     @Override
