@@ -137,6 +137,7 @@ public class CreateProjectMojo extends AbstractMojo {
             sanitizeOptions(sourceType);
 
             final Map<String, Object> context = new HashMap<>();
+            context.put("className", className);
             context.put("path", path);
 
             success = new CreateProject(projectRoot)
@@ -144,7 +145,6 @@ public class CreateProjectMojo extends AbstractMojo {
                     .artifactId(projectArtifactId)
                     .version(projectVersion)
                     .sourceType(sourceType)
-                    .className(className)
                     .doCreateProject(context);
 
             if (success) {
