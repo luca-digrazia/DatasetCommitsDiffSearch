@@ -54,11 +54,9 @@ import org.mockito.junit.MockitoRule;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -106,52 +104,10 @@ public class UserServiceImplTest {
         assertThat(user.getEmail()).isEqualTo("user1@example.com");
     }
 
-    @Test
-    @MongoDBFixtures("UserServiceImplTest.json")
-    public void testLoadByUserId() throws Exception {
-        final User user = userService.loadById("54e3deadbeefdeadbeef0001");
-        assertThat(user).isNotNull();
-        assertThat(user.getId()).isEqualTo("54e3deadbeefdeadbeef0001");
-        assertThat(user.getName()).isEqualTo("user1");
-        assertThat(user.getEmail()).isEqualTo("user1@example.com");
-    }
-
     @Test(expected = RuntimeException.class)
     @MongoDBFixtures("UserServiceImplTest.json")
     public void testLoadDuplicateUser() throws Exception {
         userService.load("user-duplicate");
-    }
-
-    @Test
-    @MongoDBFixtures("UserServiceImplTest.json")
-    public void testLoadByAuthServiceUidOrUsername() throws Exception {
-        final Optional<User> byAuthServiceUid = userService.loadByAuthServiceUidOrUsername("NmIxY2E3ZWQtMTk3NC00NGM4LTkwOTYtN2Q3OTBlM2Y2MjRmCg==", "external-user1");
-
-        assertThat(byAuthServiceUid).get().satisfies(user -> {
-            assertThat(user.getAuthServiceId()).isEqualTo("54e3deadbeefdeadbeef0001");
-            assertThat(user.getAuthServiceUid()).isEqualTo("NmIxY2E3ZWQtMTk3NC00NGM4LTkwOTYtN2Q3OTBlM2Y2MjRmCg==");
-            assertThat(user.getEmail()).isEqualTo("external-user1@example.com");
-        });
-
-        final Optional<User> byUsername = userService.loadByAuthServiceUidOrUsername("__nope__", "external-user1");
-
-        assertThat(byUsername).get().satisfies(user -> {
-            assertThat(user.getAuthServiceId()).isEqualTo("54e3deadbeefdeadbeef0001");
-            assertThat(user.getAuthServiceUid()).isEqualTo("NmIxY2E3ZWQtMTk3NC00NGM4LTkwOTYtN2Q3OTBlM2Y2MjRmCg==");
-            assertThat(user.getEmail()).isEqualTo("external-user1@example.com");
-        });
-
-        assertThat(userService.loadByAuthServiceUidOrUsername("__nope__", "__nope__"))
-                .isNotPresent();
-
-        assertThatThrownBy(() -> userService.loadByAuthServiceUidOrUsername(null, "__nope__"))
-                .hasMessageContaining("authServiceUid")
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> userService.loadByAuthServiceUidOrUsername("__nope__", null))
-                .hasMessageContaining("username")
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> userService.loadByAuthServiceUidOrUsername(null, null))
-                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -165,7 +121,7 @@ public class UserServiceImplTest {
     @Test
     @MongoDBFixtures("UserServiceImplTest.json")
     public void testLoadAll() throws Exception {
-        assertThat(userService.loadAll()).hasSize(5);
+        assertThat(userService.loadAll()).hasSize(4);
     }
 
     @Test
@@ -199,7 +155,7 @@ public class UserServiceImplTest {
     @Test
     @MongoDBFixtures("UserServiceImplTest.json")
     public void testCount() throws Exception {
-        assertThat(userService.count()).isEqualTo(5L);
+        assertThat(userService.count()).isEqualTo(4L);
     }
 
     public static class UserImplFactory implements UserImpl.Factory {
@@ -277,7 +233,7 @@ public class UserServiceImplTest {
 
         when(permissionResolver.resolveStringPermission(role.getId())).thenReturn(Collections.singleton("foo:bar"));
         final GRNPermission ownerShipPermission = GRNPermission.create(RestPermissions.ENTITY_OWN, grnRegistry.newGRN(GRNTypes.DASHBOARD, "1234"));
-        final GRN userGRN = grnRegistry.ofUser(user);
+        final GRN userGRN = grnRegistry.newGRN(GRNTypes.USER, "user");
         when(grantPermissionResolver.resolvePermissionsForPrincipal(userGRN))
                 .thenReturn(ImmutableSet.of(
                         new WildcardPermission("perm:from:grant"),
@@ -287,8 +243,8 @@ public class UserServiceImplTest {
         when(grantPermissionResolver.resolveRolesForPrincipal(userGRN)).thenReturn(ImmutableSet.of(roleId));
         when(permissionResolver.resolveStringPermission(roleId)).thenReturn(ImmutableSet.of("perm:from:role"));
 
-        assertThat(userService.getPermissionsForUser(user).stream().map(p -> p instanceof WildcardPermission ? p.toString() : p).collect(Collectors.toSet()))
-                .containsExactlyInAnyOrder("users:passwordchange:user", "users:edit:user", "foo:bar", "hello:world", "users:tokenlist:user",
+        assertThat(userService.getPermissionsForUser(user).stream().map(p -> p instanceof WildcardPermission ? p.toString() : p ).collect(Collectors.toSet()))
+                .containsExactlyInAnyOrder( "users:passwordchange:user", "users:edit:user", "foo:bar", "hello:world", "users:tokenlist:user",
                         "users:tokencreate:user", "users:tokenremove:user", "perm:from:grant", ownerShipPermission, "perm:from:role");
     }
 }
