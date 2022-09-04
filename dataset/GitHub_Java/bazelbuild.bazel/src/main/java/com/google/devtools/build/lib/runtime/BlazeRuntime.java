@@ -52,11 +52,10 @@ import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.Profiler.Format;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
+import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.QueryEnvironmentFactory;
-import com.google.devtools.build.lib.query2.common.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 import com.google.devtools.build.lib.query2.query.output.OutputFormatter;
-import com.google.devtools.build.lib.query2.query.output.OutputFormatters;
 import com.google.devtools.build.lib.runtime.CommandDispatcher.LockingMode;
 import com.google.devtools.build.lib.runtime.commands.InfoItem;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
@@ -1497,7 +1496,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
             clock);
       }
       ServerBuilder serverBuilder = new ServerBuilder();
-      serverBuilder.addQueryOutputFormatters(OutputFormatters.getDefaultFormatters());
+      serverBuilder.addQueryOutputFormatters(OutputFormatter.getDefaultFormatters());
       for (BlazeModule module : blazeModules) {
         module.serverInit(startupOptionsProvider, serverBuilder);
       }

@@ -32,7 +32,8 @@ public class AutoProfilerBenchmark {
         .start(
             ImmutableSet.copyOf(ProfilerTask.values()),
             new InMemoryFileSystem().getPath("/out.dat").getOutputStream(),
-            Profiler.Format.JSON_TRACE_FILE_FORMAT,
+            Profiler.Format.BINARY_BAZEL_FORMAT,
+            "benchmark",
             "dummy_output_base",
             UUID.randomUUID(),
             false,
