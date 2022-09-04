@@ -16,7 +16,6 @@
  */
 package org.graylog2.system.stats.mongo;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
 import com.google.common.net.HostAndPort;
 import com.mongodb.BasicDBObject;
@@ -26,46 +25,33 @@ import com.mongodb.Mongo;
 import com.mongodb.ServerAddress;
 import org.graylog2.database.MongoConnection;
 import org.joda.time.DateTime;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.List;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 @Singleton
 public class MongoProbe {
-    private static final Logger LOG = LoggerFactory.getLogger(MongoProbe.class);
-
+    private final MongoConnection mongoConnection;
     private final Mongo mongoClient;
     private final DB db;
     private final DB adminDb;
     private final BuildInfo buildInfo;
     private final HostInfo hostInfo;
 
+
     @Inject
     public MongoProbe(MongoConnection mongoConnection) {
-        this(mongoConnection.connect(), mongoConnection.getDatabase());
+        this.mongoConnection = mongoConnection;
+        this.mongoClient = mongoConnection.connect();
+        this.db = mongoConnection.getDatabase();
+        this.adminDb = mongoClient.getDB("admin");
+
+        this.buildInfo = createBuildInfo();
+        this.hostInfo = createHostInfo();
     }
 
-    @VisibleForTesting
-    MongoProbe(Mongo mongoClient, DB db) {
-        this(mongoClient, db, mongoClient.getDB("admin"),
-                createBuildInfo(mongoClient.getDB("admin")), createHostInfo(mongoClient.getDB("admin")));
-    }
-
-    @VisibleForTesting
-    MongoProbe(Mongo mongoClient, DB db, DB adminDB, BuildInfo buildInfo, HostInfo hostInfo) {
-        this.mongoClient = checkNotNull(mongoClient);
-        this.db = checkNotNull(db);
-        this.adminDb = checkNotNull(adminDB);
-        this.buildInfo = buildInfo;
-        this.hostInfo = hostInfo;
-    }
-
-    private static HostInfo createHostInfo(DB adminDb) {
+    private HostInfo createHostInfo() {
         final HostInfo hostInfo;
         final CommandResult hostInfoResult = adminDb.command("hostInfo");
         if (hostInfoResult.ok()) {
@@ -101,14 +87,13 @@ public class MongoProbe {
 
             hostInfo = HostInfo.create(system, os, extra);
         } else {
-            LOG.debug("Couldn't retrieve MongoDB hostInfo: {}", hostInfoResult.getErrorMessage());
             hostInfo = null;
         }
 
         return hostInfo;
     }
 
-    private static BuildInfo createBuildInfo(DB adminDb) {
+    private BuildInfo createBuildInfo() {
         final BuildInfo buildInfo;
         final CommandResult buildInfoResult = adminDb.command("buildInfo");
         if (buildInfoResult.ok()) {
@@ -127,7 +112,6 @@ public class MongoProbe {
 
             );
         } else {
-            LOG.debug("Couldn't retrieve MongoDB buildInfo: {}", buildInfoResult.getErrorMessage());
             buildInfo = null;
         }
 
@@ -182,7 +166,6 @@ public class MongoProbe {
                     dataFileVersion
             );
         } else {
-            LOG.debug("Couldn't retrieve MongoDB dbStats: {}", dbStatsResult.getErrorMessage());
             dbStats = null;
         }
 
@@ -235,11 +218,12 @@ public class MongoProbe {
                     memory,
                     storageEngine);
         } else {
-            LOG.debug("Couldn't retrieve MongoDB serverStatus: {}", serverStatusResult.getErrorMessage());
             serverStatus = null;
         }
 
+
         // TODO Collection stats? http://docs.mongodb.org/manual/reference/command/collStats/
+
         return MongoStats.create(servers, buildInfo, hostInfo, serverStatus, dbStats);
     }
 }
