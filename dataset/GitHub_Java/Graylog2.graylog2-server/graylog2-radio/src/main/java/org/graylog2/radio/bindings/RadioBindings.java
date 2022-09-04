@@ -16,39 +16,55 @@
  */
 package org.graylog2.radio.bindings;
 
+import com.google.inject.AbstractModule;
+import com.google.inject.Scopes;
+import com.google.inject.TypeLiteral;
+import com.google.inject.multibindings.Multibinder;
 import com.google.inject.name.Names;
 import com.google.inject.util.Providers;
 import org.graylog2.jersey.container.netty.SecurityContextFactory;
 import org.graylog2.plugin.BaseConfiguration;
-import org.graylog2.plugin.inject.Graylog2Module;
+import org.graylog2.plugin.ServerStatus;
 import org.graylog2.radio.Configuration;
 import org.graylog2.radio.bindings.providers.RadioTransportProvider;
 import org.graylog2.radio.buffers.processors.RadioProcessBufferProcessor;
 import org.graylog2.radio.inputs.PersistedInputsImpl;
 import org.graylog2.radio.security.RadioSecurityContextFactory;
-import org.graylog2.radio.system.activities.NullActivityWriter;
+import org.graylog2.shared.system.activities.NullActivityWriter;
 import org.graylog2.radio.transports.RadioTransport;
 import org.graylog2.radio.users.NullUserServiceImpl;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.graylog2.shared.inputs.PersistedInputs;
 import org.graylog2.shared.journal.NoopJournalModule;
+import org.graylog2.shared.security.ShiroSecurityBinding;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.graylog2.shared.users.UserService;
 
+import javax.ws.rs.container.ContainerResponseFilter;
+import javax.ws.rs.container.DynamicFeature;
+import javax.ws.rs.ext.ExceptionMapper;
 import java.io.File;
+import java.util.Set;
 
-public class RadioBindings extends Graylog2Module {
+public class RadioBindings extends AbstractModule {
     private final Configuration configuration;
+    private final Set<ServerStatus.Capability> capabilities;
 
-    public RadioBindings(Configuration configuration) {
+    public RadioBindings(Configuration configuration, Set<ServerStatus.Capability> capabilities) {
         this.configuration = configuration;
+        this.capabilities = capabilities;
     }
 
     @Override
     protected void configure() {
+        bindProviders();
         bindSingletons();
         bindTransport();
         bind(ProcessBufferProcessor.class).to(RadioProcessBufferProcessor.class);
+        bindDynamicFeatures();
+        bindContainerResponseFilters();
+        bindExceptionMappers();
+        bindAdditionalJerseyComponents();
         bindInterfaces();
     }
 
@@ -63,6 +79,12 @@ public class RadioBindings extends Graylog2Module {
         bind(Configuration.class).toInstance(configuration);
         bind(BaseConfiguration.class).toInstance(configuration);
 
+        Multibinder<ServerStatus.Capability> capabilityBinder = Multibinder.newSetBinder(binder(), ServerStatus.Capability.class);
+        for(ServerStatus.Capability capability : capabilities) {
+            capabilityBinder.addBinding().toInstance(capability);
+        }
+
+        bind(ServerStatus.class).in(Scopes.SINGLETON);
         install(new NoopJournalModule());
         // make this null for radio for now, because we don't support journalling here yet.
         bind(File.class).annotatedWith(Names.named("message_journal_dir")).toProvider(Providers.<File>of(null));
@@ -73,8 +95,30 @@ public class RadioBindings extends Graylog2Module {
         });
     }
 
+    private void bindProviders() {
+    }
+
     private void bindTransport() {
         bind(RadioTransport.class).toProvider(RadioTransportProvider.class);
     }
 
+    private void bindDynamicFeatures() {
+        TypeLiteral<Class<? extends DynamicFeature>> type = new TypeLiteral<Class<? extends DynamicFeature>>(){};
+        Multibinder<Class<? extends DynamicFeature>> setBinder = Multibinder.newSetBinder(binder(), type);
+        setBinder.addBinding().toInstance(ShiroSecurityBinding.class);
+    }
+
+    private void bindContainerResponseFilters() {
+        TypeLiteral<Class<? extends ContainerResponseFilter>> type = new TypeLiteral<Class<? extends ContainerResponseFilter>>(){};
+        Multibinder<Class<? extends ContainerResponseFilter>> setBinder = Multibinder.newSetBinder(binder(), type);
+    }
+
+    private void bindExceptionMappers() {
+        TypeLiteral<Class<? extends ExceptionMapper>> type = new TypeLiteral<Class<? extends ExceptionMapper>>(){};
+        Multibinder<Class<? extends ExceptionMapper>> setBinder = Multibinder.newSetBinder(binder(), type);
+    }
+
+    private void bindAdditionalJerseyComponents() {
+        Multibinder<Class> componentBinder = Multibinder.newSetBinder(binder(), Class.class, Names.named("additionalJerseyComponents"));
+    }
 }
