@@ -1,6 +1,5 @@
 package io.quarkus.mailer.impl;
 
-import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 
@@ -21,11 +20,11 @@ public class MailConfig {
     /**
      * Enables the mock mode, not sending emails.
      * The content of the emails is printed on the console.
-     * <p>
-     * Disabled by default on PROD, enabled by default on DEV and TEST modes.
+     *
+     * Disabled by default.
      */
     @ConfigItem
-    public Optional<Boolean> mock;
+    public boolean mock;
 
     /**
      * Configures the default bounce email address.
@@ -72,8 +71,7 @@ public class MailConfig {
     public boolean trustAll;
 
     /**
-     * Configures the maximum allowed number of open connections to the mail server
-     * If not set the default is {@code 10}.
+     * The pool maximum size.
      */
     @ConfigItem
     public OptionalInt maxPoolSize;
@@ -94,9 +92,8 @@ public class MailConfig {
     public boolean keepAlive;
 
     /**
-     * Disable ESMTP. {@code false} by default.
-     * The RFC-1869 states that clients should always attempt {@code EHLO} as first command to determine if ESMTP
-     * is supported, if this returns an error code, {@code HELO} is tried to use the <em>regular</em> SMTP command.
+     * Set if ESMTP should be tried as first command (EHLO).
+     * {@code false} by default.
      */
     @ConfigItem
     public boolean disableEsmtp;
@@ -133,38 +130,4 @@ public class MailConfig {
      */
     @ConfigItem
     public Optional<String> keyStorePassword;
-
-    /**
-     * NOTE: Update when new configuration added. Used to check if there is configuration change during hot reload
-     * in order to create a new mailer client only when it is necessary.
-     *
-     * @param config
-     * @return
-     */
-    @Override
-    public boolean equals(Object config) {
-        if (this == config)
-            return true;
-        if (config == null || getClass() != config.getClass())
-            return false;
-        MailConfig that = (MailConfig) config;
-        return ssl == that.ssl &&
-                trustAll == that.trustAll &&
-                keepAlive == that.keepAlive &&
-                disableEsmtp == that.disableEsmtp &&
-                Objects.equals(from, that.from) &&
-                Objects.equals(mock, that.mock) &&
-                Objects.equals(bounceAddress, that.bounceAddress) &&
-                Objects.equals(host, that.host) &&
-                Objects.equals(port, that.port) &&
-                Objects.equals(username, that.username) &&
-                Objects.equals(password, that.password) &&
-                Objects.equals(maxPoolSize, that.maxPoolSize) &&
-                Objects.equals(ownHostName, that.ownHostName) &&
-                Objects.equals(startTLS, that.startTLS) &&
-                Objects.equals(login, that.login) &&
-                Objects.equals(authMethods, that.authMethods) &&
-                Objects.equals(keyStore, that.keyStore) &&
-                Objects.equals(keyStorePassword, that.keyStorePassword);
-    }
 }
