@@ -30,7 +30,6 @@ final class Methods {
     public static final String CLINIT = "<clinit>";
     // copied from java.lang.reflect.Modifier.SYNTHETIC
     static final int SYNTHETIC = 0x00001000;
-    public static final String TO_STRING = "toString";
 
     private static final List<String> IGNORED_METHODS = initIgnoredMethods();
 
@@ -91,8 +90,7 @@ final class Methods {
         if (IGNORED_METHODS.contains(method.name())) {
             return true;
         }
-        // skip all Object methods except for toString()
-        if (method.declaringClass().name().equals(DotNames.OBJECT) && !method.name().equals(TO_STRING)) {
+        if (method.declaringClass().name().equals(DotNames.OBJECT)) {
             return true;
         }
         if (Modifier.isFinal(method.flags())) {

@@ -140,7 +140,14 @@ public class SubclassGenerator extends AbstractGenerator {
 
         // we build a map for each interceptor instance created, so that they are shared
         // Map<String, Object> where InjectableInterceptor.getIdentifier() is key and Object is instance of the interceptor for this bean
-        ResultHandle interceptorInstanceMap = constructor.newInstance(MethodDescriptor.ofConstructor(HashMap.class));
+        FieldCreator interceptorInstanceMap = subclass.getFieldCreator("interceptorInstanceMap", Map.class.getName())
+                .setModifiers(ACC_PRIVATE | ACC_FINAL);
+        // interceptorInstanceMap = new HashMap<>()
+        constructor.writeInstanceField(interceptorInstanceMap.getFieldDescriptor(), constructor.getThis(),
+                constructor.newInstance(MethodDescriptor.ofConstructor(HashMap.class)));
+        // create ResultHandleFor this Map
+        ResultHandle interceptorInstanceMapHandle = constructor.readInstanceField(interceptorInstanceMap.getFieldDescriptor(),
+                constructor.getThis());
         // build a map that links InterceptorInfo to ResultHandle
         Map<InterceptorInfo, ResultHandle> interceptorToResultHandle = new HashMap<>();
         for (int j = 0; j < boundInterceptors.size(); j++) {
@@ -158,7 +165,8 @@ public class SubclassGenerator extends AbstractGenerator {
                     constructorMethodParam);
             // then store it in the map -> Map.put(id, instance)
             constructor.invokeInterfaceMethod(MethodDescriptors.MAP_PUT,
-                    interceptorInstanceMap, idResultHandle, interceptorInstance);
+                    constructor.readInstanceField(interceptorInstanceMap.getFieldDescriptor(), constructor.getThis()),
+                    idResultHandle, interceptorInstance);
         }
 
         // PreDestroy interceptors
@@ -174,7 +182,7 @@ public class SubclassGenerator extends AbstractGenerator {
             for (InterceptorInfo interceptor : preDestroys.interceptors) {
                 // preDestroys.add(InvocationContextImpl.InterceptorInvocation.preDestroy(provider1,interceptorInstanceMap.get(InjectableInterceptor.getIdentifier())))
                 ResultHandle interceptorInstance = constructor.invokeInterfaceMethod(MethodDescriptors.MAP_GET,
-                        interceptorInstanceMap, constructor.invokeInterfaceMethod(MethodDescriptors.GET_IDENTIFIER,
+                        interceptorInstanceMapHandle, constructor.invokeInterfaceMethod(MethodDescriptors.GET_IDENTIFIER,
                                 interceptorToResultHandle.get(interceptor)));
                 ResultHandle interceptionInvocation = constructor.invokeStaticMethod(
                         MethodDescriptor.ofMethod(InterceptorInvocation.class, "preDestroy",
@@ -216,7 +224,7 @@ public class SubclassGenerator extends AbstractGenerator {
             for (InterceptorInfo interceptor : interceptedMethod.interceptors) {
                 // m1Chain.add(InvocationContextImpl.InterceptorInvocation.aroundInvoke(p3,interceptorInstanceMap.get(InjectableInterceptor.getIdentifier())))
                 ResultHandle interceptorInstance = constructor.invokeInterfaceMethod(MethodDescriptors.MAP_GET,
-                        interceptorInstanceMap, constructor.invokeInterfaceMethod(MethodDescriptors.GET_IDENTIFIER,
+                        interceptorInstanceMapHandle, constructor.invokeInterfaceMethod(MethodDescriptors.GET_IDENTIFIER,
                                 interceptorToResultHandle.get(interceptor)));
                 ResultHandle interceptionInvocation = constructor.invokeStaticMethod(
                         MethodDescriptors.INTERCEPTOR_INVOCATION_AROUND_INVOKE,
