@@ -127,8 +127,6 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
 
   /** Structure of the new CcLinkingContext. This will replace {@link CcLinkingInfo}. */
   public static class CcLinkingContext implements CcLinkingContextApi {
-    public static final CcLinkingContext EMPTY = CcLinkingContext.builder().build();
-
     private final NestedSet<LibraryToLinkWrapper> libraries;
     private final NestedSet<LinkOptions> userLinkFlags;
     private final NestedSet<Linkstamp> linkstamps;
