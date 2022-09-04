@@ -99,7 +99,7 @@ public final class CppToolchainInfo {
 
   /** Creates a CppToolchainInfo from a toolchain. */
   public CppToolchainInfo(
-      CToolchain cToolchain, PathFragment crosstoolTopPathFragment, Label toolchainLabel)
+      CToolchain cToolchain, PathFragment crosstoolTopPathFragment, Label crosstoolTop)
       throws InvalidConfigurationException {
     CToolchain toolchain = cToolchain;
     this.crosstoolTopPathFragment = crosstoolTopPathFragment;
@@ -112,12 +112,12 @@ public final class CppToolchainInfo {
 
     try {
       this.staticRuntimeLibsLabel =
-          toolchainLabel.getRelative(
+          crosstoolTop.getRelative(
               toolchain.hasStaticRuntimesFilegroup()
                   ? toolchain.getStaticRuntimesFilegroup()
                   : "static-runtime-libs-" + targetCpu);
       this.dynamicRuntimeLibsLabel =
-          toolchainLabel.getRelative(
+          crosstoolTop.getRelative(
               toolchain.hasDynamicRuntimesFilegroup()
                   ? toolchain.getDynamicRuntimesFilegroup()
                   : "dynamic-runtime-libs-" + targetCpu);
