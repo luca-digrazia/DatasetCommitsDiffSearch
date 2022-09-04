@@ -45,6 +45,10 @@ public class Logger {
 		warn(message, null, null, args);
 	}
 
+	public void warn(String message, Throwable thr, Object... args) {
+		warn(message, null, thr, args);
+	}
+
 	public void warn(String message, Element element, Object... args) {
 		warn(message, element, null, args);
 	}
