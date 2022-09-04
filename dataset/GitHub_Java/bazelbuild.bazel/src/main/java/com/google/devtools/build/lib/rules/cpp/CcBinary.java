@@ -296,7 +296,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       requestedFeaturesBuilder.add(CppRuleClasses.IS_CC_FAKE_BINARY);
     }
 
-    FdoContext fdoContext = common.getFdoContext();
+    FdoProvider fdoProvider = common.getFdoProvider();
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrReportRuleError(
             ruleContext,
@@ -306,7 +306,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
 
     CcCompilationHelper compilationHelper =
         new CcCompilationHelper(
-                ruleContext, semantics, featureConfiguration, ccToolchain, fdoContext)
+                ruleContext, semantics, featureConfiguration, ccToolchain, fdoProvider)
             .fromCommon(common, /* additionalCopts= */ ImmutableList.of())
             .addPrivateHeaders(common.getPrivateHeaders())
             .addSources(common.getSources())
@@ -348,7 +348,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
                   semantics,
                   featureConfiguration,
                   ccToolchain,
-                  fdoContext,
+                  fdoProvider,
                   ruleContext.getConfiguration())
               .fromCommon(common)
               .addDeps(ImmutableList.of(CppHelper.mallocForTarget(ruleContext)))
@@ -417,7 +417,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             ruleContext,
             ccToolchain,
             featureConfiguration,
-            fdoContext,
+            fdoProvider,
             common,
             precompiledFiles,
             ccCompilationOutputs,
@@ -575,7 +575,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
           "interface_library", dynamicLibraryForLinking.get(0).getOriginalLibraryArtifact());
     }
 
-    CcSkylarkApiProvider.maybeAdd(ruleContext, ruleBuilder);
     return ruleBuilder
         .addProvider(RunfilesProvider.class, RunfilesProvider.simple(runfiles))
         .addProvider(
@@ -583,6 +582,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             new DebugPackageProvider(ruleContext.getLabel(), strippedFile, binary, explicitDwpFile))
         .setRunfilesSupport(runfilesSupport, binary)
         .addNativeDeclaredProvider(ccLauncherInfo)
+        .addSkylarkTransitiveInfo(CcSkylarkApiProvider.NAME, new CcSkylarkApiProvider())
         .build();
   }
 
@@ -590,7 +590,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       RuleContext ruleContext,
       CcToolchainProvider ccToolchain,
       FeatureConfiguration featureConfiguration,
-      FdoContext fdoContext,
+      FdoProvider fdoProvider,
       CcCommon common,
       PrecompiledFiles precompiledFiles,
       CcCompilationOutputs ccCompilationOutputs,
@@ -621,7 +621,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             cppSemantics,
             featureConfiguration,
             ccToolchain,
-            fdoContext,
+            fdoProvider,
             ruleContext.getConfiguration());
 
     CcLinkParams.Builder ccLinkParamsBuilder = CcLinkParams.builder();

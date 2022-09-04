@@ -147,11 +147,6 @@ public class CcModule
   }
 
   @Override
-  public boolean actionIsEnabled(FeatureConfiguration featureConfiguration, String actionName) {
-    return featureConfiguration.actionIsConfigured(actionName);
-  }
-
-  @Override
   public SkylarkList<String> getCommandLine(
       FeatureConfiguration featureConfiguration,
       String actionName,
@@ -232,6 +227,7 @@ public class CcModule
         /* thinltoParamFile= */ null,
         /* thinltoMergedObjectFile= */ null,
         mustKeepDebug,
+        /* symbolCounts= */ null,
         ccToolchainProvider,
         featureConfiguration,
         useTestOnlyFlags,
@@ -965,6 +961,7 @@ public class CcModule
         compiler,
         abiVersion,
         abiLibcVersion,
+        /* supportsGoldLinker= */ false,
         /* supportsStartEndLib= */ false,
         /* supportsInterfaceSharedLibraries= */ false,
         /* supportsEmbeddedRuntimes= */ false,

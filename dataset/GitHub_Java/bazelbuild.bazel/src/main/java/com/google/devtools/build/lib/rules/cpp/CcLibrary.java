@@ -126,7 +126,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
           new MapBackedMakeVariableSupplier(toolchainMakeVariables.build()),
           new CcFlagsSupplier(ruleContext));
 
-    FdoContext fdoContext = common.getFdoContext();
+    FdoProvider fdoProvider = common.getFdoProvider();
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrReportRuleError(ruleContext, ccToolchain);
     PrecompiledFiles precompiledFiles = new PrecompiledFiles(ruleContext);
@@ -138,7 +138,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
 
     CcCompilationHelper compilationHelper =
         new CcCompilationHelper(
-                ruleContext, semantics, featureConfiguration, ccToolchain, fdoContext)
+                ruleContext, semantics, featureConfiguration, ccToolchain, fdoProvider)
             .fromCommon(common, additionalCopts)
             .addSources(common.getSources())
             .addPrivateHeaders(common.getPrivateHeaders())
@@ -152,7 +152,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
                 semantics,
                 featureConfiguration,
                 ccToolchain,
-                fdoContext,
+                fdoProvider,
                 ruleContext.getConfiguration())
             .fromCommon(common)
             .addLinkopts(common.getLinkopts())
@@ -437,7 +437,6 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
             .merge(runfiles)
             .addArtifacts(ccLinkingOutputsWithPrecompiledLibraries.getLibrariesForRunfiles(false));
 
-    CcSkylarkApiProvider.maybeAdd(ruleContext, targetBuilder);
     targetBuilder
         .setFilesToBuild(filesToBuild)
         .addProvider(compilationInfo.getCppDebugFileProvider())
@@ -447,6 +446,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
                 .setCcCompilationContext(compilationInfo.getCcCompilationContext())
                 .setCcLinkingInfo(ccLinkingInfo)
                 .build())
+        .addSkylarkTransitiveInfo(CcSkylarkApiProvider.NAME, new CcSkylarkApiProvider())
         .addOutputGroups(
             CcCommon.mergeOutputGroups(
                 ImmutableList.of(compilationInfo.getOutputGroups(), outputGroups.build())))

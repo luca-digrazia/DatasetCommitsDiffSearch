@@ -1512,16 +1512,6 @@ public final class CcCompilationHelper {
     return flagsBuilder.build();
   }
 
-  private ImmutableList<String> getCopts(Artifact sourceFile, Label sourceLabel) {
-    ImmutableList.Builder<String> coptsList = ImmutableList.builder();
-    coptsList.addAll(getCoptsFromOptions(cppConfiguration, sourceFile.getExecPathString()));
-    coptsList.addAll(copts);
-    if (sourceFile != null && sourceLabel != null) {
-      coptsList.addAll(collectPerFileCopts(sourceFile, sourceLabel));
-    }
-    return coptsList.build();
-  }
-
   private CcToolchainVariables setupCompileBuildVariables(
       CppCompileActionBuilder builder,
       Label sourceLabel,
@@ -1533,6 +1523,12 @@ public final class CcCompilationHelper {
       Artifact ltoIndexingFile,
       ImmutableMap<String, String> additionalBuildVariables) {
     Artifact sourceFile = builder.getSourceFile();
+    ImmutableList.Builder<String> userCompileFlags = ImmutableList.builder();
+    userCompileFlags.addAll(getCoptsFromOptions(cppConfiguration, sourceFile.getExecPathString()));
+    userCompileFlags.addAll(copts);
+    if (sourceFile != null && sourceLabel != null) {
+      userCompileFlags.addAll(collectPerFileCopts(sourceFile, sourceLabel));
+    }
     String dotdFileExecPath = null;
     if (builder.getDotdFile() != null) {
       dotdFileExecPath = builder.getDotdFile().getSafeExecPath().getPathString();
@@ -1553,7 +1549,7 @@ public final class CcCompilationHelper {
         toPathString(dwoFile),
         toPathString(ltoIndexingFile),
         ImmutableList.of(),
-        getCopts(builder.getSourceFile(), sourceLabel),
+        userCompileFlags.build(),
         cppModuleMap,
         usePic,
         builder.getTempOutputFile(),
@@ -1803,8 +1799,7 @@ public final class CcCompilationHelper {
           result.addPicObjectFile(picAction.getOutputFile());
 
           if (bitcodeOutput) {
-            result.addLtoBitcodeFile(
-                picAction.getOutputFile(), ltoIndexingFile, getCopts(sourceArtifact, sourceLabel));
+            result.addLtoBitcodeFile(picAction.getOutputFile(), ltoIndexingFile);
           }
         }
         if (dwoFile != null) {
@@ -1869,8 +1864,7 @@ public final class CcCompilationHelper {
         if (addObject) {
           result.addObjectFile(objectFile);
           if (bitcodeOutput) {
-            result.addLtoBitcodeFile(
-                objectFile, ltoIndexingFile, getCopts(sourceArtifact, sourceLabel));
+            result.addLtoBitcodeFile(objectFile, ltoIndexingFile);
           }
         }
         if (noPicDwoFile != null) {
