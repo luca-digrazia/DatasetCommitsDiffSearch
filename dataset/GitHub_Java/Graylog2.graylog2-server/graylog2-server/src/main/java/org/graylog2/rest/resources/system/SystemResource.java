@@ -23,7 +23,6 @@ package org.graylog2.rest.resources.system;
 import com.codahale.metrics.annotation.Timed;
 import com.codahale.metrics.jvm.ThreadDump;
 import com.google.common.collect.Maps;
-import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.Core;
 import org.graylog2.ProcessingPauseLockedException;
 import org.graylog2.plugin.Tools;
@@ -47,7 +46,6 @@ import static javax.ws.rs.core.Response.ok;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@RequiresAuthentication
 @Api(value = "System", description = "System information of this node.")
 @Path("/system")
 public class SystemResource extends RestResource {
@@ -62,8 +60,8 @@ public class SystemResource extends RestResource {
         result.put("facility", "graylog2-server");
         result.put("codename", Core.GRAYLOG2_CODENAME);
         result.put("server_id", core.getNodeId());
-       	result.put("version", Core.GRAYLOG2_VERSION.toString());
-        result.put("started_at", Tools.getISO8601String(core.getStartedAt()));
+       	result.put("version", Core.GRAYLOG2_VERSION);
+        result.put("started_at", core.getStartedAt().toString());
         result.put("is_processing", core.isProcessing());
         result.put("hostname", Tools.getLocalCanonicalHostname());
 
@@ -147,7 +145,7 @@ public class SystemResource extends RestResource {
     @Path("/threaddump")
     @Produces(MediaType.TEXT_PLAIN)
     public String threaddump() {
-        // The ThreadDump is built by internal codahale.metrics servlet library we are abusing.
+        // The ThreadDump is built by  internal codahale.metrics servlet library we are abusing.
         ThreadDump threadDump = new ThreadDump(ManagementFactory.getThreadMXBean());
         ByteArrayOutputStream output = new ByteArrayOutputStream();
 
@@ -164,5 +162,6 @@ public class SystemResource extends RestResource {
         result.put("permissions", RestPermissions.allPermissions());
         return json(result);
     }
+
 
 }

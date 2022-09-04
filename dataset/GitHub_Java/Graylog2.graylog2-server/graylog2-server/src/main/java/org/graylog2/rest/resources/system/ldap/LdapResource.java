@@ -125,15 +125,12 @@ public class LdapResource extends RestResource {
         Map<String, Object> result = Maps.newHashMap();
         try {
             final LdapConnector ldapConnector = core.getLdapRealm().ldapConnector;
-            final Map<String, String> entry = ldapConnector.checkCredentials(request.ldapUri,
+            final Map<String, String> entry = ldapConnector.loadAccount(request.ldapUri,
                                                                         request.systemUsername,
                                                                         request.systemPassword,
                                                                         request.searchBase,
                                                                         request.principalSearchPattern,
-                                                                        request.usernameAttribute,
-                                                                        request.testUsername,
-                                                                        request.testPassword);
-
+                                                                        request.testUsername);
             final Map<String, String> entryWithoutPassword = Maps.filterKeys(entry, new Predicate<String>() {
                 @Override
                 public boolean apply(String input) {
