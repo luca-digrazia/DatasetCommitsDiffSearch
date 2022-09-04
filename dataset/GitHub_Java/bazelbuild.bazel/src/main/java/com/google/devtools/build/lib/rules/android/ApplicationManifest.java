@@ -255,12 +255,12 @@ public final class ApplicationManifest {
   }
 
   private static Map<Artifact, Label> getMergeeManifests(
-      Iterable<ValidatedAndroidData> transitiveData) {
+      Iterable<ResourceContainer> resourceContainers) {
     ImmutableSortedMap.Builder<Artifact, Label> builder =
         ImmutableSortedMap.orderedBy(Artifact.EXEC_PATH_COMPARATOR);
-    for (ValidatedAndroidData d : transitiveData) {
-      if (d.isManifestExported()) {
-        builder.put(d.getManifest(), d.getLabel());
+    for (ResourceContainer r : resourceContainers) {
+      if (r.isManifestExported()) {
+        builder.put(r.getManifest(), r.getLabel());
       }
     }
     return builder.build();

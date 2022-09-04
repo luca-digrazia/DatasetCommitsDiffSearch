@@ -53,7 +53,8 @@ public final class ResourceDependencies {
    *     This should allow greater efficiency since we don't need to unroll this NestedSet to get a
    *     particular input. TODO (b/67996945): Complete this migration.
    */
-  @Deprecated private final NestedSet<ValidatedAndroidData> transitiveResourceContainers;
+  @Deprecated
+  private final NestedSet<ResourceContainer> transitiveResourceContainers;
 
   /**
    * Contains all the direct dependencies of the current target. Since a given direct dependency can
@@ -64,7 +65,8 @@ public final class ResourceDependencies {
    * @deprecated Similarly to {@link #transitiveResourceContainers}, we are moving away from storing
    *     ResourceContainer objects here. TODO (b/67996945): Complete this migration.
    */
-  @Deprecated private final NestedSet<ValidatedAndroidData> directResourceContainers;
+  @Deprecated
+  private final NestedSet<ResourceContainer> directResourceContainers;
 
   /**
    * Transitive resource files for this target.
@@ -92,10 +94,8 @@ public final class ResourceDependencies {
   private final boolean neverlink;
 
   public static ResourceDependencies fromRuleDeps(RuleContext ruleContext, boolean neverlink) {
-    NestedSetBuilder<ValidatedAndroidData> transitiveDependencies =
-        NestedSetBuilder.naiveLinkOrder();
-    NestedSetBuilder<ValidatedAndroidData> directDependencies =
-        NestedSetBuilder.naiveLinkOrder();
+    NestedSetBuilder<ResourceContainer> transitiveDependencies = NestedSetBuilder.naiveLinkOrder();
+    NestedSetBuilder<ResourceContainer> directDependencies = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveResources = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveAssets = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveManifests = NestedSetBuilder.naiveLinkOrder();
@@ -177,8 +177,8 @@ public final class ResourceDependencies {
 
   private ResourceDependencies(
       boolean neverlink,
-      NestedSet<ValidatedAndroidData> transitiveResourceContainers,
-      NestedSet<ValidatedAndroidData> directResourceContainers,
+      NestedSet<ResourceContainer> transitiveResourceContainers,
+      NestedSet<ResourceContainer> directResourceContainers,
       NestedSet<Artifact> transitiveResources,
       NestedSet<Artifact> transitiveAssets,
       NestedSet<Artifact> transitiveManifests,
@@ -222,8 +222,8 @@ public final class ResourceDependencies {
 
   @VisibleForTesting
   ResourceDependencies withResources(
-      NestedSet<ValidatedAndroidData> transitiveResourceContainers,
-      NestedSet<ValidatedAndroidData> directResourceContainers,
+      NestedSet<ResourceContainer> transitiveResourceContainers,
+      NestedSet<ResourceContainer> directResourceContainers,
       NestedSet<Artifact> transitiveResources) {
     return new ResourceDependencies(
         neverlink,
@@ -247,20 +247,21 @@ public final class ResourceDependencies {
    * identify the new container and merge appropriately. The previous direct dependencies are then
    * added to the transitive dependencies.
    *
+   * @param label The label of the library exporting this provider.
    * @param newDirectResource The new direct dependency for AndroidResourcesInfo
    * @return A provider with the current resources and label.
    */
-  public AndroidResourcesInfo toInfo(ValidatedAndroidData newDirectResource) {
+  public AndroidResourcesInfo toInfo(Label label, ResourceContainer newDirectResource) {
     if (neverlink) {
-      return ResourceDependencies.empty().toInfo(newDirectResource.getLabel());
+      return ResourceDependencies.empty().toInfo(label);
     }
     return new AndroidResourcesInfo(
-        newDirectResource.getLabel(),
-        NestedSetBuilder.<ValidatedAndroidData>naiveLinkOrder()
+        label,
+        NestedSetBuilder.<ResourceContainer>naiveLinkOrder()
             .addTransitive(transitiveResourceContainers)
             .addTransitive(directResourceContainers)
             .build(),
-        NestedSetBuilder.<ValidatedAndroidData>naiveLinkOrder().add(newDirectResource).build(),
+        NestedSetBuilder.<ResourceContainer>naiveLinkOrder().add(newDirectResource).build(),
         NestedSetBuilder.<Artifact>naiveLinkOrder()
             .addTransitive(transitiveResources)
             .addAll(newDirectResource.getResources())
@@ -323,8 +324,8 @@ public final class ResourceDependencies {
    *     get the specific Artifacts you need instead.
    */
   @Deprecated
-  public NestedSet<ValidatedAndroidData> getResourceContainers() {
-    return NestedSetBuilder.<ValidatedAndroidData>naiveLinkOrder()
+  public NestedSet<ResourceContainer> getResourceContainers() {
+    return NestedSetBuilder.<ResourceContainer>naiveLinkOrder()
         .addTransitive(directResourceContainers)
         .addTransitive(transitiveResourceContainers)
         .build();
@@ -335,7 +336,7 @@ public final class ResourceDependencies {
    *     get the specific Artifacts you need instead.
    */
   @Deprecated
-  public NestedSet<ValidatedAndroidData> getTransitiveResourceContainers() {
+  public NestedSet<ResourceContainer> getTransitiveResourceContainers() {
     return transitiveResourceContainers;
   }
 
@@ -344,7 +345,7 @@ public final class ResourceDependencies {
    *     get the specific Artifacts you need instead.
    */
   @Deprecated
-  public NestedSet<ValidatedAndroidData> getDirectResourceContainers() {
+  public NestedSet<ResourceContainer> getDirectResourceContainers() {
     return directResourceContainers;
   }
 

@@ -42,7 +42,7 @@ import javax.annotation.Nullable;
   category = SkylarkModuleCategory.NONE,
   doc = "The Android resources contributed by a single target."
 )
-public abstract class ResourceContainer implements ValidatedAndroidData {
+public abstract class ResourceContainer implements CompiledMergableAndroidData {
   /** The type of resource in question: either asset or a resource. */
   public enum ResourceType {
     ASSETS("assets"),
@@ -65,7 +65,6 @@ public abstract class ResourceContainer implements ValidatedAndroidData {
   @Nullable
   public abstract String getJavaPackage();
 
-  @Override
   @Nullable
   public abstract Artifact getApk();
 
@@ -77,7 +76,6 @@ public abstract class ResourceContainer implements ValidatedAndroidData {
   @Override
   public abstract Artifact getManifest();
 
-  @Override
   @Nullable
   public abstract Artifact getJavaSourceJar();
 
@@ -135,7 +133,6 @@ public abstract class ResourceContainer implements ValidatedAndroidData {
     return resourceType == ResourceType.ASSETS ? getAssetRoots() : getResourceRoots();
   }
 
-  @Override
   public abstract boolean isManifestExported();
 
   @Nullable
