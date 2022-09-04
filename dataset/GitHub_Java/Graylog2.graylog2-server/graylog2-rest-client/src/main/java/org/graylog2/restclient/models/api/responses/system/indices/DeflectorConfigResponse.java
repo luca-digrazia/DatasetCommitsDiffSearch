@@ -34,7 +34,7 @@ public class DeflectorConfigResponse {
     public Period maxTimePerIndex;
 
     @JsonProperty("max_size_per_index")
-    public long maxSizePerIndex;
+    public int maxSizePerIndex;
 
     @JsonProperty("max_number_of_indices")
     public int maxNumberOfIndices;
