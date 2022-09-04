@@ -15,21 +15,24 @@
 package com.google.devtools.build.lib.starlarkbuildapi.apple;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
 import com.google.devtools.build.lib.starlarkbuildapi.SplitTransitionProviderApi;
-import com.google.devtools.build.lib.starlarkbuildapi.StarlarkAspectApi;
 import com.google.devtools.build.lib.starlarkbuildapi.StarlarkRuleContextApi;
 import com.google.devtools.build.lib.starlarkbuildapi.apple.AppleStaticLibraryInfoApi.AppleStaticLibraryInfoProvider;
 import com.google.devtools.build.lib.starlarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.starlarkbuildapi.core.StructApi;
 import com.google.devtools.build.lib.starlarkbuildapi.platform.ConstraintValueInfoApi;
 import net.starlark.java.annot.Param;
+import net.starlark.java.annot.ParamType;
 import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
+import net.starlark.java.eval.NoneType;
 import net.starlark.java.eval.Sequence;
+import net.starlark.java.eval.StarlarkInt;
 import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.eval.StarlarkValue;
 
@@ -206,7 +209,6 @@ public interface AppleCommonApi<
             name = "xcode_config",
             positional = true,
             named = false,
-            type = XcodeConfigInfoApi.class,
             doc = "A provider containing information about the xcode configuration."),
       })
   ImmutableMap<String, String> getAppleHostSystemEnv(XcodeConfigInfoApiT xcodeConfig);
@@ -223,13 +225,11 @@ public interface AppleCommonApi<
             name = "xcode_config",
             positional = true,
             named = false,
-            type = XcodeConfigInfoApi.class,
             doc = "A provider containing information about the xcode configuration."),
         @Param(
             name = "platform",
             positional = true,
             named = false,
-            type = ApplePlatformApi.class,
             doc = "The apple platform."),
       })
   ImmutableMap<String, String> getTargetAppleEnvironment(
@@ -259,24 +259,12 @@ public interface AppleCommonApi<
   @StarlarkMethod(
       name = "new_objc_provider",
       doc = "Creates a new ObjcProvider instance.",
-      parameters = {
-        @Param(
-            name = "uses_swift",
-            type = Boolean.class,
-            defaultValue = "False",
-            named = true,
-            positional = false,
-            doc = "Whether this provider should enable Swift support.")
-      },
+      parameters = {},
       extraKeywords =
-          @Param(
-              name = "kwargs",
-              type = Dict.class,
-              defaultValue = "{}",
-              doc = "Dictionary of arguments."),
+          @Param(name = "kwargs", defaultValue = "{}", doc = "Dictionary of arguments."),
       useStarlarkThread = true)
   // This method is registered statically for Starlark, and never called directly.
-  ObjcProviderApi<?> newObjcProvider(Boolean usesSwift, Dict<?, ?> kwargs, StarlarkThread thread)
+  ObjcProviderApi<?> newObjcProvider(Dict<String, Object> kwargs, StarlarkThread thread)
       throws EvalException;
 
   @StarlarkMethod(
@@ -285,15 +273,16 @@ public interface AppleCommonApi<
       parameters = {
         @Param(
             name = "binary",
-            type = FileApi.class,
+            allowedTypes = {
+              @ParamType(type = FileApi.class),
+              @ParamType(type = NoneType.class),
+            },
             named = true,
-            noneable = true,
             positional = false,
             defaultValue = "None",
             doc = "The dylib binary artifact of the dynamic framework."),
         @Param(
             name = "objc",
-            type = ObjcProviderApi.class,
             named = true,
             positional = false,
             doc =
@@ -301,10 +290,11 @@ public interface AppleCommonApi<
                     + "dependencies linked into the binary."),
         @Param(
             name = "framework_dirs",
-            type = Depset.class,
-            generic1 = String.class,
+            allowedTypes = {
+              @ParamType(type = Depset.class, generic1 = String.class),
+              @ParamType(type = NoneType.class),
+            },
             named = true,
-            noneable = true,
             positional = false,
             defaultValue = "None",
             doc =
@@ -312,10 +302,11 @@ public interface AppleCommonApi<
                     + "framework."),
         @Param(
             name = "framework_files",
-            type = Depset.class,
-            generic1 = FileApi.class,
+            allowedTypes = {
+              @ParamType(type = Depset.class, generic1 = FileApi.class),
+              @ParamType(type = NoneType.class),
+            },
             named = true,
-            noneable = true,
             positional = false,
             defaultValue = "None",
             doc =
@@ -330,6 +321,31 @@ public interface AppleCommonApi<
       throws EvalException;
 
   @StarlarkMethod(
+      name = "new_executable_binary_provider",
+      doc = "Creates a new AppleExecutableBinaryInfo provider instance.",
+      parameters = {
+        @Param(
+            name = "binary",
+            allowedTypes = {
+              @ParamType(type = FileApi.class),
+              @ParamType(type = NoneType.class),
+            },
+            named = true,
+            positional = false,
+            defaultValue = "None",
+            doc = "The binary artifact of the executable."),
+        @Param(
+            name = "objc",
+            named = true,
+            positional = false,
+            doc =
+                "An ObjcProvider which contains information about the transitive "
+                    + "dependencies linked into the binary.")
+      })
+  AppleExecutableBinaryApi newExecutableBinaryProvider(
+      Object executableBinary, ObjcProviderApiT depsObjcProvider) throws EvalException;
+
+  @StarlarkMethod(
       name = "link_multi_arch_binary",
       doc =
           "Links a (potentially multi-architecture) binary targeting Apple platforms. This "
@@ -339,35 +355,69 @@ public interface AppleCommonApi<
               + "<p>This API is <b>highly experimental</b> and subject to change at any time. Do "
               + "not depend on the stability of this function at this time.",
       parameters = {
+        @Param(name = "ctx", named = true, positional = false, doc = "The Starlark rule context."),
         @Param(
-            name = "ctx",
-            type = StarlarkRuleContextApi.class,
+            name = "avoid_deps",
+            allowedTypes = {
+              @ParamType(type = Sequence.class, generic1 = TransitiveInfoCollection.class),
+              @ParamType(type = NoneType.class),
+            },
             named = true,
             positional = false,
-            doc = "The Starlark rule context."),
+            defaultValue = "None",
+            doc =
+                "A list of <code>Target</code>s that are in the dependency graph of the binary but"
+                    + " whose libraries should not be linked into the binary. This is the case for"
+                    + " dependencies that will be found at runtime in another image, such as the"
+                    + " bundle loader or any dynamic libraries/frameworks that will be loaded by"
+                    + " this binary."),
         @Param(
             name = "extra_linkopts",
-            type = Sequence.class,
-            generic1 = String.class,
+            allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
             named = true,
             positional = false,
             defaultValue = "[]",
             doc = "Extra linkopts to be passed to the linker action."),
         @Param(
             name = "extra_link_inputs",
-            type = Sequence.class,
-            generic1 = FileApi.class,
+            allowedTypes = {@ParamType(type = Sequence.class, generic1 = FileApi.class)},
             named = true,
             positional = false,
             defaultValue = "[]",
             doc = "Extra files to pass to the linker action."),
+        @Param(
+            name = "stamp",
+            named = true,
+            positional = false,
+            defaultValue = "-1",
+            doc =
+                "Whether to include build information in the linked binary. If 1, build "
+                    + "information is always included. If 0, build information is always excluded. "
+                    + "If -1 (the default), then the behavior is determined by the --[no]stamp "
+                    + "flag. This should be set to 0 when generating the executable output for "
+                    + "test rules."),
+        @Param(
+            name = "should_lipo",
+            named = true,
+            positional = false,
+            defaultValue = "True",
+            doc =
+                "If True, invoke lipo after linking to create a universal binary. This parameter "
+                    + "is temporary and defaults to True for legacy purposes. After rules_apple "
+                    + "has been updated to call this with False, the default will be changed to "
+                    + "False and the support for invoking lipo inside "
+                    + "<code>link_multi_arch_binary</code> will be removed, along with this "
+                    + "parameter.")
       },
       useStarlarkThread = true)
   // TODO(b/70937317): Iterate on, improve, and solidify this API.
   StructApi linkMultiArchBinary(
       StarlarkRuleContextT starlarkRuleContext,
+      Object avoidDeps, // Sequence<TransitiveInfoCollection> expected.
       Sequence<?> extraLinkopts, // <String> expected.
       Sequence<?> extraLinkInputs, // <? extends FileApi> expected.
+      StarlarkInt stamp,
+      Boolean shouldLipo,
       StarlarkThread thread)
       throws EvalException, InterruptedException;
 
@@ -375,18 +425,7 @@ public interface AppleCommonApi<
       name = "dotted_version",
       doc = "Creates a new <a href=\"DottedVersion.html\">DottedVersion</a> instance.",
       parameters = {
-        @Param(
-            name = "version",
-            type = String.class,
-            doc = "The string representation of the DottedVersion.")
+        @Param(name = "version", doc = "The string representation of the DottedVersion.")
       })
   DottedVersionApi<?> dottedVersion(String version) throws EvalException;
-
-  @StarlarkMethod(
-      name = "objc_proto_aspect",
-      doc =
-          "objc_proto_aspect gathers the proto dependencies of the attached rule target, and"
-              + " propagates the proto values of its dependencies through the ObjcProto provider.",
-      structField = true)
-  StarlarkAspectApi getObjcProtoAspect();
 }
