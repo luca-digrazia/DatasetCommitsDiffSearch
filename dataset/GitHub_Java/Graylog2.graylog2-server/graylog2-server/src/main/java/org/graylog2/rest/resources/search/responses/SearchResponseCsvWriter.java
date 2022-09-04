@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2013 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -42,7 +44,7 @@ public class SearchResponseCsvWriter implements MessageBodyWriter<SearchResponse
 
     public static final MediaType TEXT_CSV = new MediaType("text", "csv");
 
-    private static final Logger LOG = LoggerFactory.getLogger(SearchResponseCsvWriter.class);
+    private static final Logger log = LoggerFactory.getLogger(SearchResponseCsvWriter.class);
 
     @Override
     public boolean isWriteable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
@@ -71,7 +73,7 @@ public class SearchResponseCsvWriter implements MessageBodyWriter<SearchResponse
             int idx = 0;
             // first collect all values from the current message
             for (String fieldName : sortedFields) {
-                final Object val = message.getMessage().get(fieldName);
+                final Object val = message.message.get(fieldName);
                 fieldValues[idx++] = ((val == null) ? null : val.toString().replaceAll("\n", "\\\\n"));
                 fieldValues[idx++] = ((val == null) ? null : val.toString().replaceAll("\r", "\\\\r"));
             }
@@ -79,7 +81,7 @@ public class SearchResponseCsvWriter implements MessageBodyWriter<SearchResponse
             csvWriter.writeNext(fieldValues);
         }
         if (csvWriter.checkError()) {
-            LOG.error("Encountered unspecified error when writing message result as CSV, result is likely malformed.");
+            log.error("Encountered unspecified error when writing message result as CSV, result is likely malformed.");
         }
         csvWriter.close();
     }
