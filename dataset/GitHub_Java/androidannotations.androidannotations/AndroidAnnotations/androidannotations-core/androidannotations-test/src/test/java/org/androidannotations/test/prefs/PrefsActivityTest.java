@@ -18,6 +18,7 @@ package org.androidannotations.test.prefs;
 import static org.fest.assertions.api.Assertions.assertThat;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -85,6 +86,12 @@ public class PrefsActivityTest {
 		Set<String> values = new TreeSet<String>(Arrays.asList("1", "2", "3"));
 		somePrefs.types().put(values);
 		assertThat(sharedPref.getStringSet("types", null)).isEqualTo(values);
+	}
+
+	@Test
+	public void checkSetDefaultValues() {
+		Set<String> values = new HashSet<String>(Arrays.asList("a", "b", "c"));
+		assertThat(somePrefs.setWithDefault().get()).isEqualTo(values);
 	}
 
 	@Test
@@ -230,5 +237,20 @@ public class PrefsActivityTest {
 		sharedPref.edit().clear().commit();
 
 		assertThat(somePrefs.types().get()).isEmpty();
+	}
+
+	@Test
+	public void getStringSetEmptyWithDefaultValue() {
+		sharedPref.edit().clear().commit();
+
+		assertThat(somePrefs.emtpyStringSet().get()).isEmpty();
+	}
+
+	@Test
+	public void getStringSetWithDefaultRes() {
+		sharedPref.edit().clear().commit();
+
+		assertThat(somePrefs.planetsStringSet().get().size()).isEqualTo(8);
+		assertThat(somePrefs.planetsStringSet().get()).contains("Earth");
 	}
 }
