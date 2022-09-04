@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -29,6 +28,7 @@ import com.google.devtools.build.lib.pkgcache.ParsingFailedEvent;
 import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternSkyKeyOrException;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationResult;
@@ -163,8 +163,8 @@ final class SkyframeTargetPatternEvaluator implements TargetPatternEvaluator {
   private TargetPatternsResultBuilder createTargetPatternEvaluatorUtil(
       FilteringPolicy policy, ExtendedEventHandler eventHandler, boolean keepGoing) {
     return policy == FilteringPolicies.FILTER_TESTS
-        ? new TestTargetPatternsResultBuilder(
-            skyframeExecutor.getPackageManager(), eventHandler, keepGoing)
+        ? new TestTargetPatternsResultBuilder(skyframeExecutor.getPackageManager(), eventHandler,
+          keepGoing)
         : new BuildTargetPatternsResultBuilder();
   }
 
