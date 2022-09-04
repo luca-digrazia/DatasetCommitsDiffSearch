@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,12 +13,11 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.vq;
 
 import java.io.Serializable;
-import java.util.Optional;
 
 /**
  * Vector quantizer with competitive learning.
@@ -33,6 +32,7 @@ public interface VectorQuantizer extends Serializable {
 
     /**
      * Update the codebook with a new observation.
+     * @param x a new observation.
      */
     void update(double[] x);
 
@@ -40,6 +40,7 @@ public interface VectorQuantizer extends Serializable {
      * Quantize a new observation. Returns Optional.empty
      * if the observation is noise.
      * @param x a new observation.
+     * @return the quantized vector.
      */
-    Optional<double[]> quantize(double[] x);
+    double[] quantize(double[] x);
 }

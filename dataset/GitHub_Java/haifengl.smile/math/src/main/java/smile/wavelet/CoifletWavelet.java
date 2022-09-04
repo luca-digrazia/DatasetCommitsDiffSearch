@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.wavelet;
 
@@ -89,13 +89,14 @@ public class CoifletWavelet extends Wavelet {
     /**
      * Constructor. Create a Coiflet wavelet with n coefficients.
      * n = 6, 12, 18, 24, or 30 are supported.
+     * @param n the number of wavelet coefficients.
      */
     public CoifletWavelet(int n) {
         super(n == 6 ? c6 :
               n == 12 ? c12 :
               n == 18 ? c18 :
               n == 24 ? c24 :
-              n == 30 ? c30 : null
+              n == 30 ? c30 : c6
             );
 
         if ( n < 6 || n > 30 || n % 6 != 0) {

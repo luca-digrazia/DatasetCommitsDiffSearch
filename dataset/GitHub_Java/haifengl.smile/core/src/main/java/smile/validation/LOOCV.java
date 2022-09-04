@@ -21,7 +21,9 @@ import java.util.Arrays;
 import java.util.function.BiFunction;
 import smile.classification.Classifier;
 import smile.classification.DataFrameClassifier;
+import smile.classification.SoftClassifier;
 import smile.data.DataFrame;
+import smile.data.Tuple;
 import smile.data.formula.Formula;
 import smile.math.MathEx;
 import smile.regression.Regression;
@@ -97,9 +99,9 @@ public interface LOOCV {
             fitTime += System.nanoTime() - start;
 
             start = System.nanoTime();
-            if (model.soft()) {
+            if (model instanceof SoftClassifier) {
                 soft = true;
-                prediction[i] = model.predict(x[i], posteriori[i]);
+                prediction[i] = ((SoftClassifier<T>) model).predict(x[i], posteriori[i]);
             } else {
                 prediction[i] = model.predict(x[i]);
             }
@@ -163,6 +165,7 @@ public interface LOOCV {
      * @param trainer the lambda to train the model.
      * @return the validation results.
      */
+    @SuppressWarnings("unchecked")
     static ClassificationMetrics classification(Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameClassifier> trainer) {
         int[] y = formula.y(data).toIntArray();
         int k = MathEx.unique(y).length;
@@ -181,9 +184,9 @@ public interface LOOCV {
             fitTime += System.nanoTime() - start;
 
             start = System.nanoTime();
-            if (model.soft()) {
+            if (model instanceof SoftClassifier) {
                 soft = true;
-                prediction[i] = model.predict(data.get(i), posteriori[i]);
+                prediction[i] = ((SoftClassifier<Tuple>) model).predict(data.get(i), posteriori[i]);
             } else {
                 prediction[i] = model.predict(data.get(i));
             }

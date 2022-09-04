@@ -2272,10 +2272,10 @@ public class Matrix extends DMatrix {
      * <p>
      * A stochastic matrix, probability matrix, or transition matrix is used to
      * describe the transitions of a Markov chain. A right stochastic matrix is
-     * a square matrix each of whose rows consists of non-negative real numbers,
+     * a square matrix each of whose rows consists of nonnegative real numbers,
      * with each row summing to 1. A left stochastic matrix is a square matrix
-     * whose columns consist of non-negative real numbers whose sum is 1. A doubly
-     * stochastic matrix where all entries are non-negative and all rows and all
+     * whose columns consist of nonnegative real numbers whose sum is 1. A doubly
+     * stochastic matrix where all entries are nonnegative and all rows and all
      * columns sum to 1. A stationary probability vector &pi; is defined as a
      * vector that does not change under application of the transition matrix;
      * that is, it is defined as a left eigenvector of the probability matrix,
@@ -2717,7 +2717,7 @@ public class Matrix extends DMatrix {
             int n = qr.n;
             Matrix R = Matrix.diag(tau);
             for (int i = 0; i < n; i++) {
-                for (int j = i; j < n; j++) {
+                for (int j = i+1; j < n; j++) {
                     R.set(i, j, qr.get(i, j));
                 }
             }
@@ -2732,12 +2732,21 @@ public class Matrix extends DMatrix {
         public Matrix Q() {
             int m = qr.m;
             int n = qr.n;
-            int k = Math.min(m, n);
-            Matrix Q = qr.clone();
-            int info = LAPACK.engine.orgqr(qr.layout(), m, n, k, Q.A, qr.ld, DoubleBuffer.wrap(tau));
-            if (info != 0) {
-                logger.error("LAPACK ORGRQ error code: {}", info);
-                throw new ArithmeticException("LAPACK ORGRQ error code: " + info);
+            Matrix Q = new Matrix(m, n);
+            for (int k = n - 1; k >= 0; k--) {
+                Q.set(k, k, 1.0f);
+                for (int j = k; j < n; j++) {
+                    if (qr.get(k, k) != 0) {
+                        double s = 0.0f;
+                        for (int i = k; i < m; i++) {
+                            s += qr.get(i, k) * Q.get(i, j);
+                        }
+                        s = -s / qr.get(k, k);
+                        for (int i = k; i < m; i++) {
+                            Q.add(i, j, s * qr.get(i, k));
+                        }
+                    }
+                }
             }
             return Q;
         }

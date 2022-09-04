@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,26 +13,27 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.vq;
 
 import java.io.Serializable;
 
 /**
- * The neighborhood function determines the rate of change
- * around the winner neuron.
+ * The neighborhood function for 2-dimensional lattice topology (e.g. SOM).
+ * It determines the rate of change around the winner neuron.
  *
  * @author Haifeng Li
  */
 public interface Neighborhood extends Serializable {
     /**
      * Returns the changing rate of neighborhood at a given iteration.
-     * @param i the order number of neuron from the the winner neuron.
-     *          For the winner neuron, it is 0.
+     * @param i the row distance of topology from the the winner neuron.
+     * @param j the column distance of topology from the the winner neuron.
      * @param t the order number of current iteration.
+     * @return the changing rate of neighborhood.
      */
-    double of(int i, int t);
+    double of(int i, int j, int t);
 
     /**
      * Returns the bubble neighborhood function.
@@ -44,21 +45,23 @@ public interface Neighborhood extends Serializable {
      * computational cost and the approximation of the Gaussian.
      *
      * @param radius the radius of neighborhood.
+     * @return the bubble neighborhood function.
      */
     static Neighborhood bubble(int radius) {
-        return (i, t) -> Math.abs(i) < radius ? 1 : 0;
+        return (i, j, t) -> Math.abs(i) < radius && Math.abs(j) < radius ? 1 : 0;
     }
 
     /**
      * Returns Gaussian neighborhood function.
      * @param sigma the initial radius of neighborhood.
      * @param T the number of iterations.
+     * @return Gaussian neighborhood function.
      */
-    static Neighborhood Gaussian(double sigma, int T) {
-        return (i, t) -> {
+    static Neighborhood Gaussian(double sigma, double T) {
+        return (i, j, t) -> {
             double s = sigma * Math.exp(-t / T);
             double gamma = -0.5 / (s * s);
-            return Math.exp(gamma * i * i);
+            return Math.exp(gamma * (i*i + j*j));
         };
     }
 }
