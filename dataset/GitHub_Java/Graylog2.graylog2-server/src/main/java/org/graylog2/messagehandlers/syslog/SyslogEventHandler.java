@@ -20,8 +20,6 @@
 
 package org.graylog2.messagehandlers.syslog;
 
-import java.net.InetAddress;
-import java.util.logging.Level;
 import org.apache.log4j.Logger;
 import org.graylog2.Tools;
 import org.graylog2.messagehandlers.gelf.GELFMessage;
@@ -32,11 +30,7 @@ import org.productivity.java.syslog4j.server.SyslogServerSessionlessEventHandler
 
 import java.net.SocketAddress;
 import java.net.UnknownHostException;
-import java.util.Date;
-import java.util.Map;
 import org.graylog2.Main;
-import org.productivity.java.syslog4j.impl.message.structured.StructuredSyslogMessage;
-import org.productivity.java.syslog4j.server.impl.event.structured.StructuredSyslogServerEvent;
 
 /**
  * SyslogEventHandler.java: May 17, 2010 8:58:18 PM
@@ -76,36 +70,10 @@ public class SyslogEventHandler implements SyslogServerSessionlessEventHandlerIF
         LOG.debug("Raw: " + new String(event.getRaw()));
         LOG.debug("Host stripped from message? " + event.isHostStrippedFromMessage());
 
-        // Check if date could be parsed.
+        // Manually check for provided date because it's necessary to parse the GELF message. Second check for completness later.
         if (event.getDate() == null) {
-            if (Main.configuration.getAllowOverrideSyslogDate()) {
-                // empty Date constructor allocates a Date object and initializes it so that it represents the time at which it was allocated.
-                event.setDate(new Date());
-                LOG.info("Date could not be parsed. Was set to NOW because allow_override_syslog_date is true.");
-            } else {
-                LOG.info("Syslog message is missing date or date could not be parsed. (Possibly set allow_override_syslog_date to true) "
-                        + "Not further handling. Message was: " + new String(event.getRaw()));
-                return;
-            }
-        }
-
-        // try to parse from event. if that fails or nothing is parsed, tokenize self.
-        // Parse possibly included structured syslog data into additional_fields.
-        Map<String, String> structuredData = StructuredSyslog.extractFields(event.getRaw());
-        if (structuredData.size() > 0) {
-            // We were able to parse structured data from the message. Add as additional fields.
-            LOG.debug("Parsed <" + structuredData.size() + "> structured data pairs."
-                        + " Adding as additional_fields. Not using tokenizer.");
-            gelf.addAdditionalData(structuredData);
-        } else {
-            /*
-             * There was no structured data to be parsed or parsing failed.
-             *
-             * This means that we can safely extract values with the Tokenizer
-             * without interfering with structured data.
-             */
-             LOG.debug("No structured data was parsed from message. Using tokenizer.");
-            // XXX IMPLEMENT
+            LOG.info("Syslog message is missing date or could not be parsed. Not further handling. Message was: " + new String(event.getRaw()));
+            return;
         }
 
         // Possibly overwrite host with RNDS if configured.
