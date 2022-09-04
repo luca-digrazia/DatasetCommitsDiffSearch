@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.devtools.build.lib.remote.common.RemoteActionExecutionContext;
 import com.google.devtools.build.lib.remote.common.RemoteCacheClient;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.vfs.Path;
@@ -49,12 +48,11 @@ public final class DiskAndRemoteCacheClient implements RemoteCacheClient {
   }
 
   @Override
-  public void uploadActionResult(
-      RemoteActionExecutionContext context, ActionKey actionKey, ActionResult actionResult)
+  public void uploadActionResult(ActionKey actionKey, ActionResult actionResult)
       throws IOException, InterruptedException {
-    diskCache.uploadActionResult(context, actionKey, actionResult);
+    diskCache.uploadActionResult(actionKey, actionResult);
     if (!options.incompatibleRemoteResultsIgnoreDisk || options.remoteUploadLocalResults) {
-      remoteCache.uploadActionResult(context, actionKey, actionResult);
+      remoteCache.uploadActionResult(actionKey, actionResult);
     }
   }
 
@@ -166,19 +164,19 @@ public final class DiskAndRemoteCacheClient implements RemoteCacheClient {
 
   @Override
   public ListenableFuture<ActionResult> downloadActionResult(
-      RemoteActionExecutionContext context, ActionKey actionKey, boolean inlineOutErr) {
+      ActionKey actionKey, boolean inlineOutErr) {
     if (diskCache.containsActionResult(actionKey)) {
-      return diskCache.downloadActionResult(context, actionKey, inlineOutErr);
+      return diskCache.downloadActionResult(actionKey, inlineOutErr);
     }
 
     if (!options.incompatibleRemoteResultsIgnoreDisk || options.remoteAcceptCached) {
       return Futures.transformAsync(
-          remoteCache.downloadActionResult(context, actionKey, inlineOutErr),
+          remoteCache.downloadActionResult(actionKey, inlineOutErr),
           (actionResult) -> {
             if (actionResult == null) {
               return Futures.immediateFuture(null);
             } else {
-              diskCache.uploadActionResult(context, actionKey, actionResult);
+              diskCache.uploadActionResult(actionKey, actionResult);
               return Futures.immediateFuture(actionResult);
             }
           },
