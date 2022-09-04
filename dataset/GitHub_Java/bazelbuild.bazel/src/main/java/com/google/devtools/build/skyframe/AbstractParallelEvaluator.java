@@ -31,7 +31,6 @@ import com.google.devtools.build.skyframe.NodeEntry.DirtyState;
 import com.google.devtools.build.skyframe.ParallelEvaluatorContext.EnqueueParentBehavior;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import com.google.devtools.build.skyframe.SkyFunctionException.ReifiedSkyFunctionException;
-import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -350,10 +349,7 @@ public abstract class AbstractParallelEvaluator {
               evaluatorContext.getProgressReceiver().computed(skyKey, elapsedTimeNanos);
               Profiler.instance()
                   .logSimpleTaskDuration(
-                      startTime,
-                      Duration.ofNanos(elapsedTimeNanos),
-                      ProfilerTask.SKYFUNCTION,
-                      skyKey);
+                      startTime, elapsedTimeNanos, ProfilerTask.SKYFUNCTION, skyKey);
             }
           }
         } catch (final SkyFunctionException builderException) {
