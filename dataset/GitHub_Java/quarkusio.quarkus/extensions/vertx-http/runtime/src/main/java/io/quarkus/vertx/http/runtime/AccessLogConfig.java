@@ -15,27 +15,23 @@ public class AccessLogConfig {
     public boolean enabled;
 
     /**
-     * The access log pattern:
+     * A regular expression that can be used to exclude some paths from logging.
+     */
+    @ConfigItem
+    Optional<String> excludePattern;
+
+    /**
+     * The access log pattern.
      *
-     * If this is the string 'common', 'combined' or 'long' then this will use one of the specified named formats:
-     * <ul>
-     * <li>
-     * common:<br />
-     * %h %l %u %t "%r" %s %b
-     * </li>
-     * <li>
-     * combined:<br />
-     * %h %l %u %t "%r" %s %b "%{i,Referer}" "%{i,User-Agent}"
-     * </li>
-     * <li>
-     * long:<br />
-     * %r<br />
-     * %{ALL_REQUEST_HEADERS}<br />
-     * </li>
-     * </ul>
+     * If this is the string `common`, `combined` or `long` then this will use one of the specified named formats:
+     *
+     * - common: `%h %l %u %t "%r" %s %b`
+     * - combined: `%h %l %u %t "%r" %s %b "%{i,Referer}" "%{i,User-Agent}"`
+     * - long: `%r\n%{ALL_REQUEST_HEADERS}`
      *
      * Otherwise consult the Quarkus documentation for the full list of variables that can be used.
      *
+     * @asciidoclet
      */
     @ConfigItem(defaultValue = "common")
     public String pattern;
