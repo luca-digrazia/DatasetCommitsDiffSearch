@@ -48,6 +48,7 @@ import io.smallrye.config.SmallRyeConfigProviderResolver;
 /**
  * The dev mojo, that connects to a remote host
  * <p>
+ * You can launch forked app directly with {@code dev}
  */
 @Mojo(name = "remote-dev", defaultPhase = LifecyclePhase.PREPARE_PACKAGE, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
 public class RemoteDevMojo extends AbstractMojo {
@@ -90,8 +91,18 @@ public class RemoteDevMojo extends AbstractMojo {
     @Override
     public void execute() throws MojoFailureException, MojoExecutionException {
         mavenVersionEnforcer.ensureMavenVersion(getLog(), session);
-        boolean found = MojoUtils.checkProjectForMavenBuildPlugin(project);
-
+        boolean found = false;
+        for (Plugin i : project.getBuildPlugins()) {
+            if (i.getGroupId().equals(MojoUtils.getPluginGroupId())
+                    && i.getArtifactId().equals(MojoUtils.getPluginArtifactId())) {
+                for (PluginExecution p : i.getExecutions()) {
+                    if (p.getGoals().contains("build")) {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+        }
         if (!found) {
             getLog().warn("The quarkus-maven-plugin build goal was not configured for this project, " +
                     "skipping quarkus:remote-dev as this is assumed to be a support library. If you want to run Quarkus remote-dev"
