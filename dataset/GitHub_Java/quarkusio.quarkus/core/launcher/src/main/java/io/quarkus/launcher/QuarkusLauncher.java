@@ -1,14 +1,14 @@
 package io.quarkus.launcher;
 
-import java.net.JarURLConnection;
-import java.net.URI;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
-import io.quarkus.bootstrap.BootstrapConstants;
+import io.quarkus.bootstrap.app.CuratedApplication;
+import io.quarkus.bootstrap.app.QuarkusBootstrap;
 
 /**
  * IDE entry point.
@@ -22,7 +22,8 @@ import io.quarkus.bootstrap.BootstrapConstants;
  */
 public class QuarkusLauncher {
 
-    public static void launch(String callingClass, String quarkusApplication, String... args) {
+    public static void launch(String callingClass, String quarkusApplication, Consumer<Integer> exitHandler, String... args) {
+
         try {
             String classResource = callingClass.replace(".", "/") + ".class";
             URL resource = Thread.currentThread().getContextClassLoader().getResource(classResource);
@@ -30,15 +31,7 @@ public class QuarkusLauncher {
             path = path.substring(0, path.length() - classResource.length());
             URL newResource = new URL(resource.getProtocol(), resource.getHost(), resource.getPort(), path);
 
-            URI uri = newResource.toURI();
-            Path appClasses;
-            if ("jar".equals(uri.getScheme())) {
-                JarURLConnection connection = (JarURLConnection) uri.toURL().openConnection();
-                connection.setDefaultUseCaches(false);
-                appClasses = Paths.get(connection.getJarFileURL().toURI());
-            } else {
-                appClasses = Paths.get(uri);
-            }
+            Path appClasses = Paths.get(newResource.toURI());
             if (quarkusApplication != null) {
                 System.setProperty("quarkus.package.main-class", quarkusApplication);
             }
@@ -47,16 +40,17 @@ public class QuarkusLauncher {
             context.put("app-classes", appClasses);
             context.put("args", args);
 
-            RuntimeLaunchClassLoader loader = new RuntimeLaunchClassLoader(QuarkusLauncher.class.getClassLoader());
-            Thread.currentThread().setContextClassLoader(loader);
-
-            Class<?> launcher = loader.loadClass("io.quarkus.bootstrap.IDELauncherImpl");
-            launcher.getDeclaredMethod("launch", Path.class, Map.class).invoke(null, appClasses, context);
+            //todo : proper support for everything
+            CuratedApplication app = QuarkusBootstrap.builder(appClasses)
+                    .setBaseClassLoader(QuarkusLauncher.class.getClassLoader())
+                    .setProjectRoot(appClasses)
+                    .setIsolateDeployment(true)
+                    .setMode(QuarkusBootstrap.Mode.DEV)
+                    .build().bootstrap();
+            app.runInAugmentClassLoader("io.quarkus.deployment.dev.IDEDevModeMain", context);
 
         } catch (Exception e) {
             throw new RuntimeException(e);
-        } finally {
-            System.clearProperty(BootstrapConstants.SERIALIZED_APP_MODEL);
         }
     }
 

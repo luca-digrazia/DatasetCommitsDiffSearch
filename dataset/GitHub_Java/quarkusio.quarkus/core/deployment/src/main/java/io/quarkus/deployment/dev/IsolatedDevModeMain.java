@@ -6,6 +6,8 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -19,14 +21,11 @@ import java.util.function.Predicate;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 import org.jboss.logging.Logger;
 
+import io.quarkus.bootstrap.app.AdditionalDependency;
 import io.quarkus.bootstrap.app.AugmentAction;
 import io.quarkus.bootstrap.app.CuratedApplication;
 import io.quarkus.bootstrap.app.RunningQuarkusApplication;
 import io.quarkus.bootstrap.app.StartupAction;
-import io.quarkus.bootstrap.classloading.ClassPathElement;
-import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
-import io.quarkus.bootstrap.logging.InitialConfigurator;
-import io.quarkus.bootstrap.runner.Timing;
 import io.quarkus.builder.BuildChainBuilder;
 import io.quarkus.builder.BuildContext;
 import io.quarkus.builder.BuildStep;
@@ -34,7 +33,9 @@ import io.quarkus.deployment.builditem.ApplicationClassPredicateBuildItem;
 import io.quarkus.dev.spi.HotReplacementSetup;
 import io.quarkus.runner.bootstrap.AugmentActionImpl;
 import io.quarkus.runtime.ApplicationLifecycleManager;
+import io.quarkus.runtime.Timing;
 import io.quarkus.runtime.configuration.QuarkusConfigFactory;
+import io.quarkus.runtime.logging.InitialConfigurator;
 import io.quarkus.runtime.logging.LoggingSetupRecorder;
 
 public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<String, Object>>, Closeable {
@@ -254,12 +255,18 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
                                     context.produce(new ApplicationClassPredicateBuildItem(new Predicate<String>() {
                                         @Override
                                         public boolean test(String s) {
-                                            QuarkusClassLoader cl = (QuarkusClassLoader) Thread.currentThread()
-                                                    .getContextClassLoader();
-                                            //if the class file is present in this (and not the parent) CL then it is an application class
-                                            List<ClassPathElement> res = cl
-                                                    .getElementsWithResource(s.replace(".", "/") + ".class", true);
-                                            return !res.isEmpty();
+                                            for (AdditionalDependency i : curatedApplication.getQuarkusBootstrap()
+                                                    .getAdditionalApplicationArchives()) {
+                                                if (i.isHotReloadable()) {
+                                                    for (Path path : i.getArchivePath()) {
+                                                        Path p = path.resolve(s.replace(".", "/") + ".class");
+                                                        if (Files.exists(p)) {
+                                                            return true;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            return false;
                                         }
                                     }));
                                 }
