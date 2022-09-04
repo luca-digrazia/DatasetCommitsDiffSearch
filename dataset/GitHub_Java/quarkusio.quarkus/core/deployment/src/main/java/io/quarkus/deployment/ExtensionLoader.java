@@ -67,6 +67,7 @@ import io.quarkus.deployment.annotations.Weak;
 import io.quarkus.deployment.builditem.AdditionalApplicationArchiveMarkerBuildItem;
 import io.quarkus.deployment.builditem.BootstrapConfigSetupCompleteBuildItem;
 import io.quarkus.deployment.builditem.BytecodeRecorderObjectLoaderBuildItem;
+import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.ConfigurationBuildItem;
 import io.quarkus.deployment.builditem.MainBytecodeRecorderBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigurationProxyBuildItem;
@@ -488,6 +489,7 @@ public final class ExtensionLoader {
             }
             final BuildStep buildStep = method.getAnnotation(BuildStep.class);
             final String[] archiveMarkers = buildStep.applicationArchiveMarkers();
+            final String[] capabilities = buildStep.providesCapabilities();
             final Class<? extends BooleanSupplier>[] onlyIf = buildStep.onlyIf();
             final Class<? extends BooleanSupplier>[] onlyIfNot = buildStep.onlyIfNot();
             final Parameter[] methodParameters = method.getParameters();
@@ -527,6 +529,13 @@ public final class ExtensionLoader {
                         bc.produce(new AdditionalApplicationArchiveMarkerBuildItem(marker));
                     }
                 }).produces(AdditionalApplicationArchiveMarkerBuildItem.class).buildIf(finalAddStep));
+            }
+            if (capabilities.length > 0) {
+                chainConfig = chainConfig.andThen(bcb -> bcb.addBuildStep(bc -> {
+                    for (String capability : capabilities) {
+                        bc.produce(new CapabilityBuildItem(capability));
+                    }
+                }).produces(CapabilityBuildItem.class).buildIf(finalAddStep));
             }
 
             if (isRecorder) {

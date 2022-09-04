@@ -32,6 +32,8 @@ public class TestResourceManager implements Closeable {
 
     public static final String CLOSEABLE_NAME = TestResourceManager.class.getName() + ".closeable";
 
+    private static final int ANNOTATION = 0x00002000;
+
     private final List<TestResourceEntry> sequentialTestResourceEntries;
     private final List<TestResourceEntry> parallelTestResourceEntries;
     private final List<TestResourceEntry> allTestResourceEntries;
@@ -374,7 +376,7 @@ public class TestResourceManager implements Closeable {
     }
 
     private boolean keepTestResourceAnnotation(AnnotationInstance annotation, ClassInfo targetClass, Set<String> testClasses) {
-        if (targetClass.isAnnotation()) {
+        if (isAnnotation(targetClass)) {
             // meta-annotations have already been handled in collectMetaAnnotations
             return false;
         }
@@ -383,6 +385,10 @@ public class TestResourceManager implements Closeable {
             return testClasses.contains(targetClass.name().toString('.'));
         }
         return true;
+    }
+
+    private boolean isAnnotation(ClassInfo info) {
+        return (info.flags() & ANNOTATION) != 0;
     }
 
     public static class TestResourceClassEntry {

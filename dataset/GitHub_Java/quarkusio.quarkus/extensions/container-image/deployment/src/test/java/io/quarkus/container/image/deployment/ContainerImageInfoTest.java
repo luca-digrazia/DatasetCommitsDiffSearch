@@ -19,6 +19,7 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.builditem.ApplicationInfoBuildItem;
 import io.quarkus.deployment.configuration.BuildTimeConfigurationReader;
 import io.quarkus.deployment.configuration.DefaultValuesConfigurationSource;
+import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.configuration.ConfigUtils;
 import io.smallrye.config.PropertiesConfigSource;
 import io.smallrye.config.SmallRyeConfig;
@@ -81,16 +82,9 @@ public class ContainerImageInfoTest {
     public void shouldFailWhenSpacesInGroupProperty() {
         givenProperty(GROUP_PROPERTY, "group with space");
         // user error should not be auto-corrected
-        IllegalArgumentException thrown = assertThrows(
+        thenImagePublicationFails(
                 IllegalArgumentException.class,
-                this::whenPublishImageInfo,
-                "Expected java.lang.IllegalArgumentException to be thrown from ContainerImageProcessor.publishImageInfo");
-
-        assertTrue(
-                thrown.getMessage().contains(
-                        "The supplied combination of container-image group 'group with space' and name 'repo/name' is invalid"),
-                "Expected the error message to be 'The supplied combination of container-image group 'group with space' and name 'repo/name' is invalid' but was '"
-                        + thrown.getMessage() + "'");
+                "The supplied combination of container-image group 'group with space' and name 'repo/name' is invalid");
     }
 
     private void givenNoUserName() {
@@ -112,7 +106,7 @@ public class ContainerImageInfoTest {
     private void whenPublishImageInfo() {
         BuildTimeConfigurationReader reader = new BuildTimeConfigurationReader(
                 Collections.singletonList(ContainerImageConfig.class));
-        SmallRyeConfigBuilder builder = ConfigUtils.configBuilder(false);
+        SmallRyeConfigBuilder builder = ConfigUtils.configBuilder(false, LaunchMode.NORMAL);
 
         DefaultValuesConfigurationSource ds = new DefaultValuesConfigurationSource(
                 reader.getBuildTimePatternMap());
@@ -133,5 +127,17 @@ public class ContainerImageInfoTest {
 
     private void thenImageIs(String expectedImage) {
         assertEquals(expectedImage, actualContainerImageInfo.getImage());
+    }
+
+    private <T extends Throwable> void thenImagePublicationFails(Class<T> expectedErrorType, String expectedErrorMessage) {
+        T thrown = assertThrows(
+                expectedErrorType,
+                this::whenPublishImageInfo,
+                String.format("Expected %s to be thrown from ContainerImageProcessor.publishImageInfo",
+                        expectedErrorType.getName()));
+
+        assertTrue(
+                thrown.getMessage().contains(expectedErrorMessage),
+                String.format("Expected the error message to be '%s' but was '%s'", expectedErrorMessage, thrown.getMessage()));
     }
 }

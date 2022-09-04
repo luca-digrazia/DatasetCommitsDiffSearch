@@ -9,10 +9,8 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
-import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,7 +50,6 @@ import io.quarkus.deployment.dev.DevModeContext;
 import io.quarkus.deployment.dev.DevModeMain;
 import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.dev.appstate.ApplicationStateNotification;
-import io.quarkus.dev.testing.TestScanningLock;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.configuration.ProfileManager;
 import io.quarkus.runtime.util.ClassPathUtils;
@@ -78,8 +75,6 @@ public class QuarkusDevModeTest
         implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, AfterEachCallback, TestInstanceFactory {
 
     private static final Logger rootLogger;
-    public static final OpenOption[] OPEN_OPTIONS = { StandardOpenOption.SYNC, StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE };
     private Handler[] originalRootLoggerHandlers;
 
     static {
@@ -317,7 +312,7 @@ public class QuarkusDevModeTest
                             byte[] data = FileUtil.readFileContents(in);
                             Path resolved = deploymentResourcePath.resolve(relative);
                             Files.createDirectories(resolved.getParent());
-                            Files.write(resolved, data, OPEN_OPTIONS);
+                            Files.write(resolved, data);
                         }
                     } catch (IOException e) {
                         throw new UncheckedIOException(e);
@@ -376,7 +371,7 @@ public class QuarkusDevModeTest
                                 byte[] data = FileUtil.readFileContents(in);
                                 Path resolved = deploymentTestResourcePath.resolve(relative);
                                 Files.createDirectories(resolved.getParent());
-                                Files.write(resolved, data, OPEN_OPTIONS);
+                                Files.write(resolved, data);
                             }
                         } catch (IOException e) {
                             throw new UncheckedIOException(e);
@@ -583,30 +578,24 @@ public class QuarkusDevModeTest
     }
 
     void modifyFile(String name, Function<String, String> mutator, Path path) {
-        TestScanningLock.lockForTests();
-        try {
-            AtomicBoolean found = new AtomicBoolean(false);
-            try (Stream<Path> sources = Files.walk(path)) {
-                sources.forEach(s -> {
-                    if (s.endsWith(name)) {
-                        found.set(true);
-                        modifyPath(mutator, path, s);
-                    }
-                });
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+        AtomicBoolean found = new AtomicBoolean(false);
+        try (Stream<Path> sources = Files.walk(path)) {
+            sources.forEach(s -> {
+                if (s.endsWith(name)) {
+                    found.set(true);
+                    modifyPath(mutator, path, s);
+                }
+            });
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
 
-            if (!found.get()) {
-                throw new IllegalArgumentException("File " + name + " was not part of the test application");
-            }
-        } finally {
-            TestScanningLock.unlockForTests();
+        if (!found.get()) {
+            throw new IllegalArgumentException("File " + name + " was not part of the test application");
         }
     }
 
     private void modifyPath(Function<String, String> mutator, Path sourceDirectory, Path input) {
-        TestScanningLock.lockForTests();
         try {
             long old = modTime(input);
             long oldSrc = modTime(sourceDirectory);
@@ -621,13 +610,11 @@ public class QuarkusDevModeTest
                 throw new RuntimeException("File was not modified, mutator function had no effect");
             }
 
-            Files.write(input, content.getBytes(StandardCharsets.UTF_8), OPEN_OPTIONS);
+            Files.write(input, content.getBytes(StandardCharsets.UTF_8));
             sleepForFileChanges(sourceDirectory, oldSrc);
             sleepForFileChanges(input, old);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
-        } finally {
-            TestScanningLock.unlockForTests();
         }
     }
 
@@ -681,7 +668,7 @@ public class QuarkusDevModeTest
             String content = new String(data, StandardCharsets.UTF_8);
             content = mutator.apply(content);
 
-            Files.write(resourcePath, content.getBytes(StandardCharsets.UTF_8), OPEN_OPTIONS);
+            Files.write(resourcePath, content.getBytes(StandardCharsets.UTF_8));
             sleepForFileChanges(resourcePath, old);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -696,7 +683,7 @@ public class QuarkusDevModeTest
         final Path resourceFilePath = deploymentResourcePath.resolve(path);
         long oldParent = modTime(resourceFilePath.getParent());
         try {
-            Files.write(resourceFilePath, data, OPEN_OPTIONS);
+            Files.write(resourceFilePath, data);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -769,7 +756,7 @@ public class QuarkusDevModeTest
                     byte[] data = FileUtil.readFileContents(in);
                     Path resolved = deploymentSourcesDir.resolve(relative);
                     Files.createDirectories(resolved.getParent());
-                    Files.write(resolved, data, OPEN_OPTIONS);
+                    Files.write(resolved, data);
                     return resolved;
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
