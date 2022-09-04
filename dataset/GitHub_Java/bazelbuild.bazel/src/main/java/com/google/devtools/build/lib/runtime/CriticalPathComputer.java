@@ -20,8 +20,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.common.eventbus.AllowConcurrentEvents;
 import com.google.common.eventbus.Subscribe;
-import com.google.common.flogger.GoogleLogger;
-import com.google.common.flogger.StackSize;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionCompletionEvent;
@@ -37,7 +35,6 @@ import com.google.devtools.build.lib.actions.SpawnExecutedEvent;
 import com.google.devtools.build.lib.actions.SpawnMetrics;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.clock.Clock;
-import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -55,8 +52,6 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 public class CriticalPathComputer {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
-
   /** Number of top actions to record. */
   static final int SLOWEST_COMPONENTS_SIZE = 30;
   private static final int LARGEST_MEMORY_COMPONENTS_SIZE = 20;
@@ -165,8 +160,7 @@ public class CriticalPathComputer {
         Preconditions.checkNotNull(outputArtifactToComponent.get(primaryOutput));
 
     SpawnResult spawnResult = event.getSpawnResult();
-    stats.addSpawnResult(
-        spawnResult.getMetrics(), spawnResult.getRunnerName(), spawnResult.wasRemote());
+    stats.addSpawnResult(spawnResult.getMetrics(), spawnResult.getRunnerName());
   }
 
   /** Returns the list of components using the most memory. */
@@ -208,7 +202,7 @@ public class CriticalPathComputer {
   public void discoverInputs(DiscoveredInputsEvent event) {
     CriticalPathComponent stats =
         tryAddComponent(createComponent(event.getAction(), event.getStartTimeNanos()));
-    stats.addSpawnResult(event.getMetrics(), null, /* wasRemote=*/ false);
+    stats.addSpawnResult(event.getMetrics(), null);
     stats.changePhase();
   }
 
@@ -336,14 +330,8 @@ public class CriticalPathComputer {
   private void finalizeActionStat(
       long startTimeNanos, Action action, CriticalPathComponent component) {
     long finishTimeNanos = clock.nanoTime();
-    for (Artifact input : action.getInputs().toList()) {
+    for (Artifact input : action.getInputs()) {
       addArtifactDependency(component, input, finishTimeNanos);
-    }
-    if (Duration.ofNanos(finishTimeNanos - startTimeNanos).compareTo(Duration.ofMillis(-5)) < 0) {
-      // See note in {@link Clock#nanoTime} about non increasing subsequent #nanoTime calls.
-      logger.atWarning().withStackTrace(StackSize.MEDIUM).log(
-          "Negative duration time for [%s] %s with start: %s, finish: %s.",
-          action.getMnemonic(), action.getPrimaryOutput(), startTimeNanos, finishTimeNanos);
     }
     component.finishActionExecution(startTimeNanos, finishTimeNanos);
     maxCriticalPath.accumulateAndGet(component, SELECT_LONGER_COMPONENT);

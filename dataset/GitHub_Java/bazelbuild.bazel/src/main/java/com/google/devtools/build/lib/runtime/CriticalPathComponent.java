@@ -80,9 +80,6 @@ public class CriticalPathComponent {
   /** Child with the maximum critical path. */
   @Nullable private CriticalPathComponent child;
 
-  /** Indication that there is at least one remote spawn metrics received. */
-  private boolean remote = false;
-
   public CriticalPathComponent(int id, Action action, long startNanos) {
     this.id = id;
     this.action = Preconditions.checkNotNull(action);
@@ -191,13 +188,7 @@ public class CriticalPathComponent {
    * the longestPhaseSpawnRunnerName to the longest running spawn runner name across all phases if
    * it exists.
    */
-  void addSpawnResult(SpawnMetrics metrics, @Nullable String runnerName, boolean wasRemote) {
-    // Mark this component as having remote components if _any_ spawn result contributing
-    // to it contains meaningful remote metrics. Subsequent non-remote spawns in an action
-    // must not reset this flag.
-    if (wasRemote) {
-      this.remote = true;
-    }
+  void addSpawnResult(SpawnMetrics metrics, @Nullable String runnerName) {
     if (this.phaseChange) {
       this.totalSpawnMetrics =
           SpawnMetrics.aggregateMetrics(
@@ -288,8 +279,7 @@ public class CriticalPathComponent {
   }
 
   private long getElapsedTimeNanosNoCheck() {
-    // The delta value may be negative, see note in {@link Clock#nanoTime}.
-    return Math.max(0, finishNanos - startNanos);
+    return finishNanos - startNanos;
   }
 
   /**
@@ -330,10 +320,8 @@ public class CriticalPathComponent {
       currentTime = String.format("%.2f", getElapsedTimeNoCheck().toMillis() / 1000.0) + "s";
     }
     sb.append(currentTime);
-    if (remote) {
-      sb.append(", Remote ");
-      sb.append(getSpawnMetrics().toString(getElapsedTimeNoCheck(), /* summary= */ false));
-    }
+    sb.append(", Remote ");
+    sb.append(getSpawnMetrics().toString(getElapsedTimeNoCheck(), /* summary= */ false));
     sb.append(" ");
     sb.append(getActionString());
     return sb.toString();
