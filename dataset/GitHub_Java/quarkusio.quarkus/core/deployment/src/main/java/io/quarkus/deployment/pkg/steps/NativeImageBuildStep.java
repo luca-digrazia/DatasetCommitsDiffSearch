@@ -150,9 +150,7 @@ public class NativeImageBuildStep {
                     }
                 }
             }
-            if (nativeConfig.userLanguage.isPresent()) {
-                command.add("-J-Duser.language=" + nativeConfig.userLanguage.get());
-            }
+            command.add("-J-Duser.language=" + System.getProperty("user.language"));
             command.add("-J-Dfile.encoding=" + nativeConfig.fileEncoding);
 
             if (enableSslNative) {
