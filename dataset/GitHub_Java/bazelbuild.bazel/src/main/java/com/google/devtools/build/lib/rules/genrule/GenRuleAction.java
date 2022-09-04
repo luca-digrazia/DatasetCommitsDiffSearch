@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.rules.genrule;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.ActionEnvironment;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -43,7 +43,8 @@ public class GenRuleAction extends SpawnAction {
       Iterable<Artifact> inputs,
       Iterable<Artifact> outputs,
       List<String> argv,
-      ActionEnvironment env,
+      ImmutableMap<String, String> environment,
+      ImmutableSet<String> clientEnvironmentVariables,
       ImmutableMap<String, String> executionInfo,
       RunfilesSupplier runfilesSupplier,
       String progressMessage) {
@@ -55,7 +56,8 @@ public class GenRuleAction extends SpawnAction {
         GENRULE_RESOURCES,
         CommandLine.of(argv),
         false,
-        env,
+        environment,
+        clientEnvironmentVariables,
         executionInfo,
         progressMessage,
         runfilesSupplier,

@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInput;
@@ -114,7 +113,7 @@ public class ObjcCompileAction extends SpawnAction {
       ResourceSet resourceSet,
       CommandLine argv,
       boolean isShellCommand,
-      ActionEnvironment env,
+      ImmutableMap<String, String> environment,
       ImmutableMap<String, String> executionInfo,
       String progressMessage,
       RunfilesSupplier runfilesSupplier,
@@ -135,7 +134,8 @@ public class ObjcCompileAction extends SpawnAction {
         resourceSet,
         argv,
         isShellCommand,
-        env,
+        environment,
+        ImmutableSet.<String>of(),
         executionInfo,
         progressMessage,
         runfilesSupplier,
@@ -440,7 +440,8 @@ public class ObjcCompileAction extends SpawnAction {
         ResourceSet resourceSet,
         CommandLine actualCommandLine,
         boolean isShellCommand,
-        ActionEnvironment env,
+        ImmutableMap<String, String> env,
+        ImmutableSet<String> clientEnvironmentVariables,
         ImmutableMap<String, String> executionInfo,
         String progressMessage,
         RunfilesSupplier runfilesSupplier,
@@ -453,8 +454,7 @@ public class ObjcCompileAction extends SpawnAction {
           resourceSet,
           actualCommandLine,
           isShellCommand,
-          // TODO(#3320): This is missing the inherited action env from --action_env.
-          new ActionEnvironment(env.getFixedEnv()),
+          env,
           executionInfo,
           progressMessage,
           runfilesSupplier,

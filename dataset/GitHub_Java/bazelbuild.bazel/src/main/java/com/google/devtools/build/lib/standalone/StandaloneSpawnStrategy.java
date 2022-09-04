@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionStatusMessage;
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.ResourceManager;
@@ -86,11 +85,6 @@ public class StandaloneSpawnStrategy implements SpawnActionContext {
       }
 
       @Override
-      public ArtifactExpander getArtifactExpander() {
-        return actionExecutionContext.getArtifactExpander();
-      }
-
-      @Override
       public void lockOutputFiles() throws InterruptedException {
         // Do nothing for now.
       }
@@ -153,5 +147,10 @@ public class StandaloneSpawnStrategy implements SpawnActionContext {
   @Override
   public String toString() {
     return "standalone";
+  }
+
+  @Override
+  public boolean shouldPropagateExecException() {
+    return false;
   }
 }

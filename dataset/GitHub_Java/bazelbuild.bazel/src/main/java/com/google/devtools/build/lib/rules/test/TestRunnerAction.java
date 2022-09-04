@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.analysis.RunfilesSupplierImpl;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.ImmutableIterable;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.LoggingUtil;
@@ -93,17 +92,15 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
   private final String workspaceName;
   private final boolean useTestRunner;
 
-  // Mutable state related to test caching. Lazily initialized: null indicates unknown.
-  private Boolean unconditionalExecution;
+  // Mutable state related to test caching.
+  private Boolean unconditionalExecution; // lazily initialized: null indicates unknown
 
-  /** Any extra environment variables (and values) added by the rule that created this action. */
+  // Any extra environment variables (and values) added by the rule that created this action.
   private final ImmutableMap<String, String> extraTestEnv;
 
-  /**
-   * The set of environment variables that are inherited from the client environment. These are
-   * handled explicitly by the ActionCacheChecker and so don't have to be included in the cache key.
-   */
-  private final ImmutableIterable<String> requiredClientEnvVariables;
+  // These are handled explicitly by the ActionCacheChecker and so don't have to be included in the
+  // cache key.
+  private final Iterable<String> requiredClientEnvVariables;
 
   private static ImmutableList<Artifact> list(Artifact... artifacts) {
     ImmutableList.Builder<Artifact> builder = ImmutableList.builder();
@@ -182,9 +179,8 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
 
     this.extraTestEnv = ImmutableMap.copyOf(extraTestEnv);
     this.requiredClientEnvVariables =
-        ImmutableIterable.from(Iterables.concat(
-            configuration.getActionEnvironment().getInheritedEnv(),
-            configuration.getTestActionEnvironment().getInheritedEnv()));
+        Iterables.concat(
+            configuration.getVariableShellEnvironment(), configuration.getInheritedTestEnv());
   }
 
   public BuildConfiguration getConfiguration() {
@@ -231,8 +227,8 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     f.addStringMap(extraTestEnv);
     // TODO(ulfjack): It might be better for performance to hash the action and test envs in config,
     // and only add a hash here.
-    configuration.getActionEnvironment().addTo(f);
-    configuration.getTestActionEnvironment().addTo(f);
+    f.addStringMap(configuration.getLocalShellEnvironment());
+    f.addStringMap(configuration.getTestEnv());
     // The 'requiredClientEnvVariables' are handled by Skyframe and don't need to be added here.
     f.addString(testProperties.getSize().toString());
     f.addString(testProperties.getTimeout().toString());

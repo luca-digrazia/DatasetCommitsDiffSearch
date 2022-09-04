@@ -60,7 +60,5 @@ public final class ExecutableSymlinkAction extends SymlinkAction {
   }
 
   @Override
-  public String getMnemonic() {
-    return "ExecutableSymlink";
-  }
+  public String getMnemonic() { return "ExecutableSymlink"; }
 }

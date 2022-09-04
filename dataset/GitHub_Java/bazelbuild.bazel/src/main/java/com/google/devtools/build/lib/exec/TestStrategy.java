@@ -215,19 +215,11 @@ public abstract class TestStrategy implements TestActionContext {
    */
   @VisibleForTesting /* protected */
   public int getTestAttempts(TestRunnerAction action) {
-    return action.getTestProperties().isFlaky()
-        ? getTestAttemptsForFlakyTest()
-        : getTestAttempts(/*defaultTestAttempts=*/ 1);
-  }
-
-  public int getTestAttemptsForFlakyTest() {
-    return getTestAttempts(/*defaultTestAttempts=*/ 3);
-  }
-
-  private int getTestAttempts(int defaultTestAttempts) {
-    return executionOptions.testAttempts == -1
-        ? defaultTestAttempts
-        : executionOptions.testAttempts;
+    if (executionOptions.testAttempts == -1) {
+      return action.getTestProperties().isFlaky() ? 3 : 1;
+    } else {
+      return executionOptions.testAttempts;
+    }
   }
 
   /**

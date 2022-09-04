@@ -16,12 +16,9 @@ package com.google.devtools.build.lib.rules.java;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.BuildInfo;
@@ -29,6 +26,7 @@ import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Key;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
 import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -159,16 +157,12 @@ public class WriteBuildInfoPropertiesAction extends AbstractFileWriteAction {
         Map<String, String> keys = new HashMap<>();
         if (includeVolatile) {
           addValues(keys, values, context.getVolatileKeys());
-          // Unlike Blaze which stores BUILD_TIMESTAMP as seconds, Bazel stores
-          // it as milliseconds.
-          String timeMillisStr = values.get(BuildInfo.BUILD_TIMESTAMP);
           long timeMillis = timestamp;
-          if (Strings.isNullOrEmpty(timeMillisStr)) {
-            timeMillisStr = Long.toString(timeMillis);
-          } else {
-            timeMillis = Long.valueOf(timeMillisStr);
+          Key sourceDateEpoch = context.getStableKeys().get(BuildInfo.SOURCE_DATE_EPOCH);
+          if (sourceDateEpoch != null) {
+            timeMillis = Long.valueOf(sourceDateEpoch.getDefaultValue()) * 1000L;
           }
-          keys.put("BUILD_TIMESTAMP", timeMillisStr);
+          keys.put("BUILD_TIMESTAMP", Long.toString(timeMillis / 1000));
           keys.put("BUILD_TIME", timestampFormatter.format(timeMillis));
         }
         addValues(keys, values, context.getStableKeys());
@@ -197,7 +191,7 @@ public class WriteBuildInfoPropertiesAction extends AbstractFileWriteAction {
   }
 
   @Override
-  protected String computeKey(ActionKeyContext actionKeyContext) {
+  protected String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addString(GUID);
     f.addString(keyTranslations.computeKey());

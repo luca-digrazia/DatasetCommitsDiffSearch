@@ -16,17 +16,16 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -36,13 +35,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * An action that creates a C++ header containing the build information in the form of #define
- * directives.
+ * An action that creates a C++ header containing the build information in the
+ * form of #define directives.
  */
 @Immutable
-@AutoCodec
 public final class WriteBuildInfoHeaderAction extends AbstractFileWriteAction {
   private static final String GUID = "62be38ad-1243-46b9-9948-9bdfa81f8918";
+
+  private final ImmutableList<Artifact> valueArtifacts;
 
   private final boolean writeVolatileInfo;
   private final boolean writeStableInfo;
@@ -50,33 +50,30 @@ public final class WriteBuildInfoHeaderAction extends AbstractFileWriteAction {
   /**
    * Creates an action that writes a C++ header with the build information.
    *
-   * <p>It reads the set of build info keys from an action context that is usually contributed to
-   * Bazel by the workspace status module, and the value associated with said keys from the
+   * <p>It reads the set of build info keys from an action context that is usually contributed
+   * to Bazel by the workspace status module, and the value associated with said keys from the
    * workspace status files (stable and volatile) written by the workspace status action.
    *
    * <p>Without input artifacts this action uses redacted build information.
-   *
-   * @param inputs Artifacts that contain build information, or an empty collection to use redacted
-   *     build information
-   * @param primaryOutput the C++ header Artifact created by this action
-   * @param writeVolatileInfo whether to write the volatile part of the build information to the
-   *     generated header
-   * @param writeStableInfo whether to write the non-volatile part of the build information to the
-   *     generated header
+   * @param inputs Artifacts that contain build information, or an empty
+   *        collection to use redacted build information
+   * @param output the C++ header Artifact created by this action
+   * @param writeVolatileInfo whether to write the volatile part of the build
+   *        information to the generated header
+   * @param writeStableInfo whether to write the non-volatile part of the
+   *        build information to the generated header
    */
-  public WriteBuildInfoHeaderAction(
-      Collection<Artifact> inputs,
-      Artifact primaryOutput,
-      boolean writeVolatileInfo,
-      boolean writeStableInfo) {
-    super(ActionOwner.SYSTEM_ACTION_OWNER, inputs, primaryOutput, /*makeExecutable=*/ false);
+  public WriteBuildInfoHeaderAction(Collection<Artifact> inputs,
+      Artifact output, boolean writeVolatileInfo, boolean writeStableInfo) {
+    super(ActionOwner.SYSTEM_ACTION_OWNER, inputs, output, /*makeExecutable=*/ false);
+    valueArtifacts = ImmutableList.copyOf(inputs);
     if (!inputs.isEmpty()) {
       // With non-empty inputs we should not generate both volatile and non-volatile data
       // in the same header file.
       Preconditions.checkState(writeVolatileInfo ^ writeStableInfo);
     }
     Preconditions.checkState(
-        primaryOutput.isConstantMetadata() == (writeVolatileInfo && !inputs.isEmpty()));
+        output.isConstantMetadata() == (writeVolatileInfo && !inputs.isEmpty()));
 
     this.writeVolatileInfo = writeVolatileInfo;
     this.writeStableInfo = writeStableInfo;
@@ -97,11 +94,11 @@ public final class WriteBuildInfoHeaderAction extends AbstractFileWriteAction {
     }
 
     final Map<String, String> values = new LinkedHashMap<>();
-    for (Artifact valueFile : getInputs()) {
+    for (Artifact valueFile : valueArtifacts) {
       values.putAll(WorkspaceStatusAction.parseValues(valueFile.getPath()));
     }
 
-    final boolean redacted = Iterables.isEmpty(getInputs());
+    final boolean redacted = valueArtifacts.isEmpty();
 
     return new DeterministicWriter() {
       @Override
@@ -138,7 +135,7 @@ public final class WriteBuildInfoHeaderAction extends AbstractFileWriteAction {
   }
 
   @Override
-  protected String computeKey(ActionKeyContext actionKeyContext) {
+  protected String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addString(GUID);
     f.addBoolean(writeStableInfo);

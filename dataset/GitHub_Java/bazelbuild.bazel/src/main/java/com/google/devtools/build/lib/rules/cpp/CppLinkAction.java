@@ -195,12 +195,6 @@ public final class CppLinkAction extends AbstractAction
   }
 
   @Override
-  @VisibleForTesting
-  public Iterable<Artifact> getPossibleInputsForTesting() {
-    return getInputs();
-  }
-
-  @Override
   public Iterable<String> getClientEnvironmentVariables() {
     return clientEnvironmentVariables;
   }

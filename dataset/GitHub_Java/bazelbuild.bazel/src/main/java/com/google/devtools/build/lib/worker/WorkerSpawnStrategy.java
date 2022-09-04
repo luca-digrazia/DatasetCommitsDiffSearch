@@ -242,7 +242,7 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
             spawn.getInputFiles(), actionExecutionContext.getArtifactExpander());
 
     for (ActionInput input : inputs) {
-      byte[] digestBytes = inputFileCache.getMetadata(input).getDigest();
+      byte[] digestBytes = inputFileCache.getDigest(input);
       ByteString digest;
       if (digestBytes == null) {
         digest = ByteString.EMPTY;
@@ -396,5 +396,10 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
   @Override
   public String toString() {
     return "worker";
+  }
+
+  @Override
+  public boolean shouldPropagateExecException() {
+    return false;
   }
 }

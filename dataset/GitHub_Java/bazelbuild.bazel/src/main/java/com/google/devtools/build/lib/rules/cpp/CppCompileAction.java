@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.CommandAction;
-import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
@@ -119,9 +118,6 @@ public class CppCompileAction extends AbstractAction
   /** A string constant used to compute CC_FLAGS make variable value */
   public static final java.lang.String CC_FLAGS_MAKE_VARIABLE_ACTION_NAME =
       "cc-flags-make-variable";
-
-  /** A string constant for the strip action name. */
-  public static final String STRIP_ACTION_NAME = "strip";
 
   /**
    * A string constant for the c compilation action.
@@ -248,6 +244,7 @@ public class CppCompileAction extends AbstractAction
    *
    * @param owner the owner of the action, usually the configured target that emitted it
    * @param allInputs the list of all action inputs.
+   * @param features TODO(bazel-team): Add parameter description.
    * @param featureConfiguration TODO(bazel-team): Add parameter description.
    * @param variables TODO(bazel-team): Add parameter description.
    * @param sourceFile the source file that should be compiled. {@code mandatoryInputs} must contain
@@ -268,6 +265,7 @@ public class CppCompileAction extends AbstractAction
    * @param cppConfiguration TODO(bazel-team): Add parameter description.
    * @param context the compilation context
    * @param actionContext TODO(bazel-team): Add parameter description.
+   * @param copts options for the compiler
    * @param coptsFilter regular expression to remove options from {@code copts}
    * @param specialInputsHandler TODO(bazel-team): Add parameter description.
    * @param lipoScannables List of artifacts to include-scan when this action is a lipo action
@@ -282,6 +280,9 @@ public class CppCompileAction extends AbstractAction
   protected CppCompileAction(
       ActionOwner owner,
       NestedSet<Artifact> allInputs,
+      // TODO(bazel-team): Eventually we will remove 'features'; all functionality in 'features'
+      // will be provided by 'featureConfiguration'.
+      ImmutableList<String> features,
       FeatureConfiguration featureConfiguration,
       CcToolchainFeatures.Variables variables,
       Artifact sourceFile,
@@ -302,6 +303,7 @@ public class CppCompileAction extends AbstractAction
       CppConfiguration cppConfiguration,
       CppCompilationContext context,
       Class<? extends CppCompileActionContext> actionContext,
+      ImmutableList<String> copts,
       Predicate<String> coptsFilter,
       SpecialInputsHandler specialInputsHandler,
       Iterable<IncludeScannable> lipoScannables,
@@ -345,7 +347,9 @@ public class CppCompileAction extends AbstractAction
                 sourceFile,
                 outputFile,
                 sourceLabel,
+                copts,
                 coptsFilter,
+                features,
                 actionName,
                 cppConfiguration,
                 dotdFile,
@@ -435,8 +439,7 @@ public class CppCompileAction extends AbstractAction
     return discoversInputs;
   }
 
-  @Override
-  @VisibleForTesting // productionVisibility = Visibility.PRIVATE
+  @VisibleForTesting  // productionVisibility = Visibility.PRIVATE
   public Iterable<Artifact> getPossibleInputsForTesting() {
     return Iterables.concat(getInputs(), prunableInputs);
   }
@@ -783,11 +786,8 @@ public class CppCompileAction extends AbstractAction
               .build());
     }
 
-    try {
-      return super.getExtraActionInfo().setExtension(CppCompileInfo.cppCompileInfo, info.build());
-    } catch (CommandLineExpansionException e) {
-      throw new AssertionError("CppCompileAction command line expansion cannot fail.");
-    }
+    return super.getExtraActionInfo()
+        .setExtension(CppCompileInfo.cppCompileInfo, info.build());
   }
 
   /**
@@ -795,7 +795,7 @@ public class CppCompileAction extends AbstractAction
    */
   @VisibleForTesting
   public List<String> getCompilerOptions() {
-    return compileCommandLine.getCompilerOptions(/* overwrittenVariables= */ null);
+    return compileCommandLine.getCompilerOptions(/*updatedVariables=*/ null);
   }
 
   @Override
