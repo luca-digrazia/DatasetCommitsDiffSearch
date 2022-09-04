@@ -81,16 +81,6 @@ public class LandLayoutVideo extends StandardGSYVideoPlayer {
         return super.onInterceptTouchEvent(ev);
     }
 
-
-    @Override
-    protected void resolveNormalVideoShow(View oldF, ViewGroup vp, GSYVideoPlayer gsyVideoPlayer) {
-        LandLayoutVideo landLayoutVideo = (LandLayoutVideo)gsyVideoPlayer;
-        landLayoutVideo.dismissProgressDialog();
-        landLayoutVideo.dismissVolumeDialog();
-        landLayoutVideo.dismissBrightnessDialog();
-        super.resolveNormalVideoShow(oldF, vp, gsyVideoPlayer);
-    }
-
     public void setLinkScroll(boolean linkScroll) {
         isLinkScroll = linkScroll;
     }
