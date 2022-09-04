@@ -49,7 +49,7 @@ public class CcToolchainSelectionTest extends BuildViewTestCase {
     String crosstool = analysisMock.ccSupport().readCrosstoolFile();
     getAnalysisMock().ccSupport().setupCrosstoolWithRelease(mockToolsConfig, crosstool);
     useConfiguration(
-        "--incompatible_enable_cc_toolchain_resolution",
+        "--enabled_toolchain_types=" + CPP_TOOLCHAIN_TYPE,
         "--experimental_platforms=//mock_platform:mock-piii-platform",
         "--extra_toolchains=//mock_platform:toolchain_cc-compiler-piii");
     ConfiguredTarget target =
@@ -70,7 +70,7 @@ public class CcToolchainSelectionTest extends BuildViewTestCase {
     String crosstool = analysisMock.ccSupport().readCrosstoolFile();
     getAnalysisMock().ccSupport().setupCrosstoolWithRelease(mockToolsConfig, crosstool);
     useConfiguration(
-        "--incompatible_enable_cc_toolchain_resolution",
+        "--enabled_toolchain_types=" + CPP_TOOLCHAIN_TYPE,
         "--experimental_platforms=//mock_platform:mock-piii-platform",
         "--extra_toolchains=//mock_platform:toolchain_cc-compiler-piii");
     ConfiguredTarget target =
@@ -106,11 +106,13 @@ public class CcToolchainSelectionTest extends BuildViewTestCase {
         "   strip_files = ':dummy_filegroup',",
         "   objcopy_files = 'objcopy-piii',",
         "   all_files = ':dummy_filegroup',",
+        "   static_runtime_libs = ['static-runtime-libs-piii'],",
+        "   dynamic_runtime_libs = ['dynamic-runtime-libs-piii'],",
         ")",
         "filegroup(name = 'dummy_filegroup')");
 
     useConfiguration(
-        "--incompatible_enable_cc_toolchain_resolution",
+        "--enabled_toolchain_types=" + CPP_TOOLCHAIN_TYPE,
         "--experimental_platforms=//mock_platform:mock-piii-platform",
         "--extra_toolchains=//incomplete_toolchain:incomplete_toolchain_cc-compiler-piii");
 
@@ -129,7 +131,7 @@ public class CcToolchainSelectionTest extends BuildViewTestCase {
     getAnalysisMock().ccSupport().setupCrosstoolWithRelease(mockToolsConfig, crosstoolWithPiiiLd);
 
     useConfiguration(
-        "--incompatible_enable_cc_toolchain_resolution",
+        "--enabled_toolchain_types=" + CPP_TOOLCHAIN_TYPE,
         "--experimental_platforms=//mock_platform:mock-piii-platform",
         "--extra_toolchains=//mock_platform:toolchain_cc-compiler-piii");
     ConfiguredTarget target =

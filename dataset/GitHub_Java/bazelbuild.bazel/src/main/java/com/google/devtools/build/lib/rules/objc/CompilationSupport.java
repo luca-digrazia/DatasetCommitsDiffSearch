@@ -108,7 +108,7 @@ import com.google.devtools.build.lib.rules.cpp.CppLinkActionBuilder;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMapAction;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
-import com.google.devtools.build.lib.rules.cpp.FdoContext;
+import com.google.devtools.build.lib.rules.cpp.FdoProvider;
 import com.google.devtools.build.lib.rules.cpp.IncludeProcessing;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
@@ -293,8 +293,9 @@ public class CompilationSupport {
       VariablesExtension extension,
       ExtraCompileArgs extraCompileArgs,
       CcToolchainProvider ccToolchain,
-      FdoContext fdoContext,
+      FdoProvider fdoProvider,
       Iterable<PathFragment> priorityHeaders,
+      PrecompiledFiles precompiledFiles,
       Collection<Artifact> sources,
       Collection<Artifact> privateHdrs,
       Collection<Artifact> publicHdrs,
@@ -303,7 +304,7 @@ public class CompilationSupport {
       Iterable<? extends TransitiveInfoCollection> deps,
       ObjcCppSemantics semantics,
       String purpose)
-      throws RuleErrorException {
+      throws RuleErrorException, InterruptedException {
     CcCompilationHelper result =
         new CcCompilationHelper(
                 ruleContext,
@@ -311,13 +312,14 @@ public class CompilationSupport {
                 getFeatureConfiguration(ruleContext, ccToolchain, buildConfiguration, objcProvider),
                 CcCompilationHelper.SourceCategory.CC_AND_OBJC,
                 ccToolchain,
-                fdoContext,
+                fdoProvider,
                 buildConfiguration)
             .addSources(sources)
             .addPrivateHeaders(privateHdrs)
             .addDefines(objcProvider.get(DEFINE))
             .enableCompileProviders()
             .addPublicHeaders(publicHdrs)
+            .addPrecompiledFiles(precompiledFiles)
             .addDeps(deps)
             // Not all our dependencies need to export cpp information.
             // For example, objc_proto_library can depend on a proto_library rule that does not
@@ -353,17 +355,18 @@ public class CompilationSupport {
     return result.compile();
   }
 
-  private Pair<CcCompilationOutputs, ImmutableMap<String, NestedSet<Artifact>>> ccCompileAndLink(
-      ObjcProvider objcProvider,
-      CompilationArtifacts compilationArtifacts,
-      ObjcVariablesExtension.Builder extensionBuilder,
-      ExtraCompileArgs extraCompileArgs,
-      CcToolchainProvider ccToolchain,
-      FdoContext fdoContext,
-      Iterable<PathFragment> priorityHeaders,
-      LinkTargetType linkType,
-      Artifact linkActionInput)
-      throws RuleErrorException, InterruptedException {
+  private Pair<CcCompilationOutputs, ImmutableMap<String, NestedSet<Artifact>>>
+  ccCompileAndLink(
+          ObjcProvider objcProvider,
+          CompilationArtifacts compilationArtifacts,
+          ObjcVariablesExtension.Builder extensionBuilder,
+          ExtraCompileArgs extraCompileArgs,
+          CcToolchainProvider ccToolchain,
+          FdoProvider fdoProvider,
+          Iterable<PathFragment> priorityHeaders,
+          LinkTargetType linkType,
+          Artifact linkActionInput)
+          throws RuleErrorException, InterruptedException {
     PrecompiledFiles precompiledFiles = new PrecompiledFiles(ruleContext);
     Collection<Artifact> arcSources = ImmutableSortedSet.copyOf(compilationArtifacts.getSrcs());
     Collection<Artifact> nonArcSources =
@@ -388,8 +391,9 @@ public class CompilationSupport {
             extensionBuilder.build(),
             extraCompileArgs,
             ccToolchain,
-            fdoContext,
+            fdoProvider,
             priorityHeaders,
+            precompiledFiles,
             arcSources,
             privateHdrs,
             publicHdrs,
@@ -406,8 +410,9 @@ public class CompilationSupport {
             extensionBuilder.build(),
             extraCompileArgs,
             ccToolchain,
-            fdoContext,
+            fdoProvider,
             priorityHeaders,
+            precompiledFiles,
             nonArcSources,
             privateHdrs,
             publicHdrs,
@@ -422,7 +427,7 @@ public class CompilationSupport {
                 semantics,
                 getFeatureConfiguration(ruleContext, ccToolchain, buildConfiguration, objcProvider),
                 ccToolchain,
-                fdoContext,
+                fdoProvider,
                 buildConfiguration)
             .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
             .setLinkedArtifactNameSuffix(intermediateArtifacts.archiveFileNameSuffix())
@@ -448,17 +453,7 @@ public class CompilationSupport {
         String.format("%s_merged_arc_non_arc_objc", semantics.getPurpose()));
     semantics.setupCcCompilationContext(ruleContext, ccCompilationContextBuilder);
 
-    CcCompilationOutputs precompiledFilesObjects =
-        new CcCompilationOutputs.Builder()
-            .addObjectFiles(precompiledFiles.getObjectFiles(/* usePic= */ false))
-            .addPicObjectFiles(precompiledFiles.getObjectFiles(/* usePic= */ true))
-            .build();
-
-    CcCompilationOutputs.Builder compilationOutputsBuilder =
-        new CcCompilationOutputs.Builder()
-            .merge(objcArcCompilationInfo.getCcCompilationOutputs())
-            .merge(nonObjcArcCompilationInfo.getCcCompilationOutputs())
-            .merge(precompiledFilesObjects);
+    CcCompilationOutputs.Builder compilationOutputsBuilder = new CcCompilationOutputs.Builder();
     compilationOutputsBuilder.merge(objcArcCompilationInfo.getCcCompilationOutputs());
     compilationOutputsBuilder.merge(nonObjcArcCompilationInfo.getCcCompilationOutputs());
     CcCompilationOutputs compilationOutputs = compilationOutputsBuilder.build();
@@ -544,7 +539,7 @@ public class CompilationSupport {
     if (objcProvider.is(Flag.USES_OBJC)) {
       activatedCrosstoolSelectables.add(CONTAINS_OBJC);
     }
-    if (toolchain.useFission() && !toolchain.getCppConfiguration().disableLegacyCrosstoolFields()) {
+    if (toolchain.useFission()) {
       activatedCrosstoolSelectables.add(CppRuleClasses.PER_OBJECT_DEBUG_INFO);
     }
 
@@ -955,7 +950,7 @@ public class CompilationSupport {
         ExtraCompileArgs.NONE,
         ImmutableList.<PathFragment>of(),
         toolchain,
-        toolchain.getFdoContext());
+        toolchain.getFdoProvider());
   }
 
   /**
@@ -993,7 +988,7 @@ public class CompilationSupport {
    * @param extraCompileArgs args to be added to compile actions
    * @param priorityHeaders priority headers to be included before the dependency headers
    * @param ccToolchain the cpp toolchain provider, may be null
-   * @param fdoContext the cpp FDO support provider, may be null
+   * @param fdoProvider the cpp FDO support provider, may be null
    * @return this compilation support
    * @throws RuleErrorException for invalid crosstool files
    */
@@ -1003,10 +998,10 @@ public class CompilationSupport {
       ExtraCompileArgs extraCompileArgs,
       Iterable<PathFragment> priorityHeaders,
       @Nullable CcToolchainProvider ccToolchain,
-      @Nullable FdoContext fdoContext)
+      @Nullable FdoProvider fdoProvider)
       throws RuleErrorException, InterruptedException {
     Preconditions.checkNotNull(ccToolchain);
-    Preconditions.checkNotNull(fdoContext);
+    Preconditions.checkNotNull(fdoProvider);
     ObjcVariablesExtension.Builder extension =
         new ObjcVariablesExtension.Builder()
             .setRuleContext(ruleContext)
@@ -1029,7 +1024,7 @@ public class CompilationSupport {
               extension,
               extraCompileArgs,
               ccToolchain,
-              fdoContext,
+              fdoProvider,
               priorityHeaders,
               LinkTargetType.OBJC_ARCHIVE,
               objList);
@@ -1045,7 +1040,7 @@ public class CompilationSupport {
               extension,
               extraCompileArgs,
               ccToolchain,
-              fdoContext,
+              fdoProvider,
               priorityHeaders,
               /* linkType */ null,
               /* linkActionInput */ null);
@@ -1078,7 +1073,7 @@ public class CompilationSupport {
           extraCompileArgs,
           priorityHeaders,
           toolchain,
-          toolchain.getFdoContext());
+          toolchain.getFdoProvider());
     }
     return this;
   }
@@ -1154,13 +1149,13 @@ public class CompilationSupport {
             .addVariableCategory(VariableCategory.EXECUTABLE_LINKING_VARIABLES);
 
     Artifact binaryToLink = getBinaryToLink();
-    FdoContext fdoContext = toolchain.getFdoContext();
+    FdoProvider fdoProvider = toolchain.getFdoProvider();
     CppLinkActionBuilder executableLinkAction =
         new CppLinkActionBuilder(
                 ruleContext,
                 binaryToLink,
                 toolchain,
-                fdoContext,
+                fdoProvider,
                 getFeatureConfiguration(ruleContext, toolchain, buildConfiguration, objcProvider),
                 createObjcCppSemantics(
                     objcProvider, /* privateHdrs= */ ImmutableList.of(), /* pchHdr= */ null))
@@ -1289,7 +1284,7 @@ public class CompilationSupport {
   public CompilationSupport registerFullyLinkAction(
       ObjcProvider objcProvider, Artifact outputArchive) throws InterruptedException {
     return registerFullyLinkAction(
-        objcProvider, outputArchive, toolchain, toolchain.getFdoContext());
+        objcProvider, outputArchive, toolchain, toolchain.getFdoProvider());
   }
 
   /**
@@ -1299,17 +1294,17 @@ public class CompilationSupport {
    * @param objcProvider provides all compiling and linking information to create this artifact
    * @param outputArchive the output artifact for this action
    * @param ccToolchain the cpp toolchain provider, may be null
-   * @param fdoContext the cpp FDO support provider, may be null
+   * @param fdoProvider the cpp FDO support provider, may be null
    * @return this {@link CompilationSupport} instance
    */
   CompilationSupport registerFullyLinkAction(
       ObjcProvider objcProvider,
       Artifact outputArchive,
       @Nullable CcToolchainProvider ccToolchain,
-      @Nullable FdoContext fdoContext)
+      @Nullable FdoProvider fdoProvider)
       throws InterruptedException {
     Preconditions.checkNotNull(ccToolchain);
-    Preconditions.checkNotNull(fdoContext);
+    Preconditions.checkNotNull(fdoProvider);
     PathFragment labelName = PathFragment.create(ruleContext.getLabel().getName());
     String libraryIdentifier =
         ruleContext
@@ -1330,7 +1325,7 @@ public class CompilationSupport {
                 ruleContext,
                 outputArchive,
                 ccToolchain,
-                fdoContext,
+                fdoProvider,
                 getFeatureConfiguration(ruleContext, ccToolchain, buildConfiguration, objcProvider),
                 createObjcCppSemantics(
                     objcProvider, /* privateHdrs= */ ImmutableList.of(), /* pchHdr= */ null))
@@ -1390,7 +1385,7 @@ public class CompilationSupport {
 
   /** Returns libraries that should be passed into the linker with {@code -force_load}. */
   private ImmutableSet<Artifact> getForceLoadArtifacts(ObjcProvider objcProvider) {
-    List<Artifact> ccLibraries = objcProvider.getCcLibraries();
+    ImmutableList<Artifact> ccLibraries = objcProvider.getCcLibraries();
     Iterable<Artifact> ccLibrariesToForceLoad =
         Iterables.filter(ccLibraries, ALWAYS_LINKED_CC_LIBRARY);
 

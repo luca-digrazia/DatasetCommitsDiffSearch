@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.rules.cpp.CcToolchain.AdditionalBuildVariablesComputer;
 import com.google.devtools.build.lib.syntax.Type;
 
 /**
@@ -84,32 +83,24 @@ public class CcToolchainAttributesProvider extends ToolchainInfo implements HasC
   private final Artifact zipper;
   private final String purposePrefix;
   private final String runtimeSolibDirBase;
+  private final ImmutableList<? extends TransitiveInfoCollection> staticRuntimesLibs;
+  private final ImmutableList<? extends TransitiveInfoCollection> dynamicRuntimesLibs;
   private final LicensesProvider licensesProvider;
   private final Label toolchainType;
-  private final AdditionalBuildVariablesComputer additionalBuildVariablesComputer;
+  private final CcToolchainVariables additionalBuildVariables;
   private final CcToolchainConfigInfo ccToolchainConfigInfo;
   private final String toolchainIdentifier;
   private final FdoProfileProvider fdoProfileProvider;
   private final FdoProfileProvider xfdoProfileProvider;
   private final Label ccToolchainLabel;
-  private final TransitiveInfoCollection staticRuntimeLib;
-  private final TransitiveInfoCollection dynamicRuntimeLib;
 
   public CcToolchainAttributesProvider(
       RuleContext ruleContext,
       boolean isAppleToolchain,
-      AdditionalBuildVariablesComputer additionalBuildVariablesComputer) {
+      CcToolchainVariables additionalBuildVariables) {
     super(ImmutableMap.of(), Location.BUILTIN);
     this.ccToolchainLabel = ruleContext.getLabel();
     this.toolchainIdentifier = ruleContext.attributes().get("toolchain_identifier", Type.STRING);
-    if (ruleContext.getFragment(CppConfiguration.class).removeCpuCompilerCcToolchainAttributes()
-        && (ruleContext.attributes().isAttributeValueExplicitlySpecified("cpu")
-            || ruleContext.attributes().isAttributeValueExplicitlySpecified("compiler"))) {
-      ruleContext.ruleError(
-          "attributes 'cpu' and 'compiler' have been deprecated, please remove them. See "
-              + "https://github.com/bazelbuild/bazel/issues/7075 for details.");
-    }
-
     this.cpu = ruleContext.attributes().get("cpu", Type.STRING);
     this.compiler = ruleContext.attributes().get("compiler", Type.STRING);
     this.proto = ruleContext.attributes().get("proto", Type.STRING);
@@ -171,8 +162,10 @@ public class CcToolchainAttributesProvider extends ToolchainInfo implements HasC
     this.zipper = ruleContext.getPrerequisiteArtifact(":zipper", Mode.HOST);
     this.purposePrefix = Actions.escapeLabel(ruleContext.getLabel()) + "_";
     this.runtimeSolibDirBase = "_solib_" + "_" + Actions.escapeLabel(ruleContext.getLabel());
-    this.staticRuntimeLib = ruleContext.getPrerequisite("static_runtime_lib", Mode.TARGET);
-    this.dynamicRuntimeLib = ruleContext.getPrerequisite("dynamic_runtime_lib", Mode.TARGET);
+    this.staticRuntimesLibs =
+        ImmutableList.copyOf(ruleContext.getPrerequisites("static_runtime_libs", Mode.TARGET));
+    this.dynamicRuntimesLibs =
+        ImmutableList.copyOf(ruleContext.getPrerequisites("dynamic_runtime_libs", Mode.TARGET));
     this.ccToolchainConfigInfo =
         ruleContext.getPrerequisite(
             CcToolchainRule.TOOLCHAIN_CONFIG_ATTR, Mode.TARGET, CcToolchainConfigInfo.PROVIDER);
@@ -203,7 +196,7 @@ public class CcToolchainAttributesProvider extends ToolchainInfo implements HasC
     } else {
       this.toolchainType = null;
     }
-    this.additionalBuildVariablesComputer = additionalBuildVariablesComputer;
+    this.additionalBuildVariables = additionalBuildVariables;
   }
 
   public String getCpu() {
@@ -242,24 +235,24 @@ public class CcToolchainAttributesProvider extends ToolchainInfo implements HasC
     return fdoOptimizeArtifacts;
   }
 
+  public ImmutableList<? extends TransitiveInfoCollection> getStaticRuntimesLibs() {
+    return staticRuntimesLibs;
+  }
+
   public LicensesProvider getLicensesProvider() {
     return licensesProvider;
   }
 
-  public TransitiveInfoCollection getStaticRuntimeLib() {
-    return staticRuntimeLib;
-  }
-
-  public TransitiveInfoCollection getDynamicRuntimeLib() {
-    return dynamicRuntimeLib;
+  public ImmutableList<? extends TransitiveInfoCollection> getDynamicRuntimesLibs() {
+    return dynamicRuntimesLibs;
   }
 
   public boolean isSupportsHeaderParsing() {
     return supportsHeaderParsing;
   }
 
-  public AdditionalBuildVariablesComputer getAdditionalBuildVariablesComputer() {
-    return additionalBuildVariablesComputer;
+  public CcToolchainVariables getAdditionalBuildVariables() {
+    return additionalBuildVariables;
   }
 
   public NestedSet<Artifact> getAllFiles() {
@@ -428,10 +421,6 @@ public class CcToolchainAttributesProvider extends ToolchainInfo implements HasC
           .add(ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool", Mode.HOST));
     }
     return builder.build();
-  }
-
-  public Label getLibcTopLabel() {
-    return getLibcTop() == null ? null : getLibcTop().getLabel();
   }
 }
 
