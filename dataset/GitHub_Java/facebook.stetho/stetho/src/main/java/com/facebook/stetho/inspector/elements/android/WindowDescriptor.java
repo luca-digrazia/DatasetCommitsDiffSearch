@@ -15,7 +15,6 @@ import android.view.Window;
 
 import com.facebook.stetho.common.Accumulator;
 import com.facebook.stetho.inspector.elements.AbstractChainedDescriptor;
-import com.facebook.stetho.inspector.elements.Descriptor;
 
 import javax.annotation.Nullable;
 
@@ -33,22 +32,5 @@ final class WindowDescriptor extends AbstractChainedDescriptor<Window>
   @Nullable
   public View getViewAndBoundsForHighlighting(Window element, Rect bounds) {
     return element.peekDecorView();
-  }
-
-  @Nullable
-  @Override
-  public Object getElementToHighlightAtPosition(Window element, int x, int y, Rect bounds) {
-    final Descriptor.Host host = getHost();
-    View view = null;
-    HighlightableDescriptor descriptor = null;
-
-    if (host instanceof AndroidDescriptorHost) {
-      view = element.peekDecorView();
-      descriptor = ((AndroidDescriptorHost) host).getHighlightableDescriptor(view);
-    }
-
-    return descriptor == null
-        ? null
-        : descriptor.getElementToHighlightAtPosition(view, x, y, bounds);
   }
 }

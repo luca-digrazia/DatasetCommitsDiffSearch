@@ -33,33 +33,10 @@ final class DialogDescriptor
   @Override
   public View getViewAndBoundsForHighlighting(Dialog element, Rect bounds) {
     final Descriptor.Host host = getHost();
-    Window window = null;
-    HighlightableDescriptor descriptor = null;
-
     if (host instanceof AndroidDescriptorHost) {
-      window = element.getWindow();
-      descriptor = ((AndroidDescriptorHost) host).getHighlightableDescriptor(window);
+      return ((AndroidDescriptorHost) host).getHighlightingView(element.getWindow(), bounds);
     }
 
-    return descriptor == null
-        ? null
-        : descriptor.getViewAndBoundsForHighlighting(window, bounds);
-  }
-
-  @Nullable
-  @Override
-  public Object getElementToHighlightAtPosition(Dialog element, int x, int y, Rect bounds) {
-    final Descriptor.Host host = getHost();
-    Window window = null;
-    HighlightableDescriptor descriptor = null;
-
-    if (host instanceof AndroidDescriptorHost) {
-      window = element.getWindow();
-      descriptor = ((AndroidDescriptorHost) host).getHighlightableDescriptor(window);
-    }
-
-    return descriptor == null
-        ? null
-        : descriptor.getElementToHighlightAtPosition(window, x, y, bounds);
+    return null;
   }
 }

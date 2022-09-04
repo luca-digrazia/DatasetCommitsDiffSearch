@@ -10,6 +10,7 @@
 package com.facebook.stetho.inspector.elements.android;
 
 import android.app.Dialog;
+import android.graphics.Rect;
 import android.view.View;
 
 import com.facebook.stetho.common.Accumulator;
@@ -43,7 +44,7 @@ final class DialogFragmentDescriptor
     if (compat != null) {
       Class<?> dialogFragmentClass = compat.getDialogFragmentClass();
       LogUtil.d("Adding support for %s", dialogFragmentClass);
-      map.registerDescriptor(dialogFragmentClass, new DialogFragmentDescriptor(compat));
+      map.register(dialogFragmentClass, new DialogFragmentDescriptor(compat));
     }
   }
 
@@ -118,11 +119,11 @@ final class DialogFragmentDescriptor
 
   @Nullable
   @Override
-  public View getViewForHighlighting(Object element) {
+  public View getViewAndBoundsForHighlighting(Object element, Rect bounds) {
     final Descriptor.Host host = getHost();
     if (host instanceof AndroidDescriptorHost) {
       Dialog dialog = mAccessor.getDialog(element);
-      return ((AndroidDescriptorHost) host).getHighlightingView(dialog);
+      return ((AndroidDescriptorHost) host).getHighlightingView(dialog, bounds);
     }
 
     return null;

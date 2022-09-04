@@ -45,38 +45,16 @@ final class ActivityDescriptor
     }
   }
 
-  @Nullable
   @Override
+  @Nullable
   public View getViewAndBoundsForHighlighting(Activity element, Rect bounds) {
     final Descriptor.Host host = getHost();
-    Window window = null;
-    HighlightableDescriptor descriptor = null;
-
     if (host instanceof AndroidDescriptorHost) {
-      window = element.getWindow();
-      descriptor = ((AndroidDescriptorHost) host).getHighlightableDescriptor(window);
+      Window window = element.getWindow();
+      return ((AndroidDescriptorHost) host).getHighlightingView(window, bounds);
     }
 
-    return descriptor == null
-        ? null
-        : descriptor.getViewAndBoundsForHighlighting(window, bounds);
-  }
-
-  @Nullable
-  @Override
-  public Object getElementToHighlightAtPosition(Activity element, int x, int y, Rect bounds) {
-    final Descriptor.Host host = getHost();
-    Window window = null;
-    HighlightableDescriptor descriptor = null;
-
-    if (host instanceof AndroidDescriptorHost) {
-      window = element.getWindow();
-      descriptor = ((AndroidDescriptorHost) host).getHighlightableDescriptor(window);
-    }
-
-    return descriptor == null
-        ? null
-        : descriptor.getElementToHighlightAtPosition(window, x, y, bounds);
+    return null;
   }
 
   private static void getDialogFragments(

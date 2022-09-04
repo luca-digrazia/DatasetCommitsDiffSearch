@@ -9,6 +9,7 @@
 
 package com.facebook.stetho.inspector.elements.android;
 
+import android.graphics.Rect;
 import android.view.View;
 
 import com.facebook.stetho.common.Accumulator;
@@ -39,7 +40,7 @@ final class FragmentDescriptor
     if (compat != null) {
       Class<?> fragmentClass = compat.getFragmentClass();
       LogUtil.d("Adding support for %s", fragmentClass.getName());
-      map.registerDescriptor(fragmentClass, new FragmentDescriptor(compat));
+      map.register(fragmentClass, new FragmentDescriptor(compat));
     }
   }
 
@@ -73,7 +74,8 @@ final class FragmentDescriptor
   }
 
   @Override
-  public View getViewForHighlighting(Object element) {
+  @Nullable
+  public View getViewAndBoundsForHighlighting(Object element, Rect bounds) {
     return mAccessor.getView(element);
   }
 }

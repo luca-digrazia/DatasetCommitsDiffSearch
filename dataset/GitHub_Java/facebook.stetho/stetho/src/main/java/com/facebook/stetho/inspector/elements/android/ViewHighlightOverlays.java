@@ -138,12 +138,7 @@ abstract class ViewHighlightOverlays {
         Rect newRect = canvas.getClipBounds();
         // Make the Canvas Rect bigger according to the View margins.
         newRect.inset(-(mMargins.right + mMargins.left), -(mMargins.top + mMargins.bottom));
-
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-          canvas.clipRect(newRect, Region.Op.REPLACE);
-        } else {
-          canvas.clipOutRect(newRect);
-        }
+        canvas.clipRect(newRect, Region.Op.REPLACE);
         super.draw(canvas);
       }
     }

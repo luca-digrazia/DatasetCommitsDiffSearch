@@ -62,7 +62,6 @@ abstract class ViewHighlighter {
     // Only assigned on the UI thread
     private View mHighlightedView;
     private final Rect mHighlightedBounds = new Rect();
-    private final Rect mEmptyRect = new Rect();
 
     private AtomicReference<View> mViewToHighlight = new AtomicReference<View>();
     private AtomicReference<Rect> mBoundsToHighlight = new AtomicReference<Rect>();
@@ -99,10 +98,7 @@ abstract class ViewHighlighter {
 
     private void highlightViewOnUiThread() {
       final View viewToHighlight = mViewToHighlight.getAndSet(null);
-      Rect boundsToHighlight = mBoundsToHighlight.getAndSet(null);
-      if (boundsToHighlight == null) {
-        boundsToHighlight = mEmptyRect;
-      }
+      final Rect boundsToHighlight = mBoundsToHighlight.getAndSet(null);
 
       if (viewToHighlight == mHighlightedView && mHighlightedBounds.equals(boundsToHighlight)) {
         return;

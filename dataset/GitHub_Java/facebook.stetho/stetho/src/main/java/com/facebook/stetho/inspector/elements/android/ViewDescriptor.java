@@ -10,6 +10,7 @@
 package com.facebook.stetho.inspector.elements.android;
 
 import android.support.v4.view.ViewCompat;
+import android.graphics.Rect;
 import android.view.View;
 import android.view.ViewDebug;
 import android.support.v4.view.accessibility.AccessibilityNodeInfoCompat;
@@ -20,7 +21,6 @@ import com.facebook.stetho.common.StringUtil;
 import com.facebook.stetho.common.android.ResourcesUtil;
 import com.facebook.stetho.inspector.elements.AbstractChainedDescriptor;
 import com.facebook.stetho.inspector.elements.AttributeAccumulator;
-import com.facebook.stetho.inspector.elements.ComputedStyleAccumulator;
 import com.facebook.stetho.inspector.elements.StyleAccumulator;
 import com.facebook.stetho.inspector.helper.IntegerFormatter;
 
@@ -43,8 +43,6 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
   private static final String ID_NAME = "id";
   private static final String NONE_VALUE = "(none)";
   private static final String NONE_MAPPING = "<no mapping>";
-  private static final String VIEW_SELECTOR_NAME = "<this_view>";
-  private static final String ACCESSIBILITY_SELECTOR_NAME = "Accessibility Properties";
 
   private final MethodInvoker mMethodInvoker;
 
@@ -160,18 +158,19 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
   }
 
   @Override
-  public View getViewForHighlighting(View element) {
+  @Nullable
+  public View getViewAndBoundsForHighlighting(View element, Rect bounds) {
     return element;
   }
 
   @Override
   protected void onGetStyles(View element, StyleAccumulator styles) {
+
     List<ViewCSSProperty> properties = getViewProperties();
     for (int i = 0, size = properties.size(); i < size; i++) {
       ViewCSSProperty property = properties.get(i);
       try {
         getStyleFromValue(
-            VIEW_SELECTOR_NAME,
             element,
             property.getCSSName(),
             property.getValue(element),
@@ -186,13 +185,15 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
         }
       }
     }
+  }
 
+  @Override
+  protected void onGetAccessibilityStyles(View element, StyleAccumulator styles) {
     AccessibilityNodeInfoCompat nodeInfo = AccessibilityNodeInfoCompat.obtain();
     ViewCompat.onInitializeAccessibilityNodeInfo(element, nodeInfo);
 
     boolean ignored = AccessibilityNodeInfoWrapper.getIgnored(nodeInfo, element);
     getStyleFromValue(
-        ACCESSIBILITY_SELECTOR_NAME,
         element,
         "ignored",
         ignored,
@@ -201,7 +202,6 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
 
     if (ignored) {
       getStyleFromValue(
-          ACCESSIBILITY_SELECTOR_NAME,
           element,
           "ignored-reasons",
           AccessibilityNodeInfoWrapper.getIgnoredReasons(nodeInfo, element),
@@ -210,7 +210,6 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
     }
 
     getStyleFromValue(
-        ACCESSIBILITY_SELECTOR_NAME,
         element,
         "focusable",
         !ignored,
@@ -219,7 +218,6 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
 
     if (!ignored) {
       getStyleFromValue(
-          ACCESSIBILITY_SELECTOR_NAME,
           element,
           "focusable-reasons",
           AccessibilityNodeInfoWrapper.getFocusableReasons(nodeInfo, element),
@@ -227,7 +225,6 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
           styles);
 
       getStyleFromValue(
-          ACCESSIBILITY_SELECTOR_NAME,
           element,
           "focused",
           nodeInfo.isAccessibilityFocused(),
@@ -235,7 +232,6 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
           styles);
 
       getStyleFromValue(
-          ACCESSIBILITY_SELECTOR_NAME,
           element,
           "description",
           AccessibilityNodeInfoWrapper.getDescription(nodeInfo, element),
@@ -243,7 +239,6 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
           styles);
 
       getStyleFromValue(
-          ACCESSIBILITY_SELECTOR_NAME,
           element,
           "actions",
           AccessibilityNodeInfoWrapper.getActions(nodeInfo),
@@ -252,14 +247,6 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
     }
 
     nodeInfo.recycle();
-  }
-
-  @Override
-  protected void onGetComputedStyles(View element, ComputedStyleAccumulator styles) {
-    styles.store("left", Integer.toString(element.getLeft()));
-    styles.store("top", Integer.toString(element.getTop()));
-    styles.store("right", Integer.toString(element.getRight()));
-    styles.store("bottom", Integer.toString(element.getBottom()));
   }
 
   private static boolean canIntBeMappedToString(@Nullable ViewDebug.ExportedProperty annotation) {
@@ -348,7 +335,6 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
   }
 
   private void getStyleFromValue(
-      String selector,
       View element,
       String name,
       Object value,
@@ -356,46 +342,44 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
       StyleAccumulator styles) {
 
     if (name.equals(ID_NAME)) {
-      getIdStyle(selector, element, styles);
+      getIdStyle(element, styles);
     } else if (value instanceof Integer) {
-      getStyleFromInteger(selector, name, (Integer) value, annotation, styles);
+      getStyleFromInteger(name, (Integer) value, annotation, styles);
     } else if (value instanceof Float) {
-      styles.store(selector, name, String.valueOf(value), ((Float) value) == 0.0f);
+      styles.store(name, String.valueOf(value), ((Float) value) == 0.0f);
     } else if (value instanceof Boolean) {
-      styles.store(selector, name, String.valueOf(value), false);
+      styles.store(name, String.valueOf(value), false);
     } else if (value instanceof Short) {
-      styles.store(selector, name, String.valueOf(value), ((Short) value) == 0);
+      styles.store(name, String.valueOf(value), ((Short) value) == 0);
     } else if (value instanceof Long) {
-      styles.store(selector, name, String.valueOf(value), ((Long) value) == 0);
+      styles.store(name, String.valueOf(value), ((Long) value) == 0);
     } else if (value instanceof Double) {
-      styles.store(selector, name, String.valueOf(value), ((Double) value) == 0.0d);
+      styles.store(name, String.valueOf(value), ((Double) value) == 0.0d);
     } else if (value instanceof Byte) {
-      styles.store(selector, name, String.valueOf(value), ((Byte) value) == 0);
+      styles.store(name, String.valueOf(value), ((Byte) value) == 0);
     } else if (value instanceof Character) {
-      styles.store(selector, name, String.valueOf(value), ((Character) value) == Character.MIN_VALUE);
+      styles.store(name, String.valueOf(value), ((Character) value) == Character.MIN_VALUE);
     } else if (value instanceof CharSequence) {
-      styles.store(selector, name, String.valueOf(value), ((CharSequence) value).length() == 0);
+      styles.store(name, String.valueOf(value), ((CharSequence) value).length() == 0);
     } else {
-      getStylesFromObject(selector, element, name, value, annotation, styles);
+      getStylesFromObject(element, name, value, annotation, styles);
     }
   }
 
   private void getIdStyle(
-      String selector,
       View element,
       StyleAccumulator styles) {
 
     @Nullable String id = getIdAttribute(element);
 
     if (id == null) {
-      styles.store(selector, ID_NAME, NONE_VALUE, false);
+      styles.store(ID_NAME, NONE_VALUE, false);
     } else {
-      styles.store(selector, ID_NAME, id, false);
+      styles.store(ID_NAME, id, false);
     }
   }
 
   private void getStyleFromInteger(
-      String selector,
       String name,
       Integer value,
       @Nullable ViewDebug.ExportedProperty annotation,
@@ -405,13 +389,11 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
 
     if (canIntBeMappedToString(annotation)) {
       styles.store(
-          selector,
           name,
           intValueStr + " (" + mapIntToStringUsingAnnotation(value, annotation) + ")",
           false);
     } else if (canFlagsBeMappedToString(annotation)) {
       styles.store(
-          selector,
           name,
           intValueStr + " (" + mapFlagsToStringUsingAnnotation(value, annotation) + ")",
           false);
@@ -425,12 +407,11 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
           canIntBeMappedToString(annotation)) {
         defaultValue = false;
       }
-      styles.store(selector, name, intValueStr, defaultValue);
+      styles.store(name, intValueStr, defaultValue);
     }
   }
 
   private void getStylesFromObject(
-      String selector,
       View view,
       String name,
       Object value,
@@ -485,7 +466,6 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
           field.getAnnotation(ViewDebug.ExportedProperty.class);
 
       getStyleFromValue(
-          selector,
           view,
           propertyName,
           propertyValue,
