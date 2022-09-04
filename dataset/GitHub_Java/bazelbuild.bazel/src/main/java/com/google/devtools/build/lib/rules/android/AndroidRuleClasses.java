@@ -60,7 +60,6 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
-import com.google.devtools.build.lib.rules.java.JavaPluginInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleClasses;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -427,12 +426,12 @@ public final class AndroidRuleClasses {
           .add(
               attr("plugins", LABEL_LIST)
                   .cfg(ExecutionTransitionFactory.create())
-                  .mandatoryProviders(JavaPluginInfo.PROVIDER.id())
+                  .allowedRuleClasses("java_plugin")
                   .legacyAllowAnyFileType())
           .add(
               attr(":java_plugins", LABEL_LIST)
                   .cfg(ExecutionTransitionFactory.create())
-                  .mandatoryProviders(JavaPluginInfo.PROVIDER.id())
+                  .allowedRuleClasses("java_plugin")
                   .silentRuleClassFilter()
                   .value(JavaSemantics.JAVA_PLUGINS))
           /* <!-- #BLAZE_RULE($android_base).ATTRIBUTE(javacopts) -->
