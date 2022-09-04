@@ -21,51 +21,39 @@ import org.graylog2.plugin.PluginMetaData;
 import org.graylog2.plugin.PluginModule;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.Version;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.testng.annotations.DataProvider;
+import org.testng.annotations.Test;
 
 import java.net.URI;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
 
-import static org.junit.Assert.assertTrue;
+import static org.testng.Assert.assertTrue;
 
-@RunWith(Parameterized.class)
 public class PluginComparatorTest {
     private PluginLoader.PluginComparator comparator = new PluginLoader.PluginComparator();
 
-    @Parameterized.Parameters
+    @DataProvider(name = "test", parallel = true)
     public static Object[][] provideData() {
         return new Object[][]{
-                {new TestPlugin("u", "n", Version.from(1, 0, 0)), new TestPlugin("u", "n", Version.from(1, 0, 0)), 0},
-                {new TestPlugin("u1", "n", Version.from(1, 0, 0)), new TestPlugin("u2", "n", Version.from(1, 0, 0)), -1},
-                {new TestPlugin("u", "n1", Version.from(1, 0, 0)), new TestPlugin("u", "n2", Version.from(1, 0, 0)), -1},
-                {new TestPlugin("u2", "n1", Version.from(1, 0, 0)), new TestPlugin("u1", "n2", Version.from(1, 0, 0)), 1},
-                {new TestPlugin("u", "n", Version.from(1, 0, 0, "beta.1")), new TestPlugin("u", "n", Version.from(1, 0, 0)), -1},
-                {new TestPlugin("u", "n", Version.from(1, 0, 0, "beta.1")), new TestPlugin("u", "n", Version.from(1, 0, 0, "alpha.5")), 1},
-                {new TestPlugin("u", "n", Version.from(1, 0, 1)), new TestPlugin("u", "n", Version.from(1, 0, 0)), 1},
-                {new TestPlugin("u", "n", Version.from(1, 0, 0)), new TestPlugin("u", "n", Version.from(1, 0, 1)), -1},
-                {new TestPlugin("u", "n", Version.from(2, 0, 0)), new TestPlugin("u", "n", Version.from(1, 0, 0)), 1},
-                {new TestPlugin("u", "n", Version.from(1, 1, 0)), new TestPlugin("u", "n", Version.from(1, 0, 0)), 1},
-                {new TestPlugin("u", "n", Version.from(1, 0, 1)), new TestPlugin("u", "n", Version.from(1, 0, 0)), 1}
+                {new TestPlugin("u", "n", new Version(1, 0, 0)), new TestPlugin("u", "n", new Version(1, 0, 0)), 0},
+                {new TestPlugin("u1", "n", new Version(1, 0, 0)), new TestPlugin("u2", "n", new Version(1, 0, 0)), -1},
+                {new TestPlugin("u", "n1", new Version(1, 0, 0)), new TestPlugin("u", "n2", new Version(1, 0, 0)), -1},
+                {new TestPlugin("u2", "n1", new Version(1, 0, 0)), new TestPlugin("u1", "n2", new Version(1, 0, 0)), 1},
+                {new TestPlugin("u", "n", new Version(1, 0, 0, "beta.1")), new TestPlugin("u", "n", new Version(1, 0, 0)), -1},
+                {new TestPlugin("u", "n", new Version(1, 0, 0, "beta.1")), new TestPlugin("u", "n", new Version(1, 0, 0, "alpha.5")), 1},
+                {new TestPlugin("u", "n", new Version(1, 0, 1)), new TestPlugin("u", "n", new Version(1, 0, 0)), 1},
+                {new TestPlugin("u", "n", new Version(1, 0, 0)), new TestPlugin("u", "n", new Version(1, 0, 1)), -1},
+                {new TestPlugin("u", "n", new Version(2, 0, 0)), new TestPlugin("u", "n", new Version(1, 0, 0)), 1},
+                {new TestPlugin("u", "n", new Version(1, 1, 0)), new TestPlugin("u", "n", new Version(1, 0, 0)), 1},
+                {new TestPlugin("u", "n", new Version(1, 0, 1)), new TestPlugin("u", "n", new Version(1, 0, 0)), 1}
         };
     }
 
-    private Plugin first;
-    private Plugin second;
-    private int comparisonResult;
-
-    public PluginComparatorTest(Plugin first, Plugin second, int comparisonResult) {
-        this.first = first;
-        this.second = second;
-        this.comparisonResult = comparisonResult;
-    }
-
-    @Test
-    public void testCompare() throws Exception {
-        assertTrue(comparator.compare(first, second) == comparisonResult);
+    @Test(dataProvider = "test")
+    public void testCompare(Plugin p1, Plugin p2, int result) throws Exception {
+        assertTrue(comparator.compare(p1, p2) == result);
     }
 
     public static class TestPlugin implements Plugin {
