@@ -104,10 +104,6 @@ public class OLS implements Regression<double[]>, Serializable {
      */
     private double[][] coefficients;
     /**
-     * The fitted values.
-     */
-    private double[] fittedValues;
-    /**
      * The residuals, that is response minus fitted values.
      */
     private double[] residuals;
@@ -260,11 +256,9 @@ public class OLS implements Regression<double[]>, Serializable {
         double TSS = 0.0;
         RSS = 0.0;
         double ybar = Math.mean(y);
-        fittedValues = new double[n];
         residuals = new double[n];
         for (int i = 0; i < n; i++) {
-            fittedValues[i] = yhat[i] + b;
-            double r = y[i] - fittedValues[i];
+            double r = y[i] - yhat[i] - b;
             residuals[i] = r;
             RSS += Math.sqr(r);
             TSS += Math.sqr(y[i] - ybar);
@@ -344,13 +338,6 @@ public class OLS implements Regression<double[]>, Serializable {
      */
     public double[] residuals() {
         return residuals;
-    }
-
-    /**
-     * Returns the fitted values.
-     */
-    public double[] fittedValues() {
-        return fittedValues;
     }
 
     /**
