@@ -23,25 +23,24 @@ import java.util.Map;
 import javax.annotation.Nullable;
 
 /**
- * Base class for declared providers {@see ClassObjectConstructor} defined in native code.
+ * Base class for declared providers {@see ClassObjectConstructor} defined
+ * in native code.
  *
- * <p>Every non-abstract derived class of {@link NativeClassObjectConstructor} corresponds to a
- * single declared provider. This is enforced by final {@link #equals(Object)} and {@link
- * #hashCode()}.
+ * Every non-abstract derived class of {@link NativeClassObjectConstructor}
+ * corresponds to a single declared provider. This is enforced by final
+ * {@link #equals(Object)} and {@link #hashCode()}.
  *
- * <p>Typical implementation of a non-constructable from Skylark declared provider is as follows:
- *
+ * Typical implementation of a non-constructable from Skylark declared provider is as follows:
  * <pre>
  *     public static final ClassObjectConstructor CC_LINK_PARAMS =
  *       new NativeClassObjectConstructor("link_params") { };
  * </pre>
  *
- * To allow construction from Skylark and custom construction logic, override {@link
- * #createInstanceFromSkylark(Object[], Location)} (see {@link #STRUCT} for an example.
+ * To allow construction from Skylark and custom construction logic, override
+ * {@link #createInstanceFromSkylark(Object[], Location)} (see {@link #STRUCT} for an example.
  */
 @Immutable
-public abstract class NativeClassObjectConstructor<VALUE extends SkylarkClassObject>
-    extends ClassObjectConstructor {
+public abstract class NativeClassObjectConstructor extends ClassObjectConstructor {
   private final NativeKey key;
   private final String errorMessageForInstances;
 
@@ -50,21 +49,14 @@ public abstract class NativeClassObjectConstructor<VALUE extends SkylarkClassObj
    */
   public static final StructConstructor STRUCT = new StructConstructor();
 
-  private final Class<VALUE> valueClass;
-
-  public Class<VALUE> getValueClass() {
-    return valueClass;
-  }
-
   /**
    * A constructor for default {@code struct}s.
    *
-   * <p>Singleton, instance is {@link #STRUCT}.
+   * Singleton, instance is {@link #STRUCT}.
    */
-  public static final class StructConstructor
-      extends NativeClassObjectConstructor<SkylarkClassObject> {
+  public static final class StructConstructor extends NativeClassObjectConstructor {
     private StructConstructor() {
-      super(SkylarkClassObject.class, "struct");
+      super("struct");
     }
 
     @Override
@@ -82,18 +74,16 @@ public abstract class NativeClassObjectConstructor<VALUE extends SkylarkClassObj
   private static final FunctionSignature.WithValues<Object, SkylarkType> SIGNATURE =
       FunctionSignature.WithValues.create(FunctionSignature.KWARGS);
 
-  protected NativeClassObjectConstructor(Class<VALUE> clazz, String name) {
-    this(clazz, name, SIGNATURE);
+  protected NativeClassObjectConstructor(String name) {
+    this(name, SIGNATURE);
   }
 
-  protected NativeClassObjectConstructor(
-      Class<VALUE> valueClass,
-      String name,
+  protected NativeClassObjectConstructor(String name,
       FunctionSignature.WithValues<Object, SkylarkType> signature) {
     super(name, signature, Location.BUILTIN);
     key = new NativeKey(name, getClass());
-    this.valueClass = valueClass;
     errorMessageForInstances = String.format("'%s' object has no attribute '%%s'", name);
+
   }
 
   /**

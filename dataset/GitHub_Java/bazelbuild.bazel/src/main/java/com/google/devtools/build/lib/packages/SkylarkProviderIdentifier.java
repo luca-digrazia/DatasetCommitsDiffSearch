@@ -14,32 +14,34 @@
 
 package com.google.devtools.build.lib.packages;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.Objects;
 import javax.annotation.Nullable;
 
 /**
- * A wrapper around Skylark provider identifier, representing either a declared provider ({@see
- * SkylarkProvider}) or a "legacy" string identifier.
+ * A wrapper around Skylark provider identifier,
+ * representing either a declared provider ({@see SkylarkClassObjectConstructor})
+ * or a "legacy" string identifier.
  */
 public final class SkylarkProviderIdentifier {
-  private static final Interner<SkylarkProviderIdentifier> interner =
-      BlazeInterners.newWeakInterner();
 
   @Nullable
   private final String legacyId;
-  @Nullable private final Provider.Key key;
+  @Nullable
+  private final ClassObjectConstructor.Key key;
 
-  /** Creates an id for a declared provider with a given key ({@see SkylarkProvider}). */
-  public static SkylarkProviderIdentifier forKey(Provider.Key key) {
-    return interner.intern(new SkylarkProviderIdentifier(key));
+  /**
+   * Creates an id for a declared provider with a given key ({@see SkylarkClassObjectConstructor}).
+   */
+  public static SkylarkProviderIdentifier forKey(ClassObjectConstructor.Key key) {
+    return new SkylarkProviderIdentifier(key);
   }
 
-  /** Creates an id for a provider with a given name. */
+  /**
+   * Creates an id for a provider with a given name.
+   */
   public static SkylarkProviderIdentifier forLegacy(String legacyId) {
-    return interner.intern(new SkylarkProviderIdentifier(legacyId));
+    return new SkylarkProviderIdentifier(legacyId);
   }
 
   private SkylarkProviderIdentifier(String legacyId) {
@@ -47,7 +49,7 @@ public final class SkylarkProviderIdentifier {
     this.key = null;
   }
 
-  private SkylarkProviderIdentifier(Provider.Key key) {
+  private SkylarkProviderIdentifier(ClassObjectConstructor.Key key) {
     this.legacyId = null;
     this.key = key;
   }
@@ -68,8 +70,10 @@ public final class SkylarkProviderIdentifier {
     return legacyId;
   }
 
-  /** Returns a key identifying the declared provider (only for non-legacy providers). */
-  public Provider.Key getKey() {
+  /**
+   * Returns a key identifying the declared provider (only for non-legacy providers).
+   */
+  public ClassObjectConstructor.Key getKey() {
     Preconditions.checkState(!isLegacy(), "Check !isLegacy() first");
     return key;
   }

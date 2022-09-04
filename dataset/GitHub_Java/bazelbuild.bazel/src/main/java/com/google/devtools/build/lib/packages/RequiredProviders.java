@@ -115,9 +115,15 @@ public final class RequiredProviders {
         return true;
       }
       return satisfies(
-          aClass -> advertisedProviderSet.getNativeProviders().contains(aClass),
+          new Predicate<Class<?>>() {
+            @Override
+            public boolean apply(Class<?> aClass) {
+              return advertisedProviderSet.getNativeProviders().contains(aClass);
+            }
+          },
           Predicates.in(advertisedProviderSet.getSkylarkProviders()),
-          requiredProviders);
+          requiredProviders
+      );
     }
 
     /**

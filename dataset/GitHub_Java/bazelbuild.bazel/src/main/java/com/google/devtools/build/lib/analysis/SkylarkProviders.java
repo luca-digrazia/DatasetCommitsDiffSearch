@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.analysis.MergedConfiguredTarget.DuplicateEx
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
-import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.rules.SkylarkApiProvider;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -125,8 +124,7 @@ public final class SkylarkProviders implements TransitiveInfoProvider {
    * @param providers providers to merge {@code this} with.
    */
   public static SkylarkProviders merge(
-      ImmutableMap<String, Object> premergedLegacyProviders,
-      ImmutableMap<SkylarkClassObjectConstructor.Key, SkylarkClassObject> premergedProviders,
+      Map<String, Object> premergedProviders,
       List<SkylarkProviders> providers)
       throws DuplicateException {
     if (premergedProviders.size() == 0 && providers.size() == 0) {
@@ -138,11 +136,11 @@ public final class SkylarkProviders implements TransitiveInfoProvider {
 
     ImmutableMap<String, Object> skylarkProviders = mergeMaps(providers,
         SKYLARK_PROVIDERS_MAP_FUNCTION,
-        premergedLegacyProviders);
+        premergedProviders);
 
     ImmutableMap<ClassObjectConstructor.Key, SkylarkClassObject> declaredProviders =
         mergeMaps(providers, DECLARED_PROVIDERS_MAP_FUNCTION,
-            premergedProviders);
+            ImmutableMap.<ClassObjectConstructor.Key, SkylarkClassObject>of());
 
     return new SkylarkProviders(skylarkProviders, declaredProviders);
   }
@@ -164,10 +162,7 @@ public final class SkylarkProviders implements TransitiveInfoProvider {
           throw new DuplicateException("Provider " + key + " provided twice");
         }
 
-        V v = map.get(key);
-        if (v != null) {
-          resultBuilder.put(key, v);
-        }
+        resultBuilder.put(key, map.get(key));
       }
     }
     return resultBuilder.build();
