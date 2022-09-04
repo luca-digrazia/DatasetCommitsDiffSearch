@@ -27,7 +27,6 @@ import com.google.inject.multibindings.Multibinder;
 import com.google.inject.multibindings.OptionalBinder;
 import com.google.inject.name.Names;
 import org.apache.shiro.realm.AuthenticatingRealm;
-import org.apache.shiro.realm.AuthorizingRealm;
 import org.graylog2.audit.AuditEventSender;
 import org.graylog2.audit.AuditEventType;
 import org.graylog2.audit.PluginAuditEventTypes;
@@ -376,10 +375,6 @@ public abstract class Graylog2Module extends AbstractModule {
         return MapBinder.newMapBinder(binder(), String.class, AuthenticatingRealm.class);
     }
 
-    protected MapBinder<String, AuthorizingRealm> authorizationOnlyRealmBinder() {
-        return MapBinder.newMapBinder(binder(), String.class, AuthorizingRealm.class);
-    }
-
     protected MapBinder<String, SearchResponseDecorator.Factory> searchResponseDecoratorBinder() {
         return MapBinder.newMapBinder(binder(), String.class, SearchResponseDecorator.Factory.class);
     }
@@ -428,25 +423,12 @@ public abstract class Graylog2Module extends AbstractModule {
         return MapBinder.newMapBinder(binder(), String.class, LookupDataAdapter.Factory.class);
     }
 
-    protected MapBinder<String, LookupDataAdapter.Factory2> lookupDataAdapterBinder2() {
-        return MapBinder.newMapBinder(binder(), String.class, LookupDataAdapter.Factory2.class);
-    }
-
     protected void installLookupDataAdapter(String name,
                                             Class<? extends LookupDataAdapter> adapterClass,
                                             Class<? extends LookupDataAdapter.Factory> factoryClass,
                                             Class<? extends LookupDataAdapterConfiguration> configClass) {
         install(new FactoryModuleBuilder().implement(LookupDataAdapter.class, adapterClass).build(factoryClass));
         lookupDataAdapterBinder().addBinding(name).to(factoryClass);
-        registerJacksonSubtype(configClass, name);
-    }
-
-    protected void installLookupDataAdapter2(String name,
-                                            Class<? extends LookupDataAdapter> adapterClass,
-                                            Class<? extends LookupDataAdapter.Factory2> factoryClass,
-                                            Class<? extends LookupDataAdapterConfiguration> configClass) {
-        install(new FactoryModuleBuilder().implement(LookupDataAdapter.class, adapterClass).build(factoryClass));
-        lookupDataAdapterBinder2().addBinding(name).to(factoryClass);
         registerJacksonSubtype(configClass, name);
     }
 

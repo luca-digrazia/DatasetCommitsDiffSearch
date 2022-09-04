@@ -109,10 +109,10 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
     public static final int THRESHOLD_THROTTLING_DISABLED = -1;
 
     // Metric names, which should be used twice (once in metric startup and once in metric teardown).
-    public static final String METER_WRITTEN_MESSAGES = "writtenMessages";
-    public static final String METER_READ_MESSAGES = "readMessages";
+    private static final String METER_WRITTEN_MESSAGES = "writtenMessages";
+    private static final String METER_READ_MESSAGES = "readMessages";
     private static final String METER_WRITE_DISCARDED_MESSAGES = "writeDiscardedMessages";
-    public static final String GAUGE_UNCOMMITTED_MESSAGES = "uncommittedMessages";
+    private static final String GAUGE_UNCOMMITTED_MESSAGES = "uncommittedMessages";
     private static final String TIMER_WRITE_TIME = "writeTime";
     private static final String TIMER_READ_TIME = "readTime";
     private static final String METRIC_NAME_SIZE = "size";
@@ -399,13 +399,7 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
     private void registerUncommittedGauge(MetricRegistry metricRegistry, String name) {
         try {
             metricRegistry.register(name,
-                    (Gauge<Long>) () -> {
-                        if (getCommittedOffset() == DEFAULT_COMMITTED_OFFSET && size() == 0) {
-                            // nothing committed at all
-                            return 0L;
-                        }
-                        return Math.max(0, getLogEndOffset() - 1 - committedOffset.get());
-                    });
+                    (Gauge<Long>) () -> Math.max(0, getLogEndOffset() - 1 - committedOffset.get()));
         } catch (IllegalArgumentException ignored) {
             // already registered, we'll ignore that.
         }

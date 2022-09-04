@@ -16,39 +16,40 @@
  */
 package org.graylog2.outputs;
 
-import autovalue.shaded.com.google.common.common.collect.Maps;
+import com.google.common.collect.Maps;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
 import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.shared.bindings.InstantiationService;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 import java.util.Map;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
 public class MessageOutputFactoryTest {
-    @Mock
-    private InstantiationService instantiationService;
+    @Rule
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
+
     private final Map<String, MessageOutput.Factory<? extends MessageOutput>> availableOutputs;
+    private final Map<String, MessageOutput.Factory2<? extends MessageOutput>> availableOutputs2;
 
     private MessageOutputFactory messageOutputFactory;
 
     public MessageOutputFactoryTest() {
         this.availableOutputs = Maps.newHashMap();
+        this.availableOutputs2 = Maps.newHashMap();
     }
 
     @Before
     public void setUp() throws Exception {
-        this.messageOutputFactory = new MessageOutputFactory(instantiationService, availableOutputs);
+        this.messageOutputFactory = new MessageOutputFactory(availableOutputs, availableOutputs2);
     }
 
     @Test(expected = IllegalArgumentException.class)
