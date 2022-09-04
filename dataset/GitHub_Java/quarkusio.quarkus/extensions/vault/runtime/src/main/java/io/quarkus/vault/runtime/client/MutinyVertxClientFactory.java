@@ -19,8 +19,12 @@ public class MutinyVertxClientFactory {
     public static WebClient createHttpClient(Vertx vertx, VaultBootstrapConfig vaultBootstrapConfig, TlsConfig tlsConfig) {
 
         WebClientOptions options = new WebClientOptions()
-                .setConnectTimeout((int) vaultBootstrapConfig.connectTimeout.getSeconds())
+                .setConnectTimeout((int) vaultBootstrapConfig.connectTimeout.toMillis())
                 .setIdleTimeout((int) vaultBootstrapConfig.readTimeout.getSeconds());
+
+        if (vaultBootstrapConfig.nonProxyHosts.isPresent()) {
+            options.setNonProxyHosts(vaultBootstrapConfig.nonProxyHosts.get());
+        }
 
         boolean trustAll = vaultBootstrapConfig.tls.skipVerify.orElseGet(() -> tlsConfig.trustAll);
         if (trustAll) {
