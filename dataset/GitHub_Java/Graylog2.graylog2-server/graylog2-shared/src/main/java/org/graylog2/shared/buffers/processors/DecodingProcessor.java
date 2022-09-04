@@ -19,6 +19,9 @@ package org.graylog2.shared.buffers.processors;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Iterables;
 import com.google.common.net.InetAddresses;
 import com.google.inject.assistedinject.Assisted;
@@ -28,6 +31,7 @@ import org.graylog2.plugin.Message;
 import org.graylog2.plugin.ResolvableInetSocketAddress;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.buffers.MessageEvent;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.codecs.Codec;
 import org.graylog2.plugin.journal.RawMessage;
 import org.graylog2.shared.inputs.InputRegistry;
@@ -38,12 +42,14 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
 public class DecodingProcessor implements EventHandler<MessageEvent> {
     private static final Logger log = LoggerFactory.getLogger(DecodingProcessor.class);
 
+    private final LoadingCache<String, MessageInput> inputCache;
     private final Timer decodeTime;
 
     public interface Factory {
@@ -53,6 +59,7 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
     private final Map<String, Codec.Factory<? extends Codec>> codecFactory;
     private final ServerStatus serverStatus;
     private final MetricRegistry metricRegistry;
+    private final PersistedInputs persistedInputs;
     private final Timer parseTime;
 
     @AssistedInject
@@ -66,10 +73,23 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         this.codecFactory = codecFactory;
         this.serverStatus = serverStatus;
         this.metricRegistry = metricRegistry;
+        this.persistedInputs = persistedInputs;
 
         // these metrics are global to all processors, thus they are passed in directly to avoid relying on the class name
         this.parseTime = parseTime;
         this.decodeTime = decodeTime;
+
+        // Use cache here to avoid looking up the inputs in the InputRegistry for every message.
+        // TODO Check if there is a better way to do this!
+        this.inputCache = CacheBuilder.newBuilder()
+                .expireAfterAccess(1, TimeUnit.SECONDS)
+                .build(new CacheLoader<String, MessageInput>() {
+                    @Override
+                    public MessageInput load(String inputId) throws Exception {
+                        // TODO this creates a completely new MessageInput instance every time.
+                        return persistedInputs.get(inputId);
+                    }
+                });
     }
 
     @Override
@@ -162,7 +182,7 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
 
         if (inputIdOnCurrentNode != null) {
             try {
-                message.setSourceInputId(inputIdOnCurrentNode);
+                message.setSourceInput(inputCache.get(inputIdOnCurrentNode));
             } catch (RuntimeException e) {
                 log.warn("Unable to find input with id " + inputIdOnCurrentNode + ", not setting input id in this message.", e);
             }
@@ -177,10 +197,6 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
             if (remoteAddress.isReverseLookedUp()) { // avoid reverse lookup if the hostname is available
                 message.addField("gl2_remote_hostname", remoteAddress.getHostName());
             }
-        }
-
-        if (codec.getConfiguration().stringIsSet(Codec.Config.CK_OVERRIDE_SOURCE)) {
-            message.setSource(codec.getConfiguration().getString(Codec.Config.CK_OVERRIDE_SOURCE));
         }
 
         metricRegistry.meter(name(baseMetricName, "processedMessages")).mark();

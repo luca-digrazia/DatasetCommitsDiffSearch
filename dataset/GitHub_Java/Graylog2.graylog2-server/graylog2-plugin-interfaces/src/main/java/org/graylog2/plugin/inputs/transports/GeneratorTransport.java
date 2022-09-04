@@ -88,10 +88,10 @@ public abstract class GeneratorTransport extends ThrottleableTransport {
         return null;
     }
 
-    public static class Config extends ThrottleableTransport.Config {
+    public static class Config implements Transport.Config {
         @Override
         public ConfigurationRequest getRequestedConfiguration() {
-            return super.getRequestedConfiguration();
+            return new ConfigurationRequest();
         }
     }
 }
