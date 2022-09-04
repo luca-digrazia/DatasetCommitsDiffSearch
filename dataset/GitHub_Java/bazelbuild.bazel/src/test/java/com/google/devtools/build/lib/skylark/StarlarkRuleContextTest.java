@@ -102,7 +102,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
                                           StarlarkProviderIdentifier.forLegacy("c"))))));
 
   @Override
-  protected ConfiguredRuleClassProvider createRuleClassProvider() {
+  protected ConfiguredRuleClassProvider getRuleClassProvider() {
     ConfiguredRuleClassProvider.Builder builder =
         new ConfiguredRuleClassProvider.Builder()
             .addRuleDefinition(TESTING_RULE_FOR_MANDATORY_PROVIDERS);
@@ -2547,6 +2547,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
   }
 
   private void writeIntFlagBuildSettingFiles() throws Exception {
+    setStarlarkSemanticsOptions("--experimental_build_setting_api=True");
     scratch.file(
         "test/build_setting.bzl",
         "BuildSettingInfo = provider(fields = ['name', 'value'])",
@@ -2594,6 +2595,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
 
   @Test
   public void testBuildSettingValue_nonBuildSettingRule() throws Exception {
+    setStarlarkSemanticsOptions("--experimental_build_setting_api=True");
     scratch.file(
         "test/rule.bzl",
         "def _impl(ctx):",
