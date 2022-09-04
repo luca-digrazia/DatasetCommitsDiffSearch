@@ -1493,7 +1493,7 @@ public final class RuleContext extends TargetContext
       target
           .getAssociatedRule()
           .getRuleClassObject()
-          .checkAttributesNonEmpty(reporter, attributes);
+          .checkAttributesNonEmpty(target.getAssociatedRule(), reporter, attributes);
     }
 
     public Builder setVisibility(NestedSet<PackageGroupContents> visibility) {
