@@ -27,7 +27,6 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.DynamicStrategyRegistry;
-import com.google.devtools.build.lib.actions.DynamicStrategyRegistry.DynamicMode;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
@@ -125,13 +124,13 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
   private static void stopBranch(
       Future<ImmutableList<SpawnResult>> branch,
       Semaphore branchDone,
-      DynamicMode cancellingStrategy,
-      AtomicReference<DynamicMode> strategyThatCancelled)
+      String cancellingStrategy,
+      AtomicReference<String> strategyThatCancelled)
       throws InterruptedException {
     // This multi-step, unlocked access to "strategyThatCancelled" is valid because, for a given
     // value of "cancellingStrategy", we do not expect concurrent calls to this method. (If there
     // are, we are in big trouble.)
-    DynamicMode current = strategyThatCancelled.get();
+    String current = strategyThatCancelled.get();
     if (cancellingStrategy.equals(current)) {
       throw new AssertionError("stopBranch called more than once by " + cancellingStrategy);
     } else {
@@ -291,7 +290,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
     Semaphore localDone = new Semaphore(0);
     Semaphore remoteDone = new Semaphore(0);
 
-    AtomicReference<DynamicMode> strategyThatCancelled = new AtomicReference<>(null);
+    AtomicReference<String> strategyThatCancelled = new AtomicReference<>(null);
     SettableFuture<ImmutableList<SpawnResult>> remoteBranch = SettableFuture.create();
 
     AtomicBoolean localStarting = new AtomicBoolean(true);
@@ -299,7 +298,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
 
     ListenableFuture<ImmutableList<SpawnResult>> localBranch =
         executorService.submit(
-            new Branch(DynamicMode.LOCAL, actionExecutionContext) {
+            new Branch("local", actionExecutionContext) {
               @Override
               ImmutableList<SpawnResult> callImpl(ActionExecutionContext context)
                   throws InterruptedException, ExecException {
@@ -316,9 +315,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
                   return runLocally(
                       spawn,
                       context,
-                      () ->
-                          stopBranch(
-                              remoteBranch, remoteDone, DynamicMode.LOCAL, strategyThatCancelled));
+                      () -> stopBranch(remoteBranch, remoteDone, "local", strategyThatCancelled));
                 } finally {
                   localDone.release();
                 }
@@ -339,7 +336,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
 
     remoteBranch.setFuture(
         executorService.submit(
-            new Branch(DynamicMode.REMOTE, actionExecutionContext) {
+            new Branch("remote", actionExecutionContext) {
               @Override
               public ImmutableList<SpawnResult> callImpl(ActionExecutionContext context)
                   throws InterruptedException, ExecException {
@@ -355,11 +352,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
                           spawn,
                           context,
                           () ->
-                              stopBranch(
-                                  localBranch,
-                                  localDone,
-                                  DynamicMode.REMOTE,
-                                  strategyThatCancelled));
+                              stopBranch(localBranch, localDone, "remote", strategyThatCancelled));
                   delayLocalExecution.set(true);
                   return spawnResults;
                 } finally {
@@ -472,19 +465,19 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
    * updates the stdout/stderr files if this spawn succeeds.
    */
   private abstract static class Branch implements Callable<ImmutableList<SpawnResult>> {
-    private final DynamicStrategyRegistry.DynamicMode mode;
+    private final String name;
     private final ActionExecutionContext context;
 
     /**
      * Creates a new branch of dynamic execution.
      *
-     * @param mode the dynamic mode that this branch represents (e.g. {@link
-     *     DynamicStrategyRegistry.DynamicMode#REMOTE}). Used to qualify temporary files.
+     * @param name a name to describe what this branch represents (e.g. {@code remote}). Used to
+     *     qualify temporary files.
      * @param context the action execution context given to the dynamic strategy, used to obtain the
      *     final location of the stdout/stderr
      */
-    Branch(DynamicStrategyRegistry.DynamicMode mode, ActionExecutionContext context) {
-      this.mode = mode;
+    Branch(String name, ActionExecutionContext context) {
+      this.name = name;
       this.context = context;
     }
 
@@ -529,7 +522,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
      */
     @Override
     public final ImmutableList<SpawnResult> call() throws InterruptedException, ExecException {
-      FileOutErr fileOutErr = getSuffixedFileOutErr(context.getFileOutErr(), "." + mode.name());
+      FileOutErr fileOutErr = getSuffixedFileOutErr(context.getFileOutErr(), "." + name);
 
       ImmutableList<SpawnResult> results = null;
       ExecException exception = null;
