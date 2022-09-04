@@ -17,7 +17,7 @@
 package org.graylog2.alerts;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonValue;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import org.graylog2.plugin.MessageSummary;
@@ -40,27 +40,19 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
         MESSAGE_COUNT,
         FIELD_VALUE,
         FIELD_CONTENT_VALUE,
-        DUMMY;
-
-        @JsonValue
-        @Override
-        public String toString() {
-            return super.toString().toLowerCase(Locale.ENGLISH);
-        }
+        DUMMY
     }
 
     protected final String id;
     protected final Stream stream;
-    protected final String type;
+    protected final Type type;
     protected final DateTime createdAt;
     protected final String creatorUserId;
     protected final int grace;
-    protected final String title;
 
     private final Map<String, Object> parameters;
 
-    protected AbstractAlertCondition(Stream stream, String id, String type, DateTime createdAt, String creatorUserId, Map<String, Object> parameters, String title) {
-        this.title = title;
+    protected AbstractAlertCondition(Stream stream, String id, Type type, DateTime createdAt, String creatorUserId, Map<String, Object> parameters) {
         if (id == null) {
             this.id = UUID.randomUUID().toString();
         } else {
@@ -76,23 +68,20 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
         this.grace = getNumber(this.parameters.get("grace")).orElse(0).intValue();
     }
 
+    protected abstract AlertCondition.CheckResult runCheck();
+
     @Override
     public String getId() {
         return id;
     }
 
-    public String getType() {
+    public Type getType() {
         return type;
     }
 
     @Override
     public String getTypeString() {
         return type.toString();
-    }
-
-    @Override
-    public String getTitle() {
-        return title;
     }
 
     @Override
@@ -106,7 +95,6 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
     }
 
     @JsonIgnore
-    @Override
     public Stream getStream() {
         return stream;
     }
@@ -135,13 +123,18 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
                 .put("creator_user_id", creatorUserId)
                 .put("created_at", Tools.getISO8601String(createdAt))
                 .put("parameters", parameters)
-                .put("title", title)
                 .build();
     }
 
     @Override
     public int getGrace() {
         return grace;
+    }
+
+    public static class NoSuchAlertConditionTypeException extends Exception {
+        public NoSuchAlertConditionTypeException(String msg) {
+            super(msg);
+        }
     }
 
     public static class CheckResult implements AlertCondition.CheckResult {
@@ -166,22 +159,18 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
             }
         }
 
-        @Override
         public boolean isTriggered() {
             return isTriggered;
         }
 
-        @Override
         public String getResultDescription() {
             return resultDescription;
         }
 
-        @Override
         public AlertCondition getTriggeredCondition() {
             return triggeredCondition;
         }
 
-        @Override
         public DateTime getTriggeredAt() {
             return triggeredAt;
         }

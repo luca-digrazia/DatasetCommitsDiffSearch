@@ -105,14 +105,14 @@ public class AbstractAlertConditionTest extends AlertConditionTest {
     }
 
     protected AlertCondition getDummyAlertCondition(Map<String, Object> parameters) {
-        return new AbstractAlertCondition(stream, CONDITION_ID, null, Tools.nowUTC(), STREAM_CREATOR, parameters, "Dummy Alert Condition") {
+        return new AbstractAlertCondition(stream, CONDITION_ID, null, Tools.nowUTC(), STREAM_CREATOR, parameters) {
             @Override
             public String getDescription() {
                 return null;
             }
 
             @Override
-            public AlertCondition.CheckResult runCheck() {
+            protected AlertCondition.CheckResult runCheck() {
                 return null;
             }
         };

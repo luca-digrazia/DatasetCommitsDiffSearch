@@ -26,7 +26,6 @@ import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.indexer.results.SearchResult;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.Sorting;
-import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.plugin.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.plugin.Message;
@@ -50,12 +49,7 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
     }
 
     public interface Factory {
-        MessageCountAlertCondition createAlertCondition(Stream stream,
-                                                        @Assisted("id") String id,
-                                                        DateTime createdAt,
-                                                        @Assisted("userid") String creatorUserId,
-                                                        Map<String, Object> parameters,
-                                                        @Assisted("title") @Nullable String title);
+        MessageCountAlertCondition createAlertCondition(Stream stream, String id, DateTime createdAt, @Assisted("userid") String creatorUserId, Map<String, Object> parameters);
     }
 
     private final int time;
@@ -64,14 +58,8 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
     private final Searches searches;
 
     @AssistedInject
-    public MessageCountAlertCondition(Searches searches,
-                                      @Assisted Stream stream,
-                                      @Nullable @Assisted("id") String id,
-                                      @Assisted DateTime createdAt,
-                                      @Assisted("userid") String creatorUserId,
-                                      @Assisted Map<String, Object> parameters,
-                                      @Nullable @Assisted("title") String title) {
-        super(stream, id, Type.MESSAGE_COUNT, createdAt, creatorUserId, parameters, title);
+    public MessageCountAlertCondition(Searches searches, @Assisted Stream stream, @Nullable @Assisted String id, @Assisted DateTime createdAt, @Assisted("userid") String creatorUserId, @Assisted Map<String, Object> parameters) {
+        super(stream, id, Type.MESSAGE_COUNT, createdAt, creatorUserId, parameters);
 
         this.searches = searches;
         this.time = getNumber(parameters.get("time")).orElse(0).intValue();
@@ -90,16 +78,8 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
     @Override
     protected CheckResult runCheck() {
         try {
-            // Create an absolute range from the relative range to make sure it doesn't change during the two
-            // search requests. (count and find messages)
-            // This is needed because the RelativeRange computes the range from NOW on every invocation of getFrom() and
-            // getTo().
-            // See: https://github.com/Graylog2/graylog2-server/issues/2382
-            final RelativeRange relativeRange = RelativeRange.create(time * 60);
-            final AbsoluteRange range = AbsoluteRange.create(relativeRange.getFrom(), relativeRange.getTo());
-
             final String filter = "streams:" + stream.getId();
-            final CountResult result = searches.count("*", range, filter);
+            final CountResult result = searches.count("*", RelativeRange.create(time * 60), filter);
             final long count = result.count();
 
             LOG.debug("Alert check <{}> result: [{}]", id, count);
@@ -120,7 +100,7 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
                 final List<MessageSummary> summaries = Lists.newArrayList();
                 if (getBacklog() > 0) {
                     final SearchResult backlogResult = searches.search("*", filter,
-                            range, getBacklog(), 0, new Sorting("timestamp", Sorting.Direction.DESC));
+                                                                       RelativeRange.create(time * 60), getBacklog(), 0, new Sorting("timestamp", Sorting.Direction.DESC));
                     for (ResultMessage resultMessage : backlogResult.getResults()) {
                         final Message msg = resultMessage.getMessage();
                         summaries.add(new MessageSummary(resultMessage.getIndex(), msg));
