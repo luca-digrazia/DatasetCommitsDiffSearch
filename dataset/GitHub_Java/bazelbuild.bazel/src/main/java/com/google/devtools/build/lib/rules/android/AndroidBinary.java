@@ -28,7 +28,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.FailAction;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -1028,7 +1027,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       createDexMergerAction(
           ruleContext, multidex ? "minimal" : "off", dexArchives, classesDex, mainDexList, dexopts);
     } else {
-      SpecialArtifact shardsToMerge =
+      Artifact shardsToMerge =
           createSharderAction(
               ruleContext,
               dexArchives,
@@ -1115,13 +1114,13 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
    *
    * @return Tree artifact containing dex archives to merge into exactly one .dex file each
    */
-  private static SpecialArtifact createSharderAction(
+  private static Artifact createSharderAction(
       RuleContext ruleContext,
       ImmutableList<Artifact> dexArchives,
       @Nullable Artifact mainDexList,
       boolean minimalMainDex,
       @Nullable Artifact inclusionFilterJar) {
-    SpecialArtifact outputTree =
+    Artifact outputTree =
         ruleContext.getTreeArtifact(
             ruleContext.getUniqueDirectory("dexsplits"), ruleContext.getBinOrGenfilesDirectory());
 
@@ -1169,8 +1168,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
    * @return Tree artifact containing zips with final dex files named for inclusion in an APK.
    */
   private static Artifact createTemplatedMergerActions(
-      RuleContext ruleContext, SpecialArtifact inputTree, Collection<String> dexopts) {
-    SpecialArtifact outputTree =
+      RuleContext ruleContext, Artifact inputTree, Collection<String> dexopts) {
+    Artifact outputTree =
         ruleContext.getTreeArtifact(
             ruleContext.getUniqueDirectory("dexfiles"), ruleContext.getBinOrGenfilesDirectory());
     SpawnActionTemplate.Builder dexmerger =
