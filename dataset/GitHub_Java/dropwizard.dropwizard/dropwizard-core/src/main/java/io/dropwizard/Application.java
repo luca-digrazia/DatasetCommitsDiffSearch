@@ -1,9 +1,10 @@
 package io.dropwizard;
 
+import ch.qos.logback.classic.Level;
 import io.dropwizard.cli.CheckCommand;
 import io.dropwizard.cli.Cli;
 import io.dropwizard.cli.ServerCommand;
-import io.dropwizard.logging.LoggingFactory;
+import io.dropwizard.logging.BootstrapLogging;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import io.dropwizard.util.Generics;
@@ -12,12 +13,29 @@ import io.dropwizard.util.JarLocation;
 /**
  * The base class for Dropwizard applications.
  *
+ * Because the default constructor will be inherited by all
+ * subclasses, {BootstrapLogging.bootstrap()} will always be
+ * invoked. The log level used during the bootstrap process can be
+ * configured by {Application} subclasses by overriding
+ * {#bootstrapLogLevel}.
+ *
  * @param <T> the type of configuration class for this application
  */
 public abstract class Application<T extends Configuration> {
-    static {
+    protected Application() {
+        bootstrapLogging();
+    }
+
+    /**
+     * The log level at which to bootstrap logging on application startup.
+     */
+    protected Level bootstrapLogLevel() {
+        return Level.WARN;
+    }
+
+    protected void bootstrapLogging() {
         // make sure spinning up Hibernate Validator doesn't yell at us
-        LoggingFactory.bootstrap();
+        BootstrapLogging.bootstrap(bootstrapLogLevel());
     }
 
     /**
@@ -26,7 +44,7 @@ public abstract class Application<T extends Configuration> {
      * @return the configuration class
      * @see Generics#getTypeParameter(Class, Class)
      */
-    public final Class<T> getConfigurationClass() {
+    public Class<T> getConfigurationClass() {
         return Generics.getTypeParameter(getClass(), Configuration.class);
     }
 
@@ -44,10 +62,11 @@ public abstract class Application<T extends Configuration> {
      *
      * @param bootstrap the application bootstrap
      */
-    public abstract void initialize(Bootstrap<T> bootstrap);
+    public void initialize(Bootstrap<T> bootstrap) {
+    }
 
     /**
-     * When the application runs, this is called after the {@link Bundle}s are run. Override it to add
+     * When the application runs, this is called after the {@link ConfiguredBundle}s are run. Override it to add
      * providers, resources, etc. for your application.
      *
      * @param configuration the parsed {@link Configuration} object
@@ -63,15 +82,51 @@ public abstract class Application<T extends Configuration> {
      * @param arguments the command-line arguments
      * @throws Exception if something goes wrong
      */
-    public final void run(String[] arguments) throws Exception {
+    public void run(String... arguments) throws Exception {
         final Bootstrap<T> bootstrap = new Bootstrap<>(this);
+        addDefaultCommands(bootstrap);
+        initialize(bootstrap);
+        // Should be called after initialize to give an opportunity to set a custom metric registry
+        bootstrap.registerMetrics();
+
+        final Cli cli = new Cli(new JarLocation(getClass()), bootstrap, System.out, System.err);
+        // only exit if there's an error running the command
+        cli.run(arguments).ifPresent(this::onFatalError);
+    }
+
+    /**
+     * Called by {@link #run(String...)} to add the standard "server" and "check" commands
+     *
+     * @param bootstrap the bootstrap instance
+     */
+    protected void addDefaultCommands(Bootstrap<T> bootstrap) {
         bootstrap.addCommand(new ServerCommand<>(this));
         bootstrap.addCommand(new CheckCommand<>(this));
-        initialize(bootstrap);
-        final Cli cli = new Cli(new JarLocation(getClass()), bootstrap, System.out, System.err);
-        if (!cli.run(arguments)) {
-            // only exit if there's an error running the command
-            System.exit(1);
-        }
+    }
+
+    /**
+     * Called by {@link #run(String...)} to indicate there was a fatal error running the requested command.
+     *
+     * The default implementation calls {@link System#exit(int)} with a non-zero status code to terminate the
+     * application.
+     *
+     * @param t The {@link Throwable} instance which caused the command to fail.
+     * @since 2.0
+     */
+    protected void onFatalError(Throwable t) {
+        onFatalError();
+    }
+
+    /**
+     * Called by {@link #run(String...)} to indicate there was a fatal error running the requested command.
+     *
+     * The default implementation calls {@link System#exit(int)} with a non-zero status code to terminate the
+     * application.
+     *
+     * @deprecated Use #onFatalError(Throwable) instead.
+     */
+    @Deprecated
+    protected void onFatalError() {
+        System.exit(1);
     }
 }

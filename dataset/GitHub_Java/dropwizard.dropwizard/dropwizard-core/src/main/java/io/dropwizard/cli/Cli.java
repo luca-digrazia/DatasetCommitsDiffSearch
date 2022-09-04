@@ -62,9 +62,10 @@ public class Cli {
      * Runs the command line interface given some arguments.
      *
      * @param arguments the command line arguments
-     * @return the error or an empty optional if command succeeded
+     * @return whether or not the command successfully executed
+     * @throws Exception if something goes wrong
      */
-    public Optional<Throwable> run(String... arguments) {
+    public Optional<Throwable> run(String... arguments) throws Exception {
         try {
             if (isFlag(HELP, arguments)) {
                 parser.printHelp(stdOut);
