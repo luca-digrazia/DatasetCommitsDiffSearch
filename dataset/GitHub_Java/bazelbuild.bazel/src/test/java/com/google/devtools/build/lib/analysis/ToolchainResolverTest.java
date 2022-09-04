@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.skyframe.EvaluationResultSubjectFactory.assertThatEvaluationResult;
 
 import com.google.auto.value.AutoValue;
@@ -23,20 +22,15 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.ToolchainResolver.NoMatchingPlatformException;
-import com.google.devtools.build.lib.analysis.ToolchainResolver.UnloadedToolchainContext;
 import com.google.devtools.build.lib.analysis.ToolchainResolver.UnresolvedToolchainsException;
-import com.google.devtools.build.lib.analysis.platform.ToolchainTypeInfo;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.rules.platform.ToolchainTestCase;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.ConstraintValueLookupUtil.InvalidConstraintValueException;
 import com.google.devtools.build.lib.skyframe.PlatformLookupUtil.InvalidPlatformException;
 import com.google.devtools.build.lib.skyframe.ToolchainException;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
-import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
@@ -98,8 +92,7 @@ public class ToolchainResolverTest extends ToolchainTestCase {
 
     useConfiguration("--platforms=//platforms:linux");
     ResolveToolchainsKey key =
-        ResolveToolchainsKey.create(
-            "test", ImmutableSet.of(testToolchainTypeLabel), targetConfigKey);
+        ResolveToolchainsKey.create(ImmutableSet.of(testToolchainTypeLabel), targetConfigKey);
 
     EvaluationResult<ResolveToolchainsValue> result = createToolchainContextBuilder(key);
 
@@ -127,8 +120,7 @@ public class ToolchainResolverTest extends ToolchainTestCase {
     rewriteWorkspace("register_execution_platforms('//platforms:mac', '//platforms:linux')");
 
     useConfiguration("--host_platform=//host:host", "--platforms=//platforms:linux");
-    ResolveToolchainsKey key =
-        ResolveToolchainsKey.create("test", ImmutableSet.of(), targetConfigKey);
+    ResolveToolchainsKey key = ResolveToolchainsKey.create(ImmutableSet.of(), targetConfigKey);
 
     EvaluationResult<ResolveToolchainsValue> result = createToolchainContextBuilder(key);
 
@@ -169,7 +161,6 @@ public class ToolchainResolverTest extends ToolchainTestCase {
     useConfiguration("--host_platform=//host:host", "--platforms=//platforms:linux");
     ResolveToolchainsKey key =
         ResolveToolchainsKey.create(
-            "test",
             ImmutableSet.of(),
             ImmutableSet.of(Label.parseAbsoluteUnchecked("//sample:demo_b")),
             targetConfigKey);
@@ -196,7 +187,6 @@ public class ToolchainResolverTest extends ToolchainTestCase {
     useConfiguration("--host_platform=//platforms:linux", "--platforms=//platforms:mac");
     ResolveToolchainsKey key =
         ResolveToolchainsKey.create(
-            "test",
             ImmutableSet.of(
                 testToolchainTypeLabel, Label.parseAbsoluteUnchecked("//fake/toolchain:type_1")),
             targetConfigKey);
@@ -219,7 +209,6 @@ public class ToolchainResolverTest extends ToolchainTestCase {
     useConfiguration("--host_platform=//platforms:linux", "--platforms=//platforms:mac");
     ResolveToolchainsKey key =
         ResolveToolchainsKey.create(
-            "test",
             ImmutableSet.of(
                 testToolchainTypeLabel,
                 Label.parseAbsoluteUnchecked("//fake/toolchain:type_1"),
@@ -240,8 +229,7 @@ public class ToolchainResolverTest extends ToolchainTestCase {
     scratch.file("invalid/BUILD", "filegroup(name = 'not_a_platform')");
     useConfiguration("--platforms=//invalid:not_a_platform");
     ResolveToolchainsKey key =
-        ResolveToolchainsKey.create(
-            "test", ImmutableSet.of(testToolchainTypeLabel), targetConfigKey);
+        ResolveToolchainsKey.create(ImmutableSet.of(testToolchainTypeLabel), targetConfigKey);
 
     EvaluationResult<ResolveToolchainsValue> result = createToolchainContextBuilder(key);
 
@@ -264,8 +252,7 @@ public class ToolchainResolverTest extends ToolchainTestCase {
     scratch.resolve("invalid").delete();
     useConfiguration("--platforms=//invalid:not_a_platform");
     ResolveToolchainsKey key =
-        ResolveToolchainsKey.create(
-            "test", ImmutableSet.of(testToolchainTypeLabel), targetConfigKey);
+        ResolveToolchainsKey.create(ImmutableSet.of(testToolchainTypeLabel), targetConfigKey);
 
     EvaluationResult<ResolveToolchainsValue> result = createToolchainContextBuilder(key);
 
@@ -286,8 +273,7 @@ public class ToolchainResolverTest extends ToolchainTestCase {
     scratch.file("invalid/BUILD", "filegroup(name = 'not_a_platform')");
     useConfiguration("--host_platform=//invalid:not_a_platform");
     ResolveToolchainsKey key =
-        ResolveToolchainsKey.create(
-            "test", ImmutableSet.of(testToolchainTypeLabel), targetConfigKey);
+        ResolveToolchainsKey.create(ImmutableSet.of(testToolchainTypeLabel), targetConfigKey);
 
     EvaluationResult<ResolveToolchainsValue> result = createToolchainContextBuilder(key);
 
@@ -308,8 +294,7 @@ public class ToolchainResolverTest extends ToolchainTestCase {
     scratch.file("invalid/BUILD", "filegroup(name = 'not_a_platform')");
     useConfiguration("--extra_execution_platforms=//invalid:not_a_platform");
     ResolveToolchainsKey key =
-        ResolveToolchainsKey.create(
-            "test", ImmutableSet.of(testToolchainTypeLabel), targetConfigKey);
+        ResolveToolchainsKey.create(ImmutableSet.of(testToolchainTypeLabel), targetConfigKey);
 
     EvaluationResult<ResolveToolchainsValue> result = createToolchainContextBuilder(key);
 
@@ -348,7 +333,6 @@ public class ToolchainResolverTest extends ToolchainTestCase {
     useConfiguration("--platforms=//platforms:linux");
     ResolveToolchainsKey key =
         ResolveToolchainsKey.create(
-            "test",
             ImmutableSet.of(testToolchainTypeLabel),
             ImmutableSet.of(Label.parseAbsoluteUnchecked("//constraints:linux")),
             targetConfigKey);
@@ -377,7 +361,6 @@ public class ToolchainResolverTest extends ToolchainTestCase {
   public void resolve_execConstraints_invalid() throws Exception {
     ResolveToolchainsKey key =
         ResolveToolchainsKey.create(
-            "test",
             ImmutableSet.of(testToolchainTypeLabel),
             ImmutableSet.of(Label.parseAbsoluteUnchecked("//platforms:linux")),
             targetConfigKey);
@@ -429,7 +412,6 @@ public class ToolchainResolverTest extends ToolchainTestCase {
     useConfiguration("--platforms=//platforms:linux");
     ResolveToolchainsKey key =
         ResolveToolchainsKey.create(
-            "test",
             ImmutableSet.of(
                 Label.parseAbsoluteUnchecked("//a:toolchain_type_A"),
                 Label.parseAbsoluteUnchecked("//b:toolchain_type_B")),
@@ -443,108 +425,6 @@ public class ToolchainResolverTest extends ToolchainTestCase {
         .isInstanceOf(NoMatchingPlatformException.class);
   }
 
-  @Test
-  public void unloadedToolchainContext_load() throws Exception {
-    addToolchain(
-        "extra",
-        "extra_toolchain_linux",
-        ImmutableList.of("//constraints:linux"),
-        ImmutableList.of("//constraints:linux"),
-        "baz");
-    rewriteWorkspace(
-        "register_toolchains('//extra:extra_toolchain_linux')",
-        "register_execution_platforms('//platforms:linux')");
-
-    useConfiguration("--platforms=//platforms:linux");
-    ResolveToolchainsKey key =
-        ResolveToolchainsKey.create(
-            "test", ImmutableSet.of(testToolchainTypeLabel), targetConfigKey);
-
-    // Create the UnloadedToolchainContext.
-    EvaluationResult<ResolveToolchainsValue> result = createToolchainContextBuilder(key);
-    assertThatEvaluationResult(result).hasNoError();
-    UnloadedToolchainContext unloadedToolchainContext = result.get(key).unloadedToolchainContext();
-    assertThat(unloadedToolchainContext).isNotNull();
-
-    // Create the prerequisites.
-    ConfiguredTargetAndData toolchain =
-        getConfiguredTargetAndData(
-            Label.parseAbsoluteUnchecked("//extra:extra_toolchain_linux_impl"), targetConfig);
-    OrderedSetMultimap<Attribute, ConfiguredTargetAndData> prerequisiteMap =
-        OrderedSetMultimap.create();
-    prerequisiteMap.put(
-        Attribute.attr(PlatformSemantics.RESOLVED_TOOLCHAINS_ATTR, LABEL_LIST).build(), toolchain);
-
-    ToolchainContext toolchainContext = unloadedToolchainContext.load(prerequisiteMap);
-    assertThat(toolchainContext).isNotNull();
-    assertThat(toolchainContext.forToolchainType(testToolchainType)).isNotNull();
-    assertThat(toolchainContext.forToolchainType(testToolchainType).hasField("data")).isTrue();
-    assertThat(toolchainContext.forToolchainType(testToolchainType).getValue("data"))
-        .isEqualTo("baz");
-  }
-
-  @Test
-  public void unloadedToolchainContext_load_withTemplateVariables() throws Exception {
-    // Add new toolchain rule that provides template variables.
-    Label variableToolchainTypeLabel =
-        Label.parseAbsoluteUnchecked("//variable:variable_toolchain_type");
-    ToolchainTypeInfo variableToolchainType = ToolchainTypeInfo.create(variableToolchainTypeLabel);
-    scratch.file(
-        "variable/variable_toolchain_def.bzl",
-        "def _impl(ctx):",
-        "  value = ctx.attr.value",
-        "  toolchain = platform_common.ToolchainInfo()",
-        "  template_variables = platform_common.TemplateVariableInfo({'VALUE': value})",
-        "  return [toolchain, template_variables]",
-        "variable_toolchain = rule(",
-        "    implementation = _impl,",
-        "    attrs = {'value': attr.string()})");
-
-    scratch.file("variable/BUILD", "toolchain_type(name = 'variable_toolchain_type')");
-
-    // Create instance of new toolchain and register it.
-    scratch.appendFile(
-        "BUILD",
-        "load('//variable:variable_toolchain_def.bzl', 'variable_toolchain')",
-        "toolchain(",
-        "    name = 'variable_toolchain',",
-        "    toolchain_type = '//variable:variable_toolchain_type',",
-        "    exec_compatible_with = [],",
-        "    target_compatible_with = [],",
-        "    toolchain = ':variable_toolchain_impl')",
-        "variable_toolchain(",
-        "  name='variable_toolchain_impl',",
-        "  value = 'foo')");
-
-    rewriteWorkspace("register_toolchains('//:variable_toolchain')");
-
-    ResolveToolchainsKey key =
-        ResolveToolchainsKey.create(
-            "test", ImmutableSet.of(variableToolchainTypeLabel), targetConfigKey);
-
-    // Create the UnloadedToolchainContext.
-    EvaluationResult<ResolveToolchainsValue> result = createToolchainContextBuilder(key);
-    assertThatEvaluationResult(result).hasNoError();
-    UnloadedToolchainContext unloadedToolchainContext = result.get(key).unloadedToolchainContext();
-    assertThat(unloadedToolchainContext).isNotNull();
-
-    // Create the prerequisites.
-    ConfiguredTargetAndData toolchain =
-        getConfiguredTargetAndData(
-            Label.parseAbsoluteUnchecked("//:variable_toolchain_impl"), targetConfig);
-    OrderedSetMultimap<Attribute, ConfiguredTargetAndData> prerequisiteMap =
-        OrderedSetMultimap.create();
-    prerequisiteMap.put(
-        Attribute.attr(PlatformSemantics.RESOLVED_TOOLCHAINS_ATTR, LABEL_LIST).build(), toolchain);
-
-    ToolchainContext toolchainContext = unloadedToolchainContext.load(prerequisiteMap);
-    assertThat(toolchainContext).isNotNull();
-    assertThat(toolchainContext.forToolchainType(variableToolchainType)).isNotNull();
-    assertThat(toolchainContext.templateVariableProviders()).hasSize(1);
-    assertThat(toolchainContext.templateVariableProviders().get(0).getVariables())
-        .containsExactly("VALUE", "foo");
-  }
-
   private static final SkyFunctionName RESOLVE_TOOLCHAINS_FUNCTION =
       SkyFunctionName.createHermetic("RESOLVE_TOOLCHAINS_FUNCTION");
 
@@ -555,8 +435,6 @@ public class ToolchainResolverTest extends ToolchainTestCase {
       return RESOLVE_TOOLCHAINS_FUNCTION;
     }
 
-    abstract String targetDescription();
-
     abstract ImmutableSet<Label> requiredToolchainTypes();
 
     abstract ImmutableSet<Label> execConstraintLabels();
@@ -564,23 +442,19 @@ public class ToolchainResolverTest extends ToolchainTestCase {
     abstract BuildConfigurationValue.Key configurationKey();
 
     public static ResolveToolchainsKey create(
-        String targetDescription,
         Set<Label> requiredToolchains,
         BuildConfigurationValue.Key configurationKey) {
       return create(
-          targetDescription,
           requiredToolchains,
           /* execConstraintLabels= */ ImmutableSet.of(),
           configurationKey);
     }
 
     public static ResolveToolchainsKey create(
-        String targetDescription,
         Set<Label> requiredToolchains,
         Set<Label> execConstraintLabels,
         BuildConfigurationValue.Key configurationKey) {
       return new AutoValue_ToolchainResolverTest_ResolveToolchainsKey(
-          targetDescription,
           ImmutableSet.copyOf(requiredToolchains),
           ImmutableSet.copyOf(execConstraintLabels),
           configurationKey);
@@ -617,7 +491,6 @@ public class ToolchainResolverTest extends ToolchainTestCase {
       ResolveToolchainsKey key = (ResolveToolchainsKey) skyKey;
       ToolchainResolver toolchainResolver =
           new ToolchainResolver(env, key.configurationKey())
-              .setTargetDescription(key.targetDescription())
               .setRequiredToolchainTypes(key.requiredToolchainTypes())
               .setExecConstraintLabels(key.execConstraintLabels());
 
