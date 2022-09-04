@@ -89,7 +89,8 @@ public class WorkerJVM {
             .append(" -XX:+UseCMSCompactAtFullCollection").append(" -verbose:gc")
             .append(" -XX:+PrintGCDateStamps").append(" -XX:+PrintGCDetails")
             .append(" -XX:+PrintCommandLineFlags").append(" -XX:+PrintTenuringDistribution")
-            .append(" -XX:+PrintAdaptiveSizePolicy").append(" -Xloggc:<LOG_DIR>/gc.log").toString();
+            .append(" -XX:+PrintAdaptiveSizePolicy").append(" -Xloggc:/tmp/").append("angelgc-")
+            .append(appid).append("-").append(workerAttemptId).append(".log").toString();
 
     return ret;
   }
