@@ -13,16 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.starlarkbuildapi.android;
 
-import com.google.devtools.build.docgen.annot.StarlarkConstructor;
 import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
 import com.google.devtools.build.lib.starlarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.starlarkbuildapi.core.StructApi;
+import com.google.devtools.build.lib.syntax.EvalException;
 import net.starlark.java.annot.Param;
-import net.starlark.java.annot.ParamType;
 import net.starlark.java.annot.StarlarkBuiltin;
+import net.starlark.java.annot.StarlarkConstructor;
 import net.starlark.java.annot.StarlarkMethod;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.NoneType;
 
 /** Supplies a resource apk file (".ap_") and related info. */
 @StarlarkBuiltin(
@@ -107,15 +105,6 @@ public interface AndroidApplicationResourceInfoApi<FileT extends FileApi> extend
       structField = true)
   FileT getResourcesZip();
 
-  /** The databinding layout info file */
-  @StarlarkMethod(
-      name = "databinding_info",
-      doc = "The databinding layout info file.",
-      documented = false,
-      allowReturnNones = true,
-      structField = true)
-  FileT getDatabindingLayoutInfoZip();
-
   /** Provider for {@link AndroidApplicationResourceInfoApi}. */
   @StarlarkBuiltin(
       name = "Provider",
@@ -132,75 +121,52 @@ public interface AndroidApplicationResourceInfoApi<FileT extends FileApi> extend
         parameters = {
           @Param(
               name = "resource_apk",
-              allowedTypes = {
-                @ParamType(type = FileApi.class),
-                @ParamType(type = NoneType.class),
-              },
+              type = FileApi.class,
+              noneable = true,
               named = true,
               doc = ""),
           @Param(
               name = "resource_java_src_jar",
-              allowedTypes = {
-                @ParamType(type = FileApi.class),
-                @ParamType(type = NoneType.class),
-              },
+              type = FileApi.class,
+              noneable = true,
               named = true,
               doc = ""),
           @Param(
               name = "resource_java_class_jar",
-              allowedTypes = {
-                @ParamType(type = FileApi.class),
-                @ParamType(type = NoneType.class),
-              },
+              type = FileApi.class,
+              noneable = true,
               named = true,
               doc = ""),
-          @Param(name = "manifest", named = true, doc = ""),
+          @Param(name = "manifest", type = FileApi.class, named = true, doc = ""),
           @Param(
               name = "resource_proguard_config",
-              allowedTypes = {
-                @ParamType(type = FileApi.class),
-                @ParamType(type = NoneType.class),
-              },
+              type = FileApi.class,
+              noneable = true,
               named = true,
               doc = ""),
           @Param(
               name = "main_dex_proguard_config",
-              allowedTypes = {
-                @ParamType(type = FileApi.class),
-                @ParamType(type = NoneType.class),
-              },
+              type = FileApi.class,
+              noneable = true,
               named = true,
               doc = ""),
           @Param(
               name = "r_txt",
-              allowedTypes = {
-                @ParamType(type = FileApi.class),
-                @ParamType(type = NoneType.class),
-              },
+              type = FileApi.class,
+              noneable = true,
               named = true,
               doc = "",
               defaultValue = "None"),
           @Param(
               name = "resources_zip",
-              allowedTypes = {
-                @ParamType(type = FileApi.class),
-                @ParamType(type = NoneType.class),
-              },
-              named = true,
-              doc = "",
-              defaultValue = "None"),
-          @Param(
-              name = "databinding_info",
-              allowedTypes = {
-                @ParamType(type = FileApi.class),
-                @ParamType(type = NoneType.class),
-              },
+              type = FileApi.class,
+              noneable = true,
               named = true,
               doc = "",
               defaultValue = "None"),
         },
         selfCall = true)
-    @StarlarkConstructor
+    @StarlarkConstructor(objectType = AndroidApplicationResourceInfoApi.class)
     AndroidApplicationResourceInfoApi<FileT> createInfo(
         Object resourceApk,
         Object resourceJavaSrcJar,
@@ -209,8 +175,7 @@ public interface AndroidApplicationResourceInfoApi<FileT extends FileApi> extend
         Object resourceProguardConfig,
         Object mainDexProguardConfig,
         Object rTxt,
-        Object resourcesZip,
-        Object databindingLayoutInfoZip)
+        Object resourcesZip)
         throws EvalException;
   }
 }

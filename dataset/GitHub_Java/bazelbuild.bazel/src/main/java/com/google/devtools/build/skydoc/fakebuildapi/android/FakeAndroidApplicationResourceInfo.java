@@ -18,8 +18,8 @@ import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
 import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidApplicationResourceInfoApi;
 import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidApplicationResourceInfoApi.AndroidApplicationResourceInfoApiProvider;
 import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidDeviceBrokerInfoApi;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Printer;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Printer;
 
 /** Fake implementation of {@link AndroidDeviceBrokerInfoApi}. */
 public class FakeAndroidApplicationResourceInfo implements AndroidDeviceBrokerInfoApi {
@@ -53,8 +53,7 @@ public class FakeAndroidApplicationResourceInfo implements AndroidDeviceBrokerIn
         Object resourceProguardConfig,
         Object mainDexProguardConfig,
         Object rTxt,
-        Object resourcesZip,
-        Object databindingLayoutInfoZip)
+        Object resourcesZip)
         throws EvalException {
       return null;
     }

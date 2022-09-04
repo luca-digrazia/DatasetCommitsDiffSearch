@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -39,19 +40,19 @@ import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.ProguardSpecProvider;
 import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidBinaryDataSettingsApi;
 import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidDataProcessingApi;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Mutability;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkList;
-import net.starlark.java.eval.StarlarkThread;
 
 /** Starlark-visible methods for working with Android data (manifests, resources, and assets). */
 public abstract class AndroidStarlarkData
@@ -342,7 +343,7 @@ public abstract class AndroidStarlarkData
                       resourceConfigurationFilters, String.class, "resource_configuration_filters"),
                   Sequence.cast(densities, String.class, "densities")));
 
-      Dict.Builder<Provider, NativeInfo> builder = Dict.builder();
+      ImmutableMap.Builder<Provider, NativeInfo> builder = ImmutableMap.builder();
       builder.putAll(getNativeInfosFrom(resourceApk, ctx.getLabel()));
       builder.put(
           AndroidBinaryDataInfo.PROVIDER,
@@ -352,7 +353,7 @@ public abstract class AndroidStarlarkData
               resourceApk.toResourceInfo(ctx.getLabel()),
               resourceApk.toAssetsInfo(ctx.getLabel()),
               resourceApk.toManifestInfo().get()));
-      return builder.buildImmutable();
+      return Dict.copyOf((Mutability) null, builder.build());
     } catch (RuleErrorException e) {
       throw handleRuleException(errorReporter, e);
     }
@@ -564,7 +565,7 @@ public abstract class AndroidStarlarkData
 
   public static Dict<Provider, NativeInfo> getNativeInfosFrom(
       ResourceApk resourceApk, Label label) {
-    Dict.Builder<Provider, NativeInfo> builder = Dict.builder();
+    ImmutableMap.Builder<Provider, NativeInfo> builder = ImmutableMap.builder();
 
     builder
         .put(AndroidResourcesInfo.PROVIDER, resourceApk.toResourceInfo(label))
@@ -577,7 +578,7 @@ public abstract class AndroidStarlarkData
         getJavaInfoForRClassJar(
             resourceApk.getResourceJavaClassJar(), resourceApk.getResourceJavaSrcJar()));
 
-    return builder.buildImmutable();
+    return Dict.copyOf((Mutability) null, builder.build());
   }
 
   private static JavaInfo getJavaInfoForRClassJar(Artifact rClassJar, Artifact rClassSrcJar) {

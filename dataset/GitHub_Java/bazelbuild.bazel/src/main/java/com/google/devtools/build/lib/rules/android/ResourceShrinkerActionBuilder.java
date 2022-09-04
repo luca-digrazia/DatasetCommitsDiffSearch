@@ -15,45 +15,23 @@ package com.google.devtools.build.lib.rules.android;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.config.CompilationMode;
-import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
-
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Builder for creating resource shrinker actions.
- */
+/** Builder for creating resource shrinker actions. */
 public class ResourceShrinkerActionBuilder {
   private Artifact resourceFilesZip;
   private Artifact shrunkJar;
-  private ResourceContainer primaryResources;
-  private ResourceDependencies dependencyResources;
+  private Artifact proguardMapping;
+  private Artifact rTxt;
   private Artifact resourceApkOut;
   private Artifact shrunkResourcesOut;
-
-  private final RuleContext ruleContext;
-  private final SpawnAction.Builder spawnActionBuilder;
-  private final AndroidSdkProvider sdk;
+  private Artifact resourceOptimizationConfigOut;
+  private Artifact logOut;
 
   private List<String> uncompressedExtensions = Collections.emptyList();
-  private List<String> assetsToIgnore = Collections.emptyList();
-  private List<String> resourceConfigs = Collections.emptyList();
-
-  /**
-   * @param ruleContext The RuleContext of the owning rule.
-   */
-  public ResourceShrinkerActionBuilder(RuleContext ruleContext) {
-    this.ruleContext = ruleContext;
-    this.spawnActionBuilder = new SpawnAction.Builder();
-    this.sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
-  }
+  private ResourceFilterFactory resourceFilterFactory = ResourceFilterFactory.empty();
 
   public ResourceShrinkerActionBuilder setUncompressedExtensions(
       List<String> uncompressedExtensions) {
@@ -61,148 +39,86 @@ public class ResourceShrinkerActionBuilder {
     return this;
   }
 
-  public ResourceShrinkerActionBuilder setAssetsToIgnore(List<String> assetsToIgnore) {
-    this.assetsToIgnore = assetsToIgnore;
+  /** @param resourceFilterFactory The filters to apply to the resources. */
+  public ResourceShrinkerActionBuilder setResourceFilterFactory(
+      ResourceFilterFactory resourceFilterFactory) {
+    this.resourceFilterFactory = resourceFilterFactory;
     return this;
   }
 
-  public ResourceShrinkerActionBuilder setConfigurationFilters(List<String> resourceConfigs) {
-    this.resourceConfigs = resourceConfigs;
-    return this;
-  }
-
-  /**
-   * @param resourceFilesZip A zip file containing the merged assets and resources to be shrunk.
-   */
+  /** @param resourceFilesZip A zip file containing the merged assets and resources to be shrunk. */
   public ResourceShrinkerActionBuilder withResourceFiles(Artifact resourceFilesZip) {
     this.resourceFilesZip = resourceFilesZip;
     return this;
   }
 
-  /**
-   * @param shrunkJar The deploy jar of the rule after a dead code removal Proguard pass.
-   */
+  /** @param shrunkJar The deploy jar of the rule after a dead code removal Proguard pass. */
   public ResourceShrinkerActionBuilder withShrunkJar(Artifact shrunkJar) {
     this.shrunkJar = shrunkJar;
     return this;
   }
 
-  /**
-   * @param primary The fully processed {@link ResourceContainer} of the resources to be shrunk.
-   *     Must contain both an R.txt and merged manifest.
-   */
-  public ResourceShrinkerActionBuilder withPrimary(ResourceContainer primary) {
-    checkNotNull(primary);
-    checkNotNull(primary.getManifest());
-    checkNotNull(primary.getRTxt());
-    this.primaryResources = primary;
+  /** @param proguardMapping The Proguard mapping between obfuscated and original code. */
+  public ResourceShrinkerActionBuilder withProguardMapping(Artifact proguardMapping) {
+    this.proguardMapping = proguardMapping;
     return this;
   }
 
-  /**
-   * @param resourceDeps The full dependency tree of {@link ResourceContainer}s.
-   */
-  public ResourceShrinkerActionBuilder withDependencies(ResourceDependencies resourceDeps) {
-    this.dependencyResources = resourceDeps;
+  /** @param rTxt The R.txt file produced during resource packaging. */
+  public ResourceShrinkerActionBuilder withRTxt(Artifact rTxt) {
+    this.rTxt = rTxt;
     return this;
   }
 
-  /**
-   * @param resourceApkOut The location to write the shrunk resource ap_ package.
-   */
+  /** @param resourceApkOut The location to write the shrunk resource ap_ package. */
   public ResourceShrinkerActionBuilder setResourceApkOut(Artifact resourceApkOut) {
     this.resourceApkOut = resourceApkOut;
     return this;
   }
 
-  /**
-   * @param shrunkResourcesOut The location to write the shrunk resource files zip.
-   */
+  /** @param shrunkResourcesOut The location to write the shrunk resource files zip. */
   public ResourceShrinkerActionBuilder setShrunkResourcesOut(Artifact shrunkResourcesOut) {
     this.shrunkResourcesOut = shrunkResourcesOut;
     return this;
   }
 
-  public Artifact build() {
-    ImmutableList.Builder<Artifact> inputs = ImmutableList.builder();
-    ImmutableList.Builder<Artifact> outputs = ImmutableList.builder();
+  /** @param resourceOptimizationConfigOut The location to write the config for the optimizer. */
+  public ResourceShrinkerActionBuilder setResourceOptimizationConfigOut(
+      Artifact resourceOptimizationConfigOut) {
+    this.resourceOptimizationConfigOut = resourceOptimizationConfigOut;
+    return this;
+  }
 
-    CustomCommandLine.Builder commandLine = new CustomCommandLine.Builder();
+  /** @param logOut The location to write the shrinker log. */
+  public ResourceShrinkerActionBuilder setLogOut(Artifact logOut) {
+    this.logOut = logOut;
+    return this;
+  }
 
-    inputs.addAll(ruleContext.getExecutablePrerequisite("$android_resource_shrinker", Mode.HOST)
-        .getRunfilesSupport()
-        .getRunfilesArtifactsWithoutMiddlemen());
-
-    commandLine.addExecPath("--aapt", sdk.getAapt().getExecutable());
-
-    commandLine.addExecPath("--annotationJar", sdk.getAnnotationsJar());
-    inputs.add(sdk.getAnnotationsJar());
-
-    commandLine.addExecPath("--androidJar", sdk.getAndroidJar());
-    inputs.add(sdk.getAndroidJar());
-
-    if (!uncompressedExtensions.isEmpty()) {
-      commandLine.addJoinStrings("--uncompressedExtensions", ",", uncompressedExtensions);
-    }
-    if (!assetsToIgnore.isEmpty()) {
-      commandLine.addJoinStrings("--assetsToIgnore", ",", assetsToIgnore);
-    }
-    if (ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT) {
-      commandLine.add("--debug");
-    }
-    if (!resourceConfigs.isEmpty()) {
-      commandLine.addJoinStrings("--resourceConfigs", ",", resourceConfigs);
-    }
+  public Artifact build(AndroidDataContext dataContext) {
 
     checkNotNull(resourceFilesZip);
     checkNotNull(shrunkJar);
-    checkNotNull(primaryResources);
+    checkNotNull(proguardMapping);
+    checkNotNull(rTxt);
     checkNotNull(resourceApkOut);
 
-    commandLine.addExecPath("--resources", resourceFilesZip);
-    inputs.add(resourceFilesZip);
+    BusyBoxActionBuilder builder = BusyBoxActionBuilder.create(dataContext, "SHRINK_AAPT2");
 
-    commandLine.addExecPath("--shrunkJar", shrunkJar);
-    inputs.add(shrunkJar);
-
-    commandLine.addExecPath("--rTxt", primaryResources.getRTxt());
-    inputs.add(primaryResources.getRTxt());
-
-    commandLine.addExecPath("--primaryManifest", primaryResources.getManifest());
-    inputs.add(primaryResources.getManifest());
-
-    List<Artifact> dependencyManifests = getManifests(dependencyResources);
-    commandLine.addJoinExecPaths("--dependencyManifests", ":", dependencyManifests);
-    inputs.addAll(dependencyManifests);
-
-    commandLine.addExecPath("--shrunkResourceApk", resourceApkOut);
-    outputs.add(resourceApkOut);
-
-    commandLine.addExecPath("--shrunkResources", shrunkResourcesOut);
-    outputs.add(shrunkResourcesOut);
-
-    ruleContext.registerAction(spawnActionBuilder
-        .addTool(sdk.getAapt())
-        .addInputs(inputs.build())
-        .addOutputs(outputs.build())
-        .setCommandLine(commandLine.build())
-        .setExecutable(ruleContext.getExecutablePrerequisite(
-            "$android_resource_shrinker", Mode.HOST))
-        .setProgressMessage("Shrinking resources")
-        .setMnemonic("ResourceShrinker")
-        .build(ruleContext));
+    builder
+        .addAapt()
+        .addAndroidJar()
+        .maybeAddFlag("--debug", dataContext.useDebug())
+        .addInput("--resources", resourceFilesZip)
+        .addInput("--shrunkJar", shrunkJar)
+        .addInput("--proguardMapping", proguardMapping)
+        .addInput("--rTxt", rTxt)
+        .addOutput("--shrunkResourceApk", resourceApkOut)
+        .addOutput("--shrunkResources", shrunkResourcesOut)
+        .maybeAddOutput("--resourcesConfigOutput", resourceOptimizationConfigOut)
+        .addOutput("--log", logOut)
+        .buildAndRegister("Shrinking resources", "ResourceShrinker");
 
     return resourceApkOut;
   }
-
-  private List<Artifact> getManifests(ResourceDependencies resourceDependencies) {
-    ImmutableList.Builder<Artifact> manifests = ImmutableList.builder();
-    for (ResourceContainer resources : resourceDependencies.getResources()) {
-      if (resources.getManifest() != null) {
-        manifests.add(resources.getManifest());
-      }
-    }
-    return manifests.build();
-  }
 }
-
