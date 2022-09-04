@@ -157,6 +157,17 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean incompatibleDisallowToplevelIfStatement;
 
   @Option(
+    name = "incompatible_disallow_uncalled_set_constructor",
+    defaultValue = "true",
+    category = "incompatible changes",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
+    help = "If set to true, it's not allowed to use `set()` even if that code is never executed."
+  )
+  public boolean incompatibleDisallowUncalledSetConstructor;
+
+  @Option(
       name = "incompatible_new_actions_api",
       defaultValue = "false",
       category = "incompatible changes",
@@ -167,19 +178,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
           + "not on `ctx`."
   )
   public boolean incompatibleNewActionsApi;
-
-  @Option(
-    name = "incompatible_package_name_is_a_function",
-    defaultValue = "false",
-    category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-    help =
-        "If set to true, the values PACKAGE_NAME and REPOSITORY_NAME are not available. "
-            + "Use the package_name() or repository_name() functions instead."
-  )
-  public boolean incompatiblePackageNameIsAFunction;
 
   @Option(
     name = "incompatible_remove_native_git_repository",
@@ -206,6 +204,20 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
             + "will be available"
   )
   public boolean incompatibleRemoveNativeHttpArchive;
+
+  @Option(
+    name = "incompatible_show_all_print_messages",
+    defaultValue = "true",
+    category = "incompatible changes",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
+    help =
+        "If set to true, the print function will generate DEBUG messages that aren't affected by "
+            + "the --output_filter option. Otherwise it will generate filterable WARNING "
+            + "messages."
+  )
+  public boolean incompatibleShowAllPrintMessages;
 
   @Option(
     name = "incompatible_string_is_not_iterable",
@@ -241,10 +253,11 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .incompatibleDisallowDictPlus(incompatibleDisallowDictPlus)
         .incompatibleDisallowThreeArgVardef(incompatibleDisallowThreeArgVardef)
         .incompatibleDisallowToplevelIfStatement(incompatibleDisallowToplevelIfStatement)
+        .incompatibleDisallowUncalledSetConstructor(incompatibleDisallowUncalledSetConstructor)
         .incompatibleNewActionsApi(incompatibleNewActionsApi)
-        .incompatiblePackageNameIsAFunction(incompatiblePackageNameIsAFunction)
         .incompatibleRemoveNativeGitRepository(incompatibleRemoveNativeGitRepository)
         .incompatibleRemoveNativeHttpArchive(incompatibleRemoveNativeHttpArchive)
+        .incompatibleShowAllPrintMessages(incompatibleShowAllPrintMessages)
         .incompatibleStringIsNotIterable(incompatibleStringIsNotIterable)
         .internalSkylarkFlagTestCanary(internalSkylarkFlagTestCanary)
         .build();

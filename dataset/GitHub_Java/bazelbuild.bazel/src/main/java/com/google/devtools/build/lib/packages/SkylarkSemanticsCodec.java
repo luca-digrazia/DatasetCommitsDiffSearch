@@ -51,10 +51,11 @@ public final class SkylarkSemanticsCodec implements ObjectCodec<SkylarkSemantics
     codedOut.writeBoolNoTag(semantics.incompatibleDisallowDictPlus());
     codedOut.writeBoolNoTag(semantics.incompatibleDisallowThreeArgVardef());
     codedOut.writeBoolNoTag(semantics.incompatibleDisallowToplevelIfStatement());
+    codedOut.writeBoolNoTag(semantics.incompatibleDisallowUncalledSetConstructor());
     codedOut.writeBoolNoTag(semantics.incompatibleNewActionsApi());
-    codedOut.writeBoolNoTag(semantics.incompatiblePackageNameIsAFunction());
     codedOut.writeBoolNoTag(semantics.incompatibleRemoveNativeGitRepository());
     codedOut.writeBoolNoTag(semantics.incompatibleRemoveNativeHttpArchive());
+    codedOut.writeBoolNoTag(semantics.incompatibleShowAllPrintMessages());
     codedOut.writeBoolNoTag(semantics.incompatibleStringIsNotIterable());
     codedOut.writeBoolNoTag(semantics.internalSkylarkFlagTestCanary());
   }
@@ -73,10 +74,11 @@ public final class SkylarkSemanticsCodec implements ObjectCodec<SkylarkSemantics
     builder.incompatibleDisallowDictPlus(codedIn.readBool());
     builder.incompatibleDisallowThreeArgVardef(codedIn.readBool());
     builder.incompatibleDisallowToplevelIfStatement(codedIn.readBool());
+    builder.incompatibleDisallowUncalledSetConstructor(codedIn.readBool());
     builder.incompatibleNewActionsApi(codedIn.readBool());
-    builder.incompatiblePackageNameIsAFunction(codedIn.readBool());
     builder.incompatibleRemoveNativeGitRepository(codedIn.readBool());
     builder.incompatibleRemoveNativeHttpArchive(codedIn.readBool());
+    builder.incompatibleShowAllPrintMessages(codedIn.readBool());
     builder.incompatibleStringIsNotIterable(codedIn.readBool());
     builder.internalSkylarkFlagTestCanary(codedIn.readBool());
 
