@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.util.Fingerprint;
 import java.io.IOException;
 
 /**
@@ -52,8 +51,8 @@ final class ExtractInclusionAction extends AbstractAction {
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-    fp.addString(GUID);
+  protected String computeKey(ActionKeyContext actionKeyContext) {
+    return GUID;
   }
 
   @Override

@@ -73,9 +73,11 @@ public final class SolibSymlinkAction extends AbstractAction {
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-    fp.addPath(symlink.getPath());
-    fp.addPath(target);
+  protected String computeKey(ActionKeyContext actionKeyContext) {
+    Fingerprint f = new Fingerprint();
+    f.addPath(symlink.getPath());
+    f.addPath(target);
+    return f.hexDigestAndReset();
   }
 
   @Override
