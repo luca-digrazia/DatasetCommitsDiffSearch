@@ -2,14 +2,16 @@ package org.jboss.shamrock.jaeger.runtime;
 
 import java.util.Optional;
 
+import org.jboss.shamrock.runtime.annotations.ConfigGroup;
 import org.jboss.shamrock.runtime.annotations.ConfigItem;
 import org.jboss.shamrock.runtime.annotations.ConfigPhase;
 import org.jboss.shamrock.runtime.annotations.ConfigRoot;
 
 /**
- * The Jaeger configuration.
+ *
  */
-@ConfigRoot(phase = ConfigPhase.RUN_TIME)
+@ConfigGroup
+@ConfigRoot(phase = ConfigPhase.STATIC_INIT)
 public class JaegerConfig {
 
     /**
