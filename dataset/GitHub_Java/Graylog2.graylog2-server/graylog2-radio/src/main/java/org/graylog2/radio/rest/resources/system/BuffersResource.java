@@ -1,82 +1,58 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.radio.rest.resources.system;
 
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.collect.Maps;
-import org.graylog2.plugin.buffers.BufferWatermark;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
 import org.graylog2.radio.Configuration;
-import org.graylog2.radio.Radio;
-import org.graylog2.radio.rest.resources.RestResource;
+import org.graylog2.rest.models.system.buffers.responses.BuffersUtilizationSummary;
+import org.graylog2.rest.models.system.buffers.responses.RingSummary;
+import org.graylog2.rest.models.system.buffers.responses.SingleRingUtilization;
+import org.graylog2.shared.buffers.ProcessBuffer;
+import org.graylog2.shared.rest.resources.RestResource;
 
 import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
-import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
+@Api(value = "System/Buffers", description = "Buffer information of this node.")
 @Path("/system/buffers")
 public class BuffersResource extends RestResource {
+    private final Configuration configuration;
+    private final ProcessBuffer processBuffer;
+
     @Inject
-    private Configuration configuration;
+    public BuffersResource(Configuration configuration, ProcessBuffer processBuffer) {
+        this.configuration = configuration;
+        this.processBuffer = processBuffer;
+    }
 
-    @GET @Timed
+    @GET
+    @Timed
+    @ApiOperation(value = "Get current utilization of buffers and caches of this node.")
     @Produces(MediaType.APPLICATION_JSON)
-    public String utilization() {
-        Map<String, Object> result = Maps.newHashMap();
-        result.put("buffers", buffers(radio));
-        result.put("master_caches", masterCaches(radio));
+    public BuffersUtilizationSummary utilization() {
+        final int ringSize = configuration.getRingSize();
+        final long inputSize = processBuffer.getUsage();
+        final long inputUtil = inputSize / ringSize * 100;
 
-        return json(result);
+        return BuffersUtilizationSummary.create(RingSummary.create(SingleRingUtilization.create(inputSize, inputUtil)));
     }
-
-    private Map<String, Object> masterCaches(Radio radio) {
-        Map<String, Object> caches = Maps.newHashMap();
-        Map<String, Object> input = Maps.newHashMap();
-
-        input.put("size", radio.getInputCache().size());
-
-        caches.put("input", input);
-
-        return caches;
-    }
-
-    private Map<String, Object> buffers(Radio radio) {
-        Map<String, Object> buffers = Maps.newHashMap();
-        Map<String, Object> input = Maps.newHashMap();
-
-        BufferWatermark pWm = new BufferWatermark(
-                configuration.getRingSize(),
-                radio.processBufferWatermark()
-        );
-
-        input.put("utilization_percent", pWm.getUtilizationPercentage());
-        input.put("utilization", pWm.getUtilization());
-
-        buffers.put("input", input);
-
-        return buffers;
-    }
-
 }
