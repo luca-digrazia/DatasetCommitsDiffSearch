@@ -147,7 +147,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     ConfiguredTarget l = scratchConfiguredTarget("a", "l",
         "cc_library(name='l', srcs=['l.cc'], defines=['V=$(FOO)'], toolchains=[':v'])",
         "make_variable_tester(name='v', variables={'FOO': 'BAR'})");
-    assertThat(l.get(CcInfo.PROVIDER).getCcCompilationContext().getDefines()).contains("V=BAR");
+    assertThat(l.get(CcInfo.PROVIDER).getCcCompilationContext().getDefines().toList())
+        .contains("V=BAR");
   }
 
   @Test
@@ -442,9 +443,6 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
 
   @Test
   public void testWindowsFileNamePatternsCanBeSpecifiedInToolchain() throws Exception {
-    if (!AnalysisMock.get().isThisBazel()) {
-      return;
-    }
     AnalysisMock.get()
         .ccSupport()
         .setupCcToolchainConfig(
@@ -487,7 +485,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
 
     assertThat(
             artifactsToStrings(getOutputGroup(hello, CcLibrary.DYNAMIC_LIBRARY_OUTPUT_GROUP_NAME)))
-        .containsExactly("bin hello/hello_59017c88f7.dll", "bin hello/hello.if.lib");
+        .containsExactly("bin hello/hello.dll", "bin hello/hello.if.lib");
   }
 
   @Test

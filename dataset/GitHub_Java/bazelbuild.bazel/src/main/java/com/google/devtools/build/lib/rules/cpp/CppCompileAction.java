@@ -423,7 +423,9 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
         throw new IllegalStateException(e.getCause());
       }
     } catch (ExecException e) {
-      throw e.toActionExecutionException("include scanning", this);
+      throw e.toActionExecutionException(
+          "Include scanning of rule '" + getOwner().getLabel() + "'",
+          this);
     }
   }
 
@@ -567,7 +569,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
                   .setCmdlineIncludes(getCmdlineIncludes(options))
                   .build());
 
-      if (getDotdFile() == null) {
+      if (useHeaderModules) {
         // If we aren't looking at .d files later, remove undeclared inputs now.
         additionalInputs =
             filterDiscoveredHeaders(actionExecutionContext, additionalInputs, headerInfo);
@@ -1845,6 +1847,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       } catch (ExecException e) {
         copyTempOutErrToActionOutErr();
         throw e.toActionExecutionException(
+            "C++ compilation of rule '" + getOwner().getLabel() + "'",
             CppCompileAction.this);
       } catch (InterruptedException e) {
         copyTempOutErrToActionOutErr();

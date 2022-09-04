@@ -14,9 +14,11 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.analysis.config.AutoCpuConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
@@ -62,7 +64,6 @@ public final class CppConfiguration extends Fragment
     GCOV("gcov"),
     GCOVTOOL("gcov-tool"),
     LD("ld"),
-    LLVM_COV("llvm-cov"),
     NM("nm"),
     OBJCOPY("objcopy"),
     OBJDUMP("objdump"),
@@ -137,11 +138,12 @@ public final class CppConfiguration extends Fragment
    */
   public static final String FDO_STAMP_MACRO = "BUILD_FDO_TYPE";
 
-  // TODO(lberki): This is only used for determining the output directory name.
-  // Unfortunately, we can't move it easily to OutputDirectories.buildMnemonic() because the CPU is
-  // currently in the middle of the name of the configuration directory (e.g. it comes after the
-  // Android configuration)
-  private final String cpu;
+  private final String transformedCpuFromOptions;
+  // TODO(lberki): desiredCpu *should* be always the same as targetCpu, except that we don't check
+  // that the CPU we get from the toolchain matches CoreOptions.cpu . So we store
+  // it here so that the output directory doesn't depend on the CToolchain. When we will eventually
+  // verify that the two are the same, we can remove one of desiredCpu and targetCpu.
+  private final String desiredCpu;
 
   private final PathFragment fdoPath;
   private final Label fdoOptimizeLabel;
@@ -169,7 +171,8 @@ public final class CppConfiguration extends Fragment
 
   private final CoreOptions.FatApkSplitSanitizer fatApkSplitSanitizer;
 
-  static CppConfiguration create(BuildOptions options) throws InvalidConfigurationException {
+  static CppConfiguration create(CpuTransformer cpuTransformer, BuildOptions options)
+      throws InvalidConfigurationException {
     CppOptions cppOptions = options.get(CppOptions.class);
 
     CoreOptions commonOptions = options.get(CoreOptions.class);
@@ -218,7 +221,10 @@ public final class CppConfiguration extends Fragment
     }
 
     return new CppConfiguration(
-        commonOptions.cpu,
+        cppOptions.doNotUseCpuTransformer
+            ? commonOptions.cpu
+            : cpuTransformer.getTransformer().apply(commonOptions.cpu),
+        Preconditions.checkNotNull(commonOptions.cpu),
         fdoPath,
         fdoProfileLabel,
         csFdoAbsolutePath,
@@ -241,7 +247,8 @@ public final class CppConfiguration extends Fragment
   }
 
   private CppConfiguration(
-      String cpu,
+      String transformedCpuFromOptions,
+      String desiredCpu,
       PathFragment fdoPath,
       Label fdoOptimizeLabel,
       PathFragment csFdoAbsolutePath,
@@ -258,7 +265,8 @@ public final class CppConfiguration extends Fragment
       boolean isToolConfiguration,
       boolean appleGenerateDsym,
       CoreOptions.FatApkSplitSanitizer fatApkSplitSanitizer) {
-    this.cpu = cpu;
+    this.transformedCpuFromOptions = transformedCpuFromOptions;
+    this.desiredCpu = desiredCpu;
     this.fdoPath = fdoPath;
     this.fdoOptimizeLabel = fdoOptimizeLabel;
     this.csFdoAbsolutePath = csFdoAbsolutePath;
@@ -408,6 +416,14 @@ public final class CppConfiguration extends Fragment
     return cppOptions.useStartEndLib;
   }
 
+  /**
+   * @return value from the --cpu option transformed using {@link CpuTransformer}. If it was not
+   *     passed explicitly, {@link AutoCpuConverter} will try to guess something reasonable.
+   */
+  public String getTransformedCpuFromOptions() {
+    return transformedCpuFromOptions;
+  }
+
   /** @return value from --compiler option, null if the option was not passed. */
   @Nullable
   public String getCompilerFromOptions() {
@@ -516,15 +532,15 @@ public final class CppConfiguration extends Fragment
 
   @Override
   public String getOutputDirectoryName() {
-    String result = cpu;
+    String toolchainPrefix = desiredCpu;
     if (fatApkSplitSanitizer.feature != null) {
-      result += "-" + fatApkSplitSanitizer.feature;
+      toolchainPrefix += "-" + fatApkSplitSanitizer.feature;
     }
     if (!cppOptions.outputDirectoryTag.isEmpty()) {
-      result += "-" + cppOptions.outputDirectoryTag;
+      toolchainPrefix += "-" + cppOptions.outputDirectoryTag;
     }
 
-    return result;
+    return toolchainPrefix;
   }
 
   /**
@@ -748,9 +764,5 @@ public final class CppConfiguration extends Fragment
 
   public boolean useCppCompileHeaderMnemonic() {
     return cppOptions.useCppCompileHeaderMnemonic;
-  }
-
-  public boolean generateLlvmLCov() {
-    return cppOptions.generateLlvmLcov;
   }
 }
