@@ -85,7 +85,7 @@ public class ElasticsearchBackendGeneratedRequestTestBase extends ElasticsearchB
                 .id("search1")
                 .queries(ImmutableSet.of(query))
                 .build();
-        return new SearchJob("job1", search, "admin");
+        return new SearchJob("job1", search);
     }
 
     protected TimeRange timeRangeForTest() {
