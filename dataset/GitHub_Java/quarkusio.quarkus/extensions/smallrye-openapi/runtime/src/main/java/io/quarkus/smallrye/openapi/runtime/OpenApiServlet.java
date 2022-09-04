@@ -40,8 +40,10 @@ public class OpenApiServlet extends HttpServlet {
 
     private static final String QUERY_PARAM_FORMAT = "format";
 
-    protected static final String GENERATED_DOC_BASE = "quarkus-generated-openapi-doc.";
-    public static final String BASE_NAME = "META-INF/resources/" + GENERATED_DOC_BASE;
+    @Inject
+    OpenApiDocument openApiDocument;
+
+    private final Map<OpenApiSerializer.Format, String> cachedModels = new ConcurrentHashMap<>();
 
     @Override
     protected void doOptions(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -63,10 +65,28 @@ public class OpenApiServlet extends HttpServlet {
             format = OpenApiSerializer.Format.JSON;
         }
 
+        String oai = getCachedOaiString(format);
+
         addCorsResponseHeaders(resp);
         resp.setHeader("Content-Type", format.getMimeType());
         resp.setCharacterEncoding("UTF-8");
-        req.getRequestDispatcher(GENERATED_DOC_BASE + format).include(req, resp);
+        resp.getWriter().print(oai);
+    }
+
+    void setOpenApiDocument(OpenApiDocument document) {
+        this.openApiDocument = document;
+    }
+
+    private String getCachedOaiString(OpenApiSerializer.Format format) {
+        return cachedModels.computeIfAbsent(format, this::getModel);
+    }
+
+    private String getModel(OpenApiSerializer.Format format) {
+        try {
+            return OpenApiSerializer.serialize(this.openApiDocument.get(), format);
+        } catch (IOException ioe) {
+            throw new RuntimeException("Unable to serialize OpenAPI in " + format, ioe);
+        }
     }
 
     private static void addCorsResponseHeaders(HttpServletResponse response) {
