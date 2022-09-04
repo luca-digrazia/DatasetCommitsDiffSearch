@@ -24,7 +24,7 @@ import org.graylog2.restclient.models.Node;
 import org.graylog2.restclient.models.NodeService;
 import org.graylog2.restclient.models.api.requests.MultiMetricRequest;
 import org.graylog2.restclient.models.api.responses.metrics.MetricsListResponse;
-import org.slf4j.LoggerFactory;
+import play.Logger;
 import play.Play;
 import play.libs.F;
 import play.libs.Json;
@@ -47,7 +47,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.graylog2.restroutes.generated.routes.MetricsResource;
 
 public class MetricsController extends AuthenticatedController {
-    private static final org.slf4j.Logger log = LoggerFactory.getLogger(MetricsController.class);
 
     private final NodeService nodeService;
     private final ScheduledExecutorService executor;
@@ -125,20 +124,20 @@ public class MetricsController extends AuthenticatedController {
                                 final MetricsListResponse response = requestBuilder.node(node).execute();
                                 entries.putAll(node.getNodeId(), response.getMetrics().entrySet());
                             } catch (NodeService.NodeNotFoundException e) {
-                                log.warn("Unknown node {}, skipping it.", nodeId);
+                                Logger.warn("Unknown node {}, skipping it.", nodeId);
                             }
                         }
 
                     } catch (APIException | IOException e) {
                         pushResponse.hasError = true;
-                        log.warn("Unable to load metrics", e);
+                        Logger.warn("Unable to load metrics", e);
                     }
                 }
             } catch (Graylog2ServerUnavailableException e) {
                 pushResponse.hasError = true;
             } catch (Exception e) {
                 pushResponse.hasError = true;
-                log.warn("Unhandled exception, catching to prevent scheduled task from ending.", e);
+                Logger.warn("Unhandled exception, catching to prevent scheduled task from ending.", e);
             }
             try {
                 for (String nodeId : entries.keySet()) {
@@ -146,7 +145,7 @@ public class MetricsController extends AuthenticatedController {
                 }
                 out.write(Json.toJson(pushResponse).toString());
             } catch (Exception e){
-                log.error("Unhandled exception, catching to prevent scheduled task from ending, this is a bug.", e);
+                Logger.error("Unhandled exception, catching to prevent scheduled task from ending, this is a bug.", e);
             }
         }
 
@@ -232,20 +231,20 @@ public class MetricsController extends AuthenticatedController {
 
                                     final String[] userAndSessionId = RedirectAuthenticator.decodeSession(sessionId);
                                     if (userAndSessionId == null) {
-                                        log.warn("No valid session id, cannot load metrics.");
+                                        Logger.warn("No valid session id, cannot load metrics.");
                                         return;
                                     }
                                     clearSessionId.set(userAndSessionId[1]);
                                 } else if (command instanceof SubscribeMetricsUpdates) {
                                     final SubscribeMetricsUpdates metricsUpdates = (SubscribeMetricsUpdates) command;
-                                    log.debug("Subscribed to metrics {} on node {}",
+                                    Logger.debug("Subscribed to metrics {} on node {}",
                                                 metricsUpdates.metrics,
                                                 MoreObjects.firstNonNull(metricsUpdates.nodeId, "ALL"));
 
                                     metricsPerNode.putAll(metricsUpdates.nodeId, metricsUpdates.metrics);
                                 }
                             } catch (Exception e) {
-                                log.error("Unhandled exception", e);
+                                Logger.error("Unhandled exception", e);
                             }
                         }
                     });
