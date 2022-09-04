@@ -83,7 +83,9 @@ public class Aapt2ResourcePackagingAction {
       final Path compiledResources = Files.createDirectories(tmp.resolve("compiled"));
       final Path linkedOut = Files.createDirectories(tmp.resolve("linked"));
       final AndroidDataDeserializer dataDeserializer =
-          AndroidCompiledDataDeserializer.withFilteredResources(options.prefilteredResources);
+          aaptConfigOptions.useCompiledResourcesForMerge
+              ? AndroidCompiledDataDeserializer.withFilteredResources(options.prefilteredResources)
+              : AndroidParsedDataDeserializer.withFilteredResources(options.prefilteredResources);
       final ResourceCompiler compiler =
           ResourceCompiler.create(
               executorService,
@@ -121,7 +123,11 @@ public class Aapt2ResourcePackagingAction {
               ParsedAndroidData.loadedFrom(
                   ImmutableList.of(SerializedAndroidData.from(compiled)),
                   executorService,
-                  dataDeserializer),
+                  // TODO(b/112848607): Remove when compiled merging is the default for aapt2.
+                  aaptConfigOptions.useCompiledResourcesForMerge
+                      ? dataDeserializer
+                      : AndroidCompiledDataDeserializer.withFilteredResources(
+                          options.prefilteredResources)),
               new DensitySpecificManifestProcessor(options.densities, densityManifest)
                   .process(options.primaryData.getManifest()),
               ImmutableList.<SerializedAndroidData>builder()
