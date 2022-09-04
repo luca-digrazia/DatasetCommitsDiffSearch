@@ -17,7 +17,9 @@ package com.googlecode.androidannotations.processing;
 
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import javax.lang.model.element.Element;
@@ -38,7 +40,7 @@ public class ModelProcessor {
 
 		JCodeModel codeModel = new JCodeModel();
 
-		ActivitiesHolder activitiesHolder = new ActivitiesHolder();
+        Map<Element, ActivityHolder> activityHolders = new HashMap<Element, ActivityHolder>();
 		for (ElementProcessor processor : processors) {
 			Class<? extends Annotation> target = processor.getTarget();
 
@@ -46,7 +48,7 @@ public class ModelProcessor {
 
 			for (Element annotatedElement : annotatedElements) {
 				try {
-					processor.process(annotatedElement, codeModel, activitiesHolder);
+					processor.process(annotatedElement, codeModel, activityHolders);
 				} catch (Exception e) {
 					throw new RuntimeException(e);
 				}
@@ -55,22 +57,25 @@ public class ModelProcessor {
 
 		return codeModel;
 	}
+	
 
-	public MetaModel processToStringModel(AnnotationElements validatedModel) {
+    public MetaModel processToStringModel(AnnotationElements validatedModel) {
 
-		MetaModel metaModel = new MetaModel();
+            MetaModel metaModel = new MetaModel();
 
-		for (ElementProcessor processor : processors) {
-			Class<? extends Annotation> target = processor.getTarget();
+            for (ElementProcessor processor : processors) {
+                    Class<? extends Annotation> target = processor.getTarget();
 
-			Set<? extends Element> annotatedElements = validatedModel.getAnnotatedElements(target);
+                    Set<? extends Element> annotatedElements = validatedModel.getAnnotatedElements(target);
 
-			for (Element annotatedElement : annotatedElements) {
-				processor.process(annotatedElement, metaModel);
-			}
-		}
+                    for (Element annotatedElement : annotatedElements) {
+                            processor.process(annotatedElement, metaModel);
+                    }
+            }
 
-		return metaModel;
-	}
+            return metaModel;
+    }
+
+
 
 }

@@ -16,6 +16,7 @@
 package com.googlecode.androidannotations.processing;
 
 import java.lang.annotation.Annotation;
+import java.util.Map;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
@@ -84,9 +85,11 @@ public class EnhanceProcessor extends AnnotationHelper implements ElementProcess
 	public static final String NEW_CLASS_SUFFIX = "__";
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, ActivitiesHolder activitiesHolder) throws Exception {
+	public void process(Element element, JCodeModel codeModel, Map<Element, ActivityHolder> activityHolders) throws Exception {
 
-		ActivityHolder holder = activitiesHolder.create(element);
+		ActivityHolder holder = new ActivityHolder();
+		
+		activityHolders.put(element, holder);
 		
 		TypeElement typeElement = (TypeElement) element;
 
@@ -103,8 +106,8 @@ public class EnhanceProcessor extends AnnotationHelper implements ElementProcess
 		JClass bundleClass = codeModel.ref("android.os.Bundle");
 		
 		// beforeSetContentView
-		holder.beforeSetContentView = holder.activity.method(JMod.PRIVATE, codeModel.VOID, "beforeSetContentView_");
-		holder.beforeSetContentViewSavedInstanceStateParam = holder.beforeSetContentView.param(bundleClass, "savedInstanceState");
+		JMethod beforeSetContentView = holder.activity.method(JMod.PRIVATE, codeModel.VOID, "beforeSetContentView_");
+		beforeSetContentView.param(bundleClass, "savedInstanceState");
 		
 		// afterSetContentView
 		JMethod afterSetContentView = holder.activity.method(JMod.PRIVATE, codeModel.VOID, "afterSetContentView_");
@@ -117,7 +120,7 @@ public class EnhanceProcessor extends AnnotationHelper implements ElementProcess
 		JVar onCreateSavedInstanceState = onCreate.param(bundleClass, "savedInstanceState");
 		JBlock onCreateBody = onCreate.body();
 		
-		onCreateBody.invoke(holder.beforeSetContentView).arg(onCreateSavedInstanceState);
+		onCreateBody.invoke(beforeSetContentView).arg(onCreateSavedInstanceState);
 		
 		Enhance layoutAnnotation = element.getAnnotation(Enhance.class);
 		int layoutIdValue = layoutAnnotation.value();
