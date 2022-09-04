@@ -2,6 +2,7 @@ package io.quarkus.qrs.runtime.core;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.lang.annotation.Annotation;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,6 +33,7 @@ import io.quarkus.qrs.runtime.model.ResourceWriter;
 import io.quarkus.qrs.runtime.spi.QrsMessageBodyWriter;
 import io.quarkus.qrs.runtime.util.MediaTypeHelper;
 import io.vertx.core.buffer.Buffer;
+import io.vertx.core.http.HttpServerResponse;
 
 public class Serialisers {
 
@@ -40,7 +42,12 @@ public class Serialisers {
     private MultivaluedMap<Class<?>, ResourceReader> readers = new MultivaluedHashMap<>();
 
     public static final List<MediaType> WILDCARD_LIST = Collections.singletonList(MediaType.WILDCARD_TYPE);
-    public static final MessageBodyWriter[] EMPTY = new MessageBodyWriter[0];
+
+    public static final MessageBodyWriter<?>[] NO_WRITER = new MessageBodyWriter[0];
+    public static final MessageBodyReader<?>[] NO_READER = new MessageBodyReader[0];
+    public static final Annotation[] NO_ANNOTATION = new Annotation[0];
+    public static final MultivaluedMap<String, Object> EMPTY_MULTI_MAP = new MultivaluedHashMap<>();
+
     private final ConcurrentMap<Class<?>, List<ResourceWriter>> noMediaTypeClassCache = new ConcurrentHashMap<>();
     private Function<Class<?>, List<ResourceWriter>> mappingFunction = new Function<Class<?>, List<ResourceWriter>>() {
         @Override
@@ -88,6 +95,7 @@ public class Serialisers {
         if (writer instanceof QrsMessageBodyWriter) {
             QrsMessageBodyWriter<Object> qrsWriter = (QrsMessageBodyWriter<Object>) writer;
             RuntimeResource target = context.getTarget();
+            Serialisers.encodeResponseHeaders(context);
             if (qrsWriter.isWriteable(entity.getClass(), target == null ? null : target.getLazyMethod(),
                     context.getProducesMediaType())) {
                 if (mediaType != null) {
@@ -107,6 +115,7 @@ public class Serialisers {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 writer.writeTo(entity, entity.getClass(), context.getGenericReturnType(),
                         context.getAnnotations(), response.getMediaType(), response.getHeaders(), baos);
+                Serialisers.encodeResponseHeaders(context);
                 context.getContext().response().end(Buffer.buffer(baos.toByteArray()));
                 return true;
             } else {
@@ -264,7 +273,7 @@ public class Serialisers {
                 }
             }
         }
-        return new NoMediaTypeResult(finalResult.toArray(EMPTY), selected);
+        return new NoMediaTypeResult(finalResult.toArray(NO_WRITER), selected);
     }
 
     public static class NoMediaTypeResult {
@@ -288,6 +297,23 @@ public class Serialisers {
 
         public EntityWriter getEntityWriter() {
             return entityWriter;
+        }
+    }
+
+    public static void encodeResponseHeaders(QrsRequestContext requestContext) {
+        HttpServerResponse vertxResponse = requestContext.getContext().response();
+        Response response = requestContext.getResponse();
+        vertxResponse.setStatusCode(response.getStatus());
+        if (response.getStatusInfo().getReasonPhrase() != null) {
+            vertxResponse.setStatusMessage(response.getStatusInfo().getReasonPhrase());
+        }
+        MultivaluedMap<String, String> headers = response.getStringHeaders();
+        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+            if (entry.getValue().size() == 1) {
+                vertxResponse.putHeader(entry.getKey(), entry.getValue().get(0));
+            } else {
+                vertxResponse.putHeader(entry.getKey(), entry.getValue());
+            }
         }
     }
 }
