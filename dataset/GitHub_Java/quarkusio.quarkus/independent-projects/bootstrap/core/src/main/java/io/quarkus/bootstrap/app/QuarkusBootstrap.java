@@ -4,7 +4,6 @@ import io.quarkus.bootstrap.BootstrapAppModelFactory;
 import io.quarkus.bootstrap.BootstrapException;
 import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.bootstrap.model.AppDependency;
-import io.quarkus.bootstrap.model.AppModel;
 import io.quarkus.bootstrap.model.PathsCollection;
 import io.quarkus.bootstrap.resolver.AppModelResolver;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
@@ -78,8 +77,6 @@ public class QuarkusBootstrap implements Serializable {
     private final AppArtifact managingProject;
     private final List<AppDependency> forcedDependencies;
     private final boolean disableClasspathCache;
-    private final AppModel existingModel;
-    private final boolean rebuild;
 
     private QuarkusBootstrap(Builder builder) {
         this.applicationRoot = builder.applicationRoot;
@@ -105,17 +102,12 @@ public class QuarkusBootstrap implements Serializable {
         this.managingProject = builder.managingProject;
         this.forcedDependencies = new ArrayList<>(builder.forcedDependencies);
         this.disableClasspathCache = builder.disableClasspathCache;
-        this.existingModel = builder.existingModel;
-        this.rebuild = builder.rebuild;
     }
 
     public CuratedApplication bootstrap() throws BootstrapException {
         //all we want to do is resolve all our dependencies
         //once we have this it is up to augment to set up the class loader to actually use them
 
-        if (existingModel != null) {
-            return new CuratedApplication(this, new CurationResult(existingModel));
-        }
         //first we check for updates
         if (mode != Mode.PROD) {
             if (versionUpdate != VersionUpdate.NONE) {
@@ -208,12 +200,7 @@ public class QuarkusBootstrap implements Serializable {
         return isolateDeployment;
     }
 
-    public boolean isRebuild() {
-        return rebuild;
-    }
-
     public static class Builder {
-        boolean rebuild;
         PathsCollection applicationRoot;
         String baseName;
         Path projectRoot;
@@ -237,7 +224,6 @@ public class QuarkusBootstrap implements Serializable {
         AppArtifact managingProject;
         List<AppDependency> forcedDependencies = new ArrayList<>();
         boolean disableClasspathCache;
-        AppModel existingModel;
 
         public Builder() {
         }
@@ -394,23 +380,9 @@ public class QuarkusBootstrap implements Serializable {
             return this;
         }
 
-        public AppModel getExistingModel() {
-            return existingModel;
-        }
-
-        public Builder setExistingModel(AppModel existingModel) {
-            this.existingModel = existingModel;
-            return this;
-        }
-
         public QuarkusBootstrap build() {
             Objects.requireNonNull(applicationRoot, "Application root must not be null");
             return new QuarkusBootstrap(this);
-        }
-
-        public Builder setRebuild(boolean value) {
-            this.rebuild = value;
-            return this;
         }
     }
 

@@ -66,8 +66,6 @@ public class QuarkusUnitTest
         implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, AfterEachCallback,
         InvocationInterceptor {
 
-    public static final String THE_BUILD_WAS_EXPECTED_TO_FAIL = "The build was expected to fail";
-
     static {
         System.setProperty("java.util.logging.manager", "org.jboss.logmanager.LogManager");
     }
@@ -407,7 +405,7 @@ public class QuarkusUnitTest
                 //we restore the CL at the end of the test
                 Thread.currentThread().setContextClassLoader(runningQuarkusApplication.getClassLoader());
                 if (assertException != null) {
-                    fail(THE_BUILD_WAS_EXPECTED_TO_FAIL);
+                    fail("The build was expected to fail");
                 }
                 started = true;
                 System.setProperty("test.url", TestHTTPResourceManager.getUri(runningQuarkusApplication));
@@ -426,10 +424,6 @@ public class QuarkusUnitTest
             } catch (Throwable e) {
                 started = false;
                 if (assertException != null) {
-                    if (e instanceof AssertionError && e.getMessage().equals(THE_BUILD_WAS_EXPECTED_TO_FAIL)) {
-                        //don't pass the 'no failure' assertion into the assert exception function
-                        throw e;
-                    }
                     if (e instanceof RuntimeException) {
                         Throwable cause = e.getCause();
                         if (cause != null && cause instanceof BuildException) {
