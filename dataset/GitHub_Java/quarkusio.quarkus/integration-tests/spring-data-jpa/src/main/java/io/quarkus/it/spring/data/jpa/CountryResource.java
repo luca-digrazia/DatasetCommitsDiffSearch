@@ -2,8 +2,10 @@ package io.quarkus.it.spring.data.jpa;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import javax.persistence.NoResultException;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -37,6 +39,14 @@ public class CountryResource {
     }
 
     @GET
+    @Path("/page-sorted/{size}/{num}")
+    @Produces("text/plain")
+    public String pageSorted(@PathParam("size") int pageSize, @PathParam("num") int pageNum) {
+        Page<Country> page = countryRepository.findAll(PageRequest.of(pageNum, pageSize, Sort.by(Sort.Direction.DESC, "id")));
+        return page.stream().map(Country::getId).map(Object::toString).collect(Collectors.joining(","));
+    }
+
+    @GET
     @Path("/new/{name}/{iso3}")
     @Produces("application/json")
     public Country newCountry(@PathParam("name") String name, @PathParam("iso3") String iso3) {
@@ -63,5 +73,11 @@ public class CountryResource {
     @Produces("application/json")
     public Country getOne(@PathParam("id") Long id) {
         return countryRepository.getOne(id);
+    }
+
+    @DELETE
+    @Path("/")
+    public void deleteAllInBatch() {
+        this.countryRepository.deleteAllInBatch();
     }
 }
