@@ -20,6 +20,9 @@ import static com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClass
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -539,8 +542,13 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     }
 
     @Override
+    public Label getLabel(String labelValue) {
+      return LABELS.getUnchecked(labelValue);
+    }
+
+    @Override
     public Label getToolsLabel(String labelValue) {
-      return Label.parseAbsoluteUnchecked(toolsRepository + labelValue);
+      return getLabel(toolsRepository + labelValue);
     }
 
     @Override
@@ -556,6 +564,22 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       return toolsRepository;
     }
   }
+
+  /**
+   * Used to make the label instances unique, so that we don't create a new
+   * instance for every rule.
+   */
+  private static final LoadingCache<String, Label> LABELS = CacheBuilder.newBuilder().build(
+      new CacheLoader<String, Label>() {
+    @Override
+    public Label load(String from) {
+      try {
+        return Label.parseAbsolute(from);
+      } catch (LabelSyntaxException e) {
+        throw new IllegalArgumentException(from, e);
+      }
+    }
+  });
 
   /**
    * Default content that should be added at the beginning of the WORKSPACE file.

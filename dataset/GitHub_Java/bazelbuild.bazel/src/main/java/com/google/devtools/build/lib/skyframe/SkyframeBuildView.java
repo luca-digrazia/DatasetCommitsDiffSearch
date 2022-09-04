@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import static com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationState.BUILT;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -65,8 +63,6 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.LoadingFailureEvent;
-import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skyframe.AspectFunction.AspectCreationException;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectValueKey;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.ConfiguredValueCreationException;
@@ -80,13 +76,11 @@ import com.google.devtools.build.skyframe.EvaluationProgressReceiver;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
-import com.google.devtools.build.skyframe.SkyValue;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
@@ -114,8 +108,6 @@ public final class SkyframeBuildView {
   // has been invalidated after graph pruning has been executed.
   private Set<SkyKey> dirtiedConfiguredTargetKeys = Sets.newConcurrentHashSet();
   private volatile boolean anyConfiguredTargetDeleted = false;
-
-  private final AtomicInteger evaluatedActionCount = new AtomicInteger();
 
   private final ConfiguredRuleClassProvider ruleClassProvider;
 
@@ -154,14 +146,6 @@ public final class SkyframeBuildView {
 
   ConfiguredTargetFactory getConfiguredTargetFactory() {
     return factory;
-  }
-
-  public int getEvaluatedActionCount() {
-    return evaluatedActionCount.get();
-  }
-
-  public void resetEvaluationActionCount() {
-    evaluatedActionCount.set(0);
   }
 
   private boolean areConfigurationsDifferent(BuildConfigurationCollection configurations) {
@@ -257,18 +241,15 @@ public final class SkyframeBuildView {
       throws InterruptedException, ViewCreationFailedException {
     enableAnalysis(true);
     EvaluationResult<ActionLookupValue> result;
-    try (SilentCloseable c = Profiler.instance().profile("skyframeExecutor.configureTargets")) {
+    try {
       result =
           skyframeExecutor.configureTargets(
               eventHandler, values, aspectKeys, keepGoing, numThreads);
     } finally {
       enableAnalysis(false);
     }
-    ImmutableMap<ActionAnalysisMetadata, ConflictException> badActions;
-    try (SilentCloseable c =
-        Profiler.instance().profile("skyframeExecutor.findArtifactConflicts")) {
-      badActions = skyframeExecutor.findArtifactConflicts();
-    }
+    ImmutableMap<ActionAnalysisMetadata, ConflictException> badActions =
+        skyframeExecutor.findArtifactConflicts();
 
     Collection<AspectValue> goodAspects = Lists.newArrayListWithCapacity(values.size());
     Root singleSourceRoot = skyframeExecutor.getForcedSingleSourceRootIfNoExecrootSymlinkCreation();
@@ -738,7 +719,6 @@ public final class SkyframeBuildView {
     @Override
     public void evaluated(
         SkyKey skyKey,
-        @Nullable SkyValue value,
         Supplier<EvaluationSuccessState> evaluationSuccessState,
         EvaluationState state) {
       if (skyKey.functionName().equals(SkyFunctions.CONFIGURED_TARGET)) {
@@ -749,9 +729,6 @@ public final class SkyframeBuildView {
               // During multithreaded operation, this is only set to true, so no concurrency issues.
               someConfiguredTargetEvaluated = true;
             }
-            if (value instanceof ConfiguredTargetValue) {
-              evaluatedActionCount.addAndGet(((ConfiguredTargetValue) value).getNumActions());
-            }
             break;
           case CLEAN:
             // If the configured target value did not need to be rebuilt, then it wasn't truly
@@ -759,10 +736,6 @@ public final class SkyframeBuildView {
             dirtiedConfiguredTargetKeys.remove(skyKey);
             break;
         }
-      } else if (skyKey.functionName().equals(SkyFunctions.ASPECT)
-          && state == BUILT
-          && value instanceof AspectValue) {
-        evaluatedActionCount.addAndGet(((AspectValue) value).getNumActions());
       }
     }
   }
