@@ -40,8 +40,7 @@ public class Notification {
         ES_OPEN_FILES,
         NO_INPUT_RUNNING,
         INPUT_FAILED_TO_START,
-        CHECK_SERVER_CLOCKS,
-        OUTDATED_VERSION;
+        CHECK_SERVER_CLOCKS;
 
         public static Type fromString(String name) {
             return valueOf(name.toUpperCase());
@@ -82,8 +81,6 @@ public class Notification {
                 return new InputFailedToStartNotification(this);
             case CHECK_SERVER_CLOCKS:
                 return new CheckServerClocksNotification();
-            case OUTDATED_VERSION:
-                return new OutdatedVersionNotification(this);
         }
 
         throw new RuntimeException("No notification registered for " + type);
