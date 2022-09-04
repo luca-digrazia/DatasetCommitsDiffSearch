@@ -1,48 +1,16 @@
-/**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
- *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy of
- * the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed To in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
- */
 package org.androidannotations.holder;
 
-import static com.sun.codemodel.JExpr.invoke;
-import static com.sun.codemodel.JMod.PRIVATE;
-import static com.sun.codemodel.JMod.PUBLIC;
-import static com.sun.codemodel.JMod.STATIC;
-import static javax.lang.model.element.ElementKind.CONSTRUCTOR;
-
-import java.util.ArrayList;
-import java.util.List;
-
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.VariableElement;
-
+import com.sun.codemodel.*;
 import org.androidannotations.helper.ModelConstants;
 import org.androidannotations.process.ProcessHolder;
 
-import com.sun.codemodel.ClassType;
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JInvocation;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JMod;
-import com.sun.codemodel.JType;
-import com.sun.codemodel.JVar;
+import javax.lang.model.element.*;
+import java.util.ArrayList;
+import java.util.List;
+
+import static com.sun.codemodel.JExpr.invoke;
+import static com.sun.codemodel.JMod.*;
+import static javax.lang.model.element.ElementKind.CONSTRUCTOR;
 
 public class EViewHolder extends EComponentWithViewSupportHolder {
 
@@ -51,14 +19,14 @@ public class EViewHolder extends EComponentWithViewSupportHolder {
 			+ "which leads to infinite calls of onFinishInflate()\n" //
 			+ "when inflating a layout with a parent and using\n" //
 			+ "the <merge /> tag." //
-	;
+			;
 
 	private static final String SUPPRESS_WARNING_COMMENT = "" //
 			+ "We use @SuppressWarning here because our java code\n" //
 			+ "generator doesn't know that there is no need\n" //
 			+ "to import OnXXXListeners from View as we already\n" //
 			+ "are in a View." //
-	;
+			;
 
 	protected JBlock initBody;
 	protected JMethod onFinishInflate;

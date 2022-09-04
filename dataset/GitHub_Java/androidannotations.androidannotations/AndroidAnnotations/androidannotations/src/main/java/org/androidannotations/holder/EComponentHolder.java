@@ -1,40 +1,16 @@
-/**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
- *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy of
- * the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed To in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
- */
 package org.androidannotations.holder;
 
-import static com.sun.codemodel.JMod.PRIVATE;
-
-import java.util.HashMap;
-import java.util.Map;
-
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.TypeMirror;
-
+import com.sun.codemodel.*;
 import org.androidannotations.helper.CaseHelper;
 import org.androidannotations.helper.ModelConstants;
 import org.androidannotations.process.ProcessHolder;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JMod;
-import com.sun.codemodel.JVar;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.TypeMirror;
+import java.util.HashMap;
+import java.util.Map;
+
+import static com.sun.codemodel.JMod.PRIVATE;
 
 public abstract class EComponentHolder extends BaseGeneratedClassHolder {
 
@@ -45,7 +21,7 @@ public abstract class EComponentHolder extends BaseGeneratedClassHolder {
 	private JVar handler;
 
 	public EComponentHolder(ProcessHolder processHolder, TypeElement annotatedElement) throws Exception {
-		super(processHolder, annotatedElement);
+        super(processHolder, annotatedElement);
 	}
 
 	public JExpression getContextRef() {
@@ -77,7 +53,7 @@ public abstract class EComponentHolder extends BaseGeneratedClassHolder {
 		return resourcesRef;
 	}
 
-	private void setResourcesRef() {
+	private void setResourcesRef()  {
 		resourcesRef = getInitBody().decl(classes().RESOURCES, "resources_", getContextRef().invoke("getResources"));
 	}
 

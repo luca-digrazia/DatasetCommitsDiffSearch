@@ -1,51 +1,23 @@
-/**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
- *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy of
- * the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed To in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
- */
 package org.androidannotations.handler;
 
-import static com.sun.codemodel.JExpr._new;
-import static com.sun.codemodel.JExpr._super;
-import static com.sun.codemodel.JExpr._this;
-import static com.sun.codemodel.JExpr.invoke;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import com.sun.codemodel.*;
+import org.androidannotations.annotations.RoboGuice;
+import org.androidannotations.holder.EActivityHolder;
+import org.androidannotations.holder.RoboGuiceHolder;
+import org.androidannotations.model.AnnotationElements;
+import org.androidannotations.process.ProcessHolder;
+import org.androidannotations.process.IsValid;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
-import org.androidannotations.annotations.RoboGuice;
-import org.androidannotations.holder.EActivityHolder;
-import org.androidannotations.holder.RoboGuiceHolder;
-import org.androidannotations.model.AnnotationElements;
-import org.androidannotations.process.IsValid;
-import org.androidannotations.process.ProcessHolder;
-
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JInvocation;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JMod;
-import com.sun.codemodel.JTryBlock;
-import com.sun.codemodel.JVar;
+import static com.sun.codemodel.JExpr.*;
 
 public class RoboGuiceHandler extends BaseAnnotationHandler<EActivityHolder> {
 
@@ -74,6 +46,7 @@ public class RoboGuiceHandler extends BaseAnnotationHandler<EActivityHolder> {
 		JFieldVar eventManager = roboGuiceHolder.getEventManagerField();
 		JMethod getInjector = roboGuiceHolder.getGetInjector();
 		listenerFields(element, holder);
+
 
 		beforeCreateMethod(holder, scope, eventManager, getInjector);
 		afterSetContentView(holder, scope, eventManager);

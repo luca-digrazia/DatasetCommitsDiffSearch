@@ -1,46 +1,15 @@
-/**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
- *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy of
- * the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed To in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
- */
 package org.androidannotations.holder;
 
-import static com.sun.codemodel.JExpr.FALSE;
-import static com.sun.codemodel.JExpr.TRUE;
-import static com.sun.codemodel.JExpr._new;
-import static com.sun.codemodel.JExpr._null;
-import static com.sun.codemodel.JExpr._super;
-import static com.sun.codemodel.JExpr.invoke;
-import static com.sun.codemodel.JMod.PRIVATE;
-import static com.sun.codemodel.JMod.PUBLIC;
-import static com.sun.codemodel.JMod.STATIC;
-
-import javax.lang.model.element.TypeElement;
-
+import com.sun.codemodel.*;
 import org.androidannotations.helper.ActionBarSherlockHelper;
 import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.helper.HoloEverywhereHelper;
 import org.androidannotations.process.ProcessHolder;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JClassAlreadyExistsException;
-import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JMod;
-import com.sun.codemodel.JVar;
+import javax.lang.model.element.TypeElement;
+
+import static com.sun.codemodel.JExpr.*;
+import static com.sun.codemodel.JMod.*;
 
 public class EFragmentHolder extends EComponentWithViewSupportHolder implements HasInstanceState, HasOptionsMenu, HasOnActivityResult {
 
@@ -53,7 +22,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	private JMethod injectArgsMethod;
 	private JBlock injectArgsBlock;
 	private JVar injectBundleArgs;
-	private InstanceStateHolder instanceStateHolder;
+    private InstanceStateHolder instanceStateHolder;
 	private OnActivityResultHolder onActivityResultHolder;
 	private JBlock onCreateOptionsMenuMethodBody;
 	private JVar onCreateOptionsMenuMenuInflaterVar;
@@ -64,7 +33,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 
 	public EFragmentHolder(ProcessHolder processHolder, TypeElement annotatedElement) throws Exception {
 		super(processHolder, annotatedElement);
-		instanceStateHolder = new InstanceStateHolder(this);
+        instanceStateHolder = new InstanceStateHolder(this);
 		onActivityResultHolder = new OnActivityResultHolder(this);
 		createOnCreate();
 		createOnViewCreated();
@@ -283,25 +252,25 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 		getInitBody().invoke(injectArgsMethod);
 	}
 
-	@Override
-	public JBlock getSaveStateMethodBody() {
-		return instanceStateHolder.getSaveStateMethodBody();
-	}
+    @Override
+    public JBlock getSaveStateMethodBody() {
+        return instanceStateHolder.getSaveStateMethodBody();
+    }
 
-	@Override
-	public JVar getSaveStateBundleParam() {
-		return instanceStateHolder.getSaveStateBundleParam();
-	}
+    @Override
+    public JVar getSaveStateBundleParam() {
+        return instanceStateHolder.getSaveStateBundleParam();
+    }
 
-	@Override
-	public JMethod getRestoreStateMethod() {
-		return instanceStateHolder.getRestoreStateMethod();
-	}
+    @Override
+    public JMethod getRestoreStateMethod() {
+        return instanceStateHolder.getRestoreStateMethod();
+    }
 
-	@Override
-	public JVar getRestoreStateBundleParam() {
-		return instanceStateHolder.getRestoreStateBundleParam();
-	}
+    @Override
+    public JVar getRestoreStateBundleParam() {
+        return instanceStateHolder.getRestoreStateBundleParam();
+    }
 
 	@Override
 	public JBlock getOnCreateOptionsMenuMethodBody() {

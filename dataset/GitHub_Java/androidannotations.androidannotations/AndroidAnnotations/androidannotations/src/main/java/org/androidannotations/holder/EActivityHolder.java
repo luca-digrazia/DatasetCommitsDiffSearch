@@ -1,33 +1,9 @@
-/**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
- *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy of
- * the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed To in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
- */
 package org.androidannotations.holder;
 
-import static com.sun.codemodel.JExpr.FALSE;
-import static com.sun.codemodel.JExpr.TRUE;
-import static com.sun.codemodel.JExpr._new;
-import static com.sun.codemodel.JExpr._null;
-import static com.sun.codemodel.JExpr._super;
-import static com.sun.codemodel.JExpr._this;
-import static com.sun.codemodel.JExpr.cast;
-import static com.sun.codemodel.JExpr.invoke;
-import static com.sun.codemodel.JMod.PRIVATE;
-import static com.sun.codemodel.JMod.PUBLIC;
-
-import java.util.ArrayList;
-import java.util.List;
+import com.sun.codemodel.*;
+import org.androidannotations.api.SdkVersionHelper;
+import org.androidannotations.helper.*;
+import org.androidannotations.process.ProcessHolder;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -35,27 +11,12 @@ import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.ElementFilter;
+import java.util.ArrayList;
+import java.util.List;
 
-import org.androidannotations.api.SdkVersionHelper;
-import org.androidannotations.helper.ActionBarSherlockHelper;
-import org.androidannotations.helper.ActivityIntentBuilder;
-import org.androidannotations.helper.AnnotationHelper;
-import org.androidannotations.helper.CanonicalNameConstants;
-import org.androidannotations.helper.GreenDroidHelper;
-import org.androidannotations.process.ProcessHolder;
-
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JClassAlreadyExistsException;
-import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JInvocation;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JMod;
-import com.sun.codemodel.JType;
-import com.sun.codemodel.JVar;
+import static com.sun.codemodel.JExpr.*;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
 
 public class EActivityHolder extends EComponentWithViewSupportHolder implements HasIntentBuilder, HasExtras, HasInstanceState, HasOptionsMenu, HasOnActivityResult {
 
@@ -66,7 +27,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	private JVar initSavedInstanceParam;
 	private JDefinedClass intentBuilderClass;
 	private JFieldVar intentField;
-	private InstanceStateHolder instanceStateHolder;
+    private InstanceStateHolder instanceStateHolder;
 	private OnActivityResultHolder onActivityResultHolder;
 	private RoboGuiceHolder roboGuiceHolder;
 	private JMethod injectExtrasMethod;
@@ -89,7 +50,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 
 	public EActivityHolder(ProcessHolder processHolder, TypeElement annotatedElement) throws Exception {
 		super(processHolder, annotatedElement);
-		instanceStateHolder = new InstanceStateHolder(this);
+        instanceStateHolder = new InstanceStateHolder(this);
 		onActivityResultHolder = new OnActivityResultHolder(this);
 		createIntentBuilder();
 		handleBackPressed();
@@ -233,6 +194,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 			getMenuInflaterMethodName = "getSupportMenuInflater";
 		}
 
+
 		JMethod method = generatedClass.method(PUBLIC, codeModel().BOOLEAN, "onCreateOptionsMenu");
 		method.annotate(Override.class);
 		JBlock methodBody = method.body();
@@ -349,7 +311,6 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 		}
 		return greenDroidHelper.usesGreenDroid(annotatedElement);
 	}
-
 	private void createIntentBuilder() throws JClassAlreadyExistsException {
 		new ActivityIntentBuilder(this).build();
 	}
@@ -412,7 +373,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 				&& method.getModifiers().contains(Modifier.PUBLIC) //
 				&& method.getReturnType().getKind().equals(TypeKind.VOID) //
 				&& method.getParameters().size() == 0 //
-		;
+				;
 	}
 
 	@Override
@@ -443,7 +404,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	protected void setScopeField() {
-		getRoboGuiceHolder().scope = getGeneratedClass().field(JMod.PRIVATE, classes().CONTEXT_SCOPE, "scope_");
+		getRoboGuiceHolder().scope  = getGeneratedClass().field(JMod.PRIVATE, classes().CONTEXT_SCOPE, "scope_");
 	}
 
 	protected void setEventManagerField() {
@@ -492,25 +453,25 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 		getInitBody().invoke(injectExtrasMethod);
 	}
 
-	@Override
-	public JBlock getSaveStateMethodBody() {
-		return instanceStateHolder.getSaveStateMethodBody();
-	}
+    @Override
+    public JBlock getSaveStateMethodBody() {
+        return instanceStateHolder.getSaveStateMethodBody();
+    }
 
-	@Override
-	public JVar getSaveStateBundleParam() {
-		return instanceStateHolder.getSaveStateBundleParam();
-	}
+    @Override
+    public JVar getSaveStateBundleParam() {
+        return instanceStateHolder.getSaveStateBundleParam();
+    }
 
-	@Override
-	public JMethod getRestoreStateMethod() {
-		return instanceStateHolder.getRestoreStateMethod();
-	}
+    @Override
+    public JMethod getRestoreStateMethod() {
+        return instanceStateHolder.getRestoreStateMethod();
+    }
 
-	@Override
-	public JVar getRestoreStateBundleParam() {
-		return instanceStateHolder.getRestoreStateBundleParam();
-	}
+    @Override
+    public JVar getRestoreStateBundleParam() {
+        return instanceStateHolder.getRestoreStateBundleParam();
+    }
 
 	@Override
 	public JBlock getOnCreateOptionsMenuMethodBody() {
@@ -592,7 +553,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 		initIfNonConfigurationNotNullBlock = initBody._if(initNonConfigurationInstance.ne(_null()))._then();
 	}
 
-	public JMethod getGetLastNonConfigurationInstance() throws JClassAlreadyExistsException {
+	public JMethod getGetLastNonConfigurationInstance() throws JClassAlreadyExistsException  {
 		if (getLastNonConfigurationInstance == null) {
 			setGetLastNonConfigurationInstance();
 		}
