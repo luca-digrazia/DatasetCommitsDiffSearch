@@ -17,7 +17,6 @@ import org.jboss.classfilewriter.ClassFile;
 import org.jboss.classfilewriter.ClassMethod;
 import org.jboss.classfilewriter.code.BranchEnd;
 import org.jboss.classfilewriter.code.CodeAttribute;
-import org.jboss.classfilewriter.util.DescriptorUtils;
 import org.jboss.invocation.proxy.ProxyConfiguration;
 import org.jboss.invocation.proxy.ProxyFactory;
 import org.jboss.shamrock.deployment.ClassOutput;
@@ -176,9 +175,6 @@ public class BytecodeRecorderImpl implements BytecodeRecorder {
             if (params[i] instanceof Class) {
                 continue;
             }
-            if(params[i] instanceof Enum) {
-                continue;
-            }
             Annotation[] annotations = method.getParameterAnnotations()[i];
             boolean found = false;
             for (Annotation j : annotations) {
@@ -274,11 +270,6 @@ public class BytecodeRecorderImpl implements BytecodeRecorder {
                             } else {
                                 ca.ldc((String) param);
                             }
-                        }  else if (param instanceof Enum) {
-                            Enum e = (Enum) param;
-                            ca.ldc(e.name());
-                            ca.invokestatic(e.getDeclaringClass().getName(), "valueOf", "(Ljava/lang/String;)" + DescriptorUtils.makeDescriptor(e.getDeclaringClass()));
-
                         } else if (param instanceof Boolean) {
                             ca.ldc((boolean) param ? 1 : 0);
                         } else if (param instanceof NewInstance) {
