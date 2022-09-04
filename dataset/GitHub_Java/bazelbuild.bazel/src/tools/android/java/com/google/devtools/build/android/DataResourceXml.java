@@ -111,9 +111,9 @@ public class DataResourceXml implements DataResource {
                 resourceAttribute,
                 namespaces);
           if (resourceAttribute.isCombining()) {
-            combiningConsumer.accept(fqn, resource);
+            combiningConsumer.consume(fqn, resource);
           } else {
-            overwritingConsumer.accept(fqn, resource);
+            overwritingConsumer.consume(fqn, resource);
           }
         }
         // Process resource declarations.
@@ -149,7 +149,7 @@ public class DataResourceXml implements DataResource {
             FullyQualifiedName key = fqnFactory.create(resourceType, elementName);
             XmlResourceValue xmlResourceValue =
                 parseXmlElements(resourceType, eventReader, start, namespacesCollector);
-            consumer.accept(
+            consumer.consume(
                 key,
                 DataResourceXml.createWithNamespaces(
                     path, xmlResourceValue, namespacesCollector.toNamespaces()));
