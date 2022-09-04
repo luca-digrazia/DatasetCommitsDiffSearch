@@ -67,15 +67,14 @@ public class InputEventListener {
             return;
         }
 
-        final IOState<MessageInput> inputState = inputRegistry.getInputState(inputCreatedEvent.id());
-        if (inputState != null) {
-            inputRegistry.remove(inputState);
-        }
-
         if (!input.isGlobal() && !this.nodeId.toString().equals(input.getNodeId())) {
             return;
         }
 
+        final IOState<MessageInput> inputState = inputRegistry.getInputState(inputCreatedEvent.id());
+        if (inputState != null) {
+            inputRegistry.remove(inputState);
+        }
         final MessageInput messageInput;
         try {
             messageInput = inputService.getMessageInput(input);
