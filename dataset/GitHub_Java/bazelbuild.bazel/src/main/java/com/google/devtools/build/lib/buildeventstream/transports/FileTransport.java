@@ -48,7 +48,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
@@ -145,7 +144,8 @@ abstract class FileTransport implements BuildEventTransport {
       } catch (ExecutionException e) {
         Throwables.throwIfUnchecked(e.getCause());
         exitFailure(e);
-      } catch (IOException | InterruptedException | CancellationException e) {
+      } catch (Exception e) {
+        Throwables.throwIfUnchecked(e);
         exitFailure(e);
       } finally {
         try {
