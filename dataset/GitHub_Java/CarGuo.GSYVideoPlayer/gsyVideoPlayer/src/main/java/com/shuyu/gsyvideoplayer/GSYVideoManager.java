@@ -16,12 +16,10 @@ import com.shuyu.gsyvideoplayer.listener.GSYMediaPlayerListener;
 import com.shuyu.gsyvideoplayer.model.GSYModel;
 
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Method;
 import java.util.Map;
 
 import tv.danmaku.ijk.media.exo.IjkExoMediaPlayer;
 import tv.danmaku.ijk.media.player.IMediaPlayer;
-import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 
 /**
  * 视频管理，单例
@@ -41,11 +39,12 @@ public class GSYVideoManager implements IMediaPlayer.OnPreparedListener, IMediaP
     public static final int HANDLER_SETDISPLAY = 1;
     public static final int HANDLER_RELEASE = 2;
 
-    private IjkMediaPlayer mediaPlayer;
+    private IjkExoMediaPlayer mediaPlayer;
     private HandlerThread mMediaHandlerThread;
     private MediaHandler mMediaHandler;
     private Handler mainThreadHandler;
 
+    private Context context;
     private WeakReference<GSYMediaPlayerListener> listener;
     private WeakReference<GSYMediaPlayerListener> lastListener;
 
@@ -55,11 +54,18 @@ public class GSYVideoManager implements IMediaPlayer.OnPreparedListener, IMediaP
     private int currentVideoHeight = 0; //当前播放的视屏的高
     private int lastState;//当前视频的最后状态
 
-
-    public static synchronized GSYVideoManager instance() {
+    /**
+     * 初始化，必须的
+     *
+     * @param context
+     */
+    public static void initVideo(Context context) {
         if (videoManager == null) {
-            videoManager = new GSYVideoManager();
+            videoManager = new GSYVideoManager(context);
         }
+    }
+
+    public static GSYVideoManager instance() {
         return videoManager;
     }
 
@@ -106,8 +112,9 @@ public class GSYVideoManager implements IMediaPlayer.OnPreparedListener, IMediaP
             this.lastListener = new WeakReference<>(lastListener);
     }
 
-    public GSYVideoManager() {
-        mediaPlayer = new IjkMediaPlayer();
+    public GSYVideoManager(Context context) {
+        this.context = context;
+        mediaPlayer = new IjkExoMediaPlayer(context);
         mMediaHandlerThread = new HandlerThread(TAG);
         mMediaHandlerThread.start();
         mMediaHandler = new MediaHandler((mMediaHandlerThread.getLooper()));
@@ -128,15 +135,13 @@ public class GSYVideoManager implements IMediaPlayer.OnPreparedListener, IMediaP
                         currentVideoWidth = 0;
                         currentVideoHeight = 0;
                         mediaPlayer.release();
-                        mediaPlayer = new IjkMediaPlayer();
+                        mediaPlayer = new IjkExoMediaPlayer(context);
                         mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-                        Class<IjkMediaPlayer> clazz = IjkMediaPlayer.class;
-                        Method method = clazz.getDeclaredMethod("setDataSource", String.class, Map.class);
-                        method.invoke(mediaPlayer, ((GSYModel) msg.obj).getUrl(), ((GSYModel) msg.obj).getMapHeadData());
+                        mediaPlayer.setDataSource(context, Uri.parse(((GSYModel) msg.obj).getUrl()), ((GSYModel) msg.obj).getMapHeadData());
+                        mediaPlayer.setOnPreparedListener(GSYVideoManager.this);
                         mediaPlayer.setOnCompletionListener(GSYVideoManager.this);
                         mediaPlayer.setOnBufferingUpdateListener(GSYVideoManager.this);
                         mediaPlayer.setScreenOnWhilePlaying(true);
-                        mediaPlayer.setOnPreparedListener(GSYVideoManager.this);
                         mediaPlayer.setOnSeekCompleteListener(GSYVideoManager.this);
                         mediaPlayer.setOnErrorListener(GSYVideoManager.this);
                         mediaPlayer.setOnInfoListener(GSYVideoManager.this);
@@ -153,6 +158,11 @@ public class GSYVideoManager implements IMediaPlayer.OnPreparedListener, IMediaP
                         Surface holder = (Surface) msg.obj;
                         if (holder.isValid()) {
                             mediaPlayer.setSurface(holder);
+                            //exoPlayer在一些手机上在onPause后会声音先出来，画面黑一段时间，目前通过seekTo之后重新渲染解决
+                            if (mediaPlayer != null && mediaPlayer.getDuration() > 30
+                                    && mediaPlayer.getCurrentPosition() < mediaPlayer.getDuration()) {
+                                mediaPlayer.seekTo(mediaPlayer.getCurrentPosition() - 20);
+                            }
                         }
                     }
                     break;
@@ -161,7 +171,6 @@ public class GSYVideoManager implements IMediaPlayer.OnPreparedListener, IMediaP
                     break;
             }
         }
-
     }
 
 
@@ -275,7 +284,7 @@ public class GSYVideoManager implements IMediaPlayer.OnPreparedListener, IMediaP
         });
     }
 
-    public IjkMediaPlayer getMediaPlayer() {
+    public IjkExoMediaPlayer getMediaPlayer() {
         return mediaPlayer;
     }
 
