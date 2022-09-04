@@ -497,10 +497,6 @@ public final class AspectFunction implements SkyFunction {
       }
     } catch (AspectCreationException e) {
       throw new AspectFunctionException(e);
-    } catch (ToolchainException e) {
-      throw new AspectFunctionException(
-          new AspectCreationException(
-              e.getMessage(), new LabelCause(key.getLabel(), e.getMessage())));
     }
   }
 
