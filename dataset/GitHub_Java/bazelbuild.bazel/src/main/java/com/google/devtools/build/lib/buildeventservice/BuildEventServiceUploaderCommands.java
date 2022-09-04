@@ -131,7 +131,6 @@ public class BuildEventServiceUploaderCommands {
       return localFileUpload;
     }
 
-    @Override
     public long getSequenceNumber() {
       return sequenceNumber;
     }
