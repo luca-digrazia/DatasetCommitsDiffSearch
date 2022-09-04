@@ -78,6 +78,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
    * Value class for all the data needed to create a {@link CppConfiguration}.
    */
   public static class CppConfigurationParameters {
+    protected final CrosstoolConfig.CToolchain toolchain;
     protected final CrosstoolConfigurationLoader.CrosstoolFile crosstoolFile;
     protected final String cacheKeySuffix;
     protected final BuildConfiguration.Options commonOptions;
@@ -89,9 +90,9 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
     protected final Label fdoOptimizeLabel;
     protected final Label sysrootLabel;
     protected final CpuTransformer cpuTransformer;
-    protected final CrosstoolInfo crosstoolInfo;
 
     CppConfigurationParameters(
+        CrosstoolConfig.CToolchain toolchain,
         CrosstoolConfigurationLoader.CrosstoolFile crosstoolFile,
         String cacheKeySuffix,
         BuildOptions buildOptions,
@@ -101,8 +102,8 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
         Label ccToolchainLabel,
         Label stlLabel,
         Label sysrootLabel,
-        CpuTransformer cpuTransformer,
-        CrosstoolInfo crosstoolInfo) {
+        CpuTransformer cpuTransformer) {
+      this.toolchain = toolchain;
       this.crosstoolFile = crosstoolFile;
       this.cacheKeySuffix = cacheKeySuffix;
       this.commonOptions = buildOptions.get(BuildConfiguration.Options.class);
@@ -114,7 +115,6 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
       this.stlLabel = stlLabel;
       this.sysrootLabel = sysrootLabel;
       this.cpuTransformer = cpuTransformer;
-      this.crosstoolInfo = crosstoolInfo;
     }
   }
 
@@ -241,19 +241,11 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
               : CrosstoolConfigurationLoader.getToolchainByIdentifier(
                   file.getProto(), identifier, desiredCpu, cppOptions.cppCompiler);
     }
-    toolchain =
-        CppToolchainInfo.addLegacyFeatures(
-            toolchain, crosstoolTopLabel.getPackageIdentifier().getPathUnderExecRoot());
-
-    CrosstoolInfo crosstoolInfo =
-        CrosstoolInfo.fromToolchain(
-            file.getProto(),
-            toolchain,
-            crosstoolTopLabel.getPackageIdentifier().getPathUnderExecRoot());
 
     Label sysrootLabel = getSysrootLabel(toolchain, cppOptions.libcTopLabel);
 
     return new CppConfigurationParameters(
+        toolchain,
         file,
         file.getMd5(),
         options,
@@ -263,15 +255,13 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
         ccToolchainLabel,
         stlLabel,
         sysrootLabel,
-        cpuTransformer,
-        crosstoolInfo);
+        cpuTransformer);
   }
 
   @Nullable
   public static Label getSysrootLabel(CrosstoolConfig.CToolchain toolchain, Label libcTopLabel)
       throws InvalidConfigurationException {
-    PathFragment defaultSysroot =
-        CppConfiguration.computeDefaultSysroot(toolchain.getBuiltinSysroot());
+    PathFragment defaultSysroot = CppConfiguration.computeDefaultSysroot(toolchain);
 
     if ((libcTopLabel != null) && (defaultSysroot == null)) {
       throw new InvalidConfigurationException(

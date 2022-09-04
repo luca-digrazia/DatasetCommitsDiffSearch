@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 import com.google.protobuf.TextFormat;
 import com.google.protobuf.TextFormat.ParseException;
 import com.google.protobuf.UninitializedMessageException;
@@ -294,7 +295,9 @@ public class CrosstoolConfigurationLoader {
       throws InvalidConfigurationException {
     CrosstoolConfigurationIdentifier config =
         CrosstoolConfigurationIdentifier.fromOptions(options);
-    return selectToolchain(release, config, cpuTransformer);
+    CppOptions cppOptions = options.get(CppOptions.class);
+    return selectToolchain(
+        release, config, cppOptions.getLipoMode(), cppOptions.convertLipoToThinLto, cpuTransformer);
   }
 
   /**
@@ -311,6 +314,8 @@ public class CrosstoolConfigurationLoader {
   public static CrosstoolConfig.CToolchain selectToolchain(
       CrosstoolConfig.CrosstoolRelease release,
       CrosstoolConfigurationIdentifier config,
+      LipoMode lipoMode,
+      boolean convertLipoToThinLto,
       Function<String, String> cpuTransformer)
       throws InvalidConfigurationException {
     if (config.getCompiler() != null) {
@@ -345,7 +350,11 @@ public class CrosstoolConfigurationLoader {
     // We use fake CPU values to allow cross-platform builds for other languages that use the
     // C++ toolchain. Translate to the actual target architecture.
     String desiredCpu = cpuTransformer.apply(config.getCpu());
+    boolean needsLipo = lipoMode != LipoMode.OFF && !convertLipoToThinLto;
     for (CrosstoolConfig.DefaultCpuToolchain selector : release.getDefaultToolchainList()) {
+      if (needsLipo && !selector.getSupportsLipo()) {
+        continue;
+      }
       if (selector.getCpu().equals(desiredCpu)) {
         selectedIdentifier = selector.getToolchainIdentifier();
         break;
@@ -417,7 +426,7 @@ public class CrosstoolConfigurationLoader {
     }
   }
 
-  protected static CrosstoolConfig.CrosstoolRelease getCrosstoolReleaseProto(
+  public static CrosstoolConfig.CrosstoolRelease getCrosstoolReleaseProto(
       ConfigurationEnvironment env,
       BuildOptions options,
       Label crosstoolTop,
