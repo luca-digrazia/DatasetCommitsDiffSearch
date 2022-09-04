@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.lookup;
 
@@ -27,7 +27,6 @@ import org.graylog2.lookup.db.DBLookupTableService;
 import org.graylog2.lookup.dto.CacheDto;
 import org.graylog2.lookup.dto.DataAdapterDto;
 import org.graylog2.lookup.dto.LookupTableDto;
-import org.graylog2.lookup.events.AdapterSharedStoresUpdated;
 import org.graylog2.lookup.events.CachesDeleted;
 import org.graylog2.lookup.events.CachesUpdated;
 import org.graylog2.lookup.events.DataAdaptersDeleted;
@@ -248,18 +247,6 @@ public class LookupTableService extends AbstractIdleService {
             // stop old caches
             existingCaches.build().forEach(AbstractIdleService::stopAsync);
         }, 0, TimeUnit.SECONDS);
-    }
-
-    @Subscribe
-    public void handleAdapterSharedStoreUpdate(AdapterSharedStoresUpdated updated) {
-        // When one node updates the data store shared by other data adapter instances in
-        // a cluster, then we need to purge the caches that depend on that data adapter on each node
-        scheduler.schedule(() -> updated.ids().stream().forEach( dataAdapterId -> {
-            liveTables.values().stream()
-                    .filter(table -> table.dataAdapter().id().equals(dataAdapterId))
-                    .map(LookupTable::cache)
-                    .forEach(LookupCache::purge);
-                }), 0, TimeUnit.SECONDS);
     }
 
     @Subscribe
