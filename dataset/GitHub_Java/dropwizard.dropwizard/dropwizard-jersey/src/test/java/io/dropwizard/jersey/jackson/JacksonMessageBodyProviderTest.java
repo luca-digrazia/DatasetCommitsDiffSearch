@@ -11,7 +11,6 @@ import com.sun.jersey.core.util.StringKeyObjectValueIgnoreCaseMultivaluedMap;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.validation.ConstraintViolations;
 import io.dropwizard.validation.Validated;
-import org.hibernate.validator.constraints.NotEmpty;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -58,13 +57,6 @@ public class JacksonMessageBodyProviderTest {
         public boolean equals(Object obj) {
             return Objects.equal(this.id, obj);
         }
-    }
-
-    public static class ListExample {
-        @NotEmpty
-        @Valid
-        @JsonProperty
-        List<Example> examples;
     }
 
     public interface Partial1{}
@@ -524,52 +516,6 @@ public class JacksonMessageBodyProviderTest {
             assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
                     .contains("id must be greater than or equal to 0 (was -1)",
                             "id must be greater than or equal to 0 (was -2)");
-        }
-    }
-
-    @Test
-    public void returnsValidatedEmbeddedListRequestEntities() throws IOException {
-        final Annotation valid = mock(Annotation.class);
-        doReturn(Valid.class).when(valid).annotationType();
-
-        final ByteArrayInputStream entity =
-                new ByteArrayInputStream("[ {\"examples\": [ {\"id\":1 } ] } ]".getBytes());
-        Class<?> klass = List.class;
-
-        final Object obj = provider.readFrom((Class<Object>) klass,
-                new TypeToken<List<ListExample>>() {}.getType(),
-                new Annotation[]{ valid },
-                MediaType.APPLICATION_JSON_TYPE,
-                new MultivaluedMapImpl(),
-                entity);
-
-        assertThat(obj)
-                .isInstanceOf(klass);
-
-        Iterator<ListExample> iterator = ((Iterable<ListExample>)obj).iterator();
-        assertThat(iterator.next().examples.get(0).id).isEqualTo(1);
-    }
-
-    @Test
-    public void throwsAnInvalidEntityExceptionForInvalidEmbeddedListRequestEntities() throws Exception {
-        final Annotation valid = mock(Annotation.class);
-        doReturn(Valid.class).when(valid).annotationType();
-
-        final ByteArrayInputStream entity =
-                new ByteArrayInputStream("[ {\"examples\": [ {\"id\":1 } ] }, { } ]".getBytes());
-
-        try {
-            final Class<?> klass = List.class;
-            provider.readFrom((Class<Object>) klass,
-                    new TypeToken<List<ListExample>>() {}.getType(),
-                    new Annotation[]{ valid },
-                    MediaType.APPLICATION_JSON_TYPE,
-                    new MultivaluedMapImpl(),
-                    entity);
-            failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
-        } catch (ConstraintViolationException e) {
-            assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
-                    .containsOnly("examples may not be empty (was null)");
         }
     }
 

@@ -5,8 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.jaxrs.json.JacksonJaxbJsonProvider;
 import io.dropwizard.validation.ConstraintViolations;
 import io.dropwizard.validation.Validated;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.validation.ConstraintViolation;
 import javax.validation.ConstraintViolationException;
@@ -31,7 +29,6 @@ import java.util.*;
  * {@link JsonIgnoreType}.)
  */
 public class JacksonMessageBodyProvider extends JacksonJaxbJsonProvider {
-    private static final Logger LOGGER = LoggerFactory.getLogger(JsonProcessingExceptionMapper.class);
     /**
      * The default group array used in case any of the validate methods is called without a group.
      */
@@ -95,11 +92,8 @@ public class JacksonMessageBodyProvider extends JacksonJaxbJsonProvider {
             }
 
             if (violations != null && !violations.isEmpty()) {
-                Set<ConstraintViolation<?>> constraintViolations = ConstraintViolations.copyOf(violations);
-                LOGGER.trace("Validation failed: {}; original data was {}",
-                        ConstraintViolations.formatUntyped(constraintViolations), value);
                 throw new ConstraintViolationException("The request entity had the following errors:",
-                        constraintViolations);
+                        ConstraintViolations.copyOf(violations));
             }
         }
 
