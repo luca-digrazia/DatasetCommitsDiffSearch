@@ -19,33 +19,50 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.base.Supplier;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ProtoUtils;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
+import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
+import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.AllowedRuleClassInfo;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.AttributeDefinition;
+import com.google.devtools.build.lib.query2.proto.proto2api.Build.AttributeValue;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.BuildLanguage;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.RuleDefinition;
-import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
+import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.OsUtils;
+import com.google.devtools.build.lib.util.ProcessUtils;
 import com.google.devtools.build.lib.util.StringUtilities;
-import com.google.devtools.common.options.OptionsProvider;
+import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.common.options.OptionsParsingResult;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryUsage;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * An item that is returned by <code>blaze info</code>.
@@ -94,17 +111,18 @@ public abstract class InfoItem {
 
   /**
    * Returns the value of the info key. The return value is directly printed to stdout.
-   * @param env TODO(lpino):
    */
-  public abstract byte[] get(Supplier<BuildConfiguration> configurationSupplier,
-      CommandEnvironment env) throws AbruptExitException;
+  public abstract byte[] get(
+      Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
+      throws AbruptExitException, InterruptedException;
 
-  private static byte[] print(Object value) {
+  protected static byte[] print(Object value) {
     if (value instanceof byte[]) {
       return (byte[]) value;
     }
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-    PrintWriter writer = new PrintWriter(outputStream);
+    PrintWriter writer = new PrintWriter(new OutputStreamWriter(
+        outputStream, StandardCharsets.UTF_8));
     writer.print(value + "\n");
     writer.flush();
     return outputStream.toByteArray();
@@ -149,9 +167,9 @@ public abstract class InfoItem {
    * Info item for the output_base directory.
    */
   public static final class OutputBaseInfoItem extends InfoItem {
-    public OutputBaseInfoItem() {
+    public OutputBaseInfoItem(String productName) {
       super("output_base",
-          "A directory for shared " + Constants.PRODUCT_NAME
+          "A directory for shared " + productName
           + " state as well as tool and strategy specific subdirectories.",
           false);
     }
@@ -178,7 +196,8 @@ public abstract class InfoItem {
     public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
         throws AbruptExitException {
       checkNotNull(env);
-      return print(env.getRuntime().getWorkspace().getExecRoot());
+      return print(env.getDirectories().getExecRoot(
+          configurationSupplier.get().getMainRepositoryName()));
     }
   }
 
@@ -196,7 +215,8 @@ public abstract class InfoItem {
     public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
         throws AbruptExitException {
       checkNotNull(env);
-      return print(env.getRuntime().getWorkspace().getOutputPath());
+      return print(
+          env.getDirectories().getOutputPath(configurationSupplier.get().getMainRepositoryName()));
     }
   }
 
@@ -217,7 +237,7 @@ public abstract class InfoItem {
     public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
         throws AbruptExitException {
       checkNotNull(configurationSupplier);
-      return print(configurationSupplier.get().getBinDirectory().getPath());
+      return print(configurationSupplier.get().getBinDirectory(RepositoryName.MAIN).getRoot());
     }
   }
 
@@ -238,7 +258,7 @@ public abstract class InfoItem {
     public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
         throws AbruptExitException {
       checkNotNull(configurationSupplier);
-      return print(configurationSupplier.get().getGenfilesDirectory().getPath());
+      return print(configurationSupplier.get().getGenfilesDirectory(RepositoryName.MAIN).getRoot());
     }
   }
 
@@ -259,45 +279,33 @@ public abstract class InfoItem {
     public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
         throws AbruptExitException {
       checkNotNull(configurationSupplier);
-      return print(configurationSupplier.get().getTestLogsDirectory().getPath());
+      return print(configurationSupplier.get().getTestLogsDirectory(RepositoryName.MAIN).getRoot());
     }
   }
 
-  /**
-   * Info item for the command log
-   */
-  public static final class CommandLogInfoItem extends InfoItem {
-    public CommandLogInfoItem() {
-      super("command_log",
-          "Location of the log containg the output from the build commands.",
-          false);
+  /** Info item for server_log path. */
+  public static class ServerLogInfoItem extends InfoItem {
+    private static final Logger logger = Logger.getLogger(ServerLogInfoItem.class.getName());
+
+    /**
+     * Constructs an info item for the server log path.
+     *
+     * @param productName name of the tool whose server log path will be queried
+     */
+    public ServerLogInfoItem(String productName) {
+      super("server_log", productName + " server log path", false);
     }
 
     @Override
     public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
         throws AbruptExitException {
-      checkNotNull(env);
-      return print(BlazeCommandDispatcher.getCommandLogPath(
-          env.getRuntime().getWorkspace().getOutputBase()));
-    }
-  }
-
-  /**
-   * Info item for the message log
-   */
-  public static final class MessageLogInfoItem extends InfoItem {
-    public MessageLogInfoItem() {
-      super("message_log" ,
-      "Location of a log containing machine readable message in LogMessage protobuf format.",
-      false);
-    }
-
-    @Override
-    public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
-        throws AbruptExitException {
-      checkNotNull(configurationSupplier);
-      // NB: Duplicated in EventLogModule
-      return print(env.getRuntime().getWorkspace().getOutputBase().getRelative("message.log"));
+      try {
+        Optional<Path> path = env.getRuntime().getServerLogPath();
+        return print(path.map(Path::toString).orElse(""));
+      } catch (IOException e) {
+        logger.log(Level.WARNING, "Failed to determine server log location", e);
+        return print("UNKNOWN LOG LOCATION");
+      }
     }
   }
 
@@ -331,7 +339,7 @@ public abstract class InfoItem {
     @Override
     public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
         throws AbruptExitException {
-      return print(OsUtils.getpid());
+      return print(ProcessUtils.getpid());
     }
   }
 
@@ -339,9 +347,9 @@ public abstract class InfoItem {
    * Info item for package_path
    */
   public static final class PackagePathInfoItem extends InfoItem {
-    private final OptionsProvider commandOptions;
+    private final OptionsParsingResult commandOptions;
 
-    public PackagePathInfoItem(OptionsProvider commandOptions) {
+    public PackagePathInfoItem(OptionsParsingResult commandOptions) {
       super("package_path",
           "The search path for resolving package labels.",
           false);
@@ -449,7 +457,7 @@ public abstract class InfoItem {
         throws AbruptExitException {
       // The documentation is not very clear on what it means to have more than
       // one GC MXBean, so we just sum them up.
-      int gcCount = 0;
+      long gcCount = 0;
       for (GarbageCollectorMXBean gcBean : ManagementFactory.getGarbageCollectorMXBeans()) {
         gcCount += gcBean.getCollectionCount();
       }
@@ -457,9 +465,82 @@ public abstract class InfoItem {
     }
   }
 
-  /**
-   * Info item for the gc-time
-   */
+  /** Info item for the name and version of the Java runtime environment. */
+  public static final class JavaRuntimeInfoItem extends InfoItem {
+    public JavaRuntimeInfoItem() {
+      super("java-runtime", "Name and version of the current Java runtime environment.", false);
+    }
+
+    @Override
+    public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
+        throws AbruptExitException {
+      return print(
+          String.format(
+              "%s (build %s) by %s",
+              System.getProperty("java.runtime.name", "Unknown runtime"),
+              System.getProperty("java.runtime.version", "unknown"),
+              System.getProperty("java.vendor", "unknown")));
+    }
+  }
+
+  /** Info item for the name and version of the Java VM. */
+  public static final class JavaVirtualMachineInfoItem extends InfoItem {
+    public JavaVirtualMachineInfoItem() {
+      super("java-vm", "Name and version of the current Java virtual machine.", false);
+    }
+
+    @Override
+    public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
+        throws AbruptExitException {
+      return print(
+          String.format(
+              "%s (build %s, %s) by %s",
+              System.getProperty("java.vm.name", "Unknown VM"),
+              System.getProperty("java.vm.version", "unknown"),
+              System.getProperty("java.vm.info", "unknown"),
+              System.getProperty("java.vm.vendor", "unknown")));
+    }
+  }
+
+  /** Info item for the location of the Java runtime. */
+  public static final class JavaHomeInfoItem extends InfoItem {
+    public JavaHomeInfoItem() {
+      super("java-home", "Location of the current Java runtime.", false);
+    }
+
+    @Override
+    public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
+        throws AbruptExitException {
+      String javaHome = System.getProperty("java.home");
+      if (javaHome == null) {
+        return print("unknown");
+      }
+      // Tunnel through a Path object in order to normalize the representation of the path.
+      Path javaHomePath = env.getRuntime().getFileSystem().getPath(javaHome);
+      return print(javaHomePath.getPathString());
+    }
+  }
+
+  /** Info item for the current character encoding settings. */
+  public static final class CharacterEncodingInfoItem extends InfoItem {
+    public CharacterEncodingInfoItem() {
+      super(
+          "character-encoding",
+          "Information about the character encoding used by the running JVM.",
+          false);
+    }
+
+    @Override
+    public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
+        throws AbruptExitException {
+      return print(
+          String.format(
+              "file.encoding = %s, defaultCharset = %s",
+              System.getProperty("file.encoding", "unknown"), Charset.defaultCharset().name()));
+    }
+  }
+
+  /** Info item for the gc-time */
   public static final class GcTimeInfoItem extends InfoItem {
     public GcTimeInfoItem() {
       super("gc-time",
@@ -472,7 +553,7 @@ public abstract class InfoItem {
         throws AbruptExitException {
       // The documentation is not very clear on what it means to have more than
       // one GC MXBean, so we just sum them up.
-      int gcTime = 0;
+      long gcTime = 0;
       for (GarbageCollectorMXBean gcBean : ManagementFactory.getGarbageCollectorMXBeans()) {
         gcTime += gcBean.getCollectionTime();
       }
@@ -480,25 +561,79 @@ public abstract class InfoItem {
     }
   }
 
-  /**
-   * Info item for the default package. It is deprecated, it still works, when
-   * explicitly requested, but are not shown by default. It prints multi-line messages and thus
-   * don't play well with grep. We don't print them unless explicitly requested.
-   * @deprecated
-   */
-  @Deprecated
-  public static final class DefaultsPackageInfoItem extends InfoItem {
-    public DefaultsPackageInfoItem() {
-      super("defaults-package",
-          "Default packages used as implicit dependencies",
+  /** Info item for the effective current client environment. */
+  public static final class ClientEnv extends InfoItem {
+    public ClientEnv() {
+      super(
+          "client-env",
+          "The specifications that need to be added to the project-specific rc file to freeze the"
+              + " current client environment",
           true);
     }
 
     @Override
     public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
         throws AbruptExitException {
+      String result = "";
+      for (Map.Entry<String, String> entry : env.getWhitelistedActionEnv().entrySet()) {
+        // TODO(bazel-team): as the syntax of our rc-files does not support to express new-lines in
+        // values, we produce syntax errors if the value of the entry contains a newline character.
+        result += "build --action_env=" + entry.getKey() + "=" + entry.getValue() + "\n";
+      }
+      for (Map.Entry<String, String> entry : env.getWhitelistedTestEnv().entrySet()) {
+        // TODO(bazel-team): as the syntax of our rc-files does not support to express new-lines in
+        // values, we produce syntax errors if the value of the entry contains a newline character.
+        result += "build --test_env=" + entry.getKey() + "=" + entry.getValue() + "\n";
+      }
+      return print(result);
+    }
+  }
+
+  /**
+   * Info item for the effective current set of Starlark semantics option values.
+   *
+   * <p>This is hidden because its output is verbose and may be multiline.
+   */
+  public static final class StarlarkSemanticsInfoItem extends InfoItem {
+    private final OptionsParsingResult commandOptions;
+
+    StarlarkSemanticsInfoItem(OptionsParsingResult commandOptions) {
+      super(
+          /*name=*/ "starlark-semantics",
+          /*description=*/ "The effective set of Starlark semantics option values.",
+          /*hidden=*/ true);
+      this.commandOptions = commandOptions;
+    }
+
+    @Override
+    public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env) {
+      StarlarkSemanticsOptions starlarkSemanticsOptions =
+          commandOptions.getOptions(StarlarkSemanticsOptions.class);
+      SkyframeExecutor skyframeExecutor = env.getBlazeWorkspace().getSkyframeExecutor();
+      StarlarkSemantics effectiveSkylarkSemantics =
+          skyframeExecutor.getEffectiveStarlarkSemantics(starlarkSemanticsOptions);
+      return print(effectiveSkylarkSemantics.toDeterministicString());
+    }
+  }
+
+  /**
+   * Info item for the default package. It is deprecated, it still works, when explicitly requested,
+   * but are not shown by default. It prints multi-line messages and thus don't play well with grep.
+   * We don't print them unless explicitly requested.
+   *
+   * @deprecated
+   */
+  // TODO(lberki): Try to remove this using an incompatible flag.
+  @Deprecated
+  public static final class DefaultsPackageInfoItem extends InfoItem {
+    public DefaultsPackageInfoItem() {
+      super("defaults-package", "Obsolete. Retained for backwards compatibility.", true);
+    }
+
+    @Override
+    public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env) {
       checkNotNull(env);
-      return print(env.getRuntime().getDefaultsPackageContent());
+      return print("");
     }
   }
 
@@ -512,7 +647,7 @@ public abstract class InfoItem {
       info.setPolicy(AllowedRuleClassInfo.AllowedRuleClasses.SPECIFIED);
       Predicate<RuleClass> filter = attr.getAllowedRuleClassesPredicate();
       for (RuleClass otherClass : Iterables.filter(ruleClasses, filter)) {
-        if (otherClass.isDocumented()) {
+        if (!isAbstractRule(otherClass)) {
           info.addAllowedRuleClass(otherClass.getName());
         }
       }
@@ -521,35 +656,54 @@ public abstract class InfoItem {
     return info.build();
   }
 
+  private static boolean isAbstractRule(RuleClass c) {
+    return c.getName().startsWith("$");
+  }
+
   /**
    * Returns a byte array containing a proto-buffer describing the build language.
    */
   private static byte[] getBuildLanguageDefinition(RuleClassProvider provider) {
     BuildLanguage.Builder resultPb = BuildLanguage.newBuilder();
-    Collection<RuleClass> ruleClasses = provider.getRuleClassMap().values();
-    for (RuleClass ruleClass : ruleClasses) {
-      if (!ruleClass.isDocumented()) {
+    ImmutableList<RuleClass> sortedRuleClasses =
+        ImmutableList.sortedCopyOf(
+            Comparator.comparing(RuleClass::getName), provider.getRuleClassMap().values());
+    for (RuleClass ruleClass : sortedRuleClasses) {
+      if (isAbstractRule(ruleClass)) {
         continue;
       }
 
       RuleDefinition.Builder rulePb = RuleDefinition.newBuilder();
       rulePb.setName(ruleClass.getName());
-      for (Attribute attr : ruleClass.getAttributes()) {
-        if (!attr.isDocumented()) {
-          continue;
-        }
 
+      ImmutableList<Attribute> sortedAttributeDefinitions =
+          ImmutableList.sortedCopyOf(
+              Comparator.comparing(Attribute::getName), ruleClass.getAttributes());
+      for (Attribute attr : sortedAttributeDefinitions) {
+        Type<?> t = attr.getType();
         AttributeDefinition.Builder attrPb = AttributeDefinition.newBuilder();
         attrPb.setName(attr.getName());
-        // The protocol compiler, in its infinite wisdom, generates the field as one of the
-        // integer type and the getTypeEnum() method is missing. WTF?
-        attrPb.setType(ProtoUtils.getDiscriminatorFromType(attr.getType()));
+        attrPb.setType(ProtoUtils.getDiscriminatorFromType(t));
         attrPb.setMandatory(attr.isMandatory());
+        attrPb.setAllowEmpty(!attr.isNonEmpty());
+        attrPb.setAllowSingleFile(attr.isSingleArtifact());
+        attrPb.setConfigurable(attr.isConfigurable());
+        attrPb.setCfgIsHost(attr.getTransitionFactory().isHost());
 
-        if (BuildType.isLabelType(attr.getType())) {
-          attrPb.setAllowedRuleClasses(getAllowedRuleClasses(ruleClasses, attr));
+        // Encode default value, if simple.
+        Object v = attr.getDefaultValueUnchecked();
+        if (!(v == null
+            || v instanceof Attribute.ComputedDefault
+            || v instanceof Attribute.SkylarkComputedDefaultTemplate
+            || v instanceof Attribute.LateBoundDefault
+            || v == t.getDefaultValue())) {
+          attrPb.setDefault(convertAttrValue(t, v));
         }
-
+        attrPb.setExecutable(attr.isExecutable());
+        if (BuildType.isLabelType(t)) {
+          attrPb.setAllowedRuleClasses(getAllowedRuleClasses(sortedRuleClasses, attr));
+          attrPb.setNodep(t.getLabelClass() == Type.LabelClass.NONDEP_REFERENCE);
+        }
         rulePb.addAttribute(attrPb);
       }
 
@@ -557,6 +711,44 @@ public abstract class InfoItem {
     }
 
     return resultPb.build().toByteArray();
+  }
+
+  // convertAttrValue converts attribute value v of type to t an AttributeValue message.
+  private static AttributeValue convertAttrValue(Type<?> t, Object v) {
+    AttributeValue.Builder b = AttributeValue.newBuilder();
+    if (v instanceof Map) {
+      Type.DictType<?, ?> dictType = (Type.DictType<?, ?>) t;
+      for (Map.Entry<?, ?> entry : ((Map<?, ?>) v).entrySet()) {
+        b.addDictBuilder()
+            .setKey(entry.getKey().toString())
+            .setValue(convertAttrValue(dictType.getValueType(), entry.getValue()))
+            .build();
+      }
+    } else if (v instanceof List) {
+      for (Object elem : (List<?>) v) {
+        b.addList(convertAttrValue(t.getListElementType(), elem));
+      }
+    } else if (t == BuildType.LICENSE) {
+      // TODO(adonovan): need dual function of parseLicense.
+      // Treat as empty list for now.
+    } else if (t == BuildType.DISTRIBUTIONS) {
+      // TODO(adonovan): need dual function of parseDistributions.
+      // Treat as empty list for now.
+    } else if (t == Type.STRING) {
+      b.setString((String) v);
+    } else if (t == Type.INTEGER) {
+      b.setInt((Integer) v);
+    } else if (t == Type.BOOLEAN) {
+      b.setBool((Boolean) v);
+    } else if (t == BuildType.TRISTATE) {
+      b.setInt(((TriState) v).toInt());
+    } else if (BuildType.isLabelType(t)) { // case order matters!
+      b.setString(v.toString());
+    } else {
+      // No native rule attribute of this type (FilesetEntry?) has a default value.
+      throw new IllegalStateException("unexpected type of attribute default value: " + t);
+    }
+    return b.build();
   }
 
   /**
@@ -589,9 +781,9 @@ public abstract class InfoItem {
    */
   @Deprecated
   public static final class DefaultPackagePathInfoItem extends InfoItem {
-    private final OptionsProvider commandOptions;
+    private final OptionsParsingResult commandOptions;
 
-    public DefaultPackagePathInfoItem(OptionsProvider commandOptions) {
+    public DefaultPackagePathInfoItem(OptionsParsingResult commandOptions) {
       super("default-package-path",
           "The default package path",
           true);
