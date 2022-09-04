@@ -18,7 +18,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.nio.file.Path;
 
-/** The options for a {@link GenClass} action. */
+/** The options for a {@GenClass} action. */
 public final class GenClassOptions {
 
   /** A builder for {@link GenClassOptions}. */
@@ -26,6 +26,7 @@ public final class GenClassOptions {
     private Path manifest;
     private Path classJar;
     private Path outputJar;
+    private Path tempDir;
 
     public Builder() {}
 
@@ -41,19 +42,25 @@ public final class GenClassOptions {
       this.outputJar = outputJar;
     }
 
+    public void setTempDir(Path tempDir) {
+      this.tempDir = tempDir;
+    }
+
     GenClassOptions build() {
-      return new GenClassOptions(manifest, classJar, outputJar);
+      return new GenClassOptions(manifest, classJar, outputJar, tempDir);
     }
   }
 
   private final Path manifest;
   private final Path classJar;
   private final Path outputJar;
+  private final Path tempDir;
 
-  private GenClassOptions(Path manifest, Path classJar, Path outputJar) {
+  private GenClassOptions(Path manifest, Path classJar, Path outputJar, Path tempDir) {
     this.manifest = checkNotNull(manifest);
     this.classJar = checkNotNull(classJar);
     this.outputJar = checkNotNull(outputJar);
+    this.tempDir = checkNotNull(tempDir);
   }
 
   /** The path to the compilation manifest proto. */
@@ -69,6 +76,11 @@ public final class GenClassOptions {
   /** The path to write the output to. */
   public Path outputJar() {
     return outputJar;
+  }
+
+  /** The path to the temp directory. */
+  public Path tempDir() {
+    return tempDir;
   }
 
   /** Returns a builder for {@link GenClassOptions}. */
