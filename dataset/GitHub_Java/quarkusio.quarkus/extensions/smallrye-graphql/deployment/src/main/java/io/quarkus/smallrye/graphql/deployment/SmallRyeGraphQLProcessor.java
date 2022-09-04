@@ -47,9 +47,9 @@ import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.metrics.MetricsFactory;
 import io.quarkus.smallrye.graphql.runtime.SmallRyeGraphQLRecorder;
 import io.quarkus.smallrye.graphql.runtime.SmallRyeGraphQLRuntimeConfig;
-import io.quarkus.vertx.http.deployment.BodyHandlerBuildItem;
 import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.NonApplicationRootPathBuildItem;
+import io.quarkus.vertx.http.deployment.RequireBodyHandlerBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
 import io.smallrye.graphql.cdi.config.ConfigKey;
@@ -165,6 +165,12 @@ public class SmallRyeGraphQLProcessor {
         reflectiveClassProducer.produce(new ReflectiveClassBuildItem(true, true, getGraphQLJavaClasses()));
     }
 
+    @BuildStep
+    void requireBody(BuildProducer<RequireBodyHandlerBuildItem> requireBodyHandlerProducer) {
+        // Because we need to read the body
+        requireBodyHandlerProducer.produce(new RequireBodyHandlerBuildItem());
+    }
+
     @Record(ExecutionTime.RUNTIME_INIT)
     @BuildStep
     void buildSchemaEndpoint(
@@ -183,7 +189,7 @@ public class SmallRyeGraphQLProcessor {
 
     }
 
-    @Record(ExecutionTime.RUNTIME_INIT)
+    @Record(ExecutionTime.STATIC_INIT)
     @BuildStep
     void buildExecutionEndpoint(
             BuildProducer<RouteBuildItem> routeProducer,
@@ -192,7 +198,6 @@ public class SmallRyeGraphQLProcessor {
             SmallRyeGraphQLRecorder recorder,
             ShutdownContextBuildItem shutdownContext,
             LaunchModeBuildItem launchMode,
-            BodyHandlerBuildItem bodyHandlerBuildItem,
             SmallRyeGraphQLConfig graphQLConfig,
             BeanContainerBuildItem beanContainerBuildItem // don't remove this - makes sure beanContainer is initialized
     ) {
@@ -224,7 +229,7 @@ public class SmallRyeGraphQLProcessor {
         Handler<RoutingContext> executionHandler = recorder.executionHandler(graphQLInitializedBuildItem.getInitialized(),
                 allowGet);
         routeProducer.produce(new RouteBuildItem.Builder()
-                .routeFunction(recorder.routeFunction(graphQLConfig.rootPath, bodyHandlerBuildItem.getHandler()))
+                .route(graphQLConfig.rootPath)
                 .handler(executionHandler)
                 .blockingRoute()
                 .build());
