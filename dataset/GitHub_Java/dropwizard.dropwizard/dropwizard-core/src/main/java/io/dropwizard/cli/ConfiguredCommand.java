@@ -59,9 +59,8 @@ public abstract class ConfiguredCommand<T extends Configuration> extends Command
 
     @Override
     @SuppressWarnings("unchecked")
-    public void run(Bootstrap<?> wildcardBootstrap, Namespace namespace) throws Exception {
-        final Bootstrap<T> bootstrap = (Bootstrap<T>) wildcardBootstrap;
-        configuration = parseConfiguration(bootstrap.getConfigurationFactoryFactory(),
+    public void run(Bootstrap<?> bootstrap, Namespace namespace) throws Exception {
+        configuration = parseConfiguration(((Bootstrap<T>)bootstrap).getConfigurationFactoryFactory(),
                                            bootstrap.getConfigurationSourceProvider(),
                                            bootstrap.getValidatorFactory().getValidator(),
                                            namespace.getString("file"),
@@ -74,7 +73,7 @@ public abstract class ConfiguredCommand<T extends Configuration> extends Command
                                                             bootstrap.getApplication().getName());
             }
 
-            run(bootstrap, namespace, configuration);
+            run((Bootstrap<T>) bootstrap, namespace, configuration);
         } finally {
             if (!asynchronous) {
                 cleanup();
