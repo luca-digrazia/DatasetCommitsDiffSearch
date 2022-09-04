@@ -18,8 +18,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.LocationExpander.Options;
-import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
-import com.google.devtools.build.lib.analysis.stringtemplate.TemplateExpander;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.Type;
@@ -150,8 +148,8 @@ public final class Expander {
       expression = locationExpander.expandAttribute(attributeName, expression);
     }
     try {
-      return TemplateExpander.expand(expression, makeVariableContext);
-    } catch (ExpansionException e) {
+      return MakeVariableExpander.expand(expression, makeVariableContext);
+    } catch (MakeVariableExpander.ExpansionException e) {
       ruleContext.attributeError(attributeName, e.getMessage());
       return expression;
     }
@@ -172,10 +170,14 @@ public final class Expander {
 
   /**
    * Obtains the value of the attribute, expands all values, and returns the resulting list. If the
-   * attribute does not exist or is not of type {@link Type#STRING_LIST}, then this method throws
-   * an error.
+   * attribute does not exist or is not of type {@link Type#STRING_LIST}, then this method returns
+   * an empty list.
    */
   public ImmutableList<String> list(String attrName) {
+    if (!ruleContext.getRule().isAttrDefined(attrName, Type.STRING_LIST)) {
+      // TODO(bazel-team): This should be an error.
+      return ImmutableList.of();
+    }
     return list(attrName, ruleContext.attributes().get(attrName, Type.STRING_LIST));
   }
 
@@ -188,9 +190,13 @@ public final class Expander {
 
   /**
    * Obtains the value of the attribute, expands, and tokenizes all values. If the attribute does
-   * not exist or is not of type {@link Type#STRING_LIST}, then this method throws an error.
+   * not exist or is not of type {@link Type#STRING_LIST}, then this method returns an empty list.
    */
   public ImmutableList<String> tokenized(String attrName) {
+    if (!ruleContext.getRule().isAttrDefined(attrName, Type.STRING_LIST)) {
+      // TODO(bazel-team): This should be an error.
+      return ImmutableList.of();
+    }
     return tokenized(attrName, ruleContext.attributes().get(attrName, Type.STRING_LIST));
   }
 
@@ -214,8 +220,8 @@ public final class Expander {
   @Nullable
   public String expandSingleMakeVariable(String attrName, String expression) {
     try {
-      return TemplateExpander.expandSingleVariable(expression, makeVariableContext);
-    } catch (ExpansionException e) {
+      return MakeVariableExpander.expandSingleVariable(expression, makeVariableContext);
+    } catch (MakeVariableExpander.ExpansionException e) {
       ruleContext.attributeError(attrName, e.getMessage());
       return expression;
     }
