@@ -124,12 +124,10 @@ class MethodCreatorImpl extends BytecodeCreatorImpl implements MethodCreator {
         visitor.visitEnd();
     }
 
-    @Override
     ResultHandle resolve(final ResultHandle handle) {
         return handle;
     }
 
-    @Override
     ResultHandle[] resolve(final ResultHandle... handles) {
         return handles;
     }
@@ -161,27 +159,22 @@ class MethodCreatorImpl extends BytecodeCreatorImpl implements MethodCreator {
     FunctionCreatorImpl addFunctionBody(final ResultHandle instance, final ClassCreator cc, final MethodCreatorImpl mc, final BytecodeCreatorImpl owner) {
         FunctionCreatorImpl fc = new FunctionCreatorImpl(instance, cc, mc, owner);
         operations.add(new Operation() {
-            @Override
             void writeBytecode(final MethodVisitor methodVisitor) {
                 fc.getBytecode().writeOperations(methodVisitor);
             }
 
-            @Override
             Set<ResultHandle> getInputResultHandles() {
                 return Collections.emptySet();
             }
 
-            @Override
             ResultHandle getTopResultHandle() {
                 return null;
             }
 
-            @Override
             ResultHandle getOutgoingResultHandle() {
                 return null;
             }
 
-            @Override
             public void findResultHandles(final Set<ResultHandle> vc) {
                 fc.getBytecode().findActiveResultHandles(vc);
             }
