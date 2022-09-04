@@ -16,48 +16,41 @@ package com.google.devtools.build.lib.skylarkbuildapi.cpp;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 
-/** The C++ configuration fragment. */
-@StarlarkBuiltin(
-    name = "cpp",
-    doc = "A configuration fragment for C++.",
-    category = StarlarkDocumentationCategory.CONFIGURATION_FRAGMENT)
-public interface CppConfigurationApi<InvalidConfigurationExceptionT extends Exception>
-    extends StarlarkValue {
+/**
+ * The C++ configuration fragment.
+ */
+@SkylarkModule(
+  name = "cpp",
+  doc = "A configuration fragment for C++.",
+  category = SkylarkModuleCategory.CONFIGURATION_FRAGMENT
+)
+public interface CppConfigurationApi <InvalidConfigurationExceptionT extends Exception> {
 
   @SkylarkCallable(
       name = "copts",
       structField = true,
-      doc =
-          "Returns flags passed to Bazel by <a href=\"../../user-manual.html#flag--copt\">"
-              + "<code>--copt</code></a> option.")
+      doc = "Returns flags passed to Bazel by --copt option.")
   ImmutableList<String> getCopts() throws EvalException;
 
   @SkylarkCallable(
       name = "cxxopts",
       structField = true,
-      doc =
-          "Returns flags passed to Bazel by <a href=\"../../user-manual.html#flag--cxxopt\">"
-              + "<code>--cxxopt</code></a> option.")
+      doc = "Returns flags passed to Bazel by --cxxopt option.")
   ImmutableList<String> getCxxopts() throws EvalException;
 
   @SkylarkCallable(
       name = "conlyopts",
       structField = true,
-      doc =
-          "Returns flags passed to Bazel by <a href=\"../../user-manual.html#flag--conlyopt\">"
-              + "<code>--conlyopt</code></a> option.")
+      doc = "Returns flags passed to Bazel by --conlyopt option.")
   ImmutableList<String> getConlyopts() throws EvalException;
 
   @SkylarkCallable(
       name = "linkopts",
       structField = true,
-      doc =
-          "Returns flags passed to Bazel by <a href=\"../../user-manual.html#flag--linkopt\">"
-              + "<code>--linkopt</code></a> option.")
+      doc = "Returns flags passed to Bazel by --linkopt option.")
   ImmutableList<String> getLinkopts() throws EvalException;
 }

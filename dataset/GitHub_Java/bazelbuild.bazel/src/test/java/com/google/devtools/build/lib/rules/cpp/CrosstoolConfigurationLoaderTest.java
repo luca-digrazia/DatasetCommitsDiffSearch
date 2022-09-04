@@ -214,7 +214,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     assertThat(ccProvider.getObjCopyOptionsForEmbedding()).containsExactly("objcopy").inOrder();
     assertThat(ccProvider.getLdOptionsForEmbedding()).isEmpty();
 
-    assertThat(ccProvider.getAdditionalMakeVariables().entrySet())
+    assertThat(toolchain.getAdditionalMakeVariables().entrySet())
         .containsExactlyElementsIn(
             ImmutableMap.of(
                     "SOME_MAKE_VARIABLE", "make-variable-value",
@@ -585,11 +585,9 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     assertThat(ccProviderC.getObjCopyOptionsForEmbedding()).isEmpty();
     assertThat(ccProviderC.getLdOptionsForEmbedding()).isEmpty();
 
-    assertThat(ccProviderC.getAdditionalMakeVariables())
-        .containsExactlyEntriesIn(
-            ImmutableMap.of(
-                "CC_FLAGS", "",
-                "STACK_FRAME_UNLIMITED", ""));
+    assertThat(toolchainC.getAdditionalMakeVariables()).containsExactlyEntriesIn(ImmutableMap.of(
+        "CC_FLAGS", "",
+        "STACK_FRAME_UNLIMITED", ""));
     assertThat(ccProviderC.getBuiltInIncludeDirectories()).isEmpty();
     assertThat(ccProviderC.getSysroot()).isNull();
   }
