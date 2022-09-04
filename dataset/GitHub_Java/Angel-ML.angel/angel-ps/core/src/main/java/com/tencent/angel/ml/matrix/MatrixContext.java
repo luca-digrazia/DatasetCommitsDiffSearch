@@ -656,7 +656,6 @@ public class MatrixContext implements Serializable {
   public String toString() {
     return "MatrixContext{" + "name='" + name + '\'' + ", rowNum=" + rowNum + ", colNum=" + colNum
         + ", validIndexNum=" + validIndexNum + ", maxRowNumInBlock=" + maxRowNumInBlock
-        + ", start=" + indexStart + ", end=" + indexEnd
         + ", maxColNumInBlock=" + maxColNumInBlock + ", partitionerClass=" + partitionerClass
         + ", rowType=" + rowType + ", attributes=" + attributes + ", matrixId=" + matrixId + '}';
   }
