@@ -1,7 +1,6 @@
 package com.yammer.dropwizard.config;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.yammer.dropwizard.jetty.BiDiGzipHandler;
 import com.yammer.dropwizard.jetty.QuietErrorHandler;
@@ -11,7 +10,10 @@ import com.yammer.dropwizard.util.Duration;
 import com.yammer.dropwizard.util.Size;
 import com.yammer.metrics.HealthChecks;
 import com.yammer.metrics.core.HealthCheck;
-import com.yammer.metrics.jetty.*;
+import com.yammer.metrics.jetty.InstrumentedBlockingChannelConnector;
+import com.yammer.metrics.jetty.InstrumentedHandler;
+import com.yammer.metrics.jetty.InstrumentedSelectChannelConnector;
+import com.yammer.metrics.jetty.InstrumentedSocketConnector;
 import com.yammer.metrics.reporting.AdminServlet;
 import com.yammer.metrics.util.DeadlockHealthCheck;
 import org.eclipse.jetty.server.*;
@@ -26,9 +28,11 @@ import org.eclipse.jetty.util.resource.Resource;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ThreadPool;
 
-import javax.servlet.ServletContextListener;
 import java.util.EnumSet;
-import java.util.EventListener;
+import java.util.List;
+import java.util.Map;
+
+import static com.yammer.dropwizard.config.HttpConfiguration.GzipConfiguration;
 
 // TODO: 11/7/11 <coda> -- document ServerFactory
 // TODO: 11/7/11 <coda> -- document ServerFactory
@@ -160,7 +164,7 @@ public class ServerFactory {
     private Handler createHandler(Environment env) {
         final HandlerCollection collection = new HandlerCollection();
 
-        collection.addHandler(createExternalServlet(env.getServlets(), env.getFilters(), env.getServletContextListeners()));
+        collection.addHandler(createExternalServlet(env.getServlets(), env.getFilters()));
         collection.addHandler(createInternalServlet(env));
 
         if (requestLogHandlerFactory.isEnabled()) {
@@ -178,23 +182,18 @@ public class ServerFactory {
         return handler;
     }
 
-    private Handler createExternalServlet(ImmutableMap<String, ServletHolder> servlets,
-                                          ImmutableMap<String, FilterHolder> filters,
-                                          ImmutableSet<ServletContextListener> listeners) {
+    private Handler createExternalServlet(Map<String, ServletHolder> servlets,
+                                          Map<String, FilterHolder> filters) {
         final ServletContextHandler handler = new ServletContextHandler();
         handler.setBaseResource(Resource.newClassPathResource("."));
 
-        for (ImmutableMap.Entry<String, ServletHolder> entry : servlets.entrySet()) {
+        for (Map.Entry<String, ServletHolder> entry : servlets.entrySet()) {
             handler.addServlet(entry.getValue(), entry.getKey());
         }
 
-        for (ImmutableMap.Entry<String, FilterHolder> entry : filters.entrySet()) {
+        for (Map.Entry<String, FilterHolder> entry : filters.entrySet()) {
             handler.addFilter(entry.getValue(), entry.getKey(), EnumSet.of(DispatcherType.REQUEST));
         }
-
-        final EventListener[] eventListeners = new EventListener[listeners.size()];
-        listeners.toArray(eventListeners);
-        handler.setEventListeners(eventListeners);
 
         handler.setConnectorNames(new String[]{"main"});
 
@@ -217,14 +216,14 @@ public class ServerFactory {
                 gzipHandler.setBufferSize((int) bufferSize.get().toBytes());
             }
 
-            final Optional<ImmutableSet<String>> userAgents = gzip.getExcludedUserAgents();
+            final Optional<List<String>> userAgents = gzip.getExcludedUserAgents();
             if (userAgents.isPresent()) {
-                gzipHandler.setExcluded(userAgents.get());
+                gzipHandler.setExcluded(ImmutableSet.copyOf(userAgents.get()));
             }
 
-            final Optional<ImmutableSet<String>> mimeTypes = gzip.getCompressedMimeTypes();
+            final Optional<List<String>> mimeTypes = gzip.getCompressedMimeTypes();
             if (mimeTypes.isPresent()) {
-                gzipHandler.setMimeTypes(mimeTypes.get());
+                gzipHandler.setMimeTypes(ImmutableSet.copyOf(mimeTypes.get()));
             }
 
             return gzipHandler;
@@ -233,7 +232,7 @@ public class ServerFactory {
     }
 
     private ThreadPool createThreadPool() {
-        final InstrumentedQueuedThreadPool pool = new InstrumentedQueuedThreadPool();
+        final QueuedThreadPool pool = new QueuedThreadPool();
         pool.setMinThreads(config.getMinThreads());
         pool.setMaxThreads(config.getMaxThreads());
         return pool;
