@@ -24,10 +24,7 @@ import com.github.joschi.jadconfig.validators.PositiveDurationValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.github.joschi.jadconfig.validators.PositiveLongValidator;
 import com.github.joschi.jadconfig.validators.StringNotBlankValidator;
-import org.graylog2.configuration.WebListenUriValidator;
 import org.graylog2.plugin.BaseConfiguration;
-import org.graylog2.utilities.IPSubnetConverter;
-import org.jboss.netty.handler.ipfilter.IpSubnet;
 import org.joda.time.DateTimeZone;
 
 import java.net.URI;
@@ -54,7 +51,7 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "rest_listen_uri", required = true)
     private URI restListenUri = URI.create("http://127.0.0.1:" + GRAYLOG_DEFAULT_PORT + "/");
 
-    @Parameter(value = "web_listen_uri", required = true, validator = WebListenUriValidator.class)
+    @Parameter(value = "web_listen_uri", required = true)
     private URI webListenUri = URI.create("http://127.0.0.1:" + GRAYLOG_DEFAULT_WEB_PORT + "/");
 
     @Parameter(value = "output_batch_size", required = true, validator = PositiveIntegerValidator.class)
@@ -155,9 +152,6 @@ public class Configuration extends BaseConfiguration {
 
     @Parameter(value = "index_ranges_cleanup_interval", validator = PositiveDurationValidator.class)
     private Duration indexRangesCleanupInterval = Duration.hours(1L);
-
-    @Parameter(value = "trusted_proxies", converter = IPSubnetConverter.class)
-    private Set<IpSubnet> trustedProxies = Collections.emptySet();
 
     public boolean isMaster() {
         return isMaster;
@@ -312,6 +306,4 @@ public class Configuration extends BaseConfiguration {
     public Duration getIndexRangesCleanupInterval() {
         return indexRangesCleanupInterval;
     }
-
-    public Set<IpSubnet> getTrustedProxies() { return trustedProxies; }
 }

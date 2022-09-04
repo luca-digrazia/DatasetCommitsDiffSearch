@@ -25,9 +25,6 @@ import com.mongodb.MongoException;
 import io.airlift.airline.Command;
 import io.airlift.airline.Option;
 import org.graylog2.Configuration;
-import org.graylog2.auditlog.AuditLogModule;
-import org.graylog2.auditlog.AuditLogStdOutConfiguration;
-import org.graylog2.auditlog.AuditLogger;
 import org.graylog2.bindings.AlarmCallbackBindings;
 import org.graylog2.bindings.InitializerBindings;
 import org.graylog2.bindings.MessageFilterBindings;
@@ -81,17 +78,30 @@ public class Server extends ServerBootstrap {
     private final MongoDbConfiguration mongoDbConfiguration = new MongoDbConfiguration();
     private final VersionCheckConfiguration versionCheckConfiguration = new VersionCheckConfiguration();
     private final KafkaJournalConfiguration kafkaJournalConfiguration = new KafkaJournalConfiguration();
-    private final AuditLogStdOutConfiguration auditLogStdOutConfiguration = new AuditLogStdOutConfiguration();
 
     public Server() {
         super("server", configuration);
     }
 
+    @Option(name = {"-t", "--configtest"}, description = "Validate Graylog configuration and exit")
+    private boolean configTest = false;
+
     @Option(name = {"-l", "--local"}, description = "Run Graylog in local mode. Only interesting for Graylog developers.")
     private boolean local = false;
 
+    @Option(name = {"-r", "--no-retention"}, description = "Do not automatically remove messages from index that are older than the retention time")
+    private boolean noRetention = false;
+
+    public boolean isConfigTest() {
+        return configTest;
+    }
+
     public boolean isLocal() {
         return local;
+    }
+
+    public boolean performRetention() {
+        return !noRetention;
     }
 
     @Override
@@ -112,8 +122,7 @@ public class Server extends ServerBootstrap {
             new RestApiBindings(),
             new PasswordAlgorithmBindings(),
             new WidgetStrategyBindings(),
-            new DashboardBindings(),
-            new AuditLogModule()
+            new DashboardBindings()
         );
 
         if (configuration.isWebEnable()) {
@@ -130,8 +139,7 @@ public class Server extends ServerBootstrap {
                 emailConfiguration,
                 mongoDbConfiguration,
                 versionCheckConfiguration,
-                kafkaJournalConfiguration,
-                auditLogStdOutConfiguration);
+                kafkaJournalConfiguration);
     }
 
     @Override
@@ -177,15 +185,12 @@ public class Server extends ServerBootstrap {
         private final ActivityWriter activityWriter;
         private final ServiceManager serviceManager;
         private final GracefulShutdown gracefulShutdown;
-        private final AuditLogger auditLogger;
 
         @Inject
-        public ShutdownHook(ActivityWriter activityWriter, ServiceManager serviceManager,
-                            GracefulShutdown gracefulShutdown, AuditLogger auditLogger) {
+        public ShutdownHook(ActivityWriter activityWriter, ServiceManager serviceManager, GracefulShutdown gracefulShutdown) {
             this.activityWriter = activityWriter;
             this.serviceManager = serviceManager;
             this.gracefulShutdown = gracefulShutdown;
-            this.auditLogger = auditLogger;
         }
 
         @Override
@@ -193,8 +198,6 @@ public class Server extends ServerBootstrap {
             String msg = "SIGNAL received. Shutting down.";
             LOG.info(msg);
             activityWriter.write(new Activity(msg, Main.class));
-
-            auditLogger.success("<system>", "initiated", "shutdown");
 
             gracefulShutdown.runWithoutExit();
             serviceManager.stopAsync().awaitStopped();
