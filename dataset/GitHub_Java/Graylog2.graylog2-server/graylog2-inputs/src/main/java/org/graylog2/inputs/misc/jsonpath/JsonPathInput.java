@@ -50,6 +50,9 @@ public class JsonPathInput extends MessageInput {
 
     public static final String NAME = "JSON path from HTTP API";
 
+    private Configuration config;
+    private InputHost graylogServer;
+
     private static final String CK_URL = "target_url";
     private static final String CK_PATH = "path";
     private static final String CK_SOURCE = "source";
@@ -72,12 +75,15 @@ public class JsonPathInput extends MessageInput {
      */
 
     @Override
-    public void checkConfiguration() throws ConfigurationException {
-        if (!checkConfig(configuration)) {
-            throw new ConfigurationException(configuration.getSource().toString());
+    public void configure(Configuration config, InputHost graylogServer) throws ConfigurationException {
+        this.config = config;
+        this.graylogServer = graylogServer;
+
+        if (!checkConfig(config)) {
+            throw new ConfigurationException(config.getSource().toString());
         }
 
-        this.jsonPath = JsonPath.compile(configuration.getString(CK_PATH));
+        this.jsonPath = JsonPath.compile(config.getString(CK_PATH));
     }
 
     @Override
@@ -92,8 +98,8 @@ public class JsonPathInput extends MessageInput {
                     String json;
                     try {
                         Collector collector = new Collector(
-                                configuration.getString(CK_URL),
-                                parseHeaders(configuration.getString(CK_HEADERS)),
+                                config.getString(CK_URL),
+                                parseHeaders(config.getString(CK_HEADERS)),
                                 inputId
                         );
 
@@ -107,7 +113,7 @@ public class JsonPathInput extends MessageInput {
                     Selector selector = new Selector(jsonPath);
                     Map<String, Object> fields = selector.read(json);
 
-                    Message m = new Message(selector.buildShortMessage(fields), configuration.getString(CK_SOURCE), new DateTime());
+                    Message m = new Message(selector.buildShortMessage(fields), config.getString(CK_SOURCE), new DateTime());
                     m.addFields(fields);
 
                     // Add to buffer.
@@ -118,7 +124,7 @@ public class JsonPathInput extends MessageInput {
             }
         };
 
-        scheduledFuture = scheduler.scheduleAtFixedRate(task, 0, configuration.getInt(CK_INTERVAL), TimeUnit.valueOf(configuration.getString(CK_TIMEUNIT)));
+        scheduledFuture = scheduler.scheduleAtFixedRate(task, 0, config.getInt(CK_INTERVAL), TimeUnit.valueOf(config.getString(CK_TIMEUNIT)));
     }
 
     @Override
@@ -201,7 +207,7 @@ public class JsonPathInput extends MessageInput {
 
     @Override
     public Map<String, Object> getAttributes() {
-        return configuration.getSource();
+        return config.getSource();
     }
 
     protected boolean checkConfig(Configuration config) {

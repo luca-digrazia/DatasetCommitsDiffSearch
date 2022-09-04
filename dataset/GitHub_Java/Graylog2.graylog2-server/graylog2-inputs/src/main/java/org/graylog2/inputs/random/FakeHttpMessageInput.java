@@ -49,6 +49,9 @@ public class FakeHttpMessageInput extends MessageInput {
     public static final String CK_SLEEP = "sleep";
     public static final String CK_SLEEP_DEVIATION_PERCENT = "sleep_deviation";
 
+    protected InputHost graylogServer;
+    protected Configuration config;
+
     private final Random rand = new Random();
 
     private boolean stopRequested = false;
@@ -58,14 +61,17 @@ public class FakeHttpMessageInput extends MessageInput {
     private int maxSleepDeviation;
 
     @Override
-    public void checkConfiguration() throws ConfigurationException {
-        if (!checkConfig(configuration)) {
-            throw new ConfigurationException(configuration.getSource().toString());
+    public void configure(Configuration config, InputHost graylogServer) throws ConfigurationException {
+        this.graylogServer = graylogServer;
+        this.config = config;
+
+        if (!checkConfig(config)) {
+            throw new ConfigurationException(config.getSource().toString());
         }
 
-        source = configuration.getString(CK_SOURCE);
-        sleepMs = (int) configuration.getInt(CK_SLEEP);
-        maxSleepDeviation = (int) configuration.getInt(CK_SLEEP_DEVIATION_PERCENT);
+        source = config.getString(CK_SOURCE);
+        sleepMs = (int) config.getInt(CK_SLEEP);
+        maxSleepDeviation = (int) config.getInt(CK_SLEEP_DEVIATION_PERCENT);
     }
 
     @Override
@@ -137,7 +143,7 @@ public class FakeHttpMessageInput extends MessageInput {
 
     @Override
     public Map<String, Object> getAttributes() {
-        return configuration.getSource();
+        return config.getSource();
     }
 
     private boolean checkConfig(Configuration config) {

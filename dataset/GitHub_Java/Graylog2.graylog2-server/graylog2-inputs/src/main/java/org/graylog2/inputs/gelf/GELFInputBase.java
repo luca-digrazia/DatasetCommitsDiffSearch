@@ -47,6 +47,8 @@ public class GELFInputBase extends MessageInput {
     protected final ThroughputCounter throughputCounter;
     protected final ConnectionCounter connectionCounter;
 
+    protected InputHost core;
+    protected Configuration config;
     protected InetSocketAddress socketAddress;
 
     public GELFInputBase() {
@@ -55,14 +57,17 @@ public class GELFInputBase extends MessageInput {
     }
 
     @Override
-    public void checkConfiguration() throws ConfigurationException {
-        if (!checkConfig(configuration)) {
-            throw new ConfigurationException(configuration.getSource().toString());
+    public void configure(Configuration config, InputHost graylogServer) throws ConfigurationException {
+        this.core = graylogServer;
+        this.config = config;
+
+        if (!checkConfig(config)) {
+            throw new ConfigurationException(config.getSource().toString());
         }
 
         this.socketAddress = new InetSocketAddress(
-                configuration.getString(CK_BIND_ADDRESS),
-                (int) configuration.getInt(CK_PORT)
+                config.getString(CK_BIND_ADDRESS),
+                (int) config.getInt(CK_PORT)
         );
     }
 
@@ -97,7 +102,7 @@ public class GELFInputBase extends MessageInput {
 
     @Override
     public Map<String, Object> getAttributes() {
-        return configuration.getSource();
+        return config.getSource();
     }
 
     @Override

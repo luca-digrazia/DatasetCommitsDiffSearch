@@ -19,22 +19,20 @@
  */
 package org.graylog2.radio.inputs;
 
-import org.graylog2.plugin.inputs.MessageInput;
-
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class InputRegistry {
+public class NoSuchInputTypeException extends Throwable {
 
-    public static MessageInput factory(String type) throws NoSuchInputTypeException {
-        try {
-            Class c = Class.forName(type);
-            return (MessageInput) c.newInstance();
-        } catch (ClassNotFoundException e) {
-            throw new NoSuchInputTypeException("There is no input of type <" + type + "> registered.");
-        } catch (Exception e) {
-            throw new RuntimeException("Could not create input of type <" + type + ">", e);
-        }
+    public NoSuchInputTypeException() {
+    }
+
+    public NoSuchInputTypeException(String s) {
+        super(s);
+    }
+
+    public NoSuchInputTypeException(String s, Throwable e) {
+        super(s, e);
     }
 
 }

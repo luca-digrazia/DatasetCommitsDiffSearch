@@ -1,4 +1,6 @@
 /**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -13,13 +15,15 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.inputs.misc.metrics.agent;
 
+import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.joda.time.DateTime;
 
 import java.util.Map;
 
@@ -28,24 +32,22 @@ import java.util.Map;
  */
 public class InProcessMessageWriter implements GELFTarget {
 
+    private final InputHost server;
     private final MessageInput input;
-    private final Buffer processBuffer;
-    private final String nodeId;
 
-    public InProcessMessageWriter(Buffer processBuffer, String nodeId, MessageInput input) {
-        this.processBuffer = processBuffer;
-        this.nodeId = nodeId;
+    public InProcessMessageWriter(InputHost server, MessageInput input) {
+        this.server = server;
         this.input = input;
     }
 
     @Override
     public void deliver(String shortMessage, String source, Map<String, Object> fields) {
-        Message message = new Message(shortMessage, source, Tools.iso8601());
+        Message message = new Message(shortMessage, source, new DateTime());
         message.addFields(fields);
 
-        message.addField("node_id", nodeId);
+        message.addField("node_id", server.getNodeId());
 
-        processBuffer.insertCached(message, input);
+        server.getProcessBuffer().insertCached(message, input);
     }
 
 }

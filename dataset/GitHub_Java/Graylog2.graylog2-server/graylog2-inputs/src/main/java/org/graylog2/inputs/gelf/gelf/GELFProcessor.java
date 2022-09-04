@@ -1,5 +1,5 @@
-/*
- * Copyright 2013-2014 TORCH GmbH
+/**
+ * Copyright 2012, 2013 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -13,9 +13,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2.inputs.gelf.gelf;
@@ -24,6 +24,7 @@ import com.codahale.metrics.Timer;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
@@ -61,14 +62,9 @@ public class GELFProcessor {
         server.metrics().meter(name(metricName, "incomingMessages")).mark();
 
         // Convert to LogMessage
-        Message lm = null;
-        try {
-            lm = parse(message.getJSON(), sourceInput);
-        } catch (IllegalStateException e) {
-            LOG.error("Corrupt or invalid message received: ", e);
-        }
+        Message lm = parse(message.getJSON(), sourceInput);
 
-        if (lm == null || !lm.isComplete()) {
+        if (!lm.isComplete()) {
             server.metrics().meter(name(metricName, "incompleteMessages")).mark();
             LOG.debug("Skipping incomplete message.");
             return;
@@ -89,7 +85,6 @@ public class GELFProcessor {
             json = objectMapper.readTree(message);
         } catch (Exception e) {
             LOG.error("Could not parse JSON!", e);
-            LOG.debug("This is the failed message: ", message);
             json = null;
         }
 
@@ -101,9 +96,8 @@ public class GELFProcessor {
         double messageTimestamp = doubleValue(json, "timestamp");
         DateTime timestamp;
         if (messageTimestamp <= 0) {
-            timestamp = Tools.iso8601();
+            timestamp = new DateTime();
         } else {
-            // we treat this as a unix timestamp
             timestamp = Tools.dateTimeFromDouble(messageTimestamp);
         }
 
