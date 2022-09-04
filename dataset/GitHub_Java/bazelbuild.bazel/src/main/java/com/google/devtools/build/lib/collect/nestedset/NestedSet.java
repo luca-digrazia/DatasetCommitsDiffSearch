@@ -19,14 +19,9 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.flogger.GoogleLogger;
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
-import com.google.devtools.build.lib.concurrent.MoreFutures;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.util.BazelCrashUtils;
-import com.google.devtools.build.lib.util.ExitCode;
 import com.google.protobuf.ByteString;
 import java.util.AbstractCollection;
 import java.util.Arrays;
@@ -36,7 +31,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import javax.annotation.Nullable;
 
 /**
@@ -47,7 +41,6 @@ import javax.annotation.Nullable;
 @SuppressWarnings("unchecked")
 @AutoCodec
 public final class NestedSet<E> implements Iterable<E> {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
   /**
    * Order and size of set packed into one int.
@@ -196,13 +189,9 @@ public final class NestedSet<E> implements Iterable<E> {
   Object getChildren() {
     if (children instanceof ListenableFuture) {
       try {
-        return MoreFutures.waitForFutureAndGet((ListenableFuture<Object[]>) children);
-      } catch (InterruptedException e) {
-        System.err.println(
-            "An interrupted exception occurred during nested set deserialization, "
-                + "exiting abruptly.");
-        BazelCrashUtils.halt(e, ExitCode.INTERRUPTED.getNumericExitCode());
-        throw new IllegalStateException("Server should have shut down.", e);
+        return ((ListenableFuture<Object[]>) children).get();
+      } catch (InterruptedException | ExecutionException e) {
+        throw new IllegalStateException(e);
       }
     } else {
       return children;
@@ -328,19 +317,6 @@ public final class NestedSet<E> implements Iterable<E> {
       return Arrays.stream((Object[]) children)
           .map(NestedSet::childrenToString)
           .collect(joining(", ", "{", "}"));
-    } else if (children instanceof Future) {
-      Future<Object[]> future = (Future<Object[]>) children;
-      if (future.isDone()) {
-        try {
-          return Arrays.toString(Futures.getDone(future));
-        } catch (ExecutionException e) {
-          logger.atSevere().withCause(e).log("Error getting %s", future);
-          // Don't rethrow, since we may be in the process of trying to construct an error message.
-          return "Future " + future + " with error: " + e.getCause().getMessage();
-        }
-      } else {
-        return children.toString();
-      }
     } else {
       return children.toString();
     }
