@@ -20,7 +20,7 @@ import com.google.common.collect.Lists;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.alerts.AbstractAlertCondition;
-import org.graylog2.indexer.FieldTypeException;
+import org.graylog2.indexer.InvalidRangeFormatException;
 import org.graylog2.indexer.results.FieldStatsResult;
 import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.indexer.searches.Searches;
@@ -49,6 +49,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class FieldValueAlertCondition extends AbstractAlertCondition {
     private static final Logger LOG = LoggerFactory.getLogger(FieldValueAlertCondition.class);
@@ -93,21 +96,19 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
         public ConfigurationRequest getRequestedConfiguration() {
             final ConfigurationRequest configurationRequest = ConfigurationRequest.createWithFields(
                     new TextField("field", "Field", "", "Field name that should be checked", ConfigurationField.Optional.NOT_OPTIONAL),
-                    new NumberField("time", "Time Range", 5, "Evaluate the condition for all messages received in the given number of minutes", ConfigurationField.Optional.NOT_OPTIONAL),
+                    new NumberField("time", "Time Range", 0, "Time span in seconds to check", ConfigurationField.Optional.NOT_OPTIONAL),
+                    new NumberField("threshold", "Threshold", 0.0, "Value which triggers an alert if crossed", ConfigurationField.Optional.NOT_OPTIONAL),
                     new DropdownField(
                             "threshold_type",
                             "Threshold Type",
                             ThresholdType.HIGHER.toString(),
                             DropdownField.ValueTemplates.valueMapFromEnum(ThresholdType.class, thresholdType -> thresholdType.name().toLowerCase(Locale.ENGLISH)),
-                            "Select condition to trigger alert: when value is higher or lower than the threshold",
                             ConfigurationField.Optional.NOT_OPTIONAL),
-                    new NumberField("threshold", "Threshold", 0.0, "Value which triggers an alert if crossed", ConfigurationField.Optional.NOT_OPTIONAL),
                     new DropdownField(
                             "type",
-                            "Aggregation Type",
+                            "Check Type",
                             CheckType.MAX.toString(),
                             Arrays.stream(CheckType.values()).collect(Collectors.toMap(Enum::toString, CheckType::getDescription)),
-                            "Select statistical function to use in the aggregation",
                             ConfigurationField.Optional.NOT_OPTIONAL)
             );
             configurationRequest.addFields(AbstractAlertCondition.getDefaultConfigurationFields());
@@ -119,10 +120,9 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
     public static class Descriptor extends AlertCondition.Descriptor {
         public Descriptor() {
             super(
-                "Field Aggregation Alert Condition",
+                "Field Value Alert Condition",
                 "https://www.graylog.org/",
-                "This condition is triggered when the aggregated value of a field is higher/lower than a defined "
-                        + "threshold for a given time range."
+                "This condition is triggered when the content of messages is equal to a defined value."
             );
         }
     }
@@ -148,11 +148,13 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
 
         this.decimalFormat = new DecimalFormat("#.###", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 
-        this.time = Tools.getNumber(parameters.get("time"), 5).intValue();
+        this.time = getNumber(parameters.get("time")).orElse(0).intValue();
         this.thresholdType = ThresholdType.valueOf(((String) parameters.get("threshold_type")).toUpperCase(Locale.ENGLISH));
-        this.threshold = Tools.getNumber(parameters.get("threshold"), 0.0).doubleValue();
+        this.threshold = getNumber(parameters.get("threshold")).orElse(0.0).doubleValue();
         this.type = CheckType.valueOf(((String) parameters.get("type")).toUpperCase(Locale.ENGLISH));
         this.field = (String) parameters.get("field");
+
+        checkArgument(!isNullOrEmpty(field), "\"field\" must not be empty.");
     }
 
     @Override
@@ -162,8 +164,7 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
             + ", check type: " + type.toString().toLowerCase(Locale.ENGLISH)
             + ", threshold_type: " + thresholdType.toString().toLowerCase(Locale.ENGLISH)
             + ", threshold: " + decimalFormat.format(threshold)
-            + ", grace: " + grace
-            + ", repeat notifications: " + repeatNotifications;
+            + ", grace: " + grace;
     }
 
 
@@ -248,7 +249,11 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
             // cannot happen lol
             LOG.error("Invalid timerange.", e);
             return null;
-        } catch (FieldTypeException e) {
+        } catch (InvalidRangeFormatException e) {
+            // lol same here
+            LOG.error("Invalid timerange format.", e);
+            return null;
+        } catch (Searches.FieldTypeException e) {
             LOG.debug("Field [{}] seems not to have a numerical type or doesn't even exist at all. Returning not triggered.", field, e);
             return new NegativeCheckResult();
         }

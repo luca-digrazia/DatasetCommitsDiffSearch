@@ -33,7 +33,6 @@ import java.util.Map;
 
 public class ConfigurationRequest {
     private static final Logger log = LoggerFactory.getLogger(ConfigurationRequest.class);
-    private static final String WILDCARD_IP_ADDRESS = "0.0.0.0";
 
     private final Map<String, ConfigurationField> fields = Maps.newLinkedHashMap();
 
@@ -99,27 +98,26 @@ public class ConfigurationRequest {
         for (ConfigurationField field : fields.values()) {
             if (field.isOptional().equals(ConfigurationField.Optional.NOT_OPTIONAL)) {
                 final String type = field.getFieldType();
-                final String fieldName = field.getName();
-                log.debug("Checking for mandatory field \"{}\" of type {} in configuration", fieldName, type);
+                log.debug("Checking for non-optional field {} of type {} in configuration", field.getName(), type);
                 switch (type) {
                     case BooleanField.FIELD_TYPE:
-                        if (!configuration.booleanIsSet(fieldName)) {
-                            throw new ConfigurationException("Mandatory configuration field \"" + fieldName + "\" is missing or has the wrong data type");
+                        if (!configuration.booleanIsSet(field.getName())) {
+                            throw new ConfigurationException("Mandatory configuration field " + field.getName() + " is missing");
                         }
                         break;
                     case NumberField.FIELD_TYPE:
-                        if (!configuration.intIsSet(fieldName)) {
-                            throw new ConfigurationException("Mandatory configuration field \"" + fieldName + "\" is missing or has the wrong data type");
+                        if (!configuration.intIsSet(field.getName())) {
+                            throw new ConfigurationException("Mandatory configuration field " + field.getName() + " is missing");
                         }
                         break;
                     case TextField.FIELD_TYPE:
                     case DropdownField.FIELD_TYPE:
-                        if (!configuration.stringIsSet(fieldName)) {
-                            throw new ConfigurationException("Mandatory configuration field \"" + fieldName + "\" is missing or has the wrong data type");
+                        if (!configuration.stringIsSet(field.getName())) {
+                                throw new ConfigurationException("Mandatory configuration field " + field.getName() + " is missing");
                         }
                         break;
                     default:
-                        throw new IllegalStateException("Unknown field type " + type + " for configuration field \"" + fieldName + "\". This is a bug.");
+                        throw new IllegalStateException("Unknown field type " + type + ". This is a bug.");
                 }
             }
         }
@@ -156,7 +154,7 @@ public class ConfigurationRequest {
                     }
                     break;
                 default:
-                    throw new IllegalStateException("Unknown field type " + type + " for configuration field \"" + name + "\". This is a bug.");
+                    throw new IllegalStateException("Unknown field type " + type + ". This is a bug.");
             }
         }
         return new Configuration(values);
@@ -168,7 +166,7 @@ public class ConfigurationRequest {
             return new TextField(
                     name,
                     "Bind address",
-                    WILDCARD_IP_ADDRESS,
+                    "0.0.0.0",
                     "Address to listen on. For example 0.0.0.0 or 127.0.0.1."
             );
         }

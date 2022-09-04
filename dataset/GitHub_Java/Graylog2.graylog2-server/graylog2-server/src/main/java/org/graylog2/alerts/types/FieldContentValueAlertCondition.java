@@ -46,6 +46,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Strings.isNullOrEmpty;
+
 public class FieldContentValueAlertCondition extends AbstractAlertCondition {
     private static final Logger LOG = LoggerFactory.getLogger(FieldContentValueAlertCondition.class);
 
@@ -55,7 +58,6 @@ public class FieldContentValueAlertCondition extends AbstractAlertCondition {
     private final String value;
 
     public interface Factory extends AlertCondition.Factory {
-        @Override
         FieldContentValueAlertCondition create(Stream stream,
                                                @Assisted("id") String id,
                                                DateTime createdAt,
@@ -63,10 +65,7 @@ public class FieldContentValueAlertCondition extends AbstractAlertCondition {
                                                Map<String, Object> parameters,
                                                @Assisted("title") @Nullable String title);
 
-        @Override
         Config config();
-
-        @Override
         Descriptor descriptor();
     }
 
@@ -89,9 +88,10 @@ public class FieldContentValueAlertCondition extends AbstractAlertCondition {
     public static class Descriptor extends AlertCondition.Descriptor {
         public Descriptor() {
             super(
-                "Field Content Alert Condition",
+                "Field Content Value Alert Condition",
                 "https://www.graylog.org/",
-                "This condition is triggered when the content of messages is equal to a defined value."
+                "This condition is triggered when the aggregated value of a field is higher/lower than a defined "
+                + "threshold for a given time range."
             );
         }
     }
@@ -110,6 +110,9 @@ public class FieldContentValueAlertCondition extends AbstractAlertCondition {
         this.configuration = configuration;
         this.field = (String) parameters.get("field");
         this.value = (String) parameters.get("value");
+
+        checkArgument(!isNullOrEmpty(field), "\"field\" must not be empty.");
+        checkArgument(!isNullOrEmpty(value), "\"value\" must not be empty.");
     }
 
     @Override
