@@ -209,7 +209,7 @@ public class RunnerJarPhase implements AppCreationPhase<RunnerJarPhase>, RunnerJ
                                     public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
                                         throws IOException {
                                         final String relativePath = root.relativize(dir).toString();
-                                        if (!relativePath.isEmpty()) {
+                                        if (!"".equals(relativePath)) {
                                             addDir(runnerZipFs, dir, relativePath);
                                         }
                                         return FileVisitResult.CONTINUE;
