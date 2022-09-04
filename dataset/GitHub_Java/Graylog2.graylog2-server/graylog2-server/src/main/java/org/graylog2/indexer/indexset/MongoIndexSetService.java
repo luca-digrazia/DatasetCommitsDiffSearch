@@ -24,7 +24,7 @@ import org.graylog2.database.MongoConnection;
 import org.graylog2.events.ClusterEventBus;
 import org.graylog2.indexer.indexset.events.IndexSetCreatedEvent;
 import org.graylog2.indexer.indexset.events.IndexSetDeletedEvent;
-import org.graylog2.plugin.streams.Stream;
+import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.streams.StreamService;
 import org.mongojack.DBQuery;
 import org.mongojack.DBSort;
@@ -38,12 +38,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 
 public class MongoIndexSetService implements IndexSetService {
     private static final String COLLECTION_NAME = "index_sets";
 
     private final JacksonDBCollection<IndexSetConfig, ObjectId> collection;
+    private final ClusterConfigService clusterConfigService;
     private final ClusterEventBus clusterEventBus;
     private final StreamService streamService;
 
@@ -51,6 +53,7 @@ public class MongoIndexSetService implements IndexSetService {
     public MongoIndexSetService(MongoConnection mongoConnection,
                                 MongoJackObjectMapperProvider objectMapperProvider,
                                 StreamService streamService,
+                                ClusterConfigService clusterConfigService,
                                 ClusterEventBus clusterEventBus) {
         this(JacksonDBCollection.wrap(
                 mongoConnection.getDatabase().getCollection(COLLECTION_NAME),
@@ -58,15 +61,18 @@ public class MongoIndexSetService implements IndexSetService {
                 ObjectId.class,
                 objectMapperProvider.get()),
                 streamService,
+                clusterConfigService,
                 clusterEventBus);
     }
 
     @VisibleForTesting
     protected MongoIndexSetService(JacksonDBCollection<IndexSetConfig, ObjectId> collection,
                                    StreamService streamService,
+                                   ClusterConfigService clusterConfigService,
                                    ClusterEventBus clusterEventBus) {
         this.collection = requireNonNull(collection);
         this.streamService = streamService;
+        this.clusterConfigService = clusterConfigService;
         this.clusterEventBus = requireNonNull(clusterEventBus);
 
         this.collection.getDbCollection().createIndex(DBSort.asc(IndexSetConfig.FIELD_INDEX_PREFIX), null, true);
@@ -92,6 +98,17 @@ public class MongoIndexSetService implements IndexSetService {
         return Optional.ofNullable(indexSetConfig);
     }
 
+    @Override
+    public IndexSetConfig getDefault() {
+        final DefaultIndexSetConfig defaultIndexSetConfig = clusterConfigService.get(DefaultIndexSetConfig.class);
+
+        checkState(defaultIndexSetConfig != null, "No default index set configured. This is a bug!");
+
+        final String indexSetId = defaultIndexSetConfig.defaultIndexSetId();
+        return get(indexSetId)
+                .orElseThrow(() -> new IllegalStateException("Couldn't find default index set <" + indexSetId + ">. This is a bug!"));
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -106,6 +123,11 @@ public class MongoIndexSetService implements IndexSetService {
     @Override
     public List<IndexSetConfig> findAll() {
         return ImmutableList.copyOf((Iterator<? extends IndexSetConfig>) collection.find().sort(DBSort.asc("title")));
+    }
+
+    @Override
+    public List<IndexSetConfig> findByIds(Set<String> ids) {
+        return collection.find(DBQuery.in("_id", ids)).toArray();
     }
 
     /**
@@ -170,15 +192,6 @@ public class MongoIndexSetService implements IndexSetService {
     }
 
     private boolean isDeletable(ObjectId id) {
-        final String stringId = id.toHexString();
-
-        // TODO: This can be expensive, create a method in StreamService to find streams for a given index set ID.
-        for (Stream stream : streamService.loadAll()) {
-            if (stream.getIndexSetId() != null && stream.getIndexSetId().equals(stringId)) {
-                return false;
-            }
-        }
-
-        return true;
+        return streamService.loadAllWithIndexSet(id.toHexString()).isEmpty();
     }
 }

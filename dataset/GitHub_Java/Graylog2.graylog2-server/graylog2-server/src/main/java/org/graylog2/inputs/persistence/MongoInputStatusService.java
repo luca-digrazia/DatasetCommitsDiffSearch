@@ -23,8 +23,6 @@ import org.apache.shiro.event.Subscribe;
 import org.bson.types.ObjectId;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
-import org.graylog2.database.NotFoundException;
-import org.graylog2.inputs.InputService;
 import org.graylog2.rest.models.system.inputs.responses.InputDeleted;
 import org.mongojack.JacksonDBCollection;
 import org.mongojack.WriteResult;
@@ -47,14 +45,11 @@ public class MongoInputStatusService implements InputStatusService {
     public static final String COLLECTION_NAME = "input_status";
 
     private final JacksonDBCollection<InputStatusRecord, ObjectId> statusCollection;
-    private final InputService inputService;
 
     @Inject
     public MongoInputStatusService(MongoConnection mongoConnection,
-                                   MongoJackObjectMapperProvider objectMapperProvider,
-                                   InputService inputService,
-                                   EventBus eventBus) {
-        this.inputService = inputService;
+                              MongoJackObjectMapperProvider objectMapperProvider,
+                              EventBus eventBus) {
         DB mongoDatabase = mongoConnection.getDatabase();
         DBCollection collection = mongoDatabase.getCollection(COLLECTION_NAME);
 
@@ -74,13 +69,13 @@ public class MongoInputStatusService implements InputStatusService {
 
     @Override
     public InputStatusRecord save(InputStatusRecord statusRecord) {
-        final WriteResult<InputStatusRecord, ObjectId> save = statusCollection.save(statusRecord);
-        return save.getSavedObject();
+        WriteResult save = statusCollection.save(statusRecord);
+        return (InputStatusRecord) save.getSavedObject();
     }
 
     @Override
     public int delete(String inputId) {
-        final WriteResult<InputStatusRecord, ObjectId> delete = statusCollection.removeById(new ObjectId(inputId));
+        WriteResult delete = statusCollection.removeById(new ObjectId(inputId));
         return delete.getN();
     }
 
@@ -95,17 +90,7 @@ public class MongoInputStatusService implements InputStatusService {
     @Subscribe
     public void handleInputDeleted(InputDeleted event) {
         LOG.debug("Input Deleted event received for Input [{}]", event.id());
-
-        // The input system is currently sending an "InputDeleted" event when an input gets deleted AND when an
-        // input gets stopped. Check the database if the input was only stopped or actually deleted.
-        // TODO: Remove this workaround once https://github.com/Graylog2/graylog2-server/issues/7812 is fixed
-        try {
-            inputService.find(event.id());
-            // The input still exists so it only has been stopped. Don't do anything.
-        } catch (NotFoundException e) {
-            // The input is actually gone (deleted) so we can remove the state.
-            LOG.debug("Deleting state for input <{}> from database", event.id());
-            delete(event.id());
-        }
+        // TODO: Pending issue #7812
+        // delete(event.id());
     }
 }
