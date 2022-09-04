@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.regression;
 
@@ -30,6 +30,7 @@ import smile.data.Prostate;
 import smile.math.MathEx;
 import smile.validation.CrossValidation;
 import smile.validation.RegressionValidations;
+import smile.validation.Validation;
 import smile.validation.metric.RMSE;
 
 /**
@@ -130,7 +131,7 @@ public class OLSTest {
         LinearModel model = OLS.fit(Prostate.formula, Prostate.train);
         System.out.println(model);
 
-        double[] prediction = model.predict(Prostate.test);
+        double[] prediction = Validation.test(model, Prostate.test);
         double rmse = RMSE.of(Prostate.testy, prediction);
         System.out.println("RMSE on test data = " + rmse);
         assertEquals(0.721993, rmse, 1E-4);
