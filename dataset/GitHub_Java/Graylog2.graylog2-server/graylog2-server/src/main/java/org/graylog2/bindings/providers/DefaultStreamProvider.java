@@ -23,12 +23,11 @@ import org.graylog2.streams.StreamService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-
 import javax.inject.Inject;
 import javax.inject.Provider;
 import javax.inject.Singleton;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Singleton
 public class DefaultStreamProvider implements Provider<Stream> {
@@ -43,6 +42,11 @@ public class DefaultStreamProvider implements Provider<Stream> {
         this.service = service;
     }
 
+    public void setDefaultStream(Stream defaultStream) {
+        LOG.debug("Setting new default stream: {}", defaultStream);
+        this.sharedInstance.set(defaultStream);
+    }
+
     @Override
     public Stream get() {
         Stream defaultStream = sharedInstance.get();
@@ -55,12 +59,16 @@ public class DefaultStreamProvider implements Provider<Stream> {
             if (defaultStream != null) {
                 return defaultStream;
             }
+            int i = 0;
             do {
                 try {
                     LOG.debug("Loading shared default stream instance");
                     defaultStream = service.load(Stream.DEFAULT_STREAM_ID);
                 } catch (NotFoundException ignored) {
-                    LOG.warn("Unable to load default stream, retrying. Processing is blocked until this succeeds.");
+                    if (i % 10 == 0) {
+                        LOG.warn("Unable to load default stream, tried {} times, retrying every 500ms. Processing is blocked until this succeeds.", i + 1);
+                    }
+                    i++;
                     Uninterruptibles.sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
                 }
             } while (defaultStream == null);
