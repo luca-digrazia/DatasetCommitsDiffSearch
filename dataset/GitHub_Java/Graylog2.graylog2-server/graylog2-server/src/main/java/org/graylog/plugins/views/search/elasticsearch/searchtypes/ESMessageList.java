@@ -24,8 +24,6 @@ import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.query.QueryStringQueryBuilder;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
-import org.elasticsearch.search.sort.FieldSortBuilder;
-import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
 import org.graylog.plugins.views.search.Query;
 import org.graylog.plugins.views.search.SearchJob;
@@ -40,7 +38,6 @@ import org.graylog2.decorators.DecoratorProcessor;
 import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.decorators.SearchResponseDecorator;
-import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.rest.models.messages.responses.ResultMessageSummary;
 import org.graylog2.rest.resources.search.responses.SearchResponse;
 import org.joda.time.DateTime;
@@ -50,8 +47,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
@@ -87,17 +82,8 @@ public class ESMessageList implements ESSearchTypeHandler<MessageList> {
 
         applyHighlightingIfActivated(searchSourceBuilder, job, query);
 
-        final Set<String> effectiveStreamIds = messageList.effectiveStreams().isEmpty()
-                ? query.usedStreamIds()
-                : messageList.effectiveStreams();
-
         final List<Sort> sorts = firstNonNull(messageList.sort(), Collections.singletonList(Sort.create(Message.FIELD_TIMESTAMP, SortOrder.DESC)));
-        sorts.forEach(sort -> {
-            final FieldSortBuilder fieldSort = SortBuilders.fieldSort(sort.field())
-                    .order(sort.order());
-            final Optional<String> fieldType = queryContext.fieldType(effectiveStreamIds, sort.field());
-            searchSourceBuilder.sort(fieldType.map(fieldSort::unmappedType).orElse(fieldSort));
-        });
+        sorts.forEach(sort -> searchSourceBuilder.sort(sort.field(), sort.order()));
     }
 
     private void applyHighlightingIfActivated(SearchSourceBuilder searchSourceBuilder, SearchJob job, Query query) {
@@ -151,7 +137,6 @@ public class ESMessageList implements ESSearchTypeHandler<MessageList> {
 
         final MessageList.Result.Builder resultBuilder = MessageList.Result.result(searchType.id())
                 .messages(decoratedSearchResponse.messages())
-                .effectiveTimerange(AbsoluteRange.create(from, to))
                 .totalResults(decoratedSearchResponse.totalResults());
         return searchType.name().map(resultBuilder::name).orElse(resultBuilder).build();
     }
