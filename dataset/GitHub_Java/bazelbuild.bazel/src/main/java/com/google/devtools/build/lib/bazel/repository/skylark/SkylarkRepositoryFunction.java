@@ -291,7 +291,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
    * method can also be used as a universal check.
    */
   public static boolean isConfigureRule(Rule rule) {
-    return rule.getRuleClassObject().isStarlark()
+    return rule.getRuleClassObject().isSkylark()
         && ((Boolean) rule.getAttributeContainer().getAttr("$configure"));
   }
 

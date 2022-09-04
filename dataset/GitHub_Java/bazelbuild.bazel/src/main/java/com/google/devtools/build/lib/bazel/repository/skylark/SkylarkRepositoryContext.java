@@ -54,6 +54,7 @@ import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutor.ExecutionR
 import com.google.devtools.build.lib.skylarkbuildapi.repository.SkylarkRepositoryContextApi;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Sequence;
@@ -99,9 +100,6 @@ public class SkylarkRepositoryContext
       ImmutableList.of(
           "rules_cc/cc/private/toolchain/unix_cc_configure.bzl",
           "bazel_tools/tools/cpp/unix_cc_configure.bzl");
-
-  /** Max. number of command line args added as a profiler description. */
-  private static final int MAX_PROFILE_ARGS_LEN = 80;
 
   private final Rule rule;
   private final PathPackageLocator packageLocator;
@@ -317,7 +315,7 @@ public class SkylarkRepositoryContext
     SkylarkPath p = getPath("template()", path);
     SkylarkPath t = getPath("template()", template);
     Map<String, String> substitutionMap =
-        Dict.cast(substitutions, String.class, String.class, "substitutions");
+        substitutions.getContents(String.class, String.class, "substitutions");
     WorkspaceRuleEvent w =
         WorkspaceRuleEvent.newTemplateEvent(
             p.toString(),
@@ -409,10 +407,13 @@ public class SkylarkRepositoryContext
     return featureEnabled && isRemotable() && remoteExecEnabled;
   }
 
+  @SuppressWarnings("unchecked")
   private ImmutableMap<String, String> getExecProperties() throws EvalException {
-    return ImmutableMap.copyOf(
-        Dict.cast(
-            getAttr().getValue("exec_properties"), String.class, String.class, "exec_properties"));
+    Dict<String, String> execPropertiesDict =
+        (Dict<String, String>) getAttr().getValue("exec_properties", Dict.class);
+    Map<String, String> execPropertiesMap =
+        execPropertiesDict.getContents(String.class, String.class, "exec_properties");
+    return ImmutableMap.copyOf(execPropertiesMap);
   }
 
   private Map.Entry<PathFragment, Path> getRemotePathFromLabel(Label label)
@@ -446,14 +447,10 @@ public class SkylarkRepositoryContext
       }
     }
 
-    ImmutableList<String> arguments = argumentsBuilder.build();
-
-    try (SilentCloseable c =
-        Profiler.instance()
-            .profile(ProfilerTask.STARLARK_REPOSITORY_FN, profileArgsDesc("remote", arguments))) {
+    try {
       ExecutionResult result =
           remoteExecutor.execute(
-              arguments,
+              argumentsBuilder.build(),
               inputsBuilder.build(),
               getExecProperties(),
               ImmutableMap.copyOf(environment),
@@ -493,30 +490,6 @@ public class SkylarkRepositoryContext
     }
   }
 
-  /** Returns the command line arguments as a string for display in the profiler. */
-  private static String profileArgsDesc(String method, List<String> args) {
-    StringBuilder b = new StringBuilder();
-    b.append(method).append(":");
-
-    final String sep = " ";
-    for (String arg : args) {
-      int appendLen = sep.length() + arg.length();
-      int remainingLen = MAX_PROFILE_ARGS_LEN - b.length();
-
-      if (appendLen <= remainingLen) {
-        b.append(sep);
-        b.append(arg);
-      } else {
-        String shortenedArg = (sep + arg).substring(0, remainingLen);
-        b.append(shortenedArg);
-        b.append("...");
-        break;
-      }
-    }
-
-    return b.toString();
-  }
-
   @Override
   public SkylarkExecutionResult execute(
       Sequence<?> arguments, // <String> or <SkylarkPath> or <Label> expected
@@ -529,10 +502,13 @@ public class SkylarkRepositoryContext
     validateExecuteArguments(arguments);
 
     Map<String, String> environment =
-        Dict.cast(uncheckedEnvironment, String.class, String.class, "environment");
+        uncheckedEnvironment.getContents(String.class, String.class, "environment");
 
     if (canExecuteRemote()) {
-      return executeRemote(arguments, timeout, environment, quiet, workingDirectory);
+      try (SilentCloseable c =
+          Profiler.instance().profile(ProfilerTask.STARLARK_REPOSITORY_FN, "executeRemote")) {
+        return executeRemote(arguments, timeout, environment, quiet, workingDirectory);
+      }
     }
 
     // Execute on the local/host machine
@@ -576,18 +552,13 @@ public class SkylarkRepositoryContext
       workingDirectoryPath = getPath("execute()", workingDirectory).getPath();
     }
     createDirectory(workingDirectoryPath);
-
-    try (SilentCloseable c =
-        Profiler.instance()
-            .profile(ProfilerTask.STARLARK_REPOSITORY_FN, profileArgsDesc("local", args))) {
-      return SkylarkExecutionResult.builder(osObject.getEnvironmentVariables())
-          .addArguments(args)
-          .setDirectory(workingDirectoryPath.getPathFile())
-          .addEnvironmentVariables(environment)
-          .setTimeout(timeoutMillis)
-          .setQuiet(quiet)
-          .execute();
-    }
+    return SkylarkExecutionResult.builder(osObject.getEnvironmentVariables())
+        .addArguments(args)
+        .setDirectory(workingDirectoryPath.getPathFile())
+        .addEnvironmentVariables(environment)
+        .setTimeout(timeoutMillis)
+        .setQuiet(quiet)
+        .execute();
   }
 
   @Override
@@ -681,12 +652,17 @@ public class SkylarkRepositoryContext
     reportProgress("Will fail after download of " + url + ". " + errorMessage);
   }
 
-  private static Map<String, Dict<?, ?>> getAuthContents(Dict<?, ?> x, String what)
-      throws EvalException {
-    // Dict.cast returns Dict<String, raw Dict>.
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    Map<String, Dict<?, ?>> res = (Map) Dict.cast(x, String.class, Dict.class, what);
-    return res;
+  @SuppressWarnings({"unchecked", "rawtypes"}) // Explained in method comment
+  private static Map<String, Dict<?, ?>> getAuthContents(
+      Dict<?, ?> authUnchecked, @Nullable String description) throws EvalException {
+    // This method would not be worth having (Dict#getContents could be called
+    // instead), except that some trickery is required to cast Map<String, Dict> to
+    // Map<String, Dict<?, ?>>.
+
+    // getContents can only guarantee raw types, so Dict is the raw type here.
+    Map<String, Dict> result = authUnchecked.getContents(String.class, Dict.class, description);
+
+    return (Map<String, Dict<?, ?>>) (Map<String, ? extends Dict>) result;
   }
 
   @Override
@@ -697,7 +673,7 @@ public class SkylarkRepositoryContext
       Boolean executable,
       Boolean allowFail,
       String canonicalId,
-      Dict<?, ?> authUnchecked, // <String, Dict> expected
+      Dict<?, ?> authUnchecked, // <String, Dict<?, ?>> expected
       String integrity,
       StarlarkThread thread)
       throws RepositoryFunctionException, EvalException, InterruptedException {
@@ -813,7 +789,7 @@ public class SkylarkRepositoryContext
       String stripPrefix,
       Boolean allowFail,
       String canonicalId,
-      Dict<?, ?> auth, // <String, Dict> expected
+      Dict<?, ?> auth, // <String, Dict<?, ?>> expected
       String integrity,
       StarlarkThread thread)
       throws RepositoryFunctionException, InterruptedException, EvalException {
@@ -1002,7 +978,7 @@ public class SkylarkRepositoryContext
             String.format(
                 "Expected a string or sequence of strings for 'url' argument, "
                     + "but got '%s' item in the sequence",
-                Starlark.type(o)));
+                EvalUtils.getDataTypeName(o)));
       }
       result.add((String) o);
     }
