@@ -1,33 +1,38 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.inputs.codecs;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
-import org.graylog2.inputs.gelf.gelf.GELFMessage;
+import org.apache.commons.lang3.StringUtils;
+import org.graylog2.inputs.codecs.gelf.GELFMessage;
+import org.graylog2.inputs.transports.TcpTransport;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
-import org.graylog2.plugin.inputs.codecs.Codec;
+import org.graylog2.plugin.inputs.annotations.Codec;
+import org.graylog2.plugin.inputs.annotations.ConfigClass;
+import org.graylog2.plugin.inputs.annotations.FactoryClass;
+import org.graylog2.plugin.inputs.codecs.AbstractCodec;
 import org.graylog2.plugin.inputs.codecs.CodecAggregator;
+import org.graylog2.plugin.inputs.transports.NettyTransport;
 import org.graylog2.plugin.journal.RawMessage;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
@@ -35,10 +40,12 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 import java.util.Iterator;
 import java.util.Map;
 
-public class GelfCodec implements Codec {
+@Codec(name = "gelf", displayName = "GELF")
+public class GelfCodec extends AbstractCodec {
     private static final Logger log = LoggerFactory.getLogger(GelfCodec.class);
 
     private final GelfChunkAggregator aggregator;
@@ -46,6 +53,7 @@ public class GelfCodec implements Codec {
 
     @Inject
     public GelfCodec(@Assisted Configuration configuration, GelfChunkAggregator aggregator) {
+        super(configuration);
         this.aggregator = aggregator;
         this.objectMapper = new ObjectMapper();
         objectMapper.configure(JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
@@ -73,6 +81,17 @@ public class GelfCodec implements Codec {
         return -1L;
     }
 
+    private static int intValue(final JsonNode json, final String fieldName) {
+        if (json != null) {
+            final JsonNode value = json.get(fieldName);
+
+            if (value != null) {
+                return value.asInt(-1);
+            }
+        }
+        return -1;
+    }
+
     private static double doubleValue(final JsonNode json, final String fieldName) {
         if (json != null) {
             final JsonNode value = json.get(fieldName);
@@ -87,7 +106,7 @@ public class GelfCodec implements Codec {
     @Nullable
     @Override
     public Message decode(@Nonnull final RawMessage rawMessage) {
-        final GELFMessage gelfMessage = new GELFMessage(rawMessage.getPayload());
+        final GELFMessage gelfMessage = new GELFMessage(rawMessage.getPayload(), rawMessage.getRemoteAddress());
         final String json = gelfMessage.getJSON();
 
         final JsonNode node;
@@ -95,7 +114,8 @@ public class GelfCodec implements Codec {
         try {
             node = objectMapper.readTree(json);
         } catch (final Exception e) {
-            log.error("Could not parse JSON!", e);
+            log.error("Could not parse JSON, first 400 characters: " +
+                              StringUtils.abbreviate(json, 403), e);
             throw new IllegalStateException("JSON is null/could not be parsed (invalid JSON)", e);
         }
 
@@ -103,7 +123,7 @@ public class GelfCodec implements Codec {
         final double messageTimestamp = doubleValue(node, "timestamp");
         final DateTime timestamp;
         if (messageTimestamp <= 0) {
-            timestamp = Tools.iso8601();
+            timestamp = rawMessage.getTimestamp();
         } else {
             // we treat this as a unix timestamp
             timestamp = Tools.dateTimeFromDouble(messageTimestamp);
@@ -129,7 +149,7 @@ public class GelfCodec implements Codec {
         }
 
         // Level is set by server if not specified by client.
-        final long level = longValue(node, "level");
+        final int level = intValue(node, "level");
         if (level > -1) {
             message.addField("level", level);
         }
@@ -160,7 +180,7 @@ public class GelfCodec implements Codec {
             }
 
             // Skip standard or already set fields.
-            if (message.getField(key) != null || Message.RESERVED_FIELDS.contains(key)) {
+            if (message.getField(key) != null || (Message.RESERVED_FIELDS.contains(key) && !Message.RESERVED_SETTABLE_FIELDS.contains(key))) {
                 continue;
             }
 
@@ -194,18 +214,27 @@ public class GelfCodec implements Codec {
         return aggregator;
     }
 
-    @Override
-    public String getName() {
-        return "gelf";
-    }
-
-    @Override
-    public ConfigurationRequest getRequestedConfiguration() {
-        return new ConfigurationRequest();
-    }
-
-    public interface Factory extends Codec.Factory<GelfCodec> {
+    @FactoryClass
+    public interface Factory extends AbstractCodec.Factory<GelfCodec> {
         @Override
         GelfCodec create(Configuration configuration);
+
+        @Override
+        Config getConfig();
+    }
+
+    @ConfigClass
+    public static class Config extends AbstractCodec.Config {
+        @Override
+        public void overrideDefaultValues(@Nonnull ConfigurationRequest cr) {
+            if (cr.containsField(NettyTransport.CK_PORT)) {
+                cr.getField(NettyTransport.CK_PORT).setDefaultValue(12201);
+            }
+
+            // GELF TCP always needs null-byte delimiter!
+            if (cr.containsField(TcpTransport.CK_USE_NULL_DELIMITER)) {
+                cr.getField(TcpTransport.CK_USE_NULL_DELIMITER).setDefaultValue(true);
+            }
+        }
     }
 }
