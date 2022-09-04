@@ -207,8 +207,8 @@ public class ManifestMergerAction {
       Path manifest = options.manifest;
       if (manifest == null) {
         // No primary manifest was passed. Generate a dummy primary.
-
-        manifest = AndroidManifest.asEmpty().writeDummyManifestForAapt(tmp, options.customPackage);
+        manifest = tmp.resolve("dummy_AndroidManifest.xml");
+        AndroidResourceProcessor.writeDummyManifestForAapt(manifest, options.customPackage);
       }
 
       mergedManifest =

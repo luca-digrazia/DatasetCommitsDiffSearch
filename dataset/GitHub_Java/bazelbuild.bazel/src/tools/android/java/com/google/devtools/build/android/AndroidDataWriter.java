@@ -45,9 +45,9 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -165,7 +165,7 @@ public class AndroidDataWriter implements AndroidDataWritingVisitor {
 
   private final Path destination;
 
-  private final Map<String, ResourceValuesDefinitions> valueTags = new LinkedHashMap<>();
+  private final Map<String, ResourceValuesDefinitions> valueTags = new HashMap<>();
   private final Path resourceDirectory;
   private final Path assetDirectory;
   private final PngCruncher cruncher;
@@ -375,9 +375,9 @@ public class AndroidDataWriter implements AndroidDataWritingVisitor {
     }
 
     final Multimap<FullyQualifiedName, Segment> segments = ArrayListMultimap.create();
-    final Set<FullyQualifiedName> adopted = new LinkedHashSet<>();
+    final Set<FullyQualifiedName> adopted = new HashSet<>();
     Namespaces namespaces = Namespaces.empty();
-    final Map<String, String> attributes = Maps.newLinkedHashMap();
+    final Map<String, String> attributes = Maps.newHashMap();
 
     private ValueResourceDefinitionMetadata resource(final FullyQualifiedName fqn) {
       return new StringValueResourceDefinitionMetadata(segments, adopted, fqn);

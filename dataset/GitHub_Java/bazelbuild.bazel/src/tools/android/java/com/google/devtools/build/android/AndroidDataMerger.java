@@ -273,7 +273,7 @@ class AndroidDataMerger {
     }
   }
 
-  UnwrittenMergedAndroidData doMerge(
+  private UnwrittenMergedAndroidData doMerge(
       ParsedAndroidData transitive,
       ParsedAndroidData direct,
       ParsedAndroidData parsedPrimary,

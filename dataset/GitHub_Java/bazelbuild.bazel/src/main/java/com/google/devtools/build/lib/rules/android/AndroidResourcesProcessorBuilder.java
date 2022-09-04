@@ -63,8 +63,8 @@ public class AndroidResourcesProcessorBuilder {
           .withSeparator(ToArg.SeparatorType.COLON_COMMA)
           .toArgConverter();
 
-  private ResourceDependencies resourceDependencies = ResourceDependencies.empty();
-  private AssetDependencies assetDependencies = AssetDependencies.empty();
+  private ResourceDependencies resourceDependencies;
+  private AssetDependencies assetDependencies;
 
   private Artifact proguardOut;
   private Artifact mainDexProguardOut;
@@ -305,9 +305,7 @@ public class AndroidResourcesProcessorBuilder {
         sourceJarOut,
         apkOut,
         dataBindingInfoZip,
-        resourceDependencies,
-        proguardOut,
-        mainDexProguardOut);
+        resourceDependencies);
   }
 
   public AndroidResourcesProcessorBuilder setJavaPackage(String customJavaPackage) {

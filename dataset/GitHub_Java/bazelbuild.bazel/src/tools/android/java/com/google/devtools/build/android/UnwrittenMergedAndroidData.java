@@ -15,48 +15,89 @@ package com.google.devtools.build.android;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
-
+import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.android.AndroidDataMerger.SourceChecker;
+import com.google.devtools.build.android.AndroidResourceMerger.MergingException;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
-/**
- * Merged Android Data that has yet to written into a {@link MergedAndroidData}.
- */
+/** Merged Android Data that has yet to written into a {@link MergedAndroidData}. */
 public class UnwrittenMergedAndroidData {
 
   private final Path manifest;
-  private final AndroidDataSet resources;
-  private final AndroidDataSet deps;
+  private final ParsedAndroidData primary;
+  private final ParsedAndroidData transitive;
+  private final Set<MergeConflict> conflicts;
 
   public static UnwrittenMergedAndroidData of(
-      Path manifest, AndroidDataSet resources, AndroidDataSet deps) {
-    return new UnwrittenMergedAndroidData(manifest, resources, deps);
+      Path manifest,
+      ParsedAndroidData resources,
+      ParsedAndroidData deps,
+      Set<MergeConflict> conflicts) {
+    return new UnwrittenMergedAndroidData(manifest, resources, deps, conflicts);
   }
 
-  private UnwrittenMergedAndroidData(Path manifest, AndroidDataSet resources, AndroidDataSet deps) {
+  public static UnwrittenMergedAndroidData of(
+      Path manifest, ParsedAndroidData resources, ParsedAndroidData deps) {
+    return of(manifest, resources, deps, ImmutableSet.of());
+  }
+
+  private UnwrittenMergedAndroidData(
+      Path manifest,
+      ParsedAndroidData primary,
+      ParsedAndroidData transitive,
+      Set<MergeConflict> conflicts) {
     this.manifest = manifest;
-    this.resources = resources;
-    this.deps = deps;
+    this.primary = primary;
+    this.transitive = transitive;
+    this.conflicts = conflicts;
   }
 
   /**
-   * Writes the android data to directories for consumption by aapt.
-   * @param newResourceDirectory The new resource directory to write to.
+   * Writes the android data to the filesystem.
+   *
+   * @param mergedDataWriter Destination writer.
    * @return A MergedAndroidData that is ready for further tool processing.
    * @throws IOException when something goes wrong while writing.
+   * @throws MergingException when something goes wrong with the merge.
    */
-  public MergedAndroidData write(Path newResourceDirectory) throws IOException {
-    // TODO(corysmith): Implement write.
-    throw new UnsupportedOperationException();
+  public MergedAndroidData write(AndroidDataWriter mergedDataWriter)
+      throws IOException, MergingException {
+    try {
+      primary.writeAssetsTo(mergedDataWriter);
+      primary.writeResourcesTo(mergedDataWriter);
+      transitive.writeAssetsTo(mergedDataWriter);
+      transitive.writeResourcesTo(mergedDataWriter);
+      return new MergedAndroidData(
+          mergedDataWriter.resourceDirectory(),
+          mergedDataWriter.assetDirectory(),
+          this.manifest != null ? mergedDataWriter.copyManifest(this.manifest) : null);
+    } finally {
+      // Flush to make sure all writing is completed before returning a MergedAndroidData.
+      // If resources aren't fully written, the MergedAndroidData might be invalid.
+      mergedDataWriter.flush();
+    }
+  }
+
+  public void writeResourceClass(AndroidResourceClassWriter resourceClassWriter)
+      throws IOException {
+    primary.writeResourcesTo(resourceClassWriter);
+    transitive.writeResourcesTo(resourceClassWriter);
+    resourceClassWriter.flush();
   }
 
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
         .add("manifest", manifest)
-        .add("resources", resources)
-        .add("deps", deps)
+        .add("primary", primary)
+        .add("transitive", transitive)
+        .add("conflicts", conflicts)
         .toString();
   }
 
@@ -70,13 +111,14 @@ public class UnwrittenMergedAndroidData {
     }
     UnwrittenMergedAndroidData that = (UnwrittenMergedAndroidData) other;
     return Objects.equals(manifest, that.manifest)
-        && Objects.equals(resources, that.resources)
-        && Objects.equals(deps, that.deps);
+        && Objects.equals(primary, that.primary)
+        && Objects.equals(transitive, that.transitive)
+        && Objects.equals(conflicts, that.conflicts);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(manifest, resources, deps);
+    return Objects.hash(manifest, primary, transitive, conflicts);
   }
 
   @VisibleForTesting
@@ -85,12 +127,30 @@ public class UnwrittenMergedAndroidData {
   }
 
   @VisibleForTesting
-  AndroidDataSet getResources() {
-    return resources;
+  ParsedAndroidData getPrimary() {
+    return primary;
   }
 
   @VisibleForTesting
-  AndroidDataSet getDeps() {
-    return deps;
+  ParsedAndroidData getTransitive() {
+    return transitive;
+  }
+
+  public void serializeTo(AndroidDataSerializer serializer) {
+    for (Map.Entry<DataKey, DataAsset> entry : primary.iterateAssetEntries()) {
+      serializer.queueForSerialization(entry.getKey(), entry.getValue());
+    }
+    primary.serializeAssetsTo(serializer);
+    primary.serializeResourcesTo(serializer);
+  }
+
+  public List<String> asConflictMessagesIfValidWith(SourceChecker checker) throws IOException {
+    List<String> messages = new ArrayList<>();
+    for (MergeConflict conflict : conflicts) {
+      if (conflict.isValidWith(checker)) {
+        messages.add(conflict.toConflictMessage());
+      }
+    }
+    return messages;
   }
 }

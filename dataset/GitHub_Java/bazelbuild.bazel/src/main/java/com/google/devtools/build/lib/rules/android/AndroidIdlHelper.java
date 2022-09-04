@@ -110,7 +110,7 @@ public class AndroidIdlHelper {
           idlSourceJar);
     }
     builder
-        .addNativeDeclaredProvider(androidIdlProvider)
+        .addProvider(AndroidIdlProvider.class, androidIdlProvider)
         .addOutputGroup(IDL_JARS_OUTPUT_GROUP, androidIdlProvider.getTransitiveIdlJars());
   }
 
@@ -432,7 +432,7 @@ public class AndroidIdlHelper {
 
     for (AndroidIdlProvider dep :
         AndroidCommon.getTransitivePrerequisites(
-            ruleContext, Mode.TARGET, AndroidIdlProvider.PROVIDER)) {
+            ruleContext, Mode.TARGET, AndroidIdlProvider.class)) {
       rootsBuilder.addTransitive(dep.getTransitiveIdlImportRoots());
       importsBuilder.addTransitive(dep.getTransitiveIdlImports());
       preprocessedBuilder.addTransitive(dep.getTransitiveIdlPreprocessed());
@@ -470,7 +470,7 @@ public class AndroidIdlHelper {
     Collection<Artifact> idlPreprocessed = getIdlPreprocessed(ruleContext);
     preprocessedBuilder.addAll(idlPreprocessed);
 
-    return new AndroidIdlProvider(
+    return AndroidIdlProvider.create(
         rootsBuilder.build(),
         importsBuilder.build(),
         jarsBuilder.build(),
