@@ -43,7 +43,6 @@ import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.Differencer;
-import com.google.devtools.build.skyframe.FunctionHermeticity;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -394,8 +393,7 @@ public class FilesystemValueChecker {
     // There doesn't appear to be any facility to batch list directories... we must
     // do things the 'slow' way.
     try {
-      Set<PathFragment> currentDirectoryValue =
-          TreeArtifactValue.explodeDirectory(artifact.getPath());
+      Set<PathFragment> currentDirectoryValue = TreeArtifactValue.explodeDirectory(artifact);
       Set<PathFragment> valuePaths = value.getChildPaths();
       return !currentDirectoryValue.equals(valuePaths);
     } catch (IOException e) {
@@ -508,10 +506,6 @@ public class FilesystemValueChecker {
         if (!checker.applies(key)) {
           continue;
         }
-        Preconditions.checkState(
-            key.functionName().getHermeticity() == FunctionHermeticity.NONHERMETIC,
-            "Only non-hermetic keys can be dirty roots: %s",
-            key);
         executor.execute(
             wrapper.wrap(
                 () -> {
