@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
@@ -150,8 +149,8 @@ public final class PlatformMappingValue implements SkyValue {
   PlatformMappingValue(
       Map<Label, Collection<String>> platformsToFlags,
       Map<Collection<String>, Label> flagsToPlatforms) {
-    this.platformsToFlags = Preconditions.checkNotNull(platformsToFlags);
-    this.flagsToPlatforms = Preconditions.checkNotNull(flagsToPlatforms);
+    this.platformsToFlags = platformsToFlags;
+    this.flagsToPlatforms = flagsToPlatforms;
     this.parserCache =
         CacheBuilder.newBuilder()
             .initialCapacity(platformsToFlags.size() + flagsToPlatforms.size())
@@ -229,7 +228,7 @@ public final class PlatformMappingValue implements SkyValue {
       }
     }
 
-    return BuildConfigurationValue.keyWithoutPlatformMapping(
+    return BuildConfigurationValue.key(
         original.getFragments(),
         BuildOptions.diffForReconstruction(defaultBuildOptions, modifiedOptions));
   }
@@ -249,31 +248,5 @@ public final class PlatformMappingValue implements SkyValue {
     parser.parse(ImmutableList.copyOf(args));
     // TODO(schmitt): Parse starlark options as well.
     return parser;
-  }
-
-  @Override
-  public boolean equals(Object obj) {
-    if (this == obj) {
-      return true;
-    }
-    if (!(obj instanceof PlatformMappingValue)) {
-      return false;
-    }
-    PlatformMappingValue that = (PlatformMappingValue) obj;
-    return this.flagsToPlatforms.equals(that.flagsToPlatforms)
-        && this.platformsToFlags.equals(that.platformsToFlags);
-  }
-
-  @Override
-  public int hashCode() {
-    return 37 * flagsToPlatforms.hashCode() + platformsToFlags.hashCode();
-  }
-
-  @Override
-  public String toString() {
-    return MoreObjects.toStringHelper(this)
-        .add("flagsToPlatforms", flagsToPlatforms)
-        .add("platformsToFlags", platformsToFlags)
-        .toString();
   }
 }
