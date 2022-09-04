@@ -80,12 +80,6 @@ public class HibernateSearchElasticsearchBuildTimeConfig {
          */
         @ConfigItem
         public AnalysisConfig analysis;
-
-        /**
-         * Configuration for the index layout.
-         */
-        @ConfigItem
-        public LayoutConfig layout;
     }
 
     @ConfigGroup
@@ -95,14 +89,5 @@ public class HibernateSearchElasticsearchBuildTimeConfig {
          */
         @ConfigItem
         public Optional<Class<?>> configurer;
-    }
-
-    @ConfigGroup
-    public static class LayoutConfig {
-        /**
-         * The class or the name of the bean used to configure layout (e.g. index names, index aliases).
-         */
-        @ConfigItem
-        public Optional<Class<?>> strategy;
     }
 }
