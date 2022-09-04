@@ -17,15 +17,15 @@
 
 package smile.validation;
 
-import java.util.function.BiFunction;
-import java.util.function.Function;
 import smile.classification.Classifier;
 import smile.classification.DataFrameClassifier;
 import smile.data.DataFrame;
-import smile.data.formula.Formula;
 import smile.math.MathEx;
 import smile.regression.DataFrameRegression;
 import smile.regression.Regression;
+
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 /**
  * The bootstrap is a general tool for assessing statistical accuracy. The basic
@@ -106,7 +106,7 @@ public class Bootstrap {
 
             Classifier<T> model = trainer.apply(trainx, trainy);
             int[] prediction = model.predict(testx);
-            error[i] = 1 - Accuracy.of(testy, prediction);
+            error[i] = 1 - Accuracy.apply(testy, prediction);
         }
 
         return error;
@@ -116,17 +116,17 @@ public class Bootstrap {
      * Runs cross validation tests.
      * @return the error rates of each round.
      */
-    public double[] classification(Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameClassifier> trainer) {
+    public double[] classification(DataFrame data, Function<DataFrame, DataFrameClassifier> trainer) {
         double[] error = new double[k];
 
         for (int i = 0; i < k; i++) {
-            DataFrameClassifier model = trainer.apply(formula, data.of(train[i]));
+            DataFrameClassifier model = trainer.apply(data.of(train[i]));
 
             DataFrame oob = data.of(test[i]);
             int[] prediction = model.predict(oob);
-            int[] testy = model.formula().y(oob).toIntArray();
+            int[] testy = model.formula().get().y(oob).toIntArray();
 
-            error[i] = 1 - Accuracy.of(testy, prediction);
+            error[i] = 1 - Accuracy.apply(testy, prediction);
         }
 
         return error;
@@ -147,7 +147,7 @@ public class Bootstrap {
 
             Regression<T> model = trainer.apply(trainx, trainy);
             double[] prediction = model.predict(testx);
-            rmse[i] = RMSE.of(testy, prediction);
+            rmse[i] = RMSE.apply(testy, prediction);
         }
 
         return rmse;
@@ -157,16 +157,16 @@ public class Bootstrap {
      * Runs bootstrap tests.
      * @return the root mean squared error of each round.
      */
-    public double[] regression(Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameRegression> trainer) {
+    public double[] regression(DataFrame data, Function<DataFrame, DataFrameRegression> trainer) {
         double[] rmse = new double[k];
 
         for (int i = 0; i < k; i++) {
-            DataFrameRegression model = trainer.apply(formula, data.of(train[i]));
+            DataFrameRegression model = trainer.apply(data.of(train[i]));
             DataFrame oob = data.of(test[i]);
             double[] prediction = model.predict(oob);
-            double[] testy = model.formula().y(oob).toDoubleArray();
+            double[] testy = model.formula().get().y(oob).toDoubleArray();
 
-            rmse[i] = RMSE.of(testy, prediction);
+            rmse[i] = RMSE.apply(testy, prediction);
         }
 
         return rmse;
@@ -185,9 +185,9 @@ public class Bootstrap {
      * Runs cross validation tests.
      * @return the error rates of each round.
      */
-    public static double[] classification(int k, Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameClassifier> trainer) {
+    public static double[] classification(int k, DataFrame data, Function<DataFrame, DataFrameClassifier> trainer) {
         Bootstrap cv = new Bootstrap(data.size(), k);
-        return cv.classification(formula, data, trainer);
+        return cv.classification(data, trainer);
     }
 
     /**
@@ -203,8 +203,8 @@ public class Bootstrap {
      * Runs bootstrap tests.
      * @return the root mean squared error of each round.
      */
-    public static double[] regression(int k, Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameRegression> trainer) {
+    public static double[] regression(int k, DataFrame data, Function<DataFrame, DataFrameRegression> trainer) {
         Bootstrap cv = new Bootstrap(data.size(), k);
-        return cv.regression(formula, data, trainer);
+        return cv.regression(data, trainer);
     }
 }

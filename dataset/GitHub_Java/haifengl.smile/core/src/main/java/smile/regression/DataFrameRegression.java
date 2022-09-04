@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,10 +13,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.regression;
 
+import java.util.Arrays;
+import java.util.Optional;
 import smile.data.DataFrame;
 import smile.data.Tuple;
 import smile.data.formula.Formula;
@@ -42,9 +44,6 @@ public interface DataFrameRegression {
      * @return the predicted values.
      */
     default double[] predict(DataFrame data) {
-        // Binds the formula to the data frame's schema in case that
-        // it is different from that of training data.
-        formula().bind(data.schema());
         int n = data.size();
         double[] y = new double[n];
         for (int i = 0; i < n; i++) {
@@ -54,8 +53,8 @@ public interface DataFrameRegression {
     }
 
     /** Returns the formula associated with the model. */
-    Formula formula();
+    Optional<Formula> formula();
 
     /** Returns the design matrix schema. */
-    StructType schema();
+    Optional<StructType> schema();
 }

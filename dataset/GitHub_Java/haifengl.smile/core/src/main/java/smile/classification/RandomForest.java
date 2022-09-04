@@ -32,7 +32,8 @@ import smile.data.formula.Formula;
 import smile.data.type.StructType;
 import smile.data.vector.BaseVector;
 import smile.math.MathEx;
-import smile.util.Strings;
+import smile.validation.Accuracy;
+import smile.validation.ClassificationMeasure;
 
 /**
  * Random forest for classification. Random forest is an ensemble classifier
@@ -186,8 +187,7 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier 
         int maxNodes = Integer.valueOf(prop.getProperty("smile.random.forest.max.nodes", "100"));
         int nodeSize = Integer.valueOf(prop.getProperty("smile.random.forest.node.size", "5"));
         double subsample = Double.valueOf(prop.getProperty("smile.random.forest.sample.rate", "1.0"));
-        Optional<int[]> classWeight = Optional.ofNullable(Strings.parseIntArray(prop.getProperty("smile.random.forest.class.weight")));
-        return fit(formula, data, ntrees, mtry, rule, maxNodes, nodeSize, subsample, classWeight, Optional.empty());
+        return fit(formula, data, ntrees, mtry, rule, maxNodes, nodeSize, subsample);
     }
 
     /**
@@ -206,7 +206,7 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier 
      *                  sampling without replacement.
      */
     public static RandomForest fit(Formula formula, DataFrame data, int ntrees, int mtry, SplitRule rule, int maxNodes, int nodeSize, double subsample) {
-        return fit(formula, data, ntrees, mtry, rule, maxNodes, nodeSize, subsample, Optional.empty());
+        return fit(formula, data, ntrees, mtry, rule, maxNodes, nodeSize, subsample, Optional.empty(), Optional.empty());
     }
 
     /**
@@ -223,37 +223,6 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier 
      * @param maxNodes the maximum number of leaf nodes in the tree.
      * @param subsample the sampling rate for training tree. 1.0 means sampling with replacement. < 1.0 means
      *                  sampling without replacement.
-     * @param classWeight Priors of the classes. The weight of each class
-     *                    is roughly the ratio of samples in each class.
-     *                    For example, if there are 400 positive samples
-     *                    and 100 negative samples, the classWeight should
-     *                    be [1, 4] (assuming label 0 is of negative, label 1 is of
-     *                    positive).
-     */
-    public static RandomForest fit(Formula formula, DataFrame data, int ntrees, int mtry, SplitRule rule, int maxNodes, int nodeSize, double subsample, Optional<int[]> classWeight) {
-        return fit(formula, data, ntrees, mtry, rule, maxNodes, nodeSize, subsample, classWeight, Optional.empty());
-    }
-
-    /**
-     * Learns a random forest for regression.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
-     * @param ntrees the number of trees.
-     * @param mtry the number of input variables to be used to determine the decision
-     * at a node of the tree. p/3 seems to give generally good performance,
-     * where p is the number of variables.
-     * @param nodeSize the number of instances in a node below which the tree will
-     * not split, setting nodeSize = 5 generally gives good results.
-     * @param maxNodes the maximum number of leaf nodes in the tree.
-     * @param subsample the sampling rate for training tree. 1.0 means sampling with replacement. < 1.0 means
-     *                  sampling without replacement.
-     * @param classWeight Priors of the classes. The weight of each class
-     *                    is roughly the ratio of samples in each class.
-     *                    For example, if there are 400 positive samples
-     *                    and 100 negative samples, the classWeight should
-     *                    be [1, 4] (assuming label 0 is of negative, label 1 is of
-     *                    positive).
      * @param seedGenerator RNG seed generator.
      */
     public static RandomForest fit(Formula formula, DataFrame data, int ntrees, int mtry, SplitRule rule, int maxNodes, int nodeSize, double subsample, Optional<int[]> classWeight, LongSupplier seedGenerator) {
@@ -398,29 +367,24 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier 
 
         double error = m > 0 ? (double) err / m : 0.0;
 
-        return new RandomForest(formula, k, trees, error, importance(trees), codec.labels);
-    }
-
-    /** Calculate the importance of the whole forest. */
-    private static double[] importance(List<Tree> trees) {
-        int p = trees.get(0).tree.importance().length;
-        double[] importance = new double[p];
+        double[] importance = new double[x.ncols()];
         for (Tree tree : trees) {
             double[] imp = tree.tree.importance();
-            for (int i = 0; i < p; i++) {
+            for (int i = 0; i < imp.length; i++) {
                 importance[i] += imp[i];
             }
         }
-        return importance;
+
+        return new RandomForest(formula, k, trees, error, importance, codec.labels);
     }
 
     @Override
-    public Formula formula() {
-        return formula;
+    public Optional<Formula> formula() {
+        return Optional.of(formula);
     }
 
     @Override
-    public StructType schema() {
+    public Optional<StructType> schema() {
         return trees.get(0).tree.schema();
     }
 
@@ -547,19 +511,5 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier 
         }
 
         return prediction;
-    }
-
-    /**
-     * Returns a new random forest by reduced error pruning.
-     * @param test the test data set to evaluate the errors of nodes.
-     * @return a new pruned random forest.
-     */
-    public RandomForest prune(DataFrame test) {
-        List<Tree> forest = trees.stream().parallel()
-                .map(tree -> new Tree(tree.tree.prune(test, formula, labels), tree.weight))
-                .collect(Collectors.toList());
-
-        // The tree weight and OOB error are still the old one as we don't access to the training data here.
-        return new RandomForest(formula, k, forest, error, importance(forest), labels);
     }
 }

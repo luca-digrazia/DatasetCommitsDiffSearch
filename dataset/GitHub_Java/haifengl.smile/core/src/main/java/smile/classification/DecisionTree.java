@@ -18,6 +18,8 @@
 package smile.classification;
 
 import java.util.*;
+import java.util.stream.IntStream;
+
 import smile.base.cart.*;
 import smile.data.DataFrame;
 import smile.data.Tuple;
@@ -352,19 +354,23 @@ public class DecisionTree extends CART implements SoftClassifier<Tuple>, DataFra
     @Override
     public int predict(Tuple x, double[] posteriori) {
         DecisionNode leaf = (DecisionNode) root.predict(formula.map(f -> f.x(x)).orElse(x));
-        leaf.posteriori(posteriori);
+        // add-k smoothing
+        double n = leaf.size() + k;
+        int[] count = leaf.count();
+        for (int i = 0; i < count.length; i++) {
+            posteriori[i] = (count[i] + 1) / n;
+        }
         int y = leaf.output();
         return labels.map($ -> $.label(y)).orElse(y);
     }
 
-    /** Returns null if the tree is part of ensemble algorithm. */
     @Override
-    public Formula formula() {
-        return formula.orElse(null);
+    public Optional<Formula> formula() {
+        return formula;
     }
 
     @Override
-    public StructType schema() {
-        return schema;
+    public Optional<StructType> schema() {
+        return Optional.of(schema);
     }
 }

@@ -18,7 +18,12 @@
 package smile.regression;
 
 import java.io.Serializable;
-import java.util.function.ToDoubleFunction;
+import java.util.Arrays;
+import java.util.Optional;
+import smile.data.DataFrame;
+import smile.data.Tuple;
+import smile.data.formula.Formula;
+import smile.data.type.StructType;
 
 /**
  * Regression analysis includes any techniques for modeling and analyzing
@@ -30,7 +35,7 @@ import java.util.function.ToDoubleFunction;
  * 
  * @author Haifeng Li
  */
-public interface Regression<T> extends ToDoubleFunction<T>, Serializable {
+public interface Regression<T> extends Serializable {
     /**
      * Predicts the dependent variable of an instance.
      * @param x an instance.
@@ -51,10 +56,5 @@ public interface Regression<T> extends ToDoubleFunction<T>, Serializable {
             y[i] = predict(x[i]);
         }
         return y;
-    }
-
-    @Override
-    default double applyAsDouble(T x) {
-        return predict(x);
     }
 }

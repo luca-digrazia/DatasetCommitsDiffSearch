@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,11 +13,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.stream.IntStream;
 
@@ -29,10 +30,11 @@ import smile.data.type.DataTypes;
 import smile.data.type.StructField;
 import smile.data.type.StructType;
 import smile.data.vector.BaseVector;
+import smile.data.vector.DoubleVector;
 import smile.math.MathEx;
 import smile.regression.RegressionTree;
-import smile.util.IntSet;
-import smile.util.Strings;
+import smile.validation.Accuracy;
+import smile.validation.ClassificationMeasure;
 
 /**
  * Gradient boosting for classification. Gradient boosting is typically used
@@ -109,7 +111,6 @@ import smile.util.Strings;
  */
 public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassifier {
     private static final long serialVersionUID = 2L;
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(GradientTreeBoost.class);
 
     /**
      * Design matrix formula
@@ -141,11 +142,11 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
     /**
      * The shrinkage parameter in (0, 1] controls the learning rate of procedure.
      */
-    private double shrinkage = 0.05;
+    private double shrinkage = 0.005;
     /**
      * The class label encoder.
      */
-    private IntSet labels;
+    private ClassLabel labels;
 
     /**
      * Constructor of binary class.
@@ -156,7 +157,7 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
      * @param importance variable importance
      */
     public GradientTreeBoost(Formula formula, RegressionTree[] trees, double b, double shrinkage, double[] importance) {
-        this(formula, trees, b, shrinkage, importance, IntSet.of(2));
+        this(formula, trees, b, shrinkage, importance, ClassLabel.of(2));
     }
 
     /**
@@ -168,7 +169,7 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
      * @param importance variable importance
      * @param labels     class labels
      */
-    public GradientTreeBoost(Formula formula, RegressionTree[] trees, double b, double shrinkage, double[] importance, IntSet labels) {
+    public GradientTreeBoost(Formula formula, RegressionTree[] trees, double b, double shrinkage, double[] importance, ClassLabel labels) {
         this.formula = formula;
         this.k = 2;
         this.trees = trees;
@@ -186,7 +187,7 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
      * @param importance variable importance
      */
     public GradientTreeBoost(Formula formula, RegressionTree[][] forest, double shrinkage, double[] importance) {
-        this(formula, forest, shrinkage, importance, IntSet.of(forest.length));
+        this(formula, forest, shrinkage, importance, ClassLabel.of(forest.length));
     }
 
     /**
@@ -197,7 +198,7 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
      * @param importance variable importance
      * @param labels     class labels
      */
-    public GradientTreeBoost(Formula formula, RegressionTree[][] forest, double shrinkage, double[] importance, IntSet labels) {
+    public GradientTreeBoost(Formula formula, RegressionTree[][] forest, double shrinkage, double[] importance, ClassLabel labels) {
         this.formula = formula;
         this.k = forest.length;
         this.forest = forest;
@@ -207,7 +208,7 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
     }
 
     /**
-     * Fits a gradient tree boosting for classification.
+     * Learns a gradient tree boosting for classification.
      *
      * @param formula a symbolic description of the model to be fitted.
      * @param data    the data frame of the explanatory and response variables.
@@ -217,38 +218,43 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
     }
 
     /**
-     * Fits a gradient tree boosting for classification.
+     * Learns a gradient tree boosting for classification.
      *
      * @param formula a symbolic description of the model to be fitted.
      * @param data    the data frame of the explanatory and response variables.
      */
     public static GradientTreeBoost fit(Formula formula, DataFrame data, Properties prop) {
         int ntrees = Integer.valueOf(prop.getProperty("smile.gbt.trees", "500"));
-        int maxDepth = Integer.valueOf(prop.getProperty("smile.gbt.max.depth", "20"));
         int maxNodes = Integer.valueOf(prop.getProperty("smile.gbt.max.nodes", "6"));
         int nodeSize = Integer.valueOf(prop.getProperty("smile.gbt.node.size", "5"));
         double shrinkage = Double.valueOf(prop.getProperty("smile.gbt.shrinkage", "0.05"));
         double subsample = Double.valueOf(prop.getProperty("smile.gbt.sample.rate", "0.7"));
-        return fit(formula, data, ntrees, maxDepth, maxNodes, nodeSize, shrinkage, subsample);
+        return fit(formula, data, ntrees, maxNodes, nodeSize, shrinkage, subsample);
     }
 
     /**
-     * Fits a gradient tree boosting for classification.
+     * Constructor. Learns a gradient tree boosting for classification.
      *
      * @param formula   a symbolic description of the model to be fitted.
      * @param data      the data frame of the explanatory and response variables.
      * @param ntrees    the number of iterations (trees).
-     * @param maxDepth the maximum depth of the tree.
-     * @param maxNodes the maximum number of leaf nodes in the tree.
+     * @param maxNodes  the number of leaves in each tree.
      * @param nodeSize  the number of instances in a node below which the tree will
      *                  not split, setting nodeSize = 5 generally gives good results.
      * @param shrinkage the shrinkage parameter in (0, 1] controls the learning rate of procedure.
      * @param subsample the sampling fraction for stochastic tree boosting.
      */
-    public static GradientTreeBoost fit(Formula formula, DataFrame data, int ntrees, int maxDepth,
-                                        int maxNodes, int nodeSize, double shrinkage, double subsample) {
+    public static GradientTreeBoost fit(Formula formula, DataFrame data, int ntrees, int maxNodes, int nodeSize, double shrinkage, double subsample) {
         if (ntrees < 1) {
             throw new IllegalArgumentException("Invalid number of trees: " + ntrees);
+        }
+
+        if (maxNodes < 2) {
+            throw new IllegalArgumentException("Invalid maximum leaves: " + maxNodes);
+        }
+
+        if (nodeSize < 1) {
+            throw new IllegalArgumentException("Invalid minimum size of leaves: " + nodeSize);
         }
 
         if (shrinkage <= 0 || shrinkage > 1) {
@@ -263,22 +269,22 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
         BaseVector y = formula.y(data);
 
         int[][] order = CART.order(x);
-        ClassLabels codec = ClassLabels.fit(y);
+        ClassLabel.Result codec = ClassLabel.fit(y);
 
         if (codec.k == 2) {
-            return train2(formula, x, codec, order, ntrees, maxDepth, maxNodes, nodeSize, shrinkage, subsample);
+            return train2(formula, x, codec, order, ntrees, maxNodes, nodeSize, shrinkage, subsample);
         } else {
-            return traink(formula, x, codec, order, ntrees, maxDepth, maxNodes, nodeSize, shrinkage, subsample);
+            return traink(formula, x, codec, order, ntrees, maxNodes, nodeSize, shrinkage, subsample);
         }
     }
 
     @Override
-    public Formula formula() {
-        return formula;
+    public Optional<Formula> formula() {
+        return Optional.of(formula);
     }
 
     @Override
-    public StructType schema() {
+    public Optional<StructType> schema() {
         if (trees != null)
             return trees[0].schema();
         else
@@ -301,7 +307,7 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
     /**
      * Train L2 tree boost.
      */
-    private static GradientTreeBoost train2(Formula formula, DataFrame x, ClassLabels codec, int[][] order, int ntrees, int maxDepth, int maxNodes, int nodeSize, double shrinkage, double subsample) {
+    private static GradientTreeBoost train2(Formula formula, DataFrame x, ClassLabel.Result codec, int[][] order, int ntrees, int maxNodes, int nodeSize, double shrinkage, double subsample) {
         int n = x.nrows();
         int k = codec.k;
         int[] y = codec.y;
@@ -309,25 +315,34 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
         int[] nc = new int[k];
         for (int i = 0; i < n; i++) nc[y[i]]++;
 
-        Loss loss = Loss.logistic(y);
-        double b = loss.intercept(null);
-        double[] h = loss.residual(); // this is actually the output of boost trees.
+        int[] y2 = Arrays.stream(y).map(i -> 2 * i - 1).toArray();
+
+        double[] h = new double[n]; // current F(x_i)
+        double[] response = new double[n]; // response variable for regression tree.
         StructField field = new StructField("residual", DataTypes.DoubleType);
 
+        double mu = MathEx.mean(y2);
+        double b = 0.5 * Math.log((1 + mu) / (1 - mu));
+
+        Arrays.fill(h, b);
+
+        RegressionNodeOutput output = new BinaryLogisticRegressionNodeOutput(response);
         RegressionTree[] trees = new RegressionTree[ntrees];
 
         int[] permutation = IntStream.range(0, n).toArray();
         int[] samples = new int[n];
 
-        for (int t = 0; t < ntrees; t++) {
+        for (int m = 0; m < ntrees; m++) {
             sampling(samples, permutation, nc, y, subsample);
 
-            logger.info("Training {} tree", Strings.ordinal(t+1));
-            RegressionTree tree = new RegressionTree(x, loss, field, maxDepth, maxNodes, nodeSize, x.ncols(), samples, order);
-            trees[t] = tree;
+            for (int i = 0; i < n; i++) {
+                response[i] = 2.0 * y2[i] / (1 + Math.exp(2 * y2[i] * h[i]));
+            }
+
+            trees[m] = new RegressionTree(x, response, field, maxNodes, nodeSize, x.ncols(), samples, order, output);
 
             for (int i = 0; i < n; i++) {
-                h[i] += shrinkage * tree.predict(x.get(i));
+                h[i] += shrinkage * trees[m].predict(x.get(i));
             }
         }
 
@@ -345,9 +360,7 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
     /**
      * Train L-k tree boost.
      */
-    private static GradientTreeBoost traink(Formula formula, DataFrame x, ClassLabels codec, int[][] order,
-                                            int ntrees, int maxDepth, int maxNodes, int nodeSize,
-                                            double shrinkage, double subsample) {
+    private static GradientTreeBoost traink(Formula formula, DataFrame x, ClassLabel.Result codec, int[][] order, int ntrees, int maxNodes, int nodeSize, double shrinkage, double subsample) {
         int n = x.nrows();
         int k = codec.k;
         int[] y = codec.y;
@@ -355,38 +368,52 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
         int[] nc = new int[k];
         for (int i = 0; i < n; i++) nc[y[i]]++;
 
+        double[][] h = new double[k][n]; // boost tree output.
+        double[][] p = new double[k][n]; // posteriori probabilities.
+        double[][] response = new double[k][n]; // pseudo response.
         StructField field = new StructField("residual", DataTypes.DoubleType);
+
         RegressionTree[][] forest = new RegressionTree[k][ntrees];
 
-        double[][] p = new double[n][k]; // posteriori probabilities.
-        double[][] h = new double[k][]; // boost tree output.
-        Loss[] loss = new Loss[k];
+        RegressionNodeOutput[] output = new RegressionNodeOutput[k];
         for (int i = 0; i < k; i++) {
-            loss[i] = Loss.logistic(i, k, y, p);
-            h[i] = loss[i].residual();
+            output[i] = new MultiClassLogisticRegressionNodeOutput(k, response[i]);
         }
 
         int[] permutation = IntStream.range(0, n).toArray();
         int[] samples = new int[n];
 
-        for (int t = 0; t < ntrees; t++) {
-            logger.info("Training {} tree", Strings.ordinal(t+1));
+        for (int m = 0; m < ntrees; m++) {
             for (int i = 0; i < n; i++) {
+                double max = Double.NEGATIVE_INFINITY;
                 for (int j = 0; j < k; j++) {
-                    p[i][j] = h[j][i];
+                    if (max < h[j][i]) {
+                        max = h[j][i];
+                    }
                 }
-                MathEx.softmax(p[i]);
+
+                double Z = 0.0;
+                for (int j = 0; j < k; j++) {
+                    p[j][i] = Math.exp(h[j][i] - max);
+                    Z += p[j][i];
+                }
+
+                for (int j = 0; j < k; j++) {
+                    p[j][i] /= Z;
+                }
             }
 
             for (int j = 0; j < k; j++) {
+                for (int i = 0; i < n; i++) {
+                    response[j][i] = (y[i] == j ? 1.0 : 0.0) - p[j][i];
+                }
+
                 sampling(samples, permutation, nc, y, subsample);
 
-                RegressionTree tree = new RegressionTree(x, loss[j], field, maxDepth, maxNodes, nodeSize, x.ncols(), samples, order);
-                forest[j][t] = tree;
+                forest[j][m] = new RegressionTree(x, response[j], field, maxNodes, nodeSize, x.ncols(), samples, order, output[j]);
 
-                double[] hj = h[j];
                 for (int i = 0; i < n; i++) {
-                    hj[i] += shrinkage * tree.predict(x.get(i));
+                    h[j][i] += shrinkage * forest[j][m].predict(x.get(i));
                 }
             }
         }
@@ -484,7 +511,7 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
                 y += shrinkage * tree.predict(xt);
             }
 
-            return labels.valueOf(y > 0 ? 1 : 0);
+            return labels.label(y > 0 ? 1 : 0);
         } else {
             double max = Double.NEGATIVE_INFINITY;
             int y = -1;
@@ -500,7 +527,7 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
                 }
             }
 
-            return labels.valueOf(y);
+            return labels.label(y);
         }
     }
 
@@ -520,7 +547,7 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
             posteriori[0] = 1.0 / (1.0 + Math.exp(2 * y));
             posteriori[1] = 1.0 - posteriori[0];
 
-            return labels.valueOf(y > 0 ? 1 : 0);
+            return labels.label(y > 0 ? 1 : 0);
         } else {
             double max = Double.NEGATIVE_INFINITY;
             int y = -1;
@@ -547,7 +574,7 @@ public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassi
                 posteriori[i] /= Z;
             }
 
-            return labels.valueOf(y);
+            return labels.label(y);
         }
     }
 

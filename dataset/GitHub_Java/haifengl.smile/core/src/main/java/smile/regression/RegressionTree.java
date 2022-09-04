@@ -19,6 +19,7 @@ package smile.regression;
 
 import java.util.*;
 import java.util.stream.IntStream;
+
 import smile.base.cart.*;
 import smile.data.DataFrame;
 import smile.data.Tuple;
@@ -83,9 +84,9 @@ public class RegressionTree extends CART implements Regression<Tuple>, DataFrame
     private transient double[] y;
 
     /**
-     * The loss function.
+     * The trait to calculate the leaf node output.
      */
-    private transient Loss loss;
+    private transient RegressionNodeOutput output;
 
     @Override
     protected double impurity(LeafNode node) {
@@ -97,11 +98,11 @@ public class RegressionTree extends CART implements Regression<Tuple>, DataFrame
         // The output of node may be different from the sample mean.
         // In fact, it may be based on different data from the response
         // in gradient tree boosting.
-        double out = loss.output(nodeSamples, samples);
+        double out = output.calculate(nodeSamples, samples);
 
         // RSS computation should always based on the sample mean in the node.
         double mean = out;
-        if (!loss.toString().equals("LeastSquares")) {
+        if (!(output instanceof LeastSquaresNodeOutput)) {
             int n = 0;
             mean = 0.0;
             for (int i : nodeSamples) {
@@ -135,10 +136,10 @@ public class RegressionTree extends CART implements Regression<Tuple>, DataFrame
         int splitTrueCount = 0;
         int splitFalseCount = 0;
 
-        Measure measure = schema.field(j).measure;
-        if (measure instanceof NominalScale) {
+        Optional<Measure> measure = schema.field(j).measure;
+        if (measure.isPresent() && measure.get() instanceof NominalScale) {
             int splitValue = -1;
-            NominalScale scale = (NominalScale) measure;
+            NominalScale scale = (NominalScale) measure.get();
             int m = scale.size();
             int[] trueCount = new int[m];
             double[] trueSum = new double[m];
@@ -230,11 +231,10 @@ public class RegressionTree extends CART implements Regression<Tuple>, DataFrame
     /**
      * Constructor. Learns a regression tree for AdaBoost and Random Forest.
      * @param x the data frame of the explanatory variable.
-     * @param loss the loss function.
+     * @param y the response variables.
      * @param response the metadata of response variable.
-     * @param maxDepth the maximum depth of the tree.
-     * @param maxNodes the maximum number of leaf nodes in the tree.
      * @param nodeSize the minimum size of leaf nodes.
+     * @param maxNodes the maximum number of leaf nodes in the tree.
      * @param mtry the number of input variables to pick to split on at each
      *             node. It seems that sqrt(p) give generally good performance,
      *             where p is the number of variables.
@@ -242,11 +242,13 @@ public class RegressionTree extends CART implements Regression<Tuple>, DataFrame
      *               samples[i] is the number of sampling for instance i.
      * @param order the index of training values in ascending order. Note
      *              that only numeric attributes need be sorted.
+     * @param output a lambda to calculate node output.
      */
-    public RegressionTree(DataFrame x, Loss loss, StructField response, int maxDepth, int maxNodes, int nodeSize, int mtry, int[] samples, int[][] order) {
-        super(x, response, maxDepth, maxNodes, nodeSize, mtry, samples, order);
-        this.loss = loss;
-        this.y = loss.response();
+    public RegressionTree(DataFrame x, double[] y, StructField response, int maxNodes, int nodeSize, int mtry, int[] samples, int[][] order, RegressionNodeOutput output) {
+        super(x, response, maxNodes, nodeSize, mtry, samples, order);
+
+        this.y = y;
+        this.output = output == null ? new LeastSquaresNodeOutput(y) : output;
 
         LeafNode node = newNode(IntStream.range(0, x.size()).filter(i -> this.samples[i] > 0).toArray());
         this.root = node;
@@ -293,42 +295,39 @@ public class RegressionTree extends CART implements Regression<Tuple>, DataFrame
      * @param prop Training algorithm hyper-parameters and properties.
      */
     public static RegressionTree fit(Formula formula, DataFrame data, Properties prop) {
-        int maxDepth = Integer.valueOf(prop.getProperty("smile.cart.max.depth", "20"));
-        int maxNodes = Integer.valueOf(prop.getProperty("smile.cart.max.nodes", String.valueOf(data.size() / 5)));
-        int nodeSize = Integer.valueOf(prop.getProperty("smile.cart.node.size", "5"));
-        return fit(formula, data, maxDepth, maxNodes, nodeSize);
+        int nodeSize = Integer.parseInt(prop.getProperty("smile.cart.node.size", "5"));
+        int maxNodes = Integer.parseInt(prop.getProperty("smile.cart.max.nodes", "6"));
+        return fit(formula, data, maxNodes, nodeSize);
     }
 
     /**
      * Learns a regression tree.
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
-     * @param maxDepth the maximum depth of the tree.
-     * @param maxNodes the maximum number of leaf nodes in the tree.
      * @param nodeSize the minimum size of leaf nodes.
+     * @param maxNodes the maximum number of leaf nodes in the tree.
      */
-    public static RegressionTree fit(Formula formula, DataFrame data, int maxDepth, int maxNodes, int nodeSize) {
+    public static RegressionTree fit(Formula formula, DataFrame data, int maxNodes, int nodeSize) {
         DataFrame x = formula.x(data);
         BaseVector y = formula.y(data);
-        RegressionTree tree = new RegressionTree(x, Loss.ls(y.toDoubleArray()), y.field(), maxDepth, maxNodes, nodeSize, -1, null, null);
-        tree.formula = formula;
+        RegressionTree tree = new RegressionTree(x, y.toDoubleArray(), y.field(), maxNodes, nodeSize, -1, null, null, null);
+        tree.formula = Optional.of(formula);
         return tree;
     }
 
     @Override
     public double predict(Tuple x) {
-        RegressionNode leaf = (RegressionNode) root.predict(predictors(x));
+        RegressionNode leaf = (RegressionNode) root.predict(formula.map(f -> f.x(x)).orElse(x));
         return leaf.output();
     }
 
-    /** Returns null if the tree is part of ensemble algorithm. */
     @Override
-    public Formula formula() {
+    public Optional<Formula> formula() {
         return formula;
     }
 
     @Override
-    public StructType schema() {
-        return schema;
+    public Optional<StructType> schema() {
+        return Optional.of(schema);
     }
 }

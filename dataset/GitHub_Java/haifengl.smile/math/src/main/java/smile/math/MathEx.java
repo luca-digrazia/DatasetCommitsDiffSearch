@@ -1508,27 +1508,14 @@ public class MathEx {
     /**
      * Returns the sum of an array.
      */
-    public static int sum(byte[] x) {
-        int sum = 0;
-
-        for (int n : x) {
-            sum += n;
-        }
-
-        return sum;
-    }
-
-    /**
-     * Returns the sum of an array.
-     */
     public static int sum(int[] x) {
-        long sum = 0;
+        double sum = 0.0;
 
         for (int n : x) {
             sum += n;
         }
 
-        if (sum > Integer.MAX_VALUE || sum < Integer.MIN_VALUE) {
+        if (sum > Integer.MAX_VALUE || sum < -Integer.MAX_VALUE) {
             throw new ArithmeticException("Sum overflow: " + sum);
         }
         
