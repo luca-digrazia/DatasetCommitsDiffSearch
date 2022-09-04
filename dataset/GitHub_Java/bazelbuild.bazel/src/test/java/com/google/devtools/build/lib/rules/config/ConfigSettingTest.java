@@ -1406,7 +1406,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "foo",
         "bad",
         "in config_setting rule //foo:bad: "
-            + "Duplicate constraint values detected: "
+            + "Duplicate constraint_values detected: "
             + "constraint_setting //foo:notable_building has "
             + "[//foo:empire_state, //foo:space_needle], "
             + "constraint_setting //foo:museum has "
@@ -1427,23 +1427,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        ':sam',",
         "    ],",
         ");");
-  }
-
-  @Test
-  public void notAConstraintValue() throws Exception {
-    checkError(
-        "test",
-        "match",
-        "//test:what_am_i is not a constraint_value",
-        "genrule(",
-        "    name = 'what_am_i',",
-        "    srcs = [],",
-        "    outs = ['the_answer'],",
-        "    cmd = 'echo an eternal enigma > $@')",
-        "config_setting(",
-        "    name = 'match',",
-        "    constraint_values = [':what_am_i'],",
-        ")");
   }
 
   private Set<LicenseType> getLicenses(String label) throws Exception {

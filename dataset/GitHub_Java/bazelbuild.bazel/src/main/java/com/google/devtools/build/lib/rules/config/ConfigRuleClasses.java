@@ -256,6 +256,7 @@ public class ConfigRuleClasses {
               attr(CONSTRAINT_VALUES_ATTRIBUTE, LABEL_LIST)
                   .nonconfigurable(NONCONFIGURABLE_ATTRIBUTE_REASON)
                   .allowedFileTypes())
+          .setIsConfigMatcherForConfigSettingOnly()
           .setOptionReferenceFunctionForConfigSettingOnly(
               rule ->
                   NonconfigurableAttributeMapper.of(rule)
