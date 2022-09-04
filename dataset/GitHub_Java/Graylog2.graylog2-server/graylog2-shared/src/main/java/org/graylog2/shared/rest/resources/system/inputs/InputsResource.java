@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.shared.rest.resources.system.inputs;
 
@@ -41,7 +41,6 @@ import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.inputs.MessageInputFactory;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
 import org.graylog2.rest.models.system.inputs.requests.InputLaunchRequest;
-import org.graylog2.shared.security.RestrictToMaster;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,6 +59,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
 
 @RequiresAuthentication
@@ -75,19 +75,16 @@ public class InputsResource extends RestResource {
     private final MessageInputFactory messageInputFactory;
     private final InputLauncher inputLauncher;
     private final PersistedInputs persistedInputs;
-    private final ServerStatus serverStatus;
 
     @Inject
     public InputsResource(InputRegistry inputRegistry,
                           MessageInputFactory messageInputFactory,
                           InputLauncher inputLauncher,
-                          PersistedInputs persistedInputs,
-                          ServerStatus serverStatus) {
+                          PersistedInputs persistedInputs) {
         this.inputRegistry = inputRegistry;
         this.messageInputFactory = messageInputFactory;
         this.inputLauncher = inputLauncher;
         this.persistedInputs = persistedInputs;
-        this.serverStatus = serverStatus;
     }
 
     @GET
@@ -169,9 +166,9 @@ public class InputsResource extends RestResource {
             @ApiResponse(code = 400, message = "Missing or invalid configuration"),
             @ApiResponse(code = 400, message = "Type is exclusive and already has input running")
     })
-    @RestrictToMaster
     public Response create(@ApiParam(name = "JSON body", required = true)
                            @Valid @NotNull InputLaunchRequest lr) throws ValidationException {
+        restrictToMaster();
         checkPermission(RestPermissions.INPUTS_CREATE);
 
         // Build input.
@@ -211,7 +208,7 @@ public class InputsResource extends RestResource {
             inputLauncher.launch(input);
         }
 
-        final URI inputUri = getUriBuilderToSelf().path(InputsResource.class)
+        final URI inputUri = UriBuilder.fromResource(InputsResource.class)
                 .path("{inputId}")
                 .build(input.getId());
 
@@ -267,7 +264,7 @@ public class InputsResource extends RestResource {
             return Response.status(Response.Status.BAD_REQUEST).build();
         }
 
-        final URI inputUri = getUriBuilderToSelf().path(InputsResource.class)
+        final URI inputUri = UriBuilder.fromResource(InputsResource.class)
                 .path("{inputId}")
                 .build(inputId);
 
@@ -286,10 +283,9 @@ public class InputsResource extends RestResource {
         final IOState<MessageInput> inputState = inputRegistry.getInputState(inputId);
         final MessageInput messageInput;
 
-        if (inputState == null || inputState.getState() != IOState.Type.RUNNING) {
+        if (inputState == null)
             messageInput = persistedInputs.get(inputId);
-            messageInput.initialize();
-        } else
+        else
             messageInput = inputState.getStoppable();
 
         if (messageInput == null) {
