@@ -437,12 +437,10 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   protected Artifact getBinArtifact(String packageRelativePath, ConfiguredTarget owner)
       throws InterruptedException {
     Label label = owner.getLabel();
-    return buildView
-        .getArtifactFactory()
-        .getDerivedArtifact(
-            label.getPackageFragment().getRelative(packageRelativePath),
-            getTargetConfiguration().getBinDirectory(label.getPackageIdentifier().getRepository()),
-            ConfiguredTargetKey.of(owner));
+    return buildView.getArtifactFactory().getDerivedArtifact(
+        label.getPackageFragment().getRelative(packageRelativePath),
+        getTargetConfiguration().getBinDirectory(label.getPackageIdentifier().getRepository()),
+        new ConfiguredTargetKey(owner));
   }
 
   protected Set<SkyKey> getSkyframeEvaluatedTargetKeys() {
@@ -480,7 +478,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
    *
    * Also see {@link AnalysisTestCase#setRulesAndAspectsAvailableInTests(Iterable, Iterable)}.
    */
-  protected void setRulesAvailableInTests(RuleDefinition... rules) throws Exception {
+  protected final void setRulesAvailableInTests(RuleDefinition... rules) throws Exception {
     setRulesAndAspectsAvailableInTests(
         ImmutableList.<NativeAspectClass>of(),
         ImmutableList.copyOf(rules));
