@@ -40,7 +40,6 @@ import org.androidannotations.internal.core.helper.IntentBuilder;
 
 import com.helger.jcodemodel.AbstractJClass;
 import com.helger.jcodemodel.AbstractJType;
-import com.helger.jcodemodel.IJAssignmentTarget;
 import com.helger.jcodemodel.IJExpression;
 import com.helger.jcodemodel.JBlock;
 import com.helger.jcodemodel.JClassAlreadyExistsException;
@@ -443,7 +442,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 		injectExtrasBlock = injectExtrasBody._if(injectExtras.ne(_null()))._then();
 
 		getSetIntent().body().invoke(injectExtrasMethod);
-		getInitBodyInjectionBlock().invoke(injectExtrasMethod);
+		getInitBody().invoke(injectExtrasMethod);
 	}
 
 	public JBlock getOnNewIntentAfterSuperBlock() {
@@ -547,7 +546,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	private void setInitNonConfigurationInstance() throws JClassAlreadyExistsException {
-		JBlock initBody = getInitBodyInjectionBlock();
+		JBlock initBody = getInitBody();
 		JDefinedClass ncHolderClass = getNonConfigurationHolder().getGeneratedClass();
 		initNonConfigurationInstance = initBody.decl(ncHolderClass, "nonConfigurationInstance", cast(ncHolderClass, _super().invoke(getGetLastNonConfigurationInstance())));
 		initIfNonConfigurationNotNullBlock = initBody._if(initNonConfigurationInstance.ne(_null()))._then();
@@ -723,7 +722,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 
 	@Override
 	public JBlock getIntentFilterInitializationBlock(IntentFilterData intentFilterData) {
-		return getInitBodyInjectionBlock();
+		return getInitBody();
 	}
 
 	@Override
@@ -732,23 +731,18 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	@Override
-	public JBlock getAddPreferencesFromResourceInjectionBlock() {
-		return preferencesHolder.getAddPreferencesFromResourceInjectionBlock();
+	public JBlock getAddPreferencesFromResourceBlock() {
+		return preferencesHolder.getAddPreferencesFromResourceBlock();
 	}
 
 	@Override
-	public JBlock getAddPreferencesFromResourceAfterInjectionBlock() {
-		return preferencesHolder.getAddPreferencesFromResourceAfterInjectionBlock();
+	public void assignFindPreferenceByKey(JFieldRef idRef, AbstractJClass preferenceClass, JFieldRef fieldRef) {
+		preferencesHolder.assignFindPreferenceByKey(idRef, preferenceClass, fieldRef);
 	}
 
 	@Override
 	public FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, AbstractJClass preferenceClass) {
 		return preferencesHolder.getFoundPreferenceHolder(idRef, preferenceClass);
-	}
-
-	@Override
-	public FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, AbstractJClass preferenceClass, IJAssignmentTarget fieldRef) {
-		return preferencesHolder.getFoundPreferenceHolder(idRef, preferenceClass, fieldRef);
 	}
 
 	@Override
