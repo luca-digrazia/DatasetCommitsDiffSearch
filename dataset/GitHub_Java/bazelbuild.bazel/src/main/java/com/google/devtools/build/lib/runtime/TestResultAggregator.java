@@ -16,31 +16,22 @@ package com.google.devtools.build.lib.runtime;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.EventBus;
-import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AliasProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.test.TestAttempt;
 import com.google.devtools.build.lib.analysis.test.TestProvider;
+import com.google.devtools.build.lib.analysis.test.TestProvider.TestParams;
 import com.google.devtools.build.lib.analysis.test.TestResult;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
-import com.google.devtools.build.lib.exec.TestAttempt;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.packages.TestTimeout;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 /** This class aggregates and reports target-wide test statuses in real-time. */
 @ThreadSafety.ThreadSafe
@@ -51,43 +42,34 @@ final class TestResultAggregator {
    */
   static final class AggregationPolicy {
     private final EventBus eventBus;
-    private final boolean runsPerTestDetectsFlakes;
     private final boolean testCheckUpToDate;
     private final boolean testVerboseTimeoutWarnings;
 
     AggregationPolicy(
-        EventBus eventBus,
-        boolean runsPerTestDetectsFlakes,
-        boolean testCheckUpToDate,
-        boolean testVerboseTimeoutWarnings) {
+        EventBus eventBus, boolean testCheckUpToDate, boolean testVerboseTimeoutWarnings) {
       this.eventBus = eventBus;
-      this.runsPerTestDetectsFlakes = runsPerTestDetectsFlakes;
       this.testCheckUpToDate = testCheckUpToDate;
       this.testVerboseTimeoutWarnings = testVerboseTimeoutWarnings;
     }
   }
 
   private final AggregationPolicy policy;
-  private final ConfiguredTarget testTarget;
   private final TestSummary.Builder summary;
-  private final Set<Artifact> remainingRuns;
-  private final Map<Artifact, TestResult> statusMap = new HashMap<>();
+  private int remainingRuns;
+  private boolean summaryPosted = false;
 
-  public TestResultAggregator(
-      ConfiguredTarget target, BuildConfiguration configuration, AggregationPolicy policy) {
-    this.testTarget = target;
+  TestResultAggregator(
+      ConfiguredTarget target,
+      BuildConfiguration configuration,
+      AggregationPolicy policy,
+      boolean skippedThisTest) {
     this.policy = policy;
-
-    // And create an empty summary suitable for incremental analysis.
-    // Also has the nice side effect of mapping labels to RuleConfiguredTargets.
-    this.summary = TestSummary.newBuilder();
-    this.summary.setTarget(target);
-    if (configuration != null) {
-      // This can be null for testing.
-      this.summary.setConfiguration(configuration);
-    }
-    this.summary.setStatus(BlazeTestStatus.NO_STATUS);
-    this.remainingRuns = new HashSet<>(TestProvider.getTestStatusArtifacts(target));
+    this.summary =
+        TestSummary.newBuilder(target)
+            .setConfiguration(configuration)
+            .setStatus(BlazeTestStatus.NO_STATUS)
+            .setSkipped(skippedThisTest);
+    this.remainingRuns = TestProvider.getTestStatusArtifacts(target).size();
   }
 
   /**
@@ -95,15 +77,6 @@ final class TestResultAggregator {
    * upon completion of executed test runs.
    */
   synchronized void testEvent(TestResult result) {
-    ActionOwner testOwner = result.getTestAction().getOwner();
-    ConfiguredTargetKey targetLabel =
-        ConfiguredTargetKey.of(testOwner.getLabel(), result.getTestAction().getConfiguration());
-    Preconditions.checkArgument(targetLabel.equals(asKey(testTarget)));
-
-    Preconditions.checkState(
-        statusMap.put(result.getTestStatusArtifact(), result) == null,
-        "Duplicate result reported for an individual test shard");
-
     // If a test result was cached, then post the cached attempts to the event bus.
     if (result.isCached()) {
       for (TestAttempt attempt : result.getCachedTestAttempts()) {
@@ -111,9 +84,8 @@ final class TestResultAggregator {
       }
     }
 
-    TestSummary finalTestSummary = null;
-    Preconditions.checkNotNull(summary);
-    if (!remainingRuns.remove(result.getTestStatusArtifact())) {
+    remainingRuns--;
+    if (summaryPosted) {
       // This can happen if a buildCompleteEvent() was processed before this event reached us.
       // This situation is likely to happen if --notest_keep_going is set with multiple targets.
       return;
@@ -122,18 +94,20 @@ final class TestResultAggregator {
     incrementalAnalyze(result);
 
     // If all runs are processed, the target is finished and ready to report.
-    if (remainingRuns.isEmpty()) {
-      finalTestSummary = summary.build();
-    }
-
-    // Report finished targets.
-    if (finalTestSummary != null) {
-      policy.eventBus.post(finalTestSummary);
+    if (remainingRuns == 0) {
+      postSummary();
     }
   }
 
+  private TestSummary postSummary() {
+    TestSummary result = summary.build();
+    policy.eventBus.post(result);
+    summaryPosted = true;
+    return result;
+  }
+
   synchronized void targetFailure(boolean blazeHalted, boolean skipTargetsOnFailure) {
-    if (remainingRuns.isEmpty()) {
+    if (summaryPosted) {
       // Blaze does not guarantee that BuildResult.getSuccessfulTargets() and posted TestResult
       // events are in sync. Thus, it is possible that a test event was posted, but the target is
       // not present in the set of successful targets.
@@ -143,35 +117,24 @@ final class TestResultAggregator {
     markUnbuilt(blazeHalted, skipTargetsOnFailure);
 
     // These are never going to run; removing them marks the target complete.
-    remainingRuns.clear();
-    policy.eventBus.post(summary.build());
+    postSummary();
   }
 
-  /** Returns the known aggregate results for the given target at the current moment. */
-  synchronized TestSummary.Builder getCurrentSummaryForTesting() {
-    return summary;
+  synchronized void targetSkipped() {
+    if (summaryPosted) {
+      // Blaze does not guarantee that BuildResult.getSuccessfulTargets() and posted TestResult
+      // events are in sync. Thus, it is possible that a test event was posted, but the target is
+      // not present in the set of successful targets.
+      return;
+    }
+
+    summary.setStatus(BlazeTestStatus.NO_STATUS);
+
+    // These are never going to run; removing them marks the target complete.
+    postSummary();
   }
 
-  /**
-   * Returns all test status artifacts associated with a given target whose runs have yet to finish.
-   */
-  synchronized Collection<Artifact> getIncompleteRunsForTesting() {
-    return ImmutableSet.copyOf(remainingRuns);
-  }
-
-  synchronized Map<Artifact, TestResult> getStatusMapForTesting() {
-    return ImmutableMap.copyOf(statusMap);
-  }
-
-  private static ConfiguredTargetKey asKey(ConfiguredTarget target) {
-    return ConfiguredTargetKey.of(
-        // A test is never in the host configuration.
-        AliasProvider.getDependencyLabel(target),
-        target.getConfigurationKey(),
-        /*isHostConfiguration=*/ false);
-  }
-
-  private static BlazeTestStatus aggregateStatus(BlazeTestStatus status, BlazeTestStatus other) {
+  static BlazeTestStatus aggregateStatus(BlazeTestStatus status, BlazeTestStatus other) {
     return status.getNumber() > other.getNumber() ? status : other;
   }
 
@@ -181,32 +144,16 @@ final class TestResultAggregator {
    */
   synchronized TestSummary aggregateAndReportSummary(boolean skipTargetsOnFailure) {
     // If already reported by the listener, no work remains for this target.
-    if (remainingRuns.isEmpty()) {
-      return summary.build();
+    if (summaryPosted) {
+      return summary.build(); // Reuses the same summary if nothing has changed.
     }
 
-    // We will get back multiple TestResult instances if test had to be retried several
-    // times before passing. Sharding and multiple runs of the same test without retries
-    // will be represented by separate artifacts and will produce exactly one TestResult.
-    for (Artifact testStatus : TestProvider.getTestStatusArtifacts(testTarget)) {
-      // When a build is interrupted ( eg. a broken target with --nokeep_going ) runResult could
-      // be null for an unrelated test because we were not able to even try to execute the test.
-      // In that case, for tests that were previously passing we return null ( == NO STATUS),
-      // because checking if the cached test target is up-to-date would require running the
-      // dependency checker transitively.
-      TestResult runResult = statusMap.get(testStatus);
-      boolean isIncompleteRun = remainingRuns.contains(testStatus);
-      if (runResult == null) {
-        markIncomplete(skipTargetsOnFailure);
-      } else if (isIncompleteRun) {
-        incrementalAnalyze(runResult);
-      }
+    // Build may have been interrupted.
+    if (remainingRuns > 0) {
+      markIncomplete(skipTargetsOnFailure);
     }
 
-    // The target was not posted by the listener and must be posted now.
-    TestSummary result = summary.build();
-    policy.eventBus.post(result);
-    return result;
+    return postSummary();
   }
 
   /**
@@ -215,9 +162,8 @@ final class TestResultAggregator {
    *
    * @param result New test result to aggregate into the summary.
    */
-  synchronized void incrementalAnalyze(TestResult result) {
+  private void incrementalAnalyze(TestResult result) {
     // Cache retrieval should have been performed already.
-    Preconditions.checkNotNull(result);
     TestSummary existingSummary = Preconditions.checkNotNull(summary.peek());
 
     BlazeTestStatus status = existingSummary.getStatus();
@@ -242,26 +188,43 @@ final class TestResultAggregator {
 
     TransitiveInfoCollection target = existingSummary.getTarget();
     Preconditions.checkNotNull(target, "The existing TestSummary must be associated with a target");
+    TestParams testParams = target.getProvider(TestProvider.class).getTestParams();
 
-    if (!policy.runsPerTestDetectsFlakes) {
+    if (!testParams.runsDetectsFlakes()) {
       status = aggregateStatus(status, result.getData().getStatus());
     } else {
       int shardNumber = result.getShardNum();
-      int runsPerTestForLabel = target.getProvider(TestProvider.class).getTestParams().getRuns();
+      int runsPerTestForLabel = testParams.getRuns();
       List<BlazeTestStatus> singleShardStatuses =
           summary.addShardStatus(shardNumber, result.getData().getStatus());
       if (singleShardStatuses.size() == runsPerTestForLabel) {
+        // Aggregation is based on the order of status enums where larger values take precedence
+        // over smaller ones (NO_STATUS = 0, PASSED = 1, etc.). However, there are some special
+        // cases:
+        // 1. Tests that have some passing, some not passing shard are marked as flaky
+        // 2. The INCOMPLETE status is ignored - it is used for tests runs that are cancelled by
+        //    Bazel if --cancel_concurrent_tests is set, otherwise INCOMPLETE is not used
+        // 3. Individual test shards can be FLAKY if the test is marked flaky and
+        //    --flaky_test_attempts is not zero for this test
         BlazeTestStatus shardStatus = BlazeTestStatus.NO_STATUS;
         int passes = 0;
+        int cancelled = 0;
         for (BlazeTestStatus runStatusForShard : singleShardStatuses) {
-          shardStatus = aggregateStatus(shardStatus, runStatusForShard);
-          if (TestResult.isBlazeTestStatusPassed(runStatusForShard)) {
-            passes++;
+          if (runStatusForShard == BlazeTestStatus.INCOMPLETE) {
+            // If runs_per_test_detects_flakes is enabled, then INCOMPLETE status indicates
+            // cancelled test runs. We count them separately so that they don't result in a
+            // flaky status below.
+            cancelled++;
+          } else {
+            shardStatus = aggregateStatus(shardStatus, runStatusForShard);
+            if (TestResult.isBlazeTestStatusPassed(runStatusForShard)) {
+              passes++;
+            }
           }
         }
-        // Under the RunsPerTestDetectsFlakes option, return flaky if 1 <= p < n shards pass.
-        // If all results pass or fail, aggregate the passing/failing shardStatus.
-        if (passes == 0 || passes == runsPerTestForLabel) {
+        // Under the RunsPerTestDetectsFlakes option, return flaky if 0 < p < (n-cancelled) shards
+        // pass. Otherwise, we aggregate the shardStatus.
+        if (passes == 0 || (passes + cancelled) == runsPerTestForLabel) {
           status = aggregateStatus(status, shardStatus);
         } else {
           status = aggregateStatus(status, BlazeTestStatus.FLAKY);
@@ -281,8 +244,7 @@ final class TestResultAggregator {
         .mergeTiming(
             result.getData().getStartTimeMillisEpoch(), result.getData().getRunDurationMillis())
         .addWarnings(result.getData().getWarningList())
-        .collectFailedTests(result.getData().getTestCase())
-        .countTotalTestCases(result.getData().getTestCase())
+        .collectTestCases(result.getData().hasTestCase() ? result.getData().getTestCase() : null)
         .setRanRemotely(result.getData().getIsRemoteStrategy());
 
     List<String> warnings = new ArrayList<>();
@@ -296,6 +258,7 @@ final class TestResultAggregator {
     }
 
     summary
+        .mergeSystemFailure(result.getSystemFailure())
         .setStatus(status)
         .setNumCached(numCached)
         .setNumLocalActionCached(numLocalActionCached)
