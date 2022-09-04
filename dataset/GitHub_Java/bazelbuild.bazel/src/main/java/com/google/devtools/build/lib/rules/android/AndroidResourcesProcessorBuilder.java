@@ -44,7 +44,7 @@ public class AndroidResourcesProcessorBuilder {
           .includeManifest()
           .includeAapt2RTxt()
           .includeSymbolsBin()
-          .includeCompiledSymbols()
+          .includeStaticLibrary()
           .withSeparator(SeparatorType.COLON_COMMA)
           .toArgConverter();
 
@@ -268,7 +268,7 @@ public class AndroidResourcesProcessorBuilder {
           .addTransitive(dependencies.getTransitiveManifests())
           .addTransitive(dependencies.getTransitiveAapt2RTxt())
           .addTransitive(dependencies.getTransitiveSymbolsBin())
-          .addTransitive(dependencies.getTransitiveCompiledSymbols());
+          .addTransitive(dependencies.getTransitiveStaticLib());
     }
 
     configureCommonFlags(outs, inputs, builder);
