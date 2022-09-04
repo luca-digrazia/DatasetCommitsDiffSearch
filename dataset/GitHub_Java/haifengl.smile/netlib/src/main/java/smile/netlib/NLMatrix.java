@@ -20,9 +20,12 @@ import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.JMatrix;
 import smile.math.matrix.SVD;
 import smile.math.matrix.EVD;
+import smile.sort.QuickSort;
 import com.github.fommil.netlib.BLAS;
 import com.github.fommil.netlib.LAPACK;
 import org.netlib.util.intW;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Column-major matrix that employs netlib for matrix-vector and matrix-matrix
@@ -33,7 +36,7 @@ import org.netlib.util.intW;
 public class NLMatrix extends JMatrix {
     private static final long serialVersionUID = 1L;
 
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(NLMatrix.class);
+    private static final Logger logger = LoggerFactory.getLogger(NLMatrix.class);
 
     static String NoTranspose = "N";
     static String Transpose   = "T";
@@ -184,22 +187,6 @@ public class NLMatrix extends JMatrix {
         }
 
         throw new IllegalArgumentException("NLMatrix.atbmm() parameter must be JMatrix");
-    }
-
-    @Override
-    public NLMatrix atbtmm(DenseMatrix B) {
-        if (B instanceof JMatrix) {
-            int m = ncols();
-            int n = B.nrows();
-            int k = nrows();
-            NLMatrix C = new NLMatrix(m, n);
-            BLAS.getInstance().dgemm(Transpose, Transpose,
-                    m, n, k, 1.0, data(), k, B.data(),
-                    k, 0.0, C.data(), m);
-            return C;
-        }
-
-        throw new IllegalArgumentException("NLMatrix.atbtmm() parameter must be JMatrix");
     }
 
     @Override
