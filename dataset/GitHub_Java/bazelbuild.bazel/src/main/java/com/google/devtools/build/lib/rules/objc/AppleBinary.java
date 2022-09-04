@@ -38,8 +38,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions.AppleBitcodeMode;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
+import com.google.devtools.build.lib.rules.apple.Platform;
+import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.objc.AppleDebugOutputsProvider.OutputType;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
@@ -118,7 +118,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
 
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
-    ApplePlatform platform = appleConfiguration.getMultiArchPlatform(platformType);
+    Platform platform = appleConfiguration.getMultiArchPlatform(platformType);
     ImmutableListMultimap<BuildConfiguration, ObjcProvider> configurationToNonPropagatedObjcMap =
         ruleContext.getPrerequisitesByConfiguration(
             "non_propagated_deps", Mode.SPLIT, ObjcProvider.class);
@@ -259,8 +259,9 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
   private static Iterable<ObjcProvider> getDylibProviders(RuleContext ruleContext) {
     ImmutableList.Builder<ObjcProvider> dylibProviders = ImmutableList.builder();
     Iterable<AppleDynamicFrameworkProvider> frameworkProviders =
-        ruleContext.getPrerequisites(
-            DYLIBS_ATTR_NAME, Mode.TARGET, AppleDynamicFrameworkProvider.SKYLARK_CONSTRUCTOR);
+        ruleContext.getPrerequisites(DYLIBS_ATTR_NAME, Mode.TARGET,
+            AppleDynamicFrameworkProvider.SKYLARK_CONSTRUCTOR.getKey(),
+            AppleDynamicFrameworkProvider.class);
     for (AppleDynamicFrameworkProvider frameworkProvider : frameworkProviders) {
       dylibProviders.add(frameworkProvider.getDepsObjcProvider());
     }

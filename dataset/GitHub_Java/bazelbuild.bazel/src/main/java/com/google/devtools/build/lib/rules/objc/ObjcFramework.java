@@ -69,7 +69,6 @@ public class ObjcFramework implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> filesToBuild = NestedSetBuilder.emptySet(STABLE_ORDER);
     return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild)
         .addProvider(ObjcProvider.class, objcProvider)
-        .addNativeDeclaredProvider(objcProvider)
         .addNativeDeclaredProvider(frameworkProvider)
         .build();
   }
