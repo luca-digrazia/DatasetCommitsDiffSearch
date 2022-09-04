@@ -137,7 +137,6 @@ public class ExecutionTool {
         for (ActionContext strategy : provider.getActionContexts()) {
           ExecutionStrategy annotation =
               strategy.getClass().getAnnotation(ExecutionStrategy.class);
-          // TODO(ulfjack): Don't silently ignore action contexts without annotation.
           if (annotation != null) {
             defaultClassMap.put(annotation.contextType(), strategy);
 

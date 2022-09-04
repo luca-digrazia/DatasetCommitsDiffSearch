@@ -501,18 +501,22 @@ public final class CommandEnvironment {
    */
   public void setupPackageCache(OptionsClassProvider options,
       String defaultsPackageContents) throws InterruptedException, AbruptExitException {
-    getSkyframeExecutor()
-        .sync(
-            reporter,
-            options.getOptions(PackageCacheOptions.class),
-            options.getOptions(SkylarkSemanticsOptions.class),
-            getOutputBase(),
-            getWorkingDirectory(),
-            defaultsPackageContents,
-            getCommandId(),
-            clientEnv,
-            timestampGranularityMonitor,
-            options);
+    SkyframeExecutor skyframeExecutor = getSkyframeExecutor();
+
+    for (BlazeModule module : runtime.getBlazeModules()) {
+      skyframeExecutor.injectExtraPrecomputedValues(module.getPrecomputedValues());
+    }
+    skyframeExecutor.sync(
+        reporter,
+        options.getOptions(PackageCacheOptions.class),
+        options.getOptions(SkylarkSemanticsOptions.class),
+        getOutputBase(),
+        getWorkingDirectory(),
+        defaultsPackageContents,
+        getCommandId(),
+        clientEnv,
+        timestampGranularityMonitor,
+        options);
   }
 
   public void recordLastExecutionTime() {
@@ -570,7 +574,6 @@ public final class CommandEnvironment {
 
     SkyframeExecutor skyframeExecutor = getSkyframeExecutor();
     skyframeExecutor.setOutputService(outputService);
-    skyframeExecutor.noteCommandStart();
 
     // Ensure that the working directory will be under the workspace directory.
     Path workspace = getWorkspace();

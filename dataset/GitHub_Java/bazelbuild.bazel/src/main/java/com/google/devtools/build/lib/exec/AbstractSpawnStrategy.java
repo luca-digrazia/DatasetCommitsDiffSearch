@@ -43,11 +43,15 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /** Abstract common ancestor for spawn strategies implementing the common parts. */
 public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionContext {
+  private final boolean verboseFailures;
   private final SpawnInputExpander spawnInputExpander;
   private final SpawnRunner spawnRunner;
   private final AtomicInteger execCount = new AtomicInteger();
 
-  public AbstractSpawnStrategy(SpawnRunner spawnRunner) {
+  public AbstractSpawnStrategy(
+      boolean verboseFailures,
+      SpawnRunner spawnRunner) {
+    this.verboseFailures = verboseFailures;
     this.spawnInputExpander = new SpawnInputExpander(false);
     this.spawnRunner = spawnRunner;
   }
@@ -82,10 +86,7 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
       String cwd = actionExecutionContext.getExecRoot().getPathString();
       String message =
           CommandFailureUtils.describeCommandFailure(
-              actionExecutionContext.getVerboseFailures(),
-              spawn.getArguments(),
-              spawn.getEnvironment(),
-              cwd);
+              verboseFailures, spawn.getArguments(), spawn.getEnvironment(), cwd);
       throw new SpawnExecException(
           message, result, /*forciblyRunRemotely=*/false, /*catastrophe=*/false);
     }
