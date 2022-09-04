@@ -91,7 +91,6 @@ public class SymlinkActionTest extends BuildViewTestCase {
                 ActionInputPrefetcher.NONE,
                 actionKeyContext,
                 /*metadataHandler=*/ null,
-                /*rewindingEnabled=*/ false,
                 LostInputsCheck.NONE,
                 /*fileOutErr=*/ null,
                 new StoredEventHandler(),

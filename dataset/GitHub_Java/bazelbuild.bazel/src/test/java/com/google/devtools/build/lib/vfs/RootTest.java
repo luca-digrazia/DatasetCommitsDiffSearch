@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.vfs;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
@@ -108,7 +108,7 @@ public class RootTest {
   }
 
   @Test
-  public void testSerialization_simple() throws Exception {
+  public void testSerialization_Simple() throws Exception {
     Root fooPathRoot = Root.fromPath(fs.getPath("/foo"));
     Root barPathRoot = Root.fromPath(fs.getPath("/bar"));
     new SerializationTester(Root.absoluteRoot(fs), fooPathRoot, barPathRoot)
@@ -120,7 +120,7 @@ public class RootTest {
   }
 
   @Test
-  public void testSerialization_likelyPopularRootIsCanonicalized() throws Exception {
+  public void testSerialization_LikelyPopularRootIsCanonicalized() throws Exception {
     Root fooPathRoot = Root.fromPath(fs.getPath("/foo"));
     Root otherFooPathRoot = Root.fromPath(fs.getPath("/foo"));
     Root barPathRoot = Root.fromPath(fs.getPath("/bar"));

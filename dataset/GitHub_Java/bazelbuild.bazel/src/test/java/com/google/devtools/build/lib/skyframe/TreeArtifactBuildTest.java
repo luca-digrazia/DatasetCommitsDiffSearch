@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.ActionInputHelper.treeFileArtifact;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
@@ -1265,7 +1265,7 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
         fs.getPath(TestUtils.tmpDir()).getRelative("execroot").getRelative("default-exec-root");
     PathFragment execPath = PathFragment.create("out").getRelative(name);
     return new SpecialArtifact(
-        ArtifactRoot.asDerivedRoot(execRoot, "out"),
+        ArtifactRoot.asDerivedRoot(execRoot, execRoot.getRelative("out")),
         execPath,
         ACTION_LOOKUP_KEY,
         SpecialArtifactType.TREE);
