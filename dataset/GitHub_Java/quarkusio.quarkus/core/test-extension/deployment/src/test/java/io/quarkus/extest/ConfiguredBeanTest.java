@@ -1,12 +1,5 @@
 package io.quarkus.extest;
 
-import static org.hamcrest.Matchers.is;
-
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.Socket;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -21,13 +14,12 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.extest.runtime.config.NestedConfig;
-import io.quarkus.extest.runtime.config.ObjectOfValue;
-import io.quarkus.extest.runtime.config.ObjectValueOf;
-import io.quarkus.extest.runtime.config.TestBuildAndRunTimeConfig;
-import io.quarkus.extest.runtime.config.TestRunTimeConfig;
+import io.quarkus.extest.runtime.NestedConfig;
+import io.quarkus.extest.runtime.ObjectOfValue;
+import io.quarkus.extest.runtime.ObjectValueOf;
+import io.quarkus.extest.runtime.TestBuildAndRunTimeConfig;
+import io.quarkus.extest.runtime.TestRunTimeConfig;
 import io.quarkus.test.QuarkusUnitTest;
-import io.restassured.RestAssured;
 
 /**
  * Test driver for the test-extension
@@ -197,29 +189,4 @@ public class ConfiguredBeanTest {
         Assertions.assertEquals(Arrays.asList("value4", "value5"), stringListMap.get("key2"));
         Assertions.assertEquals(Collections.singletonList("value6"), stringListMap.get("key3"));
     }
-
-    /**
-     * Test the RuntimeXmlConfigService using old school sockets
-     */
-    @Test
-    public void testRuntimeXmlConfigService() throws Exception {
-        // From config.xml
-        Socket socket = new Socket("localhost", 12345);
-        OutputStream os = socket.getOutputStream();
-        os.write("testRuntimeXmlConfigService\n".getBytes("UTF-8"));
-        os.flush();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
-            String reply = reader.readLine();
-            Assertions.assertEquals("testRuntimeXmlConfigService-ack", reply);
-        }
-        socket.close();
-    }
-
-    @Test
-    public void verifyCommandServlet() {
-        RestAssured.when().get("/commands/ping").then()
-                .body(is("/ping-ack"));
-    }
-
 }
