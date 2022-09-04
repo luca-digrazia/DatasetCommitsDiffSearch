@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.rules.cpp.CcLinkParams.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.VariablesExtension;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper.CcLinkingContext;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkerOrArchiver;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
@@ -103,7 +102,7 @@ public final class CcLinkingHelper {
   private boolean neverlink;
 
   private boolean checkDepsGenerateCpp = true;
-  private boolean emitInterfaceSharedLibraries;
+  private boolean emitInterfaceSharedObjects;
   private boolean shouldCreateDynamicLibrary = true;
   private boolean shouldCreateStaticLibraries = true;
   private boolean willOnlyBeLinkedIntoDynamicLibraries;
@@ -308,8 +307,8 @@ public final class CcLinkingHelper {
    * linker generates a dynamic library, and only if the crosstool supports it. The default is not
    * to generate interface dynamic libraries.
    */
-  public CcLinkingHelper emitInterfaceSharedLibraries(boolean emitInterfaceSharedLibraries) {
-    this.emitInterfaceSharedLibraries = emitInterfaceSharedLibraries;
+  public CcLinkingHelper emitInterfaceSharedObjects(boolean emitInterfaceSharedObjects) {
+    this.emitInterfaceSharedObjects = emitInterfaceSharedObjects;
     return this;
   }
 
@@ -395,7 +394,7 @@ public final class CcLinkingHelper {
    *
    * <p>For dynamic libraries, this method can additionally create an interface shared library that
    * can be used for linking, but doesn't contain any executable code. This increases the number of
-   * cache hits for link actions. Call {@link #emitInterfaceSharedLibraries(boolean)} to enable this
+   * cache hits for link actions. Call {@link #emitInterfaceSharedObjects(boolean)} to enable this
    * behavior.
    *
    * @throws RuleErrorException
@@ -604,8 +603,8 @@ public final class CcLinkingHelper {
 
     List<String> sonameLinkopts = ImmutableList.of();
     Artifact soInterface = null;
-    if (CppHelper.useInterfaceSharedLibraries(cppConfiguration, ccToolchain, featureConfiguration)
-        && emitInterfaceSharedLibraries) {
+    if (CppHelper.useInterfaceSharedObjects(cppConfiguration, ccToolchain)
+        && emitInterfaceSharedObjects) {
       soInterface = getLinkedArtifact(LinkTargetType.INTERFACE_DYNAMIC_LIBRARY);
       // TODO(b/28946988): Remove this hard-coded flag.
       if (!featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
@@ -664,29 +663,24 @@ public final class CcLinkingHelper {
                   PathFragment.create(ruleContext.getTarget().getName()))));
     }
 
-    // On Windows, we cannot build a shared library with symbols unresolved, so here we
-    // dynamically link to all its dependencies, even for LinkTargetType.NODEPS_DYNAMIC_LIBRARY.
-    boolean shouldLinkTransitively =
-        featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)
-            || dynamicLinkType != LinkTargetType.NODEPS_DYNAMIC_LIBRARY;
-
-    if (shouldLinkTransitively) {
-      CcLinkingInfo mergedCcLinkingInfo = CcLinkingInfo.merge(ccLinkingInfos);
-      CcLinkingContext ccLinkingContext =
-          LibraryToLinkWrapper.fromCcLinkingInfo(mergedCcLinkingInfo);
-      List<LibraryToLink> libraries =
-          ccLinkingContext
-              .toCcLinkingInfo()
-              .getCcLinkParams(
-                  linkingMode != LinkingMode.DYNAMIC, dynamicLinkType.isDynamicLibrary())
-              .getLibraries()
-              .toList();
-      dynamicLinkActionBuilder.addLinkParams(
-          libraries,
-          ccLinkingContext.getFlattenedUserLinkFlags(),
-          ccLinkingContext.getLinkstamps().toList(),
-          ccLinkingContext.getNonCodeInputs().toList(),
-          ruleContext);
+    if (featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)
+        || dynamicLinkType != LinkTargetType.NODEPS_DYNAMIC_LIBRARY) {
+      if (dynamicLinkType != LinkTargetType.NODEPS_DYNAMIC_LIBRARY) {
+        for (CcLinkingInfo ccLinkingInfo : ccLinkingInfos) {
+          dynamicLinkActionBuilder.addLinkParams(
+              ccLinkingInfo.getCcLinkParams(
+                  linkingMode == LinkingMode.STATIC, dynamicLinkType.isDynamicLibrary()),
+              ruleContext);
+        }
+      } else {
+        // On Windows, we cannot build a shared library with symbols unresolved, so here we
+        // dynamically
+        // link to all it's dependencies.
+        CcLinkParams.Builder ccLinkParamsBuilder =
+            CcLinkParams.builder(/* linkingStatically= */ false, /* linkShared= */ true);
+        ccLinkParamsBuilder.addCcLibrary(ruleContext);
+        dynamicLinkActionBuilder.addLinkParams(ccLinkParamsBuilder.build(), ruleContext);
+      }
     }
 
     if (pdbFile != null) {

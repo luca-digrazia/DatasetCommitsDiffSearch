@@ -502,10 +502,9 @@ public class CppHelper {
    * Emits a warning on the rule if there are identical linkstamp artifacts with different {@code
    * CcCompilationContext}s.
    */
-  public static void checkLinkstampsUnique(
-      RuleErrorConsumer listener, Iterable<CcLinkParams.Linkstamp> linkstamps) {
+  public static void checkLinkstampsUnique(RuleErrorConsumer listener, CcLinkParams linkParams) {
     Map<Artifact, NestedSet<Artifact>> result = new LinkedHashMap<>();
-    for (Linkstamp pair : linkstamps) {
+    for (Linkstamp pair : linkParams.getLinkstamps()) {
       Artifact artifact = pair.getArtifact();
       if (result.containsKey(artifact)) {
         listener.ruleWarning("rule inherits the '" + artifact.toDetailString()
@@ -811,35 +810,27 @@ public class CppHelper {
    * Returns true if the build implied by the given config and toolchain uses --start-lib/--end-lib
    * ld options.
    */
-  public static boolean useStartEndLib(
-      CppConfiguration config,
-      CcToolchainProvider toolchain,
-      FeatureConfiguration featureConfiguration) {
-    return config.startEndLibIsRequested() && toolchain.supportsStartEndLib(featureConfiguration);
+  public static boolean useStartEndLib(CppConfiguration config, CcToolchainProvider toolchain) {
+    return config.startEndLibIsRequested() && toolchain.supportsStartEndLib();
   }
 
   /**
    * Returns the type of archives being used by the build implied by the given config and toolchain.
    */
   public static Link.ArchiveType getArchiveType(
-      CppConfiguration config,
-      CcToolchainProvider toolchain,
-      FeatureConfiguration featureConfiguration) {
-    return useStartEndLib(config, toolchain, featureConfiguration)
+      CppConfiguration config, CcToolchainProvider toolchain) {
+    return useStartEndLib(config, toolchain)
         ? Link.ArchiveType.START_END_LIB
         : Link.ArchiveType.REGULAR;
   }
 
   /**
    * Returns true if interface shared objects should be used in the build implied by the given
-   * cppConfiguration and toolchain.
+   * config and toolchain.
    */
-  public static boolean useInterfaceSharedLibraries(
-      CppConfiguration cppConfiguration,
-      CcToolchainProvider toolchain,
-      FeatureConfiguration featureConfiguration) {
-    return toolchain.supportsInterfaceSharedLibraries(featureConfiguration)
-        && cppConfiguration.getUseInterfaceSharedLibraries();
+  public static boolean useInterfaceSharedObjects(
+      CppConfiguration config, CcToolchainProvider toolchain) {
+    return toolchain.supportsInterfaceSharedObjects() && config.getUseInterfaceSharedObjects();
   }
 
   public static CcNativeLibraryProvider collectNativeCcLibraries(
