@@ -9,9 +9,8 @@ import com.google.common.collect.Sets;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.jersey.DropwizardResourceConfig;
 import io.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
-import io.dropwizard.jersey.validation.HibernateValidationFeature;
-import io.dropwizard.jersey.validation.JerseyViolationExceptionMapper;
 import io.dropwizard.jersey.validation.Validators;
+import io.dropwizard.jersey.validation.ConstraintViolationExceptionMapper;
 import io.dropwizard.logging.BootstrapLogging;
 import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.server.ServerProperties;
@@ -154,7 +153,7 @@ public class ResourceTestRule implements TestRule {
         }
 
         private void configure(final ResourceTestRule resourceTestRule) {
-            register(new JerseyViolationExceptionMapper());
+            register(new ConstraintViolationExceptionMapper());
             for (Class<?> provider : resourceTestRule.providers) {
                 register(provider);
             }
@@ -162,8 +161,7 @@ public class ResourceTestRule implements TestRule {
             for (Map.Entry<String, Object> property : resourceTestRule.properties.entrySet()) {
                 property(property.getKey(), property.getValue());
             }
-            register(new JacksonMessageBodyProvider(resourceTestRule.mapper));
-            register(new HibernateValidationFeature(resourceTestRule.validator));
+            register(new JacksonMessageBodyProvider(resourceTestRule.mapper, resourceTestRule.validator));
             for (Object singleton : resourceTestRule.singletons) {
                 register(singleton);
             }
