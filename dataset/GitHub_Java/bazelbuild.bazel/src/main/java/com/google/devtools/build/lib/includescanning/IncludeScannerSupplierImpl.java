@@ -39,34 +39,31 @@ public class IncludeScannerSupplierImpl implements IncludeScannerSupplier {
   private static class IncludeScannerParams {
     final List<PathFragment> quoteIncludePaths;
     final List<PathFragment> includePaths;
-    final List<PathFragment> frameworkIncludePaths;
 
-    IncludeScannerParams(
-        List<PathFragment> quoteIncludePaths,
-        List<PathFragment> includePaths,
-        List<PathFragment> frameworkIncludePaths) {
+    IncludeScannerParams(List<PathFragment> quoteIncludePaths, List<PathFragment> includePaths) {
       this.quoteIncludePaths = quoteIncludePaths;
       this.includePaths = includePaths;
-      this.frameworkIncludePaths = frameworkIncludePaths;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(quoteIncludePaths, includePaths, frameworkIncludePaths);
+      return Objects.hash(quoteIncludePaths, includePaths);
     }
 
     @Override
     public boolean equals(Object other) {
+      if (other == null) {
+        return false;
+      }
       if (this == other) {
         return true;
       }
-      if (!(other instanceof IncludeScannerParams)) {
+      if (getClass() != other.getClass()) {
         return false;
       }
       IncludeScannerParams that = (IncludeScannerParams) other;
       return this.quoteIncludePaths.equals(that.quoteIncludePaths)
-          && this.includePaths.equals(that.includePaths)
-          && this.frameworkIncludePaths.equals(that.frameworkIncludePaths);
+          && this.includePaths.equals(that.includePaths);
     }
   }
 
@@ -88,6 +85,7 @@ public class IncludeScannerSupplierImpl implements IncludeScannerSupplier {
 
   private final Supplier<SpawnIncludeScanner> spawnIncludeScannerSupplier;
   private final Path execRoot;
+  private final boolean useAsyncIncludeScanner;
 
   /** Cache of include scanner instances mapped by include-path hashes. */
   private final LoadingCache<IncludeScannerParams, IncludeScanner> scanners =
@@ -103,11 +101,11 @@ public class IncludeScannerSupplierImpl implements IncludeScannerSupplier {
                       pathCache,
                       key.quoteIncludePaths,
                       key.includePaths,
-                      key.frameworkIncludePaths,
                       directories.getOutputPath(execRoot.getBaseName()),
                       execRoot,
                       artifactFactory,
-                      spawnIncludeScannerSupplier);
+                      spawnIncludeScannerSupplier,
+                      useAsyncIncludeScanner);
                 }
               });
 
@@ -116,23 +114,22 @@ public class IncludeScannerSupplierImpl implements IncludeScannerSupplier {
       ExecutorService includePool,
       ArtifactFactory artifactFactory,
       Supplier<SpawnIncludeScanner> spawnIncludeScannerSupplier,
-      Path execRoot) {
+      Path execRoot,
+      boolean useAsyncIncludeScanner) {
     this.directories = directories;
     this.includePool = includePool;
     this.artifactFactory = artifactFactory;
     this.spawnIncludeScannerSupplier = spawnIncludeScannerSupplier;
     this.execRoot = execRoot;
     this.pathCache = new PathExistenceCache(execRoot, artifactFactory);
+    this.useAsyncIncludeScanner = useAsyncIncludeScanner;
   }
 
   @Override
   public IncludeScanner scannerFor(
-      List<PathFragment> quoteIncludePaths,
-      List<PathFragment> includePaths,
-      List<PathFragment> frameworkPaths) {
+      List<PathFragment> quoteIncludePaths, List<PathFragment> includePaths) {
     Preconditions.checkNotNull(includeParser);
-    return scanners.getUnchecked(
-        new IncludeScannerParams(quoteIncludePaths, includePaths, frameworkPaths));
+    return scanners.getUnchecked(new IncludeScannerParams(quoteIncludePaths, includePaths));
   }
 
   public void init(IncludeParser includeParser) {

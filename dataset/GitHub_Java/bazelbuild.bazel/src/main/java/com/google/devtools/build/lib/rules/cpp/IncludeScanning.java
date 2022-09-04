@@ -125,7 +125,7 @@ public class IncludeScanning implements IncludeProcessing {
       List<PathFragment> absoluteBuiltInIncludeDirs)
       throws ExecException {
     // Collect inputs and output
-    ImmutableList.Builder<Artifact> inputs = ImmutableList.builderWithExpectedSize(includes.size());
+    List<Artifact> inputs = new ArrayList<>();
     for (Artifact included : includes) {
       // Check for absolute includes -- we assign the file system root as
       // the root path for such includes
@@ -142,6 +142,6 @@ public class IncludeScanning implements IncludeProcessing {
       }
       inputs.add(included);
     }
-    return inputs.build();
+    return inputs;
   }
 }

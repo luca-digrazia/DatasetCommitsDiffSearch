@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.includescanning;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
@@ -22,6 +21,7 @@ import com.google.devtools.build.lib.includescanning.IncludeParser.Inclusion;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -45,18 +45,19 @@ public class SwigIncludeScanner extends LegacyIncludeScanner {
       List<PathFragment> includePaths,
       BlazeDirectories directories,
       ArtifactFactory artifactFactory,
-      Path execRoot) {
+      Path execRoot,
+      boolean useAsyncIncludeScanner) {
     super(
         new SwigIncludeParser(),
         includePool,
         cache,
         new PathExistenceCache(execRoot, artifactFactory),
-        /* quoteIncludePaths= */ ImmutableList.of(),
+        Collections.emptyList(),
         includePaths,
-        /* frameworkIncludePaths= */ ImmutableList.of(),
         directories.getOutputPath(execRoot.getBaseName()),
         execRoot,
         artifactFactory,
-        () -> spawnIncludeScanner);
+        () -> spawnIncludeScanner,
+        useAsyncIncludeScanner);
   }
 }

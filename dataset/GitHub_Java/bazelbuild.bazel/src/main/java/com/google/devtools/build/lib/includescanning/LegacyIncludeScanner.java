@@ -442,23 +442,17 @@ public class LegacyIncludeScanner implements IncludeScanner {
     IncludeVisitor visitor;
     visitor =
         useAsyncIncludeScanner
-            ? new AsyncIncludeVisitor(
-                actionExecutionMetadata,
-                actionExecutionContext,
-                grepIncludes,
-                includeScanningHeaderData.getPathToLegalOutputArtifact(),
-                includeScanningHeaderData.getModularHeaders())
-            : new LegacyIncludeVisitor(
-                actionExecutionMetadata,
-                actionExecutionContext,
-                grepIncludes,
-                includeScanningHeaderData.getPathToLegalOutputArtifact(),
-                includeScanningHeaderData.getModularHeaders());
+            ? new AsyncIncludeVisitor(includeScanningHeaderData.getModularHeaders())
+            : new LegacyIncludeVisitor(includeScanningHeaderData.getModularHeaders());
     return visitor.processInternal(
         mainSource,
         sources,
+        includeScanningHeaderData,
         cmdlineIncludes,
         includes,
+        actionExecutionMetadata,
+        actionExecutionContext,
+        grepIncludes,
         pathHints);
   }
 
@@ -507,8 +501,12 @@ public class LegacyIncludeScanner implements IncludeScanner {
     ListenableFuture<?> processInternal(
         Artifact mainSource,
         Collection<Artifact> sources,
+        IncludeScanningHeaderData includeScanningHeaderData,
         List<String> cmdlineIncludes,
         Set<Artifact> includes,
+        ActionExecutionMetadata actionExecutionMetadata,
+        ActionExecutionContext actionExecutionContext,
+        Artifact grepIncludes,
         ImmutableSet<Artifact> pathHints)
         throws InterruptedException, IOException, ExecException;
   }
@@ -518,28 +516,15 @@ public class LegacyIncludeScanner implements IncludeScanner {
    * different IncludeScanner instances.
    */
   private class LegacyIncludeVisitor extends AbstractQueueVisitor implements IncludeVisitor {
-    private final ActionExecutionMetadata actionExecutionMetadata;
-    private final ActionExecutionContext actionExecutionContext;
-    private final Artifact grepIncludes;
-    private final Map<PathFragment, Artifact> pathToLegalOutputArtifact;
     /** The set of headers known to be part of a C++ module. Scanning can stop here. */
-    private final Set<Artifact> modularHeaders;
+    private Set<Artifact> modularHeaders;
 
-    public LegacyIncludeVisitor(
-        ActionExecutionMetadata actionExecutionMetadata,
-        ActionExecutionContext actionExecutionContext,
-        Artifact grepIncludes,
-        final Map<PathFragment, Artifact> pathToLegalOutputArtifact,
-        Set<Artifact> modularHeaders) {
+    public LegacyIncludeVisitor(Set<Artifact> modularHeaders) {
       super(
           includePool,
           /*shutdownOnCompletion=*/ false,
           /*failFastOnException=*/ true,
           ErrorClassifier.DEFAULT);
-      this.actionExecutionMetadata = actionExecutionMetadata;
-      this.actionExecutionContext = actionExecutionContext;
-      this.grepIncludes = grepIncludes;
-      this.pathToLegalOutputArtifact = pathToLegalOutputArtifact;
       this.modularHeaders = modularHeaders;
     }
 
@@ -547,8 +532,12 @@ public class LegacyIncludeScanner implements IncludeScanner {
     public ListenableFuture<?> processInternal(
         Artifact mainSource,
         Collection<Artifact> sources,
+        IncludeScanningHeaderData includeScanningHeaderData,
         List<String> cmdlineIncludes,
         Set<Artifact> includes,
+        ActionExecutionMetadata actionExecutionMetadata,
+        ActionExecutionContext actionExecutionContext,
+        Artifact grepIncludes,
         ImmutableSet<Artifact> pathHints)
         throws InterruptedException, IOException, ExecException {
       Set<ArtifactWithInclusionContext> visitedInclusions = Sets.newConcurrentHashSet();
@@ -559,12 +548,23 @@ public class LegacyIncludeScanner implements IncludeScanner {
           processCmdlineIncludes(
               mainSource,
               cmdlineIncludes,
+              grepIncludes,
               includes,
+              includeScanningHeaderData.getPathToLegalOutputArtifact(),
+              actionExecutionMetadata,
+              actionExecutionContext,
               visitedInclusions);
           sync();
         }
 
-        processBulkAsync(sources, includes, visitedInclusions);
+        processBulkAsync(
+            sources,
+            includes,
+            includeScanningHeaderData.getPathToLegalOutputArtifact(),
+            actionExecutionMetadata,
+            actionExecutionContext,
+            visitedInclusions,
+            grepIncludes);
         sync();
 
         // Process include hints
@@ -572,10 +572,25 @@ public class LegacyIncludeScanner implements IncludeScanner {
         Hints hints = parser.getHints();
         if (hints != null) {
           // Follow "path" hints.
-          processBulkAsync(pathHints, includes, visitedInclusions);
+          processBulkAsync(
+              pathHints,
+              includes,
+              includeScanningHeaderData.getPathToLegalOutputArtifact(),
+              actionExecutionMetadata,
+              actionExecutionContext,
+              visitedInclusions,
+              grepIncludes);
           // Follow "file" hints for the primary sources.
           for (Artifact source : sources) {
-            processFileLevelHintsAsync(hints, source, includes, visitedInclusions);
+            processFileLevelHintsAsync(
+                hints,
+                source,
+                includes,
+                includeScanningHeaderData.getPathToLegalOutputArtifact(),
+                actionExecutionMetadata,
+                actionExecutionContext,
+                visitedInclusions,
+                grepIncludes);
           }
           sync();
 
@@ -584,7 +599,15 @@ public class LegacyIncludeScanner implements IncludeScanner {
           while (!frontier.isEmpty()) {
             Set<Artifact> adjacent = Sets.newConcurrentHashSet();
             for (Artifact include : frontier) {
-              processFileLevelHintsAsync(hints, include, adjacent, visitedInclusions);
+              processFileLevelHintsAsync(
+                  hints,
+                  include,
+                  adjacent,
+                  includeScanningHeaderData.getPathToLegalOutputArtifact(),
+                  actionExecutionMetadata,
+                  actionExecutionContext,
+                  visitedInclusions,
+                  grepIncludes);
             }
             sync();
             // Keep novel nodes as the next frontier.
@@ -628,6 +651,9 @@ public class LegacyIncludeScanner implements IncludeScanner {
      * @param contextKind the kind how the containing file was included, or null for top-level
      *     inclusions
      * @param visited the set to receive the files that are transitively included by {@code source}
+     * @param pathToLegalOutputArtifact map to look up legal output artifact by path
+     * @param actionExecutionMetadata owning action
+     * @param actionExecutionContext Services in the scope of the action, like the stream to which
      * @param visitedInclusions the set of all processed inclusions, to avoid processing duplicate
      *     inclusions.
      */
@@ -636,7 +662,11 @@ public class LegacyIncludeScanner implements IncludeScanner {
         int contextPathPos,
         Kind contextKind,
         Set<Artifact> visited,
-        Set<ArtifactWithInclusionContext> visitedInclusions)
+        Map<PathFragment, Artifact> pathToLegalOutputArtifact,
+        final ActionExecutionMetadata actionExecutionMetadata,
+        final ActionExecutionContext actionExecutionContext,
+        Set<ArtifactWithInclusionContext> visitedInclusions,
+        final Artifact grepIncludes)
         throws IOException, ExecException, InterruptedException {
       checkForInterrupt("processing", source);
 
@@ -691,7 +721,11 @@ public class LegacyIncludeScanner implements IncludeScanner {
             helper.createInclusionWithContext(inclusion, contextPathPos, contextKind),
             source,
             visited,
-            visitedInclusions);
+            pathToLegalOutputArtifact,
+            actionExecutionMetadata,
+            actionExecutionContext,
+            visitedInclusions,
+            grepIncludes);
       }
     }
 
@@ -707,24 +741,45 @@ public class LegacyIncludeScanner implements IncludeScanner {
         int contextPathPos,
         Kind contextKind,
         Set<Artifact> visited,
-        Set<ArtifactWithInclusionContext> visitedInclusions)
+        Map<PathFragment, Artifact> pathToLegalOutputArtifact,
+        final ActionExecutionMetadata actionExecutionMetadata,
+        final ActionExecutionContext actionExecutionContext,
+        Set<ArtifactWithInclusionContext> visitedInclusions,
+        final Artifact grepIncludes)
         throws IOException, ExecException, InterruptedException {
       ListenableFuture<Collection<Inclusion>> cacheResult = fileParseCache.get(source);
       if (cacheResult != null) {
-        process(source, contextPathPos, contextKind, visited, visitedInclusions);
+        process(
+            source,
+            contextPathPos,
+            contextKind,
+            visited,
+            pathToLegalOutputArtifact,
+            actionExecutionMetadata,
+            actionExecutionContext,
+            visitedInclusions,
+            grepIncludes);
       } else {
-        super.execute(
-            () -> {
-              try {
-                process(source, contextPathPos, contextKind, visited, visitedInclusions);
-              } catch (IOException e) {
-                throw new IORuntimeException(e);
-              } catch (ExecException e) {
-                throw new ExecRuntimeException(e);
-              } catch (InterruptedException e) {
-                throw new InterruptedRuntimeException(e);
-              }
-            });
+        super.execute(() -> {
+          try {
+            process(
+                source,
+                contextPathPos,
+                contextKind,
+                visited,
+                pathToLegalOutputArtifact,
+                actionExecutionMetadata,
+                actionExecutionContext,
+                visitedInclusions,
+                grepIncludes);
+          } catch (IOException e) {
+            throw new IORuntimeException(e);
+          } catch (ExecException e) {
+            throw new ExecRuntimeException(e);
+          } catch (InterruptedException e) {
+            throw new InterruptedRuntimeException(e);
+          }
+        });
       }
     }
 
@@ -733,7 +788,11 @@ public class LegacyIncludeScanner implements IncludeScanner {
         InclusionWithContext inclusion,
         Artifact source,
         Set<Artifact> visited,
-        Set<ArtifactWithInclusionContext> visitedInclusions)
+        Map<PathFragment, Artifact> pathToLegalOutputArtifact,
+        ActionExecutionMetadata actionExecutionMetadata,
+        ActionExecutionContext actionExecutionContext,
+        Set<ArtifactWithInclusionContext> visitedInclusions,
+        Artifact grepIncludes)
         throws IOException, ExecException, InterruptedException {
       // Try to find the included file relative to the file that contains the inclusion. Relative
       // inclusions are handled like the first entry on the quote include path
@@ -763,7 +822,15 @@ public class LegacyIncludeScanner implements IncludeScanner {
           return;
         }
         processAsyncIfNotExtracted(
-            includeFile, contextPathPos, contextKind, visited, visitedInclusions);
+            includeFile,
+            contextPathPos,
+            contextKind,
+            visited,
+            pathToLegalOutputArtifact,
+            actionExecutionMetadata,
+            actionExecutionContext,
+            visitedInclusions,
+            grepIncludes);
       }
     }
 
@@ -775,18 +842,32 @@ public class LegacyIncludeScanner implements IncludeScanner {
      * @param includes the list of -include option strings to locate and process
      * @param visited the set of files that are transitively included by {@code includes} to
      *     populate
+     * @param pathToLegalOutputArtifact map to look up legal output artifact by path
+     * @param actionExecutionContext Services in the scope of the action, like the stream to which
      * @param visitedInclusions the set of all processed inclusions, to avoid processing duplicate
      *     inclusions.
      */
     private void processCmdlineIncludes(
         Artifact source,
         List<String> includes,
+        Artifact grepIncludes,
         Set<Artifact> visited,
+        Map<PathFragment, Artifact> pathToLegalOutputArtifact,
+        ActionExecutionMetadata actionExecutionMetadata,
+        ActionExecutionContext actionExecutionContext,
         Set<ArtifactWithInclusionContext> visitedInclusions)
         throws IOException, ExecException, InterruptedException {
       for (String incl : includes) {
         InclusionWithContext inclusion = new InclusionWithContext(incl, Kind.QUOTE);
-        findAndProcess(inclusion, source, visited, visitedInclusions);
+        findAndProcess(
+            inclusion,
+            source,
+            visited,
+            pathToLegalOutputArtifact,
+            actionExecutionMetadata,
+            actionExecutionContext,
+            visitedInclusions,
+            grepIncludes);
       }
     }
 
@@ -796,13 +877,19 @@ public class LegacyIncludeScanner implements IncludeScanner {
      *
      * @param sources the files to process and add to the set
      * @param visited the set to receive the files that are transitively included by {@code sources}
+     * @param pathToLegalOutputArtifact map to look up legal output artifact by path
+     * @param actionExecutionContext Services in the scope of the action, like the stream to which
      * @param visitedInclusions the set of all processed inclusions, to avoid processing duplicate
      *     inclusions.
      */
     private void processBulkAsync(
         Collection<Artifact> sources,
         final Set<Artifact> visited,
-        final Set<ArtifactWithInclusionContext> visitedInclusions)
+        final Map<PathFragment, Artifact> pathToLegalOutputArtifact,
+        final ActionExecutionMetadata actionExecutionMetadata,
+        final ActionExecutionContext actionExecutionContext,
+        final Set<ArtifactWithInclusionContext> visitedInclusions,
+        Artifact grepIncludes)
         throws IOException, ExecException, InterruptedException {
       for (final Artifact source : sources) {
         // TODO(djasper): This looks suspicious. We should only stop based on visitedInclusions.
@@ -811,7 +898,15 @@ public class LegacyIncludeScanner implements IncludeScanner {
         }
 
         processAsyncIfNotExtracted(
-            source, /*contextPathPos=*/ -1, /*contextKind=*/ null, visited, visitedInclusions);
+            source,
+            /*contextPathPos=*/ -1,
+            /*contextKind=*/ null,
+            visited,
+            pathToLegalOutputArtifact,
+            actionExecutionMetadata,
+            actionExecutionContext,
+            visitedInclusions,
+            grepIncludes);
       }
     }
 
@@ -819,24 +914,34 @@ public class LegacyIncludeScanner implements IncludeScanner {
         final Hints hints,
         final Artifact include,
         final Set<Artifact> alsoVisited,
-        final Set<ArtifactWithInclusionContext> visitedInclusions) {
+        final Map<PathFragment, Artifact> pathToLegalOutputArtifact,
+        final ActionExecutionMetadata actionExecutionMetadata,
+        final ActionExecutionContext actionExecutionContext,
+        final Set<ArtifactWithInclusionContext> visitedInclusions,
+        Artifact grepIncludes) {
       Collection<Artifact> sources = hints.getFileLevelHintedInclusionsLegacy(include);
       // Early-out if there's nothing to do to avoid enqueuing a closure
       if (sources.isEmpty()) {
         return;
       }
-      super.execute(
-          () -> {
-            try {
-              processBulkAsync(sources, alsoVisited, visitedInclusions);
-            } catch (IOException e) {
-              throw new IORuntimeException(e);
-            } catch (ExecException e) {
-              throw new ExecRuntimeException(e);
-            } catch (InterruptedException e) {
-              throw new InterruptedRuntimeException(e);
-            }
-          });
+      super.execute(() ->  {
+        try {
+          processBulkAsync(
+              sources,
+              alsoVisited,
+              pathToLegalOutputArtifact,
+              actionExecutionMetadata,
+              actionExecutionContext,
+              visitedInclusions,
+              grepIncludes);
+        } catch (IOException e) {
+          throw new IORuntimeException(e);
+        } catch (ExecException e) {
+          throw new ExecRuntimeException(e);
+        } catch (InterruptedException e) {
+          throw new InterruptedRuntimeException(e);
+        }
+      });
     }
   }
 
@@ -845,23 +950,10 @@ public class LegacyIncludeScanner implements IncludeScanner {
    * different IncludeScanner instances.
    */
   private class AsyncIncludeVisitor implements IncludeVisitor {
-    private final ActionExecutionMetadata actionExecutionMetadata;
-    private final ActionExecutionContext actionExecutionContext;
-    private final Artifact grepIncludes;
-    private final Map<PathFragment, Artifact> pathToLegalOutputArtifact;
     /** The set of headers known to be part of a C++ module. Scanning can stop here. */
-    private final Set<Artifact> modularHeaders;
+    private Set<Artifact> modularHeaders;
 
-    public AsyncIncludeVisitor(
-        ActionExecutionMetadata actionExecutionMetadata,
-        ActionExecutionContext actionExecutionContext,
-        Artifact grepIncludes,
-        Map<PathFragment, Artifact> pathToLegalOutputArtifact,
-        Set<Artifact> modularHeaders) {
-      this.actionExecutionMetadata = actionExecutionMetadata;
-      this.actionExecutionContext = actionExecutionContext;
-      this.grepIncludes = grepIncludes;
-      this.pathToLegalOutputArtifact = pathToLegalOutputArtifact;
+    public AsyncIncludeVisitor(Set<Artifact> modularHeaders) {
       this.modularHeaders = modularHeaders;
     }
 
@@ -869,8 +961,12 @@ public class LegacyIncludeScanner implements IncludeScanner {
     public ListenableFuture<?> processInternal(
         Artifact mainSource,
         Collection<Artifact> sources,
+        IncludeScanningHeaderData includeScanningHeaderData,
         List<String> cmdlineIncludes,
         Set<Artifact> includes,
+        ActionExecutionMetadata actionExecutionMetadata,
+        ActionExecutionContext actionExecutionContext,
+        Artifact grepIncludes,
         ImmutableSet<Artifact> pathHints)
         throws InterruptedException, IOException, ExecException {
       Set<ArtifactWithInclusionContext> visitedInclusions = Sets.newConcurrentHashSet();
@@ -880,12 +976,30 @@ public class LegacyIncludeScanner implements IncludeScanner {
         // Process cmd line includes, if specified.
         if (mainSource != null && !cmdlineIncludes.isEmpty()) {
           result =
-              processCmdlineIncludesAsync(mainSource, cmdlineIncludes, includes, visitedInclusions);
+              processCmdlineIncludesAsync(
+                  mainSource,
+                  cmdlineIncludes,
+                  grepIncludes,
+                  includes,
+                  includeScanningHeaderData.getPathToLegalOutputArtifact(),
+                  actionExecutionMetadata,
+                  actionExecutionContext,
+                  visitedInclusions);
         }
 
         result =
             Futures.transformAsync(
-                result, (v) -> processBulkAsync(sources, includes, visitedInclusions), includePool);
+                result,
+                (v) ->
+                    processBulkAsync(
+                        sources,
+                        includes,
+                        includeScanningHeaderData.getPathToLegalOutputArtifact(),
+                        actionExecutionMetadata,
+                        actionExecutionContext,
+                        visitedInclusions,
+                        grepIncludes),
+                includePool);
 
         // Process include hints
         // TODO(ulfjack): Make this code go away. Use the new hinted inclusions instead.
@@ -895,19 +1009,45 @@ public class LegacyIncludeScanner implements IncludeScanner {
           result =
               Futures.transformAsync(
                   result,
-                  (v) -> processBulkAsync(pathHints, includes, visitedInclusions),
+                  (v) ->
+                      processBulkAsync(
+                          pathHints,
+                          includes,
+                          includeScanningHeaderData.getPathToLegalOutputArtifact(),
+                          actionExecutionMetadata,
+                          actionExecutionContext,
+                          visitedInclusions,
+                          grepIncludes),
                   includePool);
           result =
               Futures.transformAsync(
                   result,
-                  (v) -> processAllFileLevelHintsAsync(hints, sources, includes, visitedInclusions),
+                  (v) ->
+                      processAllFileLevelHintsAsync(
+                          hints,
+                          sources,
+                          includes,
+                          includeScanningHeaderData.getPathToLegalOutputArtifact(),
+                          actionExecutionMetadata,
+                          actionExecutionContext,
+                          visitedInclusions,
+                          grepIncludes),
                   includePool);
 
           // Follow "file" hints for all included headers, transitively.
           result =
               Futures.transformAsync(
                   result,
-                  (v) -> processOnePass(hints, includes, includes, visitedInclusions),
+                  (v) ->
+                      processOnePass(
+                          hints,
+                          includes,
+                          includes,
+                          includeScanningHeaderData.getPathToLegalOutputArtifact(),
+                          actionExecutionMetadata,
+                          actionExecutionContext,
+                          visitedInclusions,
+                          grepIncludes),
                   includePool);
         }
         return result;
@@ -921,11 +1061,23 @@ public class LegacyIncludeScanner implements IncludeScanner {
         Hints hints,
         Collection<Artifact> before,
         Set<Artifact> includes,
-        Set<ArtifactWithInclusionContext> visitedInclusions)
+        Map<PathFragment, Artifact> pathToLegalOutputArtifact,
+        ActionExecutionMetadata actionExecutionMetadata,
+        ActionExecutionContext actionExecutionContext,
+        Set<ArtifactWithInclusionContext> visitedInclusions,
+        Artifact grepIncludes)
         throws InterruptedException, IOException, ExecException {
       Set<Artifact> adjacent = Sets.newConcurrentHashSet();
       ListenableFuture<?> future =
-          processAllFileLevelHintsAsync(hints, before, adjacent, visitedInclusions);
+          processAllFileLevelHintsAsync(
+              hints,
+              before,
+              adjacent,
+              pathToLegalOutputArtifact,
+              actionExecutionMetadata,
+              actionExecutionContext,
+              visitedInclusions,
+              grepIncludes);
       return Futures.transformAsync(
           future,
           (v) -> {
@@ -938,7 +1090,15 @@ public class LegacyIncludeScanner implements IncludeScanner {
             if (adjacent.isEmpty()) {
               return Futures.immediateFuture(null);
             }
-            return processOnePass(hints, adjacent, includes, visitedInclusions);
+            return processOnePass(
+                hints,
+                adjacent,
+                includes,
+                pathToLegalOutputArtifact,
+                actionExecutionMetadata,
+                actionExecutionContext,
+                visitedInclusions,
+                grepIncludes);
           },
           includePool);
     }
@@ -952,6 +1112,9 @@ public class LegacyIncludeScanner implements IncludeScanner {
      * @param contextKind the kind how the containing file was included, or null for top-level
      *     inclusions
      * @param visited the set to receive the files that are transitively included by {@code source}
+     * @param pathToLegalOutputArtifact map to look up legal output artifact by path
+     * @param actionExecutionMetadata owning action
+     * @param actionExecutionContext Services in the scope of the action, like the stream to which
      * @param visitedInclusions the set of all processed inclusions, to avoid processing duplicate
      *     inclusions.
      */
@@ -960,7 +1123,11 @@ public class LegacyIncludeScanner implements IncludeScanner {
         int contextPathPos,
         Kind contextKind,
         Set<Artifact> visited,
-        Set<ArtifactWithInclusionContext> visitedInclusions)
+        Map<PathFragment, Artifact> pathToLegalOutputArtifact,
+        final ActionExecutionMetadata actionExecutionMetadata,
+        final ActionExecutionContext actionExecutionContext,
+        Set<ArtifactWithInclusionContext> visitedInclusions,
+        final Artifact grepIncludes)
         throws IOException, InterruptedException {
       checkForInterrupt("processing", source);
 
@@ -1013,7 +1180,11 @@ public class LegacyIncludeScanner implements IncludeScanner {
                       helper.createInclusionWithContext(inclusion, contextPathPos, contextKind),
                       source,
                       visited,
-                      visitedInclusions));
+                      pathToLegalOutputArtifact,
+                      actionExecutionMetadata,
+                      actionExecutionContext,
+                      visitedInclusions,
+                      grepIncludes));
             }
             return Futures.allAsList(allFutures);
           },
@@ -1025,7 +1196,11 @@ public class LegacyIncludeScanner implements IncludeScanner {
         InclusionWithContext inclusion,
         Artifact source,
         Set<Artifact> visited,
-        Set<ArtifactWithInclusionContext> visitedInclusions)
+        Map<PathFragment, Artifact> pathToLegalOutputArtifact,
+        ActionExecutionMetadata actionExecutionMetadata,
+        ActionExecutionContext actionExecutionContext,
+        Set<ArtifactWithInclusionContext> visitedInclusions,
+        Artifact grepIncludes)
         throws IOException, InterruptedException {
       // Try to find the included file relative to the file that contains the inclusion. Relative
       // inclusions are handled like the first entry on the quote include path
@@ -1054,7 +1229,16 @@ public class LegacyIncludeScanner implements IncludeScanner {
         if (modularHeaders.contains(includeFile)) {
           return Futures.immediateFuture(null);
         }
-        return process(includeFile, contextPathPos, contextKind, visited, visitedInclusions);
+        return process(
+            includeFile,
+            contextPathPos,
+            contextKind,
+            visited,
+            pathToLegalOutputArtifact,
+            actionExecutionMetadata,
+            actionExecutionContext,
+            visitedInclusions,
+            grepIncludes);
       }
       return Futures.immediateFuture(null);
     }
@@ -1067,19 +1251,34 @@ public class LegacyIncludeScanner implements IncludeScanner {
      * @param includes the list of -include option strings to locate and process
      * @param visited the set of files that are transitively included by {@code includes} to
      *     populate
+     * @param pathToLegalOutputArtifact map to look up legal output artifact by path
+     * @param actionExecutionContext Services in the scope of the action, like the stream to which
      * @param visitedInclusions the set of all processed inclusions, to avoid processing duplicate
      *     inclusions.
      */
     private ListenableFuture<?> processCmdlineIncludesAsync(
         Artifact source,
         List<String> includes,
+        Artifact grepIncludes,
         Set<Artifact> visited,
+        Map<PathFragment, Artifact> pathToLegalOutputArtifact,
+        ActionExecutionMetadata actionExecutionMetadata,
+        ActionExecutionContext actionExecutionContext,
         Set<ArtifactWithInclusionContext> visitedInclusions)
         throws IOException, ExecException, InterruptedException {
       List<ListenableFuture<?>> allFutures = new ArrayList<>(includes.size());
       for (String incl : includes) {
         InclusionWithContext inclusion = new InclusionWithContext(incl, Kind.QUOTE);
-        allFutures.add(findAndProcess(inclusion, source, visited, visitedInclusions));
+        allFutures.add(
+            findAndProcess(
+                inclusion,
+                source,
+                visited,
+                pathToLegalOutputArtifact,
+                actionExecutionMetadata,
+                actionExecutionContext,
+                visitedInclusions,
+                grepIncludes));
       }
       return Futures.allAsList(allFutures);
     }
@@ -1090,13 +1289,19 @@ public class LegacyIncludeScanner implements IncludeScanner {
      *
      * @param sources the files to process and add to the set
      * @param visited the set to receive the files that are transitively included by {@code sources}
+     * @param pathToLegalOutputArtifact map to look up legal output artifact by path
+     * @param actionExecutionContext Services in the scope of the action, like the stream to which
      * @param visitedInclusions the set of all processed inclusions, to avoid processing duplicate
      *     inclusions.
      */
     private ListenableFuture<?> processBulkAsync(
         Collection<Artifact> sources,
         final Set<Artifact> visited,
-        final Set<ArtifactWithInclusionContext> visitedInclusions)
+        final Map<PathFragment, Artifact> pathToLegalOutputArtifact,
+        final ActionExecutionMetadata actionExecutionMetadata,
+        final ActionExecutionContext actionExecutionContext,
+        final Set<ArtifactWithInclusionContext> visitedInclusions,
+        Artifact grepIncludes)
         throws IOException, InterruptedException {
       List<ListenableFuture<?>> allFutures = new ArrayList<>(sources.size());
       for (final Artifact source : sources) {
@@ -1107,7 +1312,15 @@ public class LegacyIncludeScanner implements IncludeScanner {
 
         allFutures.add(
             process(
-                source, /*contextPathPos=*/ -1, /*contextKind=*/ null, visited, visitedInclusions));
+                source,
+                /*contextPathPos=*/ -1,
+                /*contextKind=*/ null,
+                visited,
+                pathToLegalOutputArtifact,
+                actionExecutionMetadata,
+                actionExecutionContext,
+                visitedInclusions,
+                grepIncludes));
       }
       return Futures.allAsList(allFutures);
     }
@@ -1116,12 +1329,25 @@ public class LegacyIncludeScanner implements IncludeScanner {
         Hints hints,
         Collection<Artifact> sources,
         Set<Artifact> alsoVisited,
-        Set<ArtifactWithInclusionContext> visitedInclusions)
+        Map<PathFragment, Artifact> pathToLegalOutputArtifact,
+        ActionExecutionMetadata actionExecutionMetadata,
+        ActionExecutionContext actionExecutionContext,
+        Set<ArtifactWithInclusionContext> visitedInclusions,
+        Artifact grepIncludes)
         throws InterruptedException, IOException, ExecException {
       List<ListenableFuture<?>> allFutures = new ArrayList<>();
       // Follow "file" hints for the primary sources.
       for (Artifact source : sources) {
-        allFutures.add(processFileLevelHintsAsync(hints, source, alsoVisited, visitedInclusions));
+        allFutures.add(
+            processFileLevelHintsAsync(
+                hints,
+                source,
+                alsoVisited,
+                pathToLegalOutputArtifact,
+                actionExecutionMetadata,
+                actionExecutionContext,
+                visitedInclusions,
+                grepIncludes));
       }
       return Futures.allAsList(allFutures);
     }
@@ -1130,14 +1356,25 @@ public class LegacyIncludeScanner implements IncludeScanner {
         final Hints hints,
         final Artifact include,
         final Set<Artifact> alsoVisited,
-        final Set<ArtifactWithInclusionContext> visitedInclusions)
+        final Map<PathFragment, Artifact> pathToLegalOutputArtifact,
+        final ActionExecutionMetadata actionExecutionMetadata,
+        final ActionExecutionContext actionExecutionContext,
+        final Set<ArtifactWithInclusionContext> visitedInclusions,
+        Artifact grepIncludes)
         throws InterruptedException, IOException, ExecException {
       Collection<Artifact> sources = hints.getFileLevelHintedInclusionsLegacy(include);
       // Early-out if there's nothing to do to avoid enqueuing a closure
       if (sources.isEmpty()) {
         return Futures.immediateFuture(null);
       }
-      return processBulkAsync(sources, alsoVisited, visitedInclusions);
+      return processBulkAsync(
+          sources,
+          alsoVisited,
+          pathToLegalOutputArtifact,
+          actionExecutionMetadata,
+          actionExecutionContext,
+          visitedInclusions,
+          grepIncludes);
     }
   }
 
