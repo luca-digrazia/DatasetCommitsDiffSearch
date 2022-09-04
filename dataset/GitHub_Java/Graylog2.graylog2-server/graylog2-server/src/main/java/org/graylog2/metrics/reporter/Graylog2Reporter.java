@@ -211,7 +211,11 @@ public class Graylog2Reporter extends ScheduledReporter {
     }
 
     public String buildShortMessage(String name) {
-        return name;
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("metrics: ").append(name);
+
+        return sb.toString();
     }
 
 }
