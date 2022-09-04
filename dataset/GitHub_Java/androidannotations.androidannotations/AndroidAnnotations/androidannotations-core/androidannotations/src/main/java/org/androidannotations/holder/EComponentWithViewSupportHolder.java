@@ -15,14 +15,14 @@
  */
 package org.androidannotations.holder;
 
-import static com.helger.jcodemodel.JExpr._new;
-import static com.helger.jcodemodel.JExpr._null;
-import static com.helger.jcodemodel.JExpr._this;
-import static com.helger.jcodemodel.JExpr.cast;
-import static com.helger.jcodemodel.JExpr.invoke;
-import static com.helger.jcodemodel.JMod.FINAL;
-import static com.helger.jcodemodel.JMod.PRIVATE;
-import static com.helger.jcodemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JExpr._this;
+import static com.sun.codemodel.JExpr.cast;
+import static com.sun.codemodel.JExpr.invoke;
+import static com.sun.codemodel.JMod.FINAL;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -36,16 +36,16 @@ import org.androidannotations.api.view.OnViewChangedListener;
 import org.androidannotations.api.view.OnViewChangedNotifier;
 import org.androidannotations.internal.helper.ViewNotifierHelper;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JDefinedClass;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JFieldRef;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JSwitch;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldRef;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JSwitch;
+import com.sun.codemodel.JVar;
 
 public abstract class EComponentWithViewSupportHolder extends EComponentHolder implements HasKeyEventCallbackMethods {
 
@@ -95,9 +95,9 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		onViewChanged = getGeneratedClass().method(PUBLIC, getCodeModel().VOID, "onViewChanged");
 		onViewChanged.annotate(Override.class);
 		onViewChangedBody = onViewChanged.body();
-		onViewChangedBodyBeforeFindViews = onViewChangedBody.blockSimple();
+		onViewChangedBodyBeforeFindViews = onViewChangedBody.block();
 		onViewChangedHasViewsParam = onViewChanged.param(HasViews.class, "hasViews");
-		AbstractJClass notifierClass = getJClass(OnViewChangedNotifier.class);
+		JClass notifierClass = getJClass(OnViewChangedNotifier.class);
 		getInitBody().staticInvoke(notifierClass, "registerOnViewChangedListener").arg(_this());
 	}
 
@@ -107,16 +107,16 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		return findViewById;
 	}
 
-	public void processViewById(JFieldRef idRef, AbstractJClass viewClass, JFieldRef fieldRef) {
+	public void processViewById(JFieldRef idRef, JClass viewClass, JFieldRef fieldRef) {
 		assignFindViewById(idRef, viewClass, fieldRef);
 	}
 
-	public void assignFindViewById(JFieldRef idRef, AbstractJClass viewClass, JFieldRef fieldRef) {
-		String idRefString = idRef.name();
+	public void assignFindViewById(JFieldRef idRef, JClass viewClass, JFieldRef fieldRef) {
+		String idRefString = codeModelHelper.getIdStringFromIdFieldRef(idRef);
 		FoundViewHolder foundViewHolder = (FoundViewHolder) foundHolders.get(idRefString);
 
 		JBlock block = getOnViewChangedBody();
-		IJExpression assignExpression;
+		JExpression assignExpression;
 
 		if (foundViewHolder != null) {
 			assignExpression = foundViewHolder.getOrCastRef(viewClass);
@@ -135,8 +135,8 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		block.assign(fieldRef, assignExpression);
 	}
 
-	public FoundViewHolder getFoundViewHolder(JFieldRef idRef, AbstractJClass viewClass) {
-		String idRefString = idRef.name();
+	public FoundViewHolder getFoundViewHolder(JFieldRef idRef, JClass viewClass) {
+		String idRefString = codeModelHelper.getIdStringFromIdFieldRef(idRef);
 		FoundViewHolder foundViewHolder = (FoundViewHolder) foundHolders.get(idRefString);
 		if (foundViewHolder == null) {
 			foundViewHolder = createFoundViewAndIfNotNullBlock(idRef, viewClass);
@@ -145,9 +145,9 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		return foundViewHolder;
 	}
 
-	protected FoundViewHolder createFoundViewAndIfNotNullBlock(JFieldRef idRef, AbstractJClass viewClass) {
-		IJExpression findViewExpression = findViewById(idRef);
-		JBlock block = getOnViewChangedBody().blockSimple();
+	protected FoundViewHolder createFoundViewAndIfNotNullBlock(JFieldRef idRef, JClass viewClass) {
+		JExpression findViewExpression = findViewById(idRef);
+		JBlock block = getOnViewChangedBody().block();
 
 		if (viewClass == null) {
 			viewClass = getClasses().VIEW;
@@ -240,7 +240,7 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	}
 
 	public TextWatcherHolder getTextWatcherHolder(JFieldRef idRef, TypeMirror viewParameterType) {
-		String idRefString = idRef.name();
+		String idRefString = codeModelHelper.getIdStringFromIdFieldRef(idRef);
 		TextWatcherHolder textWatcherHolder = textWatcherHolders.get(idRefString);
 		if (textWatcherHolder == null) {
 			textWatcherHolder = createTextWatcherHolder(idRef, viewParameterType);
@@ -251,12 +251,12 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 
 	private TextWatcherHolder createTextWatcherHolder(JFieldRef idRef, TypeMirror viewParameterType) {
 		JDefinedClass onTextChangeListenerClass = getCodeModel().anonymousClass(getClasses().TEXT_WATCHER);
-		AbstractJClass viewClass = getClasses().TEXT_VIEW;
+		JClass viewClass = getClasses().TEXT_VIEW;
 		if (viewParameterType != null) {
 			viewClass = getJClass(viewParameterType.toString());
 		}
 
-		JBlock onViewChangedBody = getOnViewChangedBody().blockSimple();
+		JBlock onViewChangedBody = getOnViewChangedBody().block();
 		JVar viewVariable = onViewChangedBody.decl(FINAL, viewClass, "view", cast(viewClass, findViewById(idRef)));
 		onViewChangedBody._if(viewVariable.ne(JExpr._null()))._then() //
 		.invoke(viewVariable, "addTextChangedListener").arg(_new(onTextChangeListenerClass));
@@ -265,7 +265,7 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	}
 
 	public OnSeekBarChangeListenerHolder getOnSeekBarChangeListenerHolder(JFieldRef idRef) {
-		String idRefString = idRef.name();
+		String idRefString = codeModelHelper.getIdStringFromIdFieldRef(idRef);
 		OnSeekBarChangeListenerHolder onSeekBarChangeListenerHolder = onSeekBarChangeListenerHolders.get(idRefString);
 		if (onSeekBarChangeListenerHolder == null) {
 			onSeekBarChangeListenerHolder = createOnSeekBarChangeListenerHolder(idRef);
@@ -276,10 +276,12 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 
 	private OnSeekBarChangeListenerHolder createOnSeekBarChangeListenerHolder(JFieldRef idRef) {
 		JDefinedClass onSeekbarChangeListenerClass = getCodeModel().anonymousClass(getClasses().ON_SEEKBAR_CHANGE_LISTENER);
-		AbstractJClass viewClass = getClasses().SEEKBAR;
+		JClass viewClass = getClasses().SEEKBAR;
 
-		FoundViewHolder foundViewHolder = getFoundViewHolder(idRef, viewClass);
-		foundViewHolder.getIfNotNullBlock().invoke(foundViewHolder.getRef(), "setOnSeekBarChangeListener").arg(_new(onSeekbarChangeListenerClass));
+		JBlock onViewChangedBody = getOnViewChangedBody().block();
+		JVar viewVariable = onViewChangedBody.decl(FINAL, viewClass, "view", cast(viewClass, findViewById(idRef)));
+		onViewChangedBody._if(viewVariable.ne(JExpr._null()))._then() //
+		.invoke(viewVariable, "setOnSeekBarChangeListener").arg(_new(onSeekbarChangeListenerClass));
 
 		return new OnSeekBarChangeListenerHolder(this, onSeekbarChangeListenerClass);
 	}
