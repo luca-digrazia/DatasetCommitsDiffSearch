@@ -40,8 +40,9 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.rules.cpp.CppActionConfigs.CppPlatform;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader.CppConfigurationParameters;
+import com.google.devtools.build.lib.rules.cpp.CppLinkActionConfigs.CppLinkPlatform;
+import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.transitions.ContextCollectorOwnerTransition;
 import com.google.devtools.build.lib.rules.cpp.transitions.DisableLipoTransition;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -598,19 +599,22 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
 
     return result.build();
   }
-
-  private static boolean actionsAreConfigured(CToolchain toolchain) {
-    return Iterables.any(
-        toolchain.getActionConfigList(),
-        new Predicate<ActionConfig>() {
-          @Override
-          public boolean apply(@Nullable ActionConfig actionConfig) {
-            // We cannot assume actions are configured just by presence of any action_config. Some
-            // crosstools specify unrelated action_configs (e.g. clif_match), but C/C++ part is
-            // in fact not configured.
-            return actionConfig.getActionName().contains("c++");
-          }
-        });
+  
+  private boolean linkActionsAreConfigured(CToolchain toolchain) {
+    
+    for (LinkTargetType type : Link.MANDATORY_LINK_TARGET_TYPES) {
+      boolean typeIsConfigured = false;
+      for (ActionConfig actionConfig : toolchain.getActionConfigList()) {
+        if (actionConfig.getActionName().equals(type.getActionName())) {
+          typeIsConfigured = true;
+          break;
+        }
+      }
+      if (!typeIsConfigured) {
+        return false;
+      }
+    }
+    return true;
   }
 
   // TODO(bazel-team): Remove this once bazel supports all crosstool flags through
@@ -644,13 +648,11 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     Set<String> features = featuresBuilder.build();
     if (!features.contains(CppRuleClasses.NO_LEGACY_FEATURES)) {
       try {
-        if (!actionsAreConfigured(toolchain)) {
-          String gccToolPath = "DUMMY_GCC_TOOL";
+        if (!linkActionsAreConfigured(toolchain)) {
           String linkerToolPath = "DUMMY_LINKER_TOOL";
           String arToolPath = "DUMMY_AR_TOOL";
           for (ToolPath tool : toolchain.getToolPathList()) {
             if (tool.getName().equals(Tool.GCC.getNamePart())) {
-              gccToolPath = tool.getPath();
               linkerToolPath =
                   crosstoolTopPathFragment
                       .getRelative(PathFragment.create(tool.getPath()))
@@ -661,10 +663,9 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
             }
           }
           TextFormat.merge(
-              CppActionConfigs.getCppActionConfigs(
-                  getTargetLibc().equals("macosx") ? CppPlatform.MAC : CppPlatform.LINUX,
+              CppLinkActionConfigs.getCppLinkActionConfigs(
+                  getTargetLibc().equals("macosx") ? CppLinkPlatform.MAC : CppLinkPlatform.LINUX,
                   features,
-                  gccToolPath,
                   linkerToolPath,
                   arToolPath,
                   supportsEmbeddedRuntimes),

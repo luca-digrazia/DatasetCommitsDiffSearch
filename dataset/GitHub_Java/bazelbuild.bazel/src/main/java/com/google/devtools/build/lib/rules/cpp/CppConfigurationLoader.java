@@ -83,7 +83,6 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
    */
   public static class CppConfigurationParameters {
     protected final CrosstoolConfig.CToolchain toolchain;
-    protected final CrosstoolConfigurationLoader.CrosstoolFile crosstoolFile;
     protected final String cacheKeySuffix;
     protected final BuildConfiguration.Options commonOptions;
     protected final CppOptions cppOptions;
@@ -95,7 +94,6 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
 
     CppConfigurationParameters(
         CrosstoolConfig.CToolchain toolchain,
-        CrosstoolConfigurationLoader.CrosstoolFile crosstoolFile,
         String cacheKeySuffix,
         BuildOptions buildOptions,
         Path fdoZip,
@@ -104,7 +102,6 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
         Label stlLabel,
         Label sysrootLabel) {
       this.toolchain = toolchain;
-      this.crosstoolFile = crosstoolFile;
       this.cacheKeySuffix = cacheKeySuffix;
       this.commonOptions = buildOptions.get(BuildConfiguration.Options.class);
       this.cppOptions = buildOptions.get(CppOptions.class);
@@ -227,7 +224,6 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
 
     return new CppConfigurationParameters(
         toolchain,
-        file,
         file.getMd5(),
         options,
         fdoZip,
