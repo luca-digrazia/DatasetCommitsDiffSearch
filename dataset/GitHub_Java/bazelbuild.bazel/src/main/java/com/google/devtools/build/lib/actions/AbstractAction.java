@@ -31,8 +31,8 @@ import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
@@ -366,8 +366,8 @@ public abstract class AbstractAction implements Action, SkylarkValue {
   }
 
   @Override
-  public void repr(SkylarkPrinter printer) {
-    printer.append(prettyPrint()); // TODO(bazel-team): implement a readable representation
+  public void write(Appendable buffer, char quotationMark) {
+    Printer.append(buffer, prettyPrint()); // TODO(bazel-team): implement a readable representation
   }
 
   /**
@@ -437,11 +437,6 @@ public abstract class AbstractAction implements Action, SkylarkValue {
   @Override
   public MiddlemanType getActionType() {
     return MiddlemanType.NORMAL;
-  }
-
-  @Override
-  public boolean canRemoveAfterExecution() {
-    return true;
   }
 
   /**
@@ -578,7 +573,7 @@ public abstract class AbstractAction implements Action, SkylarkValue {
 
   @SkylarkCallable(
       name = "content",
-      doc = "For actions created by <a href=\"actions.html#write\">ctx.actions.write()</a> or "
+      doc = "For actions created by <a href=\"ctx.html#file_action\">ctx.file_action()</a> or "
           + "<a href=\"ctx.html#template_action\">ctx.template_action()</a>, the contents of the "
           + "file to be written.",
       structField = true,
