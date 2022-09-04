@@ -25,22 +25,26 @@ import org.apache.shiro.cache.MemoryConstrainedCacheManager;
 import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.apache.shiro.mgt.DefaultSessionStorageEvaluator;
 import org.apache.shiro.mgt.DefaultSubjectDAO;
-import org.apache.shiro.realm.AuthorizingRealm;
+import org.apache.shiro.realm.AuthenticatingRealm;
 import org.apache.shiro.realm.Realm;
 import org.apache.shiro.session.mgt.DefaultSessionManager;
 import org.apache.shiro.subject.Subject;
 import org.graylog2.security.InMemoryRolePermissionResolver;
 import org.graylog2.security.MongoDbSessionDAO;
 import org.graylog2.security.OrderedAuthenticatingRealms;
+import org.graylog2.security.realm.MongoDbAuthorizationRealm;
+import org.graylog2.security.realm.RootAccountRealm;
 import org.graylog2.shared.security.ThrowingFirstSuccessfulStrategy;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
 import javax.inject.Singleton;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Singleton
 public class DefaultSecurityManagerProvider implements Provider<DefaultSecurityManager> {
@@ -48,7 +52,8 @@ public class DefaultSecurityManagerProvider implements Provider<DefaultSecurityM
 
     @Inject
     public DefaultSecurityManagerProvider(MongoDbSessionDAO mongoDbSessionDAO,
-                                          Map<String, AuthorizingRealm> authorizingOnlyRealms,
+                                          MongoDbAuthorizationRealm mongoDbAuthorizationRealm,
+                                          Map<String, AuthenticatingRealm> pluggableRealms,
                                           InMemoryRolePermissionResolver inMemoryRolePermissionResolver,
                                           OrderedAuthenticatingRealms orderedAuthenticatingRealms) {
         sm = new DefaultSecurityManager(orderedAuthenticatingRealms);
@@ -59,12 +64,11 @@ public class DefaultSecurityManagerProvider implements Provider<DefaultSecurityM
             ((ModularRealmAuthenticator) authenticator).setAuthenticationStrategy(strategy);
         }
 
-        List<Realm> authorizingRealms = new ArrayList<>();
-        authorizingRealms.addAll(authorizingOnlyRealms.values());
         // root account realm might be deactivated and won't be present in that case
-        orderedAuthenticatingRealms.getRootAccountRealm().map(authorizingRealms::add);
-
-        final ModularRealmAuthorizer authorizer = new ModularRealmAuthorizer(authorizingRealms);
+        List<Realm> realms = Stream.of(mongoDbAuthorizationRealm, pluggableRealms.get(RootAccountRealm.NAME))
+                                                  .filter(Objects::nonNull)
+                                                  .collect(Collectors.toList());
+        final ModularRealmAuthorizer authorizer = new ModularRealmAuthorizer(realms);
 
         authorizer.setRolePermissionResolver(inMemoryRolePermissionResolver);
         sm.setAuthorizer(authorizer);
