@@ -352,6 +352,7 @@ public class JavaHeaderCompileActionBuilder {
       mandatoryInputs.addTransitive(classpath);
 
       commandLine.addExecPaths("--classpath", classpath);
+      commandLine.add("--nojavac_fallback");
 
       ruleContext.registerAction(
           new SpawnAction(

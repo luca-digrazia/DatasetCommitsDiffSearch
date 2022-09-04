@@ -52,7 +52,6 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
@@ -174,8 +173,7 @@ public final class JavaCompileActionBuilder {
   private Label targetLabel;
   @Nullable private String injectingRuleKind;
 
-  public JavaCompileAction build(
-      RuleContext ruleContext, JavaToolchainProvider javaToolchain, JavaSemantics javaSemantics) {
+  public JavaCompileAction build(RuleContext ruleContext, JavaSemantics javaSemantics) {
     // TODO(bazel-team): all the params should be calculated before getting here, and the various
     // aggregation code below should go away.
     ImmutableList<String> internedJcopts =
@@ -191,13 +189,7 @@ public final class JavaCompileActionBuilder {
     // Invariant: if java_classpath is set to 'off', dependencyArtifacts are ignored
     JavaConfiguration javaConfiguration =
         ruleContext.getConfiguration().getFragment(JavaConfiguration.class);
-    JavaClasspathMode classpathMode = javaConfiguration.getReduceJavaClasspath();
-    if (!Collections.disjoint(
-        plugins.processorClasses().toSet(),
-        javaToolchain.getReducedClasspathIncompatibleProcessors())) {
-      classpathMode = JavaClasspathMode.OFF;
-    }
-    if (classpathMode == JavaClasspathMode.OFF) {
+    if (javaConfiguration.getReduceJavaClasspath() == JavaClasspathMode.OFF) {
       compileTimeDependencyArtifacts = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
 
@@ -274,6 +266,7 @@ public final class JavaCompileActionBuilder {
             sourceFiles,
             internedJcopts);
 
+    JavaClasspathMode classpathMode = javaConfiguration.getReduceJavaClasspath();
     // TODO(b/123076347): outputDepsProto should never be null if SJD is enabled
     if (strictJavaDeps == StrictDepsMode.OFF || outputDepsProto == null) {
       classpathMode = JavaClasspathMode.OFF;
