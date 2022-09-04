@@ -17,12 +17,13 @@ package smile.data.type;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.text.ParseException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 /**
- * The data type in the sense of encoding and storage.
+ * The data type in the sense of .
  *
  * @see DiscreteMeasure
  * @see ContinuousMeasure
@@ -31,41 +32,16 @@ import java.time.LocalTime;
  */
 public interface DataType extends Serializable {
     /**
-     * Data type ID.
-     */
-    enum ID {
-        Boolean,
-        Byte,
-        Char,
-        Short,
-        Integer,
-        Long,
-        Float,
-        Double,
-        Decimal,
-        String,
-        Date,
-        Time,
-        DateTime,
-        Object,
-        Array,
-        Struct
-    }
-
-    /**
      * Returns the type name used in external catalogs.
      * DataType.of(name()) should returns the same type.
      */
     String name();
 
-    /** Returns the type ID enum. */
-    ID id();
-
     /**
      * Returns the value from its string representation.
      * @param s the string representation of a value of this type.
      */
-    Object valueOf(String s);
+    Object valueOf(String s) throws ParseException;
 
     /** Returns the string representation of a value of the type. */
     default String toString(Object o) {
@@ -75,19 +51,14 @@ public interface DataType extends Serializable {
 
     /** Returns true if this is a primitive data type. */
     default boolean isPrimitive() {
-        switch (id()) {
-            case Integer:
-            case Long:
-            case Float:
-            case Double:
-            case Boolean:
-            case Char:
-            case Byte:
-            case Short:
-                return true;
-            default:
-                return false;
-        }
+        return this == DataTypes.IntegerType ||
+               this == DataTypes.LongType ||
+               this == DataTypes.DoubleType ||
+               this == DataTypes.FloatType ||
+               this == DataTypes.BooleanType ||
+               this == DataTypes.CharType ||
+               this == DataTypes.ByteType ||
+               this == DataTypes.ShortType;
     }
 
     /** Returns true if the type is boolean or Boolean. */
@@ -146,23 +117,23 @@ public interface DataType extends Serializable {
             case "long": return DataTypes.LongType;
             case "float": return DataTypes.FloatType;
             case "double": return DataTypes.DoubleType;
-            case "Decimal": return DataTypes.DecimalType;
-            case "String": return DataTypes.StringType;
-            case "Date": return DataTypes.DateType;
-            case "DateTime": return DataTypes.DateTimeType;
-            case "Time": return DataTypes.TimeType;
+            case "decimal": return DataTypes.DecimalType;
+            case "string": return DataTypes.StringType;
+            case "date": return DataTypes.DateType;
+            case "datetime": return DataTypes.DateTimeType;
+            case "time": return DataTypes.TimeType;
             default:
-                if (s.startsWith("Date[") && s.endsWith("]"))
+                if (s.startsWith("date[") && s.endsWith("]"))
                     return DataTypes.date(s.substring(5, s.length() - 1));
-                else if (s.startsWith("DateTime[") && s.endsWith("]"))
+                else if (s.startsWith("datetime[") && s.endsWith("]"))
                     return DataTypes.datetime(s.substring(9, s.length() - 1));
-                else if (s.startsWith("Time[") && s.endsWith("]"))
+                else if (s.startsWith("time[") && s.endsWith("]"))
                     return DataTypes.datetime(s.substring(5, s.length() - 1));
-                else if (s.startsWith("Object[") && s.endsWith("]"))
+                else if (s.startsWith("object[") && s.endsWith("]"))
                     return DataTypes.object(Class.forName(s.substring(7, s.length() - 1)));
-                else if (s.startsWith("Array[") && s.endsWith("]"))
+                else if (s.startsWith("array[") && s.endsWith("]"))
                     return DataTypes.array(DataType.of(s.substring(6, s.length() - 1).trim()));
-                else if (s.startsWith("Struct[") && s.endsWith("]")) {
+                else if (s.startsWith("struct[") && s.endsWith("]")) {
                     String[] elements = s.substring(7, s.length() - 1).split(",");
                     StructField[] fields = new StructField[elements.length];
                     for (int i = 0; i < fields.length; i++) {
@@ -193,22 +164,6 @@ public interface DataType extends Serializable {
             return DataTypes.ByteType;
         else if (clazz == char.class)
             return DataTypes.CharType;
-        else if (clazz == Integer.class)
-            return DataTypes.IntegerObjectType;
-        else if (clazz == Double.class)
-            return DataTypes.DoubleObjectType;
-        else if (clazz == Long.class)
-            return DataTypes.LongObjectType;
-        else if (clazz == Float.class)
-            return DataTypes.FloatObjectType;
-        else if (clazz == Boolean.class)
-            return DataTypes.BooleanObjectType;
-        else if (clazz == Short.class)
-            return DataTypes.ShortObjectType;
-        else if (clazz == Byte.class)
-            return DataTypes.ByteObjectType;
-        else if (clazz == Character.class)
-            return DataTypes.CharObjectType;
         else if (clazz == String.class)
             return DataTypes.StringType;
         else if (clazz == BigDecimal.class)
@@ -221,84 +176,8 @@ public interface DataType extends Serializable {
             return DataTypes.TimeType;
         else if (clazz.isArray())
             return DataTypes.array(DataType.of(clazz.getComponentType()));
-        else if (clazz.isEnum()) {
-            int levels = clazz.getEnumConstants().length;
-            if (levels < Byte.MAX_VALUE + 1) {
-                return DataTypes.ByteType;
-            } else if (levels < Short.MAX_VALUE + 1) {
-                return DataTypes.ShortType;
-            } else {
-                return DataTypes.IntegerType;
-            }
-        }
         else
             return DataTypes.object(clazz);
-    }
-
-    /**
-     * Returns the DataType of a JDBC type.
-     * @param type a JDBCType
-     * @param nullable true if the column value may be null
-     */
-    static DataType of(java.sql.JDBCType type, boolean nullable) {
-        return of(type, nullable, null);
-    }
-
-    /**
-     * Returns the DataType of a JDBC type.
-     * @param type a JDBCType
-     * @param nullable true if the column value may be null
-     * @param dbms The database product name.
-     */
-    static DataType of(java.sql.JDBCType type, boolean nullable, String dbms) {
-        switch (type) {
-            case BOOLEAN:
-            case BIT:
-                return nullable ? DataTypes.BooleanObjectType : DataTypes.BooleanType;
-            case TINYINT:
-                return nullable ? DataTypes.ByteObjectType : DataTypes.ByteType;
-            case SMALLINT:
-                return nullable ? DataTypes.ShortObjectType : DataTypes.ShortType;
-            case INTEGER:
-                return nullable ? DataTypes.IntegerObjectType : DataTypes.IntegerType;
-            case BIGINT:
-                return nullable ? DataTypes.LongObjectType : DataTypes.LongType;
-            case NUMERIC:
-                // Numeric should be like Decimal.
-                // But SQLite treats Numeric very differently.
-                if ("SQLite".equals(dbms))
-                    return nullable ? DataTypes.DoubleObjectType : DataTypes.DoubleType;
-                else
-                    return DataTypes.DecimalType;
-            case DECIMAL:
-                return DataTypes.DecimalType;
-            case REAL:
-            case FLOAT:
-                return nullable ? DataTypes.FloatObjectType : DataTypes.FloatType;
-            case DOUBLE:
-                return nullable ? DataTypes.DoubleObjectType : DataTypes.DoubleType;
-            case CHAR:
-            case NCHAR:
-            case VARCHAR:
-            case NVARCHAR:
-            case LONGVARCHAR:
-            case LONGNVARCHAR:
-            case CLOB:
-                return DataTypes.StringType;
-            case DATE:
-                return DataTypes.DateType;
-            case TIME:
-                return DataTypes.TimeType;
-            case TIMESTAMP:
-                return DataTypes.DateTimeType;
-            case BINARY:
-            case VARBINARY:
-            case LONGVARBINARY:
-            case BLOB:
-                return DataTypes.ByteArrayType;
-            default:
-                throw new UnsupportedOperationException(String.format("Unsupported JDBCType: %s", type));
-        }
     }
 
     /**
@@ -347,17 +226,14 @@ public interface DataType extends Serializable {
      * either primitive or boxed.
      */
     static boolean isInt(DataType t) {
-        switch (t.id()) {
-            case Integer:
-            case Short:
-            case Byte:
-                return true;
-            case Object:
-                Class clazz = ((ObjectType) t).getObjectClass();
-                return clazz == Integer.class || clazz == Short.class || clazz == Byte.class;
-            default:
-                return false;
-        }
+        return t == DataTypes.IntegerType ||
+               t == DataTypes.ShortType ||
+               t == DataTypes.ByteType ||
+               t == DataTypes.CharType ||
+               t.equals(DataTypes.object(Integer.class)) ||
+               t == DataTypes.object(Short.class) ||
+               t == DataTypes.object(Byte.class) ||
+               t == DataTypes.object(Character.class);
     }
 
     /**
@@ -365,8 +241,8 @@ public interface DataType extends Serializable {
      * either primitive or boxed.
      */
     static boolean isLong(DataType t) {
-        return (t.id() == ID.Long) ||
-               (t.id() == ID.Object && ((ObjectType) t).getObjectClass() == Long.class);
+        return t == DataTypes.LongType ||
+               t == DataTypes.object(Long.class);
     }
 
     /**
@@ -374,8 +250,8 @@ public interface DataType extends Serializable {
      * either primitive or boxed.
      */
     static boolean isFloat(DataType t) {
-        return (t.id () == ID.Float) ||
-               (t.id() == ID.Object && ((ObjectType) t).getObjectClass() == Float.class);
+        return t == DataTypes.FloatType ||
+               t == DataTypes.object(Float.class);
     }
 
     /**
@@ -383,7 +259,7 @@ public interface DataType extends Serializable {
      * either primitive or boxed.
      */
     static boolean isDouble(DataType t) {
-        return (t.id() == ID.Double) ||
-               (t.id() == ID.Object && ((ObjectType) t).getObjectClass() == Double.class);
+        return t == DataTypes.DoubleType ||
+               t == DataTypes.object(Double.class);
     }
 }

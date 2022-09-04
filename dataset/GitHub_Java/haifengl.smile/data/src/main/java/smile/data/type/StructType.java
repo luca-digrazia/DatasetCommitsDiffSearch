@@ -15,7 +15,11 @@
  *******************************************************************************/
 package smile.data.type;
 
-import java.util.*;
+import java.text.ParseException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import smile.data.Tuple;
 
@@ -31,26 +35,29 @@ public class StructType implements DataType {
     /** Struct fields. */
     private final StructField[] fields;
     /** Field name to index map. */
-    private final Map<String, Integer> index;
-    /** Optional scale of measurement of fields. */
-    private final Map<String, Measure> measure;
-
-    /**
-     * Constructor.
-     */
-    StructType(List<StructField> fields) {
-        this(fields.toArray(new StructField[fields.size()]));
-    }
+    private final Map<String, Integer> index = new HashMap<>();
 
     /**
      * Constructor.
      */
     StructType(StructField... fields) {
         this.fields = fields;
-        index = new HashMap<>(fields.length * 4 / 3);
-        measure = new HashMap<>(fields.length * 4 / 3);
-        for (int i = 0; i < fields.length; i++) {
-            index.put(fields[i].name, i);
+        initFieldIndex();
+    }
+
+    /**
+     * Constructor.
+     */
+    StructType(List<StructField> fields) {
+        this.fields = fields.toArray(new StructField[fields.size()]);
+        initFieldIndex();
+    }
+
+    /** Initialize the field index mapping. */
+    private void initFieldIndex() {
+        for (int i = 0; i < this.fields.length; i++) {
+            StructField field = this.fields[i];
+            index.put(field.name, i);
         }
     }
 
@@ -59,31 +66,16 @@ public class StructType implements DataType {
         return fields;
     }
 
-    /** Return the field of given name. */
-    public StructField field(String name) {
-        return fields[fieldIndex(name)];
-    }
-
     /** Returns the index of a field. */
     public int fieldIndex(String field) {
         return index.get(field);
-    }
-
-    /** Returns the map of field name to its (optional) scale of measure. */
-    public Map<String, Measure> measure() {
-        return measure;
     }
 
     @Override
     public String name() {
         return Arrays.stream(fields)
                 .map(field -> String.format("%s: %s", field.name, field.type.name()))
-                .collect(Collectors.joining(", ", "Struct[", "]"));
-    }
-
-    @Override
-    public ID id() {
-        return ID.Struct;
+                .collect(Collectors.joining(", ", "struct[", "]"));
     }
 
     @Override
@@ -95,30 +87,44 @@ public class StructType implements DataType {
     public String toString(Object o) {
         Tuple t = (Tuple) o;
         return Arrays.stream(fields)
-                .map(field -> {
-                    Measure m = measure().get(field.name);
-                    String value = (m != null && m instanceof DiscreteMeasure) ?
-                            t.getScale(field.name) :
-                            field.type.toString(t.get(field.name));
-                    return String.format("  %s: %s", field.name, value);
-                })
+                .map(field -> String.format("  %s: %s", field.name, field.type.toString(t.get(field.name))))
                 .collect(Collectors.joining(",\n", "{\n", "\n}"));
     }
 
     @Override
-    public Tuple valueOf(String s) {
+    public Tuple valueOf(String s) throws ParseException {
         // strip surrounding []
         String[] elements = s.substring(1, s.length() - 1).split(",");
-        final Object[] row = new Object[fields.length];
+        final Object[] array = new Object[fields.length];
         for (String element : elements) {
             String[] field = element.split(":");
             DataType type = fields[index.get(field[0])].type;
             Object value = type.valueOf(field[1]);
             int i = index.get(field[0]);
-            row[i] = value;
+            array[i] = value;
         }
 
-        return Tuple.of(row, this);
+        return new Tuple() {
+            @Override
+            public int size() {
+                return array.length;
+            }
+
+            @Override
+            public StructType schema() {
+                return StructType.this;
+            }
+
+            @Override
+            public Object get(int i) {
+                return array[i];
+            }
+
+            @Override
+            public int fieldIndex(String field) {
+                return index.get(field);
+            }
+        };
     }
 
     @Override

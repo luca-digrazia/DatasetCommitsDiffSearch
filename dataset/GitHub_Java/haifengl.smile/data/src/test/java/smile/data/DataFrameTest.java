@@ -15,7 +15,6 @@
  *******************************************************************************/
 package smile.data;
 
-import com.sun.tools.javah.Gen;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -27,15 +26,13 @@ import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
 
-import smile.data.formula.DateFeature;
 import smile.data.formula.Formula;
-import smile.data.measure.NominalScale;
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
 import smile.data.type.StructField;
-import smile.data.vector.Vector;
 import smile.math.matrix.DenseMatrix;
-import static smile.data.formula.Terms.*;
+
+import static smile.data.formula.Formula.*;
 
 import static org.junit.Assert.*;
 
@@ -45,18 +42,13 @@ import static org.junit.Assert.*;
  */
 public class DataFrameTest {
 
-    enum Gender {
-        Male,
-        Female
-    }
-
     static class Person {
         String name;
-        Gender gender;
+        char gender;
         LocalDate birthday;
         int age;
         Double salary;
-        Person(String name, Gender gender, LocalDate birthday, int age, Double salary) {
+        Person(String name, char gender, LocalDate birthday, int age, Double salary) {
             this.name = name;
             this.gender = gender;
             this.birthday = birthday;
@@ -65,7 +57,7 @@ public class DataFrameTest {
         }
 
         public String getName() { return name; }
-        public Gender getGender() { return gender; }
+        public char getGender() { return gender; }
         public LocalDate getBirthday() { return birthday; }
         public int getAge() { return age; }
         public Double getSalary() { return salary; }
@@ -75,13 +67,12 @@ public class DataFrameTest {
 
     public DataFrameTest() {
         List<Person> persons = new ArrayList<>();
-        persons.add(new Person("Alex", Gender.Male, LocalDate.of(1980, 10, 1), 38, 10000.));
-        persons.add(new Person("Bob", Gender.Male, LocalDate.of(1995, 3, 4), 23, null));
-        persons.add(new Person("Jane", Gender.Female, LocalDate.of(1970, 3, 1), 48, 230000.));
-        persons.add(new Person("Amy", Gender.Female, LocalDate.of(2005, 12, 10), 13, null));
+        persons.add(new Person("Alex", 'M', LocalDate.of(1980, 10, 1), 38, 10000.));
+        persons.add(new Person("Bob", 'M', LocalDate.of(1995, 3, 4), 23, null));
+        persons.add(new Person("Jane", 'F', LocalDate.of(1970, 3, 1), 48, 230000.));
+        persons.add(new Person("Amy", 'F', LocalDate.of(2005, 12, 10), 13, null));
 
         df = DataFrame.of(persons, Person.class);
-        //df.schema().measure().put("gender", new NominalScale("M", "F"));
     }
 
     @BeforeClass
@@ -130,7 +121,7 @@ public class DataFrameTest {
         smile.data.type.StructType schema = DataTypes.struct(
                 new StructField("age", DataTypes.IntegerType),
                 new StructField("birthday", DataTypes.DateType),
-                new StructField("gender", DataTypes.ByteType),
+                new StructField("gender", DataTypes.CharType),
                 new StructField("name", DataTypes.StringType),
                 new StructField("salary", DataTypes.object(Double.class))
         );
@@ -153,54 +144,8 @@ public class DataFrameTest {
     @Test
     public void testTypes() {
         System.out.println("names");
-        DataType[] types = {DataTypes.IntegerType, DataTypes.DateType, DataTypes.ByteType, DataTypes.StringType, DataTypes.object(Double.class)};
+        DataType[] types = {DataTypes.IntegerType, DataTypes.DateType, DataTypes.CharType, DataTypes.StringType, DataTypes.object(Double.class)};
         assertTrue(Arrays.equals(types, df.types()));
-    }
-
-    /**
-     * Test of union method, of class DataFrame.
-     */
-    @Test
-    public void testUnion() {
-        System.out.println("union");
-        DataFrame two = df.union(df);
-        assertEquals(2*df.nrows(), two.nrows());
-        assertEquals(df.ncols(), two.ncols());
-
-        assertEquals(38, two.get(0).getInt(0));
-        assertEquals("Alex", two.get(0).getString(3));
-        assertEquals(10000., two.get(0).get(4));
-        assertEquals(13, two.get(3).getInt(0));
-        assertEquals("Amy", two.get(3).getString(3));
-        assertEquals(null, two.get(3).get(4));
-
-        assertEquals(38, two.get(4).getInt(0));
-        assertEquals("Alex", two.get(4).getString(3));
-        assertEquals(10000., two.get(4).get(4));
-        assertEquals(13, two.get(7).getInt(0));
-        assertEquals("Amy", two.get(7).getString(3));
-        assertEquals(null, two.get(7).get(4));
-    }
-
-    /**
-     * Test of merge method, of class DataFrame.
-     */
-    @Test
-    public void testMerge() {
-        System.out.println("union");
-        Vector<String> edu = Vector.of("Education", String.class, smile.math.MathEx.c("MS", "BS", "Ph.D", "Middle School"));
-        DataFrame two = df.merge(edu);
-        assertEquals(df.nrows(), two.nrows());
-        assertEquals(df.ncols()+1, two.ncols());
-
-        assertEquals(38, two.get(0).getInt(0));
-        assertEquals("Alex", two.get(0).getString(3));
-        assertEquals(10000., two.get(0).get(4));
-        assertEquals("MS", two.get(0).get(5));
-        assertEquals(13, two.get(3).getInt(0));
-        assertEquals("Amy", two.get(3).getString(3));
-        assertEquals(null, two.get(3).get(4));
-        assertEquals("Middle School", two.get(3).get(5));
     }
 
     /**
@@ -224,48 +169,6 @@ public class DataFrameTest {
         assertEquals(13, df.get(3,0));
         assertEquals("Amy", df.get(3,3));
         assertEquals(null, df.get(3,4));
-    }
-
-    /**
-     * Test of one-hot encoding.
-     */
-    @Test
-    public void testFormulaOneHot() {
-        System.out.println("one-hot");
-        Formula formula = new Formula(onehot("gender"));
-        DataFrame output = df.map(formula);
-        System.out.println(output);
-        assertEquals(df.size(), output.size());
-        assertEquals(2, output.ncols());
-        assertEquals(1, output.getByte(0,0));
-        assertEquals(0, output.getByte(0,1));
-        assertEquals(1, output.getByte(1,0));
-        assertEquals(0, output.getByte(1,1));
-        assertEquals(0, output.getByte(2,0));
-        assertEquals(1, output.getByte(2,1));
-        assertEquals(0, output.getByte(3,0));
-        assertEquals(1, output.getByte(3,1));
-    }
-
-    /**
-     * Test of one-hot encoding.
-     */
-    @Test
-    public void testFormulaDate() {
-        System.out.println("date");
-        Formula formula = new Formula(date("birthday", DateFeature.YEAR, DateFeature.MONTH, DateFeature.DAY_OF_MONTH, DateFeature.DAY_OF_WEEK));
-        DataFrame output = df.map(formula);
-        System.out.println(output);
-        assertEquals(df.size(), output.size());
-        assertEquals(4, output.ncols());
-        assertEquals(1980, output.get(0,0));
-        assertEquals(10, output.get(0,1));
-        assertEquals(1, output.get(0,2));
-        assertEquals(3, output.get(0,3));
-        assertEquals(1970, output.get(2,0));
-        assertEquals(3, output.get(2,1));
-        assertEquals(1, output.get(2,2));
-        assertEquals(7, output.get(2,3));
     }
 
     /**
@@ -679,8 +582,8 @@ public class DataFrameTest {
         assertEquals(48., output.get(2, 0), 1E-10);
         assertEquals(13., output.get(3, 0), 1E-10);
         assertEquals(10000., output.get(0, 1), 1E-10);
-        assertTrue(Double.isNaN(output.get(1, 1)));
+        assertEquals(Double.NaN, output.get(1, 1), 1E-10);
         assertEquals(230000., output.get(2, 1), 1E-10);
-        assertTrue(Double.isNaN(output.get(3, 1)));
+        assertEquals(Double.NaN, output.get(3, 1), 1E-10);
     }
 }

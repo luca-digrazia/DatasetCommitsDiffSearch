@@ -15,20 +15,23 @@
  *******************************************************************************/
 package smile.io;
 
+import java.io.BufferedReader;
 import java.io.Closeable;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StreamTokenizer;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
 import smile.data.DataFrame;
 import smile.data.Tuple;
-import smile.data.type.*;
+import smile.data.type.DataTypes;
+import smile.data.type.NominalScale;
+import smile.data.type.StructField;
+import smile.data.type.StructType;
 
 /**
  * Weka ARFF (attribute relation file format) is an ASCII
@@ -90,23 +93,13 @@ public class Arff implements Closeable {
     private String name;
     /** The schema of ARFF relation. */
     private StructType schema;
-    /** The map of field name to its scale of measure. */
-    private Map<String, NominalScale> measure;
-    /** The lambda to parse fields. */
-    private Parser[] parser;
-    /** If a field has missing values, the corresponding entry will be true. */
-    private boolean[] missing;
-
-    /** Parser lambda interface that allows throw a checked exception. */
-    interface Parser {
-        Object apply(String s) throws ParseException;
-    }
 
     /**
      * Constructor.
      */
     public Arff(Path path) throws IOException, ParseException {
-        reader = Files.newBufferedReader(path);
+        FileInputStream stream = new FileInputStream(path.toFile());
+        reader = new BufferedReader(new InputStreamReader(stream));
 
         tokenizer = new StreamTokenizer(reader);
         tokenizer.resetSyntax();
@@ -120,7 +113,6 @@ public class Arff implements Closeable {
         tokenizer.ordinaryChar('}');
         tokenizer.eolIsSignificant(true);
 
-        measure = new HashMap<>();
         readHeader();
     }
 
@@ -207,11 +199,11 @@ public class Arff implements Closeable {
         }
 
         while (ARFF_ATTRIBUTE.equalsIgnoreCase(tokenizer.sval)) {
-            StructField attribute = nextAttribute();
+            StructField attribute = parseAttribute();
             // We may meet an relational attribute, which parseAttribute returns null
             // as it flats the relational attribute out.
             if (attribute != null) {
-                fields.add(attribute);
+                fields.add(parseAttribute());
             }
         }
 
@@ -226,27 +218,16 @@ public class Arff implements Closeable {
         }
         
         schema = DataTypes.struct(fields);
-        schema.measure().putAll(measure);
-        missing = new boolean[fields.size()];
-        parser = new Parser[fields.size()];
-        for (int i = 0; i < parser.length; i++) {
-            final StructField field = fields.get(i);
-            NominalScale scale = measure.get(field.name);
-            if (scale == null) {
-                parser[i] = s -> field.type.valueOf(s);
-            } else {
-                parser[i] = s -> scale.valueOf(s);
-            }
-        }
     }
 
     /**
-     * Reads the attribute declaration.
+     * Parses the attribute declaration.
      *
      * @return an attributes in this relation
-     * @throws IOException 	if the information is not read successfully
+     * @throws IOException 	if the information is not read
+     * 				successfully
      */
-    private StructField nextAttribute() throws IOException, ParseException {
+    private StructField parseAttribute() throws IOException, ParseException {
         StructField attribute = null;
 
         // Get attribute name.
@@ -315,15 +296,11 @@ public class Arff implements Closeable {
                 }
             }
 
-            String[] levels = attributeValues.toArray(new String[attributeValues.size()]);
-            if (levels.length <= Byte.MAX_VALUE + 1) {
-                attribute = new StructField(attributeName, DataTypes.ByteType);
-            } else if (levels.length <= Short.MAX_VALUE + 1) {
-                attribute = new StructField(attributeName, DataTypes.ShortType);
-            } else {
-                attribute = new StructField(attributeName, DataTypes.IntegerType);
+            String[] values = new String[attributeValues.size()];
+            for (int i = 0; i < values.length; i++) {
+                values[i] = attributeValues.get(i);
             }
-            measure.put(attributeName, new NominalScale(levels));
+            attribute = new StructField(attributeName, DataTypes.StringType);//new NominalScale(values);
         }
 
         getLastToken(false);
@@ -373,10 +350,6 @@ public class Arff implements Closeable {
      * @param limit reads a limited number of records.
      */
     public DataFrame read(int limit) throws IOException, ParseException {
-        if (limit <= 0) {
-            throw new IllegalArgumentException("Invalid limit: " + limit);
-        }
-
         List<Tuple> data = new ArrayList<>();
         for (int i = 0; i < limit; i++) {
             // Check if end of file reached.
@@ -410,9 +383,7 @@ public class Arff implements Closeable {
             }
 
             if (tokenizer.ttype != '?') {
-                x[i] = parser[i].apply(tokenizer.sval);
-            } else {
-                missing[i] = true;
+                x[i] = fields[i].type.valueOf(tokenizer.sval);
             }
         }
 
@@ -427,6 +398,7 @@ public class Arff implements Closeable {
         StructField[] fields = schema.fields();
         int p = fields.length;
         Object[] x = new Object[p];
+        int index = -1;
 
         // Get values for all attributes.
         do {
@@ -437,36 +409,24 @@ public class Arff implements Closeable {
                 break;
             }
             
-            int i = Integer.parseInt(tokenizer.sval.trim());
-            if (i < 0 || i >= p) {
-                throw new ParseException("Invalid attribute index: " + i, tokenizer.lineno());
-            }
-
-            getNextToken();
-            String val = tokenizer.sval.trim();
-            if (!val.equals("?")) {
-                x[i] = parser[i].apply(val);
-            } else {
-                missing[i] = true;
-            }
-        } while (tokenizer.ttype == StreamTokenizer.TT_WORD);
-
-        for (int i = 0; i < x.length; i++) {
-            if (x[i] == null) {
-                StructField field = schema.fields()[i];
-                if (field.type.isByte()) {
-                    x[i] = (byte) 0;
-                } else if (field.type.isShort()) {
-                    x[i] = (short) 0;
-                } else if (field.type.isInt()) {
-                    x[i] = 0;
-                } else if (field.type.isFloat()) {
-                    x[i] = 0.0f;
-                } else {
-                    x[i] = 0.0;
+            String s = tokenizer.sval.trim();
+            if (index < 0) {
+                index = Integer.parseInt(s);
+                if (index < 0 || index >= p) {
+                    throw new ParseException("Invalid attribute index: " + index, tokenizer.lineno());
                 }
+                
+            } else {
+                
+                String val = s;
+                if (!val.equals("?")) {
+                    x[index] = fields[index].type.valueOf(val);
+                }
+
+                index = -1;
             }
-        }
+            
+        } while (tokenizer.ttype == StreamTokenizer.TT_WORD);
 
         return x;
     }

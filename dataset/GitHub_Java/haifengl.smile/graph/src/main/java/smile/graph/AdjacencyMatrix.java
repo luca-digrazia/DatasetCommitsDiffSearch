@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.graph;
 
 import java.util.Arrays;
@@ -99,7 +97,10 @@ public class AdjacencyMatrix implements Graph {
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j < n; j++) {
                     if (graph[i][j] != 0.0) {
-                        Edge edge = new Edge(i, j, graph[i][j]);
+                        Edge edge = new Edge();
+                        edge.v1 = i;
+                        edge.v2 = j;
+                        edge.weight = graph[i][j];
                         set.add(edge);
                     }
                 }
@@ -108,7 +109,10 @@ public class AdjacencyMatrix implements Graph {
             for (int i = 0; i < n; i++) {
                 for (int j = i; j < n; j++) {
                     if (graph[i][j] != 0.0) {
-                        Edge edge = new Edge(i, j, graph[i][j]);
+                        Edge edge = new Edge();
+                        edge.v1 = i;
+                        edge.v2 = j;
+                        edge.weight = graph[i][j];
                         set.add(edge);
                     }
                 }
@@ -123,7 +127,10 @@ public class AdjacencyMatrix implements Graph {
         Collection<Edge> set = new LinkedList<>();
         for (int j = 0; j < n; j++) {
             if (graph[vertex][j] != 0.0) {
-                Edge edge = new Edge(vertex, j, graph[vertex][j]);
+                Edge edge = new Edge();
+                edge.v1 = vertex;
+                edge.v2 = j;
+                edge.weight = graph[vertex][j];
                 set.add(edge);
             }
         }
@@ -146,7 +153,11 @@ public class AdjacencyMatrix implements Graph {
             return null;
         }
 
-        return new Edge(source, target, graph[source][target]);
+        Edge edge = new Edge();
+        edge.v1 = source;
+        edge.v2 = target;
+        edge.weight = graph[source][target];
+        return edge;
     }
 
     @Override
@@ -521,6 +532,15 @@ public class AdjacencyMatrix implements Graph {
             }
         }
         
+        return wt;
+    }
+
+    @Override
+    public double[][] dijkstra() {
+        double[][] wt = new double[n][];
+        for (int i = 0; i < n; i++) {
+            wt[i] = dijkstra(i);
+        }
         return wt;
     }
 
