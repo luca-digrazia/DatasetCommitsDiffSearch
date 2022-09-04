@@ -161,16 +161,6 @@ public class AppModel implements Serializable {
             return this;
         }
 
-        public Builder addLesserPriorityArtifact(AppArtifactKey deps) {
-            this.lesserPriorityArtifacts.add(deps);
-            return this;
-        }
-
-        public Builder addLesserPriorityArtifacts(List<AppArtifactKey> deps) {
-            this.lesserPriorityArtifacts.addAll(deps);
-            return this;
-        }
-
         /**
          * Sets the parent first and excluded artifacts from a descriptor properties file
          *
