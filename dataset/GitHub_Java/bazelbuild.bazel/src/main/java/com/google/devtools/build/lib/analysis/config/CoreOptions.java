@@ -846,7 +846,7 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
   // TODO(b/132346407): Update docs when the feature is fully implemented
   @Option(
       name = "flag_alias",
-      converter = Converters.FlagAliasConverter.class,
+      converter = Converters.AssignmentConverter.class,
       defaultValue = "null",
       allowMultiple = true,
       documentationCategory = OptionDocumentationCategory.GENERIC_INPUTS,
