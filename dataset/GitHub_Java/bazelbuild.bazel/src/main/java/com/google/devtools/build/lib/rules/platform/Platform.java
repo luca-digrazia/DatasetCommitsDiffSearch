@@ -14,88 +14,140 @@
 
 package com.google.devtools.build.lib.rules.platform;
 
-import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Multimap;
+import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.analysis.PlatformOptions;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
+import com.google.devtools.build.lib.analysis.config.AutoCpuConverter;
+import com.google.devtools.build.lib.analysis.platform.ConstraintCollection;
+import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
+import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
+import com.google.devtools.build.lib.analysis.platform.PlatformProviderUtils;
+import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.util.CPU;
+import com.google.devtools.build.lib.util.OS;
+import com.google.devtools.build.lib.util.Pair;
+import java.util.Map;
 
 /** Defines a platform for execution contexts. */
 public class Platform implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException {
+      throws InterruptedException, RuleErrorException, ActionConflictException {
 
-    Iterable<ConstraintValueProvider> constraintValues =
-        ruleContext.getPrerequisites(
-            PlatformRule.CONSTRAINT_VALUES_ATTR, Mode.DONT_CHECK, ConstraintValueProvider.class);
+    PlatformOptions platformOptions =
+        ruleContext.getConfiguration().getOptions().get(PlatformOptions.class);
 
-    // Verify the constraints - no two values for the same setting, and construct the map.
-    ImmutableMap<ConstraintSettingProvider, ConstraintValueProvider> constraints =
-        validateConstraints(ruleContext, constraintValues);
-    if (constraints == null) {
-      // An error occurred, return null.
-      return null;
+    PlatformInfo.Builder platformBuilder = PlatformInfo.builder().setLabel(ruleContext.getLabel());
+
+    ImmutableList<PlatformInfo> parentPlatforms =
+        PlatformProviderUtils.platforms(
+            ruleContext.getPrerequisites(PlatformRule.PARENTS_PLATFORM_ATTR));
+
+    if (parentPlatforms.size() > 1) {
+      throw ruleContext.throwWithAttributeError(
+          PlatformRule.PARENTS_PLATFORM_ATTR,
+          PlatformRule.PARENTS_PLATFORM_ATTR + " attribute must have a single value");
+    }
+    PlatformInfo parentPlatform = Iterables.getFirst(parentPlatforms, null);
+    platformBuilder.setParent(parentPlatform);
+
+    if (!platformOptions.autoConfigureHostPlatform) {
+      // If the flag is set, the constraints are defaulted by @local_config_platform.
+      setDefaultConstraints(platformBuilder, ruleContext);
+    }
+
+    // Add the declared constraints. Because setting the host_platform or target_platform attribute
+    // to true on a platform automatically includes the detected CPU and OS constraints, if the
+    // constraint_values attribute tries to add those, this will throw an error.
+    platformBuilder.addConstraints(
+        PlatformProviderUtils.constraintValues(
+            ruleContext.getPrerequisites(PlatformRule.CONSTRAINT_VALUES_ATTR)));
+
+    String remoteExecutionProperties =
+        ruleContext.attributes().get(PlatformRule.REMOTE_EXECUTION_PROPS_ATTR, Type.STRING);
+    platformBuilder.setRemoteExecutionProperties(remoteExecutionProperties);
+
+    Map<String, String> execProperties =
+        ruleContext.attributes().get(PlatformRule.EXEC_PROPS_ATTR, Type.STRING_DICT);
+    if (execProperties != null && !execProperties.isEmpty()) {
+      platformBuilder.setExecProperties(ImmutableMap.copyOf(execProperties));
+    }
+
+    PlatformInfo platformInfo;
+    try {
+      platformInfo = platformBuilder.build();
+    } catch (ConstraintCollection.DuplicateConstraintException e) {
+      throw ruleContext.throwWithAttributeError(
+          PlatformRule.CONSTRAINT_VALUES_ATTR, e.getMessage());
+    } catch (PlatformInfo.ExecPropertiesException e) {
+      throw ruleContext.throwWithAttributeError(PlatformRule.EXEC_PROPS_ATTR, e.getMessage());
     }
 
     return new RuleConfiguredTargetBuilder(ruleContext)
         .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
         .addProvider(FileProvider.class, FileProvider.EMPTY)
         .addProvider(FilesToRunProvider.class, FilesToRunProvider.EMPTY)
-        .addProvider(PlatformProvider.class, PlatformProvider.create(constraints))
+        .addNativeDeclaredProvider(platformInfo)
         .build();
   }
 
-  private ImmutableMap<ConstraintSettingProvider, ConstraintValueProvider> validateConstraints(
-      RuleContext ruleContext, Iterable<ConstraintValueProvider> constraintValues) {
-    Multimap<ConstraintSettingProvider, ConstraintValueProvider> constraints =
-        ArrayListMultimap.create();
-
-    for (ConstraintValueProvider constraintValue : constraintValues) {
-      constraints.put(constraintValue.constraint(), constraintValue);
+  private void setDefaultConstraints(PlatformInfo.Builder platformBuilder, RuleContext ruleContext)
+      throws RuleErrorException {
+    Boolean isHostPlatform =
+        ruleContext.attributes().get(PlatformRule.HOST_PLATFORM_ATTR, Type.BOOLEAN);
+    Boolean isTargetPlatform =
+        ruleContext.attributes().get(PlatformRule.TARGET_PLATFORM_ATTR, Type.BOOLEAN);
+    if (isHostPlatform && isTargetPlatform) {
+      throw ruleContext.throwWithAttributeError(
+          PlatformRule.HOST_PLATFORM_ATTR,
+          "A single platform cannot have both host_platform and target_platform set.");
+    } else if (isHostPlatform) {
+      // Create default constraints based on the current host OS and CPU values.
+      String cpuOption = ruleContext.getConfiguration().getHostCpu();
+      autodetectConstraints(cpuOption, ruleContext, platformBuilder);
+    } else if (isTargetPlatform) {
+      // Create default constraints based on the current OS and CPU values.
+      String cpuOption = ruleContext.getConfiguration().getCpu();
+      autodetectConstraints(cpuOption, ruleContext, platformBuilder);
     }
+  }
 
-    // Are there any settings with more than one value?
-    boolean foundError = false;
-    for (ConstraintSettingProvider constraintSetting : constraints.keySet()) {
-      if (constraints.get(constraintSetting).size() > 1) {
-        foundError = true;
-        // error
-        StringBuilder constraintValuesDescription = new StringBuilder();
-        for (ConstraintValueProvider constraintValue : constraints.get(constraintSetting)) {
-          if (constraintValuesDescription.length() > 0) {
-            constraintValuesDescription.append(", ");
-          }
-          constraintValuesDescription.append(constraintValue.value());
-        }
-        ruleContext.attributeError(
-            PlatformRule.CONSTRAINT_VALUES_ATTR,
-            String.format(
-                "Duplicate constraint_values for constraint_setting %s: %s",
-                constraintSetting.constraintSetting(), constraintValuesDescription.toString()));
+  private void autodetectConstraints(
+      String cpuOption, RuleContext ruleContext, PlatformInfo.Builder platformBuilder) {
+
+    Pair<CPU, OS> cpuValues = AutoCpuConverter.reverse(cpuOption);
+
+    // Add the CPU.
+    CPU cpu = cpuValues.getFirst();
+    ImmutableList<ConstraintValueInfo> cpuConstraintValues =
+        PlatformProviderUtils.constraintValues(
+            ruleContext.getPrerequisites(PlatformRule.CPU_CONSTRAINTS_ATTR));
+    for (ConstraintValueInfo constraint : cpuConstraintValues) {
+      if (cpu.getCanonicalName().equals(constraint.label().getName())) {
+        platformBuilder.addConstraint(constraint);
+        break;
       }
     }
 
-    if (foundError) {
-      return null;
+    // Add the OS.
+    OS os = cpuValues.getSecond();
+    ImmutableList<ConstraintValueInfo> osConstraintValues =
+        PlatformProviderUtils.constraintValues(
+            ruleContext.getPrerequisites(PlatformRule.OS_CONSTRAINTS_ATTR));
+    for (ConstraintValueInfo constraint : osConstraintValues) {
+      if (os.getCanonicalName().equals(constraint.label().getName())) {
+        platformBuilder.addConstraint(constraint);
+        break;
+      }
     }
-
-    // Convert to a flat map.
-    ImmutableMap.Builder<ConstraintSettingProvider, ConstraintValueProvider> builder =
-        new ImmutableMap.Builder<>();
-    for (ConstraintSettingProvider constraintSetting : constraints.keySet()) {
-      ConstraintValueProvider constraintValue =
-          Iterables.getOnlyElement(constraints.get(constraintSetting));
-      builder.put(constraintSetting, constraintValue);
-    }
-
-    return builder.build();
   }
 }
