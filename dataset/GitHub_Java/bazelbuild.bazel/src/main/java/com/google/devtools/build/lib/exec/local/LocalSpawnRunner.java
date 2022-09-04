@@ -18,8 +18,6 @@ import static java.util.logging.Level.INFO;
 import static java.util.logging.Level.SEVERE;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Predicates;
-import com.google.common.collect.Iterables;
 import com.google.common.io.ByteStreams;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ResourceManager;
@@ -36,6 +34,7 @@ import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.shell.CommandResult;
 import com.google.devtools.build.lib.util.NetUtil;
+import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
@@ -76,9 +75,6 @@ public final class LocalSpawnRunner implements SpawnRunner {
   private final boolean useProcessWrapper;
   private final String processWrapper;
 
-  private final String productName;
-  private final LocalEnvProvider localEnvProvider;
-
   public LocalSpawnRunner(
       Logger logger,
       AtomicInteger execCount,
@@ -86,9 +82,7 @@ public final class LocalSpawnRunner implements SpawnRunner {
       ActionInputPrefetcher actionInputPrefetcher,
       LocalExecutionOptions localExecutionOptions,
       ResourceManager resourceManager,
-      boolean useProcessWrapper,
-      String productName,
-      LocalEnvProvider localEnvProvider) {
+      boolean useProcessWrapper) {
     this.logger = logger;
     this.execRoot = execRoot;
     this.actionInputPrefetcher = Preconditions.checkNotNull(actionInputPrefetcher);
@@ -98,8 +92,25 @@ public final class LocalSpawnRunner implements SpawnRunner {
     this.execCount = execCount;
     this.resourceManager = resourceManager;
     this.useProcessWrapper = useProcessWrapper;
-    this.productName = productName;
-    this.localEnvProvider = localEnvProvider;
+  }
+
+  public LocalSpawnRunner(
+      Path execRoot,
+      ActionInputPrefetcher actionInputPrefetcher,
+      LocalExecutionOptions localExecutionOptions,
+      ResourceManager resourceManager) {
+    this(
+        null,
+        new AtomicInteger(),
+        execRoot,
+        actionInputPrefetcher,
+        localExecutionOptions,
+        resourceManager,
+        // TODO(bazel-team): process-wrapper seems to work on Windows, but requires additional setup
+        // as it is an msys2 binary, so it needs msys2 DLLs on %PATH%. Disable it for now to make
+        // the setup easier and to avoid further PATH hacks. Ideally we should have a native
+        // implementation of process-wrapper for Windows.
+        OS.getCurrent() != OS.WINDOWS);
   }
 
   @Override
@@ -216,8 +227,7 @@ public final class LocalSpawnRunner implements SpawnRunner {
       if (Spawns.shouldPrefetchInputsForLocalExecution(spawn)) {
         stepLog(INFO, "prefetching inputs for local execution");
         setState(State.PREFETCHING_LOCAL_INPUTS);
-        actionInputPrefetcher.prefetchFiles(
-            Iterables.filter(policy.getInputMapping().values(), Predicates.notNull()));
+        actionInputPrefetcher.prefetchFiles(policy.getInputMapping().values());
       }
 
       stepLog(INFO, "running locally");
@@ -237,14 +247,14 @@ public final class LocalSpawnRunner implements SpawnRunner {
         cmdLine.addAll(spawn.getArguments());
         cmd = new Command(
             cmdLine.toArray(new String[0]),
-            localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, productName),
+            spawn.getEnvironment(),
             execRoot.getPathFile());
       } else {
         stdOut = outErr.getOutputStream();
         stdErr = outErr.getErrorStream();
         cmd = new Command(
             spawn.getArguments().toArray(new String[0]),
-            localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, productName),
+            spawn.getEnvironment(),
             execRoot.getPathFile(),
             policy.getTimeoutMillis());
       }
