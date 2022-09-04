@@ -475,35 +475,27 @@ public class InMemoryNodeEntry implements NodeEntry {
   }
 
   @Override
-  public synchronized MarkedDirtyResult markDirty(DirtyType dirtyType) {
+  public synchronized MarkedDirtyResult markDirty(boolean isChanged) {
     // Can't process a dirty node without its deps.
     assertKeepDeps();
     if (isDone()) {
       dirtyBuildingState =
-          DirtyBuildingState.create(dirtyType, GroupedList.create(directDeps), value);
+          DirtyBuildingState.create(isChanged, GroupedList.<SkyKey>create(directDeps), value);
       value = null;
       directDeps = null;
-      return new MarkedDirtyResult(ReverseDepsUtility.getReverseDeps(this));
+      return new FromCleanMarkedDirtyResult(ReverseDepsUtility.getReverseDeps(this));
     }
-    if (dirtyType.equals(DirtyType.FORCE_REBUILD)) {
-      getDirtyBuildingState().markForceRebuild();
-      return null;
-    }
-    // The caller may be simultaneously trying to mark this node dirty and changed, and the dirty
-    // thread may have lost the race, but it is the caller's responsibility not to try to mark
-    // this node changed twice. The end result of racing markers must be a changed node, since one
-    // of the markers is trying to mark the node changed.
-    Preconditions.checkState(
-        dirtyType.equals(DirtyType.CHANGE) != isChanged(),
-        "Cannot mark node dirty twice or changed twice: %s",
-        this);
+
     Preconditions.checkState(value == null, "Value should have been reset already %s", this);
-    if (dirtyType.equals(DirtyType.CHANGE)) {
-      // If the changed marker lost the race, we just need to mark changed in this method -- all
-      // other work was done by the dirty marker.
-      getDirtyBuildingState().markChanged();
+    if (isChanged != isChanged()) {
+      if (isChanged) {
+        getDirtyBuildingState().markChanged();
+      }
+      // If !isChanged, then this call made no changes to the node, but redundancy is a property of
+      // the sequence of markDirty calls, not their effects.
+      return FromDirtyMarkedDirtyResult.NOT_REDUNDANT;
     }
-    return null;
+    return FromDirtyMarkedDirtyResult.REDUNDANT;
   }
 
   @Override
@@ -522,7 +514,7 @@ public class InMemoryNodeEntry implements NodeEntry {
   @Override
   public synchronized void forceRebuild() {
     Preconditions.checkState(getNumTemporaryDirectDeps() == signaledDeps, this);
-    getDirtyBuildingState().forceRebuild();
+    getDirtyBuildingState().forceChanged();
   }
 
   @Override
