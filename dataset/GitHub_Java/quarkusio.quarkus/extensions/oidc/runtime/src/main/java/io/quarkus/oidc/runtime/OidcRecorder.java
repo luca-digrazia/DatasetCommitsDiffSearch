@@ -99,15 +99,9 @@ public class OidcRecorder {
             return createdTenantContextFromPublicKey(options, oidcConfig);
         }
 
-        if (!oidcConfig.getAuthServerUrl().isPresent()) {
+        if (!oidcConfig.getAuthServerUrl().isPresent() || !oidcConfig.getClientId().isPresent()) {
             throw new ConfigurationException(
-                    "'auth-server-url' is not present. Both 'auth-server-url' and 'client-id' or alternatively 'public-key' must be configured"
-                            + " when the quarkus-oidc extension is enabled");
-        }
-
-        if (!oidcConfig.getClientId().isPresent()) {
-            throw new ConfigurationException(
-                    "'client-id' is not present. Both 'auth-server-url' and 'client-id' or alternatively 'public-key' must be configured"
+                    "Both 'auth-server-url' and 'client-id' or alternatively 'public-key' must be configured"
                             + " when the quarkus-oidc extension is enabled");
         }
 
@@ -132,10 +126,10 @@ public class OidcRecorder {
                 if (oidcConfig.getTokenPath().isPresent()) {
                     options.setTokenPath(authServerUrl + prependSlash(oidcConfig.getTokenPath().get()));
                 }
-            }
 
-            if (oidcConfig.getUserInfoPath().isPresent()) {
-                options.setUserInfoPath(authServerUrl + prependSlash(oidcConfig.getUserInfoPath().get()));
+                if (oidcConfig.getUserInfoPath().isPresent()) {
+                    options.setUserInfoPath(authServerUrl + prependSlash(oidcConfig.getUserInfoPath().get()));
+                }
             }
 
             // JWK and introspection endpoints have to be set for both 'web-app' and 'service' applications  
@@ -175,9 +169,9 @@ public class OidcRecorder {
                         "The 'logout.path' property can only be enabled for " + ApplicationType.WEB_APP
                                 + " application types");
             }
-            if (oidcConfig.roles.source.isPresent() && oidcConfig.roles.source.get() == Source.idtoken) {
+            if (oidcConfig.roles.source.isPresent() && oidcConfig.roles.source.get() != Source.accesstoken) {
                 throw new RuntimeException(
-                        "The 'roles.source' property can only be set to 'idtoken' for " + ApplicationType.WEB_APP
+                        "The 'roles.source' property can only be set to 'accesstoken' for " + ApplicationType.SERVICE
                                 + " application types");
             }
         }
