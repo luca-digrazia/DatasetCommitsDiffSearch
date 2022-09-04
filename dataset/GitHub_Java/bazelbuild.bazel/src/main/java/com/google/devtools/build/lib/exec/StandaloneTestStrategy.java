@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SimpleSpawn;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
@@ -72,7 +71,6 @@ public class StandaloneTestStrategy extends TestStrategy {
           .put("PYTHON_RUNFILES", TestPolicy.RUNFILES_DIR)
           .put("RUNFILES_DIR", TestPolicy.RUNFILES_DIR)
           .put("TEST_TMPDIR", TestPolicy.TEST_TMP_DIR)
-          .put("RUN_UNDER_RUNFILES", "1")
           .build();
 
   public static final TestPolicy DEFAULT_LOCAL_POLICY = new TestPolicy(ENV_VARS);
@@ -82,8 +80,9 @@ public class StandaloneTestStrategy extends TestStrategy {
   public StandaloneTestStrategy(
       OptionsClassProvider requestOptions,
       BinTools binTools,
+      Map<String, String> clientEnv,
       Path tmpDirRoot) {
-    super(requestOptions, binTools);
+    super(requestOptions, binTools, clientEnv);
     this.tmpDirRoot = tmpDirRoot;
   }
 
@@ -105,8 +104,7 @@ public class StandaloneTestStrategy extends TestStrategy {
                 action.getExecutionSettings().getExecutable().getExecPath(),
                 action.getShardNum(),
                 action.getRunNumber()));
-    Map<String, String> env = setupEnvironment(
-        action, actionExecutionContext.getClientEnv(), execRoot, runfilesDir, tmpDir);
+    Map<String, String> env = setupEnvironment(action, execRoot, runfilesDir, tmpDir);
     Path workingDirectory = runfilesDir.getRelative(action.getRunfilesPrefix());
 
     ResolvedPaths resolvedPaths = action.resolve(execRoot);
@@ -116,12 +114,6 @@ public class StandaloneTestStrategy extends TestStrategy {
     info.put("timeout", "" + getTimeout(action));
     info.putAll(action.getTestProperties().getExecutionInfo());
 
-    ResourceSet localResourceUsage =
-        action
-            .getTestProperties()
-            .getLocalResourceUsage(
-                action.getOwner().getLabel(), executionOptions.usingLocalTestJobs());
-
     Spawn spawn =
         new SimpleSpawn(
             action,
@@ -130,11 +122,13 @@ public class StandaloneTestStrategy extends TestStrategy {
             ImmutableMap.copyOf(info),
             new RunfilesSupplierImpl(
                 runfilesDir.relativeTo(execRoot), action.getExecutionSettings().getRunfiles()),
-            /*inputs=*/ ImmutableList.copyOf(action.getInputs()),
-            /*tools=*/ ImmutableList.<Artifact>of(),
-            /*filesetManifests=*/ ImmutableList.<Artifact>of(),
+            /*inputs=*/ImmutableList.copyOf(action.getInputs()),
+            /*tools=*/ImmutableList.<Artifact>of(),
+            /*filesetManifests=*/ImmutableList.<Artifact>of(),
             ImmutableList.copyOf(action.getSpawnOutputs()),
-            localResourceUsage);
+            action
+                .getTestProperties()
+                .getLocalResourceUsage(executionOptions.usingLocalTestJobs()));
 
     Executor executor = actionExecutionContext.getExecutor();
 
@@ -250,7 +244,7 @@ public class StandaloneTestStrategy extends TestStrategy {
     for (int i = 0; i < data.getFailedLogsCount(); i++) {
       dataBuilder.addFailedLogs(data.getFailedLogs(i));
     }
-    if (data.getTestPassed()) {
+    if (data.hasTestPassed()) {
       dataBuilder.setPassedLog(data.getPassedLog());
     }
     dataBuilder.addTestTimes(data.getTestTimes(0));
@@ -287,8 +281,7 @@ public class StandaloneTestStrategy extends TestStrategy {
   }
 
   private Map<String, String> setupEnvironment(
-      TestRunnerAction action, Map<String, String> clientEnv, Path execRoot, Path runfilesDir,
-      Path tmpDir) {
+      TestRunnerAction action, Path execRoot, Path runfilesDir, Path tmpDir) {
     PathFragment relativeTmpDir;
     if (tmpDir.startsWith(execRoot)) {
       relativeTmpDir = tmpDir.relativeTo(execRoot);
