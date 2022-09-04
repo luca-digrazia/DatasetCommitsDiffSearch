@@ -55,7 +55,7 @@ import java.util.concurrent.RecursiveAction;
  * Default matrix format implement.
  */
 public abstract class MatrixFormatImpl implements MatrixFormat {
-  private final static Log LOG = LogFactory.getLog(MatrixFormatImpl.class);
+  private final static Log LOG = LogFactory.getLog(RowFormat.class);
   protected final Configuration conf;
 
   public MatrixFormatImpl(Configuration conf) {

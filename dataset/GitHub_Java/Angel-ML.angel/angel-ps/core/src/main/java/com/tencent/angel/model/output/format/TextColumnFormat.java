@@ -17,6 +17,8 @@
 
 package com.tencent.angel.model.output.format;
 
+import org.apache.hadoop.conf.Configuration;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -25,14 +27,22 @@ import java.io.IOException;
  * Text format: column id + sep + row1 element + sep + row2 element + sep + ...
  */
 public class TextColumnFormat extends ColumnFormat {
-  public String sep = ",";
+  private final String defaultSet = ",";
+  public final static String sepParam =  "text.format.filed.sep";
+  private final String sep;
+
+  public TextColumnFormat(Configuration conf) {
+    super(conf);
+    sep = conf.get(sepParam, defaultSet);
+  }
+
   @Override public void save(IntFloatsCol col, DataOutputStream output) throws IOException {
     StringBuilder sb = new StringBuilder();
     sb.append(col.colId);
     sb.append(sep);
-    for(int i = 0; i < col.colElems.length; i++) {
+    for (int i = 0; i < col.colElems.length; i++) {
       sb.append(col.colElems[i]);
-      if(i < col.colElems.length - 1) {
+      if (i < col.colElems.length - 1) {
         sb.append(sep);
       }
     }
@@ -44,9 +54,9 @@ public class TextColumnFormat extends ColumnFormat {
     StringBuilder sb = new StringBuilder();
     sb.append(col.colId);
     sb.append(sep);
-    for(int i = 0; i < col.colElems.length; i++) {
+    for (int i = 0; i < col.colElems.length; i++) {
       sb.append(col.colElems[i]);
-      if(i < col.colElems.length - 1) {
+      if (i < col.colElems.length - 1) {
         sb.append(sep);
       }
     }
@@ -58,9 +68,9 @@ public class TextColumnFormat extends ColumnFormat {
     StringBuilder sb = new StringBuilder();
     sb.append(col.colId);
     sb.append(sep);
-    for(int i = 0; i < col.colElems.length; i++) {
+    for (int i = 0; i < col.colElems.length; i++) {
       sb.append(col.colElems[i]);
-      if(i < col.colElems.length - 1) {
+      if (i < col.colElems.length - 1) {
         sb.append(sep);
       }
     }
@@ -72,9 +82,9 @@ public class TextColumnFormat extends ColumnFormat {
     StringBuilder sb = new StringBuilder();
     sb.append(col.colId);
     sb.append(sep);
-    for(int i = 0; i < col.colElems.length; i++) {
+    for (int i = 0; i < col.colElems.length; i++) {
       sb.append(col.colElems[i]);
-      if(i < col.colElems.length - 1) {
+      if (i < col.colElems.length - 1) {
         sb.append(sep);
       }
     }
@@ -86,9 +96,9 @@ public class TextColumnFormat extends ColumnFormat {
     StringBuilder sb = new StringBuilder();
     sb.append(col.colId);
     sb.append(sep);
-    for(int i = 0; i < col.colElems.length; i++) {
+    for (int i = 0; i < col.colElems.length; i++) {
       sb.append(col.colElems[i]);
-      if(i < col.colElems.length - 1) {
+      if (i < col.colElems.length - 1) {
         sb.append(sep);
       }
     }
@@ -100,9 +110,9 @@ public class TextColumnFormat extends ColumnFormat {
     StringBuilder sb = new StringBuilder();
     sb.append(col.colId);
     sb.append(sep);
-    for(int i = 0; i < col.colElems.length; i++) {
+    for (int i = 0; i < col.colElems.length; i++) {
       sb.append(col.colElems[i]);
-      if(i < col.colElems.length - 1) {
+      if (i < col.colElems.length - 1) {
         sb.append(sep);
       }
     }
@@ -114,9 +124,9 @@ public class TextColumnFormat extends ColumnFormat {
     StringBuilder sb = new StringBuilder();
     sb.append(col.colId);
     sb.append(sep);
-    for(int i = 0; i < col.colElems.length; i++) {
+    for (int i = 0; i < col.colElems.length; i++) {
       sb.append(col.colElems[i]);
-      if(i < col.colElems.length - 1) {
+      if (i < col.colElems.length - 1) {
         sb.append(sep);
       }
     }
@@ -128,9 +138,9 @@ public class TextColumnFormat extends ColumnFormat {
     StringBuilder sb = new StringBuilder();
     sb.append(col.colId);
     sb.append(sep);
-    for(int i = 0; i < col.colElems.length; i++) {
+    for (int i = 0; i < col.colElems.length; i++) {
       sb.append(col.colElems[i]);
-      if(i < col.colElems.length - 1) {
+      if (i < col.colElems.length - 1) {
         sb.append(sep);
       }
     }
@@ -140,73 +150,73 @@ public class TextColumnFormat extends ColumnFormat {
 
   @Override public void load(IntFloatsCol col, DataInputStream input) throws IOException {
     String line = input.readLine();
-    String [] subStrs = line.split(sep);
+    String[] subStrs = line.split(sep);
     col.colId = Integer.valueOf(subStrs[0]);
-    for(int i = 0; i < col.colElems.length; i++) {
-      col.colElems[i] = Float.valueOf(subStrs[i+1]);
+    for (int i = 0; i < col.colElems.length; i++) {
+      col.colElems[i] = Float.valueOf(subStrs[i + 1]);
     }
   }
 
   @Override public void load(IntDoublesCol col, DataInputStream input) throws IOException {
     String line = input.readLine();
-    String [] subStrs = line.split(sep);
+    String[] subStrs = line.split(sep);
     col.colId = Integer.valueOf(subStrs[0]);
-    for(int i = 0; i < col.colElems.length; i++) {
-      col.colElems[i] = Double.valueOf(subStrs[i+1]);
+    for (int i = 0; i < col.colElems.length; i++) {
+      col.colElems[i] = Double.valueOf(subStrs[i + 1]);
     }
   }
 
   @Override public void load(IntIntsCol col, DataInputStream input) throws IOException {
     String line = input.readLine();
-    String [] subStrs = line.split(sep);
+    String[] subStrs = line.split(sep);
     col.colId = Integer.valueOf(subStrs[0]);
-    for(int i = 0; i < col.colElems.length; i++) {
-      col.colElems[i] = Integer.valueOf(subStrs[i+1]);
+    for (int i = 0; i < col.colElems.length; i++) {
+      col.colElems[i] = Integer.valueOf(subStrs[i + 1]);
     }
   }
 
   @Override public void load(IntLongsCol col, DataInputStream input) throws IOException {
     String line = input.readLine();
-    String [] subStrs = line.split(sep);
+    String[] subStrs = line.split(sep);
     col.colId = Integer.valueOf(subStrs[0]);
-    for(int i = 0; i < col.colElems.length; i++) {
-      col.colElems[i] = Long.valueOf(subStrs[i+1]);
+    for (int i = 0; i < col.colElems.length; i++) {
+      col.colElems[i] = Long.valueOf(subStrs[i + 1]);
     }
   }
 
   @Override public void load(LongFloatsCol col, DataInputStream input) throws IOException {
     String line = input.readLine();
-    String [] subStrs = line.split(sep);
+    String[] subStrs = line.split(sep);
     col.colId = Long.valueOf(subStrs[0]);
-    for(int i = 0; i < col.colElems.length; i++) {
-      col.colElems[i] = Float.valueOf(subStrs[i+1]);
+    for (int i = 0; i < col.colElems.length; i++) {
+      col.colElems[i] = Float.valueOf(subStrs[i + 1]);
     }
   }
 
   @Override public void load(LongDoublesCol col, DataInputStream input) throws IOException {
     String line = input.readLine();
-    String [] subStrs = line.split(sep);
+    String[] subStrs = line.split(sep);
     col.colId = Long.valueOf(subStrs[0]);
-    for(int i = 0; i < col.colElems.length; i++) {
-      col.colElems[i] = Double.valueOf(subStrs[i+1]);
+    for (int i = 0; i < col.colElems.length; i++) {
+      col.colElems[i] = Double.valueOf(subStrs[i + 1]);
     }
   }
 
   @Override public void load(LongIntsCol col, DataInputStream input) throws IOException {
     String line = input.readLine();
-    String [] subStrs = line.split(sep);
+    String[] subStrs = line.split(sep);
     col.colId = Long.valueOf(subStrs[0]);
-    for(int i = 0; i < col.colElems.length; i++) {
-      col.colElems[i] = Integer.valueOf(subStrs[i+1]);
+    for (int i = 0; i < col.colElems.length; i++) {
+      col.colElems[i] = Integer.valueOf(subStrs[i + 1]);
     }
   }
 
   @Override public void load(LongLongsCol col, DataInputStream input) throws IOException {
     String line = input.readLine();
-    String [] subStrs = line.split(sep);
+    String[] subStrs = line.split(sep);
     col.colId = Long.valueOf(subStrs[0]);
-    for(int i = 0; i < col.colElems.length; i++) {
-      col.colElems[i] = Long.valueOf(subStrs[i+1]);
+    for (int i = 0; i < col.colElems.length; i++) {
+      col.colElems[i] = Long.valueOf(subStrs[i + 1]);
     }
   }
 }

@@ -17,6 +17,8 @@
 
 package com.tencent.angel.model.output.format;
 
+import org.apache.hadoop.conf.Configuration;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -25,53 +27,47 @@ import java.io.IOException;
  * Text format: values without index
  */
 public class ValueTextRowFormat extends RowFormat {
-  @Override public void save(IntFloatElement element, DataOutputStream out)
-    throws IOException {
+  public ValueTextRowFormat(Configuration conf) {
+    super(conf);
+  }
+
+  @Override public void save(IntFloatElement element, DataOutputStream out) throws IOException {
     out.writeBytes(String.valueOf(element.value) + "\n");
   }
 
-  @Override public void save(IntDoubleElement element, DataOutputStream out)
-    throws IOException {
+  @Override public void save(IntDoubleElement element, DataOutputStream out) throws IOException {
     out.writeBytes(String.valueOf(element.value) + "\n");
   }
 
-  @Override public void save(IntIntElement element, DataOutputStream out)
-    throws IOException {
+  @Override public void save(IntIntElement element, DataOutputStream out) throws IOException {
     out.writeBytes(String.valueOf(element.value) + "\n");
   }
 
-  @Override public void save(IntLongElement element, DataOutputStream out)
-    throws IOException {
+  @Override public void save(IntLongElement element, DataOutputStream out) throws IOException {
     out.writeBytes(String.valueOf(element.value) + "\n");
   }
 
-  @Override public void save(LongFloatElement element, DataOutputStream out)
-    throws IOException {
+  @Override public void save(LongFloatElement element, DataOutputStream out) throws IOException {
     out.writeBytes(String.valueOf(element.value) + "\n");
   }
 
-  @Override public void save(LongDoubleElement element, DataOutputStream out)
-    throws IOException {
+  @Override public void save(LongDoubleElement element, DataOutputStream out) throws IOException {
     out.writeBytes(String.valueOf(element.value) + "\n");
   }
 
-  @Override public void save(LongIntElement element, DataOutputStream out)
-    throws IOException {
+  @Override public void save(LongIntElement element, DataOutputStream out) throws IOException {
     out.writeBytes(String.valueOf(element.value) + "\n");
   }
 
-  @Override public void save(LongLongElement element, DataOutputStream out)
-    throws IOException {
+  @Override public void save(LongLongElement element, DataOutputStream out) throws IOException {
     out.writeBytes(String.valueOf(element.value) + "\n");
   }
 
-  @Override public void load(IntFloatElement element, DataInputStream in)
-    throws IOException {
+  @Override public void load(IntFloatElement element, DataInputStream in) throws IOException {
     element.value = Float.valueOf(in.readLine());
   }
 
-  @Override public void load(IntDoubleElement element, DataInputStream in)
-    throws IOException {
+  @Override public void load(IntDoubleElement element, DataInputStream in) throws IOException {
     element.value = Double.valueOf(in.readLine());
   }
 
@@ -83,13 +79,11 @@ public class ValueTextRowFormat extends RowFormat {
     element.value = Long.valueOf(in.readLine());
   }
 
-  @Override public void load(LongFloatElement element, DataInputStream in)
-    throws IOException {
+  @Override public void load(LongFloatElement element, DataInputStream in) throws IOException {
     element.value = Float.valueOf(in.readLine());
   }
 
-  @Override public void load(LongDoubleElement element, DataInputStream in)
-    throws IOException {
+  @Override public void load(LongDoubleElement element, DataInputStream in) throws IOException {
     element.value = Double.valueOf(in.readLine());
   }
 
@@ -97,8 +91,7 @@ public class ValueTextRowFormat extends RowFormat {
     element.value = Integer.valueOf(in.readLine());
   }
 
-  @Override public void load(LongLongElement element, DataInputStream in)
-    throws IOException {
+  @Override public void load(LongLongElement element, DataInputStream in) throws IOException {
     element.value = Long.valueOf(in.readLine());
   }
 }
