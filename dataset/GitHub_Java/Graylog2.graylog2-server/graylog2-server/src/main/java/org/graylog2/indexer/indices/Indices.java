@@ -20,12 +20,12 @@
 
 package org.graylog2.indexer.indices;
 
+import com.beust.jcommander.internal.Maps;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import org.elasticsearch.action.ActionFuture;
 import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
+import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest;
 import org.elasticsearch.action.admin.indices.alias.get.IndicesGetAliasesRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
@@ -35,6 +35,7 @@ import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRespon
 import org.elasticsearch.action.admin.indices.flush.FlushRequest;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
 import org.elasticsearch.action.admin.indices.settings.UpdateSettingsRequest;
+import org.elasticsearch.action.admin.indices.settings.UpdateSettingsResponse;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsRequest;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
@@ -47,10 +48,9 @@ import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.action.support.replication.ReplicationType;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.cluster.metadata.MappingMetaData;
 import org.elasticsearch.common.settings.ImmutableSettings;
+import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.search.SearchHit;
@@ -62,7 +62,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
-import java.util.Set;
 
 import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
 
@@ -198,31 +197,6 @@ public class Indices {
         return ImmutableMap.copyOf(c.admin().cluster().state(new ClusterStateRequest()).actionGet().getState().getMetaData().indices());
     }
 
-    public Set<String> getAllMessageFields() {
-        Set<String> fields = Sets.newHashSet();
-
-        ClusterStateRequest csr = new ClusterStateRequest().filterBlocks(true).filterNodes(true).filteredIndices(allIndicesAlias());
-        ClusterState cs = c.admin().cluster().state(csr).actionGet().getState();
-        for (Map.Entry<String, IndexMetaData> d : cs.getMetaData().indices().entrySet()) {
-            try {
-                MappingMetaData mmd = d.getValue().mapping(Indexer.TYPE);
-                if (mmd == null) {
-                    // There is no mapping if there are no messages in the index.
-                    continue;
-                }
-
-                Map<String, Object> mapping = (Map<String, Object>) mmd.getSourceAsMap().get("properties");
-
-                fields.addAll(mapping.keySet());
-            } catch(Exception e) {
-                LOG.error("Error while trying to get fields of <{}>", d.getKey(), e);
-                continue;
-            }
-        }
-
-        return fields;
-    }
-
     private IndexRequestBuilder manualIndexRequest(String index, Map<String, Object> doc, String id) {
         final IndexRequestBuilder b = new IndexRequestBuilder(c);
         b.setIndex(index);
@@ -250,6 +224,7 @@ public class Indices {
         FlushRequest flush = new FlushRequest(index);
         flush.force(true); // Just flushes. Even if it is not necessary.
         flush.full(false);
+        flush.refresh(true);
 
         c.admin().indices().flush(new FlushRequest(index).force(true)).actionGet();
     }
