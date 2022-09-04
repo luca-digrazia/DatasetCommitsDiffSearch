@@ -24,6 +24,8 @@ import com.google.devtools.common.options.TriState;
  * Python-related command-line options.
  */
 public class PythonOptions extends FragmentOptions {
+  static final PythonVersion DEFAULT_PYTHON_VERSION = PythonVersion.PY2;
+
   /**
    * Converter for the --force_python option.
    */
@@ -36,8 +38,8 @@ public class PythonOptions extends FragmentOptions {
   @Option(
     name = "build_python_zip",
     defaultValue = "auto",
-    documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    effectTags = {OptionEffectTag.UNKNOWN},
     help = "Build python executable zip; on on Windows, off on other platforms"
   )
   public TriState buildPythonZip;
@@ -67,11 +69,7 @@ public class PythonOptions extends FragmentOptions {
   public PythonVersion hostForcePython;
 
   public PythonVersion getPythonVersion() {
-    return getPythonVersion(PythonVersion.DEFAULT);
-  }
-
-  public PythonVersion getPythonVersion(PythonVersion defaultVersion) {
-    return (forcePython == null) ? defaultVersion : forcePython;
+    return (forcePython == null) ? DEFAULT_PYTHON_VERSION : forcePython;
   }
 
   @Override
@@ -85,16 +83,5 @@ public class PythonOptions extends FragmentOptions {
     hostPythonOpts.buildPythonZip = buildPythonZip;
     return hostPythonOpts;
   }
-
-  @Option(
-    name = "experimental_build_transitive_python_runfiles",
-    defaultValue = "true",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-    effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
-    help =
-        "Build the runfiles trees of py_binary targets that appear in the transitive "
-            + "data runfiles of another binary."
-  )
-  public boolean buildTransitiveRunfilesTrees;
 }
 

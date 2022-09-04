@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
 import com.google.devtools.build.lib.rules.python.PyCommon;
 import com.google.devtools.build.lib.rules.python.PythonConfiguration;
 import com.google.devtools.build.lib.rules.python.PythonSemantics;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -101,7 +102,8 @@ public class BazelPythonSemantics implements PythonSemantics {
     // adjusted to be relative to the workspace name.
     packageFragment = PathFragment.create(ruleContext.getWorkspaceName())
         .getRelative(packageFragment);
-    for (String importsAttr : ruleContext.expandedMakeVariablesList("imports")) {
+    for (String importsAttr : ruleContext.attributes().get("imports", Type.STRING_LIST)) {
+      importsAttr = ruleContext.expandMakeVariables("includes", importsAttr);
       if (importsAttr.startsWith("/")) {
         ruleContext.attributeWarning("imports",
             "ignoring invalid absolute path '" + importsAttr + "'");
