@@ -75,7 +75,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
   /** Pattern for @flagfile.txt and --flagfile=flagfile.txt */
   private static final Pattern FLAG_FILE_PATTERN = Pattern.compile("(?:@|--?flagfile=)(.+)");
 
-  private final SandboxHelpers helpers;
   private final Path execRoot;
   private final WorkerPool workers;
   private final Multimap<String, String> extraFlags;
@@ -88,7 +87,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
   private final RunfilesTreeUpdater runfilesTreeUpdater;
 
   public WorkerSpawnRunner(
-      SandboxHelpers helpers,
       Path execRoot,
       WorkerPool workers,
       Multimap<String, String> extraFlags,
@@ -99,7 +97,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
       BinTools binTools,
       ResourceManager resourceManager,
       RunfilesTreeUpdater runfilesTreeUpdater) {
-    this.helpers = helpers;
     this.execRoot = execRoot;
     this.workers = Preconditions.checkNotNull(workers);
     this.extraFlags = extraFlags;
@@ -174,12 +171,12 @@ final class WorkerSpawnRunner implements SpawnRunner {
     HashCode workerFilesCombinedHash = WorkerFilesHash.getCombinedHash(workerFiles);
 
     SandboxInputs inputFiles =
-        helpers.processInputFiles(
+        SandboxHelpers.processInputFiles(
             context.getInputMapping(sandboxUsesExpandedTreeArtifactsInRunfiles),
             spawn,
             context.getArtifactExpander(),
             execRoot);
-    SandboxOutputs outputs = helpers.getOutputs(spawn);
+    SandboxOutputs outputs = SandboxHelpers.getOutputs(spawn);
 
     WorkerKey key =
         new WorkerKey(
