@@ -31,7 +31,6 @@ import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.processor.Transformation;
-import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
@@ -86,7 +85,7 @@ public class SpringDIProcessor {
 
     @BuildStep
     FeatureBuildItem registerFeature() {
-        return new FeatureBuildItem(Feature.SPRING_DI);
+        return new FeatureBuildItem(FeatureBuildItem.SPRING_DI);
     }
 
     /*
@@ -208,16 +207,10 @@ public class SpringDIProcessor {
         if (target.kind() == AnnotationTarget.Kind.CLASS) {
             if (target.asClass().classAnnotation(SPRING_SCOPE_ANNOTATION) != null) {
                 value = target.asClass().classAnnotation(SPRING_SCOPE_ANNOTATION).value();
-                if ((value == null) || value.asString().isEmpty()) {
-                    value = target.asClass().classAnnotation(SPRING_SCOPE_ANNOTATION).value("scopeName");
-                }
             }
         } else if (target.kind() == AnnotationTarget.Kind.METHOD) {
             if (target.asMethod().hasAnnotation(SPRING_SCOPE_ANNOTATION)) {
                 value = target.asMethod().annotation(SPRING_SCOPE_ANNOTATION).value();
-                if ((value == null) || value.asString().isEmpty()) {
-                    value = target.asMethod().annotation(SPRING_SCOPE_ANNOTATION).value("scopeName");
-                }
             }
         }
         if (value != null) {
@@ -272,10 +265,7 @@ public class SpringDIProcessor {
                 visitAnnotation(annotation, index, deps, visited, ret);
             }
         }
-        final ClassInfo classInfo = index.getClassByName(clazz);
-        if (classInfo != null) {
-            ret.add(classInfo);
-        }
+        ret.add(index.getClassByName(clazz));
     }
 
     /**
