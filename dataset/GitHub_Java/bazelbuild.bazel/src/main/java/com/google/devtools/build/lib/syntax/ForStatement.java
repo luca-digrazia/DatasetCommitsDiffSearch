@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,82 +16,67 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
-import java.util.List;
-
-/**
- * Syntax node for a for loop statement.
- */
+/** Syntax node for a for loop statement. */
 public final class ForStatement extends Statement {
 
-  private final Ident variable;
+  private final int forOffset;
+  private final Expression vars;
   private final Expression collection;
-  private final ImmutableList<Statement> block;
+  private final ImmutableList<Statement> body; // non-empty if well formed
+
+  /** Constructs a for loop statement. */
+  ForStatement(
+      FileLocations locs,
+      int forOffset,
+      Expression vars,
+      Expression collection,
+      ImmutableList<Statement> body) {
+    super(locs);
+    this.forOffset = forOffset;
+    this.vars = Preconditions.checkNotNull(vars);
+    this.collection = Preconditions.checkNotNull(collection);
+    this.body = body;
+  }
+
+  public Expression getVars() {
+    return vars;
+  }
 
   /**
-   * Constructs a for loop statement.
+   * @return The collection we iterate on, e.g. `col` in `for x in col:`
    */
-  ForStatement(Ident variable, Expression collection, List<Statement> block) {
-    this.variable = Preconditions.checkNotNull(variable);
-    this.collection = Preconditions.checkNotNull(collection);
-    this.block = ImmutableList.copyOf(block);
-  }
-
-  public Ident getVariable() {
-    return variable;
-  }
-
   public Expression getCollection() {
     return collection;
   }
 
-  public ImmutableList<Statement> block() {
-    return block;
+  public ImmutableList<Statement> getBody() {
+    return body;
+  }
+
+  @Override
+  public int getStartOffset() {
+    return forOffset;
+  }
+
+  @Override
+  public int getEndOffset() {
+    return body.isEmpty()
+        ? collection.getEndOffset() // wrong, but tree is ill formed
+        : body.get(body.size() - 1).getEndOffset();
   }
 
   @Override
   public String toString() {
-    // TODO(bazel-team): if we want to print the complete statement, the function
-    // needs an extra argument to specify indentation level.
-    return "for " + variable + " in " + collection + ": ...\n";
+    return "for " + vars + " in " + collection + ": ...\n";
   }
 
   @Override
-  void exec(Environment env) throws EvalException, InterruptedException {
-    Object o = collection.eval(env);
-    Iterable<?> col = EvalUtils.toIterable(o, getLocation());
-
-    int i = 0;
-    for (Object it : ImmutableList.copyOf(col)) {
-      env.update(variable.getName(), it);
-      for (Statement stmt : block) {
-        stmt.exec(env);
-      }
-      i++;
-    }
-    // TODO(bazel-team): This should not happen if every collection is immutable.
-    if (i != EvalUtils.size(col)) {
-      throw new EvalException(getLocation(),
-          String.format("Cannot modify '%s' during during iteration.", collection.toString()));
-    }
-  }
-
-  @Override
-  public void accept(SyntaxTreeVisitor visitor) {
+  public void accept(NodeVisitor visitor) {
     visitor.visit(this);
   }
 
   @Override
-  void validate(ValidationEnvironment env) throws EvalException {
-    if (env.isTopLevel()) {
-      throw new EvalException(getLocation(),
-          "'For' is not allowed as a top level statement");
-    }
-    // TODO(bazel-team): validate variable. Maybe make it temporarily readonly.
-    SkylarkType type = collection.validate(env);
-    env.checkIterable(type, getLocation());
-    env.update(variable.getName(), SkylarkType.UNKNOWN, getLocation());
-    for (Statement stmt : block) {
-      stmt.validate(env);
-    }
+  public Kind kind() {
+    return Kind.FOR;
   }
 }
