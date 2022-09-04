@@ -15,42 +15,33 @@
  */
 package org.androidannotations.handler;
 
-import static com.sun.codemodel.JExpr._new;
-import static com.sun.codemodel.JExpr.cast;
-import static com.sun.codemodel.JExpr.ref;
-
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.type.TypeMirror;
-
+import com.sun.codemodel.*;
 import org.androidannotations.annotations.OrmLiteDao;
-import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.CanonicalNameConstants;
-import org.androidannotations.helper.OrmLiteHelper;
 import org.androidannotations.helper.TargetAnnotationHelper;
 import org.androidannotations.holder.EComponentHolder;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JCatchBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JTryBlock;
-import com.sun.codemodel.JVar;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
+import java.util.List;
+
+import static com.sun.codemodel.JExpr.ref;
 
 public class OrmLiteDaoHandler extends BaseAnnotationHandler<EComponentHolder> {
 
-	private final OrmLiteHelper ormLiteHelper;
-	private final TargetAnnotationHelper helper;
-	private final APTCodeModelHelper codeModelHelper;
+	private TargetAnnotationHelper helper;
+	private DeclaredType daoParametrizedType;
+	private DeclaredType runtimeExceptionDaoParametrizedType;
 
 	public OrmLiteDaoHandler(ProcessingEnvironment processingEnvironment) {
 		super(OrmLiteDao.class, processingEnvironment);
 		helper = new TargetAnnotationHelper(processingEnv, getTarget());
-		ormLiteHelper = new OrmLiteHelper(helper);
-		codeModelHelper = new APTCodeModelHelper();
 	}
 
 	@Override
@@ -61,30 +52,37 @@ public class OrmLiteDaoHandler extends BaseAnnotationHandler<EComponentHolder> {
 
 		validatorHelper.isNotPrivate(element, valid);
 
-		validatorHelper.extendsOrmLiteDao(element, valid, ormLiteHelper);
+		validatorHelper.extendsOrmLiteDao(element, valid);
 
 		validatorHelper.hasASqlLiteOpenHelperParameterizedType(element, valid);
 	}
 
 	@Override
 	public void process(Element element, EComponentHolder holder) {
+		createDaoParametrizedTypes();
+
 		String fieldName = element.getSimpleName().toString();
 
-		JClass modelClass = refClass(ormLiteHelper.getEntityType(element));
-		JClass idClass = refClass(ormLiteHelper.getEntityIdType(element));
+		JClass modelClass = getEntityAndIdClass(element, holder);
 		JExpression modelClassDotClass = modelClass.dotclass();
-
-		JClass daoClass = refClass(CanonicalNameConstants.DAO).narrow(modelClass, idClass);
 
 		TypeMirror databaseHelperTypeMirror = helper.extractAnnotationParameter(element, "helper");
 		JFieldVar databaseHelperRef = holder.getDatabaseHelperRef(databaseHelperTypeMirror);
 
 		JBlock initBody = holder.getInitBody();
 
-		JExpression injectExpr = databaseHelperRef.invoke("getDao").arg(modelClassDotClass);
+		JExpression injectExpr;
 		if (elementExtendsRuntimeExceptionDao(element)) {
-			JClass daoImplClass = codeModelHelper.typeMirrorToJClass(element.asType(), holder);
-			injectExpr = _new(daoImplClass).arg(cast(daoClass, injectExpr));
+
+			injectExpr = classes().RUNTIME_EXCEPTION_DAO//
+					.staticInvoke("createDao") //
+					.arg(databaseHelperRef.invoke("getConnectionSource")) //
+					.arg(modelClassDotClass);
+
+		} else {
+
+			injectExpr = databaseHelperRef.invoke("getDao").arg(modelClassDotClass);
+
 		}
 
 		JTryBlock tryBlock = initBody._try();
@@ -102,6 +100,46 @@ public class OrmLiteDaoHandler extends BaseAnnotationHandler<EComponentHolder> {
 
 	private boolean elementExtendsRuntimeExceptionDao(Element element) {
 		TypeMirror elementType = element.asType();
-		return helper.isSubtype(elementType, ormLiteHelper.getRuntimeExceptionDaoParametrizedType());
+		return helper.isSubtype(elementType, runtimeExceptionDaoParametrizedType);
+	}
+
+	private JClass getEntityAndIdClass(Element element, EComponentHolder holder) {
+		if (isSubtypeOfDao(element.asType())) {
+			DeclaredType declaredType = (DeclaredType) element.asType();
+			List<? extends TypeMirror> typeArguments = declaredType.getTypeArguments();
+			if (typeArguments.size() == 2) {
+				return holder.refClass(typeArguments.get(0).toString());
+			}
+		}
+
+		List<? extends TypeMirror> superTypes = helper.directSupertypes(element.asType());
+		for (TypeMirror superType : superTypes) {
+
+			if (superType.getKind() == TypeKind.DECLARED && isSubtypeOfDao(superType)) {
+
+				DeclaredType superDeclaredType = (DeclaredType) superType;
+				List<? extends TypeMirror> typeArguments = superDeclaredType.getTypeArguments();
+				if (typeArguments.size() == 2) {
+					return holder.refClass(typeArguments.get(0).toString());
+				}
+			}
+		}
+		return null;
+	}
+
+	private boolean isSubtypeOfDao(TypeMirror type) {
+		return helper.isSubtype(type, daoParametrizedType) || helper.isSubtype(type, runtimeExceptionDaoParametrizedType);
+	}
+
+	/*
+	 * This method is not in the constructor because it prevents tests from
+	 * succeeding
+	 */
+	private void createDaoParametrizedTypes() {
+		TypeMirror wildcardType = helper.getTypeUtils().getWildcardType(null, null);
+		TypeElement daoTypeElement = helper.typeElementFromQualifiedName(CanonicalNameConstants.DAO);
+		daoParametrizedType = helper.getTypeUtils().getDeclaredType(daoTypeElement, wildcardType, wildcardType);
+		TypeElement runtimeExceptionDaoTypeElement = helper.typeElementFromQualifiedName(CanonicalNameConstants.RUNTIME_EXCEPTION_DAO);
+		runtimeExceptionDaoParametrizedType = helper.getTypeUtils().getDeclaredType(runtimeExceptionDaoTypeElement, wildcardType, wildcardType);
 	}
 }
