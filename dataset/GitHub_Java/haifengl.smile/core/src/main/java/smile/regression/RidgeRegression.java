@@ -202,7 +202,9 @@ public class RidgeRegression {
 
         Matrix XtX = XtW.mm(scaledX);
         XtX.uplo(UPLO.LOWER);
-        XtX.addDiag(lambda);
+        for (int i = 0; i < p; i++) {
+            XtX.add(i, i, lambda[i]);
+        }
         Matrix.Cholesky cholesky = XtX.cholesky(true);
 
         double[] w = cholesky.solve(scaledY);

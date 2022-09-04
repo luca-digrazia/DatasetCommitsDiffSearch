@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.glm;
 
@@ -52,7 +52,7 @@ public class GLMTest {
     public void tearDown() {
     }
 
-    @Test(expected = Test.None.class)
+    @Test
     public void testDefault() throws Exception {
         System.out.println("default");
 
@@ -60,15 +60,15 @@ public class GLMTest {
         System.out.println(model);
 
         assertEquals(1571.5448, model.deviance(), 1E-4);
-        assertEquals(-785.7724, model.loglikelihood(), 1E-4);
+        assertEquals(-785.7724, model.logLikelihood(), 1E-4);
         assertEquals(1579.5448, model.AIC(), 1E-4);
         assertEquals(1608.3862, model.BIC(), 1E-4);
 
         double[][] ztest = {
+                {-10.869045, 4.923e-01, -22.0793,   0.00000},
                 {-6.468e-01, 2.363e-01,  -2.7376,   0.00619},
                 { 5.737e-03, 2.319e-04,  24.7365,   0.00000},
-                { 3.033e-06, 8.203e-06,   0.3698,   0.71153},
-                {-10.869045, 4.923e-01, -22.0793,   0.00000}
+                { 3.033e-06, 8.203e-06,   0.3698,   0.71153}
         };
 
         for (int i = 0; i < ztest.length; i++) {

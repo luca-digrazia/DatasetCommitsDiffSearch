@@ -69,7 +69,7 @@ import smile.math.rbf.RadialBasisFunction;
  * </ol>
  * 
  * @see RadialBasisFunction
- * @see SVM
+ * @see SVR
  *
  * @param <T> the data type of samples.
  *

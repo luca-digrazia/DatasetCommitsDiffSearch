@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 /**
  * Feature extraction. Feature extraction transforms the data in the
@@ -38,7 +38,7 @@
  * is an adaptive method to find the largest k eigenvectors of the covariance
  * matrix, assuming that the associated eigenvalues are distinct. GHA works
  * with an arbitrarily large sample size and the storage requirement is modest.
- * Another attractive feature is that, in a nonstationary environment, it
+ * Another attractive feature is that, in a non-stationary environment, it
  * has an inherent ability to track gradual changes in the optimal solution
  * in an inexpensive way.
  * <p>

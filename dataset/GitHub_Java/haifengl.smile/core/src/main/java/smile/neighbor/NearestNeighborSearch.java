@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.neighbor;
 
@@ -22,9 +22,9 @@ package smile.neighbor;
  * or closest point search, is an optimization problem for finding closest
  * points in metric spaces. The problem is: given a set S of points in a metric
  * space M and a query point q &isin; M, find the closest point in S to q.
- *
+ * <p>
  * In machine learning, we often build a nearest neighbor search data structure,
- * and then search with object in the same dataset. The object itsef is of course
+ * and then search with object in the same dataset. The object itself is of course
  * the nearest one with distance 0. But this is meaningless and we therefore do
  * the reference check during the search and excludes the query object from the
  * results.

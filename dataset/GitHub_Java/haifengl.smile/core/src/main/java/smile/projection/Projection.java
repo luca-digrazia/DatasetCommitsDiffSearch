@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,13 +13,13 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.projection;
 
 /**
  * A projection is a kind of feature extraction technique that transforms data
- * from the input space to a feature space, linearly or nonlinearly. Often,
+ * from the input space to a feature space, linearly or non-linearly. Often,
  * projections are used to reduce dimensionality, for example PCA and random
  * projection. However, kernel-based methods, e.g. Kernel PCA, can actually map
  * the data into a much higher dimensional space.
@@ -29,11 +29,15 @@ package smile.projection;
 public interface Projection<T> {
     /**
      * Project a data point to the feature space.
+     * @param x the data point.
+     * @return the projection in the feature space.
      */
     double[] project(T x);
 
     /**
      * Project a set of data to the feature space.
+     * @param x the data set.
+     * @return the projection in the feature space.
      */
     double[][] project(T[] x);
 }

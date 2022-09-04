@@ -20,7 +20,6 @@ package smile.regression;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Properties;
 import java.util.function.ToDoubleFunction;
 import smile.data.Dataset;
 import smile.data.Instance;
@@ -38,33 +37,6 @@ import smile.data.Instance;
  * @author Haifeng Li
  */
 public interface Regression<T> extends ToDoubleFunction<T>, Serializable {
-    /**
-     * The regression trainer.
-     * @param <T> the type of model input object.
-     * @param <M> the type of model.
-     */
-    interface Trainer<T, M extends Regression<T>> {
-        /**
-         * Fits a regression model with the default hyper-parameters.
-         * @param x the training samples.
-         * @param y the response variables.
-         * @return the model
-         */
-        default M fit(T[] x, double[] y) {
-            Properties params = new Properties();
-            return fit(x, y, params);
-        }
-
-        /**
-         * Fits a regression model.
-         * @param x the training samples.
-         * @param y the response variables.
-         * @param params the hyper-parameters.
-         * @return the model
-         */
-        M fit(T[] x, double[] y, Properties params);
-    }
-
     /**
      * Predicts the dependent variable of an instance.
      * @param x an instance.
