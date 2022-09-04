@@ -21,15 +21,9 @@ import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
+import com.sun.beans.WeakCache;
 
 class CamelSubstitutions {
-}
-
-@TargetClass(className = "com.sun.beans.WeakCache")
-final class Target_com_sun_beans_WeakCache<K, V> {
-    @Alias
-    public Target_com_sun_beans_WeakCache() {
-    }
 }
 
 @TargetClass(className = "java.beans.Introspector")
@@ -37,7 +31,7 @@ final class Target_java_beans_Introspector {
 
     @Alias
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.FromAlias)
-    private static Target_com_sun_beans_WeakCache<Class<?>, Method[]> declaredMethodCache = new Target_com_sun_beans_WeakCache<>();
+    private static WeakCache<Class<?>, Method[]> declaredMethodCache = new WeakCache<>();
 
 }
 
