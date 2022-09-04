@@ -16,11 +16,9 @@ package com.google.devtools.build.lib.actions;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.util.concurrent.Striped;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.Path;
@@ -30,15 +28,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.Lock;
 import javax.annotation.Nullable;
 
 /** A cache of Artifacts, keyed by Path. */
 @ThreadSafe
 public class ArtifactFactory implements ArtifactResolver {
-  private static final int CONCURRENCY_LEVEL = Runtime.getRuntime().availableProcessors();
-  private static final Striped<Lock> STRIPED_LOCK = Striped.lock(CONCURRENCY_LEVEL);
 
   private final Path execRoot;
   private final Path execRootParent;
@@ -77,26 +71,24 @@ public class ArtifactFactory implements ArtifactResolver {
     }
 
     /**
-     * The main Path to source artifact cache. There will always be exactly one canonical artifact
-     * for a given source path.
+     * The main Path to source artifact cache. There will always be exactly one canonical
+     * artifact for a given source path.
      */
-    private final Map<PathFragment, Entry> pathToSourceArtifact = new ConcurrentHashMap<>();
+    private final Map<PathFragment, Entry> pathToSourceArtifact = new HashMap<>();
 
     /** Id of current build. Has to be increased every time before execution phase starts. */
     private int buildId = 0;
 
     /** Returns artifact if it present in the cache, otherwise null. */
-    @ThreadSafe
     Artifact getArtifact(PathFragment execPath) {
       Entry cacheEntry = pathToSourceArtifact.get(execPath);
       return cacheEntry == null ? null : cacheEntry.getArtifact();
     }
 
     /**
-     * Returns artifact if it present in the cache and was created during this build, otherwise
-     * null.
+     * Returns artifact if it present in the cache and was created during this build,
+     * otherwise null.
      */
-    @ThreadSafe
     Artifact getArtifactIfValid(PathFragment execPath) {
       Entry cacheEntry = pathToSourceArtifact.get(execPath);
       if (cacheEntry != null && cacheEntry.getIdOfBuild() == buildId) {
@@ -105,10 +97,9 @@ public class ArtifactFactory implements ArtifactResolver {
       return null;
     }
 
-    @ThreadCompatible // Calls #putArtifact.
     void markEntryAsValid(PathFragment execPath) {
       Artifact oldValue = Preconditions.checkNotNull(getArtifact(execPath));
-      putArtifact(execPath, oldValue);
+      pathToSourceArtifact.put(execPath, new Entry(oldValue));
     }
 
     void newBuild() {
@@ -120,7 +111,6 @@ public class ArtifactFactory implements ArtifactResolver {
       buildId = 0;
     }
 
-    @ThreadCompatible // Concurrent puts do not know which one actually got its artifact in.
     void putArtifact(PathFragment execPath, Artifact artifact) {
       pathToSourceArtifact.put(execPath, new Entry(artifact));
     }
@@ -262,7 +252,7 @@ public class ArtifactFactory implements ArtifactResolver {
    * Returns the Artifact for the specified path, creating one if not found and setting the <code>
    * root</code> and <code>execPath</code> to the specified values.
    */
-  private Artifact getArtifact(
+  private synchronized Artifact getArtifact(
       ArtifactRoot root,
       PathFragment execPath,
       ArtifactOwner owner,
@@ -274,26 +264,14 @@ public class ArtifactFactory implements ArtifactResolver {
       return createArtifact(root, execPath, owner, type);
     }
 
-    // Double-checked locking to avoid locking cost when possible.
     Artifact artifact = sourceArtifactCache.getArtifact(execPath);
     if (artifact == null || !Objects.equals(artifact.getArtifactOwner(), owner)
         || !root.equals(artifact.getRoot())) {
-      Lock lock = STRIPED_LOCK.get(execPath);
-      lock.lock();
-      try {
-        artifact = sourceArtifactCache.getArtifact(execPath);
-        if (artifact == null
-            || !Objects.equals(artifact.getArtifactOwner(), owner)
-            || !root.equals(artifact.getRoot())) {
-          // There really should be a safety net that makes it impossible to create two Artifacts
-          // with the same exec path but a different Owner, but we also need to reuse Artifacts from
-          // previous builds.
-          artifact = createArtifact(root, execPath, owner, type);
-          sourceArtifactCache.putArtifact(execPath, artifact);
-        }
-      } finally {
-        lock.unlock();
-      }
+      // There really should be a safety net that makes it impossible to create two Artifacts
+      // with the same exec path but a different Owner, but we also need to reuse Artifacts from
+      // previous builds.
+      artifact = createArtifact(root, execPath, owner, type);
+      sourceArtifactCache.putArtifact(execPath, artifact);
     }
     return artifact;
   }

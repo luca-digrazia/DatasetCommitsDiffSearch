@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLogBufferPathGenerator;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -2002,15 +2001,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   /** Creates instances of {@link ActionExecutionContext} consistent with test case. */
   public class ActionExecutionContextBuilder {
-    private ActionInputFileCache actionInputFileCache = null;
     private TreeMap<String, String> clientEnv = new TreeMap<>();
     private ArtifactExpander artifactExpander = null;
-
-    public ActionExecutionContextBuilder setActionInputFileCache(
-        ActionInputFileCache actionInputFileCache) {
-      this.actionInputFileCache = actionInputFileCache;
-      return this;
-    }
 
     public ActionExecutionContextBuilder setArtifactExpander(ArtifactExpander artifactExpander) {
       this.artifactExpander = artifactExpander;
@@ -2020,7 +2012,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     public ActionExecutionContext build() {
       return new ActionExecutionContext(
           new DummyExecutor(fileSystem, getExecRoot(), reporter),
-          actionInputFileCache,
+          /*actionInputFileCache=*/ null,
           /*actionInputPrefetcher=*/ null,
           actionKeyContext,
           /*metadataHandler=*/ null,

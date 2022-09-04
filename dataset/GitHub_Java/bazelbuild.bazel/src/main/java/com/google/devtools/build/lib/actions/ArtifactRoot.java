@@ -15,15 +15,16 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Interner;
-import com.google.common.collect.Interners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
-import com.google.devtools.build.lib.skylarkbuildapi.FileRootApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
@@ -49,10 +50,15 @@ import java.util.Objects;
  * <p>The derived roots must have paths that point inside the exec root, i.e. below the directory
  * that is the root of the merged directory tree.
  */
+@SkylarkModule(
+  name = "root",
+  category = SkylarkModuleCategory.BUILTIN,
+  doc =
+      "A root for files. The roots are the directories containing files, and they are mapped "
+          + "together into a single directory tree to form the execution environment."
+)
 @Immutable
-public final class ArtifactRoot implements Comparable<ArtifactRoot>, Serializable, FileRootApi {
-  private static final Interner<ArtifactRoot> INTERNER = Interners.newWeakInterner();
-
+public final class ArtifactRoot implements Comparable<ArtifactRoot>, Serializable, SkylarkValue {
   /**
    * Do not use except in tests and in {@link
    * com.google.devtools.build.lib.skyframe.SkyframeExecutor}.
@@ -74,7 +80,7 @@ public final class ArtifactRoot implements Comparable<ArtifactRoot>, Serializabl
     Preconditions.checkArgument(root.startsWith(execRoot));
     Preconditions.checkArgument(!root.equals(execRoot));
     PathFragment execPath = root.relativeTo(execRoot);
-    return INTERNER.intern(new ArtifactRoot(Root.fromPath(root), execPath, RootType.Output));
+    return new ArtifactRoot(Root.fromPath(root), execPath, RootType.Output);
   }
 
   public static ArtifactRoot middlemanRoot(Path execRoot, Path outputDir) {
@@ -82,7 +88,7 @@ public final class ArtifactRoot implements Comparable<ArtifactRoot>, Serializabl
     Preconditions.checkArgument(root.startsWith(execRoot));
     Preconditions.checkArgument(!root.equals(execRoot));
     PathFragment execPath = root.relativeTo(execRoot);
-    return INTERNER.intern(new ArtifactRoot(Root.fromPath(root), execPath, RootType.Middleman));
+    return new ArtifactRoot(Root.fromPath(root), execPath, RootType.Middleman);
   }
 
   private enum RootType {
@@ -95,7 +101,7 @@ public final class ArtifactRoot implements Comparable<ArtifactRoot>, Serializabl
   private final PathFragment execPath;
   private final RootType rootType;
 
-  private ArtifactRoot(Root root, PathFragment execPath, RootType rootType) {
+  ArtifactRoot(Root root, PathFragment execPath, RootType rootType) {
     this.root = Preconditions.checkNotNull(root);
     this.execPath = execPath;
     this.rootType = rootType;
@@ -113,7 +119,8 @@ public final class ArtifactRoot implements Comparable<ArtifactRoot>, Serializabl
     return execPath;
   }
 
-  @Override
+  @SkylarkCallable(name = "path", structField = true,
+      doc = "Returns the relative path from the exec root to the actual root.")
   public String getExecPathString() {
     return getExecPath().getPathString();
   }
@@ -200,7 +207,7 @@ public final class ArtifactRoot implements Comparable<ArtifactRoot>, Serializabl
           root = Root.fromPath(outputBase.getRelative(relativeRoot));
           break;
       }
-      return INTERNER.intern(new ArtifactRoot(root, context.deserialize(codedIn), rootType));
+      return new ArtifactRoot(root, context.deserialize(codedIn), rootType);
     }
   }
 }

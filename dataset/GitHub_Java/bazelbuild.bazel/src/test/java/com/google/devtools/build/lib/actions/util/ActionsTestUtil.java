@@ -167,7 +167,7 @@ public final class ActionsTestUtil {
             buildDriver, executor == null ? null : executor.getEventHandler()));
   }
 
-  public static ActionExecutionContext createContext(ExtendedEventHandler eventHandler) {
+  public static ActionExecutionContext createContext(EventHandler eventHandler) {
     DummyExecutor dummyExecutor = new DummyExecutor(eventHandler);
     return new ActionExecutionContext(
         dummyExecutor,

@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,11 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import com.google.devtools.build.lib.actions.PackageRootResolutionException;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
-import com.google.devtools.build.lib.actions.Root;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.vfs.PathFragment;
-
+import com.google.devtools.build.lib.vfs.Root;
 import java.util.Map;
 
 /**
@@ -29,14 +28,16 @@ import java.util.Map;
  */
 public final class SkyframePackageRootResolver implements PackageRootResolver {
   private final SkyframeExecutor executor;
+  private final ExtendedEventHandler eventHandler;
 
-  public SkyframePackageRootResolver(SkyframeExecutor executor) {
+  public SkyframePackageRootResolver(SkyframeExecutor executor, ExtendedEventHandler eventHandler) {
     this.executor = executor;
+    this.eventHandler = eventHandler;
   }
 
   @Override
-  public Map<PathFragment, Root> findPackageRoots(Iterable<PathFragment> execPaths)
-      throws PackageRootResolutionException {
-    return executor.getArtifactRoots(execPaths);
+  public Map<PathFragment, Root> findPackageRootsForFiles(Iterable<PathFragment> execPaths)
+      throws InterruptedException {
+    return executor.getArtifactRootsForFiles(eventHandler, execPaths);
   }
 }

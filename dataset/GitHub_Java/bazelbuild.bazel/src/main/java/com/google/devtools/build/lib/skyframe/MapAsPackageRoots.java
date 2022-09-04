@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.PackageRoots;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.vfs.Root;
@@ -41,19 +40,15 @@ public class MapAsPackageRoots implements PackageRoots {
 
   @Override
   public PackageRootLookup getPackageRootLookup() {
-    Map<Root, Root> deduper = new HashMap<>();
+    Map<Root, Root> rootMap = new HashMap<>();
     Map<PackageIdentifier, Root> realPackageRoots = new HashMap<>();
     for (Map.Entry<PackageIdentifier, Root> entry : packageRootsMap.entrySet()) {
-      Root newRoot = entry.getValue();
-      Root oldRoot = deduper.putIfAbsent(newRoot, newRoot);
-      realPackageRoots.put(entry.getKey(), oldRoot == null ? newRoot : oldRoot);
-    }
-    if (deduper.size() == 1) {
-      // This will return a root more often than in the multi-root case, which only returns a root
-      // for an exact match, but there are no negative consequences to being *more* informed about
-      // a file's potential root.
-      Root onlyRoot = Iterables.getOnlyElement(deduper.keySet());
-      return k -> onlyRoot;
+      Root root = rootMap.get(entry.getValue());
+      if (root == null) {
+        root = entry.getValue();
+        rootMap.put(entry.getValue(), root);
+      }
+      realPackageRoots.put(entry.getKey(), root);
     }
     return realPackageRoots::get;
   }

@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -189,8 +190,7 @@ public class ArtifactFactoryTest {
     Artifact fooArtifact = artifactFactory.getSourceArtifact(fooRelative, clientRoot);
     artifactFactory.clear();
     setupRoots();
-    assertThat(artifactFactory.getSourceArtifact(fooRelative, clientRoot))
-        .isNotSameInstanceAs(fooArtifact);
+    assertThat(artifactFactory.getSourceArtifact(fooRelative, clientRoot)).isNotSameAs(fooArtifact);
   }
 
   @Test
@@ -243,7 +243,7 @@ public class ArtifactFactoryTest {
     private final Map<PathFragment, Root> packageRoots = Maps.newHashMap();
 
     public void setPackageRoots(Map<PackageIdentifier, Root> packageRoots) {
-      for (Map.Entry<PackageIdentifier, Root> packageRoot : packageRoots.entrySet()) {
+      for (Entry<PackageIdentifier, Root> packageRoot : packageRoots.entrySet()) {
         this.packageRoots.put(packageRoot.getKey().getPackageFragment(), packageRoot.getValue());
       }
     }
