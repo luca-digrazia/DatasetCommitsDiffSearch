@@ -8,7 +8,6 @@ import android.content.res.Resources;
 import android.graphics.*;
 import android.net.Uri;
 import android.os.Build;
-import android.support.annotation.Keep;
 import android.text.TextUtils;
 
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView;
@@ -26,7 +25,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * however it has some problems with grayscale, indexed and CMYK images.
  *
  * A {@link ReadWriteLock} is used to delegate responsibility for multi threading behaviour to the
- * {@link BitmapRegionDecoder} instance on SDK &gt;= 21, whilst allowing this class to block until no
+ * {@link BitmapRegionDecoder} instance on SDK >= 21, whilst allowing this class to block until no
  * tiles are being loaded before recycling the decoder. In practice, {@link BitmapRegionDecoder} is
  * synchronized internally so this has no real impact on performance.
  */
@@ -41,13 +40,10 @@ public class SkiaImageRegionDecoder implements ImageRegionDecoder {
 
     private final Bitmap.Config bitmapConfig;
 
-    @Keep
-    @SuppressWarnings("unused")
     public SkiaImageRegionDecoder() {
         this(null);
     }
 
-    @SuppressWarnings("WeakerAccess")
     public SkiaImageRegionDecoder(Bitmap.Config bitmapConfig) {
         Bitmap.Config globalBitmapConfig = SubsamplingScaleImageView.getPreferredBitmapConfig();
         if (bitmapConfig != null) {
@@ -99,7 +95,7 @@ public class SkiaImageRegionDecoder implements ImageRegionDecoder {
                 decoder = BitmapRegionDecoder.newInstance(inputStream, false);
             } finally {
                 if (inputStream != null) {
-                    try { inputStream.close(); } catch (Exception e) { /* Ignore */ }
+                    try { inputStream.close(); } catch (Exception e) { }
                 }
             }
         }

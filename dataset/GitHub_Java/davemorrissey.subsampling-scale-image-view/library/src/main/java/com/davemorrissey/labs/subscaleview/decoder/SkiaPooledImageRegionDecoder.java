@@ -14,7 +14,6 @@ import android.graphics.Point;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
-import android.support.annotation.Keep;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -75,13 +74,10 @@ public class SkiaPooledImageRegionDecoder implements ImageRegionDecoder {
     private Point imageDimensions = new Point(0, 0);
     private final AtomicBoolean lazyInited = new AtomicBoolean(false);
 
-    @Keep
-    @SuppressWarnings("unused")
     public SkiaPooledImageRegionDecoder() {
         this(null);
     }
 
-    @SuppressWarnings("WeakerAccess")
     public SkiaPooledImageRegionDecoder(Bitmap.Config bitmapConfig) {
         Bitmap.Config globalBitmapConfig = SubsamplingScaleImageView.getPreferredBitmapConfig();
         if (bitmapConfig != null) {
@@ -218,7 +214,7 @@ public class SkiaPooledImageRegionDecoder implements ImageRegionDecoder {
                 }
             } finally {
                 if (inputStream != null) {
-                    try { inputStream.close(); } catch (Exception e) { /* Ignore */ }
+                    try { inputStream.close(); } catch (Exception e) { }
                 }
             }
         }
@@ -312,7 +308,6 @@ public class SkiaPooledImageRegionDecoder implements ImageRegionDecoder {
      * @param fileLength the size of the image file in bytes. Creating another decoder will use approximately this much native memory.
      * @return true if another decoder can be created.
      */
-    @SuppressWarnings("WeakerAccess")
     protected boolean allowAdditionalDecoder(int numberOfDecoders, long fileLength) {
         if (numberOfDecoders >= 4) {
             debug("No additional decoders allowed, reached hard limit (4)");
