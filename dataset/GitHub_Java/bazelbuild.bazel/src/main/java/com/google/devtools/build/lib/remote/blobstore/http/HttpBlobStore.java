@@ -187,8 +187,7 @@ public final class HttpBlobStore implements SimpleBlobStore {
     } else {
       sslCtx = null;
     }
-    final int port = uri.getPort();
-    final String hostname = uri.getHost();
+
     this.eventLoop = newEventLoopGroup.apply(2);
     Bootstrap clientBootstrap =
         new Bootstrap()
@@ -209,7 +208,7 @@ public final class HttpBlobStore implements SimpleBlobStore {
           public void channelCreated(Channel ch) {
             ChannelPipeline p = ch.pipeline();
             if (sslCtx != null) {
-              SSLEngine engine = sslCtx.newEngine(ch.alloc(), hostname, port);
+              SSLEngine engine = sslCtx.newEngine(ch.alloc());
               engine.setUseClientMode(true);
               p.addFirst("ssl-handler", new SslHandler(engine));
             }
