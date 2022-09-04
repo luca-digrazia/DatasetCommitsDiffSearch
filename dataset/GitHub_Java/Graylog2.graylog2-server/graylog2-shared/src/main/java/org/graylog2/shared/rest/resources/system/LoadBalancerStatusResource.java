@@ -36,7 +36,6 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.util.Locale;
 
 @Api(value = "System/LoadBalancers", description = "Status propagation for load balancers")
 @Path("/system/lbstatus")
@@ -67,7 +66,7 @@ public class LoadBalancerStatusResource extends RestResource {
                 ? Response.Status.OK : Response.Status.SERVICE_UNAVAILABLE;
 
         return Response.status(status)
-                .entity(lbStatus.toString().toUpperCase(Locale.ENGLISH))
+                .entity(lbStatus.toString().toUpperCase())
                 .build();
     }
 
@@ -82,7 +81,7 @@ public class LoadBalancerStatusResource extends RestResource {
     public void override(@ApiParam(name = "status") @PathParam("status") String status) {
         final LoadBalancerStatus lbStatus;
         try {
-            lbStatus = LoadBalancerStatus.valueOf(status.toUpperCase(Locale.ENGLISH));
+            lbStatus = LoadBalancerStatus.valueOf(status.toUpperCase());
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e);
         }
