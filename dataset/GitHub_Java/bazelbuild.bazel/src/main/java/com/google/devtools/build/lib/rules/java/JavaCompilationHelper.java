@@ -72,18 +72,16 @@ public final class JavaCompilationHelper {
   private boolean translationsFrozen;
   private final JavaSemantics semantics;
   private final ImmutableList<Artifact> additionalJavaBaseInputs;
-  private final StrictDepsMode strictJavaDeps;
 
   private static final String DEFAULT_ATTRIBUTES_SUFFIX = "";
   private static final PathFragment JAVAC = PathFragment.create("_javac");
 
-  private JavaCompilationHelper(RuleContext ruleContext, JavaSemantics semantics,
+  public JavaCompilationHelper(RuleContext ruleContext, JavaSemantics semantics,
       ImmutableList<String> javacOpts, JavaTargetAttributes.Builder attributes,
       JavaToolchainProvider javaToolchainProvider,
       NestedSet<Artifact> hostJavabase,
       Iterable<Artifact> jacocoInstrumentation,
-      ImmutableList<Artifact> additionalJavaBaseInputs,
-      boolean disableStrictDeps) {
+      ImmutableList<Artifact> additionalJavaBaseInputs) {
     this.ruleContext = ruleContext;
     this.javaToolchain = javaToolchainProvider;
     this.hostJavabase = hostJavabase;
@@ -93,9 +91,6 @@ public final class JavaCompilationHelper {
     this.customJavacJvmOpts = javaToolchain.getJvmOptions();
     this.semantics = semantics;
     this.additionalJavaBaseInputs = additionalJavaBaseInputs;
-    this.strictJavaDeps = disableStrictDeps
-        ? StrictDepsMode.OFF
-        : getJavaConfiguration().getFilteredStrictJavaDeps();
   }
 
   public JavaCompilationHelper(RuleContext ruleContext, JavaSemantics semantics,
@@ -104,7 +99,7 @@ public final class JavaCompilationHelper {
       NestedSet<Artifact> hostJavabase,
       Iterable<Artifact> jacocoInstrumentation) {
     this(ruleContext, semantics, javacOpts, attributes, javaToolchainProvider, hostJavabase,
-        jacocoInstrumentation, ImmutableList.<Artifact>of(), false);
+        jacocoInstrumentation, ImmutableList.<Artifact>of());
   }
 
   public JavaCompilationHelper(RuleContext ruleContext, JavaSemantics semantics,
@@ -121,7 +116,7 @@ public final class JavaCompilationHelper {
 
   public JavaCompilationHelper(RuleContext ruleContext, JavaSemantics semantics,
       ImmutableList<String> javacOpts, JavaTargetAttributes.Builder attributes,
-      ImmutableList<Artifact> additionalJavaBaseInputs, boolean disableStrictDeps) {
+      ImmutableList<Artifact> additionalJavaBaseInputs) {
     this(
         ruleContext,
         semantics,
@@ -130,12 +125,10 @@ public final class JavaCompilationHelper {
         getJavaToolchainProvider(ruleContext),
         getHostJavabaseInputs(ruleContext),
         getInstrumentationJars(ruleContext),
-        additionalJavaBaseInputs,
-        disableStrictDeps);
+        additionalJavaBaseInputs);
   }
 
-  @VisibleForTesting
-  JavaCompilationHelper(RuleContext ruleContext, JavaSemantics semantics,
+  public JavaCompilationHelper(RuleContext ruleContext, JavaSemantics semantics,
       JavaTargetAttributes.Builder attributes) {
     this(ruleContext, semantics, getDefaultJavacOptsFromRule(ruleContext), attributes);
   }
@@ -699,7 +692,7 @@ public final class JavaCompilationHelper {
    * @return filtered command line flag value, defaulting to ERROR
    */
   public StrictDepsMode getStrictJavaDeps() {
-    return strictJavaDeps;
+    return getJavaConfiguration().getFilteredStrictJavaDeps();
   }
 
   /**

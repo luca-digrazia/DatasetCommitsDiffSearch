@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.java;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
@@ -63,7 +62,7 @@ public final class SingleJarActionBuilder {
       builder
           .addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext))
           .setJarExecutable(
-              JavaCommon.getHostJavaExecutable(ruleContext),
+              ruleContext.getHostConfiguration().getFragment(Jvm.class).getJavaExecutable(),
               singleJar,
               JavaToolchainProvider.fromRuleContext(ruleContext).getJvmOptions())
           .setExecutionInfo(ExecutionRequirements.WORKER_MODE_ENABLED);
@@ -95,9 +94,7 @@ public final class SingleJarActionBuilder {
     CustomCommandLine.Builder args = CustomCommandLine.builder();
     args.addExecPath("--output", outputJar);
     args.add(SOURCE_JAR_COMMAND_LINE_ARGS);
-    if (!Iterables.isEmpty(resourceJars)) {
-      args.add("--sources").addExecPaths(resourceJars);
-    }
+    args.addExecPaths("--sources", resourceJars);
     if (!resources.isEmpty()) {
       args.add("--resources");
       for (Map.Entry<PathFragment, Artifact> resource : resources.entrySet()) {

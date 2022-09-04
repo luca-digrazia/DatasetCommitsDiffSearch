@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
+import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext;
@@ -111,19 +112,19 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
       ActionExecutionContext actionExecutionContext,
       AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
       throws ExecException, InterruptedException {
+    Executor executor = actionExecutionContext.getExecutor();
     if (!spawn.getExecutionInfo().containsKey(ExecutionRequirements.SUPPORTS_WORKERS)
         || !spawn.getExecutionInfo().get(ExecutionRequirements.SUPPORTS_WORKERS).equals("1")) {
       StandaloneSpawnStrategy standaloneStrategy =
-          Preconditions.checkNotNull(
-              actionExecutionContext.getContext(StandaloneSpawnStrategy.class));
-      actionExecutionContext.getEventHandler().handle(
+          Preconditions.checkNotNull(executor.getContext(StandaloneSpawnStrategy.class));
+      executor.getEventHandler().handle(
           Event.warn(
               String.format(ERROR_MESSAGE_PREFIX + REASON_NO_EXECUTION_INFO, spawn.getMnemonic())));
       standaloneStrategy.exec(spawn, actionExecutionContext);
       return;
     }
 
-    EventBus eventBus = actionExecutionContext.getEventBus();
+    EventBus eventBus = actionExecutionContext.getExecutor().getEventBus();
     ActionExecutionMetadata owner = spawn.getResourceOwner();
     eventBus.post(ActionStatusMessage.schedulingStrategy(owner));
     try (ResourceHandle handle =
@@ -138,8 +139,10 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
       ActionExecutionContext actionExecutionContext,
       AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
       throws ExecException, InterruptedException {
-    if (actionExecutionContext.reportsSubcommands()) {
-      actionExecutionContext.reportSubcommand(spawn);
+    Executor executor = actionExecutionContext.getExecutor();
+
+    if (executor.reportsSubcommands()) {
+      executor.reportSubcommand(spawn);
     }
 
     if (Iterables.isEmpty(spawn.getToolFiles())) {

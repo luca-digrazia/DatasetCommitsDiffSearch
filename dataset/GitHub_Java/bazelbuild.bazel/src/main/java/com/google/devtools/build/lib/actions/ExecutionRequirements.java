@@ -116,26 +116,29 @@ public class ExecutionRequirements {
       ParseableRequirement.create(
           "cpu:<int>",
           Pattern.compile("cpu:(.+)"),
-          s -> {
-            Preconditions.checkNotNull(s);
+          new Function<String, String>() {
+            @Override
+            public String apply(String s) {
+              Preconditions.checkNotNull(s);
 
-            int value;
-            try {
-              value = Integer.parseInt(s);
-            } catch (NumberFormatException e) {
-              return "can't be parsed as an integer";
+              int value;
+              try {
+                value = Integer.parseInt(s);
+              } catch (NumberFormatException e) {
+                return "can't be parsed as an integer";
+              }
+
+              // De-and-reserialize & compare to only allow canonical integer formats.
+              if (!Integer.toString(value).equals(s)) {
+                return "must be in canonical format (e.g. '4' instead of '+04')";
+              }
+
+              if (value < 1) {
+                return "can't be zero or negative";
+              }
+
+              return null;
             }
-
-            // De-and-reserialize & compare to only allow canonical integer formats.
-            if (!Integer.toString(value).equals(s)) {
-              return "must be in canonical format (e.g. '4' instead of '+04')";
-            }
-
-            if (value < 1) {
-              return "can't be zero or negative";
-            }
-
-            return null;
           });
 
   /** If an action supports running in persistent worker mode. */
