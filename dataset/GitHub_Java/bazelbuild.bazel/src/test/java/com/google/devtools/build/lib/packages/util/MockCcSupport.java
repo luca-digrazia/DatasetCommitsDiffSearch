@@ -407,23 +407,6 @@ public abstract class MockCcSupport {
           + "  }"
           + "}";
 
-  public static final String XBINARY_FDO_CONFIGURATION =
-      ""
-          + "feature {"
-          + "  name: 'xbinaryfdo'"
-          + "  provides: 'profile'"
-          + "  flag_set {"
-          + "    action: 'c-compile'"
-          + "    action: 'c++-compile'"
-          + "    action: 'lto-backend'"
-          + "    expand_if_all_available: 'fdo_profile_path'"
-          + "    flag_group {"
-          + "      flag: '-fauto-profile=%{fdo_profile_path}'"
-          + "      flag: '-fprofile-correction'"
-          + "    }"
-          + "  }"
-          + "}";
-
   public static final String FDO_OPTIMIZE_CONFIGURATION =
       ""
           + "feature {"
@@ -494,16 +477,21 @@ public abstract class MockCcSupport {
       ""
           + "artifact_name_pattern {"
           + "   category_name: 'static_library'"
-          + "   prefix: 'lib'"
-          + "   extension: '.lib'"
+          + "   pattern: 'lib%{base_name}.tweaked.a'"
           + "}";
 
   public static final String STATIC_LINK_AS_DOT_A_CONFIGURATION =
       ""
           + "artifact_name_pattern {"
           + "   category_name: 'static_library'"
-          + "   prefix: 'lib'"
-          + "   extension: '.a'"
+          + "   pattern: 'lib%{base_name}.a'"
+          + "}";
+
+  public static final String STATIC_LINK_BAD_TEMPLATE_CONFIGURATION =
+      ""
+          + "artifact_name_pattern {"
+          + "   category_name: 'static_library'"
+          + "   pattern: 'foo%{bad_variable}bar'"
           + "}";
 
   public static final String EMPTY_COMPILE_ACTION_CONFIG =
