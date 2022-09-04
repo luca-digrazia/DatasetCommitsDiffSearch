@@ -21,8 +21,8 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration;
 import com.google.devtools.build.lib.bazel.rules.DefaultBuildOptionsForDiffing;
 import com.google.devtools.build.lib.testutil.Scratch;
@@ -36,7 +36,7 @@ import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.OptionsParsingResult;
+import com.google.devtools.common.options.OptionsProvider;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.BrokenBarrierException;
@@ -92,7 +92,7 @@ public final class CommandInterruptionTest {
     }
 
     @Override
-    public BlazeCommandResult exec(CommandEnvironment env, OptionsParsingResult options) {
+    public BlazeCommandResult exec(CommandEnvironment env, OptionsProvider options) {
       CommandState commandState = new CommandState(
           env, options.getOptions(WaitOptions.class).expectInterruption, isTestShuttingDown);
       commandStateHandoff.getAndSet(null).set(commandState);
@@ -367,7 +367,9 @@ public final class CommandInterruptionTest {
                     // Can't create a Skylark environment without a tools repository!
                     builder.setToolsRepository(TestConstants.TOOLS_REPOSITORY);
                     // Can't create a defaults package without the base options in there!
-                    builder.addConfigurationOptions(CoreOptions.class);
+                    builder.addConfigurationOptions(BuildConfiguration.Options.class);
+                    // Need to have some defaults values to satisfy DefaultsPackage.getContent()
+                    // TODO(dbabkin): remove when DefaultsPackage been deprecated b/79239052
                     builder.addConfigurationOptions(TestConfiguration.TestOptions.class);
                   }
                 })
