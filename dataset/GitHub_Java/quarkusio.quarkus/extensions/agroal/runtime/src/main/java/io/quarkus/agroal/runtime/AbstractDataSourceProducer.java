@@ -1,3 +1,18 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.quarkus.agroal.runtime;
 
 import java.sql.Driver;
@@ -16,8 +31,6 @@ import javax.transaction.TransactionSynchronizationRegistry;
 import org.jboss.logging.Logger;
 
 import io.agroal.api.AgroalDataSource;
-import io.agroal.api.configuration.AgroalConnectionPoolConfiguration.ConnectionValidator;
-import io.agroal.api.configuration.supplier.AgroalConnectionFactoryConfigurationSupplier;
 import io.agroal.api.configuration.supplier.AgroalConnectionPoolConfigurationSupplier;
 import io.agroal.api.configuration.supplier.AgroalDataSourceConfigurationSupplier;
 import io.agroal.api.security.NamePrincipal;
@@ -94,31 +107,20 @@ public abstract class AbstractDataSourceProducer {
         AgroalDataSourceConfigurationSupplier dataSourceConfiguration = new AgroalDataSourceConfigurationSupplier();
 
         AgroalConnectionPoolConfigurationSupplier poolConfiguration = dataSourceConfiguration.connectionPoolConfiguration();
-        AgroalConnectionFactoryConfigurationSupplier agroalConnectionFactoryConfigurationSupplier = poolConfiguration
-                .connectionFactoryConfiguration();
-        agroalConnectionFactoryConfigurationSupplier.jdbcUrl(url);
-        agroalConnectionFactoryConfigurationSupplier.connectionProviderClass(driver);
-
-        if (dataSourceRuntimeConfig.transactionIsolationLevel.isPresent()) {
-            agroalConnectionFactoryConfigurationSupplier
-                    .jdbcTransactionIsolation(
-                            dataSourceRuntimeConfig.transactionIsolationLevel.get());
-        }
+        poolConfiguration.connectionFactoryConfiguration().jdbcUrl(url);
+        poolConfiguration.connectionFactoryConfiguration().connectionProviderClass(driver);
 
         TransactionIntegration txIntegration = new NarayanaTransactionIntegration(transactionManager,
                 transactionSynchronizationRegistry);
         poolConfiguration.transactionIntegration(txIntegration);
 
-        // metrics
-        dataSourceConfiguration.metricsEnabled(dataSourceRuntimeConfig.enableMetrics);
-
         // Authentication
         if (dataSourceRuntimeConfig.username.isPresent()) {
-            agroalConnectionFactoryConfigurationSupplier
+            poolConfiguration.connectionFactoryConfiguration()
                     .principal(new NamePrincipal(dataSourceRuntimeConfig.username.get()));
         }
         if (dataSourceRuntimeConfig.password.isPresent()) {
-            agroalConnectionFactoryConfigurationSupplier
+            poolConfiguration.connectionFactoryConfiguration()
                     .credential(new SimplePassword(dataSourceRuntimeConfig.password.get()));
         }
 
@@ -130,7 +132,6 @@ public abstract class AbstractDataSourceProducer {
         }
 
         // Connection management
-        poolConfiguration.connectionValidator(ConnectionValidator.defaultValidator());
         if (dataSourceRuntimeConfig.acquisitionTimeout.isPresent()) {
             poolConfiguration.acquisitionTimeout(dataSourceRuntimeConfig.acquisitionTimeout.get());
         }
@@ -143,18 +144,15 @@ public abstract class AbstractDataSourceProducer {
         if (dataSourceRuntimeConfig.leakDetectionInterval.isPresent()) {
             poolConfiguration.leakTimeout(dataSourceRuntimeConfig.leakDetectionInterval.get());
         }
-        if (dataSourceRuntimeConfig.maxLifetime.isPresent()) {
-            poolConfiguration.maxLifetime(dataSourceRuntimeConfig.maxLifetime.get());
-        }
 
         // SSL support: we should push the driver specific code to the driver extensions but it will have to do for now
         if (disableSslSupport) {
             switch (driverName) {
                 case "org.postgresql.Driver":
-                    agroalConnectionFactoryConfigurationSupplier.jdbcProperty("sslmode", "disable");
+                    poolConfiguration.connectionFactoryConfiguration().jdbcProperty("sslmode", "disable");
                     break;
                 case "org.mariadb.jdbc.Driver":
-                    agroalConnectionFactoryConfigurationSupplier.jdbcProperty("useSSL", "false");
+                    poolConfiguration.connectionFactoryConfiguration().jdbcProperty("useSSL", "false");
                     break;
                 default:
                     log.warn("Agroal does not support disabling SSL for driver " + driverName);
