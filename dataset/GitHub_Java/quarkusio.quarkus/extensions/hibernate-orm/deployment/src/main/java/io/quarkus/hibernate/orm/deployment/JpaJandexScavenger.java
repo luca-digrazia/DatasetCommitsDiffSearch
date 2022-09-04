@@ -271,8 +271,7 @@ final class JpaJandexScavenger {
     private static boolean isIgnored(DotName classDotName) {
         String className = classDotName.toString();
         if (className.startsWith("java.util.") || className.startsWith("java.lang.")
-                || className.startsWith("org.hibernate.engine.spi.")
-                || className.startsWith("javax.persistence.")) {
+                || className.startsWith("org.hibernate.engine.spi.")) {
             return true;
         }
         return false;

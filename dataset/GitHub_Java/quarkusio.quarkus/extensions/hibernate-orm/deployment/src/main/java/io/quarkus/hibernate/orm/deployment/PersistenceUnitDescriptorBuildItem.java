@@ -1,7 +1,5 @@
 package io.quarkus.hibernate.orm.deployment;
 
-import java.util.Set;
-
 import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 
 import io.quarkus.builder.item.MultiBuildItem;
@@ -22,15 +20,5 @@ public final class PersistenceUnitDescriptorBuildItem extends MultiBuildItem {
 
     public ParsedPersistenceXmlDescriptor getDescriptor() {
         return descriptor;
-    }
-
-    /**
-     * Modifies the passed set by adding all explicitly listed classnames from this PU
-     * into the set.
-     * 
-     * @param classNames the set to modify
-     */
-    public void addListedEntityClassNamesTo(Set<String> classNames) {
-        classNames.addAll(descriptor.getManagedClassNames());
     }
 }

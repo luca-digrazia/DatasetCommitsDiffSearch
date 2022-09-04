@@ -784,9 +784,8 @@ public final class HibernateOrmProcessor {
                     desc.getProperties().setProperty(AvailableSettings.HBM2DDL_HALT_ON_ERROR, "true");
                 }
 
-                //charset
-                desc.getProperties().setProperty(AvailableSettings.HBM2DDL_CHARSET_NAME,
-                        hibernateConfig.database.charset.name());
+                hibernateConfig.database.charset.ifPresent(
+                        charset -> desc.getProperties().setProperty(AvailableSettings.HBM2DDL_CHARSET_NAME, charset));
 
                 hibernateConfig.database.defaultCatalog.ifPresent(
                         catalog -> desc.getProperties().setProperty(AvailableSettings.DEFAULT_CATALOG, catalog));
