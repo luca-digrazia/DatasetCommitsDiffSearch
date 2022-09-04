@@ -32,9 +32,11 @@ public class IsolationTree implements Serializable {
     /**
      * Isolation tree node.
      */
-    class Node implements Serializable {
-        /** The adjusted depth of node in the tree. */
-        final double depth;
+    class Node {
+        /** The depth of node in the tree. */
+        final int depth;
+        /** The number of samples in the node. */
+        final int size;
         /** The normal vector of random hyperplane, uniformly over the unit N-Sphere. */
         final double[] slope;
         /**
@@ -50,24 +52,17 @@ public class IsolationTree implements Serializable {
         final Node right;
 
         /**
-         * Leaf node constructor.
-         * @param depth the adjusted depth of node in the tree.
-         */
-        Node(double depth) {
-            this(depth, null, null, 0.0, null, null);
-        }
-
-        /**
          * Constructor.
-         * @param depth the adjusted depth of node in the tree.
+         * @param depth the depth of node in the tree.
          * @param slope the normal vector of random hyperplane.
          * @param intercept the intercept point.
          * @param bias the dot product of slope and intercept.
          * @param left the left child branch.
          * @param right the right child branch.
          */
-        Node(double depth, double[] slope, double[] intercept, double bias, Node left, Node right) {
+        Node(int depth, int size, double[] slope, double[] intercept, double bias, Node left, Node right) {
             this.depth = depth;
+            this.size = size;
             this.slope = slope;
             this.intercept = intercept;
             this.bias = bias;
@@ -75,14 +70,13 @@ public class IsolationTree implements Serializable {
             this.right = right;
         }
 
-        /**
-         * Returns the path length from the root to the leaf node.
-         * @param x the sample.
-         * @return the path length.
-         */
         public double path(double[] x) {
             if (left == null && right == null) {
-                return depth;
+                if (size <= 1) {
+                    return depth;
+                } else {
+                    return depth + IsolationForest.factor(size);
+                }
             } else {
                 double dot = MathEx.dot(x, slope);
                 if (dot < bias) {
@@ -129,11 +123,7 @@ public class IsolationTree implements Serializable {
      */
     private Node buildNode(List<double[]> data, int maxDepth, int extensionLevel, int depth) {
         if (depth >= maxDepth || data.size() <= 1) {
-            double adjustedDepth = depth;
-            if (data.size() > 1) {
-                adjustedDepth += IsolationForest.factor(data.size());
-            }
-            return new Node(adjustedDepth);
+            return new Node(depth, data.size(), null, null, 0.0, null, null);
         } else {
             double[] min = data.get(0).clone();
             double[] max = data.get(0).clone();
@@ -159,7 +149,7 @@ public class IsolationTree implements Serializable {
             }
 
             int[] index = MathEx.permutate(p);
-            for (int i = 0; i < p - extensionLevel - 1; i++) {
+            for (int i = 0; i < extensionLevel; i++) {
                 slope[index[i]] = 0.0;
             }
 
@@ -178,7 +168,7 @@ public class IsolationTree implements Serializable {
             Node left = buildNode(leftData, maxDepth, extensionLevel, depth+1);
             Node right = buildNode(rightData, maxDepth, extensionLevel, depth+1);
 
-            return new Node(depth, slope, intercept, bias, left, right);
+            return new Node(depth, data.size(), slope, intercept, bias, left, right);
         }
     }
 }
