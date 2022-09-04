@@ -4,7 +4,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import io.quarkus.runtime.annotations.ConfigDocMapKey;
-import io.quarkus.runtime.annotations.ConfigDocSection;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
@@ -20,17 +19,10 @@ public class QuartzBuildTimeConfig {
     public boolean clustered;
 
     /**
-     * The frequency (in milliseconds) at which the scheduler instance checks-in with other instances of the cluster.
-     */
-    @ConfigItem(defaultValue = "15000")
-    public long clusterCheckinInterval;
-
-    /**
      * The type of store to use.
      * <p>
-     * When using {@link StoreType#JDBC_CMT} or {@link StoreType#JDBC_TX} configuration values make sure that you have the
-     * datasource configured. See <a href="https://quarkus.io/guides/datasource"> Configuring your datasource</a> for more
-     * information.
+     * When using the `db` store type configuration value make sure that you have the datasource configured.
+     * See <a href="https://quarkus.io/guides/datasource"> Configuring your datasource</a> for more information.
      * <p>
      * To create Quartz tables, you can perform a schema migration via the <a href="https://quarkus.io/guides/flyway"> Flyway
      * extension</a> using a SQL script matching your database picked from <a href=
@@ -58,24 +50,21 @@ public class QuartzBuildTimeConfig {
     public String tablePrefix;
 
     /**
-     * Trigger listeners.
+     * The named trigged listeners list
      */
-    @ConfigItem
-    @ConfigDocMapKey("listener-name")
-    @ConfigDocSection
-    public Map<String, QuartzExtensionPointConfig> triggerListeners;
+    @ConfigItem(name = "triggerListener")
+    @ConfigDocMapKey("namedTriggerListener")
+    public Map<String, QuartzAdditionalPropsConfig> triggerListeners;
     /**
-     * Job listeners.
+     * The named job listeners list
      */
-    @ConfigItem
-    @ConfigDocMapKey("listener-name")
-    @ConfigDocSection
-    public Map<String, QuartzExtensionPointConfig> jobListeners;
+    @ConfigItem(name = "jobListener")
+    @ConfigDocMapKey("namedJobListener")
+    public Map<String, QuartzAdditionalPropsConfig> jobListeners;
     /**
-     * Plugins.
+     * The named plugins list
      */
-    @ConfigItem
-    @ConfigDocMapKey("plugin-name")
-    @ConfigDocSection
-    public Map<String, QuartzExtensionPointConfig> plugins;
+    @ConfigItem(name = "plugin")
+    @ConfigDocMapKey("namedPlugin")
+    public Map<String, QuartzAdditionalPropsConfig> plugins;
 }
