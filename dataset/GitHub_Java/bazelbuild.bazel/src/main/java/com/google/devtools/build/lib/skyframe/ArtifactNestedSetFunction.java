@@ -163,7 +163,8 @@ final class ArtifactNestedSetFunction implements SkyFunction {
                   + ", SkyKey: "
                   + firstSkyKeyAndException.getFirst(),
               transitiveExceptions,
-              catastrophic));
+              catastrophic),
+          skyKey);
     }
 
     // This should only happen when all error handling is done.
@@ -241,8 +242,8 @@ final class ArtifactNestedSetFunction implements SkyFunction {
 
     private final boolean catastrophic;
 
-    ArtifactNestedSetFunctionException(ArtifactNestedSetEvalException e) {
-      super(e, Transience.PERSISTENT);
+    ArtifactNestedSetFunctionException(ArtifactNestedSetEvalException e, SkyKey child) {
+      super(e, child);
       this.catastrophic = e.isCatastrophic();
     }
 
