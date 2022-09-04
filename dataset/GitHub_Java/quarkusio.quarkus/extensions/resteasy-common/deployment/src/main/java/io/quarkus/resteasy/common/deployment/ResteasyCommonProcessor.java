@@ -55,7 +55,6 @@ import io.quarkus.deployment.builditem.ProxyUnwrapperBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.resteasy.common.runtime.ResteasyInjectorFactoryRecorder;
-import io.quarkus.resteasy.common.runtime.providers.ServerFormUrlEncodedProvider;
 import io.quarkus.resteasy.common.spi.ResteasyConfigBuildItem;
 import io.quarkus.resteasy.common.spi.ResteasyDotNames;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
@@ -170,10 +169,8 @@ public class ResteasyCommonProcessor {
             checkProperConstructorInProvider(i);
         }
 
-        Set<String> availableProviders = new HashSet<>(ServiceUtil.classNamesNamedIn(getClass().getClassLoader(),
-                "META-INF/services/" + Providers.class.getName()));
-        // this one is added manually in RESTEasy's ResteasyDeploymentImpl
-        availableProviders.add(ServerFormUrlEncodedProvider.class.getName());
+        Set<String> availableProviders = ServiceUtil.classNamesNamedIn(getClass().getClassLoader(),
+                "META-INF/services/" + Providers.class.getName());
 
         MediaTypeMap<String> categorizedReaders = new MediaTypeMap<>();
         MediaTypeMap<String> categorizedWriters = new MediaTypeMap<>();

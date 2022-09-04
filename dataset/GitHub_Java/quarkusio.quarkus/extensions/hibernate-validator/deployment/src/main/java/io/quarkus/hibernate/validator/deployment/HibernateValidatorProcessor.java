@@ -24,10 +24,8 @@ import javax.validation.MessageInterpolator;
 import javax.validation.ParameterNameProvider;
 import javax.validation.TraversableResolver;
 import javax.validation.Valid;
-import javax.validation.ValidationException;
 import javax.validation.executable.ValidateOnExecution;
 import javax.validation.valueextraction.ValueExtractor;
-import javax.ws.rs.Priorities;
 
 import org.hibernate.validator.internal.metadata.core.ConstraintHelper;
 import org.hibernate.validator.messageinterpolation.AbstractMessageInterpolator;
@@ -74,12 +72,10 @@ import io.quarkus.hibernate.validator.runtime.HibernateValidatorBuildTimeConfig;
 import io.quarkus.hibernate.validator.runtime.HibernateValidatorRecorder;
 import io.quarkus.hibernate.validator.runtime.ValidatorProvider;
 import io.quarkus.hibernate.validator.runtime.interceptor.MethodValidationInterceptor;
-import io.quarkus.hibernate.validator.runtime.jaxrs.QuarkusRestViolationExceptionMapper;
 import io.quarkus.hibernate.validator.runtime.jaxrs.ResteasyConfigSupport;
 import io.quarkus.hibernate.validator.spi.BeanValidationAnnotationsBuildItem;
 import io.quarkus.resteasy.common.spi.ResteasyConfigBuildItem;
 import io.quarkus.resteasy.common.spi.ResteasyDotNames;
-import io.quarkus.resteasy.reactive.spi.ExceptionMapperBuildItem;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodAnnotationsBuildItem;
 import io.quarkus.runtime.LocalesBuildTimeConfig;
 
@@ -146,16 +142,13 @@ class HibernateValidatorProcessor {
                     "io.quarkus.hibernate.validator.runtime.jaxrs.JaxrsEndPointValidationInterceptor"));
             additionalBeans.produce(new AdditionalBeanBuildItem(
                     "io.quarkus.hibernate.validator.runtime.jaxrs.ResteasyContextLocaleResolver"));
+
             syntheticBeanBuildItems.produce(SyntheticBeanBuildItem.configure(ResteasyConfigSupport.class)
                     .scope(Singleton.class)
                     .unremovable()
                     .supplier(hibernateValidatorRecorder.resteasyConfigSupportSupplier(
                             resteasyConfigBuildItem.isPresent() ? resteasyConfigBuildItem.get().isJsonDefault() : false))
                     .done());
-        } else if (capabilities.isPresent(Capability.QUARKUS_REST)) {
-            // The CDI interceptor which will validate the methods annotated with @JaxrsEndPointValidated
-            additionalBeans.produce(new AdditionalBeanBuildItem(
-                    "io.quarkus.hibernate.validator.runtime.jaxrs.QuarkusRestEndPointValidationInterceptor"));
         }
 
         // A constraint validator with an injection point but no scope is added as @Singleton
@@ -232,7 +225,7 @@ class HibernateValidatorProcessor {
                 allConsideredAnnotations));
 
         Set<DotName> classNamesToBeValidated = new HashSet<>();
-        Map<DotName, Set<SimpleMethodSignatureKey>> methodsWithInheritedValidation = new HashMap<>();
+        Map<DotName, Set<SimpleMethodSignatureKey>> inheritedAnnotationsToBeValidated = new HashMap<>();
         Set<String> detectedBuiltinConstraints = new HashSet<>();
 
         for (DotName consideredAnnotation : allConsideredAnnotations) {
@@ -261,7 +254,7 @@ class HibernateValidatorProcessor {
                     reflectiveMethods.produce(new ReflectiveMethodBuildItem(annotation.target().asMethod()));
                     contributeClassMarkedForCascadingValidation(classNamesToBeValidated, indexView, consideredAnnotation,
                             annotation.target().asMethod().returnType());
-                    contributeMethodsWithInheritedValidation(methodsWithInheritedValidation, indexView,
+                    contributeMethodsWithInheritedValidation(inheritedAnnotationsToBeValidated, indexView,
                             annotation.target().asMethod());
                 } else if (annotation.target().kind() == AnnotationTarget.Kind.METHOD_PARAMETER) {
                     contributeClass(classNamesToBeValidated, indexView,
@@ -271,7 +264,7 @@ class HibernateValidatorProcessor {
                             // FIXME this won't work in the case of synthetic parameters
                             annotation.target().asMethodParameter().method().parameters()
                                     .get(annotation.target().asMethodParameter().position()));
-                    contributeMethodsWithInheritedValidation(methodsWithInheritedValidation, indexView,
+                    contributeMethodsWithInheritedValidation(inheritedAnnotationsToBeValidated, indexView,
                             annotation.target().asMethodParameter().method());
                 } else if (annotation.target().kind() == AnnotationTarget.Kind.CLASS) {
                     contributeClass(classNamesToBeValidated, indexView, annotation.target().asClass().name());
@@ -292,7 +285,7 @@ class HibernateValidatorProcessor {
                 .produce(new AnnotationsTransformerBuildItem(
                         new MethodValidatedAnnotationsTransformer(allConsideredAnnotations,
                                 jaxRsMethods,
-                                methodsWithInheritedValidation)));
+                                inheritedAnnotationsToBeValidated)));
 
         Set<Class<?>> classesToBeValidated = new HashSet<>();
         for (DotName className : classNamesToBeValidated) {
@@ -316,12 +309,6 @@ class HibernateValidatorProcessor {
                 .addResourceBundle(AbstractMessageInterpolator.USER_VALIDATION_MESSAGES)
                 .addResourceBundle(AbstractMessageInterpolator.CONTRIBUTOR_VALIDATION_MESSAGES)
                 .build();
-    }
-
-    @BuildStep
-    ExceptionMapperBuildItem mapper() {
-        return new ExceptionMapperBuildItem(QuarkusRestViolationExceptionMapper.class.getName(),
-                ValidationException.class.getName(), Priorities.USER + 1, true);
     }
 
     private static void contributeBuiltinConstraints(Set<String> builtinConstraints,
@@ -376,23 +363,13 @@ class HibernateValidatorProcessor {
     }
 
     private static void contributeMethodsWithInheritedValidation(
-            Map<DotName, Set<SimpleMethodSignatureKey>> methodsWithInheritedValidation,
+            Map<DotName, Set<SimpleMethodSignatureKey>> inheritedAnnotationsToBeValidated,
             IndexView indexView, MethodInfo method) {
         ClassInfo clazz = method.declaringClass();
-
-        methodsWithInheritedValidation.computeIfAbsent(clazz.name(), k -> new HashSet<>())
-                .add(new SimpleMethodSignatureKey(method));
-
         if (Modifier.isInterface(clazz.flags())) {
-            for (ClassInfo implementor : indexView.getAllKnownImplementors(clazz.name())) {
-                methodsWithInheritedValidation.computeIfAbsent(implementor.name(), k -> new HashSet<>())
-                        .add(new SimpleMethodSignatureKey(method));
-            }
-        } else {
-            for (ClassInfo subclass : indexView.getAllKnownSubclasses(clazz.name())) {
-                methodsWithInheritedValidation.computeIfAbsent(subclass.name(), k -> new HashSet<>())
-                        .add(new SimpleMethodSignatureKey(method));
-            }
+            // Remember annotated interface methods that must be validated
+            inheritedAnnotationsToBeValidated.computeIfAbsent(clazz.name(), k -> new HashSet<>())
+                    .add(new SimpleMethodSignatureKey(method));
         }
     }
 
@@ -420,18 +397,6 @@ class HibernateValidatorProcessor {
                     MethodInfo method = annotation.target().asMethod();
                     jaxRsMethods.computeIfAbsent(method.declaringClass().name(), k -> new HashSet<>())
                             .add(new SimpleMethodSignatureKey(method));
-
-                    if (Modifier.isInterface(method.declaringClass().flags())) {
-                        for (ClassInfo implementor : indexView.getAllKnownImplementors(method.declaringClass().name())) {
-                            jaxRsMethods.computeIfAbsent(implementor.name(), k -> new HashSet<>())
-                                    .add(new SimpleMethodSignatureKey(method));
-                        }
-                    } else {
-                        for (ClassInfo subclass : indexView.getAllKnownSubclasses(method.declaringClass().name())) {
-                            jaxRsMethods.computeIfAbsent(subclass.name(), k -> new HashSet<>())
-                                    .add(new SimpleMethodSignatureKey(method));
-                        }
-                    }
                 }
             }
         }
