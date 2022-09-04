@@ -145,17 +145,6 @@ public class NinjaLexerStepTest {
   }
 
   @Test
-  public void testReadPath() {
-    doTest(
-        "this/is/the/relative/path.txt",
-        NinjaLexerStep::readPath,
-        "this/is/the/relative/path.txt",
-        false);
-    doTest(
-        "relative/text#.properties", NinjaLexerStep::readPath, "relative/text#.properties", false);
-  }
-
-  @Test
   public void testTryReadDoublePipe() {
     doTest("||", NinjaLexerStep::tryReadDoublePipe);
   }
