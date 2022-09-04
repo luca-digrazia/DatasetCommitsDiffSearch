@@ -3,6 +3,7 @@ package io.dropwizard.views;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import io.dropwizard.Configuration;
 import io.dropwizard.jersey.setup.JerseyEnvironment;
 import io.dropwizard.setup.Environment;
@@ -16,7 +17,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -59,7 +59,12 @@ public class ViewBundleTest {
 
     @Test
     public void addsTheViewMessageBodyWriterToTheEnvironment() throws Exception {
-        new ViewBundle<Configuration>().run(null, environment);
+        new ViewBundle<Configuration>() {
+            @Override
+            public Map<String, Map<String, String>> getViewConfiguration(Configuration configuration) {
+                return Collections.emptyMap();
+            }
+        }.run(null, environment);
 
         verify(jerseyEnvironment).register(any(ViewMessageBodyWriter.class));
     }
@@ -69,14 +74,14 @@ public class ViewBundleTest {
     public void addsTheViewMessageBodyWriterWithSingleViewRendererToTheEnvironment() throws Exception {
         final String viewSuffix = ".ftl";
         final String testKey = "testKey";
-        final Map<String, Map<String, String>> viewRendererConfig = new HashMap<>();
-        final Map<String, String> freeMarkerConfig = new HashMap<>();
+        final Map<String, Map<String, String>> viewRendererConfig = Maps.newHashMap();
+        final Map<String, String> freeMarkerConfig = Maps.newHashMap();
         freeMarkerConfig.put(testKey, "yes");
         viewRendererConfig.put(viewSuffix, freeMarkerConfig);
-
+        
         MyConfiguration myConfiguration = new MyConfiguration();
         myConfiguration.setViewRendererConfiguration(viewRendererConfig);
-
+        
         ViewRenderer renderer = new ViewRenderer() {
             @Override
             public boolean isRenderable(View view) {
