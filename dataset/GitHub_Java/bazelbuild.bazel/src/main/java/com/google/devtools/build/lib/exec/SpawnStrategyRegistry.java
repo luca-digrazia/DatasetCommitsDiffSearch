@@ -18,7 +18,6 @@ import static java.util.stream.Collectors.joining;
 import com.google.auto.value.AutoValue;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMultimap;
@@ -218,11 +217,6 @@ public final class SpawnStrategyRegistry
         .collect(joining(", "));
   }
 
-  /** Returns a new {@link Builder} suitable for creating instances of SpawnStrategyRegistry. */
-  public static Builder builder() {
-    return new BuilderImpl();
-  }
-
   /**
    * Builder collecting the strategies and restrictions thereon for a {@link SpawnStrategyRegistry}.
    *
@@ -237,126 +231,7 @@ public final class SpawnStrategyRegistry
    * all registered strategies, in registration order (i.e. the earliest strategy registered will be
    * first in the list of strategies returned by {@link SpawnStrategyRegistry#getStrategies}).
    */
-  // TODO(katre): This exists only to allow incremental migration from SpawnActionContextMaps.
-  // Delete ASAP.
-  public interface Builder {
-
-    /**
-     * Adds a filter limiting any spawn whose {@linkplain
-     * ActionExecutionMetadata#getProgressMessage() owner's progress message} matches the regular
-     * expression to only use strategies with the given command-line identifiers, in order.
-     *
-     * <p>If multiple filters match the same spawn (including an identical filter) the order of
-     * precedence of calls to this method is determined by {@link
-     * #useLegacyDescriptionFilterPrecedence()}.
-     */
-    SpawnStrategyRegistry.Builder addDescriptionFilter(
-        RegexFilter filter, List<String> identifiers);
-
-    /**
-     * Adds a filter limiting any spawn whose {@linkplain Spawn#getMnemonic() mnemonic}
-     * (case-sensitively) matches the given mnemonic to only use strategies with the given
-     * command-line identifiers, in order.
-     *
-     * <p>If the same mnemonic is registered multiple times the last such call will take precedence.
-     *
-     * <p>Note that if a spawn matches a {@linkplain #addDescriptionFilter registered description
-     * filter} that filter will take precedence over any mnemonic-based filters.
-     */
-    // last one wins
-    SpawnStrategyRegistry.Builder addMnemonicFilter(String mnemonic, List<String> identifiers);
-
-    default SpawnStrategyRegistry.Builder registerStrategy(
-        SpawnStrategy strategy, String... commandlineIdentifiers) {
-      return registerStrategy(strategy, ImmutableList.copyOf(commandlineIdentifiers));
-    }
-
-    /**
-     * Registers a strategy implementation with this collector, distinguishing it from other
-     * strategies with the given command-line identifiers (of which at least one is required).
-     *
-     * <p>If multiple strategies are registered with the same command-line identifier the last one
-     * so registered will take precedence.
-     */
-    SpawnStrategyRegistry.Builder registerStrategy(
-        SpawnStrategy strategy, List<String> commandlineIdentifiers);
-
-    /**
-     * Instructs this collector to use the legacy description filter precedence, i.e. to prefer the
-     * first regular expression filter that matches a spawn over any later registered filters.
-     *
-     * <p>The default behavior of this collector is to prefer the last registered description filter
-     * over any previously registered matching filters.
-     */
-    SpawnStrategyRegistry.Builder useLegacyDescriptionFilterPrecedence();
-
-    /**
-     * Explicitly sets the identifiers of default strategies to use if a spawn matches no filters.
-     *
-     * <p>Note that if this method is not called on the builder, all registered strategies are
-     * considered default strategies, in registration order. See also the {@linkplain Builder class
-     * documentation}.
-     */
-    SpawnStrategyRegistry.Builder setDefaultStrategies(List<String> defaultStrategies);
-
-    /**
-     * Sets the strategy names to use in the remote branch of dynamic execution for a given action
-     * mnemonic.
-     *
-     * <p>During execution, each strategy is {@linkplain SpawnStrategy#canExec(Spawn,
-     * ActionContextRegistry) asked} whether it can execute a given Spawn. The first strategy in the
-     * list that says so will get the job.
-     */
-    SpawnStrategyRegistry.Builder addDynamicRemoteStrategiesByMnemonic(
-        String mnemonic, List<String> strategies);
-
-    /**
-     * Sets the strategy names to use in the local branch of dynamic execution for a given action
-     * mnemonic.
-     *
-     * <p>During execution, each strategy is {@linkplain SpawnStrategy#canExec(Spawn,
-     * ActionContextRegistry) asked} whether it can execute a given Spawn. The first strategy in the
-     * list that says so will get the job.
-     */
-    SpawnStrategyRegistry.Builder addDynamicLocalStrategiesByMnemonic(
-        String mnemonic, List<String> strategies);
-
-    /**
-     * Sets the commandline identifier of the strategy to be used when falling back from remote to
-     * local execution.
-     *
-     * <p>Note that this is an optional setting, if not provided {@link
-     * SpawnStrategyRegistry#getRemoteLocalFallbackStrategy()} will return {@code null}. If the
-     * value <b>is</b> provided it must match the commandline identifier of a registered strategy
-     * (at {@linkplain #build build} time).
-     */
-    SpawnStrategyRegistry.Builder setRemoteLocalFallbackStrategyIdentifier(
-        String commandlineIdentifier);
-
-    /**
-     * Finalizes the construction of the registry.
-     *
-     * @throws ExecutorInitException if a strategy command-line identifier was used in a filter or
-     *     the default strategies but no strategy for that identifier was registered
-     */
-    SpawnStrategyRegistry build() throws ExecutorInitException;
-  }
-
-  /**
-   * Builder collecting the strategies and restrictions thereon for a {@link SpawnStrategyRegistry}.
-   *
-   * <p>To {@linkplain SpawnStrategyRegistry#getStrategies match a strategy to a spawn} it needs to
-   * be both {@linkplain #registerStrategy registered} and its registered command-line identifier
-   * has to match {@linkplain #addDescriptionFilter a filter on the spawn's progress message},
-   * {@linkplain #addMnemonicFilter a filter on the spawn's mnemonic} or be part of the default
-   * strategies (see below).
-   *
-   * <p><strong>Default strategies</strong> are either {@linkplain #setDefaultStrategies set
-   * explicitly} or, if {@link #setDefaultStrategies} is not called on this builder, comprised of
-   * all registered strategies, in registration order (i.e. the earliest strategy registered will be
-   * first in the list of strategies returned by {@link SpawnStrategyRegistry#getStrategies}).
-   */
-  private static final class BuilderImpl implements Builder {
+  public static final class Builder {
 
     private ImmutableList<String> explicitDefaultStrategies = ImmutableList.of();
     // TODO(schmitt): Using a list and autovalue so as to be able to reverse order while legacy sort
@@ -383,7 +258,6 @@ public final class SpawnStrategyRegistry
      * precedence of calls to this method is determined by {@link
      * #useLegacyDescriptionFilterPrecedence()}.
      */
-    @Override
     public Builder addDescriptionFilter(RegexFilter filter, List<String> identifiers) {
       filterAndIdentifiers.add(
           new AutoValue_SpawnStrategyRegistry_FilterAndIdentifiers(
@@ -402,7 +276,6 @@ public final class SpawnStrategyRegistry
      * filter} that filter will take precedence over any mnemonic-based filters.
      */
     // last one wins
-    @Override
     public Builder addMnemonicFilter(String mnemonic, List<String> identifiers) {
       mnemonicToIdentifiers.put(mnemonic, identifiers);
       return this;
@@ -415,10 +288,11 @@ public final class SpawnStrategyRegistry
      * <p>If multiple strategies are registered with the same command-line identifier the last one
      * so registered will take precedence.
      */
-    @Override
-    public Builder registerStrategy(SpawnStrategy strategy, List<String> commandlineIdentifiers) {
-      Preconditions.checkArgument(
-          commandlineIdentifiers.size() >= 1, "At least one commandLineIdentifier must be given");
+    public Builder registerStrategy(
+        SpawnStrategy strategy,
+        String firstCommandlineIdentifier,
+        String... commandlineIdentifiers) {
+      identifierToStrategy.put(firstCommandlineIdentifier, strategy);
       for (String identifier : commandlineIdentifiers) {
         identifierToStrategy.put(identifier, strategy);
       }
@@ -433,7 +307,6 @@ public final class SpawnStrategyRegistry
      * <p>The default behavior of this collector is to prefer the last registered description filter
      * over any previously registered matching filters.
      */
-    @Override
     public Builder useLegacyDescriptionFilterPrecedence() {
       legacyFilterIterationOrder = true;
       return this;
@@ -446,7 +319,6 @@ public final class SpawnStrategyRegistry
      * considered default strategies, in registration order. See also the {@linkplain Builder class
      * documentation}.
      */
-    @Override
     public Builder setDefaultStrategies(List<String> defaultStrategies) {
       this.explicitDefaultStrategies = ImmutableList.copyOf(defaultStrategies);
       useRegistrationOrderForDefault = false;
@@ -461,7 +333,6 @@ public final class SpawnStrategyRegistry
      * ActionContextRegistry) asked} whether it can execute a given Spawn. The first strategy in the
      * list that says so will get the job.
      */
-    @Override
     public Builder addDynamicRemoteStrategiesByMnemonic(String mnemonic, List<String> strategies) {
       mnemonicToRemoteIdentifiers.put(mnemonic, strategies);
       return this;
@@ -475,7 +346,6 @@ public final class SpawnStrategyRegistry
      * ActionContextRegistry) asked} whether it can execute a given Spawn. The first strategy in the
      * list that says so will get the job.
      */
-    @Override
     public Builder addDynamicLocalStrategiesByMnemonic(String mnemonic, List<String> strategies) {
       mnemonicToLocalIdentifiers.put(mnemonic, strategies);
       return this;
@@ -490,7 +360,6 @@ public final class SpawnStrategyRegistry
      * value <b>is</b> provided it must match the commandline identifier of a registered strategy
      * (at {@linkplain #build build} time).
      */
-    @Override
     public Builder setRemoteLocalFallbackStrategyIdentifier(String commandlineIdentifier) {
       this.remoteLocalFallbackStrategyIdentifier = commandlineIdentifier;
       return this;
@@ -502,7 +371,6 @@ public final class SpawnStrategyRegistry
      * @throws ExecutorInitException if a strategy command-line identifier was used in a filter or
      *     the default strategies but no strategy for that identifier was registered
      */
-    @Override
     public SpawnStrategyRegistry build() throws ExecutorInitException {
       List<FilterAndIdentifiers> orderedFilterAndIdentifiers = filterAndIdentifiers;
 

@@ -156,7 +156,7 @@ public class DynamicSpawnStrategyTest {
     public ImmutableList<SpawnResult> exec(
         Spawn spawn,
         ActionExecutionContext actionExecutionContext,
-        @Nullable SandboxedSpawnStrategy.StopConcurrentSpawns stopConcurrentSpawns)
+        @Nullable StopConcurrentSpawns stopConcurrentSpawns)
         throws ExecException, InterruptedException {
       executedSpawn = spawn;
 
