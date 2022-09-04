@@ -866,7 +866,7 @@ public final class ExtensionLoader {
 
             final Consume[] consumes = method.getAnnotationsByType(Consume.class);
             if (consumes.length > 0) {
-                methodStepConfig = methodStepConfig.andThen(bsb -> {
+                stepConfig = stepConfig.andThen(bsb -> {
                     for (Consume consume : consumes) {
                         bsb.afterProduce(consume.value());
                     }
@@ -874,7 +874,7 @@ public final class ExtensionLoader {
             }
             final Produce[] produces = method.getAnnotationsByType(Produce.class);
             if (produces.length > 0) {
-                methodStepConfig = methodStepConfig.andThen(bsb -> {
+                stepConfig = stepConfig.andThen(bsb -> {
                     for (Produce produce : produces) {
                         bsb.beforeConsume(produce.value());
                     }
@@ -882,7 +882,7 @@ public final class ExtensionLoader {
             }
             final ProduceWeak[] produceWeaks = method.getAnnotationsByType(ProduceWeak.class);
             if (produceWeaks.length > 0) {
-                methodStepConfig = methodStepConfig.andThen(bsb -> {
+                stepConfig = stepConfig.andThen(bsb -> {
                     for (ProduceWeak produceWeak : produceWeaks) {
                         bsb.beforeConsume(produceWeak.value(), ProduceFlag.WEAK);
                     }
