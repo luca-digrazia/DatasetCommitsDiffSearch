@@ -415,7 +415,7 @@ public class JarResultBuildStep {
                 .resolve(outputTargetBuildItem.getBaseName() + packageConfig.runnerSuffix + ".jar");
         Path libDir = outputTargetBuildItem.getOutputDirectory().resolve("lib");
         Files.deleteIfExists(runnerJar);
-        IoUtils.createOrEmptyDir(libDir);
+        IoUtils.recursiveDeleteAndThenCreate(libDir);
 
         try (FileSystem runnerZipFs = ZipUtils.newZip(runnerJar)) {
 
@@ -464,7 +464,7 @@ public class JarResultBuildStep {
             userProviders = buildDir.resolve(packageConfig.userProvidersDirectory.get());
         }
         if (!rebuild) {
-            IoUtils.createOrEmptyDir(buildDir);
+            IoUtils.recursiveDeleteAndThenCreate(buildDir);
             Files.createDirectories(mainLib);
             Files.createDirectories(baseLib);
             Files.createDirectories(appDir);
@@ -476,7 +476,7 @@ public class JarResultBuildStep {
                 Files.createFile(userProviders.resolve(".keep"));
             }
         } else {
-            IoUtils.createOrEmptyDir(quarkus);
+            IoUtils.recursiveDeleteAndThenCreate(quarkus);
         }
         Map<AppArtifactKey, List<Path>> copiedArtifacts = new HashMap<>();
 
@@ -710,7 +710,7 @@ public class JarResultBuildStep {
             List<UberJarRequiredBuildItem> uberJarRequired) throws Exception {
         Path targetDirectory = outputTargetBuildItem.getOutputDirectory()
                 .resolve(outputTargetBuildItem.getBaseName() + "-native-image-source-jar");
-        IoUtils.createOrEmptyDir(targetDirectory);
+        IoUtils.recursiveDeleteAndThenCreate(targetDirectory);
 
         List<GeneratedClassBuildItem> allClasses = new ArrayList<>(generatedClasses);
         allClasses.addAll(nativeImageResources.stream()
