@@ -14,11 +14,11 @@ import io.quarkus.cache.CacheManager;
 public class CacheManagerImpl implements CacheManager {
 
     // There's no need for concurrency here since the caches are created at build time and never modified after that.
-    private Map<String, Cache> caches = Collections.emptyMap();
-    private Set<String> cacheNames = Collections.emptySet();
+    private Map<String, Cache> caches;
+    private Set<String> cacheNames;
 
     public void setCaches(Map<String, Cache> caches) {
-        if (this.caches != Collections.EMPTY_MAP) {
+        if (this.caches != null) {
             throw new IllegalStateException("The caches map must only be set once at build time");
         }
         this.caches = Collections.unmodifiableMap(caches);
