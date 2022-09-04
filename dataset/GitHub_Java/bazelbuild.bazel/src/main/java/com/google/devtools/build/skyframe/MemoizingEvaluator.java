@@ -18,7 +18,6 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetVisitor;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadHostile;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
 import java.io.PrintStream;
 import java.util.Map;
@@ -100,8 +99,7 @@ public interface MemoizingEvaluator {
    * the same version. A call of this method tells the evaluator that the next evaluation is not
    * guaranteed to be at the same version.
    */
-  default void noteEvaluationsAtSameVersionMayBeFinished(ExtendedEventHandler eventHandler)
-      throws InterruptedException {}
+  default void noteEvaluationsAtSameVersionMayBeFinished() throws InterruptedException {}
 
   /**
    * Returns the done (without error) values in the graph.

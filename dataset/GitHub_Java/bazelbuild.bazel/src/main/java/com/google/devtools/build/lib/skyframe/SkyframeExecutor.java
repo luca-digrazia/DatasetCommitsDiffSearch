@@ -110,7 +110,7 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.RuleVisibility;
-import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
+import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
@@ -138,7 +138,7 @@ import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossReposit
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompletedReceiver;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ProgressSupplier;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ResourceUsage;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
@@ -1041,8 +1041,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     PrecomputedValue.DEFAULT_VISIBILITY.set(injectable(), defaultVisibility);
   }
 
-  protected void setSkylarkSemantics(StarlarkSemantics starlarkSemantics) {
-    PrecomputedValue.STARLARK_SEMANTICS.set(injectable(), starlarkSemantics);
+  protected void setSkylarkSemantics(SkylarkSemantics skylarkSemantics) {
+    PrecomputedValue.SKYLARK_SEMANTICS.set(injectable(), skylarkSemantics);
   }
 
   public void injectExtraPrecomputedValues(
@@ -1296,7 +1296,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   public void preparePackageLoading(
       PathPackageLocator pkgLocator,
       PackageCacheOptions packageCacheOptions,
-      StarlarkSemanticsOptions starlarkSemanticsOptions,
+      SkylarkSemanticsOptions skylarkSemanticsOptions,
       UUID commandId,
       Map<String, String> clientEnv,
       TimestampGranularityMonitor tsgm) {
@@ -1309,7 +1309,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     this.clientEnv.set(clientEnv);
     setShowLoadingProgress(packageCacheOptions.showLoadingProgress);
     setDefaultVisibility(packageCacheOptions.defaultVisibility);
-    setSkylarkSemantics(starlarkSemanticsOptions.toSkylarkSemantics());
+    setSkylarkSemantics(skylarkSemanticsOptions.toSkylarkSemantics());
     setPackageLocator(pkgLocator);
 
     syscalls.set(getPerBuildSyscallCache(packageCacheOptions.globbingThreads));
@@ -2398,7 +2398,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       ExtendedEventHandler eventHandler,
       PackageCacheOptions packageCacheOptions,
       PathPackageLocator pathPackageLocator,
-      StarlarkSemanticsOptions starlarkSemanticsOptions,
+      SkylarkSemanticsOptions skylarkSemanticsOptions,
       UUID commandId,
       Map<String, String> clientEnv,
       TimestampGranularityMonitor tsgm,
@@ -2408,7 +2408,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     syncPackageLoading(
         packageCacheOptions,
         pathPackageLocator,
-        starlarkSemanticsOptions,
+        skylarkSemanticsOptions,
         commandId,
         clientEnv,
         tsgm);
@@ -2421,7 +2421,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   public void syncPackageLoading(
       PackageCacheOptions packageCacheOptions,
       PathPackageLocator pathPackageLocator,
-      StarlarkSemanticsOptions starlarkSemanticsOptions,
+      SkylarkSemanticsOptions skylarkSemanticsOptions,
       UUID commandId,
       Map<String, String> clientEnv,
       TimestampGranularityMonitor tsgm)
@@ -2430,7 +2430,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       preparePackageLoading(
           pathPackageLocator,
           packageCacheOptions,
-          starlarkSemanticsOptions,
+          skylarkSemanticsOptions,
           commandId,
           clientEnv,
           tsgm);
