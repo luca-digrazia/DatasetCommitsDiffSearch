@@ -141,11 +141,11 @@ public class EvaluationTest extends EvaluationTestCase {
           }
 
           @Override
-          public Object callImpl(
-              StarlarkThread thread,
-              FuncallExpression ast,
+          public Object call(
               List<Object> args,
-              Map<String, Object> kwargs) {
+              Map<String, Object> kwargs,
+              FuncallExpression ast,
+              StarlarkThread thread) {
             int sum = 0;
             for (Object arg : args) {
               sum += (Integer) arg;
@@ -188,11 +188,11 @@ public class EvaluationTest extends EvaluationTestCase {
           }
 
           @Override
-          public Object callImpl(
-              StarlarkThread thread,
-              FuncallExpression call,
+          public Object call(
               List<Object> args,
-              Map<String, Object> kwargs) {
+              final Map<String, Object> kwargs,
+              FuncallExpression ast,
+              StarlarkThread thread) {
             return Dict.copyOf(thread.mutability(), kwargs);
           }
         };
@@ -353,12 +353,11 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testListComprehensionsMultipleVariablesFail() throws Exception {
-    newTest()
-        .testIfErrorContains(
-            "assignment length mismatch: left-hand side has length 3, but right-hand side"
-                + " evaluates to value of length 2",
-            "[x + y for x, y, z in [(1, 2), (3, 4)]]")
-        .testIfExactError("type 'int' is not iterable", "[x + y for x, y in (1, 2)]");
+    newTest().testIfErrorContains(
+        "assignment length mismatch: left-hand side has length 3, but right-hand side evaluates to "
+            + "value of length 2",
+        "[x + y for x, y, z in [(1, 2), (3, 4)]]").testIfExactError(
+        "type 'int' is not a collection", "[x + y for x, y in (1, 2)]");
   }
 
   @Test
