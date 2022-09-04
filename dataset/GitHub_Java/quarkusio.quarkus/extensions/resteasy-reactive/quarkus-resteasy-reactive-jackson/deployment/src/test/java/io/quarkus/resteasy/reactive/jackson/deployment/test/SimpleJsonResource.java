@@ -14,23 +14,16 @@ import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
-
 import com.fasterxml.jackson.annotation.JsonView;
-import com.fasterxml.jackson.core.JsonParseException;
 
 import io.quarkus.runtime.BlockingOperationControl;
 
 @Path("/simple")
 public class SimpleJsonResource extends SuperClass<Person> {
 
-    @ServerExceptionMapper
-    public Response handleParseException(JsonParseException jpe) {
-        return Response.status(Response.Status.BAD_REQUEST).entity(jpe.getMessage()).build();
-    }
-
     @GET
     @Path("/person")
+    @Produces(MediaType.APPLICATION_JSON)
     public Person getPerson() {
         Person person = new Person();
         person.setFirst("Bob");
@@ -84,6 +77,7 @@ public class SimpleJsonResource extends SuperClass<Person> {
 
     @POST
     @Path("/people")
+    @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
     public List<Person> getPeople(List<Person> people) {
         if (BlockingOperationControl.isBlockingAllowed()) {
