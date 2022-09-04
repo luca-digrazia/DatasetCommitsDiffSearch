@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.sandbox;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ExecException;
@@ -228,8 +227,8 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
    *
    * @throws IOException because we might resolve symlinks, which throws {@link IOException}.
    */
-  protected ImmutableSet<Path> getWritableDirs(Path sandboxExecRoot, Map<String, String> env)
-      throws IOException {
+  protected ImmutableSet<Path> getWritableDirs(
+      Path sandboxExecRoot, Map<String, String> env, Path tmpDir) throws IOException {
     // We have to make the TEST_TMPDIR directory writable if it is specified.
     ImmutableSet.Builder<Path> writablePaths = ImmutableSet.builder();
     writablePaths.add(sandboxExecRoot);
@@ -238,20 +237,14 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
       addWritablePath(
           sandboxExecRoot,
           writablePaths,
-          testTmpdir,
+          sandboxExecRoot.getRelative(testTmpdir),
           "Cannot resolve symlinks in TEST_TMPDIR because it doesn't exist: \"%s\"");
     }
     addWritablePath(
         sandboxExecRoot,
         writablePaths,
-        // As of 2018-01-09:
-        // - every caller of `getWritableDirs` passes a LocalEnvProvider-processed environment as
-        //   `env`, and in every case that's either PosixLocalEnvProvider or XCodeLocalEnvProvider,
-        //   therefore `env` surely has an entry for TMPDIR
-        // - Bazel-on-Windows does not yet support sandboxing, so we don't need to add env[TMP] and
-        //   env[TEMP] as writable paths.
-        Preconditions.checkNotNull(env.get("TMPDIR")),
-        "Cannot resolve symlinks in TMPDIR because it doesn't exist: \"%s\"");
+        tmpDir,
+        "Cannot resolve symlinks in tmpDir because it doesn't exist: \"%s\"");
 
     FileSystem fileSystem = sandboxExecRoot.getFileSystem();
     for (String writablePath : sandboxOptions.sandboxWritablePath) {
@@ -266,10 +259,9 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
   private void addWritablePath(
       Path sandboxExecRoot,
       ImmutableSet.Builder<Path> writablePaths,
-      String pathString,
+      Path path,
       String pathDoesNotExistErrorTemplate)
       throws IOException {
-    Path path = sandboxExecRoot.getRelative(pathString);
     if (path.startsWith(sandboxExecRoot)) {
       // We add this path even though it is below sandboxExecRoot (and thus already writable as a
       // subpath) to take advantage of the side-effect that SymlinkedExecRoot also creates this
