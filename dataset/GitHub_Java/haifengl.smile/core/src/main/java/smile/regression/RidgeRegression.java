@@ -173,7 +173,7 @@ public class RidgeRegression implements Regression<double[]> {
     
     /**
      * Constructor. Learn the ridge regression model.
-     * @param x a matrix containing the explanatory variables. NO NEED to include a constant column of 1s for bias.
+     * @param x a matrix containing the explanatory variables.
      * @param y the response values.
      * @param lambda the shrinkage/regularization parameter. Large lambda means more shrinkage.
      *               Choosing an appropriate value of lambda is important, and also difficult.
@@ -206,12 +206,10 @@ public class RidgeRegression implements Regression<double[]> {
             }
             scale[j] = Math.sqrt(scale[j] / n);
         }
-
-        for (int j = 0; j < p; j++) {
-            if (!Math.isZero(scale[j])) {
-                for (int i = 0; i < n; i++) {
-                    X[i][j] /= scale[j];
-                }
+        
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < p; j++) {
+                X[i][j] /= scale[j];
             }
         }
 
@@ -227,9 +225,7 @@ public class RidgeRegression implements Regression<double[]> {
         cholesky.solve(w);
         
         for (int j = 0; j < p; j++) {
-            if (!Math.isZero(scale[j])) {
-                w[j] /= scale[j];
-            }
+            w[j] /= scale[j];
         }
         b = ym - Math.dot(w, center);
 
