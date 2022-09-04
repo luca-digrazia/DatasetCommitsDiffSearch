@@ -10,8 +10,6 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.FieldDescriptor;
@@ -108,16 +106,6 @@ public class DerivedMethodsAdder extends AbstractMethodsAdder {
                                 methodCreator.getMethodParam(sortParameterIndex));
                     } else if (parseResult.getSort() != null) {
                         finalQuery += JpaOperations.toOrderBy(parseResult.getSort());
-                    } else if (pageableParameterIndex != null) {
-                        ResultHandle pageable = methodCreator.getMethodParam(pageableParameterIndex);
-                        ResultHandle pageableSort = methodCreator.invokeInterfaceMethod(
-                                MethodDescriptor.ofMethod(Pageable.class, "getSort", Sort.class),
-                                pageable);
-                        sort = methodCreator.invokeStaticMethod(
-                                MethodDescriptor.ofMethod(TypesConverter.class, "toPanacheSort",
-                                        io.quarkus.panache.common.Sort.class,
-                                        org.springframework.data.domain.Sort.class),
-                                pageableSort);
                     }
 
                     // call JpaOperations.find()

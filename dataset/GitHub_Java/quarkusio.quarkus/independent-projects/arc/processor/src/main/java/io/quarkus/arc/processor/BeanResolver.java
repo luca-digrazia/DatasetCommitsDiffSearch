@@ -125,8 +125,6 @@ class BeanResolver {
                 }
                 return true;
             }
-        } else if (WILDCARD_TYPE.equals(requiredType.kind())) {
-            return parametersMatch(requiredType, beanType);
         }
         return false;
     }

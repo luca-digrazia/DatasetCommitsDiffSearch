@@ -17,6 +17,7 @@ import io.quarkus.cli.commands.writer.ProjectWriter;
 import io.quarkus.dependencies.Extension;
 import io.quarkus.generators.BuildTool;
 import io.quarkus.maven.utilities.MojoUtils;
+import io.quarkus.platform.tools.config.QuarkusPlatformConfig;
 
 public class AddExtensions {
 
@@ -54,9 +55,9 @@ public class AddExtensions {
         if (matchesNameOrArtifactId.size() == 1) {
             return new SelectionResult(matchesNameOrArtifactId, true);
         }
-
+        
         extensions = extensions.stream().filter(e -> !e.isUnlisted()).collect(Collectors.toList());
-
+        
         // Try short names
         Set<Extension> matchesShortName = extensions.stream().filter(extension -> matchesShortName(extension, q))
                 .collect(Collectors.toSet());
@@ -112,7 +113,7 @@ public class AddExtensions {
         boolean matches = false;
         // if any label match it's ok
         for(String label : labels) {
-            matches = matches || pattern.matcher(label.toLowerCase()).matches();
+            matches = matches | pattern.matcher(label.toLowerCase()).matches();
         }
         return matches;
     }
@@ -237,6 +238,6 @@ public class AddExtensions {
     }
 
     private List<Dependency> getDependenciesFromBom() {
-        return MojoUtils.getPlatformDescriptor().getManagedDependencies();
+        return QuarkusPlatformConfig.getGlobalDefault().getPlatformDescriptor().getManagedDependencies();
     }
 }
