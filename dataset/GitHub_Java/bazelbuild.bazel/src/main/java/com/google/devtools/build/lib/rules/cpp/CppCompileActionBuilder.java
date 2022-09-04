@@ -77,8 +77,7 @@ public class CppCompileActionBuilder {
   @Nullable private String actionName;
   private ImmutableList<Artifact> builtinIncludeFiles;
   private NestedSet<Artifact> inputsForInvalidation = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-  private NestedSet<Artifact> additionalPrunableHeaders =
-      NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+  private Iterable<Artifact> additionalPrunableHeaders = ImmutableList.of();
   private ImmutableList<PathFragment> builtinIncludeDirectories;
   // New fields need to be added to the copy constructor.
 
@@ -258,7 +257,7 @@ public class CppCompileActionBuilder {
     }
 
     NestedSet<Artifact> realMandatoryInputs = buildMandatoryInputs();
-    NestedSet<Artifact> prunableHeaders = additionalPrunableHeaders;
+    NestedSet<Artifact> prunableHeaders = buildPrunableHeaders();
 
     configuration.modifyExecutionInfo(
         executionInfo,
@@ -327,13 +326,13 @@ public class CppCompileActionBuilder {
     }
     if (!shouldScanIncludes && dotdFile == null) {
       realMandatoryInputsBuilder.addTransitive(ccCompilationContext.getDeclaredIncludeSrcs());
-      realMandatoryInputsBuilder.addTransitive(additionalPrunableHeaders);
+      realMandatoryInputsBuilder.addAll(additionalPrunableHeaders);
     }
     return realMandatoryInputsBuilder.build();
   }
 
-  NestedSet<Artifact> getPrunableHeaders() {
-    return additionalPrunableHeaders;
+  NestedSet<Artifact> buildPrunableHeaders() {
+    return NestedSetBuilder.<Artifact>stableOrder().addAll(additionalPrunableHeaders).build();
   }
 
   NestedSet<Artifact> buildInputsForInvalidation() {
@@ -572,7 +571,7 @@ public class CppCompileActionBuilder {
   }
 
   public CppCompileActionBuilder setAdditionalPrunableHeaders(
-      NestedSet<Artifact> additionalPrunableHeaders) {
+      Iterable<Artifact> additionalPrunableHeaders) {
     this.additionalPrunableHeaders = Preconditions.checkNotNull(additionalPrunableHeaders);
     return this;
   }

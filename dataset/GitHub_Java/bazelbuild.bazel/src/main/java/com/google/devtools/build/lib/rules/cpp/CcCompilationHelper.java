@@ -453,7 +453,6 @@ public final class CcCompilationHelper {
 
     if (shouldProcessHeaders
         && ccToolchain.shouldProcessHeaders(featureConfiguration, cppConfiguration)
-        && !shouldProvideHeaderModules()
         && !isTextualInclude) {
       compilationUnitSources.put(
           privateHeader, CppSource.create(privateHeader, label, CppSource.Type.HEADER));
@@ -512,8 +511,7 @@ public final class CcCompilationHelper {
     if (!shouldProcessHeaders
         || isTextualInclude
         || !isHeader
-        || !ccToolchain.shouldProcessHeaders(featureConfiguration, cppConfiguration)
-        || shouldProvideHeaderModules()) {
+        || !ccToolchain.shouldProcessHeaders(featureConfiguration, cppConfiguration)) {
       return;
     }
 

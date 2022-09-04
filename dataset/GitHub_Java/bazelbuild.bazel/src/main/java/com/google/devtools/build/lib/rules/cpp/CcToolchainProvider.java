@@ -509,12 +509,6 @@ public final class CcToolchainProvider extends ToolchainInfo
     return stripFiles;
   }
 
-  @Override
-  public Depset getStripFilesForStarlark(StarlarkThread thread) throws EvalException {
-    CcModule.checkPrivateStarlarkificationAllowlist(thread);
-    return Depset.of(Artifact.TYPE, getStripFiles());
-  }
-
   /** Returns the files necessary for an 'objcopy' invocation. */
   public NestedSet<Artifact> getObjcopyFiles() {
     return objcopyFiles;
