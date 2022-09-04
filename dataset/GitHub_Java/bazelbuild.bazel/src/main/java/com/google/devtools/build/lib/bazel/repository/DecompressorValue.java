@@ -111,6 +111,7 @@ public class DecompressorValue implements SkyValue {
     } else {
       throw new RepositoryFunctionException(
           new EvalException(
+              null,
               String.format(
                   "Expected a file with a .zip, .jar, .war, .tar, .tar.gz, .tgz, .tar.xz, .txz, or "
                       + ".tar.bz2 suffix (got %s)",
