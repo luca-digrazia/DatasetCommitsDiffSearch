@@ -17,14 +17,11 @@ public class NativeImageBuildRemoteContainerRunner extends NativeImageBuildConta
     private static final Logger log = Logger.getLogger(NativeImageBuildRemoteContainerRunner.class);
     private static final String CONTAINER_BUILD_VOLUME_NAME = "quarkus-native-builder-image-project-volume";
 
-    private final String nativeImageName;
     private final String resultingExecutableName;
     private String containerId;
 
-    public NativeImageBuildRemoteContainerRunner(NativeConfig nativeConfig, Path outputDir,
-            String nativeImageName, String resultingExecutableName) {
+    public NativeImageBuildRemoteContainerRunner(NativeConfig nativeConfig, Path outputDir, String resultingExecutableName) {
         super(nativeConfig, outputDir);
-        this.nativeImageName = nativeImageName;
         this.resultingExecutableName = resultingExecutableName;
     }
 

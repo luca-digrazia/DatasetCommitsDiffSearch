@@ -150,8 +150,7 @@ public class NativeImageBuildStep {
         String nativeImageName = getNativeImageName(outputTargetBuildItem, packageConfig);
         String resultingExecutableName = getResultingExecutableName(nativeImageName, isContainerBuild);
 
-        NativeImageBuildRunner buildRunner = getNativeImageBuildRunner(nativeConfig, outputDir,
-                nativeImageName, resultingExecutableName);
+        NativeImageBuildRunner buildRunner = getNativeImageBuildRunner(nativeConfig, outputDir, resultingExecutableName);
         buildRunner.setup(processInheritIODisabled.isPresent());
         final GraalVM.Version graalVMVersion = buildRunner.getGraalVMVersion();
 
@@ -184,8 +183,8 @@ public class NativeImageBuildStep {
 
             List<String> nativeImageArgs = commandAndExecutable.args;
 
-            int exitCode = buildRunner.build(nativeImageArgs, nativeImageName, resultingExecutableName, outputDir,
-                    nativeConfig.debug.enabled, processInheritIODisabled.isPresent());
+            int exitCode = buildRunner.build(nativeImageArgs, nativeImageName, outputDir, nativeConfig.debug.enabled,
+                    processInheritIODisabled.isPresent());
             if (exitCode != 0) {
                 throw imageGenerationFailed(exitCode, nativeImageArgs);
             }
@@ -239,7 +238,7 @@ public class NativeImageBuildStep {
     }
 
     private static NativeImageBuildRunner getNativeImageBuildRunner(NativeConfig nativeConfig, Path outputDir,
-            String nativeImageName, String resultingExecutableName) {
+            String resultingExecutableName) {
         if (!isContainerBuild(nativeConfig)) {
             NativeImageBuildLocalRunner localRunner = getNativeImageBuildLocalRunner(nativeConfig, outputDir.toFile());
             if (localRunner != null) {
@@ -254,8 +253,7 @@ public class NativeImageBuildStep {
             log.warn(errorMessage + " Attempting to fall back to container build.");
         }
         if (nativeConfig.remoteContainerBuild) {
-            return new NativeImageBuildRemoteContainerRunner(nativeConfig, outputDir,
-                    nativeImageName, resultingExecutableName);
+            return new NativeImageBuildRemoteContainerRunner(nativeConfig, outputDir, resultingExecutableName);
         }
         return new NativeImageBuildLocalContainerRunner(nativeConfig, outputDir);
     }
