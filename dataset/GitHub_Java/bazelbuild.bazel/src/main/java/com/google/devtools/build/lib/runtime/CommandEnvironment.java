@@ -21,11 +21,9 @@ import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.BuildView.Options;
 import com.google.devtools.build.lib.analysis.SkyframePackageRootResolver;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
-import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
@@ -483,7 +481,13 @@ public final class CommandEnvironment {
    */
   ExitCode precompleteCommand(ExitCode originalExit) {
     eventBus.post(new CommandPrecompleteEvent(originalExit));
-    return finalizeExitCode();
+    // If Blaze did not suffer an infrastructure failure, check for errors in modules.
+    ExitCode exitCode = originalExit;
+    ExitCode newExitCode = finalizeExitCode();
+    if (!originalExit.isInfrastructureFailure() && newExitCode != null) {
+      exitCode = newExitCode;
+    }
+    return exitCode;
   }
 
   /**
@@ -616,14 +620,10 @@ public final class CommandEnvironment {
 
     // Fail fast in the case where a Blaze command forgets to install the package path correctly.
     skyframeExecutor.setActive(false);
-    // Let skyframe figure out how much incremental state it will be keeping.
-    Options viewOptions = options.getOptions(Options.class);
-    BuildRequestOptions requestOptions = options.getOptions(BuildRequestOptions.class);
+    // Let skyframe figure out if it needs to store graph edges for this build.
     skyframeExecutor.decideKeepIncrementalState(
         runtime.getStartupOptionsProvider().getOptions(BlazeServerStartupOptions.class).batch,
-        commonOptions.keepStateAfterBuild, commonOptions.trackIncrementalState,
-        viewOptions != null && viewOptions.discardAnalysisCache,
-        requestOptions != null && requestOptions.discardActionsAfterExecution,
+        options,
         reporter);
 
     // Start the performance and memory profilers.
