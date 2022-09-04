@@ -365,7 +365,7 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 	}
 
 	private String getAAApiVersion() {
-		return propertiesApi.getProperty("version", "unknown");
+		return propertiesApi.getProperty("version", null);
 	}
 
 	private void processThrowing(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) throws ProcessingException, Exception {
