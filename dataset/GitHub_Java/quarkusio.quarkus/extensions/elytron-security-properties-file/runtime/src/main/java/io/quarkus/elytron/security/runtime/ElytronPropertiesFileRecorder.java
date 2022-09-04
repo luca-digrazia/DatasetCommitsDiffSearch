@@ -1,6 +1,7 @@
 package io.quarkus.elytron.security.runtime;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -16,6 +17,7 @@ import java.util.function.Supplier;
 
 import org.jboss.logging.Logger;
 import org.wildfly.common.iteration.ByteIterator;
+import org.wildfly.security.WildFlyElytronProvider;
 import org.wildfly.security.auth.realm.LegacyPropertiesSecurityRealm;
 import org.wildfly.security.auth.realm.SimpleMapBackedSecurityRealm;
 import org.wildfly.security.auth.realm.SimpleRealmEntry;
@@ -34,7 +36,6 @@ import org.wildfly.security.password.spec.DigestPasswordSpec;
 
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.annotations.Recorder;
-import io.quarkus.runtime.util.ClassPathUtils;
 
 /**
  * The runtime security recorder class that provides methods for creating RuntimeValues for the deployment security objects.
@@ -43,7 +44,7 @@ import io.quarkus.runtime.util.ClassPathUtils;
 public class ElytronPropertiesFileRecorder {
     static final Logger log = Logger.getLogger(ElytronPropertiesFileRecorder.class);
 
-    private static final Provider[] PROVIDERS = new Provider[] { new WildFlyElytronPasswordProvider() };
+    private static final Provider[] PROVIDERS = new Provider[] { new WildFlyElytronProvider() };
 
     /**
      * Load the user.properties and roles.properties files into the {@linkplain SecurityRealm}
@@ -87,19 +88,9 @@ public class ElytronPropertiesFileRecorder {
                         throw new IllegalStateException(msg);
                     }
                     LegacyPropertiesSecurityRealm propsRealm = (LegacyPropertiesSecurityRealm) secRealm;
-                    ClassPathUtils.consumeStream(users, usersStream -> {
-                        try {
-                            ClassPathUtils.consumeStream(roles, rolesStream -> {
-                                try {
-                                    propsRealm.load(usersStream, rolesStream);
-                                } catch (IOException e) {
-                                    throw new UncheckedIOException(e);
-                                }
-                            });
-                        } catch (IOException e) {
-                            throw new UncheckedIOException(e);
-                        }
-                    });
+                    try (InputStream usersStream = users.openStream(); InputStream rolesStream = roles.openStream()) {
+                        propsRealm.load(usersStream, rolesStream);
+                    }
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
                 }
