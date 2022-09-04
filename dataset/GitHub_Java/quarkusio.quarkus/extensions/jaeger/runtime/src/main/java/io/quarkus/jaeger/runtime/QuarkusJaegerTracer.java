@@ -16,6 +16,8 @@
 
 package io.quarkus.jaeger.runtime;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 import io.jaegertracing.Configuration;
 import io.opentracing.ScopeManager;
 import io.opentracing.Span;
@@ -25,23 +27,23 @@ import io.opentracing.propagation.Format;
 
 public class QuarkusJaegerTracer implements Tracer {
 
-    private static volatile Tracer tracer;
+    static AtomicReference<Tracer> REF = new AtomicReference<>();
+
+    public QuarkusJaegerTracer() {
+    }
 
     @Override
     public String toString() {
         return tracer().toString();
     }
 
-    private static Tracer tracer() {
-        if (tracer == null) {
-            synchronized (QuarkusJaegerTracer.class) {
-                if (tracer == null) {
-                    tracer = Configuration.fromEnv()
-                            .withMetricsFactory(new QuarkusJaegerMetricsFactory()).getTracer();
-                }
+    Tracer tracer() {
+        return REF.updateAndGet((orig) -> {
+            if (orig != null) {
+                return orig;
             }
-        }
-        return tracer;
+            return Configuration.fromEnv().withMetricsFactory(new QuarkusJaegerMetricsFactory()).getTracer();
+        });
     }
 
     @Override
