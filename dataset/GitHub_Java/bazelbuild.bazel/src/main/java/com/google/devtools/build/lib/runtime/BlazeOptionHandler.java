@@ -22,11 +22,9 @@ import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.runtime.commands.ProjectFileSupport;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.Command.Code;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.util.DetailedExitCode;
+import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.InvocationPolicyEnforcer;
@@ -60,11 +58,6 @@ public final class BlazeOptionHandler {
           "ignore_client_env",
           "client_env",
           "client_cwd");
-
-  // Marks an event to indicate a parsing error.
-  static final String BAD_OPTION_TAG = "invalidOption";
-  // Separates the invalid tag from the full error message for easier parsing.
-  static final String ERROR_SEPARATOR = " :: ";
 
   private final BlazeRuntime runtime;
   private final OptionsParser optionsParser;
@@ -105,34 +98,34 @@ public final class BlazeOptionHandler {
    * Only some commands work if cwd != workspaceSuffix in Blaze. In that case, also check if Blaze
    * was called from the output directory and fail if it was.
    */
-  private DetailedExitCode checkCwdInWorkspace(EventHandler eventHandler) {
+  private ExitCode checkCwdInWorkspace(EventHandler eventHandler) {
     if (!commandAnnotation.mustRunInWorkspace()) {
-      return DetailedExitCode.success();
+      return ExitCode.SUCCESS;
     }
 
     if (!workspace.getDirectories().inWorkspace()) {
-      String message =
-          "The '"
-              + commandAnnotation.name()
-              + "' command is only supported from within a workspace"
-              + " (below a directory having a WORKSPACE file).\n"
-              + "See documentation at"
-              + " https://docs.bazel.build/versions/master/build-ref.html#workspace";
-      eventHandler.handle(Event.error(message));
-      return createDetailedExitCode(message, Code.NOT_IN_WORKSPACE);
+      eventHandler.handle(
+          Event.error(
+              "The '"
+                  + commandAnnotation.name()
+                  + "' command is only supported from within a workspace"
+                  + " (below a directory having a WORKSPACE file).\n"
+                  + "See documentation at"
+                  + " https://docs.bazel.build/versions/master/build-ref.html#workspace"));
+      return ExitCode.COMMAND_LINE_ERROR;
     }
 
     Path workspacePath = workspace.getWorkspace();
     // TODO(kchodorow): Remove this once spaces are supported.
     if (workspacePath.getPathString().contains(" ")) {
-      String message =
-          runtime.getProductName()
-              + " does not currently work properly from paths "
-              + "containing spaces ("
-              + workspacePath
-              + ").";
-      eventHandler.handle(Event.error(message));
-      return createDetailedExitCode(message, Code.SPACES_IN_WORKSPACE_PATH);
+      eventHandler.handle(
+          Event.error(
+              runtime.getProductName()
+                  + " does not currently work properly from paths "
+                  + "containing spaces ("
+                  + workspace
+                  + ")."));
+      return ExitCode.LOCAL_ENVIRONMENTAL_ERROR;
     }
 
     if (workspacePath.getParentDirectory() != null) {
@@ -141,9 +134,8 @@ public final class BlazeOptionHandler {
 
       if (doNotBuild.exists()) {
         if (!commandAnnotation.canRunInOutputDirectory()) {
-          String message = getNotInRealWorkspaceError(doNotBuild);
-          eventHandler.handle(Event.error(message));
-          return createDetailedExitCode(message, Code.IN_OUTPUT_DIRECTORY);
+          eventHandler.handle(Event.error(getNotInRealWorkspaceError(doNotBuild)));
+          return ExitCode.COMMAND_LINE_ERROR;
         } else {
           eventHandler.handle(
               Event.warn(
@@ -151,7 +143,7 @@ public final class BlazeOptionHandler {
         }
       }
     }
-    return DetailedExitCode.success();
+    return ExitCode.SUCCESS;
   }
 
   /**
@@ -239,7 +231,7 @@ public final class BlazeOptionHandler {
    * TODO(bazel-team): When we move CoreOptions options to be defined in starlark, make sure they're
    * not passed in here during {@link #getOptionsResult}.
    */
-  DetailedExitCode parseStarlarkOptions(CommandEnvironment env, ExtendedEventHandler eventHandler) {
+  ExitCode parseStarlarkOptions(CommandEnvironment env, ExtendedEventHandler eventHandler) {
     // For now, restrict starlark options to commands that already build to ensure that loading
     // will work. We may want to open this up to other commands in the future. The "info"
     // and "clean" commands have builds=true set in their annotation but don't actually do any
@@ -247,32 +239,31 @@ public final class BlazeOptionHandler {
     if (!commandAnnotation.builds()
         || commandAnnotation.name().equals("info")
         || commandAnnotation.name().equals("clean")) {
-      return DetailedExitCode.success();
+      return ExitCode.SUCCESS;
     }
     try {
       StarlarkOptionsParser.newStarlarkOptionsParser(env, optionsParser).parse(eventHandler);
     } catch (OptionsParsingException e) {
-      String logMessage = "Error parsing Starlark options";
-      logger.atInfo().withCause(e).log(logMessage);
-      return processOptionsParsingException(
-          eventHandler, e, logMessage, Code.STARLARK_OPTIONS_PARSE_FAILURE);
+      env.getReporter().handle(Event.error(e.getMessage()));
+      logger.atInfo().withCause(e).log("Error parsing options");
+      return ExitCode.PARSING_FAILURE;
     }
-    return DetailedExitCode.success();
+    return ExitCode.SUCCESS;
   }
 
   /**
    * Parses the options, taking care not to generate any output to outErr, return, or throw an
    * exception.
    *
-   * @return {@code DetailedExitCode.success()} if everything went well, or some other value if not
+   * @return ExitCode.SUCCESS if everything went well, or some other value if not
    */
-  DetailedExitCode parseOptions(List<String> args, ExtendedEventHandler eventHandler) {
+  ExitCode parseOptions(List<String> args, ExtendedEventHandler eventHandler) {
     // The initialization code here was carefully written to parse the options early before we call
     // into the BlazeModule APIs, which means we must not generate any output to outErr, return, or
     // throw an exception. All the events happening here are instead stored in a temporary event
     // handler, and later replayed.
-    DetailedExitCode earlyExitCode = checkCwdInWorkspace(eventHandler);
-    if (!earlyExitCode.isSuccess()) {
+    ExitCode earlyExitCode = checkCwdInWorkspace(eventHandler);
+    if (!earlyExitCode.equals(ExitCode.SUCCESS)) {
       return earlyExitCode;
     }
 
@@ -316,12 +307,11 @@ public final class BlazeOptionHandler {
         eventHandler.handle(Event.warn(warning));
       }
     } catch (OptionsParsingException e) {
-      String logMessage = "Error parsing options";
-      logger.atInfo().withCause(e).log(logMessage);
-      return processOptionsParsingException(
-          eventHandler, e, logMessage, Code.OPTIONS_PARSE_FAILURE);
+      eventHandler.handle(Event.error(e.getMessage()));
+      logger.atInfo().withCause(e).log("Error parsing options");
+      return ExitCode.COMMAND_LINE_ERROR;
     }
-    return DetailedExitCode.success();
+    return ExitCode.SUCCESS;
   }
 
   /**
@@ -352,25 +342,6 @@ public final class BlazeOptionHandler {
       getCommandNamesToParseHelper(base.getAnnotation(Command.class), accumulator);
     }
     accumulator.add(commandAnnotation.name());
-  }
-
-  private static DetailedExitCode processOptionsParsingException(
-      ExtendedEventHandler eventHandler,
-      OptionsParsingException e,
-      String logMessage,
-      Code failureCode) {
-    Event error;
-    // Differentiates errors stemming from an invalid argument and errors from different parts of
-    // the codebase.
-    if (e.getInvalidArgument() != null) {
-      error =
-          Event.error(e.getInvalidArgument() + ERROR_SEPARATOR + e.getMessage())
-              .withTag(BAD_OPTION_TAG);
-    } else {
-      error = Event.error(e.getMessage());
-    }
-    eventHandler.handle(error);
-    return createDetailedExitCode(logMessage + ": " + e.getMessage(), failureCode);
   }
 
   private String getNotInRealWorkspaceError(Path doNotBuildFile) {
@@ -454,13 +425,5 @@ public final class BlazeOptionHandler {
     }
 
     return commandToRcArgs;
-  }
-
-  private static DetailedExitCode createDetailedExitCode(String message, Code detailedCode) {
-    return DetailedExitCode.of(
-        FailureDetail.newBuilder()
-            .setMessage(message)
-            .setCommand(FailureDetails.Command.newBuilder().setCode(detailedCode))
-            .build());
   }
 }
