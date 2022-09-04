@@ -16,9 +16,7 @@
  */
 package org.graylog.plugins.views.search.elasticsearch;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.searchbox.core.MultiSearch;
 import io.searchbox.core.MultiSearchResult;
 import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
 
@@ -29,13 +27,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 abstract class ElasticsearchBackendTestBase {
     static final ObjectMapperProvider objectMapperProvider = new ObjectMapperProvider();
-    static final ObjectMapper objectMapper = objectMapperProvider.get();
 
     MultiSearchResult resultFor(String result) {
         final ObjectMapper objectMapper = objectMapperProvider.get();
@@ -58,20 +52,5 @@ abstract class ElasticsearchBackendTestBase {
         } catch (IOException | URISyntaxException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    List<String> indicesOf(MultiSearch clientRequest) throws IOException {
-        final String request = clientRequest.getData(objectMapper);
-        final String[] lines = request.split("\\r?\\n");
-        final int noOfHeaders = lines.length / 2;
-        return IntStream.range(0, noOfHeaders)
-                .mapToObj(headerNumber -> {
-                    try {
-                        final JsonNode headerNode = objectMapper.readTree(lines[headerNumber * 2]);
-                        return headerNode.get("index").asText();
-                    } catch (IOException ignored) {}
-                    return null;
-                })
-                .collect(Collectors.toList());
     }
 }
