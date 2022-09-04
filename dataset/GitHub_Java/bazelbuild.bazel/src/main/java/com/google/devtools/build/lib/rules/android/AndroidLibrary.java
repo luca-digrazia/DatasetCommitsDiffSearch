@@ -257,8 +257,9 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     }
 
     builder
-        .addNativeDeclaredProvider(
-            new NativeLibsZipsInfo(
+        .addProvider(
+            NativeLibsZipsProvider.class,
+            new NativeLibsZipsProvider(
                 AndroidCommon.collectTransitiveNativeLibsZips(ruleContext).build()))
         .add(
             JavaSourceInfoProvider.class,
