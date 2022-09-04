@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -90,7 +91,7 @@ public class CppLinkstampCompileHelper {
       boolean codeCoverageEnabled) {
     String labelPattern = Pattern.quote("${LABEL}");
     String outputPathPattern = Pattern.quote("${OUTPUT_PATH}");
-    ImmutableList.Builder<String> defines =
+    Builder<String> defines =
         ImmutableList.<String>builder()
             .add("GPLATFORM=\"" + cppConfiguration + "\"")
             .add("BUILD_COVERAGE_ENABLED=" + (codeCoverageEnabled ? "1" : "0"))
@@ -142,8 +143,8 @@ public class CppLinkstampCompileHelper {
     // TODO(b/34761650): Remove all this hardcoding by separating a full blown compile action.
     Preconditions.checkArgument(
         featureConfiguration.actionIsConfigured(CppCompileAction.LINKSTAMP_COMPILE));
-    CcCompilationContextInfo ccCompilationContextInfo =
-        new CcCompilationContextInfo.Builder(ruleContext)
+    CcCompilationInfo ccCompilationInfo =
+        new CcCompilationInfo.Builder(ruleContext)
             .addIncludeDir(PathFragment.create("."))
             .addDefines(
                 computeAllLinkstampDefines(
@@ -155,7 +156,7 @@ public class CppLinkstampCompileHelper {
                     codeCoverageEnabled))
             .build();
 
-    return CompileBuildVariables.setupVariables(
+    return CcBuildVariables.setupCompileBuildVariables(
         ruleContext,
         featureConfiguration,
         ccToolchainProvider,
@@ -164,7 +165,7 @@ public class CppLinkstampCompileHelper {
         /* gcnoFile= */ null,
         /* dwoFile= */ null,
         /* ltoIndexingFile= */ null,
-        ccCompilationContextInfo,
+        ccCompilationInfo,
         buildInfoHeaderArtifacts
             .stream()
             .map(Artifact::getExecPathString)
@@ -176,6 +177,8 @@ public class CppLinkstampCompileHelper {
         fdoBuildStamp,
         /* dotdFileExecPath= */ null,
         /* variablesExtensions= */ ImmutableList.of(),
-        /* additionalBuildVariables= */ ImmutableMap.of());
+        /* additionalBuildVariables= */ ImmutableMap.of(),
+        // TODO(b/76449614): Remove use of optional_*_flag from CROSSTOOL and get rid of this param
+        ruleContext.getFeatures());
   }
 }

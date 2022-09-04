@@ -77,9 +77,6 @@ public final class CcCommon {
   /** Name of the build variable for the path to the input file being processed. */
   public static final String INPUT_FILE_VARIABLE_NAME = "input_file";
 
-  public static final String PIC_CONFIGURATION_ERROR =
-      "PIC compilation is requested but the toolchain does not support it";
-
   private static final String NO_COPTS_ATTRIBUTE = "nocopts";
 
   /**
@@ -597,12 +594,10 @@ public final class CcCommon {
 
   /** Collects compilation prerequisite artifacts. */
   static NestedSet<Artifact> collectCompilationPrerequisites(
-      RuleContext ruleContext, CcCompilationContextInfo ccCompilationContextInfo) {
-    // TODO(bazel-team): Use ccCompilationContextInfo.getCompilationPrerequisites() instead; note
-    // that this
+      RuleContext ruleContext, CcCompilationInfo ccCompilationInfo) {
+    // TODO(bazel-team): Use ccCompilationInfo.getCompilationPrerequisites() instead; note that this
     // will
-    // need cleaning up the prerequisites, as the {@code CcCompilationContextInfo} currently
-    // collects them
+    // need cleaning up the prerequisites, as the {@code CcCompilationInfo} currently collects them
     // transitively (to get transitive headers), but source files are not transitive compilation
     // prerequisites.
     NestedSetBuilder<Artifact> prerequisites = NestedSetBuilder.stableOrder();
@@ -614,10 +609,10 @@ public final class CcCommon {
                 provider.getFilesToBuild(), SourceCategory.CC_AND_OBJC.getSourceTypes()));
       }
     }
-    prerequisites.addTransitive(ccCompilationContextInfo.getDeclaredIncludeSrcs());
-    prerequisites.addTransitive(ccCompilationContextInfo.getAdditionalInputs());
-    prerequisites.addTransitive(ccCompilationContextInfo.getTransitiveModules(true));
-    prerequisites.addTransitive(ccCompilationContextInfo.getTransitiveModules(false));
+    prerequisites.addTransitive(ccCompilationInfo.getDeclaredIncludeSrcs());
+    prerequisites.addTransitive(ccCompilationInfo.getAdditionalInputs());
+    prerequisites.addTransitive(ccCompilationInfo.getTransitiveModules(true));
+    prerequisites.addTransitive(ccCompilationInfo.getTransitiveModules(false));
     return prerequisites.build();
   }
 
@@ -713,7 +708,7 @@ public final class CcCommon {
       unsupportedFeaturesBuilder.add(CppRuleClasses.PARSE_HEADERS);
       unsupportedFeaturesBuilder.add(CppRuleClasses.PREPROCESS_HEADERS);
     }
-    if (toolchain.getCcCompilationContextInfo().getCppModuleMap() == null) {
+    if (toolchain.getCcCompilationInfo().getCppModuleMap() == null) {
       unsupportedFeaturesBuilder.add(CppRuleClasses.MODULE_MAPS);
     }
     ImmutableSet<String> allUnsupportedFeatures = unsupportedFeaturesBuilder.build();
@@ -793,10 +788,10 @@ public final class CcCommon {
     allRequestedFeaturesBuilder.addAll(DEFAULT_ACTION_CONFIGS);
 
     try {
-      FeatureConfiguration featureConfiguration =
+      FeatureConfiguration configuration =
           toolchain.getFeatures().getFeatureConfiguration(allRequestedFeaturesBuilder.build());
       for (String feature : unsupportedFeatures) {
-        if (featureConfiguration.isEnabled(feature)) {
+        if (configuration.isEnabled(feature)) {
           ruleContext.ruleError(
               "The C++ toolchain '"
                   + ruleContext
@@ -808,11 +803,7 @@ public final class CcCommon {
                   + "This is most likely a misconfiguration in the C++ toolchain.");
         }
       }
-      if ((cppConfiguration.forcePic() || toolchain.toolchainNeedsPic())
-          && !featureConfiguration.isEnabled(CppRuleClasses.PIC)) {
-        ruleContext.ruleError(PIC_CONFIGURATION_ERROR);
-      }
-      return featureConfiguration;
+      return configuration;
     } catch (CollidingProvidesException e) {
       ruleContext.ruleError(e.getMessage());
       return FeatureConfiguration.EMPTY;

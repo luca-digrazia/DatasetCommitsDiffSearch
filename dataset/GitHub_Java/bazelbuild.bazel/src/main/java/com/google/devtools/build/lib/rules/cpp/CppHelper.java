@@ -57,7 +57,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
-import com.google.devtools.build.lib.rules.cpp.CcCompilationContextInfo.Builder;
+import com.google.devtools.build.lib.rules.cpp.CcBuildVariables.StripBuildVariables;
+import com.google.devtools.build.lib.rules.cpp.CcCompilationInfo.Builder;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Tool;
@@ -113,25 +114,22 @@ public class CppHelper {
    * Merges the STL and toolchain contexts into context builder. The STL is automatically determined
    * using the ":stl" attribute.
    */
-  public static void mergeToolchainDependentCcCompilationContextInfo(
-      RuleContext ruleContext,
-      CcToolchainProvider toolchain,
-      Builder ccCompilationContextInfoBuilder) {
+  public static void mergeToolchainDependentCcCompilationInfo(
+      RuleContext ruleContext, CcToolchainProvider toolchain, Builder ccCompilationInfoBuilder) {
     if (ruleContext.getRule().getAttributeDefinition(":stl") != null) {
       TransitiveInfoCollection stl = ruleContext.getPrerequisite(":stl", Mode.TARGET);
       if (stl != null) {
-        CcCompilationContextInfo provider = stl.get(CcCompilationContextInfo.PROVIDER);
+        CcCompilationInfo provider = stl.get(CcCompilationInfo.PROVIDER);
         if (provider == null) {
           ruleContext.ruleError("Unable to merge the STL '" + stl.getLabel()
               + "' and toolchain contexts");
           return;
         }
-        ccCompilationContextInfoBuilder.mergeDependentCcCompilationContextInfo(provider);
+        ccCompilationInfoBuilder.mergeDependentCcCompilationInfo(provider);
       }
     }
     if (toolchain != null) {
-      ccCompilationContextInfoBuilder.mergeDependentCcCompilationContextInfo(
-          toolchain.getCcCompilationContextInfo());
+      ccCompilationInfoBuilder.mergeDependentCcCompilationInfo(toolchain.getCcCompilationInfo());
     }
   }
 
@@ -300,7 +298,10 @@ public class CppHelper {
             .addAll(toolchain.getLipoCxxFlags().get(config.getLipoMode()));
 
     FlagList cxxFlags =
-        new FlagList(cxxOptsBuilder.build(), ImmutableList.of(), ImmutableList.of());
+        new FlagList(
+            cxxOptsBuilder.build(),
+            FlagList.convertOptionalOptions(toolchain.getOptionalCxxFlags()),
+            ImmutableList.of());
 
     return cxxFlags.evaluate(features);
   }
@@ -355,11 +356,10 @@ public class CppHelper {
       CppConfiguration config,
       CcToolchainProvider toolchain,
       Iterable<String> features,
-      boolean sharedLib,
-      boolean shouldStaticallyLinkCppRuntimes) {
+      Boolean sharedLib) {
     if (sharedLib) {
       return toolchain.getSharedLibraryLinkOptions(
-          shouldStaticallyLinkCppRuntimes
+          toolchain.supportsEmbeddedRuntimes()
               ? toolchain.getMostlyStaticSharedLinkFlags(
                   config.getCompilationMode(), config.getLipoMode())
               : toolchain.getDynamicLinkFlags(config.getCompilationMode(), config.getLipoMode()),
@@ -511,38 +511,6 @@ public class CppHelper {
   public static CcToolchainProvider getToolchainUsingDefaultCcToolchainAttribute(
       RuleContext ruleContext) {
     return getToolchain(ruleContext, CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME);
-  }
-
-  /**
-   * Convenience function for finding the dynamic runtime inputs for the current toolchain. Useful
-   * for non C++ rules that link against the C++ runtime.
-   */
-  public static NestedSet<Artifact> getDefaultCcToolchainDynamicRuntimeInputs(
-      RuleContext ruleContext) {
-    CcToolchainProvider defaultToolchain =
-        getToolchain(ruleContext, CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME);
-    if (defaultToolchain == null) {
-      return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-    }
-    FeatureConfiguration featureConfiguration =
-        CcCommon.configureFeatures(ruleContext, defaultToolchain);
-    return defaultToolchain.getDynamicRuntimeLinkInputs(featureConfiguration);
-  }
-
-  /**
-   * Convenience function for finding the static runtime inputs for the current toolchain. Useful
-   * for non C++ rules that link against the C++ runtime.
-   */
-  public static NestedSet<Artifact> getDefaultCcToolchainStaticRuntimeInputs(
-      RuleContext ruleContext) {
-    CcToolchainProvider defaultToolchain =
-        getToolchain(ruleContext, CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME);
-    if (defaultToolchain == null) {
-      return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-    }
-    FeatureConfiguration featureConfiguration =
-        CcCommon.configureFeatures(ruleContext, defaultToolchain);
-    return defaultToolchain.getStaticRuntimeLinkInputs(featureConfiguration);
   }
 
   /**
@@ -733,7 +701,7 @@ public class CppHelper {
 
   /**
    * Emits a warning on the rule if there are identical linkstamp artifacts with different {@code
-   * CcCompilationContextInfo}s.
+   * CcCompilationInfo}s.
    */
   public static void checkLinkstampsUnique(RuleErrorConsumer listener, CcLinkParams linkParams) {
     Map<Artifact, NestedSet<Artifact>> result = new LinkedHashMap<>();
@@ -792,28 +760,36 @@ public class CppHelper {
    * "Provide a way to turn off -fPIC for targets that can't be built that way").
    *
    * @param ruleContext the context of the rule to check
+   * @param forBinary true if compiling for a binary, false if for a shared library
    * @return true if this rule's compilations should apply -fPIC, false otherwise
    */
-  public static boolean usePicForDynamicLibraries(
-      RuleContext ruleContext, CcToolchainProvider toolchain) {
-    return ruleContext.getFragment(CppConfiguration.class).forcePic()
-        || toolchain.toolchainNeedsPic();
-  }
-
-  /** Returns whether binaries must be compiled with position independent code. */
-  public static boolean usePicForBinaries(RuleContext ruleContext, CcToolchainProvider toolchain) {
-    CppConfiguration config = ruleContext.getFragment(CppConfiguration.class);
+  public static boolean usePic(
+      RuleContext ruleContext, CcToolchainProvider toolchain, boolean forBinary) {
     if (CcCommon.noCoptsMatches("-fPIC", ruleContext)) {
       return false;
     }
-    return config.forcePic()
-        || (toolchain.toolchainNeedsPic() && config.getCompilationMode() != CompilationMode.OPT);
+    CppConfiguration config = ruleContext.getFragment(CppConfiguration.class);
+    return forBinary ? usePicObjectsForBinaries(config, toolchain) : needsPic(config, toolchain);
+  }
+
+  /** Returns whether binaries must be compiled with position independent code. */
+  public static boolean usePicForBinaries(CppConfiguration config, CcToolchainProvider toolchain) {
+    return toolchain.toolchainNeedsPic() && config.getCompilationMode() != CompilationMode.OPT;
+  }
+
+  /** Returns true iff we should use ".pic.o" files when linking executables. */
+  public static boolean usePicObjectsForBinaries(
+      CppConfiguration config, CcToolchainProvider toolchain) {
+    return config.forcePic() || usePicForBinaries(config, toolchain);
   }
 
   /**
    * Returns true if shared libraries must be compiled with position independent code for the build
    * implied by the given config and toolchain.
    */
+  public static boolean needsPic(CppConfiguration config, CcToolchainProvider toolchain) {
+    return config.forcePic() || toolchain.toolchainNeedsPic();
+  }
 
   /**
    * Returns the LIPO context provider for configured target,
