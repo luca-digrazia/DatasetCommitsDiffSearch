@@ -26,15 +26,16 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.analysis.util.MockRule;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
+import com.google.devtools.build.lib.packages.Attribute.SplitTransitionProvider;
+import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.packages.RuleTransitionData;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -269,11 +270,14 @@ public class CircularDependencyTest extends BuildViewTestCase {
                   .mandatory()
                   .allowedFileTypes()
                   .cfg(
-                      new TransitionFactory<RuleTransitionData>() {
+                      new SplitTransitionProvider() {
                         @Override
-                        public SplitTransition create(RuleTransitionData data) {
+                        public void repr(SkylarkPrinter printer) {}
+
+                        @Override
+                        public SplitTransition apply(AttributeMap map) {
                           return (BuildOptions options) -> {
-                            String define = data.attributes().get("define", STRING);
+                            String define = map.get("define", STRING);
                             BuildOptions newOptions = options.clone();
                             BuildConfiguration.Options optionsFragment =
                                 newOptions.get(BuildConfiguration.Options.class);
@@ -283,11 +287,6 @@ public class CircularDependencyTest extends BuildViewTestCase {
                                     .collect(toImmutableList());
                             return ImmutableList.of(newOptions);
                           };
-                        }
-
-                        @Override
-                        public boolean isSplit() {
-                          return true;
                         }
                       }));
 

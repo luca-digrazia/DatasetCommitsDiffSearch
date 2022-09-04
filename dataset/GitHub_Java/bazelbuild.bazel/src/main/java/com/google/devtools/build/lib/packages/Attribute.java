@@ -329,7 +329,7 @@ public final class Attribute implements Comparable<Attribute> {
 
     private final Set<Object> allowedValues;
 
-    public AllowedValueSet(Object... values) {
+    public <T> AllowedValueSet(T... values) {
       this(Arrays.asList(values));
     }
 
