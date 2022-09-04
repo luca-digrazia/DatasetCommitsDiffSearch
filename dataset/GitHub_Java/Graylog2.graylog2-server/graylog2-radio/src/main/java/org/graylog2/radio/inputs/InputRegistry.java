@@ -19,7 +19,6 @@
  */
 package org.graylog2.radio.inputs;
 
-import com.beust.jcommander.internal.Lists;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -28,7 +27,6 @@ import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.plugin.inputs.InputState;
 import org.graylog2.plugin.inputs.MisfireException;
 import org.graylog2.radio.Radio;
 import org.graylog2.radio.inputs.api.InputSummaryResponse;
@@ -43,7 +41,6 @@ import javax.ws.rs.core.UriBuilder;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -57,8 +54,8 @@ public class InputRegistry {
     private static final Logger LOG = LoggerFactory.getLogger(InputRegistry.class);
 
     private final Radio radio;
-    private final List<InputState> inputStates;
-    private final Map<String, String> availableInputs;
+    private Map<String, MessageInput> runningInputs;
+    private Map<String, String> availableInputs;
 
     private ObjectMapper mapper;
 
@@ -68,25 +65,22 @@ public class InputRegistry {
 
     public InputRegistry(InputHost radio) {
         this.radio = (Radio) radio;
-        inputStates = Lists.newArrayList();
+        runningInputs = Maps.newHashMap();
         availableInputs = Maps.newHashMap();
 
         mapper = new ObjectMapper();
     }
 
     public String launch(final MessageInput input, String id, boolean register) {
-        final InputState inputState = new InputState(input, id);
-        inputStates.add(inputState);
+        input.setId(id);
+        runningInputs.put(id, input);
 
         executor.submit(new Runnable() {
             @Override
             public void run() {
                 LOG.info("Starting [{}] input with ID <{}>", input.getClass().getCanonicalName(), input.getId());
                 try {
-                    inputState.setState(InputState.InputStateType.STARTING);
                     input.launch();
-                    inputState.setState(InputState.InputStateType.RUNNING);
-                    LOG.info("Completed starting [{}] input with ID <{}>", input.getClass().getCanonicalName(), input.getId());
                 } catch (MisfireException e) {
                     StringBuilder msg = new StringBuilder("The [" + input.getClass().getCanonicalName() + "] input with ID <" + input.getId() + "> " +
                             "was accepted but misfired. Reason: ").append(e.getMessage());
@@ -107,10 +101,8 @@ public class InputRegistry {
 
                     // Clean up.
                     cleanInput(input);
-                    inputState.setState(InputState.InputStateType.FAILED);
                 } catch(Exception e) {
                     LOG.error("Error in input <{}>", input.getId(), e);
-                    inputState.setState(InputState.InputStateType.FAILED);
                 }
             }
         });
@@ -124,12 +116,16 @@ public class InputRegistry {
             }
         }
 
-        return inputState.getId();
+        return id;
+    }
+
+    public int runningCount() {
+        return runningInputs.size();
     }
 
     public void cleanInput(MessageInput input) {
         // Remove from running list.
-        removeFromRunning(input);
+        getRunningInputs().remove(input.getId());
     }
 
     public static MessageInput factory(String type) throws NoSuchInputTypeException {
@@ -143,15 +139,14 @@ public class InputRegistry {
         }
     }
 
-    public void removeFromRunning(MessageInput input) {
-        // Remove from running list.
-        InputState thisInputState = null;
-        for (InputState inputState : inputStates) {
-            if (inputState.getMessageInput().equals(input)) {
-                thisInputState = inputState;
+    public boolean hasTypeRunning(Class klazz) {
+        for (MessageInput input : runningInputs.values()) {
+            if (input.getClass().equals(klazz)) {
+                return true;
             }
         }
-        inputStates.remove(thisInputState);
+
+        return false;
     }
 
     public void launchPersisted() throws InterruptedException, ExecutionException, IOException {
@@ -179,10 +174,6 @@ public class InputRegistry {
 
             launch(input, isr.id, false);
         }
-    }
-
-    public String launch(final MessageInput input, Boolean register) {
-        return launch(input, UUID.randomUUID().toString(), register);
     }
 
     // TODO make this use a generic ApiClient class that knows the graylog2-server node address(es) or something.
@@ -248,43 +239,12 @@ public class InputRegistry {
         availableInputs.put(clazz.getCanonicalName(), name);
     }
 
-    public List<InputState> getInputStates() {
-        return inputStates;
-    }
-
-    public List<InputState> getRunningInputs() {
-        List<InputState> runningInputs = Lists.newArrayList();
-        for (InputState inputState : inputStates) {
-            if (inputState.getState() == InputState.InputStateType.RUNNING)
-                runningInputs.add(inputState);
-        }
-        return inputStates;
-    }
-
-    public boolean hasTypeRunning(Class klazz) {
-        for (InputState inputState : inputStates) {
-            if (inputState.getMessageInput().getClass().equals(klazz)) {
-                return true;
-            }
-        }
-
-        return false;
+    public Map<String, MessageInput> getRunningInputs() {
+        return runningInputs;
     }
 
     public Map<String, String> getAvailableInputs() {
         return availableInputs;
     }
 
-    public int runningCount() {
-        return getRunningInputs().size();
-    }
-
-    public MessageInput getRunningInput(String inputId) {
-        for (InputState inputState : inputStates) {
-            if (inputState.getMessageInput().getId().equals(inputId))
-                return inputState.getMessageInput();
-        }
-
-        return null;
-    }
 }
