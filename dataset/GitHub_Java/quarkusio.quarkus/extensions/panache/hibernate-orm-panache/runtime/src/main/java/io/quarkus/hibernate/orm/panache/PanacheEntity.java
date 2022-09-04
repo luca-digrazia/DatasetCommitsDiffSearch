@@ -38,4 +38,6 @@ public abstract class PanacheEntity extends PanacheEntityBase {
     public String toString() {
         return this.getClass().getSimpleName() + "<" + id + ">";
     }
+
+    // FIXME: VERSION?
 }
