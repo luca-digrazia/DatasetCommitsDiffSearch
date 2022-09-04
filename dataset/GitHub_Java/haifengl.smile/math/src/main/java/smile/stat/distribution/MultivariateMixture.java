@@ -19,6 +19,7 @@ package smile.stat.distribution;
 
 import java.util.Arrays;
 import java.util.stream.Collectors;
+
 import smile.math.MathEx;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;

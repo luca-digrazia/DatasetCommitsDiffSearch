@@ -17,7 +17,6 @@
 
 package smile.stat.distribution;
 
-import java.io.Serializable;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 import smile.math.MathEx;
@@ -47,8 +46,7 @@ public class Mixture extends AbstractDistribution {
      * A component in the mixture distribution is defined by a distribution
      * and its weight in the mixture.
      */
-    public static class Component implements Serializable {
-        private static final long serialVersionUID = 2L;
+    public static class Component {
         /**
          * The priori probability of component.
          */
