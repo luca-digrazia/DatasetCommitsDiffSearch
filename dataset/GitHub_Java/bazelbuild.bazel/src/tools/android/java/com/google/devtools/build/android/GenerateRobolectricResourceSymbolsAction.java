@@ -26,8 +26,6 @@ import com.google.devtools.build.android.Converters.PathConverter;
 import com.google.devtools.build.android.resources.RClassGenerator;
 import com.google.devtools.build.android.resources.ResourceSymbols;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import java.io.Closeable;
@@ -86,8 +84,6 @@ public class GenerateRobolectricResourceSymbolsAction {
       defaultValue = "",
       converter = DependencyAndroidDataListConverter.class,
       category = "input",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Data dependencies. The expected format is "
               + DependencyAndroidData.EXPECTED_FORMAT
@@ -100,8 +96,6 @@ public class GenerateRobolectricResourceSymbolsAction {
       defaultValue = "null",
       converter = PathConverter.class,
       category = "output",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Path for the generated java class jar."
     )
     public Path classJarOutput;
@@ -177,6 +171,7 @@ public class GenerateRobolectricResourceSymbolsAction {
       logger.fine(String.format("Merging finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
       AndroidResourceOutputs.createClassJar(generatedSources, options.classJarOutput);
+      System.out.println(options.classJarOutput);
       logger.fine(
           String.format("Create classJar finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
