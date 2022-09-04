@@ -21,7 +21,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
-import com.google.devtools.build.lib.actions.cache.MetadataDigestUtils;
+import com.google.devtools.build.lib.actions.cache.DigestUtils;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics.MissReason;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -54,6 +54,9 @@ import javax.annotation.Nullable;
  * otherwise lightweight, and should be constructed anew and discarded for each build request.
  */
 public class ActionCacheChecker {
+  private static final byte[] EMPTY_DIGEST = new byte[0];
+  private static final FileArtifactValue CONSTANT_METADATA = new ConstantMetadataValue();
+
   private final ActionCache actionCache;
   private final ActionKeyContext actionKeyContext;
   private final Predicate<? super Action> executionFilter;
@@ -156,7 +159,7 @@ public class ActionCacheChecker {
     for (Artifact artifact : actionInputs.toList()) {
       mdMap.put(artifact.getExecPathString(), getMetadataMaybe(metadataHandler, artifact));
     }
-    return !Arrays.equals(MetadataDigestUtils.fromMetadata(mdMap), entry.getFileDigest());
+    return !Arrays.equals(DigestUtils.fromMetadata(mdMap), entry.getFileDigest());
   }
 
   private void reportCommand(EventHandler handler, Action action) {
@@ -344,8 +347,7 @@ public class ActionCacheChecker {
     }
     Map<String, String> usedEnvironment =
         computeUsedEnv(action, clientEnv, remoteDefaultPlatformProperties);
-    if (!Arrays.equals(
-        entry.getUsedClientEnvDigest(), MetadataDigestUtils.fromEnv(usedEnvironment))) {
+    if (!Arrays.equals(entry.getUsedClientEnvDigest(), DigestUtils.fromEnv(usedEnvironment))) {
       reportClientEnv(handler, action, usedEnvironment);
       actionCache.accountMiss(MissReason.DIFFERENT_ENVIRONMENT);
       return true;
@@ -358,10 +360,11 @@ public class ActionCacheChecker {
 
   private static FileArtifactValue getMetadataOrConstant(
       MetadataHandler metadataHandler, Artifact artifact) throws IOException {
-    FileArtifactValue metadata = metadataHandler.getMetadata(artifact);
-    return (metadata != null && artifact.isConstantMetadata())
-        ? ConstantMetadataValue.INSTANCE
-        : metadata;
+    if (artifact.isConstantMetadata()) {
+      return CONSTANT_METADATA;
+    } else {
+      return metadataHandler.getMetadata(artifact);
+    }
   }
 
   // TODO(ulfjack): It's unclear to me why we're ignoring all IOExceptions. In some cases, we want
@@ -607,13 +610,6 @@ public class ActionCacheChecker {
 
   private static final class ConstantMetadataValue extends FileArtifactValue
       implements FileArtifactValue.Singleton {
-    static final ConstantMetadataValue INSTANCE = new ConstantMetadataValue();
-    // This needs to not be of length 0, so it is distinguishable from a missing digest when written
-    // into a Fingerprint.
-    private static final byte[] DIGEST = new byte[1];
-
-    private ConstantMetadataValue() {}
-
     @Override
     public FileStateType getType() {
       return FileStateType.REGULAR_FILE;
@@ -621,7 +617,7 @@ public class ActionCacheChecker {
 
     @Override
     public byte[] getDigest() {
-      return DIGEST;
+      return EMPTY_DIGEST;
     }
 
     @Override
