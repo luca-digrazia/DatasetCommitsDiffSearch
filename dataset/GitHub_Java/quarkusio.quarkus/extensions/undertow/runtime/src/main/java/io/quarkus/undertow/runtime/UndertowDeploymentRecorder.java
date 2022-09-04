@@ -245,9 +245,7 @@ public class UndertowDeploymentRecorder {
 
     public void addServletMapping(RuntimeValue<DeploymentInfo> info, String name, String mapping) throws Exception {
         ServletInfo sv = info.getValue().getServlets().get(name);
-        if (sv != null) {
-            sv.addMapping(mapping);
-        }
+        sv.addMapping(mapping);
     }
 
     public void setMultipartConfig(RuntimeValue<ServletInfo> sref, String location, long fileSize, long maxRequestSize,
@@ -361,7 +359,6 @@ public class UndertowDeploymentRecorder {
         return new Handler<RoutingContext>() {
             @Override
             public void handle(RoutingContext event) {
-                event.request().pause();
                 VertxHttpExchange exchange = new VertxHttpExchange(event.request(), allocator, executorService, event,
                         event.getBody());
                 Optional<MemorySize> maxBodySize = httpConfiguration.limits.maxBodySize;
