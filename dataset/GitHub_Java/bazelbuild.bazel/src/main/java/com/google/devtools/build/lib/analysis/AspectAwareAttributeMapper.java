@@ -80,11 +80,8 @@ class AspectAwareAttributeMapper implements AttributeMap {
             "attribute %s has type %s, not expected type %s",
             attributeName, attribute.getType(), type));
       } else {
-        throw new UnsupportedOperationException(
-            String.format(
-                "Attribute '%s' comes from an aspect. "
-                    + "Value retrieval for aspect attributes is not supported.",
-                attributeName));
+        throw new UnsupportedOperationException("Attribute '%s' comes from an aspect. "
+            + "Value retrieval for aspect attributes is not supported.");
       }
     }
   }

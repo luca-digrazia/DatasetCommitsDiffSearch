@@ -488,11 +488,6 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
       }
 
       @Override
-      public String getRuleClassName() {
-        return owner.getRuleClassName();
-      }
-
-      @Override
       public Iterable<String> getAttributeNames() {
         return ImmutableList.<String>builder()
             .addAll(directMap.keySet())

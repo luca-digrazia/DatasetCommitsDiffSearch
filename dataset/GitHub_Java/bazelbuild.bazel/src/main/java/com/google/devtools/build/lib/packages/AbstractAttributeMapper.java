@@ -214,7 +214,7 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
    * @throws IllegalArgumentException if the attribute is configurable but of the wrong type
    */
   @Nullable
-  public final <T> SelectorList<T> getSelectorList(String attributeName, Type<T> type) {
+  protected final <T> SelectorList<T> getSelectorList(String attributeName, Type<T> type) {
     return getSelectorList(ruleClass, ruleLabel, attributes, attributeName, type);
   }
 
