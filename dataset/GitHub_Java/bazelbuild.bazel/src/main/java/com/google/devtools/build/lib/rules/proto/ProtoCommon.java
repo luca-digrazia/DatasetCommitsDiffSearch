@@ -292,9 +292,9 @@ public class ProtoCommon {
     NestedSetBuilder<Artifact> result = NestedSetBuilder.stableOrder();
     ImmutableList<Artifact> srcs = ruleContext.getPrerequisiteArtifacts("srcs", TARGET).list();
     if (srcs.isEmpty()) {
-      for (ProtoSourcesProvider provider :
-          ruleContext.getPrerequisites("deps", TARGET, ProtoSourcesProvider.class)) {
-        result.addTransitive(provider.getProtosInDirectDeps());
+      for (ProtoSupportDataProvider provider :
+          ruleContext.getPrerequisites("deps", TARGET, ProtoSupportDataProvider.class)) {
+        result.addTransitive(provider.getSupportData().getProtosInDirectDeps());
       }
     } else {
       for (ProtoSourcesProvider provider :
@@ -312,9 +312,9 @@ public class ProtoCommon {
   @Nullable
   public static NestedSet<Artifact> computeProtosInExportedDeps(RuleContext ruleContext) {
     NestedSetBuilder<Artifact> result = NestedSetBuilder.stableOrder();
-    for (ProtoSourcesProvider provider :
-        ruleContext.getPrerequisites("exports", TARGET, ProtoSourcesProvider.class)) {
-      result.addTransitive(provider.getProtosInDirectDeps());
+    for (ProtoSupportDataProvider provider :
+        ruleContext.getPrerequisites("exports", TARGET, ProtoSupportDataProvider.class)) {
+      result.addTransitive(provider.getSupportData().getProtosInDirectDeps());
     }
     return result.build();
   }
