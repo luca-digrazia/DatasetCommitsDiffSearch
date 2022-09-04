@@ -27,13 +27,9 @@ import com.google.common.eventbus.EventBus;
 import com.mongodb.BasicDBObject;
 import com.mongodb.BasicDBObjectBuilder;
 import com.mongodb.DBObject;
-import org.apache.shiro.authz.Permission;
 import org.apache.shiro.authz.permission.WildcardPermission;
 import org.bson.types.ObjectId;
-import org.graylog.grn.GRN;
-import org.graylog.grn.GRNRegistry;
 import org.graylog.security.GrantPermissionResolver;
-import org.graylog.security.permissions.GRNPermission;
 import org.graylog2.Configuration;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
@@ -70,7 +66,6 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
     private final UserImpl.Factory userFactory;
     private final InMemoryRolePermissionResolver inMemoryRolePermissionResolver;
     private final EventBus serverEventBus;
-    private final GRNRegistry grnRegistry;
     private final GrantPermissionResolver grantPermissionResolver;
 
     @Inject
@@ -81,9 +76,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
                            final UserImpl.Factory userFactory,
                            final InMemoryRolePermissionResolver inMemoryRolePermissionResolver,
                            final EventBus serverEventBus,
-                           final GRNRegistry grnRegistry,
-                           final GrantPermissionResolver grantPermissionResolver
-    ) {
+                           final GrantPermissionResolver grantPermissionResolver) {
         super(mongoConnection);
         this.configuration = configuration;
         this.roleService = roleService;
@@ -91,7 +84,6 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         this.userFactory = userFactory;
         this.inMemoryRolePermissionResolver = inMemoryRolePermissionResolver;
         this.serverEventBus = serverEventBus;
-        this.grnRegistry = grnRegistry;
         this.grantPermissionResolver = grantPermissionResolver;
 
         // ensure that the users' roles array is indexed
@@ -178,7 +170,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
     @Deprecated
     public User getAdminUser() {
         return getRootUser().orElseThrow(() ->
-                new IllegalStateException("Local admin user requested but root user is disabled in config."));
+            new IllegalStateException("Local admin user requested but root user is disabled in config."));
     }
 
     @Override
@@ -236,26 +228,15 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
     }
 
     @Override
-    public List<Permission> getPermissionsForUser(User user) {
-        final GRN principal = grnRegistry.ofUser(user);
-        final ImmutableSet.Builder<Permission> permSet = ImmutableSet.<Permission>builder()
-                .addAll(user.getPermissions().stream().map(WildcardPermission::new).collect(Collectors.toSet()))
-                .addAll(grantPermissionResolver.resolvePermissionsForPrincipal(principal))
-                .addAll(getUserPermissionsFromRoles(user).stream().map(WildcardPermission::new).collect(Collectors.toSet()));
+    public List<String> getPermissionsForUser(User user) {
+        final ImmutableSet.Builder<String> permSet = ImmutableSet.<String>builder()
+                .addAll(user.getPermissions())
+                // The frontend cannot handle (and currently does not need) GRNPermissions. Thus we filter them
+                .addAll(grantPermissionResolver.resolvePermissionsForUser(user.getName())
+                        .stream().filter(p -> p instanceof WildcardPermission).map(Object::toString).collect(Collectors.toSet()))
+                .addAll(getUserPermissionsFromRoles(user));
 
         return permSet.build().asList();
-    }
-
-    @Override
-    public List<WildcardPermission> getWildcardPermissionsForUser(User user) {
-        return getPermissionsForUser(user).stream()
-                .filter(WildcardPermission.class::isInstance).map(WildcardPermission.class::cast).collect(Collectors.toList());
-    }
-
-    @Override
-    public List<GRNPermission> getGRNPermissionsForUser(User user) {
-        return getPermissionsForUser(user).stream()
-                .filter(GRNPermission.class::isInstance).map(GRNPermission.class::cast).collect(Collectors.toList());
     }
 
     @Override

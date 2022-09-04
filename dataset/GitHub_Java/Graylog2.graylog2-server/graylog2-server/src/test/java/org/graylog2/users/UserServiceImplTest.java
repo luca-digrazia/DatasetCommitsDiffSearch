@@ -24,10 +24,7 @@ import com.mongodb.BasicDBObjectBuilder;
 import com.mongodb.DBObject;
 import org.apache.shiro.authz.permission.WildcardPermission;
 import org.bson.types.ObjectId;
-import org.graylog.grn.GRNRegistry;
-import org.graylog.grn.GRNTypes;
 import org.graylog.security.GrantPermissionResolver;
-import org.graylog.security.permissions.GRNPermission;
 import org.graylog.testing.mongodb.MongoDBFixtures;
 import org.graylog.testing.mongodb.MongoDBInstance;
 import org.graylog2.Configuration;
@@ -53,7 +50,6 @@ import org.mockito.junit.MockitoRule;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -89,7 +85,7 @@ public class UserServiceImplTest {
         this.userFactory = new UserImplFactory(configuration);
         this.permissions = new Permissions(ImmutableSet.of(new RestPermissions()));
         this.userService = new UserServiceImpl(mongoConnection, configuration, roleService, accessTokenService,
-                userFactory, permissionsResolver, serverEventBus, GRNRegistry.createWithBuiltinTypes(), grantPermissionResolver);
+                                               userFactory, permissionsResolver, serverEventBus, grantPermissionResolver);
 
         when(roleService.getAdminRoleObjectId()).thenReturn("deadbeef");
     }
@@ -215,10 +211,9 @@ public class UserServiceImplTest {
     @Test
     public void testGetPermissionsForUser() throws Exception {
         final InMemoryRolePermissionResolver permissionResolver = mock(InMemoryRolePermissionResolver.class);
-        final GRNRegistry grnRegistry = GRNRegistry.createWithBuiltinTypes();
         final UserService userService = new UserServiceImpl(mongoConnection, configuration, roleService,
-                accessTokenService, userFactory, permissionResolver,
-                serverEventBus, grnRegistry, grantPermissionResolver);
+                                                            accessTokenService,userFactory, permissionResolver,
+                                                            serverEventBus, grantPermissionResolver);
 
         final UserImplFactory factory = new UserImplFactory(new Configuration());
         final UserImpl user = factory.create(new HashMap<>());
@@ -229,14 +224,9 @@ public class UserServiceImplTest {
         user.setPermissions(Collections.singletonList("hello:world"));
 
         when(permissionResolver.resolveStringPermission(role.getId())).thenReturn(Collections.singleton("foo:bar"));
-        when(grantPermissionResolver.resolvePermissionsForPrincipal(grnRegistry.newGRN(GRNTypes.USER, "user")))
-                .thenReturn(ImmutableSet.of(
-                        new WildcardPermission("perm:from:grant"),
-                        GRNPermission.create(RestPermissions.ENTITY_OWN, grnRegistry.newGRN(GRNTypes.DASHBOARD, "1234"))));
+        when(grantPermissionResolver.resolvePermissionsForUser("user")).thenReturn(ImmutableSet.of(new WildcardPermission("perm:from:grant")));
 
-        assertThat(userService.getPermissionsForUser(user).stream().map(Objects::toString)).containsExactlyInAnyOrder(
-                "users:passwordchange:user", "users:edit:user", "foo:bar", "hello:world", "users:tokenlist:user", "users:tokencreate:user", "users:tokenremove:user",
-                "perm:from:grant",
-                "entity:own|grn::::dashboard:1234");
+        assertThat(userService.getPermissionsForUser(user)).containsOnly("users:passwordchange:user", "users:edit:user",
+                "foo:bar", "hello:world", "perm:from:grant", "users:tokenlist:user", "users:tokencreate:user", "users:tokenremove:user");
     }
 }
