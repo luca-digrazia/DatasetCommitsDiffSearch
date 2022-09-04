@@ -24,7 +24,6 @@ import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
@@ -178,7 +177,7 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
     }
 
     @Override
-    public ActionResult execute(ActionExecutionContext actionExecutionContext)
+    public void execute(ActionExecutionContext actionExecutionContext)
         throws ActionExecutionException {
       try {
         Map<String, String> statusMap = parseWorkspaceStatus(
@@ -232,7 +231,6 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
             this,
             true);
       }
-      return ActionResult.EMPTY;
     }
 
     @Override
