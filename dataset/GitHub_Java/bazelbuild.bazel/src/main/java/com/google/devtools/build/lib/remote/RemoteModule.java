@@ -299,8 +299,7 @@ public final class RemoteModule extends BlazeModule {
                   remoteOptions.diskCache,
                   remoteOptions.remoteVerifyDownloads,
                   digestUtil,
-                  cacheClient,
-                  remoteOptions);
+                  cacheClient);
         }
 
         RemoteCache remoteCache = new RemoteCache(cacheClient, remoteOptions, digestUtil);
@@ -507,8 +506,6 @@ public final class RemoteModule extends BlazeModule {
       builder.setActionInputPrefetcher(actionInputFetcher);
       remoteOutputService.setActionInputFetcher(actionInputFetcher);
     }
-
-    builder.setRemoteFallbackStrategy(remoteOptions.remoteLocalFallbackStrategy);
   }
 
   @Override

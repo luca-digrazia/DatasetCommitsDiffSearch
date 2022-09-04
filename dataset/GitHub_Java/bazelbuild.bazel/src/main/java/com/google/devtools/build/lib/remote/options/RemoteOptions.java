@@ -86,20 +86,9 @@ public final class RemoteOptions extends OptionsBase {
   public String remoteCache;
 
   @Option(
-      name = "experimental_remote_downloader",
-      defaultValue = "null",
-      documentationCategory = OptionDocumentationCategory.REMOTE,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "A URI of a remote downloader endpoint. The supported schemas are grpc and grpcs"
-              + " (grpc with TLS enabled). If no schema is provided bazel will default to grpcs."
-              + " Specify grpc:// schema to disable TLS.")
-  public String remoteDownloader;
-
-  @Option(
       name = "remote_header",
       converter = Converters.AssignmentConverter.class,
-      defaultValue = "null",
+      defaultValue = "",
       documentationCategory = OptionDocumentationCategory.REMOTE,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
@@ -112,7 +101,7 @@ public final class RemoteOptions extends OptionsBase {
   @Option(
       name = "remote_cache_header",
       converter = Converters.AssignmentConverter.class,
-      defaultValue = "null",
+      defaultValue = "",
       documentationCategory = OptionDocumentationCategory.REMOTE,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
@@ -126,7 +115,7 @@ public final class RemoteOptions extends OptionsBase {
   @Option(
       name = "remote_exec_header",
       converter = Converters.AssignmentConverter.class,
-      defaultValue = "null",
+      defaultValue = "",
       documentationCategory = OptionDocumentationCategory.REMOTE,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
@@ -136,20 +125,6 @@ public final class RemoteOptions extends OptionsBase {
               + "values for the same name will be converted to a comma-separated list.",
       allowMultiple = true)
   public List<Entry<String, String>> remoteExecHeaders;
-
-  @Option(
-      name = "remote_downloader_header",
-      converter = Converters.AssignmentConverter.class,
-      defaultValue = "null",
-      documentationCategory = OptionDocumentationCategory.REMOTE,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "Specify a header that will be included in remote downloader requests: "
-              + "--remote_downloader_header=Name=Value. "
-              + "Multiple headers can be passed by specifying the flag multiple times. Multiple "
-              + "values for the same name will be converted to a comma-separated list.",
-      allowMultiple = true)
-  public List<Entry<String, String>> remoteDownloaderHeaders;
 
   @Option(
       name = "remote_timeout",
@@ -194,26 +169,6 @@ public final class RemoteOptions extends OptionsBase {
       effectTags = {OptionEffectTag.UNKNOWN},
       help = "Whether to upload locally executed action results to the remote cache.")
   public boolean remoteUploadLocalResults;
-
-  @Option(
-      name = "incompatible_remote_results_ignore_disk",
-      defaultValue = "false",
-      category = "remote",
-      documentationCategory = OptionDocumentationCategory.REMOTE,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "If set to true, --noremote_upload_local_results and --noremote_accept_cached will not"
-              + " apply to the disk cache. If a combined cache is used:\n"
-              + "\t--noremote_upload_local_results will cause results to be written to the disk"
-              + " cache, but not uploaded to the remote cache.\n"
-              + "\t--noremote_accept_cached will result in Bazel checking for results in the disk"
-              + " cache, but not in the remote cache.\n"
-              + "See #8216 for details.")
-  public boolean incompatibleRemoteResultsIgnoreDisk;
 
   @Option(
       name = "remote_instance_name",
