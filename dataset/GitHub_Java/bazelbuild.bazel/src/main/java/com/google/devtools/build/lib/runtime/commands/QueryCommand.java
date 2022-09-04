@@ -42,11 +42,7 @@ import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.KeepGoingOption;
 import com.google.devtools.build.lib.runtime.LoadingPhaseThreadsOption;
-import com.google.devtools.build.lib.runtime.QueryRuntimeHelper;
-import com.google.devtools.build.lib.runtime.QueryRuntimeHelper.Factory.CommandLineException;
 import com.google.devtools.build.lib.runtime.TargetProviderForQueryEnvironment;
-import com.google.devtools.build.lib.skyframe.LoadingPhaseStartedEvent;
-import com.google.devtools.build.lib.skyframe.PackageProgressReceiver;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutorWrappingWalkableGraph;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.Either;
@@ -147,59 +143,36 @@ public final class QueryCommand implements BlazeCommand {
     Set<Setting> settings = queryOptions.toSettings();
     boolean streamResults = QueryOutputUtils.shouldStreamResults(queryOptions, formatter);
 
-    env.getEventBus()
-        .post(
-            new NoBuildEvent(
-                env.getCommandName(),
-                env.getCommandStartTime(),
-                /* separateFinishedEvent= */ true,
-                /* showProgress= */ true,
-                /* id= */ null));
-    try (QueryRuntimeHelper queryRuntimeHelper =
-        env.getRuntime().getQueryRuntimeHelperFactory().create(env)) {
-      Either<BlazeCommandResult, QueryEvalResult> result;
-      try (AbstractBlazeQueryEnvironment<Target> queryEnv =
-          newQueryEnvironment(
-              env,
-              options.getOptions(KeepGoingOption.class).keepGoing,
-              !streamResults,
-              queryOptions.universeScope,
-              options.getOptions(LoadingPhaseThreadsOption.class).threads,
-              settings)) {
-        result =
-            doQuery(
-                query, env, queryOptions, streamResults, formatter, queryEnv, queryRuntimeHelper);
-      }
-      return result.map(
-          Function.identity(),
-          queryEvalResult -> {
-            if (queryEvalResult.isEmpty()) {
-              env.getReporter().handle(Event.info("Empty results"));
-            }
-            try {
-              queryRuntimeHelper.afterQueryOutputIsWritten();
-            } catch (IOException e) {
-              env.getReporter().handle(Event.error("I/O error:" + e.getMessage()));
-              return BlazeCommandResult.exitCode(ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
-            } catch (InterruptedException e) {
-              env.getReporter().handle(Event.error("query interrupted"));
-              return BlazeCommandResult.exitCode(ExitCode.INTERRUPTED);
-            }
-            ExitCode exitCode =
-                queryEvalResult.getSuccess() ? ExitCode.SUCCESS : ExitCode.PARTIAL_ANALYSIS_FAILURE;
-            env.getEventBus()
-                .post(
-                    new NoBuildRequestFinishedEvent(
-                        exitCode, runtime.getClock().currentTimeMillis()));
-            return BlazeCommandResult.exitCode(exitCode);
-          });
-    } catch (IOException e) {
-      env.getReporter().handle(Event.error("I/O error: " + e.getMessage()));
-      return BlazeCommandResult.exitCode(ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
-    } catch (CommandLineException e) {
-      env.getReporter().handle(Event.error("Commandline error: " + e.getMessage()));
-      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
+    Either<BlazeCommandResult, QueryEvalResult> result;
+    try (AbstractBlazeQueryEnvironment<Target> queryEnv =
+        newQueryEnvironment(
+            env,
+            options.getOptions(KeepGoingOption.class).keepGoing,
+            !streamResults,
+            queryOptions.universeScope,
+            options.getOptions(LoadingPhaseThreadsOption.class).threads,
+            settings)) {
+      result = doQuery(
+          query,
+          env,
+          queryOptions,
+          streamResults,
+          formatter,
+          queryEnv);
     }
+    return result.map(
+        Function.identity(),
+        queryEvalResult -> {
+          if (queryEvalResult.isEmpty()) {
+            env.getReporter().handle(Event.info("Empty results"));
+          }
+          ExitCode exitCode = queryEvalResult.getSuccess()
+              ? ExitCode.SUCCESS
+              : ExitCode.PARTIAL_ANALYSIS_FAILURE;
+          env.getEventBus().post(
+              new NoBuildRequestFinishedEvent(exitCode, runtime.getClock().currentTimeMillis()));
+          return BlazeCommandResult.exitCode(exitCode);
+        });
   }
 
   private Either<BlazeCommandResult, QueryEvalResult> doQuery(
@@ -208,8 +181,7 @@ public final class QueryCommand implements BlazeCommand {
       QueryOptions queryOptions,
       boolean streamResults,
       OutputFormatter formatter,
-      AbstractBlazeQueryEnvironment<Target> queryEnv,
-      QueryRuntimeHelper queryRuntimeHelper) {
+      AbstractBlazeQueryEnvironment<Target> queryEnv) {
     QueryExpression expr;
     try {
       expr = QueryExpression.parse(query, queryEnv);
@@ -233,9 +205,9 @@ public final class QueryCommand implements BlazeCommand {
       // There is no particular reason for the 16384 constant here, except its a multiple of the
       // gRPC buffer size. We mainly don't want to send each label individually because the output
       // stream is connected to gRPC, and every write gets converted to one gRPC call.
-      out = new BufferedOutputStream(queryRuntimeHelper.getOutputStreamForQueryOutput(), 16384);
+      out = new BufferedOutputStream(env.getReporter().getOutErr().getOutputStream(), 16384);
     } else {
-      out = queryRuntimeHelper.getOutputStreamForQueryOutput();
+      out = env.getReporter().getOutErr().getOutputStream();
     }
 
     ThreadSafeOutputFormatterCallback<Target> callback;
@@ -288,6 +260,9 @@ public final class QueryCommand implements BlazeCommand {
         }
       }
     }
+
+    env.getEventBus()
+        .post(new NoBuildEvent(env.getCommandName(), env.getCommandStartTime(), true));
     if (!streamResults) {
       disableAnsiCharactersFiltering(env);
       try {
@@ -347,13 +322,6 @@ public final class QueryCommand implements BlazeCommand {
 
     TargetProviderForQueryEnvironment targetProviderForQueryEnvironment =
         new TargetProviderForQueryEnvironment(walkableGraph, env.getPackageManager());
-
-    PackageProgressReceiver progressReceiver =
-        env.getSkyframeExecutor().getPackageProgressReceiver();
-    if (progressReceiver != null) {
-      progressReceiver.reset();
-      env.getReporter().post(new LoadingPhaseStartedEvent(progressReceiver));
-    }
 
     return env.getRuntime()
         .getQueryEnvironmentFactory()
