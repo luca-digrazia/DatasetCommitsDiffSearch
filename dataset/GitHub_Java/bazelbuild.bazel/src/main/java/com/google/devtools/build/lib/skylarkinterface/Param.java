@@ -42,14 +42,14 @@ public @interface Param {
    *
    * <p>If the function implementation needs to distinguish the case where the caller does not
    * supply a value for this parameter, you can set the default to the magic string "unbound", which
-   * maps to the sentinal object {@link com.google.devtools.build.lib.syntax.Starlark#UNBOUND}
+   * maps to the sentinal object {@link com.google.devtools.build.lib.syntax.Runtime#UNBOUND}
    * (which can't appear in normal Skylark code).
    */
   String defaultValue() default "";
 
   /**
-   * Type of the parameter, e.g. {@link String}.class or {@link
-   * com.google.devtools.build.lib.syntax.Sequence}.class.
+   * Type of the parameter, e.g. {@link String}.class or
+   * {@link com.google.devtools.build.lib.syntax.SkylarkList}.class.
    */
   Class<?> type() default Object.class;
 
@@ -61,10 +61,10 @@ public @interface Param {
   ParamType[] allowedTypes() default {};
 
   /**
-   * When {@link #type()} is a generic type (e.g., {@link
-   * com.google.devtools.build.lib.syntax.Sequence}), specify the type parameter (e.g. {@link
-   * String}.class} along with {@link com.google.devtools.build.lib.syntax.Sequence} for {@link
-   * #type()} to specify a list of strings).
+   * When {@link #type()} is a generic type (e.g.,
+   * {@link com.google.devtools.build.lib.syntax.SkylarkList}), specify the type parameter (e.g.
+   * {@link String}.class} along with {@link com.google.devtools.build.lib.syntax.SkylarkList} for
+   * {@link #type()} to specify a list of strings).
    *
    * <p>This is only used for documentation generation. The actual generic type is not checked at
    * runtime, so the Java method signature should use a generic type of Object and cast
@@ -102,6 +102,18 @@ public @interface Param {
   boolean named() default false;
 
   /**
+   * If this true, {@link #named} should be treated as true.
+   *
+   * <p>This indicates this parameter is part of a {@link SkylarkCallable} method which
+   * was migrated from {@link SkylarkSignature}. Due to a pre-migration bug, all parameters were
+   * treated as if {@link #named} was true, even if it was false. To prevent breakages during
+   * migration, the interpreter can continue to treat these parameters as named. This is distinct
+   * from {@link #named}, however, so that a bulk fix/cleanup will be easier later.
+   */
+  // TODO(b/77902276): Remove this after a bulk cleanup/fix.
+  boolean legacyNamed() default false;
+
+  /**
    * If true, the parameter may be specified as a positional parameter. For example for an integer
    * positional parameter {@code foo} of a method {@code bar}, then the method call will look like
    * {@code bar(1)}. If {@link #named()} is {@code false}, then this will be the only way to call
@@ -116,47 +128,6 @@ public @interface Param {
    * element of a method, this field has no effect.
    */
   boolean positional() default true;
-
-  /**
-   * If non-empty, the annotated parameter will only be present if the given semantic flag is true.
-   * (If the parameter is disabled, it may not be specified by a user, and the Java method will
-   * always be invoked with the parameter set to its default value.)
-   *
-   * <p>Note that at most one of {@link #enableOnlyWithFlag} and {@link #disableWithFlag} can be
-   * non-empty.
-   */
-  String enableOnlyWithFlag() default "";
-
-  /**
-   * If non-empty, the annotated parameter will only be present if the given semantic flag is false.
-   * (If the parameter is disabled, it may not be specified by a user, and the Java method will
-   * always be invoked with the parameter set to its default value.)
-   *
-   * <p>Note that at most one of {@link #enableOnlyWithFlag} and {@link #disableWithFlag} can be
-   * non-empty.
-   */
-  String disableWithFlag() default "";
-
-  /**
-   * Value for the parameter when the parameter is "disabled" based on semantic flags. (When the
-   * parameter is disabled, it may not be set from Starlark, but an argument of the given value is
-   * passed to the annotated Java method when invoked.) (See {@link #enableOnlyWithFlag()} and
-   * {@link #disableWithFlag()} for toggling a parameter with semantic flags.
-   *
-   * <p>The parameter value is written as a Skylark expression (for example: "False", "True", "[]",
-   * "None").
-   *
-   * <p>This should be set (non-empty) if and only if the parameter may be disabled with a semantic
-   * flag.
-   *
-   * <p>Note that this is very similar to {@link #defaultValue}; it may be considered "the default
-   * value if no parameter is specified". It is important that this is distinct, however, in cases
-   * where it is desired to have a normally-mandatory parameter toggled by flag. Such a parameter
-   * should have no {@link #defaultValue} set, but should have a sensible {@link
-   * #valueWhenDisabled()} set. ("unbound" may be used in cases where no value would be valid. See
-   * {@link #defaultValue}.)
-   */
-  String valueWhenDisabled() default "";
 
   // TODO(bazel-team): parse the type from a single field in Skylark syntax,
   // and allow a Union as "ThisType or ThatType or NoneType":
