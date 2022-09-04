@@ -29,6 +29,7 @@ public final class ParamDescriptor {
   private final Class<?> generic1;
   private final boolean noneable;
   private final boolean named;
+  private final boolean legacyNamed;
   private final boolean positional;
   // While the type can be inferred completely by the Param annotation, this tuple allows for the
   // type of a given parameter to be determined only once, as it is an expensive operation.
@@ -53,7 +54,8 @@ public final class ParamDescriptor {
     this.allowedTypes = allowedTypes;
     this.generic1 = generic1;
     this.noneable = noneable;
-    this.named = named || legacyNamed;
+    this.named = named;
+    this.legacyNamed = legacyNamed;
     this.positional = positional;
     this.skylarkType = skylarkType;
   }
@@ -139,6 +141,11 @@ public final class ParamDescriptor {
   /** @see Param#named() */
   public boolean isNamed() {
     return named;
+  }
+
+  /** @see Param#legacyNamed() */
+  public boolean isLegacyNamed() {
+    return legacyNamed;
   }
 
   /** @see Param#defaultValue() */

@@ -31,14 +31,10 @@ public abstract class AbstractUnfilteredTTVDTCVisitor<T> extends AbstractSkyKeyP
   protected AbstractUnfilteredTTVDTCVisitor(
       SkyQueryEnvironment env,
       Uniquifier<SkyKey> uniquifier,
+      int visitBatchSize,
       int processResultsBatchSize,
       Callback<T> callback) {
-    super(
-        uniquifier,
-        callback,
-        env.getVisitBatchSizeForParallelVisitation(),
-        processResultsBatchSize,
-        env.getVisitTaskStatusCallback());
+    super(uniquifier, callback, visitBatchSize, processResultsBatchSize);
     this.env = env;
   }
 
@@ -54,10 +50,9 @@ public abstract class AbstractUnfilteredTTVDTCVisitor<T> extends AbstractSkyKeyP
   }
 
   @Override
-  protected Iterable<SkyKey> preprocessInitialVisit(Iterable<SkyKey> visitationKeys) {
-    // ParallelTargetVisitorCallback passes in TTV keys.
-    Preconditions.checkState(
-        Iterables.all(visitationKeys, SkyQueryEnvironment.IS_TTV), visitationKeys);
-    return visitationKeys;
+  protected Iterable<SkyKey> preprocessInitialVisit(Iterable<SkyKey> keys) {
+    // ParallelVisitorCallback passes in TTV keys.
+    Preconditions.checkState(Iterables.all(keys, SkyQueryEnvironment.IS_TTV), keys);
+    return keys;
   }
 }

@@ -147,9 +147,6 @@ public final class FuncallExpression extends Expression {
                 }
               });
 
-  // *args, **kwargs, location, ast, environment, skylark semantics
-  private static final int EXTRA_ARGS_COUNT = 6;
-
   /**
    * Returns a map of methods and corresponding SkylarkCallable annotations of the methods of the
    * classObj class reachable from Skylark.
@@ -557,8 +554,9 @@ public final class FuncallExpression extends Expression {
       Map<String, Object> kwargs,
       MethodDescriptor method,
       Environment environment) {
-    ImmutableList.Builder<Object> builder =
-        ImmutableList.builderWithExpectedSize(method.getParameters().size() + EXTRA_ARGS_COUNT);
+    ImmutableList.Builder<Object> builder = ImmutableList.builder();
+    ImmutableList.Builder<Object> extraArgsBuilder = ImmutableList.builder();
+    ImmutableMap.Builder<String, Object> extraKwargsBuilder = ImmutableMap.builder();
     boolean acceptsExtraArgs = method.isAcceptsExtraArgs();
     boolean acceptsExtraKwargs = method.isAcceptsExtraKwargs();
 
@@ -613,15 +611,11 @@ public final class FuncallExpression extends Expression {
       builder.add(value);
     }
 
-    ImmutableList<Object> extraArgs = ImmutableList.of();
     if (argIndex < args.size()) {
       if (acceptsExtraArgs) {
-        ImmutableList.Builder<Object> extraArgsBuilder =
-            ImmutableList.builderWithExpectedSize(args.size() - argIndex);
         for (; argIndex < args.size(); argIndex++) {
           extraArgsBuilder.add(args.get(argIndex));
         }
-        extraArgs = extraArgsBuilder.build();
       } else {
         return ArgumentListConversionResult.fromError(
             String.format(
@@ -629,15 +623,11 @@ public final class FuncallExpression extends Expression {
                 argIndex, args.size()));
       }
     }
-    ImmutableMap<String, Object> extraKwargs = ImmutableMap.of();
     if (!keys.isEmpty()) {
       if (acceptsExtraKwargs) {
-        ImmutableMap.Builder<String, Object> extraKwargsBuilder =
-            ImmutableMap.builderWithExpectedSize(keys.size());
         for (String key : keys) {
           extraKwargsBuilder.put(key, kwargs.get(key));
         }
-        extraKwargs = extraKwargsBuilder.build();
       } else {
         return ArgumentListConversionResult.fromError(
             String.format(
@@ -649,10 +639,10 @@ public final class FuncallExpression extends Expression {
 
     // Then add any skylark-interpreter arguments (for example kwargs or the Environment).
     if (acceptsExtraArgs) {
-      builder.add(Tuple.copyOf(extraArgs));
+      builder.add(Tuple.copyOf(extraArgsBuilder.build()));
     }
     if (acceptsExtraKwargs) {
-      builder.add(SkylarkDict.copyOf(environment, extraKwargs));
+      builder.add(SkylarkDict.copyOf(environment, extraKwargsBuilder.build()));
     }
     builder.addAll(extraInterpreterArgs(method, this, getLocation(), environment));
 

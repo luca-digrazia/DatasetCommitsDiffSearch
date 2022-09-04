@@ -14,6 +14,8 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Preconditions;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.common.primitives.Booleans;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -25,7 +27,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nullable;
 
 /**
@@ -38,8 +39,7 @@ public class SkylarkSignatureProcessor {
   // represented by that string. For example, "None" -> Runtime.NONE. This cache is manually
   // maintained (instead of using, for example, a LoadingCache), as default values may sometimes
   // be recursively requested.
-  private static final ConcurrentHashMap<String, Object> defaultValueCache =
-      new ConcurrentHashMap<>();
+  private static final Cache<String, Object> defaultValueCache = CacheBuilder.newBuilder().build();
 
   /**
    * Extracts a {@code FunctionSignature.WithValues<Object, SkylarkType>} from a
@@ -243,7 +243,7 @@ public class SkylarkSignatureProcessor {
       return Runtime.NONE;
     } else {
       try {
-        Object defaultValue = defaultValueCache.get(paramDefaultValue);
+        Object defaultValue = defaultValueCache.getIfPresent(paramDefaultValue);
         if (defaultValue != null) {
           return defaultValue;
         }

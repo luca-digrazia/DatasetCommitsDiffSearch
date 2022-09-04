@@ -13,17 +13,21 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2;
 
-import com.google.common.collect.ImmutableSet;
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
+import static com.google.devtools.build.lib.query2.SkyQueryEnvironment.IS_TTV;
+import static com.google.devtools.build.lib.query2.SkyQueryEnvironment.SKYKEY_TO_LABEL;
+
+import com.google.common.base.Predicates;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.concurrent.MultisetSemaphore;
+import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.query2.ParallelVisitorUtils.ParallelQueryVisitor;
-import com.google.devtools.build.lib.query2.ParallelVisitorUtils.QueryVisitorFactory;
 import com.google.devtools.build.lib.query2.engine.Callback;
 import com.google.devtools.build.lib.query2.engine.QueryException;
-import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.engine.QueryExpressionContext;
 import com.google.devtools.build.lib.query2.engine.Uniquifier;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -32,10 +36,10 @@ import java.util.Set;
 
 /**
  * A helper class that computes unbounded 'deps(<expr>)' via BFS. Re-use logic from {@link
- * AbstractTargetOuputtingVisitor} to grab relevant semaphore locks when processing nodes as well as
- * batching visits by packages.
+ * AbstractEdgeVisitor} to grab relevant semaphore locks when processing nodes as well as batching
+ * visits by packages.
  */
-class DepsUnboundedVisitor extends AbstractTargetOuputtingVisitor<SkyKey> {
+class DepsUnboundedVisitor extends AbstractEdgeVisitor<SkyKey> {
   /**
    * A {@link Uniquifier} for valid deps. Only used prior to visiting the deps. Deps filtering is
    * done in the {@link DepsUnboundedVisitor#getVisitResult} stage.
@@ -44,20 +48,18 @@ class DepsUnboundedVisitor extends AbstractTargetOuputtingVisitor<SkyKey> {
 
   private final boolean depsNeedFiltering;
   private final QueryExpressionContext<Target> context;
-  private final QueryExpression caller;
 
   DepsUnboundedVisitor(
       SkyQueryEnvironment env,
       Uniquifier<SkyKey> validDepUniquifier,
       Callback<Target> callback,
+      MultisetSemaphore<PackageIdentifier> packageSemaphore,
       boolean depsNeedFiltering,
-      QueryExpressionContext<Target> context,
-      QueryExpression caller) {
-    super(env, callback);
+      QueryExpressionContext<Target> context) {
+    super(env, callback, packageSemaphore);
     this.validDepUniquifier = validDepUniquifier;
     this.depsNeedFiltering = depsNeedFiltering;
     this.context = context;
-    this.caller = caller;
   }
 
   /**
@@ -66,87 +68,96 @@ class DepsUnboundedVisitor extends AbstractTargetOuputtingVisitor<SkyKey> {
    * Callback#process} call. Note that all the created instances share the same {@link Uniquifier}
    * so that we don't visit the same Skyframe node more than once.
    */
-  static class Factory implements QueryVisitorFactory<SkyKey, SkyKey, Target> {
+  static class Factory implements ParallelVisitor.Factory {
     private final SkyQueryEnvironment env;
     private final Uniquifier<SkyKey> validDepUniquifier;
     private final Callback<Target> callback;
+    private final MultisetSemaphore<PackageIdentifier> packageSemaphore;
     private final boolean depsNeedFiltering;
     private final QueryExpressionContext<Target> context;
-    private final QueryExpression caller;
 
     Factory(
         SkyQueryEnvironment env,
         Callback<Target> callback,
+        MultisetSemaphore<PackageIdentifier> packageSemaphore,
         boolean depsNeedFiltering,
-        QueryExpressionContext<Target> context,
-        QueryExpression caller) {
+        QueryExpressionContext<Target> context) {
       this.env = env;
       this.validDepUniquifier = env.createSkyKeyUniquifier();
       this.callback = callback;
+      this.packageSemaphore = packageSemaphore;
       this.depsNeedFiltering = depsNeedFiltering;
       this.context = context;
-      this.caller = caller;
     }
 
     @Override
-    public ParallelQueryVisitor<SkyKey, SkyKey, Target> create() {
+    public ParallelVisitor<SkyKey, Target> create() {
       return new DepsUnboundedVisitor(
-          env, validDepUniquifier, callback, depsNeedFiltering, context, caller);
+          env,
+          validDepUniquifier,
+          callback,
+          packageSemaphore,
+          depsNeedFiltering,
+          context);
     }
   }
 
   @Override
-  protected Visit getVisitResult(Iterable<SkyKey> keys)
-      throws InterruptedException, QueryException {
+  protected Visit getVisitResult(Iterable<SkyKey> keys) throws InterruptedException {
     if (depsNeedFiltering) {
       // We have to targetify the keys here in order to determine the allowed dependencies.
-      Multimap<SkyKey, SkyKey> packageKeyToTargetKeyMap =
-          SkyQueryEnvironment.makePackageKeyToTargetKeyMap(keys);
+      Multimap<SkyKey, SkyKey> packageKeyToTargetKeyMap = env.makePackageKeyToTargetKeyMap(keys);
       Set<PackageIdentifier> pkgIdsNeededForTargetification =
-          SkyQueryEnvironment.getPkgIdsNeededForTargetification(packageKeyToTargetKeyMap);
-      MultisetSemaphore<PackageIdentifier> packageSemaphore = getPackageSemaphore();
+          packageKeyToTargetKeyMap
+              .keySet()
+              .stream()
+              .map(SkyQueryEnvironment.PACKAGE_SKYKEY_TO_PACKAGE_IDENTIFIER)
+              .collect(toImmutableSet());
       packageSemaphore.acquireAll(pkgIdsNeededForTargetification);
-      Iterable<SkyKey> depsAsSkyKeys;
+      Iterable<Target> deps;
       try {
-        Iterable<Target> depsAsTargets =
-            env.getFwdDeps(
-                env.getTargetKeyToTargetMapForPackageKeyToTargetKeyMap(
-                    packageKeyToTargetKeyMap).values(),
-                context);
-        depsAsSkyKeys = Iterables.transform(depsAsTargets, Target::getLabel);
+        deps = env.getFwdDeps(env.makeTargetsFromSkyKeys(keys).values(), context);
       } finally {
         packageSemaphore.releaseAll(pkgIdsNeededForTargetification);
       }
 
       return new Visit(
           /*keysToUseForResult=*/ keys,
-          /*keysToVisit=*/ depsAsSkyKeys);
+          /*keysToVisit=*/ Iterables.transform(deps, Target::getLabel));
     }
 
-    return new Visit(
-        keys, ImmutableSet.copyOf(Iterables.concat(env.getFwdDepLabels(keys).values())));
+    // We need to explicitly check that all requested TTVs are actually in the graph.
+    Map<SkyKey, Iterable<SkyKey>> depMap = env.graph.getDirectDeps(keys);
+    checkIfMissingTargets(keys, depMap);
+    Iterable<SkyKey> deps = Iterables.filter(Iterables.concat(depMap.values()), IS_TTV);
+    return new Visit(keys, deps);
+  }
+
+  private void checkIfMissingTargets(Iterable<SkyKey> keys, Map<SkyKey, Iterable<SkyKey>> depMap) {
+    if (depMap.size() != Iterables.size(keys)) {
+      Iterable<Label> missingTargets =
+          Iterables.transform(
+              Iterables.filter(keys, Predicates.not(Predicates.in(depMap.keySet()))),
+              SKYKEY_TO_LABEL);
+      env.getEventHandler()
+          .handle(Event.warn("Targets were missing from graph: " + missingTargets));
+    }
   }
 
   @Override
-  protected Iterable<SkyKey> preprocessInitialVisit(Iterable<SkyKey> visitationKeys) {
-    return visitationKeys;
+  protected Iterable<SkyKey> preprocessInitialVisit(Iterable<SkyKey> keys) {
+    return keys;
   }
 
   @Override
-  protected SkyKey visitationKeyToOutputKey(SkyKey visitationKey) {
-    return visitationKey;
+  protected SkyKey getNewNodeFromEdge(SkyKey visit) {
+    return visit;
   }
 
   @Override
-  protected Iterable<SkyKey> noteAndReturnUniqueVisitationKeys(
-      Iterable<SkyKey> prospectiveVisitationKeys) throws QueryException {
-    return validDepUniquifier.unique(prospectiveVisitationKeys);
-  }
-
-  @Override
-  protected void handleMissingTargets(
-      Map<? extends SkyKey, Target> keysWithTargets, Set<SkyKey> targetKeys)
-      throws QueryException, InterruptedException {
-    env.reportUnsuccessfulOrMissingTargets(keysWithTargets, targetKeys, caller);
+  protected ImmutableList<SkyKey> getUniqueValues(Iterable<SkyKey> keysToVisit)
+      throws QueryException {
+    // Legit deps are already filtered using env.getFwdDeps().
+    return validDepUniquifier.unique(keysToVisit);
   }
 }
