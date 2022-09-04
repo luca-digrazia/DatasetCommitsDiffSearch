@@ -341,35 +341,26 @@ public class ProtoCompileActionBuilder {
       ImmutableList.Builder<String> builder = ImmutableList.builder();
       for (Artifact artifact : transitiveImports) {
         builder.add(
-            "-I" + getPathIgnoringRepository(artifact) + "=" + artifact.getExecPathString());
+            "-I"
+                + artifact
+                    .getRootRelativePath()
+                    .relativeTo(
+                        artifact
+                            .getOwnerLabel()
+                            .getPackageIdentifier()
+                            .getRepository()
+                            .getPathUnderExecRoot())
+                + "="
+                + artifact.getExecPathString());
       }
       if (protosInDirectDependencies != null) {
         ArrayList<String> rootRelativePaths = new ArrayList<>();
         for (Artifact directDependency : protosInDirectDependencies) {
-          rootRelativePaths.add(getPathIgnoringRepository(directDependency));
+          rootRelativePaths.add(directDependency.getRootRelativePathString());
         }
         builder.add("--direct_dependencies=" + Joiner.on(":").join(rootRelativePaths));
       }
       return builder.build();
-    }
-
-    /**
-     * Gets the artifact's path relative to the root, ignoring the external repository the artifact
-     * is at. For example, <code>
-     * //a:b.proto --> a/b.proto
-     * {@literal @}foo//a:b.proto --> a/b.proto
-     * </code>
-     */
-    private static String getPathIgnoringRepository(Artifact artifact) {
-      return artifact
-          .getRootRelativePath()
-          .relativeTo(
-              artifact
-                  .getOwnerLabel()
-                  .getPackageIdentifier()
-                  .getRepository()
-                  .getPathUnderExecRoot())
-          .toString();
     }
   }
 
