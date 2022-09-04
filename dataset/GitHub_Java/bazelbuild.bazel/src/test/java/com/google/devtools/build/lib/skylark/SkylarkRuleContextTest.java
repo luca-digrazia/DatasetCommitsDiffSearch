@@ -17,10 +17,9 @@ package com.google.devtools.build.lib.skylark;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.common.truth.Truth8.assertThat;
-import static com.google.devtools.build.lib.analysis.ToolchainCollection.DEFAULT_EXEC_GROUP_NAME;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
@@ -31,7 +30,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ActionsProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.ResolvedToolchainContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.StarlarkAction;
@@ -2097,17 +2095,14 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     Artifact helper1 =
         Iterables.getOnlyElement(
             Iterables.filter(
-                spawnAction1.getInputs().toList(),
-                a -> a.getFilename().equals("undertest.run_shell_0.sh")));
+                spawnAction1.getInputs(), a -> a.getFilename().equals("undertest.run_shell_0.sh")));
     assertThat(
-            Iterables.filter(
-                spawnAction2.getInputs().toList(), a -> a.getFilename().contains("run_shell_")))
+            Iterables.filter(spawnAction2.getInputs(), a -> a.getFilename().contains("run_shell_")))
         .isEmpty();
     Artifact helper3 =
         Iterables.getOnlyElement(
             Iterables.filter(
-                spawnAction3.getInputs().toList(),
-                a -> a.getFilename().equals("undertest.run_shell_2.sh")));
+                spawnAction3.getInputs(), a -> a.getFilename().equals("undertest.run_shell_2.sh")));
     assertThat(map).containsKey(helper1);
     assertThat(map).containsKey(helper3);
     Object action4Unchecked = map.get(helper1);
@@ -2631,91 +2626,5 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         "--platforms=//platform:platform_2");
     value = getToolchainResult("//demo");
     assertThat(value).isEqualTo("bar");
-  }
-
-  @Test
-  public void testTargetPlatformHasConstraint() throws Exception {
-    createPlatforms();
-
-    scratch.file(
-        "demo/test_rule.bzl",
-        "result = provider()",
-        "def _impl(ctx):",
-        "    constraint = ctx.attr._constraint[platform_common.ConstraintValueInfo]",
-        "    has_constraint = ctx.target_platform_has_constraint(constraint)",
-        "    return [result(",
-        "        has_constraint = has_constraint,",
-        "    )]",
-        "test_rule = rule(",
-        "    implementation = _impl,",
-        "    attrs = {",
-        "        '_constraint': attr.label(default = '//platform:constraint_1'),",
-        "    },",
-        ")");
-    scratch.file(
-        "demo/BUILD",
-        "load(':test_rule.bzl', 'test_rule')",
-        "test_rule(",
-        "    name = 'demo',",
-        ")");
-
-    useConfiguration("--platforms=//platform:platform_1");
-
-    ConfiguredTarget myRuleTarget = getConfiguredTarget("//demo");
-    StructImpl info =
-        (StructImpl)
-            myRuleTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//demo:test_rule.bzl", ImmutableMap.of()), "result"));
-
-    assertThat(info).isNotNull();
-    boolean hasConstraint = (boolean) info.getValue("has_constraint");
-    assertThat(hasConstraint).isTrue();
-
-    // Re-test with the other platform.
-    useConfiguration("--platforms=//platform:platform_2");
-    myRuleTarget = getConfiguredTarget("//demo");
-    info =
-        (StructImpl)
-            myRuleTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//demo:test_rule.bzl", ImmutableMap.of()), "result"));
-
-    assertThat(info).isNotNull();
-    hasConstraint = (boolean) info.getValue("has_constraint");
-    assertThat(hasConstraint).isFalse();
-  }
-
-  @Test
-  public void testExecGroupToolchain() throws Exception {
-    createToolchains();
-    createPlatforms();
-    scratch.file(
-        "something/defs.bzl",
-        "def _impl(ctx):",
-        "  return []",
-        "use_exec_groups = rule(",
-        "  implementation = _impl,",
-        "  exec_groups = {",
-        "    'dragonfruit': exec_group(toolchains = ['//rule:toolchain_type']),",
-        "  },",
-        ")");
-    scratch.file(
-        "something/BUILD",
-        "load('//something:defs.bzl', 'use_exec_groups')",
-        "use_exec_groups(name = 'nectarine')");
-    setSkylarkSemanticsOptions("--experimental_exec_groups=true");
-    useConfiguration(
-        "--extra_toolchains=//toolchain:foo_toolchain,//toolchain:bar_toolchain",
-        "--platforms=//platform:platform_1");
-    ImmutableMap<String, ResolvedToolchainContext> toolchainContexts =
-        createRuleContext("//something:nectarine")
-            .getRuleContext()
-            .getToolchainContextsForTesting()
-            .getContextMap();
-    assertThat(toolchainContexts.keySet()).containsExactly(DEFAULT_EXEC_GROUP_NAME, "dragonfruit");
-    assertThat(toolchainContexts.get(DEFAULT_EXEC_GROUP_NAME).requiredToolchainTypes()).isEmpty();
-    assertThat(toolchainContexts.get("dragonfruit").resolvedToolchainLabels())
-        .containsExactly(Label.parseAbsoluteUnchecked("//toolchain:foo"));
   }
 }
