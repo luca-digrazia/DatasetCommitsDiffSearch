@@ -312,8 +312,7 @@ public abstract class TestStrategy implements TestActionContext {
     digest.addPath(action.getExecutionSettings().getExecutable().getExecPath());
     digest.addInt(action.getShardNum());
     digest.addInt(action.getRunNumber());
-    // Truncate the string to 32 character to avoid exceeding path length limit on Windows and macOS
-    return digest.hexDigestAndReset().substring(0, 32);
+    return digest.hexDigestAndReset();
   }
 
   /** Parse a test result XML file into a {@link TestCase}. */
