@@ -219,7 +219,6 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
 
     private FeatureConfiguration getFeatureConfiguration(SupportData supportData) {
       ImmutableSet.Builder<String> requestedFeatures = new ImmutableSet.Builder<>();
-      requestedFeatures.addAll(ruleContext.getFeatures());
       ImmutableSet.Builder<String> unsupportedFeatures = new ImmutableSet.Builder<>();
       unsupportedFeatures.addAll(ruleContext.getDisabledFeatures());
       unsupportedFeatures.add(CppRuleClasses.PARSE_HEADERS);
