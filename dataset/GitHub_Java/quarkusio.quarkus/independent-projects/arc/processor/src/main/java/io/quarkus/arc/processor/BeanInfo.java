@@ -1,7 +1,5 @@
 package io.quarkus.arc.processor;
 
-import static io.quarkus.arc.processor.IndexClassLookupUtils.getClassByName;
-
 import io.quarkus.arc.processor.BeanDeploymentValidator.ValidationRule;
 import io.quarkus.arc.processor.Methods.MethodKey;
 import io.quarkus.gizmo.MethodCreator;
@@ -453,7 +451,7 @@ public class BeanInfo implements InjectionTargetInfo {
                         && bindings.stream().noneMatch(e -> e.name().equals(a.name())))
                 .forEach(a -> bindings.add(a));
         if (classInfo.superClassType() != null && !classInfo.superClassType().name().equals(DotNames.OBJECT)) {
-            ClassInfo superClass = getClassByName(beanDeployment.getIndex(), classInfo.superName());
+            ClassInfo superClass = beanDeployment.getIndex().getClassByName(classInfo.superName());
             if (superClass != null) {
                 addClassLevelBindings(superClass, bindings);
             }
@@ -540,14 +538,14 @@ public class BeanInfo implements InjectionTargetInfo {
                 Type fieldType = target.asField().type();
                 if (fieldType.kind() != org.jboss.jandex.Type.Kind.PRIMITIVE
                         && fieldType.kind() != org.jboss.jandex.Type.Kind.ARRAY) {
-                    return getClassByName(beanDeployment.getIndex(), fieldType.name());
+                    return beanDeployment.getIndex().getClassByName(fieldType.name());
                 }
                 break;
             case METHOD:
                 Type returnType = target.asMethod().returnType();
                 if (returnType.kind() != org.jboss.jandex.Type.Kind.PRIMITIVE
                         && returnType.kind() != org.jboss.jandex.Type.Kind.ARRAY) {
-                    return getClassByName(beanDeployment.getIndex(), returnType.name());
+                    return beanDeployment.getIndex().getClassByName(returnType.name());
                 }
                 break;
             default:
