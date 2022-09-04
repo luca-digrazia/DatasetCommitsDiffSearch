@@ -776,7 +776,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     ImmutableList.Builder<String> userLinkflags = ImmutableList.builder();
     userLinkflags.addAll(common.getLinkopts());
     currentCcLinkingContextBuilder
-        .setOwner(ruleContext.getLabel())
         .addNonCodeInputs(
             ImmutableList.<Artifact>builder()
                 .addAll(ccCompilationContext.getTransitiveCompilationPrerequisites())
@@ -798,7 +797,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         CcInfo.builder()
             .setCcLinkingContext(
                 CcLinkingContext.builder()
-                    .setOwner(ruleContext.getLabel())
                     .addTransitiveLinkerInputs(extraLinkTimeLibraries)
                     .build())
             .build();
