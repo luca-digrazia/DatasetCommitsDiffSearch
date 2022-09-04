@@ -411,7 +411,7 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
         "        output_to_bindir=0)");
 
     assertThat(getFileConfiguredTarget("//x:bin.out").getArtifact())
-        .isEqualTo(getBinArtifact("bin.out", getConfiguredTarget("//x:bin")));
+        .isEqualTo(getBinArtifact("bin.out", "//x:bin"));
     assertThat(getFileConfiguredTarget("//x:genfiles.out").getArtifact())
         .isEqualTo(getGenfilesArtifact("genfiles.out", "//x:genfiles"));
   }
@@ -429,16 +429,14 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
         "        cmd=':',",
         "        output_to_bindir=0)");
 
-    ConfiguredTarget binCt = getConfiguredTarget("//x:bin");
-    ConfiguredTarget genCt = getConfiguredTarget("//x:genfiles");
     assertThat(getFileConfiguredTarget("//x:bin_a.out").getArtifact())
-        .isEqualTo(getBinArtifact("bin_a.out", binCt));
+        .isEqualTo(getBinArtifact("bin_a.out", "//x:bin"));
     assertThat(getFileConfiguredTarget("//x:bin_b.out").getArtifact())
-        .isEqualTo(getBinArtifact("bin_b.out", binCt));
+        .isEqualTo(getBinArtifact("bin_b.out", "//x:bin"));
     assertThat(getFileConfiguredTarget("//x:genfiles_a.out").getArtifact())
-        .isEqualTo(getGenfilesArtifact("genfiles_a.out", genCt));
+        .isEqualTo(getGenfilesArtifact("genfiles_a.out", "//x:genfiles"));
     assertThat(getFileConfiguredTarget("//x:genfiles_b.out").getArtifact())
-        .isEqualTo(getGenfilesArtifact("genfiles_b.out", genCt));
+        .isEqualTo(getGenfilesArtifact("genfiles_b.out", "//x:genfiles"));
   }
 
   @Test
