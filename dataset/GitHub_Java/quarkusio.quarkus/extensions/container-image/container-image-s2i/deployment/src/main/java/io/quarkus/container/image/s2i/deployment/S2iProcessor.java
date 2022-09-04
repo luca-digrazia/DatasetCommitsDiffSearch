@@ -31,7 +31,6 @@ import io.dekorate.s2i.util.S2iUtils;
 import io.dekorate.utils.Clients;
 import io.dekorate.utils.Packaging;
 import io.dekorate.utils.Serialization;
-import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.container.image.deployment.ContainerImageConfig;
 import io.quarkus.container.image.deployment.util.ImageUtil;
@@ -53,13 +52,11 @@ import io.quarkus.deployment.pkg.builditem.NativeImageBuildItem;
 import io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem;
 import io.quarkus.deployment.pkg.steps.NativeBuild;
 import io.quarkus.deployment.util.ExecUtil;
-import io.quarkus.kubernetes.client.deployment.KubernetesClientErrorHanlder;
 import io.quarkus.kubernetes.client.spi.KubernetesClientBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesCommandBuildItem;
 
 public class S2iProcessor {
 
-    private static final String S2I = "s2i";
     private static final String JAR_ARTIFACT_FORMAT = "%s%s.jar";
     private static final String NATIVE_ARTIFACT_FORMAT = "%s%s";
 
@@ -146,7 +143,7 @@ public class S2iProcessor {
                 out.getOutputDirectory().resolve("lib"));
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "jar-container", Collections.emptyMap()));
         containerImageResultProducer.produce(
-                new ContainerImageResultBuildItem(S2I, null, ImageUtil.getRepository(image), ImageUtil.getTag(image)));
+                new ContainerImageResultBuildItem(null, ImageUtil.getRepository(image), ImageUtil.getTag(image)));
     }
 
     @BuildStep(onlyIf = { IsNormal.class, S2iBuild.class, NativeBuild.class })
@@ -191,7 +188,7 @@ public class S2iProcessor {
         createContainerImage(kubernetesClient, openshiftYml, s2iConfig, out.getOutputDirectory(), applicationImagePath);
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "native-container", Collections.emptyMap()));
         containerImageResultProducer.produce(
-                new ContainerImageResultBuildItem(S2I, null, ImageUtil.getRepository(image), ImageUtil.getTag(image)));
+                new ContainerImageResultBuildItem(null, ImageUtil.getRepository(image), ImageUtil.getTag(image)));
     }
 
     public static void createContainerImage(KubernetesClientBuildItem kubernetesClient,
@@ -210,11 +207,9 @@ public class S2iProcessor {
             throw new RuntimeException("Error creating the s2i binary build archive.", e);
         }
 
-        Config config = kubernetesClient.getClient().getConfiguration();
-        //Let's disable http2 as it causes issues with duplicate build triggers.
-        config.setHttp2Disable(true);
-        KubernetesClient client = Clients.fromConfig(config);
-        KubernetesList kubernetesList = Serialization.unmarshalAsList(new ByteArrayInputStream(openshiftManifests.getData()));
+        KubernetesClient client = Clients.fromConfig(kubernetesClient.getClient().getConfiguration());
+        KubernetesList kubernetesList = Serialization
+                .unmarshalAsList(new ByteArrayInputStream(openshiftManifests.getData()));
 
         List<HasMetadata> buildResources = kubernetesList.getItems().stream()
                 .filter(i -> i instanceof BuildConfig || i instanceof ImageStream || i instanceof Secret)
@@ -232,27 +227,22 @@ public class S2iProcessor {
      */
     private static void applyS2iResources(KubernetesClient client, List<HasMetadata> buildResources) {
         // Apply build resource requirements
-        try {
-            buildResources.forEach(i -> {
-                if (i instanceof BuildConfig) {
-                    client.resource(i).cascading(true).delete();
-                    try {
-                        client.resource(i).waitUntilCondition(d -> d == null, 10, TimeUnit.SECONDS);
-                    } catch (IllegalArgumentException e) {
-                        // We should ignore that, as its expected to be thrown when item is actually
-                        // deleted.
-                    } catch (InterruptedException e) {
-                        s2iException(e);
-                    }
+        buildResources.forEach(i -> {
+            if (i instanceof BuildConfig) {
+                client.resource(i).cascading(true).delete();
+                try {
+                    client.resource(i).waitUntilCondition(d -> d == null, 10, TimeUnit.SECONDS);
+                } catch (IllegalArgumentException e) {
+                    // We should ignore that, as its expected to be thrown when item is actually
+                    // deleted.
+                } catch (InterruptedException e) {
+                    s2iException(e);
                 }
-                client.resource(i).createOrReplace();
-                LOG.info("Applied: " + i.getKind() + " " + i.getMetadata().getName());
-            });
-            S2iUtils.waitForImageStreamTags(buildResources, 2, TimeUnit.MINUTES);
-
-        } catch (KubernetesClientException e) {
-            KubernetesClientErrorHanlder.handle(e);
-        }
+            }
+            client.resource(i).createOrReplace();
+            LOG.info("Applied: " + i.getKind() + " " + i.getMetadata().getName());
+        });
+        S2iUtils.waitForImageStreamTags(buildResources, 2, TimeUnit.MINUTES);
     }
 
     private static void s2iBuild(KubernetesClient client, List<HasMetadata> buildResources, File binaryFile,
@@ -264,19 +254,15 @@ public class S2iProcessor {
     /**
      * Performs the binary build of the specified {@link BuildConfig} with the given
      * binary input.
-     * 
-     * @param client The openshift client instance
-     * @param buildConfig The build config
-     * @param binaryFile The binary file
-     * @param s2iConfig The s2i configuration
+     *
+     * @param buildConfig The build config.
+     * @param binaryFile The binary file.
      */
     private static void s2iBuild(OpenShiftClient client, BuildConfig buildConfig, File binaryFile, S2iConfig s2iConfig) {
         Build build;
         try {
-            build = client.buildConfigs().withName(buildConfig.getMetadata().getName())
-                    .instantiateBinary()
-                    .withTimeoutInMillis(s2iConfig.buildTimeout.toMillis())
-                    .fromFile(binaryFile);
+            build = client.buildConfigs().withName(buildConfig.getMetadata().getName()).instantiateBinary()
+                    .withTimeoutInMillis(s2iConfig.buildTimeout.toMillis()).fromFile(binaryFile);
         } catch (Exception e) {
             if (e.getCause() instanceof StreamResetException) {
                 LOG.warn("Stream was reset while building. Falling back to building with the 'oc' binary.");
@@ -301,9 +287,6 @@ public class S2iProcessor {
     }
 
     private static RuntimeException s2iException(Throwable t) {
-        if (t instanceof KubernetesClientException) {
-            KubernetesClientErrorHanlder.handle((KubernetesClientException) t);
-        }
         return new RuntimeException("Execution of s2i build failed. See s2i output for more details", t);
     }
 }
