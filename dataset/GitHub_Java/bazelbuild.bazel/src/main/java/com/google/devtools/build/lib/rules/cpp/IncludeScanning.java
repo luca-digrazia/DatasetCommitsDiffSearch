@@ -17,6 +17,10 @@ package com.google.devtools.build.lib.rules.cpp;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
+import com.google.common.util.concurrent.AsyncFunction;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
@@ -49,7 +53,7 @@ public class IncludeScanning implements IncludeProcessing {
 
   @Nullable
   @Override
-  public List<Artifact> determineAdditionalInputs(
+  public ListenableFuture<List<Artifact>> determineAdditionalInputs(
       @Nullable IncludeScannerSupplier includeScannerSupplier,
       CppCompileAction action,
       ActionExecutionContext actionExecutionContext,
@@ -90,16 +94,26 @@ public class IncludeScanning implements IncludeProcessing {
     try (SilentCloseable c =
         Profiler.instance()
             .profile(ProfilerTask.SCANNER, action.getSourceFile().getExecPathString())) {
-      scanner.processAsync(
-          mainSource,
-          sources,
-          includeScanningHeaderData,
-          cmdlineIncludes,
-          includes,
-          action,
-          actionExecutionContext,
-          action.getGrepIncludes());
-      return collect(actionExecutionContext, includes, absoluteBuiltInIncludeDirs);
+      ListenableFuture<?> future =
+          scanner.processAsync(
+              mainSource,
+              sources,
+              includeScanningHeaderData,
+              cmdlineIncludes,
+              includes,
+              action,
+              actionExecutionContext,
+              action.getGrepIncludes());
+      return Futures.transformAsync(
+          future,
+          new AsyncFunction<Object, List<Artifact>>() {
+            @Override
+            public ListenableFuture<List<Artifact>> apply(Object input) throws Exception {
+              return Futures.immediateFuture(
+                  collect(actionExecutionContext, includes, absoluteBuiltInIncludeDirs));
+            }
+          },
+          MoreExecutors.directExecutor());
     } catch (IOException e) {
       throw new EnvironmentalExecException(
           e, createFailureDetail("Include scanning IOException", Code.SCANNING_IO_EXCEPTION));
