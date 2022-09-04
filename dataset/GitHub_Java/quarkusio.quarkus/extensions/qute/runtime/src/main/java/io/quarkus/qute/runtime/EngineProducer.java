@@ -22,7 +22,6 @@ import io.quarkus.qute.Engine;
 import io.quarkus.qute.EngineBuilder;
 import io.quarkus.qute.NamespaceResolver;
 import io.quarkus.qute.ReflectionValueResolver;
-import io.quarkus.qute.Resolver;
 import io.quarkus.qute.Results.Result;
 import io.quarkus.qute.TemplateLocator.TemplateLocation;
 import io.quarkus.qute.UserTagSectionHelper;
@@ -49,10 +48,10 @@ public class EngineProducer {
     private final String basePath;
     private final String tagPath;
 
-    public EngineProducer(QuteContext context, QuteConfig config, QuteRuntimeConfig runtimeConfig,
-            Event<EngineBuilder> builderReady, Event<Engine> engineReady, ContentTypes contentTypes) {
+    public EngineProducer(QuteContext context, Event<EngineBuilder> builderReady, Event<Engine> engineReady,
+            ContentTypes contentTypes) {
         this.contentTypes = contentTypes;
-        this.suffixes = config.suffixes;
+        this.suffixes = context.getConfig().suffixes;
         this.basePath = "templates/";
         this.tagPath = basePath + TAGS;
         this.tags = context.getTags();
@@ -73,24 +72,6 @@ public class EngineProducer {
         builder.addValueResolver(ValueResolvers.mapEntryResolver());
         // foo.string.raw returns a RawString which is never escaped
         builder.addValueResolver(ValueResolvers.rawResolver());
-        builder.addValueResolver(ValueResolvers.logicalAndResolver());
-        builder.addValueResolver(ValueResolvers.logicalOrResolver());
-
-        // If needed use a specific result mapper for the selected strategy  
-        switch (runtimeConfig.propertyNotFoundStrategy) {
-            case THROW_EXCEPTION:
-                builder.addResultMapper(new PropertyNotFoundThrowException());
-                break;
-            case NOOP:
-                builder.addResultMapper(new PropertyNotFoundNoop());
-                break;
-            case OUTPUT_ORIGINAL:
-                builder.addResultMapper(new PropertyNotFoundOutputExpression());
-                break;
-            default:
-                // Use the default strategy
-                break;
-        }
 
         // Escape some characters for HTML templates
         builder.addResultMapper(new HtmlEscaper());
@@ -99,7 +80,7 @@ public class EngineProducer {
         builder.addValueResolver(new ReflectionValueResolver());
 
         // Remove standalone lines if desired
-        builder.removeStandaloneLines(runtimeConfig.removeStandaloneLines);
+        builder.removeStandaloneLines(context.getConfig().removeStandaloneLines);
 
         // Allow anyone to customize the builder
         builderReady.fire(builder);
@@ -112,12 +93,7 @@ public class EngineProducer {
 
         // Add generated resolvers
         for (String resolverClass : context.getResolverClasses()) {
-            Resolver resolver = createResolver(resolverClass);
-            if (resolver instanceof NamespaceResolver) {
-                builder.addNamespaceResolver((NamespaceResolver) resolver);
-            } else {
-                builder.addValueResolver((ValueResolver) resolver);
-            }
+            builder.addValueResolver(createResolver(resolverClass));
             LOGGER.debugf("Added generated value resolver: %s", resolverClass);
         }
         // Add tags
@@ -153,14 +129,14 @@ public class EngineProducer {
         return tagPath;
     }
 
-    private Resolver createResolver(String resolverClassName) {
+    private ValueResolver createResolver(String resolverClassName) {
         try {
             Class<?> resolverClazz = Thread.currentThread()
                     .getContextClassLoader().loadClass(resolverClassName);
-            if (Resolver.class.isAssignableFrom(resolverClazz)) {
-                return (Resolver) resolverClazz.newInstance();
+            if (ValueResolver.class.isAssignableFrom(resolverClazz)) {
+                return (ValueResolver) resolverClazz.newInstance();
             }
-            throw new IllegalStateException("Not a resolver: " + resolverClassName);
+            throw new IllegalStateException("Not a value resolver: " + resolverClassName);
         } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
             throw new IllegalStateException("Unable to create resolver: " + resolverClassName, e);
         }
