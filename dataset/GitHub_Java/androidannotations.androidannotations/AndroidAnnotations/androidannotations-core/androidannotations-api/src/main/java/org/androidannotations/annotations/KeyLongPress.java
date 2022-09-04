@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -35,8 +34,8 @@ import java.lang.annotation.Target;
  * </p>
  * <p>
  * The method may return a <code>boolean</code>, <code>void</code>, or a
- * {@link Boolean}. If returning void, it will be considered as returning true
- * (ie: the method has handled the event).
+ * {@link Boolean}. If returning void, it will be considered as
+ * returning true (ie: the method has handled the event).
  * </p>
  * <p>
  * The method MAY have one parameter:
@@ -88,8 +87,7 @@ import java.lang.annotation.Target;
  *
  * @see android.view.KeyEvent
  * @see android.view.KeyEvent.Callback
- * @see android.view.KeyEvent.Callback#onKeyLongPress(int,
- *      android.view.KeyEvent)
+ * @see android.view.KeyEvent.Callback#onKeyLongPress(int, android.view.KeyEvent)
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
