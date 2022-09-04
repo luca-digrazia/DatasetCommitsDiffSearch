@@ -44,13 +44,13 @@ public class DropwizardServiceRuleTest {
 
     @Test
     public void returnsService() {
-        final TestService service = RULE.getService();
+        TestService service = RULE.getService();
         assertNotNull(service);
     }
 
     @Test
     public void returnsEnvironment() {
-        final Environment environment = RULE.getEnvironment();
+        Environment environment = RULE.getEnvironment();
         assertThat(environment.getName(), is("TestService"));
     }
 
@@ -62,7 +62,7 @@ public class DropwizardServiceRuleTest {
 
         @Override
         public void run(TestConfiguration configuration, Environment environment) throws Exception {
-            environment.getJerseyEnvironment().addResource(new TestResource(configuration.getMessage()));
+            environment.addResource(new TestResource(configuration.getMessage()));
         }
     }
 
