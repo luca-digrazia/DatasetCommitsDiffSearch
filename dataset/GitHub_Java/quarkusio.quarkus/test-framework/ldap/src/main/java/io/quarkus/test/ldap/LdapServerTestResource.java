@@ -18,7 +18,7 @@ public class LdapServerTestResource implements QuarkusTestResourceLifecycleManag
 
     public LdapServerTestResource() throws LDAPException {
         InMemoryListenerConfig listenerConfig = new InMemoryListenerConfig("listener", InetAddress.getLoopbackAddress(),
-                0, null, null, null);
+                10389, null, null, null);
         InMemoryDirectoryServerConfig inMemoryDirectoryServerConfig = new InMemoryDirectoryServerConfig("dc=quarkus,dc=io");
         inMemoryDirectoryServerConfig.setListenerConfigs(listenerConfig);
         inMemoryDirectoryServerConfig.addAdditionalBindCredentials("uid=admin,ou=system", "secret");
@@ -30,15 +30,12 @@ public class LdapServerTestResource implements QuarkusTestResourceLifecycleManag
     public Map<String, String> start() {
         try {
             ldapServer.startListening();
-            System.out.println(
-                    "[INFO] LDAP server started on " + InetAddress.getLoopbackAddress().getHostAddress() + ":"
-                            + ldapServer.getListenPort());
+            System.out.println("[INFO] LDAP server started");
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
 
-        return Collections.singletonMap("quarkus.security.ldap.dir-context.url",
-                "ldap://" + InetAddress.getLoopbackAddress().getHostAddress() + ":" + ldapServer.getListenPort());
+        return Collections.emptyMap();
     }
 
     @Override
