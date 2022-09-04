@@ -17,46 +17,32 @@ package com.google.devtools.build.lib.util;
 /**
  * An exception thrown by various error conditions that are severe enough to halt the command (e.g.
  * even a --keep_going build). These typically need to signal to the handling code what happened.
- * Therefore, these exceptions contain a {@link DetailedExitCode} specifying a numeric exit code and
- * a detailed failure for the command to return.
+ * Therefore, these exceptions contain a recommended ExitCode allowing the exception to "set" a
+ * returned numeric exit code.
  *
- * <p>When an instance of this exception is thrown, Bazel will try to halt the command as soon as
- * reasonably possible.
+ * When an instance of this exception is thrown, Blaze will try to halt as soon as reasonably
+ * possible.
  */
 public class AbruptExitException extends Exception {
 
-  private final DetailedExitCode detailedExitCode;
+  private final ExitCode exitCode;
 
   public AbruptExitException(String message, ExitCode exitCode) {
     super(message);
-    this.detailedExitCode = DetailedExitCode.justExitCode(exitCode);
+    this.exitCode = exitCode;
   }
 
   public AbruptExitException(String message, ExitCode exitCode, Throwable cause) {
     super(message, cause);
-    this.detailedExitCode = DetailedExitCode.justExitCode(exitCode);
+    this.exitCode = exitCode;
   }
 
   public AbruptExitException(ExitCode exitCode, Throwable cause) {
     super(cause);
-    this.detailedExitCode = DetailedExitCode.justExitCode(exitCode);
-  }
-
-  public AbruptExitException(DetailedExitCode detailedExitCode) {
-    super(detailedExitCode.getFailureDetail().getMessage());
-    this.detailedExitCode = detailedExitCode;
-  }
-
-  public AbruptExitException(DetailedExitCode detailedExitCode, Throwable cause) {
-    super(detailedExitCode.getFailureDetail().getMessage(), cause);
-    this.detailedExitCode = detailedExitCode;
+    this.exitCode = exitCode;
   }
 
   public ExitCode getExitCode() {
-    return detailedExitCode.getExitCode();
-  }
-
-  public DetailedExitCode getDetailedExitCode() {
-    return detailedExitCode;
+    return exitCode;
   }
 }
