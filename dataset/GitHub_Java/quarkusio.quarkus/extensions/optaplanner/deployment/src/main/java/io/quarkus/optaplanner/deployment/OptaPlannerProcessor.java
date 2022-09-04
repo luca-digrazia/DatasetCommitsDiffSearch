@@ -8,6 +8,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import javax.inject.Singleton;
+
 import org.drools.core.base.ClassFieldAccessorFactory;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
@@ -26,7 +28,7 @@ import org.optaplanner.core.impl.score.director.easy.EasyScoreCalculator;
 import org.optaplanner.core.impl.score.director.incremental.IncrementalScoreCalculator;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
-import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
+import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
@@ -78,7 +80,7 @@ class OptaPlannerProcessor {
             CombinedIndexBuildItem combinedIndex,
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchyClass,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            BuildProducer<BeanContainerListenerBuildItem> beanContainerListener) {
+            BuildProducer<SyntheticBeanBuildItem> syntheticBeanBuildItemBuildProducer) {
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
         SolverConfig solverConfig;
         if (optaPlannerBuildTimeConfig.solverConfigXml.isPresent()) {
@@ -123,9 +125,17 @@ class OptaPlannerProcessor {
 
         SolverManagerConfig solverManagerConfig = new SolverManagerConfig();
         optaPlannerBuildTimeConfig.solverManager.parallelSolverCount.ifPresent(solverManagerConfig::setParallelSolverCount);
-        beanContainerListener
-                .produce(new BeanContainerListenerBuildItem(
-                        recorder.initialize(solverConfig, solverManagerConfig)));
+
+        syntheticBeanBuildItemBuildProducer.produce(SyntheticBeanBuildItem.configure(SolverConfig.class)
+                .scope(Singleton.class)
+                .defaultBean()
+                .supplier(recorder.solverConfigSupplier(solverConfig)).done());
+
+        syntheticBeanBuildItemBuildProducer.produce(SyntheticBeanBuildItem.configure(SolverManagerConfig.class)
+                .scope(Singleton.class)
+                .defaultBean()
+                .supplier(recorder.solverManagerConfig(solverManagerConfig)).done());
+
     }
 
     private void applySolverProperties(RecorderContext recorderContext,
@@ -141,21 +151,7 @@ class OptaPlannerProcessor {
         if (solverConfig.getEntityClassList() == null) {
             solverConfig.setEntityClassList(findEntityClassList(recorderContext, indexView));
         }
-        if (solverConfig.getScoreDirectorFactoryConfig() == null) {
-            ScoreDirectorFactoryConfig scoreDirectorFactoryConfig = new ScoreDirectorFactoryConfig();
-            scoreDirectorFactoryConfig.setEasyScoreCalculatorClass(
-                    findImplementingClass(EasyScoreCalculator.class, indexView));
-            scoreDirectorFactoryConfig.setConstraintProviderClass(
-                    findImplementingClass(ConstraintProvider.class, indexView));
-            scoreDirectorFactoryConfig.setIncrementalScoreCalculatorClass(
-                    findImplementingClass(IncrementalScoreCalculator.class, indexView));
-            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-            if (classLoader.getResource(SolverBuildTimeConfig.DEFAULT_SCORE_DRL_URL) != null) {
-                scoreDirectorFactoryConfig.setScoreDrlList(Collections.singletonList(
-                        SolverBuildTimeConfig.DEFAULT_SCORE_DRL_URL));
-            }
-            solverConfig.setScoreDirectorFactoryConfig(scoreDirectorFactoryConfig);
-        }
+        applyScoreDirectorFactoryProperties(indexView, solverConfig);
         optaPlannerBuildTimeConfig.solver.environmentMode.ifPresent(solverConfig::setEnvironmentMode);
         optaPlannerBuildTimeConfig.solver.moveThreadCount.ifPresent(solverConfig::setMoveThreadCount);
         applyTerminationProperties(solverConfig);
@@ -196,6 +192,35 @@ class OptaPlannerProcessor {
         return targetList.stream()
                 .map(target -> recorderContext.classProxy(target.asClass().name().toString()))
                 .collect(Collectors.toList());
+    }
+
+    private void applyScoreDirectorFactoryProperties(IndexView indexView, SolverConfig solverConfig) {
+        if (solverConfig.getScoreDirectorFactoryConfig() == null) {
+            ScoreDirectorFactoryConfig scoreDirectorFactoryConfig = new ScoreDirectorFactoryConfig();
+            scoreDirectorFactoryConfig.setEasyScoreCalculatorClass(
+                    findImplementingClass(EasyScoreCalculator.class, indexView));
+            scoreDirectorFactoryConfig.setConstraintProviderClass(
+                    findImplementingClass(ConstraintProvider.class, indexView));
+            scoreDirectorFactoryConfig.setIncrementalScoreCalculatorClass(
+                    findImplementingClass(IncrementalScoreCalculator.class, indexView));
+            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+            if (classLoader.getResource(SolverBuildTimeConfig.DEFAULT_SCORE_DRL_URL) != null) {
+                scoreDirectorFactoryConfig.setScoreDrlList(Collections.singletonList(
+                        SolverBuildTimeConfig.DEFAULT_SCORE_DRL_URL));
+            }
+            if (scoreDirectorFactoryConfig.getEasyScoreCalculatorClass() == null
+                    && scoreDirectorFactoryConfig.getEasyScoreCalculatorClass() == null
+                    && scoreDirectorFactoryConfig.getConstraintProviderClass() == null
+                    && scoreDirectorFactoryConfig.getIncrementalScoreCalculatorClass() == null
+                    && scoreDirectorFactoryConfig.getScoreDrlList() == null) {
+                throw new IllegalStateException("No classes found that implement "
+                        + EasyScoreCalculator.class.getSimpleName() + ", "
+                        + ConstraintProvider.class.getSimpleName() + " or "
+                        + IncrementalScoreCalculator.class.getSimpleName() + ", nor a "
+                        + SolverBuildTimeConfig.DEFAULT_SCORE_DRL_URL + " resource.");
+            }
+            solverConfig.setScoreDirectorFactoryConfig(scoreDirectorFactoryConfig);
+        }
     }
 
     private <T> Class<? extends T> findImplementingClass(Class<T> targetClass, IndexView indexView) {
