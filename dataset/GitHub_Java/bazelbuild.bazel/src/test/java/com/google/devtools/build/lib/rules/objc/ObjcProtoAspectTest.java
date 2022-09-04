@@ -42,9 +42,6 @@ public final class ObjcProtoAspectTest extends ObjcRuleTestCase {
   public final void initializeToolsConfigMock() throws Exception {
     MockProtoSupport.setup(mockToolsConfig);
     MockObjcSupport.setup(mockToolsConfig);
-
-    MockProtoSupport.setupWorkspace(scratch);
-    invalidatePackages();
   }
 
   @Test
@@ -53,7 +50,6 @@ public final class ObjcProtoAspectTest extends ObjcRuleTestCase {
     scratch.file("x/data_filter.pbascii");
     scratch.file(
         "x/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
         "load('//objc_proto_library:objc_proto_library.bzl', 'objc_proto_library')",
         "proto_library(",
         "  name = 'protos',",
@@ -69,12 +65,12 @@ public final class ObjcProtoAspectTest extends ObjcRuleTestCase {
     assertThat(objcProtoProvider).isNotNull();
   }
 
-  private void testObjcProtoAspectPropagatesProtobufProvider() throws Exception {
+  @Test
+  public void testObjcProtoAspectPropagatesProtobufProvider() throws Exception {
     MockObjcSupport.setupObjcProtoLibrary(scratch);
     scratch.file("x/data_filter.pbascii");
     scratch.file(
         "x/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
         "load('//objc_proto_library:objc_proto_library.bzl', 'objc_proto_library')",
         "proto_library(",
         "  name = 'protos',",
@@ -88,30 +84,18 @@ public final class ObjcProtoAspectTest extends ObjcRuleTestCase {
     ConfiguredTarget topTarget = getObjcProtoAspectConfiguredTarget("//x:x");
     ObjcProtoProvider objcProtoProvider = topTarget.get(ObjcProtoProvider.SKYLARK_CONSTRUCTOR);
     assertThat(objcProtoProvider).isNotNull();
-    assertThat(Artifact.asExecPaths(objcProtoProvider.getProtobufHeaders()))
+    assertThat(Artifact.toExecPaths(objcProtoProvider.getProtobufHeaders()))
         .containsExactly(TestConstants.TOOLS_REPOSITORY_PATH_PREFIX + "objcproto/include/header.h");
 
-    Artifact header = objcProtoProvider.getProtobufHeaders().getSingleton();
+    Artifact header = Iterables.getOnlyElement(objcProtoProvider.getProtobufHeaders());
     PathFragment includePath = header.getExecPath().getParentDirectory();
     PathFragment genIncludePath =
         PathFragment.create(
             configurationGenfiles("x86_64", ConfigurationDistinguisher.APPLEBIN_IOS, null)
                 + "/" + includePath);
 
-    assertThat(objcProtoProvider.getProtobufHeaderSearchPaths().toList())
+    assertThat(objcProtoProvider.getProtobufHeaderSearchPaths())
         .containsExactly(includePath, genIncludePath);
-  }
-
-  @Test
-  public void testObjcProtoAspectPropagatesProtobufProviderPreMigration() throws Exception {
-    useConfiguration("--incompatible_objc_compile_info_migration=false");
-    testObjcProtoAspectPropagatesProtobufProvider();
-  }
-
-  @Test
-  public void testObjcProtoAspectPropagatesProtobufProviderPostMigration() throws Exception {
-    useConfiguration("--incompatible_objc_compile_info_migration=true");
-    testObjcProtoAspectPropagatesProtobufProvider();
   }
 
   @Test
@@ -132,7 +116,6 @@ public final class ObjcProtoAspectTest extends ObjcRuleTestCase {
     scratch.file("x/data_filter.pbascii");
     scratch.file(
         "x/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
         "load('//objc_proto_library:objc_proto_library.bzl', 'objc_proto_library')",
         "objc_library(",
         "  name = 'x',",
@@ -160,9 +143,9 @@ public final class ObjcProtoAspectTest extends ObjcRuleTestCase {
     ObjcProtoProvider objcProtoProvider = topTarget.get(ObjcProtoProvider.SKYLARK_CONSTRUCTOR);
     assertThat(objcProtoProvider).isNotNull();
 
-    assertThat(Artifact.asExecPaths(Iterables.concat(objcProtoProvider.getProtoFiles().toList())))
+    assertThat(Artifact.toExecPaths(Iterables.concat(objcProtoProvider.getProtoFiles())))
         .containsExactly("x/data.proto");
-    assertThat(Artifact.asExecPaths(objcProtoProvider.getPortableProtoFilters()))
+    assertThat(Artifact.toExecPaths(objcProtoProvider.getPortableProtoFilters()))
         .containsExactly("x/data_filter.pbascii");
   }
 
@@ -171,7 +154,6 @@ public final class ObjcProtoAspectTest extends ObjcRuleTestCase {
     MockObjcSupport.setupObjcProtoLibrary(scratch);
     scratch.file(
         "x/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
         "load('//objc_proto_library:objc_proto_library.bzl', 'objc_proto_library')",
         "objc_library(",
         "  name = 'x',",
@@ -192,7 +174,7 @@ public final class ObjcProtoAspectTest extends ObjcRuleTestCase {
     ObjcProtoProvider objcProtoProvider = topTarget.get(ObjcProtoProvider.SKYLARK_CONSTRUCTOR);
     assertThat(objcProtoProvider).isNotNull();
 
-    assertThat(Artifact.asExecPaths(objcProtoProvider.getPortableProtoFilters()))
+    assertThat(Artifact.toExecPaths(objcProtoProvider.getPortableProtoFilters()))
         .containsExactly(
             configurationGenfiles("x86_64", ConfigurationDistinguisher.APPLEBIN_IOS, null)
                 + "/x/_proto_filters/objc_proto/generated_filter_file.pbascii");
@@ -205,7 +187,6 @@ public final class ObjcProtoAspectTest extends ObjcRuleTestCase {
     scratch.file("x/filter.pbascii");
     scratch.file(
         "x/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
         "load('//objc_proto_library:objc_proto_library.bzl', 'objc_proto_library')",
         "objc_library(",
         "  name = 'x',",
@@ -235,7 +216,7 @@ public final class ObjcProtoAspectTest extends ObjcRuleTestCase {
     ObjcProtoProvider objcProtoProvider = topTarget.get(ObjcProtoProvider.SKYLARK_CONSTRUCTOR);
     assertThat(objcProtoProvider).isNotNull();
 
-    assertThat(Artifact.asExecPaths(objcProtoProvider.getPortableProtoFilters()))
+    assertThat(Artifact.toExecPaths(objcProtoProvider.getPortableProtoFilters()))
         .containsAtLeast(
             "x/filter.pbascii",
             configurationGenfiles("x86_64", ConfigurationDistinguisher.APPLEBIN_IOS, null)
@@ -265,7 +246,6 @@ public final class ObjcProtoAspectTest extends ObjcRuleTestCase {
 
     scratch.file(
         "x/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
         "load('//objc_proto_library:objc_proto_library.bzl', 'objc_proto_library')",
         "proto_library(",
         "  name = 'protos',",
