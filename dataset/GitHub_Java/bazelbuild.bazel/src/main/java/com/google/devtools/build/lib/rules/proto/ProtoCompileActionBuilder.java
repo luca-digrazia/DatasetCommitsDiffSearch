@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
@@ -191,7 +192,7 @@ public class ProtoCompileActionBuilder {
     }
   }
 
-  public Action[] build() {
+  public Action[] build() throws InterruptedException {
     if (isEmpty(outputs)) {
       return NO_ACTIONS;
     }
@@ -203,7 +204,8 @@ public class ProtoCompileActionBuilder {
     }
   }
 
-  private SpawnAction.Builder createAction() throws MissingPrerequisiteException {
+  private SpawnAction.Builder createAction()
+      throws MissingPrerequisiteException, InterruptedException {
     SpawnAction.Builder result =
         new SpawnAction.Builder().addTransitiveInputs(protoInfo.getTransitiveProtoSources());
 
@@ -245,7 +247,7 @@ public class ProtoCompileActionBuilder {
 
   /** Commandline generator for protoc invocations. */
   @VisibleForTesting
-  CustomCommandLine.Builder createProtoCompilerCommandLine() {
+  CustomCommandLine.Builder createProtoCompilerCommandLine() throws InterruptedException {
     CustomCommandLine.Builder result = CustomCommandLine.builder();
 
     if (langPlugin != null) {
@@ -263,7 +265,11 @@ public class ProtoCompileActionBuilder {
 
     boolean areDepsStrict = areDepsStrict(ruleContext);
 
-    boolean siblingRepositoryLayout = ruleContext.getConfiguration().isSiblingRepositoryLayout();
+    boolean siblingRepositoryLayout =
+        ruleContext
+            .getAnalysisEnvironment()
+            .getStarlarkSemantics()
+            .experimentalSiblingRepositoryLayout();
 
     // Add include maps
     addIncludeMapArguments(
@@ -317,10 +323,12 @@ public class ProtoCompileActionBuilder {
   private static class MissingPrerequisiteException extends Exception {}
 
   public static void writeDescriptorSet(
-      RuleContext ruleContext, ProtoInfo protoInfo, Services allowServices) {
+      RuleContext ruleContext, ProtoInfo protoInfo, Services allowServices)
+      throws InterruptedException {
     Artifact output = protoInfo.getDirectDescriptorSet();
     ImmutableList<ProtoInfo> protoDeps =
-        ImmutableList.copyOf(ruleContext.getPrerequisites("deps", ProtoInfo.PROVIDER));
+        ImmutableList.copyOf(
+            ruleContext.getPrerequisites("deps", TransitionMode.TARGET, ProtoInfo.PROVIDER));
     NestedSet<Artifact> dependenciesDescriptorSets =
         ProtoCommon.computeDependenciesDescriptorSets(protoDeps);
     if (protoInfo.getDirectProtoSources().isEmpty()) {
@@ -410,7 +418,8 @@ public class ProtoCompileActionBuilder {
       Iterable<Artifact> outputs,
       String flavorName,
       Exports useExports,
-      Services allowServices) {
+      Services allowServices)
+      throws InterruptedException {
     SpawnAction.Builder actions =
         createActions(
             ruleContext,
@@ -435,7 +444,8 @@ public class ProtoCompileActionBuilder {
       Iterable<Artifact> outputs,
       String flavorName,
       Exports useExports,
-      Services allowServices) {
+      Services allowServices)
+      throws InterruptedException {
 
     if (isEmpty(outputs)) {
       return null;
@@ -451,12 +461,17 @@ public class ProtoCompileActionBuilder {
       }
     }
 
-    FilesToRunProvider compilerTarget = ruleContext.getExecutablePrerequisite(":proto_compiler");
+    FilesToRunProvider compilerTarget =
+        ruleContext.getExecutablePrerequisite(":proto_compiler", TransitionMode.HOST);
     if (compilerTarget == null) {
       return null;
     }
 
-    boolean siblingRepositoryLayout = ruleContext.getConfiguration().isSiblingRepositoryLayout();
+    boolean siblingRepositoryLayout =
+        ruleContext
+            .getAnalysisEnvironment()
+            .getStarlarkSemantics()
+            .experimentalSiblingRepositoryLayout();
 
     result
         .addOutputs(outputs)

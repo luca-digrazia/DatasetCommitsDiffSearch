@@ -68,9 +68,9 @@ public class BazelCcModule extends CcModule
 
   @Override
   public Tuple<Object> compile(
-      StarlarkActionFactory starlarkActionFactoryApi,
-      FeatureConfigurationForStarlark starlarkFeatureConfiguration,
-      CcToolchainProvider starlarkCcToolchainProvider,
+      StarlarkActionFactory skylarkActionFactoryApi,
+      FeatureConfigurationForStarlark skylarkFeatureConfiguration,
+      CcToolchainProvider skylarkCcToolchainProvider,
       Sequence<?> sources, // <Artifact> expected
       Sequence<?> publicHeaders, // <Artifact> expected
       Sequence<?> privateHeaders, // <Artifact> expected
@@ -89,9 +89,9 @@ public class BazelCcModule extends CcModule
       StarlarkThread thread)
       throws EvalException, InterruptedException {
     return compile(
-        starlarkActionFactoryApi,
-        starlarkFeatureConfiguration,
-        starlarkCcToolchainProvider,
+        skylarkActionFactoryApi,
+        skylarkFeatureConfiguration,
+        skylarkCcToolchainProvider,
         sources,
         publicHeaders,
         privateHeaders,
@@ -116,8 +116,8 @@ public class BazelCcModule extends CcModule
   @Override
   public CcLinkingOutputs link(
       StarlarkActionFactory actions,
-      FeatureConfigurationForStarlark starlarkFeatureConfiguration,
-      CcToolchainProvider starlarkCcToolchainProvider,
+      FeatureConfigurationForStarlark skylarkFeatureConfiguration,
+      CcToolchainProvider skylarkCcToolchainProvider,
       Object compilationOutputs,
       Sequence<?> userLinkFlags, // <String> expected
       Sequence<?> linkingContexts, // <CcLinkingContext> expected
@@ -132,8 +132,8 @@ public class BazelCcModule extends CcModule
       throws InterruptedException, EvalException {
     return super.link(
         actions,
-        starlarkFeatureConfiguration,
-        starlarkCcToolchainProvider,
+        skylarkFeatureConfiguration,
+        skylarkCcToolchainProvider,
         convertFromNoneable(compilationOutputs, /* defaultValue= */ null),
         userLinkFlags,
         linkingContexts,
@@ -154,7 +154,7 @@ public class BazelCcModule extends CcModule
   }
 
   @Override
-  public CcCompilationOutputs mergeCcCompilationOutputsFromStarlark(Sequence<?> compilationOutputs)
+  public CcCompilationOutputs mergeCcCompilationOutputsFromSkylark(Sequence<?> compilationOutputs)
       throws EvalException {
     CcCompilationOutputs.Builder ccCompilationOutputsBuilder = CcCompilationOutputs.builder();
     for (CcCompilationOutputs ccCompilationOutputs :

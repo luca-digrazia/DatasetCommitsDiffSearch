@@ -16,27 +16,37 @@ package com.google.devtools.build.lib.analysis.configuredtargets;
 
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.TargetContext;
-import com.google.devtools.build.lib.packages.EnvironmentGroup;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.Provider;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 
 /**
- * Dummy ConfiguredTarget for environment groups. Contains no functionality, since
- * environment groups are not really first-class Targets.
+ * Dummy ConfiguredTarget for environment groups. Contains no functionality, since environment
+ * groups are not really first-class Targets.
  */
+@AutoCodec
+@Immutable
 public final class EnvironmentGroupConfiguredTarget extends AbstractConfiguredTarget {
-  public EnvironmentGroupConfiguredTarget(TargetContext targetContext, EnvironmentGroup envGroup) {
-    super(targetContext);
-    Preconditions.checkArgument(targetContext.getConfiguration() == null);
+  @AutoCodec.Instantiator
+  @AutoCodec.VisibleForSerialization
+  EnvironmentGroupConfiguredTarget(Label label) {
+    super(label, null);
+  }
+
+  public EnvironmentGroupConfiguredTarget(TargetContext targetContext) {
+    this(targetContext.getLabel());
+    Preconditions.checkState(targetContext.getConfiguration() == null, targetContext);
   }
 
   @Override
-  protected Info rawGetSkylarkProvider(Provider.Key providerKey) {
+  protected Info rawGetStarlarkProvider(Provider.Key providerKey) {
     return null;
   }
 
   @Override
-  protected Object rawGetSkylarkProvider(String providerKey) {
+  protected Object rawGetStarlarkProvider(String providerKey) {
     return null;
   }
 }

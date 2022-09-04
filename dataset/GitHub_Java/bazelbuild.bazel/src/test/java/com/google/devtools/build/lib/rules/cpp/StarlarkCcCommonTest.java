@@ -2791,7 +2791,7 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testFlagGroup_expandIfEqual_notStarlarkInfo() throws Exception {
+  public void testFlagGroup_expandIfEqual_notSkylarkInfo() throws Exception {
     loadCcToolchainConfigLib();
     createFlagGroupRule(
         "eight",
@@ -4499,7 +4499,7 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testCcToolchainInfoFromStarlark() throws Exception {
+  public void testCcToolchainInfoFromSkylark() throws Exception {
     loadCcToolchainConfigLib();
     scratch.file(
         "foo/crosstool.bzl",
@@ -4559,8 +4559,8 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testCcToolchainInfoFromStarlarkRequiredToolchainIdentifier() throws Exception {
-    setupStarlarkRuleForStringFieldsTesting("toolchain_identifier");
+  public void testCcToolchainInfoFromSkylarkRequiredToolchainIdentifier() throws Exception {
+    setupSkylarkRuleForStringFieldsTesting("toolchain_identifier");
     AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//foo:r"));
     assertThat(e)
         .hasMessageThat()
@@ -4568,15 +4568,15 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testCcToolchainInfoFromStarlarkRequiredHostSystemName() throws Exception {
-    setupStarlarkRuleForStringFieldsTesting("host_system_name");
+  public void testCcToolchainInfoFromSkylarkRequiredHostSystemName() throws Exception {
+    setupSkylarkRuleForStringFieldsTesting("host_system_name");
     AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//foo:r"));
     assertThat(e).hasMessageThat().contains("missing 1 required named argument: host_system_name");
   }
 
   @Test
-  public void testCcToolchainInfoFromStarlarkRequiredTargetSystemName() throws Exception {
-    setupStarlarkRuleForStringFieldsTesting("target_system_name");
+  public void testCcToolchainInfoFromSkylarkRequiredTargetSystemName() throws Exception {
+    setupSkylarkRuleForStringFieldsTesting("target_system_name");
     AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//foo:r"));
     assertThat(e)
         .hasMessageThat()
@@ -4584,43 +4584,43 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testCcToolchainInfoFromStarlarkRequiredTargetCpu() throws Exception {
-    setupStarlarkRuleForStringFieldsTesting("target_cpu");
+  public void testCcToolchainInfoFromSkylarkRequiredTargetCpu() throws Exception {
+    setupSkylarkRuleForStringFieldsTesting("target_cpu");
     AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//foo:r"));
     assertThat(e).hasMessageThat().contains("missing 1 required named argument: target_cpu");
   }
 
   @Test
-  public void testCcToolchainInfoFromStarlarkRequiredTargetLibc() throws Exception {
-    setupStarlarkRuleForStringFieldsTesting("target_libc");
+  public void testCcToolchainInfoFromSkylarkRequiredTargetLibc() throws Exception {
+    setupSkylarkRuleForStringFieldsTesting("target_libc");
     AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//foo:r"));
     assertThat(e).hasMessageThat().contains("missing 1 required named argument: target_libc");
   }
 
   @Test
-  public void testCcToolchainInfoFromStarlarkRequiredCompiler() throws Exception {
-    setupStarlarkRuleForStringFieldsTesting("compiler");
+  public void testCcToolchainInfoFromSkylarkRequiredCompiler() throws Exception {
+    setupSkylarkRuleForStringFieldsTesting("compiler");
     AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//foo:r"));
     assertThat(e).hasMessageThat().contains("missing 1 required named argument: compiler");
   }
 
   @Test
-  public void testCcToolchainInfoFromStarlarkRequiredAbiVersion() throws Exception {
-    setupStarlarkRuleForStringFieldsTesting("abi_version");
+  public void testCcToolchainInfoFromSkylarkRequiredAbiVersion() throws Exception {
+    setupSkylarkRuleForStringFieldsTesting("abi_version");
     AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//foo:r"));
     assertThat(e).hasMessageThat().contains("missing 1 required named argument: abi_version");
   }
 
   @Test
-  public void testCcToolchainInfoFromStarlarkRequiredAbiLibcVersion() throws Exception {
-    setupStarlarkRuleForStringFieldsTesting("abi_libc_version");
+  public void testCcToolchainInfoFromSkylarkRequiredAbiLibcVersion() throws Exception {
+    setupSkylarkRuleForStringFieldsTesting("abi_libc_version");
     AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//foo:r"));
     assertThat(e).hasMessageThat().contains("missing 1 required named argument: abi_libc_version");
   }
 
   @Test
-  public void testCcToolchainInfoFromStarlarkAllRequiredStringsPresent() throws Exception {
-    setupStarlarkRuleForStringFieldsTesting("");
+  public void testCcToolchainInfoFromSkylarkAllRequiredStringsPresent() throws Exception {
+    setupSkylarkRuleForStringFieldsTesting("");
     ConfiguredTarget target = getConfiguredTarget("//foo:r");
     assertThat(target).isNotNull();
     CcToolchainConfigInfo ccToolchainConfigInfo =
@@ -4628,7 +4628,7 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
     assertThat(ccToolchainConfigInfo).isNotNull();
   }
 
-  private void setupStarlarkRuleForStringFieldsTesting(String fieldToExclude) throws Exception {
+  private void setupSkylarkRuleForStringFieldsTesting(String fieldToExclude) throws Exception {
     ImmutableList<String> fields =
         ImmutableList.of(
             "toolchain_identifier = 'identifier'",
@@ -4661,7 +4661,7 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testCcToolchainInfoFromStarlarkNoLegacyFeatures() throws Exception {
+  public void testCcToolchainInfoFromSkylarkNoLegacyFeatures() throws Exception {
     loadCcToolchainConfigLib();
     scratch.file(
         "foo/crosstool.bzl",
@@ -4728,7 +4728,7 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testCcToolchainInfoFromStarlarkWithLegacyFeatures() throws Exception {
+  public void testCcToolchainInfoFromSkylarkWithLegacyFeatures() throws Exception {
     loadCcToolchainConfigLib();
     scratch.file(
         "foo/crosstool.bzl",
@@ -5398,7 +5398,7 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testCcNativeRuleDependingOnStarlarkDefinedRule() throws Exception {
+  public void testCcNativeRuleDependingOnSkylarkDefinedRule() throws Exception {
     createFiles(scratch, "tools/build_defs/cc");
     assertThat(getConfiguredTarget("//foo:bin")).isNotNull();
   }
@@ -6334,70 +6334,5 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
 
     assertThat(getConfiguredTarget("//foo:a")).isNotNull();
     assertNoEvents();
-  }
-
-  @Test
-  public void testMergeCcInfosWithDirects() throws Exception {
-    AnalysisMock.get()
-        .ccSupport()
-        .setupCcToolchainConfig(
-            mockToolsConfig,
-            CcToolchainConfig.builder().withFeatures(MockCcSupport.HEADER_MODULES_FEATURES));
-
-    scratch.file(
-        "direct/cc_merger.bzl",
-        "def _cc_merger_impl(ctx):",
-        "    direct_cc_infos = [dep[CcInfo] for dep in ctx.attr.exports]",
-        "    cc_infos = [dep[CcInfo] for dep in ctx.attr.deps]",
-        "    return [cc_common.merge_cc_infos(",
-        "        direct_cc_infos = direct_cc_infos,",
-        "        cc_infos = cc_infos,",
-        "    )]",
-        "cc_merger = rule(",
-        "    _cc_merger_impl,",
-        "    attrs = {",
-        "        'deps': attr.label_list(providers = [[CcInfo]]),",
-        "        'exports': attr.label_list(providers = [[CcInfo]]),",
-        "    }",
-        ")");
-    scratch.file(
-        "direct/BUILD",
-        "load('//direct:cc_merger.bzl', 'cc_merger')",
-        "cc_library(",
-        "    name = 'public1',",
-        "    srcs = ['public1.cc', 'public1_impl.h'],",
-        "    hdrs = ['public1.h'],",
-        "    textual_hdrs = ['public1.inc'],",
-        ")",
-        "cc_library(",
-        "    name = 'public2',",
-        "    srcs = ['public2.cc', 'public2_impl.h'],",
-        "    hdrs = ['public2.h'],",
-        "    textual_hdrs = ['public2.inc'],",
-        ")",
-        "cc_library(",
-        "    name = 'private',",
-        "    srcs = ['private.cc', 'private_impl.h'],",
-        "    hdrs = ['private.h'],",
-        "    textual_hdrs = ['private.inc'],",
-        ")",
-        "cc_merger(",
-        "    name = 'merge',",
-        "    exports = [':public1', ':public2'],",
-        "    deps = [':private'],",
-        ")");
-
-    ConfiguredTarget lib = getConfiguredTarget("//direct:merge");
-    CcCompilationContext ccCompilationContext = lib.get(CcInfo.PROVIDER).getCcCompilationContext();
-    assertThat(
-            baseArtifactNames(
-                ccCompilationContext.getExportingModuleMaps().stream()
-                    .map(CppModuleMap::getArtifact)
-                    .collect(ImmutableList.toImmutableList())))
-        .containsExactly("public1.cppmap", "public2.cppmap");
-    assertThat(baseArtifactNames(ccCompilationContext.getDirectHdrs()))
-        .containsExactly("public1.h", "public2.h", "public1_impl.h", "public2_impl.h");
-    assertThat(baseArtifactNames(ccCompilationContext.getTextualHdrs()))
-        .containsExactly("public1.inc", "public2.inc");
   }
 }

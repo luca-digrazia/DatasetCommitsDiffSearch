@@ -15,8 +15,13 @@ package com.google.devtools.build.lib.collect.nestedset;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet.NestedSetDepthException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkInterfaceUtils;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkMethod;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
@@ -28,12 +33,7 @@ import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.Nullable;
-import net.starlark.java.annot.StarlarkBuiltin;
-import net.starlark.java.annot.StarlarkDocumentationCategory;
-import net.starlark.java.annot.StarlarkInterfaceUtils;
-import net.starlark.java.annot.StarlarkMethod;
 
 /**
  * A Depset is a Starlark value that wraps a {@link NestedSet}.
@@ -341,7 +341,18 @@ public final class Depset implements StarlarkValue {
               + "on the depset and vice versa.",
       useStarlarkThread = true)
   public StarlarkList<Object> toListForStarlark(StarlarkThread thread) throws EvalException {
-    return StarlarkList.copyOf(thread.mutability(), this.toList());
+    try {
+      return StarlarkList.copyOf(thread.mutability(), this.toList());
+    } catch (NestedSetDepthException exception) {
+      throw new EvalException(
+          null,
+          "depset exceeded maximum depth "
+              + exception.getDepthLimit()
+              + ". This was only discovered when attempting to flatten the depset for to_list(), "
+              + "as the size of depsets is unknown until flattening. "
+              + "See https://github.com/bazelbuild/bazel/issues/9180 for details and possible "
+              + "solutions.");
+    }
   }
 
   /** Create a Depset from the given direct and transitive components. */
@@ -437,7 +448,7 @@ public final class Depset implements StarlarkValue {
 
     // Returns the Java class representing the Starlark type of an instance of cls,
     // which must be one of String, Integer, or Boolean (in which case the result is cls),
-    // or a StarlarkModule-annotated Starlark value class or one of its subclasses,
+    // or a SkylarkModule-annotated Starlark value class or one of its subclasses,
     // in which case the result is the annotated class.
     //
     // TODO(adonovan): consider publishing something like this as Starlark.typeClass
@@ -529,7 +540,7 @@ public final class Depset implements StarlarkValue {
             null,
             "parameter 'direct' must contain a list of elements, and may no longer accept a"
                 + " depset. The deprecated behavior may be temporarily re-enabled by setting"
-                + " --incompatible_disable_depset_items=false");
+                + " --incompatible_disable_depset_inputs=false");
       }
       result =
           fromDirectAndTransitive(
@@ -539,7 +550,7 @@ public final class Depset implements StarlarkValue {
               semantics.incompatibleAlwaysCheckDepsetElements());
     } else {
       if (x != Starlark.NONE) {
-        if (!isEmptyStarlarkList(items)) {
+        if (!isEmptySkylarkList(items)) {
           throw new EvalException(
               null, "parameter 'items' cannot be specified both positionally and by keyword");
         }
@@ -548,13 +559,17 @@ public final class Depset implements StarlarkValue {
       result = legacyDepsetConstructor(items, order, direct, transitive, semantics);
     }
 
-    // check depth limit
-    int depth = result.getSet().getApproxDepth();
-    int limit = depthLimit.get();
-    if (depth > limit) {
-      throw Starlark.errorf("depset depth %d exceeds limit (%d)", depth, limit);
+    if (semantics.debugDepsetDepth()) {
+      // Flatten the underlying nested set. If the set exceeds the depth limit, then this will
+      // throw a NestedSetDepthException.
+      // This is an extremely inefficient check and should be only done in the
+      // "--debug_depset_depth" mode.
+      try {
+        result.toList(); // may throw exception
+      } catch (NestedSetDepthException ex) {
+        throw Starlark.errorf("depset exceeded maximum depth %d", ex.getDepthLimit());
+      }
     }
-
     return result;
   }
 
@@ -567,7 +582,7 @@ public final class Depset implements StarlarkValue {
       return legacyOf(order, items);
     }
 
-    if (direct != Starlark.NONE && !isEmptyStarlarkList(items)) {
+    if (direct != Starlark.NONE && !isEmptySkylarkList(items)) {
       throw new EvalException(
           null, "Do not pass both 'direct' and 'items' argument to depset constructor.");
     }
@@ -584,22 +599,7 @@ public final class Depset implements StarlarkValue {
         order, directElements, transitiveList, semantics.incompatibleAlwaysCheckDepsetElements());
   }
 
-  private static boolean isEmptyStarlarkList(Object o) {
+  private static boolean isEmptySkylarkList(Object o) {
     return o instanceof Sequence && ((Sequence) o).isEmpty();
   }
-
-  /**
-   * Sets the maximum depth for nested sets constructed by the Starlark {@code depset} function (as
-   * set by {@code --nested_set_depth_limit}).
-   *
-   * @return whether the new limit differs from the old
-   */
-  public static boolean setDepthLimit(int newLimit) {
-    int oldValue = depthLimit.getAndSet(newLimit);
-    return oldValue != newLimit;
-  }
-
-  // The effective default value comes from the --nested_set_depth_limit
-  // flag in NestedSetOptionsModule, which overrides this.
-  private static final AtomicInteger depthLimit = new AtomicInteger(3500);
 }

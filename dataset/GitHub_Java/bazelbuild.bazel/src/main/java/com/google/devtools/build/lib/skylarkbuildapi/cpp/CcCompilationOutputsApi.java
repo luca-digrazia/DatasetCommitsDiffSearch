@@ -15,14 +15,14 @@
 package com.google.devtools.build.lib.skylarkbuildapi.cpp;
 
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
+import com.google.devtools.build.lib.skylarkinterface.Param;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkMethod;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
-import net.starlark.java.annot.Param;
-import net.starlark.java.annot.StarlarkBuiltin;
-import net.starlark.java.annot.StarlarkDocumentationCategory;
-import net.starlark.java.annot.StarlarkMethod;
 
 /** Interface for a structured representation of the compilation outputs of a C++ rule. */
 @StarlarkBuiltin(
@@ -37,7 +37,6 @@ public interface CcCompilationOutputsApi<FileT extends FileApi> extends Starlark
       name = "object_files",
       doc = "Do not use. Use eiher 'objects' or 'pic_objects'.",
       useStarlarkThread = true,
-      documented = false,
       parameters = {
         @Param(name = "use_pic", doc = "use_pic", positional = false, named = true),
       })
@@ -45,17 +44,9 @@ public interface CcCompilationOutputsApi<FileT extends FileApi> extends Starlark
   Sequence<FileT> getStarlarkObjectFiles(boolean usePic, StarlarkThread thread)
       throws EvalException;
 
-  @StarlarkMethod(
-      name = "objects",
-      doc = "Non-PIC object files.",
-      documented = true,
-      structField = true)
+  @StarlarkMethod(name = "objects", documented = false, structField = true)
   Sequence<FileT> getStarlarkObjects() throws EvalException;
 
-  @StarlarkMethod(
-      name = "pic_objects",
-      doc = "PIC object files.",
-      documented = true,
-      structField = true)
+  @StarlarkMethod(name = "pic_objects", documented = false, structField = true)
   Sequence<FileT> getStarlarkPicObjects() throws EvalException;
 }

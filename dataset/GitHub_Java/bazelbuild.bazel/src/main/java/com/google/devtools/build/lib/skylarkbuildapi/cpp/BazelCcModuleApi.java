@@ -19,25 +19,25 @@ import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.StarlarkActionFactoryApi;
 import com.google.devtools.build.lib.skylarkbuildapi.StarlarkRuleContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintValueInfoApi;
+import com.google.devtools.build.lib.skylarkinterface.Param;
+import com.google.devtools.build.lib.skylarkinterface.ParamType;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkMethod;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.NoneType;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.Tuple;
-import net.starlark.java.annot.Param;
-import net.starlark.java.annot.ParamType;
-import net.starlark.java.annot.StarlarkBuiltin;
-import net.starlark.java.annot.StarlarkMethod;
 
 /** Utilites related to C++ support. */
 @StarlarkBuiltin(
     name = "cc_common",
     doc = "Utilities for C++ compilation, linking, and command line generation.")
 public interface BazelCcModuleApi<
-        StarlarkActionFactoryT extends StarlarkActionFactoryApi,
+        SkylarkActionFactoryT extends StarlarkActionFactoryApi,
         FileT extends FileApi,
         ConstraintValueT extends ConstraintValueInfoApi,
-        StarlarkRuleContextT extends StarlarkRuleContextApi<ConstraintValueT>,
+        SkylarkRuleContextT extends StarlarkRuleContextApi<ConstraintValueT>,
         CcToolchainProviderT extends CcToolchainProviderApi<FeatureConfigurationT>,
         FeatureConfigurationT extends FeatureConfigurationApi,
         CompilationContextT extends CcCompilationContextApi<FileT>,
@@ -49,7 +49,7 @@ public interface BazelCcModuleApi<
         CcToolchainVariablesT extends CcToolchainVariablesApi,
         CcToolchainConfigInfoT extends CcToolchainConfigInfoApi>
     extends CcModuleApi<
-        StarlarkActionFactoryT,
+        SkylarkActionFactoryT,
         FileT,
         CcToolchainProviderT,
         FeatureConfigurationT,
@@ -59,7 +59,7 @@ public interface BazelCcModuleApi<
         LibraryToLinkT,
         CcToolchainVariablesT,
         ConstraintValueT,
-        StarlarkRuleContextT,
+        SkylarkRuleContextT,
         CcToolchainConfigInfoT,
         CompilationOutputsT> {
 
@@ -217,9 +217,9 @@ public interface BazelCcModuleApi<
             type = Sequence.class),
       })
   Tuple<Object> compile(
-      StarlarkActionFactoryT starlarkActionFactoryApi,
-      FeatureConfigurationT starlarkFeatureConfiguration,
-      CcToolchainProviderT starlarkCcToolchainProvider,
+      SkylarkActionFactoryT skylarkActionFactoryApi,
+      FeatureConfigurationT skylarkFeatureConfiguration,
+      CcToolchainProviderT skylarkCcToolchainProvider,
       Sequence<?> sources, // <FileT> expected
       Sequence<?> publicHeaders, // <FileT> expected
       Sequence<?> privateHeaders, // <FileT> expected
@@ -345,9 +345,9 @@ public interface BazelCcModuleApi<
             allowedTypes = {@ParamType(type = FileApi.class), @ParamType(type = NoneType.class)}),
       })
   LinkingOutputsT link(
-      StarlarkActionFactoryT starlarkActionFactoryApi,
-      FeatureConfigurationT starlarkFeatureConfiguration,
-      CcToolchainProviderT starlarkCcToolchainProvider,
+      SkylarkActionFactoryT skylarkActionFactoryApi,
+      FeatureConfigurationT skylarkFeatureConfiguration,
+      CcToolchainProviderT skylarkCcToolchainProvider,
       Object compilationOutputs,
       Sequence<?> userLinkFlags, // <String> expected
       Sequence<?> linkingContexts, // <LinkingContextT> expected
@@ -396,7 +396,7 @@ public interface BazelCcModuleApi<
             defaultValue = "[]",
             type = Sequence.class),
       })
-  CompilationOutputsT mergeCcCompilationOutputsFromStarlark(
+  CompilationOutputsT mergeCcCompilationOutputsFromSkylark(
       Sequence<?> compilationOutputs) // <CompilationOutputsT> expected
       throws EvalException;
 }

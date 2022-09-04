@@ -14,21 +14,51 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.cpp;
 
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.collect.nestedset.Depset;
+import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkMethod;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
 
 /** Wrapper for every C++ linking provider. */
-@SkylarkModule(
+@StarlarkBuiltin(
     name = "LinkingContext",
-    documented = false,
-    category = SkylarkModuleCategory.BUILTIN,
-    doc = "")
-public interface CcLinkingContextApi {
-  @SkylarkCallable(name = "user_link_flags", documented = false, structField = true)
-  SkylarkList<String> getSkylarkUserLinkFlags();
+    category = StarlarkDocumentationCategory.BUILTIN,
+    doc =
+        "Immutable store of information needed for C++ linking that is aggregated across "
+            + "dependencies.")
+public interface CcLinkingContextApi<FileT extends FileApi> extends StarlarkValue {
+  @StarlarkMethod(
+      name = "user_link_flags",
+      doc = "Returns the list of user link flags passed as strings.",
+      disableWithFlag = FlagIdentifier.INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API,
+      structField = true)
+  Sequence<String> getStarlarkUserLinkFlags();
 
-  @SkylarkCallable(name = "libraries_to_link", documented = false, structField = true)
-  SkylarkList<LibraryToLinkWrapperApi> getSkylarkLibrariesToLink();
+  @StarlarkMethod(
+      name = "libraries_to_link",
+      doc =
+          "Returns the depset of <code>LibraryToLink</code>. May return a list but this is"
+              + "deprecated. See #8118.",
+      disableWithFlag = FlagIdentifier.INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API,
+      structField = true,
+      useStarlarkSemantics = true)
+  Object getStarlarkLibrariesToLink(StarlarkSemantics semantics);
+
+  @StarlarkMethod(
+      name = "additional_inputs",
+      doc = "Returns the depset of additional inputs, e.g.: linker scripts.",
+      disableWithFlag = FlagIdentifier.INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API,
+      structField = true)
+  Depset getStarlarkNonCodeInputs();
+
+  @StarlarkMethod(
+      name = "linker_inputs",
+      doc = "Returns the depset of linker inputs.",
+      structField = true)
+  Depset getStarlarkLinkerInputs();
 }

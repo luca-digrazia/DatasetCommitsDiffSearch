@@ -14,7 +14,7 @@
 
 package com.google.devtools.build.lib.analysis.actions;
 
-import static java.nio.charset.StandardCharsets.ISO_8859_1;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
@@ -35,17 +35,11 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
-import javax.annotation.Nullable;
 
 /**
  * Action to write a file whose contents are known at analysis time.
  *
- * <p>The output file is generally encoded as UTF-8, but by an unusual path. BUILD files and
- * directory entries, which are actually UTF-8, are misinterpreted by Bazel as Latin1, so that most
- * Strings within the build language use this unusual representation. FileWriteAction writes those
- * Strings out again as Latin1.
- *
- * <p>TODO(b/146554973): Change this implementation when that is addressed.
+ * <p>The output is always UTF-8 encoded.
  *
  * <p>TODO(bazel-team): Choose a better name to distinguish this class from {@link
  * BinaryFileWriteAction}.
@@ -149,8 +143,9 @@ public final class FileWriteAction extends AbstractFileWriteAction {
   /**
    * Creates a new FileWriteAction instance.
    *
-   * <p>There are no inputs. No reference to the {@link ActionConstructionContext} will be
-   * maintained.
+   * <p>There are no inputs. Transparent compression is controlled by the {@code
+   * --experimental_transparent_compression} flag. No reference to the {@link
+   * ActionConstructionContext} will be maintained.
    *
    * @param context the action construction context
    * @param output the Artifact that will be created by executing this Action
@@ -168,7 +163,7 @@ public final class FileWriteAction extends AbstractFileWriteAction {
         output,
         fileContents,
         makeExecutable,
-        Compression.ALLOW);
+        context.getConfiguration().transparentCompression());
   }
 
   private static final class CompressedString extends LazyString {
@@ -176,7 +171,7 @@ public final class FileWriteAction extends AbstractFileWriteAction {
     final int uncompressedSize;
 
     CompressedString(String chars) {
-      byte[] dataToCompress = chars.getBytes(ISO_8859_1);
+      byte[] dataToCompress = chars.getBytes(UTF_8);
       ByteArrayOutputStream byteStream = new ByteArrayOutputStream(dataToCompress.length);
       try (GZIPOutputStream zipStream = new GZIPOutputStream(byteStream)) {
         zipStream.write(dataToCompress);
@@ -207,7 +202,7 @@ public final class FileWriteAction extends AbstractFileWriteAction {
         // This should be impossible since we're reading from a byte array.
         throw new RuntimeException(e);
       }
-      return new String(uncompressedBytes, ISO_8859_1);
+      return new String(uncompressedBytes, UTF_8);
     }
   }
 
@@ -221,11 +216,6 @@ public final class FileWriteAction extends AbstractFileWriteAction {
    *
    * <p>Note that if the string is lazily computed or compressed, calling this method will force its
    * computation or decompression. No attempt is made by FileWriteAction to cache the result.
-   *
-   * <p>Note that the content is a not a normal Java String. When Bazel parses BUILD files, it
-   * misinterprets the bytes as Latin1, so a code point with a 3-byte UTF-8 encoding will take 3
-   * chars internally. To reverse this process, you must encode this string as Latin1, giving you
-   * back the correct UTF-8 encoding of the original input.
    */
   public String getFileContents() {
     return fileContents.toString();
@@ -245,17 +235,14 @@ public final class FileWriteAction extends AbstractFileWriteAction {
     return new DeterministicWriter() {
       @Override
       public void writeOutputFile(OutputStream out) throws IOException {
-        out.write(getFileContents().getBytes(ISO_8859_1));
+        out.write(getFileContents().getBytes(UTF_8));
       }
     };
   }
 
   /** Computes the Action key for this action by computing the fingerprint for the file contents. */
   @Override
-  protected void computeKey(
-      ActionKeyContext actionKeyContext,
-      @Nullable Artifact.ArtifactExpander artifactExpander,
-      Fingerprint fp) {
+  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
     fp.addString(GUID);
     fp.addString(String.valueOf(makeExecutable));
     fp.addString(getFileContents());

@@ -110,7 +110,7 @@ public abstract class AbstractPackageLoaderTest {
     PackageIdentifier pkgId1 = PackageIdentifier.createInMainRepo(PathFragment.create("good1"));
     PackageIdentifier pkgId2 = PackageIdentifier.createInMainRepo(PathFragment.create("good2"));
     ImmutableMap<PackageIdentifier, PackageLoader.PackageOrException> pkgs =
-        pkgLoader.loadPackages(ImmutableList.of(pkgId1, pkgId2)).getLoadedPackages();
+        pkgLoader.loadPackages(ImmutableList.of(pkgId1, pkgId2));
     assertThat(pkgs.get(pkgId1).get().containsErrors()).isFalse();
     assertThat(pkgs.get(pkgId2).get().containsErrors()).isFalse();
     assertThat(pkgs.get(pkgId1).get().getTarget("good1").getAssociatedRule().getRuleClass())
@@ -128,7 +128,7 @@ public abstract class AbstractPackageLoaderTest {
     file("good1/BUILD", "sh_library(name = 'good1')");
     PackageIdentifier pkgId = PackageIdentifier.createInMainRepo(PathFragment.create("good1"));
     ImmutableMap<PackageIdentifier, PackageLoader.PackageOrException> pkgs =
-        pkgLoader.loadPackages(ImmutableList.of(pkgId, pkgId)).getLoadedPackages();
+        pkgLoader.loadPackages(ImmutableList.of(pkgId, pkgId));
     assertThat(pkgs.get(pkgId).get().containsErrors()).isFalse();
     assertThat(pkgs.get(pkgId).get().getTarget("good1").getAssociatedRule().getRuleClass())
         .isEqualTo("sh_library");
@@ -137,7 +137,7 @@ public abstract class AbstractPackageLoaderTest {
   }
 
   @Test
-  public void simpleGoodPackage_Starlark() throws Exception {
+  public void simpleGoodPackage_Skylark() throws Exception {
     PackageLoader pkgLoader = newPackageLoader();
     file("good/good.bzl", "def f(x):", "  native.sh_library(name = x)");
     file("good/BUILD", "load('//good:good.bzl', 'f')", "f('good')");

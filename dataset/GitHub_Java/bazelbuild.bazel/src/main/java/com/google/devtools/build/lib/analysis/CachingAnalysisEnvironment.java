@@ -16,12 +16,11 @@ package com.google.devtools.build.lib.analysis;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLookupKey;
+import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
@@ -34,8 +33,9 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.BuildInfoCollectionValue;
-import com.google.devtools.build.lib.skyframe.StarlarkBuiltinsValue;
+import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.WorkspaceStatusValue;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
@@ -44,6 +44,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -51,7 +52,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.StarlarkSemantics;
 
 /**
  * The implementation of AnalysisEnvironment used for analysis. It tracks metadata for each
@@ -61,7 +61,7 @@ import net.starlark.java.eval.StarlarkSemantics;
 public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   private final ArtifactFactory artifactFactory;
 
-  private final ActionLookupKey owner;
+  private final ActionLookupValue.ActionLookupKey owner;
   /**
    * If this is the system analysis environment, then errors and warnings are directly reported
    * to the global reporter, rather than stored, i.e., we don't track here whether there are any
@@ -77,9 +77,6 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   private MiddlemanFactory middlemanFactory;
   private ExtendedEventHandler errorEventListener;
   private SkyFunction.Environment skyframeEnv;
-  // TODO(bazel-team): Should this be nulled out by disable()? Alternatively, does disable() even
-  // need to exist?
-  private final StarlarkBuiltinsValue starlarkBuiltinsValue;
   /**
    * Map of artifacts to either themselves or to {@code Pair<Artifact, String>} if
    * --experimental_extended_sanity_checks is enabled. In the latter case, the string will contain
@@ -99,13 +96,12 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   public CachingAnalysisEnvironment(
       ArtifactFactory artifactFactory,
       ActionKeyContext actionKeyContext,
-      ActionLookupKey owner,
+      ActionLookupValue.ActionLookupKey owner,
       boolean isSystemEnv,
       boolean extendedSanityChecks,
       boolean allowAnalysisFailures,
       ExtendedEventHandler errorEventListener,
-      SkyFunction.Environment env,
-      StarlarkBuiltinsValue starlarkBuiltinsValue) {
+      SkyFunction.Environment env) {
     this.artifactFactory = artifactFactory;
     this.actionKeyContext = actionKeyContext;
     this.owner = Preconditions.checkNotNull(owner);
@@ -114,7 +110,6 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
     this.allowAnalysisFailures = allowAnalysisFailures;
     this.errorEventListener = errorEventListener;
     this.skyframeEnv = env;
-    this.starlarkBuiltinsValue = starlarkBuiltinsValue;
     middlemanFactory = new MiddlemanFactory(artifactFactory, this);
     artifacts = new HashMap<>();
   }
@@ -337,9 +332,9 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public void registerAction(ActionAnalysisMetadata action) {
+  public void registerAction(ActionAnalysisMetadata... actions) {
     Preconditions.checkState(enabled);
-    this.actions.add(Preconditions.checkNotNull(action, owner));
+    Collections.addAll(this.actions, actions);
   }
 
   @Override
@@ -364,12 +359,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
 
   @Override
   public StarlarkSemantics getStarlarkSemantics() throws InterruptedException {
-    return starlarkBuiltinsValue.starlarkSemantics;
-  }
-
-  @Override
-  public ImmutableMap<String, Object> getStarlarkDefinedBuiltins() throws InterruptedException {
-    return starlarkBuiltinsValue.exportedToJava;
+    return PrecomputedValue.STARLARK_SEMANTICS.get(skyframeEnv);
   }
 
   @Override
@@ -405,7 +395,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public ActionLookupKey getOwner() {
+  public ActionLookupValue.ActionLookupKey getOwner() {
     return owner;
   }
 

@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
+import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -1005,7 +1006,8 @@ public class CppLinkActionBuilder {
               paramFileActionInputs,
               paramFile,
               linkCommandLine.paramCmdLine(),
-              ParameterFile.ParameterFileType.UNQUOTED);
+              ParameterFile.ParameterFileType.UNQUOTED,
+              ISO_8859_1);
       actionConstructionContext.registerAction(parameterFileWriteAction);
     }
 

@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.Artifact.SourceArtifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.FailAction;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
-import com.google.devtools.build.lib.analysis.RuleContext.InvalidExecGroupException;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
@@ -182,7 +181,7 @@ public final class ConfiguredTargetFactory {
       OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> prerequisiteMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       @Nullable ToolchainCollection<ResolvedToolchainContext> toolchainContexts)
-      throws InterruptedException, ActionConflictException, InvalidExecGroupException {
+      throws InterruptedException, ActionConflictException {
     if (target instanceof Rule) {
       try {
         CurrentRuleTracker.beginConfiguredTarget(((Rule) target).getRuleClassObject());
@@ -240,10 +239,7 @@ public final class ConfiguredTargetFactory {
               inputFile.getExecPath(
                   analysisEnvironment.getStarlarkSemantics().experimentalSiblingRepositoryLayout()),
               inputFile.getPackage().getSourceRoot().get(),
-              ConfiguredTargetKey.builder()
-                  .setLabel(target.getLabel())
-                  .setConfiguration(config)
-                  .build());
+              ConfiguredTargetKey.of(target.getLabel(), config));
       return new InputFileConfiguredTarget(targetContext, inputFile, artifact);
     } else if (target instanceof PackageGroup) {
       PackageGroup packageGroup = (PackageGroup) target;
@@ -334,7 +330,7 @@ public final class ConfiguredTargetFactory {
             starlarkName -> {
               requiredFragments.add(
                   ClassName.getSimpleNameWithOuter(
-                      configuration.getStarlarkFragmentByName(starlarkName)));
+                      configuration.getSkylarkFragmentByName(starlarkName)));
             });
     // Fragments universally required by everything:
     universallyRequiredFragments.forEach(
@@ -412,7 +408,7 @@ public final class ConfiguredTargetFactory {
       OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> prerequisiteMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       @Nullable ToolchainCollection<ResolvedToolchainContext> toolchainContexts)
-      throws InterruptedException, ActionConflictException, InvalidExecGroupException {
+      throws InterruptedException, ActionConflictException {
     ConfigurationFragmentPolicy configurationFragmentPolicy =
         rule.getRuleClassObject().getConfigurationFragmentPolicy();
     // Visibility computation and checking is done for every rule.
@@ -503,7 +499,7 @@ public final class ConfiguredTargetFactory {
           ruleContext.getConfiguredTargetMap().values();
       for (TransitiveInfoCollection infoCollection : infoCollections) {
         AnalysisFailureInfo failureInfo =
-            infoCollection.get(AnalysisFailureInfo.STARLARK_CONSTRUCTOR);
+            infoCollection.get(AnalysisFailureInfo.SKYLARK_CONSTRUCTOR);
         if (failureInfo != null) {
           analysisFailures.add(failureInfo.getCausesNestedSet());
         }
@@ -606,7 +602,7 @@ public final class ConfiguredTargetFactory {
       BuildConfiguration aspectConfiguration,
       BuildConfiguration hostConfiguration,
       AspectValueKey.AspectKey aspectKey)
-      throws InterruptedException, ActionConflictException, InvalidExecGroupException {
+      throws InterruptedException, ActionConflictException {
 
     RuleContext.Builder builder =
         new RuleContext.Builder(

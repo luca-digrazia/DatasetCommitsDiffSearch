@@ -75,8 +75,8 @@ public abstract class AbstractConfiguredTarget implements ConfiguredTarget, Visi
           FILES_FIELD,
           DEFAULT_RUNFILES_FIELD,
           DATA_RUNFILES_FIELD,
-          FilesToRunProvider.STARLARK_NAME,
-          OutputGroupInfo.STARLARK_NAME,
+          FilesToRunProvider.SKYLARK_NAME,
+          OutputGroupInfo.SKYLARK_NAME,
           ACTIONS_FIELD_NAME);
 
   public AbstractConfiguredTarget(Label label, BuildConfigurationValue.Key configurationKey) {
@@ -192,21 +192,21 @@ public abstract class AbstractConfiguredTarget implements ConfiguredTarget, Visi
   @Override
   public final ImmutableCollection<String> getFieldNames() {
     ImmutableList.Builder<String> result = ImmutableList.builder();
-    result.addAll(
-        ImmutableList.of(
-            DATA_RUNFILES_FIELD,
-            DEFAULT_RUNFILES_FIELD,
-            LABEL_FIELD,
-            FILES_FIELD,
-            FilesToRunProvider.STARLARK_NAME));
-    if (get(OutputGroupInfo.STARLARK_CONSTRUCTOR) != null) {
-      result.add(OutputGroupInfo.STARLARK_NAME);
+    result.addAll(ImmutableList.of(
+        DATA_RUNFILES_FIELD,
+        DEFAULT_RUNFILES_FIELD,
+        LABEL_FIELD,
+        FILES_FIELD,
+        FilesToRunProvider.SKYLARK_NAME));
+    if (get(OutputGroupInfo.SKYLARK_CONSTRUCTOR) != null) {
+      result.add(OutputGroupInfo.SKYLARK_NAME);
     }
-    addExtraStarlarkKeys(result::add);
+    addExtraSkylarkKeys(result::add);
     return result.build();
   }
 
-  protected void addExtraStarlarkKeys(Consumer<String> result) {}
+  protected void addExtraSkylarkKeys(Consumer<String> result) {
+  }
 
   private DefaultInfo getDefaultProvider() {
     if (defaultProvider.get() == null) {
@@ -248,10 +248,10 @@ public abstract class AbstractConfiguredTarget implements ConfiguredTarget, Visi
         return getDefaultProvider().getDefaultRunfiles();
       case DATA_RUNFILES_FIELD:
         return getDefaultProvider().getDataRunfiles();
-      case FilesToRunProvider.STARLARK_NAME:
+      case FilesToRunProvider.SKYLARK_NAME:
         return getDefaultProvider().getFilesToRun();
-      case OutputGroupInfo.STARLARK_NAME:
-        return get(OutputGroupInfo.STARLARK_CONSTRUCTOR);
+      case OutputGroupInfo.SKYLARK_NAME:
+        return get(OutputGroupInfo.SKYLARK_CONSTRUCTOR);
       default:
         return rawGetStarlarkProvider(providerKey);
     }

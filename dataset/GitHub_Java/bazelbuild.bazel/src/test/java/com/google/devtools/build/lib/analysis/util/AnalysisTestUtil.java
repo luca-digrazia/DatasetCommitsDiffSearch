@@ -76,7 +76,6 @@ public final class AnalysisTestUtil {
       new TopLevelArtifactContext(
           /*runTestsExclusively=*/ false,
           /*expandFilesets=*/ false,
-          /*fullyResolveFilesetSymlinks=*/ false,
           /*outputGroups=*/ ImmutableSortedSet.copyOf(OutputGroupInfo.DEFAULT_GROUPS));
 
   /**

@@ -361,7 +361,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   protected final BuildConfigurationCollection createConfigurations(
-      ImmutableMap<String, Object> starlarkOptions, String... args) throws Exception {
+      ImmutableMap<String, Object> skylarkOptions, String... args) throws Exception {
     optionsParser =
         OptionsParser.builder()
             .optionsClasses(
@@ -383,7 +383,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     optionsParser.parse(args);
 
     // TODO(juliexxia): when the starlark options parsing work goes in, add type verification here.
-    optionsParser.setStarlarkOptions(starlarkOptions);
+    optionsParser.setStarlarkOptions(skylarkOptions);
 
     BuildOptions buildOptions = ruleClassProvider.createBuildOptions(optionsParser);
     return skyframeExecutor.createConfigurations(
@@ -527,12 +527,12 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * <p>TODO(juliexxia): when Starlark option parsing exists, find a way to combine these parameters
    * into a single parameter so Starlark/native options don't have to be specified separately.
    *
-   * @param starlarkOptions map of Starlark-defined options where the keys are option names (in the
+   * @param skylarkOptions map of Starlark-defined options where the keys are option names (in the
    *     form of label-like strings) and the values are option values
    * @param args native option name/pair descriptions in command line form (e.g. "--cpu=k8")
    * @throws IllegalArgumentException
    */
-  protected void useConfiguration(ImmutableMap<String, Object> starlarkOptions, String... args)
+  protected void useConfiguration(ImmutableMap<String, Object> skylarkOptions, String... args)
       throws Exception {
     ImmutableList<String> actualArgs =
         ImmutableList.<String>builder()
@@ -541,7 +541,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             .add("--experimental_dynamic_configs=" + Ascii.toLowerCase(configsMode.toString()))
             .build();
 
-    masterConfig = createConfigurations(starlarkOptions, actualArgs.toArray(new String[0]));
+    masterConfig = createConfigurations(skylarkOptions, actualArgs.toArray(new String[0]));
     targetConfig = getTargetConfiguration();
     targetConfigKey = BuildConfigurationValue.key(targetConfig);
     configurationArgs = actualArgs;
@@ -1265,10 +1265,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   protected final Artifact getTreeArtifact(String packageRelativePath, ConfiguredTarget owner) {
     ActionLookupValue.ActionLookupKey actionLookupKey =
-        ConfiguredTargetKey.builder()
-            .setConfiguredTarget(owner)
-            .setConfigurationKey(owner.getConfigurationKey())
-            .build();
+        ConfiguredTargetKey.of(owner, owner.getConfigurationKey(), /*isHostConfiguration=*/ false);
     return getDerivedArtifact(
         owner.getLabel().getPackageFragment().getRelative(packageRelativePath),
         getConfiguration(owner).getBinDirectory(RepositoryName.MAIN),
@@ -1325,11 +1322,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return getPackageRelativeDerivedArtifact(
         packageRelativePath,
         getConfiguration(owner).getBinDirectory(RepositoryName.MAIN),
-        ConfiguredTargetKey.builder()
-            .setConfiguredTarget(owner)
-            .setConfiguration(
-                skyframeExecutor.getConfiguration(reporter, owner.getConfigurationKey()))
-            .build());
+        ConfiguredTargetKey.of(
+            owner, skyframeExecutor.getConfiguration(reporter, owner.getConfigurationKey())));
   }
 
   /**
@@ -1395,9 +1389,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected Artifact getGenfilesArtifact(String packageRelativePath, String owner) {
     BuildConfiguration config = getConfiguration(owner);
     return getGenfilesArtifact(
-        packageRelativePath,
-        ConfiguredTargetKey.builder().setLabel(makeLabel(owner)).setConfiguration(config).build(),
-        config);
+        packageRelativePath, ConfiguredTargetKey.of(makeLabel(owner), config), config);
   }
 
   /**
@@ -1409,11 +1401,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected Artifact getGenfilesArtifact(String packageRelativePath, ConfiguredTarget owner) {
     BuildConfiguration configuration =
         skyframeExecutor.getConfiguration(reporter, owner.getConfigurationKey());
-    ConfiguredTargetKey configKey =
-        ConfiguredTargetKey.builder()
-            .setConfiguredTarget(owner)
-            .setConfiguration(configuration)
-            .build();
+    ConfiguredTargetKey configKey = ConfiguredTargetKey.of(owner, configuration);
     return getGenfilesArtifact(packageRelativePath, configKey, configuration);
   }
 
@@ -1500,11 +1488,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return getDerivedArtifact(
         PathFragment.create(rootRelativePath),
         targetConfig.getBinDirectory(RepositoryName.MAIN),
-        ConfiguredTargetKey.builder()
-            .setConfiguredTarget(owner)
-            .setConfiguration(
-                skyframeExecutor.getConfiguration(reporter, owner.getConfigurationKey()))
-            .build());
+        ConfiguredTargetKey.of(
+            owner, skyframeExecutor.getConfiguration(reporter, owner.getConfigurationKey())));
   }
 
   protected Action getGeneratingActionForLabel(String label) throws Exception {
@@ -1617,10 +1602,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   private ConfiguredTargetKey makeConfiguredTargetKey(String label) {
-    return ConfiguredTargetKey.builder()
-        .setLabel(makeLabel(label))
-        .setConfiguration(getConfiguration(label))
-        .build();
+    return ConfiguredTargetKey.of(makeLabel(label), getConfiguration(label));
   }
 
   protected static List<String> actionInputsToPaths(NestedSet<? extends ActionInput> actionInputs) {

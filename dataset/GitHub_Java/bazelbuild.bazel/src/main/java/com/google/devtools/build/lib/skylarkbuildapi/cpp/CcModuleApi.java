@@ -21,6 +21,10 @@ import com.google.devtools.build.lib.skylarkbuildapi.StarlarkActionFactoryApi;
 import com.google.devtools.build.lib.skylarkbuildapi.StarlarkRuleContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintValueInfoApi;
+import com.google.devtools.build.lib.skylarkinterface.Param;
+import com.google.devtools.build.lib.skylarkinterface.ParamType;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkMethod;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.NoneType;
@@ -29,17 +33,13 @@ import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
 import com.google.devtools.build.lib.syntax.Tuple;
-import net.starlark.java.annot.Param;
-import net.starlark.java.annot.ParamType;
-import net.starlark.java.annot.StarlarkBuiltin;
-import net.starlark.java.annot.StarlarkMethod;
 
 /** Utilites related to C++ support. */
 @StarlarkBuiltin(
     name = "cc_common",
     doc = "Utilities for C++ compilation, linking, and command line generation.")
 public interface CcModuleApi<
-        StarlarkActionFactoryT extends StarlarkActionFactoryApi,
+        SkylarkActionFactoryT extends StarlarkActionFactoryApi,
         FileT extends FileApi,
         CcToolchainProviderT extends CcToolchainProviderApi<?>,
         FeatureConfigurationT extends FeatureConfigurationApi,
@@ -49,7 +49,7 @@ public interface CcModuleApi<
         LibraryToLinkT extends LibraryToLinkApi<FileT>,
         CcToolchainVariablesT extends CcToolchainVariablesApi,
         ConstraintValueT extends ConstraintValueInfoApi,
-        StarlarkRuleContextT extends StarlarkRuleContextApi<ConstraintValueT>,
+        SkylarkRuleContextT extends StarlarkRuleContextApi<ConstraintValueT>,
         CcToolchainConfigInfoT extends CcToolchainConfigInfoApi,
         CompilationOutputsT extends CcCompilationOutputsApi<FileT>>
     extends StarlarkValue {
@@ -820,7 +820,7 @@ public interface CcModuleApi<
             doc = "The rule context."),
       },
       doc = "Returns true if the --incompatible_enable_cc_toolchain_resolution flag is enabled.")
-  boolean isCcToolchainResolutionEnabled(StarlarkRuleContextT ruleContext);
+  boolean isCcToolchainResolutionEnabled(SkylarkRuleContextT ruleContext);
 
   @StarlarkMethod(
       name = "create_cc_toolchain_config_info",
@@ -965,7 +965,7 @@ public interface CcModuleApi<
             doc = "Internal purpose only, do not use."),
       })
   CcToolchainConfigInfoT ccToolchainConfigInfoFromStarlark(
-      StarlarkRuleContextT starlarkRuleContext,
+      SkylarkRuleContextT skylarkRuleContext,
       Sequence<?> features, // <StructApi> expected
       Sequence<?> actionConfigs, // <StructApi> expected
       Sequence<?> artifactNamePatterns, // <StructApi> expected
@@ -1085,9 +1085,9 @@ public interface CcModuleApi<
             allowedTypes = {@ParamType(type = FileApi.class), @ParamType(type = NoneType.class)}),
       })
   Tuple<Object> createLinkingContextFromCompilationOutputs(
-      StarlarkActionFactoryT starlarkActionFactoryApi,
-      FeatureConfigurationT starlarkFeatureConfiguration,
-      CcToolchainProviderT starlarkCcToolchainProvider,
+      SkylarkActionFactoryT skylarkActionFactoryApi,
+      FeatureConfigurationT skylarkFeatureConfiguration,
+      CcToolchainProviderT skylarkCcToolchainProvider,
       CompilationOutputsT compilationOutputs,
       Sequence<?> userLinkFlags, // <String> expected
       Sequence<?> linkingContexts, // <LinkingContextT> expected

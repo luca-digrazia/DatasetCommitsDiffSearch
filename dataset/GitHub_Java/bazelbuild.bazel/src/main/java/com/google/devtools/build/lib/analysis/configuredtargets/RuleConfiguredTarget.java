@@ -103,7 +103,7 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
     Preconditions.checkState(providerBuilder.contains(FileProvider.class), label);
     Preconditions.checkState(providerBuilder.contains(FilesToRunProvider.class), label);
 
-    // Initialize every StarlarkApiProvider
+    // Initialize every SkylarkApiProvider
     for (int i = 0; i < providers.getProviderCount(); i++) {
       Object obj = providers.getProviderInstanceAt(i);
       if (obj instanceof StarlarkApiProvider) {
@@ -184,7 +184,7 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   }
 
   @Override
-  protected void addExtraStarlarkKeys(Consumer<String> result) {
+  protected void addExtraSkylarkKeys(Consumer<String> result) {
     for (int i = 0; i < providers.getProviderCount(); i++) {
       Object classAt = providers.getProviderKeyAt(i);
       if (classAt instanceof String) {
@@ -223,14 +223,14 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
     // Provider key names might potentially be *private* information, and thus a comprehensive
     // list of provider keys should not be exposed in any way other than for debug information.
     printer.append("<target " + getLabel() + ", keys:[");
-    ImmutableList.Builder<String> starlarkProviderKeyStrings = ImmutableList.builder();
+    ImmutableList.Builder<String> skylarkProviderKeyStrings = ImmutableList.builder();
     for (int providerIndex = 0; providerIndex < providers.getProviderCount(); providerIndex++) {
       Object providerKey = providers.getProviderKeyAt(providerIndex);
       if (providerKey instanceof Provider.Key) {
-        starlarkProviderKeyStrings.add(providerKey.toString());
+        skylarkProviderKeyStrings.add(providerKey.toString());
       }
     }
-    printer.append(Joiner.on(", ").join(starlarkProviderKeyStrings.build()));
+    printer.append(Joiner.on(", ").join(skylarkProviderKeyStrings.build()));
     printer.append("]>");
   }
 

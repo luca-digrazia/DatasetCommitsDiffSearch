@@ -595,10 +595,8 @@ public abstract class CcModule
   }
 
   @Override
-  public CcInfo mergeCcInfos(Sequence<?> directCcInfos, Sequence<?> ccInfos) throws EvalException {
-    return CcInfo.merge(
-        Sequence.cast(directCcInfos, CcInfo.class, "directs"),
-        Sequence.cast(ccInfos, CcInfo.class, "cc_infos"));
+  public CcInfo mergeCcInfos(Sequence<?> ccInfos) throws EvalException {
+    return CcInfo.merge(Sequence.cast(ccInfos, CcInfo.class, "infos"));
   }
 
   @Override

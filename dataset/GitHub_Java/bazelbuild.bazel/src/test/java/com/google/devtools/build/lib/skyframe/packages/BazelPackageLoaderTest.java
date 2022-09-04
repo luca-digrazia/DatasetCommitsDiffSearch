@@ -125,6 +125,7 @@ public final class BazelPackageLoaderTest extends AbstractPackageLoaderTest {
     assertThat(goodPkg.containsErrors()).isFalse();
     assertThat(goodPkg.getTarget("good").getAssociatedRule().getRuleClass())
         .isEqualTo("sh_library");
+    assertNoEvents(goodPkg.getEvents());
     assertNoEvents(handler.getEvents());
   }
 
@@ -145,6 +146,7 @@ public final class BazelPackageLoaderTest extends AbstractPackageLoaderTest {
     assertThat(goodPkg.containsErrors()).isFalse();
     assertThat(goodPkg.getTarget("good").getAssociatedRule().getRuleClass())
         .isEqualTo("sh_library");
+    assertNoEvents(goodPkg.getEvents());
     assertNoEvents(handler.getEvents());
   }
 
@@ -159,6 +161,7 @@ public final class BazelPackageLoaderTest extends AbstractPackageLoaderTest {
     Package aPkg = pkgLoader.loadPackage(pkgId);
     assertThat(aPkg.containsErrors()).isFalse();
     assertThrows(NoSuchTargetException.class, () -> aPkg.getTarget("sub/a.txt"));
+    assertNoEvents(aPkg.getEvents());
     assertNoEvents(handler.getEvents());
   }
 }

@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.FdoContext.BranchFdoMode;
 import com.google.devtools.build.lib.util.FileType;
@@ -48,7 +47,6 @@ public class FdoHelper {
     FdoInputFile fdoInputFile = null;
     FdoInputFile csFdoInputFile = null;
     FdoInputFile prefetchHints = null;
-    PropellerOptimizeInputFile propellerOptimizeInputFile = null;
     Artifact protoProfileArtifact = null;
     Pair<FdoInputFile, Artifact> fdoInputs = null;
     if (configuration.getCompilationMode() == CompilationMode.OPT) {
@@ -58,13 +56,6 @@ public class FdoHelper {
         FdoPrefetchHintsProvider provider = attributes.getFdoPrefetch();
         prefetchHints = provider.getInputFile();
       }
-      if (cppConfiguration
-              .getPropellerOptimizeLabelUnsafeSinceItCanReturnValueFromWrongConfiguration()
-          != null) {
-        PropellerOptimizeProvider provider = attributes.getPropellerOptimize();
-        propellerOptimizeInputFile = provider.getInputFile();
-      }
-
       if (cppConfiguration.getFdoPathUnsafeSinceItCanReturnValueFromWrongConfiguration() != null) {
         PathFragment fdoZip =
             cppConfiguration.getFdoPathUnsafeSinceItCanReturnValueFromWrongConfiguration();
@@ -213,8 +204,7 @@ public class FdoHelper {
           new FdoContext.BranchFdoProfile(branchFdoMode, profileArtifact, protoProfileArtifact);
     }
     Artifact prefetchHintsArtifact = getPrefetchHintsArtifact(prefetchHints, ruleContext);
-
-    return new FdoContext(branchFdoProfile, prefetchHintsArtifact, propellerOptimizeInputFile);
+    return new FdoContext(branchFdoProfile, prefetchHintsArtifact);
   }
 
   /**
@@ -381,18 +371,6 @@ public class FdoHelper {
           fdoProfile,
           "Symlinking LLVM ZIP Profile " + fdoProfile.getBasename());
 
-      // We invoke different binaries depending on whether the unzip_fdo tool
-      // is available. When it isn't, unzip_fdo is aliased to the generic
-      // zipper tool, which takes different command-line arguments.
-      CustomCommandLine.Builder argv = new CustomCommandLine.Builder();
-      if (zipperBinaryArtifact.getExecPathString().endsWith("unzip_fdo")) {
-        argv.addExecPath("--profile_zip", zipProfileArtifact)
-            .add("--cpu", cpu)
-            .add("--output_file", rawProfileArtifact.getExecPath().getSafePathString());
-      } else {
-        argv.addExecPath("xf", zipProfileArtifact)
-            .add("-d", rawProfileArtifact.getExecPath().getParentDirectory().getSafePathString());
-      }
       // Unzip the profile.
       ruleContext.registerAction(
           new SpawnAction.Builder()
@@ -404,7 +382,13 @@ public class FdoHelper {
               .setProgressMessage(
                   "LLVMUnzipProfileAction: Generating %s", rawProfileArtifact.prettyPrint())
               .setMnemonic("LLVMUnzipProfileAction")
-              .addCommandLine(argv.build())
+              .addCommandLine(
+                  CustomCommandLine.builder()
+                      .addExecPath("xf", zipProfileArtifact)
+                      .add(
+                          "-d",
+                          rawProfileArtifact.getExecPath().getParentDirectory().getSafePathString())
+                      .build())
               .build(ruleContext));
     } else {
       rawProfileArtifact =
@@ -479,7 +463,7 @@ public class FdoHelper {
             ruleContext
                 .getAnalysisEnvironment()
                 .getStarlarkSemantics()
-                .getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT))
+                .experimentalSiblingRepositoryLayout())
         .getRelative(fdoLabel.getName())
         .equals(fdoArtifact.getExecPath())) {
       ruleContext.ruleError("--fdo_optimize points to a target that is not an input file");

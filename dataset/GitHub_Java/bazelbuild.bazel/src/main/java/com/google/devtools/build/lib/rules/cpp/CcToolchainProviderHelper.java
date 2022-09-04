@@ -38,6 +38,7 @@ import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.
 import com.google.devtools.build.lib.rules.cpp.CcToolchain.AdditionalBuildVariablesComputer;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.EnumSet;
@@ -183,11 +184,8 @@ public class CcToolchainProviderHelper {
     ImmutableList<PathFragment> builtInIncludeDirectories =
         builtInIncludeDirectoriesBuilder.build();
 
-    PackageSpecificationProvider allowlistForLayeringCheck =
-        attributes.getAllowlistForLayeringCheck();
-
-    PackageSpecificationProvider allowlistForLooseHeaderCheck =
-        attributes.getAllowlistForLooseHeaderCheck();
+    PackageSpecificationProvider whitelistForLayeringCheck =
+        attributes.getWhitelistForLayeringCheck();
 
     return new CcToolchainProvider(
         getToolchainForStarlark(toolPaths),
@@ -251,8 +249,7 @@ public class CcToolchainProviderHelper {
         toolchainConfigInfo.getTargetSystemName(),
         computeAdditionalMakeVariables(toolchainConfigInfo),
         computeLegacyCcFlagsMakeVariable(toolchainConfigInfo),
-        allowlistForLayeringCheck,
-        allowlistForLooseHeaderCheck);
+        whitelistForLayeringCheck);
   }
 
   @Nullable
@@ -499,7 +496,8 @@ public class CcToolchainProviderHelper {
               });
       for (CppConfiguration.Tool tool : neededTools) {
         if (!toolPathsCollector.containsKey(tool.getNamePart())) {
-          throw new EvalException("Tool path for '" + tool.getNamePart() + "' is missing");
+          throw new EvalException(
+              Location.BUILTIN, "Tool path for '" + tool.getNamePart() + "' is missing");
         }
       }
     }
