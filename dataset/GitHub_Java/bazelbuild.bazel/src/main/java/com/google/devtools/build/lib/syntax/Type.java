@@ -124,17 +124,13 @@ public abstract class Type<T> {
    */
   public abstract T getDefaultValue();
 
-  /**
-   * Function accepting a (potentially null) {@link Label} and an arbitrary context object. Used by
-   * {@link #visitLabels}.
-   */
-  public static interface LabelVisitor<C> {
-    void visit(@Nullable Label label, @Nullable C context) throws InterruptedException;
+  /** Function accepting a (potentially null) object value. See {@link #visitLabels}. */
+  public static interface LabelVisitor {
+    void visit(@Nullable Label label) throws InterruptedException;
   }
 
   /**
-   * Invokes {@code visitor.visit(label, context)} for each {@link Label} {@code label} associated
-   * with {@code value}, which is assumed an instance of this {@link Type}.
+   * Extracts all labels associated with the instance of the type to visitor.
    *
    * <p>This is used to support reliable label visitation in
    * {@link com.google.devtools.build.lib.packages.AbstractAttributeMapper#visitLabels}. To preserve
@@ -142,8 +138,7 @@ public abstract class Type<T> {
    * words, be careful about defining default instances in base types that get auto-inherited by
    * their children. Keep all definitions as explicit as possible.
    */
-  public abstract <C> void visitLabels(LabelVisitor<C> visitor, Object value, @Nullable C context)
-      throws InterruptedException;
+  public abstract void visitLabels(LabelVisitor visitor, Object value) throws InterruptedException;
 
   /** Classifications of labels by their usage. */
   public enum LabelClass {
@@ -234,6 +229,12 @@ public abstract class Type<T> {
       DictType.create(STRING, STRING_LIST);
 
   /**
+   * The type of a dictionary of {@linkplain #STRING strings}, where each entry
+   * maps to a single string value.
+   */
+  public static final DictType<String, String> STRING_DICT_UNARY = DictType.create(STRING, STRING);
+
+  /**
    *  For ListType objects, returns the type of the elements of the list; for
    *  all other types, returns null.  (This non-obvious implementation strategy
    *  is necessitated by the wildcard capture rules of the Java type system,
@@ -288,7 +289,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    public void visitLabels(LabelVisitor visitor, Object value) {
     }
 
     @Override
@@ -314,7 +315,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    public void visitLabels(LabelVisitor visitor, Object value) {
     }
 
     @Override
@@ -353,7 +354,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    public void visitLabels(LabelVisitor visitor, Object value) {
     }
 
     @Override
@@ -403,7 +404,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    public void visitLabels(LabelVisitor visitor, Object value) {
     }
 
     @Override
@@ -451,11 +452,10 @@ public abstract class Type<T> {
     private final LabelClass labelClass;
 
     @Override
-    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context)
-        throws InterruptedException {
+    public void visitLabels(LabelVisitor visitor, Object value) throws InterruptedException {
       for (Entry<KeyT, ValueT> entry : cast(value).entrySet()) {
-        keyType.visitLabels(visitor, entry.getKey(), context);
-        valueType.visitLabels(visitor, entry.getValue(), context);
+        keyType.visitLabels(visitor, entry.getKey());
+        valueType.visitLabels(visitor, entry.getValue());
       }
     }
 
@@ -475,7 +475,7 @@ public abstract class Type<T> {
       return new DictType<>(keyType, valueType, labelClass);
     }
 
-    protected DictType(Type<KeyT> keyType, Type<ValueT> valueType, LabelClass labelClass) {
+    private DictType(Type<KeyT> keyType, Type<ValueT> valueType, LabelClass labelClass) {
       this.keyType = keyType;
       this.valueType = valueType;
       this.labelClass = labelClass;
@@ -509,7 +509,8 @@ public abstract class Type<T> {
     public Map<KeyT, ValueT> convert(Object x, Object what, Object context)
         throws ConversionException {
       if (!(x instanceof Map<?, ?>)) {
-        throw new ConversionException(this, x, what);
+        throw new ConversionException(String.format(
+            "Expected a map for dictionary but got a %s", x.getClass().getName()));
       }
       // Order the keys so the return value will be independent of insertion order.
       Map<KeyT, ValueT> result = new TreeMap<>();
@@ -565,10 +566,9 @@ public abstract class Type<T> {
     }
 
     @Override
-    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context)
-        throws InterruptedException {
+    public void visitLabels(LabelVisitor visitor, Object value) throws InterruptedException {
       for (ElemT elem : cast(value)) {
-        elemType.visitLabels(visitor, elem, context);
+        elemType.visitLabels(visitor, elem);
       }
     }
 

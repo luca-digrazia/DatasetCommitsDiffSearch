@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.AllowedValueSet;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
@@ -273,18 +274,6 @@ public final class SkylarkAttr {
             "cfg must be either 'data', 'host', or 'target'.");
       }
     }
-
-    if (containsNonNoneKey(arguments, ASPECTS_ARG)) {
-      Object obj = arguments.get(ASPECTS_ARG);
-      SkylarkType.checkType(obj, SkylarkList.class, ASPECTS_ARG);
-
-      List<SkylarkAspect> aspects =
-          ((SkylarkList<?>) obj).getContents(SkylarkAspect.class, "aspects");
-      for (SkylarkAspect aspect : aspects) {
-        builder.aspect(aspect, ast.getLocation());
-      }
-    }
-
     return builder;
   }
 
@@ -641,13 +630,12 @@ public final class SkylarkAttr {
                     SINGLE_FILE_ARG,
                     singleFile,
                     CONFIGURATION_ARG,
-                    cfg,
-                    ASPECTS_ARG,
-                    aspects
-                    ),
+                    cfg),
                 ast,
                 env);
-            return new Descriptor(attribute);
+            ImmutableList<SkylarkAspect> skylarkAspects =
+                ImmutableList.copyOf(aspects.getContents(SkylarkAspect.class, "aspects"));
+            return new Descriptor(attribute, skylarkAspects);
           } catch (EvalException e) {
             throw new EvalException(ast.getLocation(), e.getMessage(), e);
           }
@@ -920,166 +908,13 @@ public final class SkylarkAttr {
                   ALLOW_EMPTY_ARG,
                   allowEmpty,
                   CONFIGURATION_ARG,
-                  cfg,
-                  ASPECTS_ARG,
-                  aspects
-                  );
+                  cfg);
           try {
             Attribute.Builder<?> attribute =
                 createAttribute(BuildType.LABEL_LIST, kwargs, ast, env);
-            return new Descriptor(attribute);
-          } catch (EvalException e) {
-            throw new EvalException(ast.getLocation(), e.getMessage(), e);
-          }
-        }
-      };
-
-  @SkylarkSignature(
-    name = "label_keyed_string_dict",
-    doc =
-        "Creates an attribute which is a <a href=\"dict.html\">dict</a>. Its keys are type "
-            + "<a href=\"Target.html\">Target</a> and are specified by the label keys of the "
-            + "input dict. Its values are <a href=\"string.html\">strings</a>. See "
-            + "<a href=\"attr.html#label\">label</a> for more information.",
-    objectType = SkylarkAttr.class,
-    returnType = Descriptor.class,
-    parameters = {
-      @Param(
-        name = DEFAULT_ARG,
-        type = SkylarkDict.class,
-        callbackEnabled = true,
-        defaultValue = "{}",
-        named = true,
-        positional = false,
-        doc =
-            DEFAULT_DOC
-                + " Use the <a href=\"globals.html#Label\"><code>Label</code></a> function to "
-                + "specify default values ex:</p>"
-                + "<code>attr.label_keyed_string_dict(default = "
-                + "{ Label(\"//a:b\"): \"value\", Label(\"//a:c\"): \"string\" })</code>"
-      ),
-      @Param(
-        name = ALLOW_FILES_ARG, // bool or FileType filter
-        defaultValue = "None",
-        named = true,
-        positional = false,
-        doc = ALLOW_FILES_DOC
-      ),
-      @Param(
-        name = ALLOW_RULES_ARG,
-        type = SkylarkList.class,
-        generic1 = String.class,
-        noneable = true,
-        defaultValue = "None",
-        named = true,
-        positional = false,
-        doc = ALLOW_RULES_DOC
-      ),
-      @Param(
-        name = PROVIDERS_ARG,
-        type = SkylarkList.class,
-        defaultValue = "[]",
-        named = true,
-        positional = false,
-        doc = PROVIDERS_DOC
-      ),
-      @Param(
-        name = FLAGS_ARG,
-        type = SkylarkList.class,
-        generic1 = String.class,
-        defaultValue = "[]",
-        named = true,
-        positional = false,
-        doc = FLAGS_DOC
-      ),
-      @Param(
-        name = MANDATORY_ARG,
-        type = Boolean.class,
-        defaultValue = "False",
-        named = true,
-        positional = false,
-        doc = MANDATORY_DOC
-      ),
-      @Param(
-        name = NON_EMPTY_ARG,
-        type = Boolean.class,
-        defaultValue = "False",
-        named = true,
-        positional = false,
-        doc = NON_EMPTY_DOC
-      ),
-      @Param(
-        name = ALLOW_EMPTY_ARG,
-        type = Boolean.class,
-        defaultValue = "True",
-        doc = ALLOW_EMPTY_DOC
-      ),
-      @Param(
-        name = CONFIGURATION_ARG,
-        type = Object.class,
-        noneable = true,
-        defaultValue = "None",
-        named = true,
-        positional = false,
-        doc = CONFIGURATION_DOC
-      ),
-      @Param(
-        name = ASPECTS_ARG,
-        type = SkylarkList.class,
-        generic1 = SkylarkAspect.class,
-        defaultValue = "[]",
-        named = true,
-        positional = false,
-        doc = ASPECTS_ARG_DOC
-      )
-    },
-    useAst = true,
-    useEnvironment = true
-  )
-  private static BuiltinFunction labelKeyedStringDict =
-      new BuiltinFunction("label_keyed_string_dict") {
-        public Descriptor invoke(
-            Object defaultList,
-            Object allowFiles,
-            Object allowRules,
-            SkylarkList<?> providers,
-            SkylarkList<?> flags,
-            Boolean mandatory,
-            Boolean nonEmpty,
-            Boolean allowEmpty,
-            Object cfg,
-            SkylarkList<?> aspects,
-            FuncallExpression ast,
-            Environment env)
-            throws EvalException {
-          env.checkLoadingOrWorkspacePhase("attr.label_keyed_string_dict", ast.getLocation());
-          SkylarkDict<String, Object> kwargs =
-              EvalUtils.<String, Object>optionMap(
-                  env,
-                  DEFAULT_ARG,
-                  defaultList,
-                  ALLOW_FILES_ARG,
-                  allowFiles,
-                  ALLOW_RULES_ARG,
-                  allowRules,
-                  PROVIDERS_ARG,
-                  providers,
-                  FLAGS_ARG,
-                  flags,
-                  MANDATORY_ARG,
-                  mandatory,
-                  NON_EMPTY_ARG,
-                  nonEmpty,
-                  ALLOW_EMPTY_ARG,
-                  allowEmpty,
-                  CONFIGURATION_ARG,
-                  cfg,
-                  ASPECTS_ARG,
-                  aspects);
-          try {
-            Attribute.Builder<?> attribute =
-                createAttribute(BuildType.LABEL_KEYED_STRING_DICT, kwargs, ast, env);
-            return new Descriptor(attribute);
+            ImmutableList<SkylarkAspect> skylarkAspects =
+                ImmutableList.copyOf(aspects.getContents(SkylarkAspect.class, "aspects"));
+            return new Descriptor(attribute, skylarkAspects);
           } catch (EvalException e) {
             throw new EvalException(ast.getLocation(), e.getMessage(), e);
           }
@@ -1438,17 +1273,33 @@ public final class SkylarkAttr {
   )
   public static final class Descriptor {
     private final Attribute.Builder<?> attributeBuilder;
+    private final ImmutableList<SkylarkAspect> aspects;
 
     /**
      * This lock guards {@code attributeBuilder} field.
      *
      * {@link Attribute.Builder} class is not thread-safe for concurrent modification.
+     * This class, together with its enclosing {@link SkylarkAttr} class, do not let
+     * anyone else access the {@code attributeBuilder}, however {@link #exportAspects(Location)}
+     * method actually modifies the {@code attributeBuilder}. Therefore all read- and write-accesses
+     * to {@code attributeBuilder} are protected with this lock.
+     *
+     * For example, {@link #hasDefault()} method only reads from {@link #attributeBuilder},
+     * but we have no guarantee that it is safe to do so concurrently with adding aspects
+     * in {@link #exportAspects(Location)}.
      */
     private final Object lock = new Object();
+    boolean exported;
+
+    private Descriptor(Attribute.Builder<?> attributeBuilder) {
+      this(attributeBuilder, ImmutableList.<SkylarkAspect>of());
+    }
 
     private Descriptor(
-        Attribute.Builder<?> attributeBuilder) {
+        Attribute.Builder<?> attributeBuilder, ImmutableList<SkylarkAspect> aspects) {
       this.attributeBuilder = attributeBuilder;
+      this.aspects = aspects;
+      exported = false;
     }
 
     public boolean hasDefault() {
@@ -1466,6 +1317,27 @@ public final class SkylarkAttr {
     public Attribute build(String name) {
       synchronized (lock) {
         return attributeBuilder.build(name);
+      }
+    }
+
+    public ImmutableList<SkylarkAspect> getAspects() {
+      return aspects;
+    }
+
+    public void exportAspects(Location definitionLocation) throws EvalException {
+      synchronized (lock) {
+        if (exported) {
+          // Only export an attribute definiton once.
+          return;
+        }
+        for (SkylarkAspect skylarkAspect : getAspects()) {
+          if (!skylarkAspect.isExported()) {
+            throw new EvalException(definitionLocation,
+                "All aspects applied to rule dependencies must be top-level values");
+          }
+          attributeBuilder.aspect(skylarkAspect, definitionLocation);
+        }
+        exported = true;
       }
     }
   }

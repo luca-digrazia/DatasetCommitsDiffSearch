@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -23,16 +22,13 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.License.LicenseParsingException;
-import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SelectorValue;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.syntax.Type.DictType;
 import com.google.devtools.build.lib.syntax.Type.LabelClass;
-import com.google.devtools.build.lib.syntax.Type.LabelVisitor;
 import com.google.devtools.build.lib.syntax.Type.ListType;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -58,11 +54,6 @@ public final class BuildType {
    */
   public static final DictType<String, Label> LABEL_DICT_UNARY = DictType.create(
       Type.STRING, LABEL);
-  /**
-   * The type of a dictionary keyed by {@linkplain #LABEL labels} with string values.
-   */
-  public static final DictType<Label, String> LABEL_KEYED_STRING_DICT =
-      LabelKeyedDictType.create(Type.STRING);
   /**
    *  The type of a list of {@linkplain #LABEL labels}.
    */
@@ -104,7 +95,7 @@ public final class BuildType {
     }
 
     @Override
-    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    public void visitLabels(LabelVisitor visitor, Object value) {
     }
 
     @Override
@@ -201,10 +192,9 @@ public final class BuildType {
     }
 
     @Override
-    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context)
-        throws InterruptedException {
+    public void visitLabels(LabelVisitor visitor, Object value) throws InterruptedException {
       for (Label label : cast(value).getLabels()) {
-        visitor.visit(label, context);
+        visitor.visit(label);
       }
     }
   }
@@ -227,9 +217,8 @@ public final class BuildType {
     }
 
     @Override
-    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context)
-        throws InterruptedException {
-      visitor.visit(cast(value), context);
+    public void visitLabels(LabelVisitor visitor, Object value) throws InterruptedException {
+      visitor.visit(cast(value));
     }
 
     @Override
@@ -254,70 +243,6 @@ public final class BuildType {
         throw new ConversionException("invalid label '" + x + "' in "
             + what + ": " + e.getMessage());
       }
-    }
-  }
-
-  /**
-   * Dictionary type specialized for label keys, which is able to detect collisions caused by the
-   * fact that labels have multiple equivalent representations in Skylark code.
-   */
-  private static class LabelKeyedDictType<ValueT> extends DictType<Label, ValueT> {
-    private LabelKeyedDictType(Type<ValueT> valueType) {
-      super(LABEL, valueType, LabelClass.DEPENDENCY);
-    }
-
-    public static <ValueT> LabelKeyedDictType<ValueT> create(Type<ValueT> valueType) {
-      Preconditions.checkArgument(
-          valueType.getLabelClass() == LabelClass.NONE
-          || valueType.getLabelClass() == LabelClass.DEPENDENCY,
-          "Values associated with label keys must not be labels themselves.");
-      return new LabelKeyedDictType<>(valueType);
-    }
-
-    @Override
-    public Map<Label, ValueT> convert(Object x, Object what, Object context)
-        throws ConversionException {
-      Map<Label, ValueT> result = super.convert(x, what, context);
-      // The input is known to be a map because super.convert succeded; otherwise, a
-      // ConversionException would have been thrown.
-      Map<?, ?> input = (Map<?, ?>) x;
-
-      if (input.size() == result.size()) {
-        // No collisions found. Exit early.
-        return result;
-      }
-      // Look for collisions in order to produce a nicer error message.
-      Map<Label, List<Object>> convertedFrom = new LinkedHashMap<>();
-      for (Object original : input.keySet()) {
-        Label label = LABEL.convert(original, what, context);
-        if (!convertedFrom.containsKey(label)) {
-          convertedFrom.put(label, new ArrayList<Object>());
-        }
-        convertedFrom.get(label).add(original);
-      }
-      StringBuilder errorMessage = new StringBuilder();
-      errorMessage.append("duplicate labels");
-      if (what != null) {
-        errorMessage.append(" in ").append(what);
-      }
-      errorMessage.append(':');
-      boolean isFirstEntry = true;
-      for (Map.Entry<Label, List<Object>> entry : convertedFrom.entrySet()) {
-        if (entry.getValue().size() == 1) {
-          continue;
-        }
-        if (isFirstEntry) {
-          isFirstEntry = false;
-        } else {
-          errorMessage.append(',');
-        }
-        errorMessage.append(' ');
-        errorMessage.append(entry.getKey());
-        errorMessage.append(" (as ");
-        Printer.write(errorMessage, entry.getValue());
-        errorMessage.append(')');
-      }
-      throw new ConversionException(errorMessage.toString());
     }
   }
 
@@ -348,7 +273,7 @@ public final class BuildType {
     }
 
     @Override
-    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    public void visitLabels(LabelVisitor visitor, Object value) {
     }
 
     @Override
@@ -387,7 +312,7 @@ public final class BuildType {
     }
 
     @Override
-    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    public void visitLabels(LabelVisitor visitor, Object value) {
     }
 
     @Override
@@ -413,9 +338,8 @@ public final class BuildType {
     }
 
     @Override
-    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context)
-        throws InterruptedException {
-      visitor.visit(cast(value), context);
+    public void visitLabels(LabelVisitor visitor, Object value) throws InterruptedException {
+      visitor.visit(cast(value));
     }
 
     @Override
@@ -680,7 +604,7 @@ public final class BuildType {
     }
 
     @Override
-    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    public void visitLabels(LabelVisitor visitor, Object value) {
     }
 
     @Override

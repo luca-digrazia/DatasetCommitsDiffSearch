@@ -17,9 +17,11 @@ package com.google.devtools.build.lib.rules.java;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LICENSE;
 
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
@@ -41,7 +43,9 @@ public final class JavaRuntimeSuiteRule implements RuleDefinition {
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(
             attr("default", BuildType.LABEL)
-                .mandatoryProviders(JavaRuntimeProvider.SKYLARK_CONSTRUCTOR.id())
+                .mandatoryNativeProviders(
+                    ImmutableList.<Class<? extends TransitiveInfoProvider>>of(
+                        JavaRuntimeProvider.class))
                 .allowedFileTypes(FileTypeSet.NO_FILE))
         .add(attr("output_licenses", LICENSE))
         .build();
