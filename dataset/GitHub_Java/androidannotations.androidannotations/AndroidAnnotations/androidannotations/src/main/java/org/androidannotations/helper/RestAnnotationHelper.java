@@ -267,20 +267,12 @@ public class RestAnnotationHelper extends TargetAnnotationHelper {
 		return httpHeadersVar;
 	}
 
-    public JVar getEntitySentToServer(ExecutableElement element, TreeMap<String, JVar> params) {
-        Set<String> urlVariables = extractUrlVariableNames(element);
-        for (String paramName : params.keySet()) {
-            if (!urlVariables.contains(paramName)) {
-                return params.get(paramName);
-            }
-        }
-        return null;
-    }
-
-	public JExpression declareHttpEntity(ProcessHolder holder, JBlock body, JVar entitySentToServer, JVar httpHeaders) {
+	public JExpression declareHttpEntity(ProcessHolder holder, JBlock body, TreeMap<String, JVar> methodParams, JVar httpHeaders) {
+		JVar entitySentToServer = null;
 		JType entityType = holder.refClass(Object.class);
 
-		if (entitySentToServer != null) {
+		if (!methodParams.isEmpty()) {
+			entitySentToServer = methodParams.firstEntry().getValue();
 			entityType = entitySentToServer.type();
 			if (entityType.isPrimitive()) {
 				// Don't narrow primitive types...
