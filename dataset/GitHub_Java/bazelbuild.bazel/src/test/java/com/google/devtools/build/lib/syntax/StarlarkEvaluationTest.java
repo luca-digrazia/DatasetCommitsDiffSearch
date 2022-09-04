@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
-import com.google.errorprone.annotations.DoNotCall;
 import java.util.List;
 import java.util.Map;
 import net.starlark.java.annot.Param;
@@ -52,7 +51,6 @@ public final class StarlarkEvaluationTest {
     return "foobar";
   }
 
-  @DoNotCall("Always throws java.lang.InterruptedException")
   @StarlarkMethod(name = "interrupted_function", documented = false)
   public NoneType interruptedFunction() throws InterruptedException {
     throw new InterruptedException();
@@ -1018,8 +1016,7 @@ public final class StarlarkEvaluationTest {
     ev.new Scenario()
         .update("mock", new Mock())
         .testIfExactError(
-            "'Mock' value has no field or method 'isEmpty' (did you mean 'is_empty'?)",
-            "mock.isEmpty(str='abc')");
+            "'Mock' value has no field or method 'isEmpty'", "mock.isEmpty(str='abc')");
   }
 
   @Test
@@ -1534,9 +1531,7 @@ public final class StarlarkEvaluationTest {
   @Test
   public void testDotExpressionOnNonStructObject() throws Exception {
     ev.new Scenario()
-        .testIfExactError(
-            "'string' value has no field or method 'field' (did you mean 'find'?)",
-            "x = 'a'.field");
+        .testIfExactError("'string' value has no field or method 'field'", "x = 'a'.field");
   }
 
   @Test
@@ -1987,22 +1982,12 @@ public final class StarlarkEvaluationTest {
   public void testAttrNotDefined() throws Exception {
     ev.new Scenario()
         .update("s", new SimpleStructWithMethods())
-        // dir shows all fields and methods
-        .testEval(
-            "dir(s)",
-            "['callable_only_field', 'callable_only_method', 'collision_field',"
-                + " 'collision_method', 'values_only_field', 'values_only_method']")
-        // field-like non-existent access
+        // TODO(adonovan): this error message will include spelling suggestions when CL 319083265
+        // finally lands.
         .testIfExactError(
             "'SimpleStructWithMethods' value has no field or method 'nonesuch'", "s.nonesuch")
-        // method-like non-existent access (same result)
         .testIfExactError(
-            "'SimpleStructWithMethods' value has no field or method 'nonesuch'", "s.nonesuch()")
-        // spelling hint
-        .testIfExactError(
-            "'SimpleStructWithMethods' value has no field or method 'collision_metod' (did you"
-                + " mean 'collision_method'?)",
-            "s.collision_metod");
+            "'SimpleStructWithMethods' value has no field or method 'nonesuch'", "s.nonesuch()");
   }
 
   @Test
