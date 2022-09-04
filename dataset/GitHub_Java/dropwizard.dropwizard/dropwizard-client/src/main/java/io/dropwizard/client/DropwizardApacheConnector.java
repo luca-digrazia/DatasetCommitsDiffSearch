@@ -127,6 +127,10 @@ public class DropwizardApacheConnector implements Connector {
                 .setUri(jerseyRequest.getUri())
                 .setEntity(getHttpEntity(jerseyRequest));
         for (String headerName : jerseyRequest.getHeaders().keySet()) {
+            // Ignore user-agent because it's already configured in the Apache HTTP client
+            if (headerName.equalsIgnoreCase(HttpHeaders.USER_AGENT)) {
+                continue;
+            }
             builder.addHeader(headerName, jerseyRequest.getHeaderString(headerName));
         }
 
@@ -215,7 +219,11 @@ public class DropwizardApacheConnector implements Connector {
      */
     @Override
     public void close() {
-        // Should not close the client here, because it's managed by the Dropwizard environment
+        try {
+            client.close();
+        } catch (IOException e) {
+            throw new ProcessingException(LocalizationMessages.FAILED_TO_STOP_CLIENT(), e);
+        }
     }
 
     /**
