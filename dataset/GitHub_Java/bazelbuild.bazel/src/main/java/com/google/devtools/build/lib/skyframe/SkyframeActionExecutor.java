@@ -769,8 +769,10 @@ public final class SkyframeActionExecutor {
                 + " in an action which is not a SkyframeAwareAction. Action: %s\n symlinks:%s",
             action,
             actionExecutionContext.getOutputSymlinks());
-        return ActionExecutionValue.createFromOutputStore(
-            metadataHandler.getOutputStore(),
+        return ActionExecutionValue.create(
+            metadataHandler.getOutputArtifactData(),
+            metadataHandler.getOutputTreeArtifactData(),
+            metadataHandler.getAdditionalOutputData(),
             actionExecutionContext.getOutputSymlinks(),
             (action instanceof IncludeScannable)
                 ? ((IncludeScannable) action).getDiscoveredModules()
