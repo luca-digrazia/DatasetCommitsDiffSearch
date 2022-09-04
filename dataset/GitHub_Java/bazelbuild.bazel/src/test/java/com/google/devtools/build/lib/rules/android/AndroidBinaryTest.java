@@ -1019,14 +1019,9 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
   @Test
   public void testNeverlinkTransitivity() throws Exception {
-    useConfiguration("--android_fixed_resource_neverlinking");
-
-    scratch.file(
-        "java/com/google/android/neversayneveragain/BUILD",
+    scratch.file("java/com/google/android/neversayneveragain/BUILD",
         "android_library(name = 'l1',",
-        "                srcs = ['l1.java'],",
-        "                manifest = 'AndroidManifest.xml',",
-        "                resource_files = ['res/values/resource.xml'])",
+        "                srcs = ['l1.java'])",
         "android_library(name = 'l2',",
         "                srcs = ['l2.java'],",
         "                deps = [':l1'],",
@@ -1061,10 +1056,6 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "java/com/google/android/neversayneveragain/libl4.jar_desugared.jar");
     assertThat(b1Inputs).contains(
         "java/com/google/android/neversayneveragain/libb1.jar_desugared.jar");
-    assertThat(
-            resourceInputPaths(
-                "java/com/google/android/neversayneveragain", getResourceContainer(b1)))
-        .doesNotContain("res/values/resource.xml");
 
     ConfiguredTarget b2 = getConfiguredTarget("//java/com/google/android/neversayneveragain:b2");
     Action b2DeployAction = actionsTestUtil().getActionForArtifactEndingWith(
@@ -1078,10 +1069,6 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     assertThat(b2Inputs).containsAllOf(
         "java/com/google/android/neversayneveragain/_dx/l3/libl3.jar_desugared.jar",
         "java/com/google/android/neversayneveragain/libb2.jar_desugared.jar");
-    assertThat(
-        resourceInputPaths(
-            "java/com/google/android/neversayneveragain", getResourceContainer(b2)))
-        .doesNotContain("res/values/resource.xml");
 
     ConfiguredTarget b3 = getConfiguredTarget("//java/com/google/android/neversayneveragain:b3");
     Action b3DeployAction = actionsTestUtil().getActionForArtifactEndingWith(
@@ -1095,10 +1082,6 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "java/com/google/android/neversayneveragain/libb3.jar_desugared.jar");
     assertThat(b3Inputs)
         .doesNotContain("java/com/google/android/neversayneveragain/libl2.jar_desugared.jar");
-    assertThat(
-        resourceInputPaths(
-            "java/com/google/android/neversayneveragain", getResourceContainer(b3)))
-        .contains("res/values/resource.xml");
   }
 
   @Test

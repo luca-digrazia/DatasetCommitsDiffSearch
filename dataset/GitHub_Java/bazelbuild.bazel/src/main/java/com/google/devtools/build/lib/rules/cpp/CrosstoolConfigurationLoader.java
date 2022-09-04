@@ -32,8 +32,6 @@ import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -68,20 +66,17 @@ public class CrosstoolConfigurationLoader {
    */
   private static final Cache<String, CrosstoolRelease> crosstoolReleaseCache =
       CacheBuilder.newBuilder().concurrencyLevel(4).maximumSize(100).build();
-  /** A class that holds the results of reading a CROSSTOOL file. */
-  @AutoCodec
+  /**
+   * A class that holds the results of reading a CROSSTOOL file.
+   */
   public static class CrosstoolFile {
-    public static final ObjectCodec<CrosstoolFile> CODEC =
-        new CrosstoolConfigurationLoader_CrosstoolFile_AutoCodec();
-
     private final String location;
-    private final CrosstoolConfig.CrosstoolRelease proto;
+    private final CrosstoolConfig.CrosstoolRelease crosstool;
     private final String md5;
 
-    @AutoCodec.Constructor
-    CrosstoolFile(String location, CrosstoolConfig.CrosstoolRelease proto, String md5) {
+    CrosstoolFile(String location, CrosstoolConfig.CrosstoolRelease crosstool, String md5) {
       this.location = location;
-      this.proto = proto;
+      this.crosstool = crosstool;
       this.md5 = md5;
     }
 
@@ -96,7 +91,7 @@ public class CrosstoolConfigurationLoader {
      * Returns the parsed contents of the CROSSTOOL file.
      */
     public CrosstoolConfig.CrosstoolRelease getProto() {
-      return proto;
+      return crosstool;
     }
 
     /**
