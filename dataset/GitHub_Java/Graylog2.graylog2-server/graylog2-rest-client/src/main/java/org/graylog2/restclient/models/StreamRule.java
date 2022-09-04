@@ -1,23 +1,23 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonValue;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.restclient.lib.APIException;
@@ -43,6 +43,7 @@ public class StreamRule {
             this.longDesc = longDesc;
         }
 
+        @JsonValue
         public int getId() {
             return id;
         }
@@ -73,6 +74,7 @@ public class StreamRule {
     private final Type type;
     private final Boolean inverted;
     private final String stream_id;
+    private final String contentPack;
 
     private final StreamService streamService;
 
@@ -85,6 +87,7 @@ public class StreamRule {
         this.type = Type.fromInt(srsr.type);
         this.stream_id = srsr.stream_id;
         this.streamService = streamService;
+        this.contentPack = srsr.contentPack;
     }
 
     public String getId() {
@@ -121,6 +124,7 @@ public class StreamRule {
         return stream_id;
     }
 
+    @JsonIgnore
     public Stream getStream() throws IOException, APIException {
         if (this.streamService == null)
             throw new RuntimeException("foo");
