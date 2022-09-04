@@ -28,6 +28,7 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.annotations.ItemClick;
+import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.holder.EComponentWithViewSupportHolder;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
@@ -41,6 +42,8 @@ import com.sun.codemodel.JMod;
 import com.sun.codemodel.JVar;
 
 public class ItemClickHandler extends AbstractViewListenerHandler {
+
+	private final APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
 
 	public ItemClickHandler(ProcessingEnvironment processingEnvironment) {
 		super(ItemClick.class, processingEnvironment);

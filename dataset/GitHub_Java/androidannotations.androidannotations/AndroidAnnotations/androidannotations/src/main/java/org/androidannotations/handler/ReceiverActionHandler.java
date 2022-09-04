@@ -84,7 +84,10 @@ public class ReceiverActionHandler extends BaseAnnotationHandler<EReceiverHolder
 
 		ReceiverAction annotation = element.getAnnotation(ReceiverAction.class);
 		String[] dataSchemes = annotation.dataSchemes();
-		String[] actions = annotation.actions();
+		String[] actions = annotation.value();
+		if (actions.length == 0) {
+			actions = new String[] { methodName };
+		}
 
 		JFieldVar actionKeyField = createStaticField(holder, "actions", methodName, actions);
 		JFieldVar dataSchemesField = createStaticField(holder, "dataSchemes", methodName, dataSchemes);

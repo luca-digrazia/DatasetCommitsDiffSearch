@@ -55,7 +55,7 @@ public class TouchHandler extends AbstractViewListenerHandler {
 
 		validatorHelper.param.anyOrder() //
 				.type(CanonicalNameConstants.MOTION_EVENT).optional() //
-				.extendsType(CanonicalNameConstants.VIEW).optional() //
+				.type(CanonicalNameConstants.VIEW).optional() //
 				.validate(executableElement, valid);
 	}
 
@@ -78,11 +78,10 @@ public class TouchHandler extends AbstractViewListenerHandler {
 
 		for (VariableElement parameter : parameters) {
 			String parameterType = parameter.asType().toString();
-
 			if (parameterType.equals(CanonicalNameConstants.MOTION_EVENT)) {
 				call.arg(eventParam);
-			} else if (isTypeOrSubclass(CanonicalNameConstants.VIEW, parameter)) {
-				call.arg(castArgumentIfNecessary(holder, CanonicalNameConstants.VIEW, viewParam, parameter));
+			} else if (parameterType.equals(CanonicalNameConstants.VIEW)) {
+				call.arg(viewParam);
 			}
 		}
 	}

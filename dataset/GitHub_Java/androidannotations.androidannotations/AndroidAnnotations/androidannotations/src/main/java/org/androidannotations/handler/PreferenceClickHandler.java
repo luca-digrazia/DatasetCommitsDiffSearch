@@ -55,7 +55,7 @@ public class PreferenceClickHandler extends AbstractPreferenceListenerHandler {
 		validatorHelper.returnTypeIsVoidOrBoolean(executableElement, valid);
 
 		validatorHelper.param //
-				.extendsType(CanonicalNameConstants.PREFERENCE).optional() //
+				.type(CanonicalNameConstants.PREFERENCE).optional() //
 				.validate(executableElement, valid);
 	}
 
@@ -75,7 +75,7 @@ public class PreferenceClickHandler extends AbstractPreferenceListenerHandler {
 		JVar preferenceParam = listenerMethod.param(classes().PREFERENCE, "preference");
 
 		if (userParameters.size() == 1) {
-			call.arg(castArgumentIfNecessary(holder, CanonicalNameConstants.PREFERENCE, preferenceParam, userParameters.get(0)));
+			call.arg(preferenceParam);
 		}
 	}
 

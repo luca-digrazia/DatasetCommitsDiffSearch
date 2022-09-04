@@ -53,7 +53,7 @@ public class FocusChangeHandler extends AbstractViewListenerHandler {
 		validatorHelper.returnTypeIsVoid(executableElement, valid);
 
 		validatorHelper.param.anyOrder() //
-				.extendsType(CanonicalNameConstants.VIEW).optional() //
+				.type(CanonicalNameConstants.VIEW).optional() //
 				.primitiveOrWrapper(TypeKind.BOOLEAN).optional() //
 				.validate(executableElement, valid);
 	}
@@ -70,8 +70,8 @@ public class FocusChangeHandler extends AbstractViewListenerHandler {
 
 		for (VariableElement parameter : parameters) {
 			String parameterType = parameter.asType().toString();
-			if (isTypeOrSubclass(CanonicalNameConstants.VIEW, parameter)) {
-				call.arg(castArgumentIfNecessary(holder, CanonicalNameConstants.VIEW, viewParam, parameter));
+			if (parameterType.equals(CanonicalNameConstants.VIEW)) {
+				call.arg(viewParam);
 			} else if (parameterType.equals(CanonicalNameConstants.BOOLEAN) || parameter.asType().getKind() == TypeKind.BOOLEAN) {
 				call.arg(hasFocusParam);
 			}
