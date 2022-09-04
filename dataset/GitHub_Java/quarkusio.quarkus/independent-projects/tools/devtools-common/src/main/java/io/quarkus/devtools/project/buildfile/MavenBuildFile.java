@@ -7,16 +7,12 @@ import io.quarkus.bootstrap.model.AppArtifactKey;
 import io.quarkus.devtools.project.BuildTool;
 import io.quarkus.devtools.project.extensions.Extensions;
 import io.quarkus.maven.utilities.MojoUtils;
-import io.quarkus.registry.Constants;
-import io.quarkus.registry.catalog.ExtensionCatalog;
-import io.quarkus.registry.util.PlatformArtifacts;
+import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -34,8 +30,8 @@ public class MavenBuildFile extends BuildFile {
 
     private final AtomicReference<Model> modelRef = new AtomicReference<>();
 
-    public MavenBuildFile(final Path projectDirPath, ExtensionCatalog catalog) {
-        super(projectDirPath, catalog);
+    public MavenBuildFile(final Path projectDirPath, final QuarkusPlatformDescriptor platformDescriptor) {
+        super(projectDirPath, platformDescriptor);
     }
 
     @Override
@@ -100,25 +96,6 @@ public class MavenBuildFile extends BuildFile {
     public List<AppArtifactCoords> getDependencies() throws IOException {
         return getModel() == null ? Collections.emptyList()
                 : getModel().getDependencies().stream().map(Extensions::toCoords).collect(Collectors.toList());
-    }
-
-    @Override
-    public final Collection<AppArtifactCoords> getInstalledPlatforms() throws IOException {
-        final Model model = getModel();
-        if (model == null || model.getDependencyManagement() == null) {
-            return Collections.emptyList();
-        }
-        final List<AppArtifactCoords> tmp = new ArrayList<>(4);
-        for (Dependency c : model.getDependencyManagement().getDependencies()) {
-            if (!PlatformArtifacts.isCatalogArtifactId(c.getArtifactId())) {
-                continue;
-            }
-            tmp.add(new AppArtifactCoords(c.getGroupId(),
-                    c.getArtifactId().substring(0,
-                            c.getArtifactId().length() - Constants.PLATFORM_DESCRIPTOR_ARTIFACT_ID_SUFFIX.length()),
-                    null, "pom", c.getVersion()));
-        }
-        return tmp;
     }
 
     @Override
