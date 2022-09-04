@@ -9,7 +9,7 @@ import java.util.Collections;
 import java.util.Set;
 
 public class CEFInputMetaData implements PluginMetaData {
-    private static final String PLUGIN_PROPERTIES = "org.graylog.plugins.graylog-plugin-cef/graylog-plugin.properties";
+    private static final String PLUGIN_PROPERTIES = "org.graylog.plugins.graylog-plugin-input-cef/graylog-plugin.properties";
 
     @Override
     public String getUniqueId() {
@@ -23,7 +23,7 @@ public class CEFInputMetaData implements PluginMetaData {
 
     @Override
     public String getAuthor() {
-        return "Graylog, Inc.";
+        return "Graylog, Inc. <hello@graylog.com>";
     }
 
     @Override
