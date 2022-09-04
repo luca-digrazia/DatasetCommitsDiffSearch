@@ -79,9 +79,6 @@ public class CreateProjectMojoIT extends MojoTestBase {
         assertThat(model.getDependencies().stream().anyMatch(d ->
                 d.getArtifactId().equalsIgnoreCase("shamrock-jaxrs-deployment")
                         && d.getVersion() == null)).isTrue();
-
-        assertThat(model.getProfiles()).hasSize(1);
-        assertThat(model.getProfiles().get(0).getId()).isEqualTo("native");
     }
 
     private Model load(File directory) {
@@ -120,9 +117,6 @@ public class CreateProjectMojoIT extends MojoTestBase {
                         && d.getType().equalsIgnoreCase("pom"))).isTrue();
 
         assertThat(model.getDependencies()).isEmpty();
-
-        assertThat(model.getProfiles()).hasSize(1);
-        assertThat(model.getProfiles().get(0).getId()).isEqualTo("native");
     }
 
     @Test
@@ -170,7 +164,7 @@ public class CreateProjectMojoIT extends MojoTestBase {
         properties.put("projectGroupId", "org.acme");
         properties.put("projectArtifactId", "acme");
         properties.put("className", "org.acme.MyResource");
-        properties.put("extensions", "jaxrs,smallrye-metrics,missing");
+        properties.put("extensions", "web,metrics,missing");
         setup(properties);
 
         // As the directory is not empty (log) navigate to the artifactID directory
@@ -182,7 +176,7 @@ public class CreateProjectMojoIT extends MojoTestBase {
         check(new File(testDir, "src/main/java/org/acme/MyResource.java"), "package org.acme;");
 
         assertThat(FileUtils.readFileToString(new File(testDir, "pom.xml"), "UTF-8"))
-                .contains("shamrock-jaxrs-deployment", "shamrock-smallrye-metrics-deployment").doesNotContain("missing");
+                .contains("shamrock-jaxrs-deployment", "shamrock-metrics-deployment").doesNotContain("missing");
 
         Model model = load(testDir);
         assertThat(model.getDependencyManagement().getDependencies().stream().anyMatch(d ->
@@ -196,7 +190,7 @@ public class CreateProjectMojoIT extends MojoTestBase {
                         && d.getVersion() == null)).isTrue();
 
         assertThat(model.getDependencies().stream().anyMatch(d ->
-                d.getArtifactId().equalsIgnoreCase("shamrock-smallrye-metrics-deployment")
+                d.getArtifactId().equalsIgnoreCase("shamrock-metrics-deployment")
                         && d.getVersion() == null)).isTrue();
     }
 
@@ -261,8 +255,10 @@ public class CreateProjectMojoIT extends MojoTestBase {
         Properties properties = new Properties();
         properties.put("className", "MyGreatResource");
         setup(properties);
+
         // As the directory is not empty (log) navigate to the artifactID directory
         testDir = new File(testDir, "my-shamrock-project");
+
         check(new File(testDir, "src/main/java/org/acme/shamrock/sample/MyGreatResource.java"), "package org.acme.shamrock.sample;");
     }
 
