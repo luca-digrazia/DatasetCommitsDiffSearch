@@ -37,7 +37,7 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.cpp.CcSkyframeSupportFunction.CcSkyframeSupportException;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
-import com.google.devtools.build.lib.rules.cpp.FdoContext.BranchFdoMode;
+import com.google.devtools.build.lib.rules.cpp.FdoProvider.FdoMode;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Pair;
@@ -432,6 +432,34 @@ public class CcToolchainProviderHelper {
           FdoInputFile.fromAbsolutePath(ccSkyframeSupportValue.getFdoZipPath().asFragment());
     }
 
+    FdoMode fdoMode;
+    if (fdoInputFile == null) {
+      fdoMode = FdoMode.OFF;
+    } else if (CppFileTypes.GCC_AUTO_PROFILE.matches(fdoInputFile)) {
+      fdoMode = FdoMode.AUTO_FDO;
+    } else if (CppFileTypes.XBINARY_PROFILE.matches(fdoInputFile)) {
+      fdoMode = FdoMode.XBINARY_FDO;
+    } else if (CppFileTypes.LLVM_PROFILE.matches(fdoInputFile)) {
+      fdoMode = FdoMode.LLVM_FDO;
+    } else if (CppFileTypes.LLVM_PROFILE_RAW.matches(fdoInputFile)) {
+      fdoMode = FdoMode.LLVM_FDO;
+    } else if (CppFileTypes.LLVM_PROFILE_ZIP.matches(fdoInputFile)) {
+      fdoMode = FdoMode.LLVM_FDO;
+    } else {
+      ruleContext.ruleError("invalid extension for FDO profile file.");
+      return null;
+    }
+
+    if (fdoMode != FdoMode.OFF
+        && fdoMode != FdoMode.XBINARY_FDO
+        && cppConfiguration.getXFdoProfileLabel() != null) {
+      ruleContext.throwWithRuleError("--xbinary_fdo cannot accept profile input other than *.xfdo");
+    }
+
+    if (fdoMode != FdoMode.OFF && configuration.isCodeCoverageEnabled()) {
+      ruleContext.throwWithRuleError("coverage mode is not compatible with FDO optimization");
+    }
+
     CppToolchainInfo toolchainInfo =
         getCppToolchainInfo(
             ruleContext,
@@ -440,55 +468,6 @@ public class CcToolchainProviderHelper {
             ccSkyframeSupportValue,
             toolchain,
             crosstoolFromCcToolchainSuiteProtoAttribute);
-
-    FdoContext.BranchFdoProfile branchFdoProfile = null;
-    if (fdoInputFile != null) {
-      BranchFdoMode branchFdoMode;
-      if (CppFileTypes.GCC_AUTO_PROFILE.matches(fdoInputFile)) {
-        branchFdoMode = BranchFdoMode.AUTO_FDO;
-      } else if (CppFileTypes.XBINARY_PROFILE.matches(fdoInputFile)) {
-        branchFdoMode = BranchFdoMode.XBINARY_FDO;
-      } else if (CppFileTypes.LLVM_PROFILE.matches(fdoInputFile)) {
-        branchFdoMode = BranchFdoMode.LLVM_FDO;
-      } else if (CppFileTypes.LLVM_PROFILE_RAW.matches(fdoInputFile)) {
-        branchFdoMode = BranchFdoMode.LLVM_FDO;
-      } else if (CppFileTypes.LLVM_PROFILE_ZIP.matches(fdoInputFile)) {
-        branchFdoMode = BranchFdoMode.LLVM_FDO;
-      } else {
-        ruleContext.ruleError("invalid extension for FDO profile file.");
-        return null;
-      }
-      if (branchFdoMode != BranchFdoMode.XBINARY_FDO
-          && cppConfiguration.getXFdoProfileLabel() != null) {
-        ruleContext.throwWithRuleError(
-            "--xbinary_fdo cannot accept profile input other than *.xfdo");
-      }
-
-      if (configuration.isCodeCoverageEnabled()) {
-        ruleContext.throwWithRuleError("coverage mode is not compatible with FDO optimization");
-      }
-      // This tries to convert LLVM profiles to the indexed format if necessary.
-      Artifact profileArtifact = null;
-      if (branchFdoMode == BranchFdoMode.LLVM_FDO) {
-        profileArtifact =
-            convertLLVMRawProfileToIndexed(attributes, fdoInputFile, toolchainInfo, ruleContext);
-        if (ruleContext.hasErrors()) {
-          return null;
-        }
-      } else if (branchFdoMode == BranchFdoMode.AUTO_FDO
-          || branchFdoMode == BranchFdoMode.XBINARY_FDO) {
-        profileArtifact =
-            ruleContext.getUniqueDirectoryArtifact(
-                "fdo", fdoInputFile.getBasename(), ruleContext.getBinOrGenfilesDirectory());
-        symlinkTo(
-            ruleContext,
-            profileArtifact,
-            fdoInputFile,
-            "Symlinking FDO profile " + fdoInputFile.getBasename());
-      }
-      branchFdoProfile =
-          new FdoContext.BranchFdoProfile(branchFdoMode, profileArtifact, protoProfileArtifact);
-    }
 
     String purposePrefix = attributes.getPurposePrefix();
     String runtimeSolibDirBase = attributes.getRuntimeSolibDirBase();
@@ -625,6 +604,25 @@ public class CcToolchainProviderHelper {
       coverageEnvironment.add(Pair.of("FDO_DIR", cppConfiguration.getFdoInstrument()));
     }
 
+    // This tries to convert LLVM profiles to the indexed format if necessary.
+    Artifact profileArtifact = null;
+    if (fdoMode == FdoMode.LLVM_FDO) {
+      profileArtifact =
+          convertLLVMRawProfileToIndexed(attributes, fdoInputFile, toolchainInfo, ruleContext);
+      if (ruleContext.hasErrors()) {
+        return null;
+      }
+    } else if (fdoMode == FdoMode.AUTO_FDO || fdoMode == FdoMode.XBINARY_FDO) {
+      profileArtifact =
+          ruleContext.getUniqueDirectoryArtifact(
+              "fdo", fdoInputFile.getBasename(), ruleContext.getBinOrGenfilesDirectory());
+      symlinkTo(
+          ruleContext,
+          profileArtifact,
+          fdoInputFile,
+          "Symlinking FDO profile " + fdoInputFile.getBasename());
+    }
+
     Artifact prefetchHintsArtifact = getPrefetchHintsArtifact(prefetchHints, ruleContext);
 
     reportInvalidOptions(ruleContext, toolchainInfo);
@@ -664,7 +662,13 @@ public class CcToolchainProviderHelper {
         attributes.getLinkDynamicLibraryTool(),
         builtInIncludeDirectories,
         sysroot,
-        new FdoContext(branchFdoProfile, prefetchHintsArtifact),
+        fdoMode,
+        new FdoProvider(
+            fdoMode,
+            cppConfiguration.getFdoInstrument(),
+            profileArtifact,
+            prefetchHintsArtifact,
+            protoProfileArtifact),
         cppConfiguration.useLLVMCoverageMapFormat(),
         configuration.isCodeCoverageEnabled(),
         configuration.isHostConfiguration(),
