@@ -20,11 +20,12 @@ import static com.google.devtools.build.lib.packages.Type.STRING;
 import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
 import static com.google.devtools.build.lib.syntax.SkylarkType.castMap;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkAttr.Descriptor;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AttributeValueSource;
 import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.Package;
@@ -46,20 +47,20 @@ import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkCallable;
+import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.Tuple;
 import java.util.Map;
 
 /**
- * The Starlark module containing the definition of {@code repository_rule} function to define a
- * Starlark remote repository.
+ * The Skylark module containing the definition of {@code repository_rule} function to define a
+ * skylark remote repository.
  */
 public class SkylarkRepositoryModule implements RepositoryModuleApi {
 
   @Override
-  public StarlarkCallable repositoryRule(
-      StarlarkCallable implementation,
+  public BaseFunction repositoryRule(
+      StarlarkFunction implementation,
       Object attrs,
       Boolean local,
       Sequence<?> environ, // <String> expected
@@ -71,10 +72,6 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
     BazelStarlarkContext.from(thread).checkLoadingOrWorkspacePhase("repository_rule");
     // We'll set the name later, pass the empty string for now.
     RuleClass.Builder builder = new RuleClass.Builder("", RuleClassType.WORKSPACE, true);
-
-    ImmutableList<StarlarkThread.CallStackEntry> callstack = thread.getCallStack();
-    builder.setCallStack(
-        callstack.subList(0, callstack.size() - 1)); // pop 'repository_rule' itself
 
     builder.addOrOverrideAttribute(attr("$local", BOOLEAN).defaultValue(local).build());
     builder.addOrOverrideAttribute(attr("$configure", BOOLEAN).defaultValue(configure).build());
@@ -108,7 +105,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
         (Label) Module.ofInnermostEnclosingStarlarkFunction(thread).getLabel(),
         thread.getTransitiveContentHashCode());
     builder.setWorkspaceOnly();
-    return new RepositoryRuleFunction(builder, implementation);
+    return new RepositoryRuleFunction(builder, thread.getCallerLocation(), implementation);
   }
 
   // RepositoryRuleFunction is the result of repository_rule(...).
@@ -116,12 +113,17 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
   private static final class RepositoryRuleFunction extends BaseFunction
       implements SkylarkExportable {
     private final RuleClass.Builder builder;
-    private final StarlarkCallable implementation;
     private Label extensionLabel;
     private String exportedName;
+    private final Location ruleClassDefinitionLocation;
+    private final BaseFunction implementation;
 
-    private RepositoryRuleFunction(RuleClass.Builder builder, StarlarkCallable implementation) {
+    private RepositoryRuleFunction(
+        RuleClass.Builder builder,
+        Location ruleClassDefinitionLocation,
+        BaseFunction implementation) {
       this.builder = builder;
+      this.ruleClassDefinitionLocation = ruleClassDefinitionLocation;
       this.implementation = implementation;
     }
 
@@ -190,18 +192,35 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
         PackageContext context = PackageFactory.getContext(thread);
         Package.Builder packageBuilder = context.getBuilder();
 
-        // TODO(adonovan): is this cast safe? Check.
-        String name = (String) kwargs.get("name");
-        WorkspaceFactoryHelper.addMainRepoEntry(packageBuilder, name, thread.getSemantics());
-        WorkspaceFactoryHelper.addRepoMappings(packageBuilder, kwargs, name);
+        // TODO(adonovan): is this safe? Check.
+        String externalRepoName = (String) kwargs.get("name");
+
+        StringBuilder callStack =
+            new StringBuilder("Call stack for the definition of repository '")
+                .append(externalRepoName)
+                .append("' which is a ")
+                .append(ruleClassName)
+                .append(" (rule definition at ")
+                .append(ruleClassDefinitionLocation.toString())
+                .append("):");
+        for (StarlarkThread.CallStackEntry frame : Lists.reverse(thread.getCallStack())) {
+          callStack.append("\n - ").append(frame.location);
+        }
+
+        WorkspaceFactoryHelper.addMainRepoEntry(
+            packageBuilder, externalRepoName, thread.getSemantics());
+
+        Location loc = thread.getCallerLocation();
+        WorkspaceFactoryHelper.addRepoMappings(packageBuilder, kwargs, externalRepoName, loc);
+
         Rule rule =
             WorkspaceFactoryHelper.createAndAddRepositoryRule(
                 context.getBuilder(),
                 ruleClass,
-                /*bindRuleClass=*/ null,
+                null,
                 WorkspaceFactoryHelper.getFinalKwargs(kwargs),
-                thread.getSemantics(),
-                thread.getCallStack());
+                loc,
+                callStack.toString());
         return rule;
       } catch (InvalidRuleException | NameConflictException | LabelSyntaxException e) {
         throw Starlark.errorf("%s", e.getMessage());

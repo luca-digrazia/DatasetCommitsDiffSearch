@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import javax.annotation.Nullable;
 
@@ -165,13 +166,10 @@ public final class Module implements ValidationEnvironment.Module {
     if (parent == null) {
       return new Module(mutability);
     }
-    Preconditions.checkArgument(parent.mutability().isFrozen(), "parent frame must be frozen");
-    Preconditions.checkArgument(parent.universe == null);
-
     Map<String, Object> filteredBindings = new LinkedHashMap<>();
     Map<String, FlagGuardedValue> restrictedBindings = new LinkedHashMap<>();
 
-    for (Map.Entry<String, Object> binding : parent.bindings.entrySet()) {
+    for (Entry<String, Object> binding : parent.getTransitiveBindings().entrySet()) {
       if (binding.getValue() instanceof FlagGuardedValue) {
         FlagGuardedValue val = (FlagGuardedValue) binding.getValue();
         if (val.isObjectAccessibleUsingSemantics(semantics)) {

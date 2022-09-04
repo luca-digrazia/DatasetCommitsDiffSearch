@@ -36,7 +36,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import javax.annotation.Nullable;
 
@@ -68,17 +67,6 @@ public final class StarlarkThread {
   // The mutability of the StarlarkThread comes from its initial module.
   // TODO(adonovan): not every thread initializes a module.
   private final Mutability mutability;
-
-  // profiler state
-  //
-  // The profiler field (and savedThread) are set when we first observe during a
-  // push (function call entry) that the profiler is active. They are unset
-  // not in the corresponding pop, but when the last frame is popped, because
-  // the profiler session might start in the middle of a call and/or run beyond
-  // the lifetime of this thread.
-  final AtomicInteger cpuTicks = new AtomicInteger();
-  @Nullable private CpuProfiler profiler;
-  StarlarkThread savedThread; // saved StarlarkThread, when profiling reentrant evaluation
 
   private final Map<Class<?>, Object> threadLocals = new HashMap<>();
 
@@ -196,6 +184,8 @@ public final class StarlarkThread {
      * StarlarkThread}, and that {@code StarlarkThread}'s transitive hash code.
      */
     public Extension(StarlarkThread thread) {
+      // Legacy behavior: all symbols from the global Frame are exported (including symbols
+      // introduced by load).
       this(
           ImmutableMap.copyOf(thread.module.getExportedBindings()),
           thread.getTransitiveContentHashCode());
@@ -268,16 +258,9 @@ public final class StarlarkThread {
           continue;
         }
         if (value instanceof Depset) {
-          if (otherValue instanceof Depset) {
-            // Widen to Object to avoid static checker warning
-            // about Collection.equals(Collection). We may assume
-            // these collections have the same class, even if we
-            // can't assume its equality is List-like or Set-like.
-            Object x = ((Depset) value).toCollection();
-            Object y = ((Depset) otherValue).toCollection();
-            if (x.equals(y)) {
-              continue;
-            }
+          if (otherValue instanceof Depset
+              && ((Depset) value).toCollection().equals(((Depset) otherValue).toCollection())) {
+            continue;
           }
         } else if (value instanceof Dict) {
           if (otherValue instanceof Dict) {
@@ -372,9 +355,10 @@ public final class StarlarkThread {
     Frame fr = new Frame(this, fn);
     callstack.add(fr);
 
-    // Notify debug tools of the thread's first push.
-    if (callstack.size() == 1 && Debug.threadHook != null) {
-      Debug.threadHook.onPushFirst(this);
+    // Push the function onto the allocation tracker's stack.
+    // TODO(adonovan): optimize it out of existence.
+    if (Callstack.enabled) {
+      Callstack.push(fn);
     }
 
     ProfilerTask taskKind;
@@ -390,55 +374,26 @@ public final class StarlarkThread {
 
     fr.loc = fn.getLocation();
 
-    // start wall-time profile span
+    // start profile span
     // TODO(adonovan): throw this away when we build a CPU profiler.
     if (Profiler.instance().isActive()) {
       fr.profileSpan = Profiler.instance().profile(taskKind, fn.getName());
-    }
-
-    // Poll for newly installed CPU profiler.
-    if (profiler == null) {
-      this.profiler = CpuProfiler.get();
-      if (profiler != null) {
-        cpuTicks.set(0);
-        // Associated current Java thread with this StarlarkThread.
-        // (Save the previous association so we can restore it later.)
-        this.savedThread = CpuProfiler.setStarlarkThread(this);
-      }
     }
   }
 
   /** Pops a function off the call stack. */
   void pop() {
     int last = callstack.size() - 1;
-    Frame fr = callstack.get(last);
-
-    if (profiler != null) {
-      int ticks = cpuTicks.getAndSet(0);
-      if (ticks > 0) {
-        profiler.addEvent(ticks, getDebugCallStack());
-      }
-
-      // If this is the final pop in this thread,
-      // unregister it from the profiler.
-      if (last == 0) {
-        // Restore the previous association (in case of reentrant evaluation).
-        CpuProfiler.setStarlarkThread(this.savedThread);
-        this.savedThread = null;
-        this.profiler = null;
-      }
-    }
-
+    Frame top = callstack.get(last);
     callstack.remove(last); // pop
 
     // end profile span
-    if (fr.profileSpan != null) {
-      fr.profileSpan.close();
+    if (top.profileSpan != null) {
+      top.profileSpan.close();
     }
 
-    // Notify debug tools of the thread's last pop.
-    if (last == 0 && Debug.threadHook != null) {
-      Debug.threadHook.onPopLast(this);
+    if (Callstack.enabled) {
+      Callstack.pop();
     }
   }
 
@@ -610,6 +565,21 @@ public final class StarlarkThread {
       if (semantics == null) {
         throw new IllegalArgumentException("must call either setSemantics or useDefaultSemantics");
       }
+      if (parent != null) {
+        Preconditions.checkArgument(parent.mutability().isFrozen(), "parent frame must be frozen");
+        if (parent.universe != null) { // This code path doesn't happen in Bazel.
+
+          // Flatten the frame, ensure all builtins are in the same frame.
+          parent =
+              new Module(
+                  parent.mutability(),
+                  null /* parent */,
+                  parent.label,
+                  parent.getTransitiveBindings(),
+                  parent.restrictedBindings);
+        }
+      }
+
       // Filter out restricted objects from the universe scope. This cannot be done in-place in
       // creation of the input global universe scope, because this environment's semantics may not
       // have been available during its creation. Thus, create a new universe scope for this

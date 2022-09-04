@@ -166,20 +166,22 @@ public class FakeSkylarkAttrApi implements SkylarkAttrApi {
   }
 
   @Override
-  public Descriptor outputAttribute(String doc, Boolean mandatory, StarlarkThread thread)
-      throws EvalException {
-    return new FakeDescriptor(AttributeType.OUTPUT, doc, mandatory, ImmutableList.of(), "");
+  public Descriptor outputAttribute(
+      Object defaultO, String doc, Boolean mandatory, StarlarkThread thread) throws EvalException {
+    return new FakeDescriptor(AttributeType.OUTPUT, doc, mandatory, ImmutableList.of(), defaultO);
   }
 
   @Override
   public Descriptor outputListAttribute(
       Boolean allowEmpty,
+      Object defaultList,
       String doc,
       Boolean mandatory,
       Boolean nonEmpty,
       StarlarkThread thread)
       throws EvalException {
-    return new FakeDescriptor(AttributeType.OUTPUT_LIST, doc, mandatory, ImmutableList.of(), "");
+    return new FakeDescriptor(
+        AttributeType.OUTPUT_LIST, doc, mandatory, ImmutableList.of(), defaultList);
   }
 
   @Override

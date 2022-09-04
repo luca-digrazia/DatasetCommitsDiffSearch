@@ -680,6 +680,7 @@ public final class SkylarkAttr implements SkylarkAttrApi {
 
   @Override
   public Descriptor outputAttribute(
+      Object defaultValue, // Label | StarlarkFunction
       String doc,
       Boolean mandatory,
       StarlarkThread thread)
@@ -687,12 +688,16 @@ public final class SkylarkAttr implements SkylarkAttrApi {
     BazelStarlarkContext.from(thread).checkLoadingOrWorkspacePhase("attr.output");
 
     return createNonconfigurableAttrDescriptor(
-        "output", optionMap(MANDATORY_ARG, mandatory), BuildType.OUTPUT, thread);
+        "output",
+        optionMap(DEFAULT_ARG, defaultValue, MANDATORY_ARG, mandatory),
+        BuildType.OUTPUT,
+        thread);
   }
 
   @Override
   public Descriptor outputListAttribute(
       Boolean allowEmpty,
+      Object defaultValue, // Sequence | StarlarkFunction
       String doc,
       Boolean mandatory,
       Boolean nonEmpty,
@@ -703,6 +708,8 @@ public final class SkylarkAttr implements SkylarkAttrApi {
     return createAttrDescriptor(
         "output_list",
         optionMap(
+            DEFAULT_ARG,
+            defaultValue,
             MANDATORY_ARG,
             mandatory,
             NON_EMPTY_ARG,
