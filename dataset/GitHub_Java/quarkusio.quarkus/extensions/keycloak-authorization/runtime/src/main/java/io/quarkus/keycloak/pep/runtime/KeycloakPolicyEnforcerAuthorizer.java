@@ -18,9 +18,7 @@ import org.keycloak.representations.adapters.config.AdapterConfig;
 import org.keycloak.representations.adapters.config.PolicyEnforcerConfig;
 
 import io.quarkus.oidc.OidcTenantConfig;
-import io.quarkus.oidc.common.runtime.OidcCommonConfig.Tls.Verification;
 import io.quarkus.oidc.runtime.OidcConfig;
-import io.quarkus.runtime.TlsConfig;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.security.runtime.QuarkusSecurityIdentity;
 import io.quarkus.vertx.http.runtime.HttpConfiguration;
@@ -91,8 +89,7 @@ public class KeycloakPolicyEnforcerAuthorizer
                 }).build();
     }
 
-    public void init(OidcConfig oidcConfig, KeycloakPolicyEnforcerConfig config, TlsConfig tlsConfig,
-            HttpConfiguration httpConfiguration) {
+    public void init(OidcConfig oidcConfig, KeycloakPolicyEnforcerConfig config, HttpConfiguration httpConfiguration) {
         AdapterConfig adapterConfig = new AdapterConfig();
         String authServerUrl = oidcConfig.defaultTenant.getAuthServerUrl().get();
 
@@ -105,18 +102,6 @@ public class KeycloakPolicyEnforcerAuthorizer
 
         adapterConfig.setResource(oidcConfig.defaultTenant.getClientId().get());
         adapterConfig.setCredentials(getCredentials(oidcConfig.defaultTenant));
-
-        boolean trustAll = oidcConfig.defaultTenant.tls.getVerification().isPresent()
-                ? oidcConfig.defaultTenant.tls.getVerification().get() == Verification.NONE
-                : tlsConfig.trustAll;
-        if (trustAll) {
-            adapterConfig.setDisableTrustManager(true);
-            adapterConfig.setAllowAnyHostname(true);
-        }
-
-        if (oidcConfig.defaultTenant.proxy.host.isPresent()) {
-            adapterConfig.setProxyUrl(oidcConfig.defaultTenant.proxy.host.get() + ":" + oidcConfig.defaultTenant.proxy.port);
-        }
 
         PolicyEnforcerConfig enforcerConfig = getPolicyEnforcerConfig(config, adapterConfig);
 
