@@ -23,6 +23,7 @@ import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InstanceHandle;
 import io.quarkus.mongodb.impl.ReactiveMongoClientImpl;
 import io.quarkus.mongodb.reactive.ReactiveMongoClient;
+import io.quarkus.mongodb.runtime.MongoClientName;
 import io.quarkus.test.QuarkusUnitTest;
 
 public class NamedReactiveMongoClientConfigTest extends MongoWithReplicasTestBase {
@@ -76,7 +77,7 @@ public class NamedReactiveMongoClientConfigTest extends MongoWithReplicasTestBas
             } catch (IllegalAccessException e) {
                 throw new RuntimeException(e);
             }
-            assertThat(c.getClusterDescription().getClusterSettings().getHosts()).singleElement().satisfies(sa -> {
+            assertThat(c.getClusterDescription().getClusterSettings().getHosts()).hasOnlyOneElementSatisfying(sa -> {
                 assertThat(sa.getPort()).isEqualTo(expectedPort);
             });
         });
