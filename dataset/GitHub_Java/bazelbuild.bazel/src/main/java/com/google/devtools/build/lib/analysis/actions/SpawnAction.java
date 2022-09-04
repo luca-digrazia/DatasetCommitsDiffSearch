@@ -292,34 +292,19 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
   public final ActionContinuationOrResult beginExecution(
       ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
-    Spawn spawn;
     try {
       beforeExecute(actionExecutionContext);
-      spawn = getSpawn(actionExecutionContext);
+      Spawn spawn = getSpawn(actionExecutionContext);
+      SpawnActionContext context = actionExecutionContext.getContext(SpawnActionContext.class);
+      SpawnContinuation spawnContinuation = context.beginExecution(spawn, actionExecutionContext);
+      return new SpawnActionContinuation(spawnContinuation, actionExecutionContext);
     } catch (IOException e) {
       throw warnUnexpectedIOException(actionExecutionContext, e);
+    } catch (ExecException e) {
+      throw toActionExecutionException(e, actionExecutionContext.getVerboseFailures());
     } catch (CommandLineExpansionException e) {
       throw new ActionExecutionException(e, this, /*catastrophe=*/ false);
     }
-    // This construction ensures that beginExecution and execute are called with identical exception
-    // handling, pre-processing, and post-processing, at the expense of two throwaway objects.
-    SpawnActionContinuation continuation =
-        new SpawnActionContinuation(
-            actionExecutionContext,
-            new SpawnContinuation() {
-              @Override
-              public ListenableFuture<?> getFuture() {
-                return null;
-              }
-
-              @Override
-              public SpawnContinuation execute() throws ExecException, InterruptedException {
-                SpawnActionContext context =
-                    actionExecutionContext.getContext(SpawnActionContext.class);
-                return context.beginExecution(spawn, actionExecutionContext);
-              }
-            });
-    return continuation.execute();
   }
 
   @Override
@@ -1356,13 +1341,13 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
   }
 
   private final class SpawnActionContinuation extends ActionContinuationOrResult {
-    private final ActionExecutionContext actionExecutionContext;
     private final SpawnContinuation spawnContinuation;
+    private final ActionExecutionContext actionExecutionContext;
 
     public SpawnActionContinuation(
-        ActionExecutionContext actionExecutionContext, SpawnContinuation spawnContinuation) {
-      this.actionExecutionContext = actionExecutionContext;
+        SpawnContinuation spawnContinuation, ActionExecutionContext actionExecutionContext) {
       this.spawnContinuation = spawnContinuation;
+      this.actionExecutionContext = actionExecutionContext;
     }
 
     @Override
@@ -1379,7 +1364,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           afterExecute(actionExecutionContext);
           return ActionContinuationOrResult.of(ActionResult.create(nextContinuation.get()));
         }
-        return new SpawnActionContinuation(actionExecutionContext, nextContinuation);
+        return new SpawnActionContinuation(nextContinuation, actionExecutionContext);
       } catch (IOException e) {
         throw warnUnexpectedIOException(actionExecutionContext, e);
       } catch (ExecException e) {

@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.genrule;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -43,17 +44,34 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.rules.cpp.CcCommon.CcFlagsSupplier;
+import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.LazyString;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * A base implementation of genrule, to be used by specific implementing rules which can change some
  * of the semantics around when the execution info and inputs are changed.
  */
 public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
+
+  private static final ImmutableList<String> CROSSTOOL_MAKE_VARIABLES = ImmutableList.of("CC",
+      "CC_FLAGS", "AR", "NM", "OBJCOPY", "STRIP", "GCOVTOOL");
+
+  private static Pattern matchesMakeVariables(Iterable<String> variables) {
+    return Pattern.compile("\\$\\((" + Joiner.on("|").join(variables) + ")\\)");
+  }
+
+  private static final Pattern CROSSTOOL_MAKE_VARIABLE_PATTERN =
+      matchesMakeVariables(CROSSTOOL_MAKE_VARIABLES);
+
+  protected static boolean requiresCrosstool(String command) {
+    return CROSSTOOL_MAKE_VARIABLE_PATTERN.matcher(command).find();
+  }
 
   /**
    * Returns {@code true} if the rule should be stamped.
@@ -122,6 +140,9 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
     // Expand template variables and functions.
     ImmutableList.Builder<MakeVariableSupplier> makeVariableSuppliers =
         new ImmutableList.Builder<>();
+    if (GenRuleBaseRule.enableCcToolchain(ruleContext.getConfiguration())) {
+      makeVariableSuppliers.add(new CcFlagsSupplier(ruleContext));
+    }
     CommandResolverContext commandResolverContext =
         new CommandResolverContext(
             ruleContext, resolvedSrcs, filesToBuild, makeVariableSuppliers.build());
@@ -178,6 +199,15 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
             inputs,
             ".genrule_script.sh",
             ImmutableMap.copyOf(executionInfo));
+
+    // TODO(bazel-team): Make the make variable expander pass back a list of these.
+    if (GenRuleBaseRule.enableCcToolchain(ruleContext.getConfiguration())
+        && requiresCrosstool(baseCommand)) {
+      // If cc is used, silently throw in the crosstool filegroup as a dependency.
+      inputs.addTransitive(
+          CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext)
+              .getAllFilesMiddleman());
+    }
 
     if (isStampingEnabled(ruleContext)) {
       inputs.add(ruleContext.getAnalysisEnvironment().getStableWorkspaceStatusArtifact());
@@ -279,18 +309,13 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
         return expandSingletonArtifact(filesToBuild, "$@", "output file");
       }
 
-      PathFragment ruleDirRootRelativePath =
-          ruleContext.getRule().getLabel().getPackageIdentifier().getSourceRoot();
-      PathFragment ruleDirExecPath =
-          ruleContext
-              .getBinOrGenfilesDirectory()
-              .getExecPath()
-              .getRelative(ruleDirRootRelativePath);
-
       if (variableName.equals("RULEDIR")) {
         // The output root directory. This variable expands to the package's root directory
         // in the genfiles tree.
-        return ruleDirExecPath.getPathString();
+        PathFragment dir = ruleContext.getBinOrGenfilesDirectory().getExecPath();
+        PathFragment relPath =
+            ruleContext.getRule().getLabel().getPackageIdentifier().getSourceRoot();
+        return dir.getRelative(relPath).getPathString();
       }
 
       if (variableName.equals("@D")) {
@@ -310,7 +335,15 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
           }
           return relativeOutputFile.getParentDirectory().getPathString();
         } else {
-          return ruleDirExecPath.getPathString();
+          PathFragment dir;
+          if (ruleContext.getRule().hasBinaryOutput()) {
+            dir = ruleContext.getConfiguration().getBinFragment();
+          } else {
+            dir = ruleContext.getConfiguration().getGenfilesFragment();
+          }
+          PathFragment relPath =
+              ruleContext.getRule().getLabel().getPackageIdentifier().getSourceRoot();
+          return dir.getRelative(relPath).getPathString();
         }
       }
 

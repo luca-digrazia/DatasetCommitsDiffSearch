@@ -67,7 +67,7 @@ public final class ExtraAction extends SpawnAction {
   ExtraAction(
       ImmutableSet<Artifact> extraActionInputs,
       RunfilesSupplier runfilesSupplier,
-      Collection<Artifact.DerivedArtifact> outputs,
+      Collection<Artifact> outputs,
       Action shadowedAction,
       boolean createDummyOutput,
       CommandLine argv,
