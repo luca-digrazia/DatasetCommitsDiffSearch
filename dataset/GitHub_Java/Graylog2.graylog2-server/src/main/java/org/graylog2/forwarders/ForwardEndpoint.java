@@ -22,11 +22,16 @@ package org.graylog2.forwarders;
 
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
+import org.graylog2.forwarders.forwarders.GELFMessageForwarder;
 import org.graylog2.forwarders.forwarders.LogglyForwarder;
 import org.graylog2.forwarders.forwarders.MessageForwarderConfigurationException;
 import org.graylog2.forwarders.forwarders.UDPSyslogForwarder;
 
 /**
+ * ForwardEndpoint.java: Apr 3, 2011 11:42:58 PM
+ *
+ * [description]
+ *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class ForwardEndpoint {
@@ -54,6 +59,8 @@ public class ForwardEndpoint {
         switch (endpointType) {
             case ENDPOINT_TYPE_UDP_SYSLOG:
                 return new UDPSyslogForwarder(this.getHost(), this.getPort());
+            case ENDPOINT_TYPE_GELF:
+                return new GELFMessageForwarder(this.getHost(), this.getPort());
             case ENDPOINT_TYPE_LOGGLY:
                 return new LogglyForwarder(this.getHost());
         }
