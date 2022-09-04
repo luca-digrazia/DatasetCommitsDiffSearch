@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.actions.cache.CompactPersistentActionCache;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
-import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
@@ -62,13 +61,8 @@ public final class BlazeWorkspace {
 
   private final BlazeDirectories directories;
   private final SkyframeExecutor skyframeExecutor;
-
-  /**
-   * Loaded lazily on the first build command that enables the action cache. Cleared on a build
-   * command with {@code --nouse_action_cache} to save memory.
-   */
-  @Nullable private ActionCache actionCache;
-
+  /** The action cache is loaded lazily on the first build command. */
+  private ActionCache actionCache;
   /** The execution time range of the previous build command in this server, if any. */
   @Nullable private Range<Long> lastExecutionRange = null;
 
@@ -157,11 +151,12 @@ public final class BlazeWorkspace {
   }
 
   /**
-   * Returns path to the cache directory. Path must be inside output base to ensure that users can
-   * run concurrent instances of blaze in different clients without attempting to concurrently write
-   * to the same action cache on disk, which might not be safe.
+   * Returns path to the cache directory. Path must be inside output base to
+   * ensure that users can run concurrent instances of blaze in different
+   * clients without attempting to concurrently write to the same action cache
+   * on disk, which might not be safe.
    */
-  private Path getCacheDirectory() {
+  Path getCacheDirectory() {
     return getOutputBase().getChild("action_cache");
   }
 
@@ -213,12 +208,6 @@ public final class BlazeWorkspace {
             commandExtensions,
             shutdownReasonConsumer);
     skyframeExecutor.setClientEnv(env.getClientEnv());
-    BuildRequestOptions buildRequestOptions = options.getOptions(BuildRequestOptions.class);
-    if (buildRequestOptions != null && !buildRequestOptions.useActionCache) {
-      // Drop the action cache reference to save memory since we don't need it for this build. If a
-      // subsequent build needs it, getOrLoadPersistentActionCache will reload it from disk.
-      actionCache = null;
-    }
     return env;
   }
 
@@ -249,7 +238,7 @@ public final class BlazeWorkspace {
    * method may recreate instance between different build requests, so return value should not be
    * cached.
    */
-  public ActionCache getOrLoadPersistentActionCache(Reporter reporter) throws IOException {
+  ActionCache getPersistentActionCache(Reporter reporter) throws IOException {
     if (actionCache == null) {
       try (AutoProfiler p = profiledAndLogged("Loading action cache", ProfilerTask.INFO)) {
         actionCache =
@@ -292,7 +281,7 @@ public final class BlazeWorkspace {
 
   private void writeDoNotBuildHereFile(Path filePath) {
     try {
-      filePath.getParentDirectory().createDirectoryAndParents();
+      FileSystemUtils.createDirectoryAndParents(filePath.getParentDirectory());
       FileSystemUtils.writeContent(filePath, ISO_8859_1, getWorkspace().toString());
     } catch (IOException e) {
       logger.atWarning().withCause(e).log("Couldn't write to '%s'", filePath);

@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.ResourceManager;
+import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.analysis.AnalysisOptions;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
@@ -54,6 +55,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsParsingResult;
 import com.google.devtools.common.options.OptionsProvider;
 import com.google.protobuf.Any;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -607,6 +609,10 @@ public class CommandEnvironment {
   @Nullable
   public WorkspaceInfoFromDiff getWorkspaceInfoFromDiff() {
     return workspaceInfoFromDiff;
+  }
+
+  public ActionCache getPersistentActionCache() throws IOException {
+    return workspace.getPersistentActionCache(reporter);
   }
 
   /** Returns the top-down action cache to use, or null. */

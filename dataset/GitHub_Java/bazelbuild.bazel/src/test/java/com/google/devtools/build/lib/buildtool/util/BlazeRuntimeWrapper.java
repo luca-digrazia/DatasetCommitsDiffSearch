@@ -14,6 +14,9 @@
 
 package com.google.devtools.build.lib.buildtool.util;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.ImmutableList.toImmutableList;
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -25,56 +28,64 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
+import com.google.devtools.build.lib.bugreport.Crash;
+import com.google.devtools.build.lib.bugreport.CrashContext;
+import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.buildtool.BuildResult;
 import com.google.devtools.build.lib.buildtool.BuildTool;
+import com.google.devtools.build.lib.clock.JavaClock;
+import com.google.devtools.build.lib.events.Reporter;
+import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
 import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
-import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
+import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
-import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
+import com.google.devtools.build.lib.pkgcache.PackageOptions;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
-import com.google.devtools.build.lib.runtime.BlazeCommandEventHandler;
 import com.google.devtools.build.lib.runtime.BlazeCommandResult;
+import com.google.devtools.build.lib.runtime.BlazeCommandUtils;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.ClientOptions;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.runtime.CommandStartEvent;
 import com.google.devtools.build.lib.runtime.CommonCommandOptions;
-import com.google.devtools.build.lib.runtime.GotOptionsEvent;
 import com.google.devtools.build.lib.runtime.KeepGoingOption;
 import com.google.devtools.build.lib.runtime.LoadingPhaseThreadsOption;
+import com.google.devtools.build.lib.runtime.UiOptions;
 import com.google.devtools.build.lib.runtime.commands.BuildCommand;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.sandbox.SandboxOptions;
+import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
+import com.google.devtools.build.lib.server.FailureDetails.Spawn;
+import com.google.devtools.build.lib.server.FailureDetails.Spawn.Code;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
-import com.google.devtools.build.lib.util.ExitCode;
+import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.io.OutErr;
-import com.google.devtools.build.lib.vfs.OutputService;
 import com.google.devtools.common.options.InvocationPolicyEnforcer;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
-import java.io.PrintStream;
+import com.google.protobuf.Any;
+import com.google.protobuf.Message;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Consumer;
 
 /**
- * A wrapper for {@link BlazeRuntime} for testing purposes that makes it possible to exercise
- * (most) of the build machinery in integration tests. Note that {@code BlazeCommandDispatcher}
- * is not exercised here.
+ * A wrapper for {@link BlazeRuntime} for testing purposes that makes it possible to exercise (most)
+ * of the build machinery in integration tests. Note that {@code BlazeCommandDispatcher} is not
+ * exercised here.
  */
 public class BlazeRuntimeWrapper {
+
   private final BlazeRuntime runtime;
   private CommandEnvironment env;
   private final EventCollectionApparatus events;
@@ -87,13 +98,18 @@ public class BlazeRuntimeWrapper {
 
   private OptionsParser optionsParser;
   private ImmutableList.Builder<String> optionsToParse = new ImmutableList.Builder<>();
+  private final List<Class<? extends OptionsBase>> additionalOptionsClasses = new ArrayList<>();
+  private final List<String> crashMessages = new ArrayList<>();
 
-  private Consumer<EventBus> eventBusReceiver;
+  private final List<Object> eventBusSubscribers = new ArrayList<>();
 
   public BlazeRuntimeWrapper(
-      EventCollectionApparatus events, ServerDirectories serverDirectories,
-      BlazeDirectories directories, BinTools binTools, BlazeRuntime.Builder builder)
-          throws Exception {
+      EventCollectionApparatus events,
+      ServerDirectories serverDirectories,
+      BlazeDirectories directories,
+      BinTools binTools,
+      BlazeRuntime.Builder builder)
+      throws Exception {
     this.events = events;
     runtime =
         builder
@@ -138,6 +154,7 @@ public class BlazeRuntimeWrapper {
         new HashSet<>(
             ImmutableList.of(
                 BuildRequestOptions.class,
+                BuildEventProtocolOptions.class,
                 ExecutionOptions.class,
                 LocalExecutionOptions.class,
                 CommonCommandOptions.class,
@@ -146,10 +163,11 @@ public class BlazeRuntimeWrapper {
                 AnalysisOptions.class,
                 KeepGoingOption.class,
                 LoadingPhaseThreadsOption.class,
-                PackageCacheOptions.class,
-                StarlarkSemanticsOptions.class,
-                BlazeCommandEventHandler.Options.class,
+                PackageOptions.class,
+                BuildLanguageOptions.class,
+                UiOptions.class,
                 SandboxOptions.class));
+    options.addAll(additionalOptionsClasses);
 
     for (BlazeModule module : runtime.getBlazeModules()) {
       Iterables.addAll(options, module.getCommonCommandOptions());
@@ -157,7 +175,7 @@ public class BlazeRuntimeWrapper {
           options, module.getCommandOptions(DummyBuildCommand.class.getAnnotation(Command.class)));
     }
     options.addAll(runtime.getRuleClassProvider().getConfigurationOptions());
-    return OptionsParser.newOptionsParser(options);
+    return OptionsParser.builder().optionsClasses(options).build();
   }
 
   private void enforceTestInvocationPolicy(OptionsParser parser) {
@@ -170,16 +188,13 @@ public class BlazeRuntimeWrapper {
     }
   }
 
-  public BlazeRuntime getRuntime() {
+  public final BlazeRuntime getRuntime() {
     return runtime;
   }
 
-  /**
-   * If called with a non-null argument, all new EventBuses are posted on creation to the given
-   * receiver.
-   */
-  public void setEventBusReceiver(Consumer<EventBus> receiver) {
-    eventBusReceiver = receiver;
+  /** Registers the given {@code subscriber} with the {@link EventBus} before each command. */
+  public void registerSubscriber(Object subscriber) {
+    eventBusSubscribers.add(subscriber);
   }
 
   public final CommandEnvironment newCommand() throws Exception {
@@ -187,24 +202,41 @@ public class BlazeRuntimeWrapper {
   }
 
   /** Creates a new command environment; executeBuild does this automatically if you do not. */
-  public final CommandEnvironment newCommand(Class<? extends BlazeCommand> buildCommand)
+  public final CommandEnvironment newCommand(Class<? extends BlazeCommand> command)
       throws Exception {
+    return newCommandWithExtensions(command, /*extensions=*/ ImmutableList.of());
+  }
+
+  /**
+   * Creates a new command environment with additional proto extensions as if they were passed to
+   * the blaze server.
+   */
+  public final CommandEnvironment newCommandWithExtensions(
+      Class<? extends BlazeCommand> command, List<Message> extensions) throws Exception {
+    additionalOptionsClasses.addAll(
+        BlazeCommandUtils.getOptions(
+            command, runtime.getBlazeModules(), runtime.getRuleClassProvider()));
     initializeOptionsParser();
     commandCreated = true;
     if (env != null) {
-      runtime.afterCommand(env, BlazeCommandResult.exitCode(ExitCode.SUCCESS));
+      runtime.afterCommand(env, BlazeCommandResult.success());
     }
 
-    if (optionsParser == null) {
-      throw new IllegalArgumentException("The options parser must be initialized before creating "
-          + "a new command environment");
-    }
+    checkNotNull(
+        optionsParser,
+        "The options parser must be initialized before creating a new command environment");
 
     env =
         runtime
             .getWorkspace()
             .initCommand(
-                buildCommand.getAnnotation(Command.class), optionsParser, new ArrayList<>());
+                command.getAnnotation(Command.class),
+                optionsParser,
+                new ArrayList<>(),
+                0L,
+                0L,
+                extensions.stream().map(Any::pack).collect(toImmutableList()),
+                this.crashMessages::add);
     return env;
   }
 
@@ -213,15 +245,6 @@ public class BlazeRuntimeWrapper {
    * method.
    */
   public CommandEnvironment getCommandEnvironment() {
-    // In these tests, calls to the CommandEnvironment are not always in correct order; this is OK
-    // for unit tests. So return an environment here, that has a forced command id to allow tests to
-    // stay simple.
-    try {
-      env.getCommandId();
-    } catch (IllegalArgumentException e) {
-      // Ignored, as we know that tests deviate from normal calling order.
-    }
-
     return env;
   }
 
@@ -249,7 +272,11 @@ public class BlazeRuntimeWrapper {
     return optionsParser.getOptions(optionsClass);
   }
 
-  protected void finalizeBuildResult(@SuppressWarnings("unused") BuildResult request) {}
+  public void addOptionsClass(Class<? extends OptionsBase> optionsClass) {
+    additionalOptionsClasses.add(optionsClass);
+  }
+
+  void finalizeBuildResult(@SuppressWarnings("unused") BuildResult request) {}
 
   /**
    * Initializes a new options parser, parsing all the options set by {@link
@@ -270,103 +297,106 @@ public class BlazeRuntimeWrapper {
     }
     commandCreated = false;
     BuildTool buildTool = new BuildTool(env);
-    PrintStream origSystemOut = System.out;
-    PrintStream origSystemErr = System.err;
-    try {
-      OutErr outErr = env.getReporter().getOutErr();
-      System.setOut(new PrintStream(outErr.getOutputStream(), /*autoflush=*/ true));
-      System.setErr(new PrintStream(outErr.getErrorStream(), /*autoflush=*/ true));
+    Reporter reporter = env.getReporter();
+    try (OutErr.SystemPatcher systemOutErrPatcher = reporter.getOutErr().getSystemPatcher()) {
+      Profiler.instance()
+          .start(
+              /*profiledTasks=*/ ImmutableSet.of(),
+              /*stream=*/ null,
+              /*format=*/ null,
+              /*outputBase=*/ null,
+              /*buildID=*/ null,
+              /*recordAllDurations=*/ false,
+              new JavaClock(),
+              /*execStartTimeNanos=*/ 42,
+              /*enabledCpuUsageProfiling=*/ false,
+              /*slimProfile=*/ false,
+              /*includePrimaryOutput=*/ false,
+              /*includeTargetLabel=*/ false,
+              /*collectTaskHistograms=*/ true);
+
+      StoredEventHandler storedEventHandler = new StoredEventHandler();
+      reporter.addHandler(storedEventHandler);
 
       // This cannot go into newCommand, because we hook up the EventCollectionApparatus as a
       // module, and after that ran, further changes to the apparatus aren't reflected on the
       // reporter.
-      for (BlazeModule module : getRuntime().getBlazeModules()) {
+      for (BlazeModule module : runtime.getBlazeModules()) {
         module.beforeCommand(env);
       }
-      if (eventBusReceiver != null) {
-        eventBusReceiver.accept(env.getEventBus());
-      }
-      env.getEventBus()
-          .post(
-              new GotOptionsEvent(
-                  getRuntime().getStartupOptionsProvider(),
-                  optionsParser,
-                  InvocationPolicy.getDefaultInstance()));
-      // This roughly mimics what BlazeRuntime#beforeCommand does in practice.
-      env.throwPendingException();
+      reporter.removeHandler(storedEventHandler);
 
-      // In this test we are allowed to omit the beforeCommand; so force setting of a command
-      // id in the CommandEnvironment, as we will need it in a moment even though we deviate from
-      // normal calling order.
-      try {
-        env.getCommandId();
-      } catch (IllegalArgumentException e) {
-        // Ignored, as we know the test deviates from normal calling order.
+      EventBus eventBus = env.getEventBus();
+      for (Object subscriber : eventBusSubscribers) {
+        eventBus.register(subscriber);
       }
 
-      OutputService outputService = null;
-      BlazeModule outputModule = null;
-      for (BlazeModule module : runtime.getBlazeModules()) {
-        OutputService moduleService = module.getOutputService();
-        if (moduleService != null) {
-          if (outputService != null) {
-            throw new IllegalStateException(
-                String.format(
-                    "More than one module (%s and %s) returns an output service",
-                    module.getClass(), outputModule.getClass()));
-          }
-          outputService = moduleService;
-          outputModule = module;
-        }
-      }
-      getSkyframeExecutor().setOutputService(outputService);
-      env.setOutputServiceForTesting(outputService);
+      // Replay events from beforeCommand, just as BlazeCommandDispatcher does.
+      storedEventHandler.replayOn(reporter);
 
-      env.getEventBus()
-          .post(
-              new CommandStartEvent(
-                  "build", env.getCommandId(), env.getClientEnv(), env.getWorkingDirectory(),
-                  env.getDirectories(), 0));
+      env.beforeCommand(InvocationPolicy.getDefaultInstance());
 
-      lastRequest = createRequest("build", targets);
+      lastRequest = createRequest(env.getCommandName(), targets);
       lastResult = new BuildResult(lastRequest.getStartTime());
-      boolean success = false;
 
-      for (BlazeModule module : getRuntime().getBlazeModules()) {
+      for (BlazeModule module : runtime.getBlazeModules()) {
         env.getSkyframeExecutor().injectExtraPrecomputedValues(module.getPrecomputedValues());
       }
 
+      Crash crash = null;
+      DetailedExitCode detailedExitCode = DetailedExitCode.of(createGenericDetailedFailure());
       try {
-        try (SilentCloseable c = Profiler.instance().profile("setupPackageCache")) {
-          env.setupPackageCache(lastRequest);
+        try (SilentCloseable c = Profiler.instance().profile("syncPackageLoading")) {
+          env.syncPackageLoading(lastRequest);
         }
         buildTool.buildTargets(lastRequest, lastResult, null);
-        success = true;
+        detailedExitCode = DetailedExitCode.success();
+      } catch (RuntimeException | Error e) {
+        crash = Crash.from(e);
+        detailedExitCode = crash.getDetailedExitCode();
+        throw e;
       } finally {
-        env
-            .getTimestampGranularityMonitor()
-            .waitForTimestampGranularity(lastRequest.getOutErr());
+        env.getTimestampGranularityMonitor().waitForTimestampGranularity(lastRequest.getOutErr());
         this.configurations = lastResult.getBuildConfigurationCollection();
         finalizeBuildResult(lastResult);
         buildTool.stopRequest(
-            lastResult, null, success ? ExitCode.SUCCESS : ExitCode.BUILD_FAILURE);
-        getSkyframeExecutor().notifyCommandComplete(env.getReporter());
+            lastResult,
+            crash != null ? crash.getThrowable() : null,
+            detailedExitCode,
+            /*startSuspendCount=*/ 0);
+        getSkyframeExecutor().notifyCommandComplete(reporter);
+        if (crash != null) {
+          runtime
+              .getBugReporter()
+              .handleCrash(crash, CrashContext.keepAlive().reportingTo(reporter));
+        }
       }
     } finally {
-      System.setOut(origSystemOut);
-      System.setErr(origSystemErr);
+      Profiler.instance().stop();
     }
   }
 
-  public BuildRequest createRequest(String commandName, List<String> targets) {
-    return BuildRequest.create(
-        commandName,
-        optionsParser,
-        null,
-        targets,
-        env.getReporter().getOutErr(),
-        env.getCommandId(),
-        runtime.getClock().currentTimeMillis());
+  private static FailureDetail createGenericDetailedFailure() {
+    return FailureDetail.newBuilder()
+        .setSpawn(Spawn.newBuilder().setCode(Code.NON_ZERO_EXIT))
+        .build();
+  }
+
+  BuildRequest createRequest(String commandName, List<String> targets) {
+
+    BuildRequest.Builder builder =
+        BuildRequest.builder()
+            .setCommandName(commandName)
+            .setId(env.getCommandId())
+            .setOptions(optionsParser)
+            .setStartupOptions(null)
+            .setOutErr(env.getReporter().getOutErr())
+            .setTargets(targets)
+            .setStartTimeMillis(runtime.getClock().currentTimeMillis());
+    if ("test".equals(commandName)) {
+      builder.setRunTests(true);
+    }
+    return builder.build();
   }
 
   public BuildRequest getLastRequest() {
@@ -383,5 +413,9 @@ public class BlazeRuntimeWrapper {
 
   public ImmutableSet<ConfiguredTarget> getTopLevelTargets() {
     return topLevelTargets;
+  }
+
+  public List<String> getCrashMessages() {
+    return crashMessages;
   }
 }
