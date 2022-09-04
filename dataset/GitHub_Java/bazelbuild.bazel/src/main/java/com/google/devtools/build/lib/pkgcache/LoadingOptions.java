@@ -30,6 +30,7 @@ public class LoadingOptions extends OptionsBase {
   @Option(
     name = "build_tests_only",
     defaultValue = "false",
+    category = "what",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
@@ -42,6 +43,7 @@ public class LoadingOptions extends OptionsBase {
   @Option(
     name = "compile_one_dependency",
     defaultValue = "false",
+    category = "what",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
@@ -58,6 +60,7 @@ public class LoadingOptions extends OptionsBase {
     name = "build_tag_filters",
     converter = CommaSeparatedOptionListConverter.class,
     defaultValue = "",
+    category = "what",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
@@ -73,6 +76,7 @@ public class LoadingOptions extends OptionsBase {
     name = "test_tag_filters",
     converter = CommaSeparatedOptionListConverter.class,
     defaultValue = "",
+    category = "what",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
@@ -87,6 +91,7 @@ public class LoadingOptions extends OptionsBase {
     name = "test_size_filters",
     converter = TestSize.TestSizeFilterConverter.class,
     defaultValue = "",
+    category = "what",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
@@ -101,6 +106,7 @@ public class LoadingOptions extends OptionsBase {
     name = "test_timeout_filters",
     converter = TestTimeout.TestTimeoutFilterConverter.class,
     defaultValue = "",
+    category = "what",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
@@ -116,6 +122,7 @@ public class LoadingOptions extends OptionsBase {
     name = "test_lang_filters",
     converter = CommaSeparatedOptionListConverter.class,
     defaultValue = "",
+    category = "what",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
@@ -131,6 +138,7 @@ public class LoadingOptions extends OptionsBase {
   @Option(
     name = "build_manual_tests",
     defaultValue = "false",
+    category = "what",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
@@ -154,17 +162,4 @@ public class LoadingOptions extends OptionsBase {
             + "--experimental_interleave_loading_and_analysis."
   )
   public boolean useSkyframeTargetPatternEvaluator;
-
-  @Option(
-    name = "expand_test_suites",
-    defaultValue = "true",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-    help = "Expand test_suite targets into their constituent tests before analysis. "
-        + "When this flag is turned on (the default), negative target patterns will apply "
-        + "to the tests belonging to the test suite, otherwise they will not. "
-        + "Turning off this flag is useful when top-level aspects are applied at command line: "
-        + "then they can analyze test_suite targets."
-  )
-  public boolean expandTestSuites;
 }

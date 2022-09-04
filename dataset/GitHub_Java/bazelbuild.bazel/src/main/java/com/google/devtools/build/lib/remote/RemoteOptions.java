@@ -44,10 +44,7 @@ public final class RemoteOptions extends OptionsBase {
     category = "remote",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
-    help = "Size of the HTTP pool for making requests to the REST cache.",
-    deprecationWarning =
-        "The value will be ignored and the option will be removed in the next "
-            + "release. Bazel selects the ideal pool size automatically."
+    help = "Size of the HTTP pool for making requests to the REST cache."
   )
   public int restCachePoolSize;
 
