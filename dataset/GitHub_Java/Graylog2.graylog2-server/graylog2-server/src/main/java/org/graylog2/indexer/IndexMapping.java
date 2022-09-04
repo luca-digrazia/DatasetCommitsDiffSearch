@@ -33,26 +33,12 @@ import java.util.Map;
 public class IndexMapping {
     public static final String TYPE_MESSAGE = "message";
 
-    public Map<String, Object> messageTemplate(final String template, final String analyzer) {
-        final Map<String, Object> analyzerKeyword = ImmutableMap.of("analyzer_keyword", ImmutableMap.of(
-            "tokenizer", "keyword",
-            "filter", "lowercase"));
-        final Map<String, Object> analysis = ImmutableMap.of("analyzer", analyzerKeyword);
-        final Map<String, Object> settings = ImmutableMap.of("analysis", analysis);
-        final Map<String, Object> mappings = ImmutableMap.of(TYPE_MESSAGE, messageMapping(analyzer));
-
-        return ImmutableMap.of(
-                "template", template,
-                "settings", settings,
-                "mappings", mappings
-        );
-    }
-
     public Map<String, Object> messageMapping(final String analyzer) {
         return ImmutableMap.of(
                 "properties", partFieldProperties(analyzer),
                 "dynamic_templates", partDefaultAllInDynamicTemplate(),
-                "_source", enabled(),
+                // Compress source field
+                "_source", enabledAndCompressed(),
                 // Enable purging by TTL
                 "_ttl", enabled());
     }
@@ -61,16 +47,20 @@ public class IndexMapping {
      * Disable analyzing for every field by default.
      */
     private List<Map<String, Map<String, Object>>> partDefaultAllInDynamicTemplate() {
+        final Map<String, Serializable> mappingInternal = ImmutableMap.<String, Serializable>of(
+                "index", "not_analyzed",
+                "doc_values", true);
         final Map<String, Object> defaultInternal = ImmutableMap.of(
                 "match", "gl2_*",
-                "mapping", notAnalyzedString());
+                "mapping", mappingInternal);
         final Map<String, Map<String, Object>> templateInternal = ImmutableMap.of("internal_fields", defaultInternal);
 
+        final Map<String, String> mappingAll = ImmutableMap.of("index", "not_analyzed");
         final Map<String, Object> defaultAll = ImmutableMap.of(
                 // Match all
                 "match", "*",
                 // Analyze nothing by default
-                "mapping", ImmutableMap.of("index", "not_analyzed"));
+                "mapping", mappingAll);
         final Map<String, Map<String, Object>> templateAll = ImmutableMap.of("store_generic", defaultAll);
 
         return ImmutableList.of(templateInternal, templateAll);
@@ -85,16 +75,9 @@ public class IndexMapping {
                 "full_message", analyzedString(analyzer),
                 // http://joda-time.sourceforge.net/api-release/org/joda/time/format/DateTimeFormat.html
                 // http://www.elasticsearch.org/guide/reference/mapping/date-format.html
-                "timestamp", typeTimeWithMillis(),
+                "timestamp", typeTimeWithMillis(true),
                 // to support wildcard searches in source we need to lowercase the content (wildcard search lowercases search term)
-                "source", analyzedString("analyzer_keyword"),
-                "streams", notAnalyzedString());
-    }
-
-    private Map<String, String> notAnalyzedString() {
-        return ImmutableMap.of(
-                "index", "not_analyzed",
-                "type", "string");
+                "source", analyzedString("analyzer_keyword"));
     }
 
     private Map<String, String> analyzedString(String analyzer) {
@@ -104,13 +87,20 @@ public class IndexMapping {
                 "analyzer", analyzer);
     }
 
-    private Map<String, Serializable> typeTimeWithMillis() {
+    private Map<String, Serializable> typeTimeWithMillis(boolean storeAsDocValues) {
         return ImmutableMap.<String, Serializable>of(
                 "type", "date",
-                "format", Tools.ES_DATE_FORMAT);
+                "format", Tools.ES_DATE_FORMAT,
+                "doc_values", storeAsDocValues);
     }
 
     private Map<String, Boolean> enabled() {
         return ImmutableMap.of("enabled", true);
+    }
+
+    private Map<String, Boolean> enabledAndCompressed() {
+        return ImmutableMap.of(
+                "enabled", true,
+                "compress", true);
     }
 }

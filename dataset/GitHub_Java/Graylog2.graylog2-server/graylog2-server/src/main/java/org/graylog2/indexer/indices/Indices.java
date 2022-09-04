@@ -16,12 +16,10 @@
  */
 package org.graylog2.indexer.indices;
 
-import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
-import com.google.common.collect.UnmodifiableIterator;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.ActionFuture;
 import org.elasticsearch.action.WriteConsistencyLevel;
@@ -37,19 +35,21 @@ import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsResponse;
 import org.elasticsearch.action.admin.indices.flush.FlushRequest;
-import org.elasticsearch.action.admin.indices.forcemerge.ForceMergeRequest;
 import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
 import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
 import org.elasticsearch.action.admin.indices.open.OpenIndexRequest;
+import org.elasticsearch.action.admin.indices.optimize.OptimizeRequest;
+import org.elasticsearch.action.admin.indices.settings.get.GetSettingsRequest;
+import org.elasticsearch.action.admin.indices.settings.get.GetSettingsResponse;
 import org.elasticsearch.action.admin.indices.settings.put.UpdateSettingsRequest;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsRequest;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
 import org.elasticsearch.action.admin.indices.stats.ShardStats;
-import org.elasticsearch.action.admin.indices.template.get.GetIndexTemplatesResponse;
-import org.elasticsearch.action.admin.indices.template.put.PutIndexTemplateRequest;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
+import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.SearchType;
@@ -57,13 +57,17 @@ import org.elasticsearch.client.Client;
 import org.elasticsearch.client.IndicesAdminClient;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.cluster.metadata.IndexTemplateMetaData;
 import org.elasticsearch.cluster.metadata.MappingMetaData;
 import org.elasticsearch.cluster.routing.ShardRouting;
+import org.elasticsearch.common.collect.UnmodifiableIterator;
+import org.elasticsearch.common.hppc.cursors.ObjectObjectCursor;
+import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.query.FilterBuilders;
 import org.elasticsearch.index.query.QueryBuilder;
-import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.indices.IndexMissingException;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.bucket.filter.Filter;
@@ -73,8 +77,8 @@ import org.elasticsearch.search.aggregations.metrics.min.Min;
 import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.IndexNotFoundException;
-import org.graylog2.indexer.messages.Messages;
 import org.graylog2.indexer.searches.TimestampStats;
+import org.graylog2.plugin.indexer.retention.IndexManagement;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
@@ -84,7 +88,6 @@ import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -92,23 +95,19 @@ import java.util.concurrent.TimeUnit;
 import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
 
 @Singleton
-public class Indices {
+public class Indices implements IndexManagement {
 
     private static final Logger LOG = LoggerFactory.getLogger(Indices.class);
-
-    private static final String GRAYLOG_INTERNAL_TEMPLATE_NAME = "graylog-internal";
 
     private final Client c;
     private final ElasticsearchConfiguration configuration;
     private final IndexMapping indexMapping;
-    private final Messages messages;
 
     @Inject
-    public Indices(Client client, ElasticsearchConfiguration configuration, IndexMapping indexMapping, Messages messages) {
+    public Indices(Client client, ElasticsearchConfiguration configuration, IndexMapping indexMapping) {
         this.c = client;
         this.configuration = configuration;
         this.indexMapping = indexMapping;
-        this.messages = messages;
     }
 
     public void move(String source, String target) {
@@ -133,7 +132,7 @@ public class Indices {
                 Map<String, Object> doc = hit.getSource();
                 String id = (String) doc.remove("_id");
 
-                request.add(messages.buildIndexRequest(target, doc, id));
+                request.add(manualIndexRequest(target, doc, id).request());
             }
 
             request.setConsistencyLevel(WriteConsistencyLevel.ONE);
@@ -212,42 +211,6 @@ public class Indices {
         return response.getAliases().isEmpty() ? null : response.getAliases().keysIt().next();
     }
 
-    private void ensureIndexTemplate() {
-        final Map<String, Object> template = indexMapping.messageTemplate(allIndicesAlias(), configuration.getAnalyzer());
-
-        // First check if we have to install the index template. If the template exists, we do not install it again.
-        // We do not compare the installed template in Elasticsearch with our template to avoid overwriting changes
-        // done by users.
-        try {
-            final GetIndexTemplatesResponse getIndexTemplatesResponse = c.admin().indices()
-                    .prepareGetTemplates(GRAYLOG_INTERNAL_TEMPLATE_NAME)
-                    .get();
-
-            final List<IndexTemplateMetaData> existingTemplate = getIndexTemplatesResponse.getIndexTemplates();
-
-            if (existingTemplate.size() > 0) {
-                LOG.debug("Index template \"{}\" exists, not installing it again.", GRAYLOG_INTERNAL_TEMPLATE_NAME);
-                return;
-            }
-        } catch (Exception e) {
-            LOG.error("Unable to get index template \"" + GRAYLOG_INTERNAL_TEMPLATE_NAME + "\" from Elasticsearch.", e);
-        }
-
-        final PutIndexTemplateRequest itr = c.admin().indices().preparePutTemplate(GRAYLOG_INTERNAL_TEMPLATE_NAME)
-                .setOrder(Integer.MIN_VALUE) // Make sure templates with "order: 0" are applied after our template!
-                .setSource(template)
-                .request();
-
-        try {
-            final boolean acknowledged = c.admin().indices().putTemplate(itr).actionGet().isAcknowledged();
-            if (acknowledged) {
-                LOG.info("Created Graylog index template \"{}\" in Elasticsearch.", GRAYLOG_INTERNAL_TEMPLATE_NAME);
-            }
-        } catch (Exception e) {
-            LOG.error("Unable to create the Graylog index template: " + GRAYLOG_INTERNAL_TEMPLATE_NAME, e);
-        }
-    }
-
     public boolean create(String indexName) {
         final Map<String, String> keywordLowercase = ImmutableMap.of(
                 "tokenizer", "keyword",
@@ -256,12 +219,11 @@ public class Indices {
                 "number_of_shards", configuration.getShards(),
                 "number_of_replicas", configuration.getReplicas(),
                 "index.analysis.analyzer.analyzer_keyword", keywordLowercase);
-
-        // Make sure our index template exists before creating an index!
-        ensureIndexTemplate();
+        final Map<String, Object> messageMapping = indexMapping.messageMapping(configuration.getAnalyzer());
 
         final CreateIndexRequest cir = c.admin().indices().prepareCreate(indexName)
                 .setSettings(settings)
+                .addMapping(IndexMapping.TYPE_MESSAGE, messageMapping)
                 .request();
 
         return c.admin().indices().create(cir).actionGet().isAcknowledged();
@@ -292,15 +254,45 @@ public class Indices {
         return fields;
     }
 
+    private IndexRequestBuilder manualIndexRequest(String index, Map<String, Object> doc, String id) {
+        final IndexRequestBuilder b = new IndexRequestBuilder(c);
+        b.setIndex(index);
+        b.setId(id);
+        b.setSource(doc);
+        b.setOpType(IndexRequest.OpType.INDEX);
+        b.setType(IndexMapping.TYPE_MESSAGE);
+        b.setConsistencyLevel(WriteConsistencyLevel.ONE);
+
+        return b;
+    }
+
     public void setReadOnly(String index) {
-        final Settings.Builder sb = Settings.builder()
-                // https://www.elastic.co/guide/en/elasticsearch/reference/2.0/indices-update-settings.html
-                .put("index.blocks.write", true) // Block writing.
-                .put("index.blocks.read", false) // Allow reading.
-                .put("index.blocks.metadata", false); // Allow getting metadata.
+        ImmutableSettings.Builder sb = ImmutableSettings.builder();
+
+        // http://www.elasticsearch.org/guide/reference/api/admin-indices-update-settings/
+        sb.put("index.blocks.write", true); // Block writing.
+        sb.put("index.blocks.read", false); // Allow reading.
+        sb.put("index.blocks.metadata", false); // Allow getting metadata.
+
+        c.admin().indices().updateSettings(new UpdateSettingsRequest(index).settings(sb.build())).actionGet();
+    }
+
+    public boolean isReadOnly(String index) {
+        final GetSettingsRequest request = c.admin().indices().prepareGetSettings(index).request();
+        final GetSettingsResponse response = c.admin().indices().getSettings(request).actionGet();
+
+        return response.getIndexToSettings().get(index).getAsBoolean("index.blocks.write", false);
+    }
+
+    public void setReadWrite(String index) {
+        Settings settings = ImmutableSettings.builder()
+                .put("index.blocks.write", false)
+                .put("index.blocks.read", false)
+                .put("index.blocks.metadata", false)
+                .build();
 
         final UpdateSettingsRequest request = c.admin().indices().prepareUpdateSettings(index)
-                .setSettings(sb)
+                .setSettings(settings)
                 .request();
         c.admin().indices().updateSettings(request).actionGet();
     }
@@ -455,15 +447,14 @@ public class Indices {
     }
 
     public void optimizeIndex(String index) {
-        // https://www.elastic.co/guide/en/elasticsearch/reference/2.1/indices-forcemerge.html
-        final ForceMergeRequest request = c.admin().indices().prepareForceMerge(index)
-                .setMaxNumSegments(configuration.getIndexOptimizationMaxNumSegments())
-                .setOnlyExpungeDeletes(false)
-                .setFlush(true)
-                .request();
+        // http://www.elasticsearch.org/guide/reference/api/admin-indices-optimize/
+        final OptimizeRequest or = new OptimizeRequest(index)
+                .maxNumSegments(configuration.getIndexOptimizationMaxNumSegments())
+                .onlyExpungeDeletes(false)
+                .flush(true);
 
         // Using a specific timeout to override the global Elasticsearch request timeout
-        c.admin().indices().forceMerge(request).actionGet(1L, TimeUnit.HOURS);
+        c.admin().indices().optimize(or).actionGet(1L, TimeUnit.HOURS);
     }
 
     public ClusterHealthStatus waitForRecovery(String index) {
@@ -510,24 +501,22 @@ public class Indices {
      */
     public TimestampStats timestampStatsOfIndex(String index) {
         final FilterAggregationBuilder builder = AggregationBuilders.filter("agg")
-                .filter(QueryBuilders.existsQuery("timestamp"))
+                .filter(FilterBuilders.existsFilter("timestamp"))
                 .subAggregation(AggregationBuilders.min("ts_min").field("timestamp"))
                 .subAggregation(AggregationBuilders.max("ts_max").field("timestamp"));
         final SearchRequestBuilder srb = c.prepareSearch()
                 .setIndices(index)
-                .setSearchType(SearchType.QUERY_THEN_FETCH)
-                .setSize(0)
+                .setSearchType(SearchType.COUNT)
                 .addAggregation(builder);
 
         final SearchResponse response;
         try {
             response = c.search(srb.request()).actionGet();
-        } catch (org.elasticsearch.index.IndexNotFoundException e) {
-            LOG.error("Error while calculating timestamp stats in index <" + index + ">", e);
+        } catch (IndexMissingException e) {
             throw e;
         } catch (ElasticsearchException e) {
             LOG.error("Error while calculating timestamp stats in index <" + index + ">", e);
-            throw new org.elasticsearch.index.IndexNotFoundException("Index " + index + " not found", e);
+            throw new IndexMissingException(new Index(index));
         }
 
         final Filter f = response.getAggregations().get("agg");
