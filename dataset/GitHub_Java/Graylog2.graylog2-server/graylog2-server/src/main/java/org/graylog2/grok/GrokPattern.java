@@ -24,7 +24,7 @@ import javax.persistence.Id;
 import java.util.Objects;
 
 @JsonAutoDetect
-public final class GrokPattern {
+public class GrokPattern {
     @Id
     @org.mongojack.ObjectId
     public ObjectId id;

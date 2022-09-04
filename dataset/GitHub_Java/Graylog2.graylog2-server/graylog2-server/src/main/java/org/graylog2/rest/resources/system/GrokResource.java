@@ -18,6 +18,7 @@ package org.graylog2.rest.resources.system;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Sets;
+import com.google.common.eventbus.EventBus;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -61,10 +62,10 @@ import java.util.Set;
 public class GrokResource extends RestResource {
 
     private final GrokPatternService grokPatternService;
-    private final ClusterEventBus clusterBus;
+    private final EventBus clusterBus;
 
     @Inject
-    public GrokResource(GrokPatternService grokPatternService, ClusterEventBus clusterBus) {
+    public GrokResource(GrokPatternService grokPatternService, @ClusterEventBus EventBus clusterBus) {
         this.grokPatternService = grokPatternService;
         this.clusterBus = clusterBus;
     }

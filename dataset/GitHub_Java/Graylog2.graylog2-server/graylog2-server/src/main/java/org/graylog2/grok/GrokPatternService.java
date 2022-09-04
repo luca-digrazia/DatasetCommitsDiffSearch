@@ -16,53 +16,27 @@
  */
 package org.graylog2.grok;
 
-import io.krakens.grok.api.GrokUtils;
-import io.krakens.grok.api.exception.GrokException;
+import com.google.inject.ImplementedBy;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.database.ValidationException;
 
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Matcher;
 
+@ImplementedBy(GrokPatternServiceImpl.class)
 public interface GrokPatternService {
     GrokPattern load(String patternId) throws NotFoundException;
-
-    Optional<GrokPattern> loadByName(String name);
-
-    Set<GrokPattern> bulkLoad(Collection<String> patternIds);
 
     Set<GrokPattern> loadAll();
 
     GrokPattern save(GrokPattern pattern) throws ValidationException;
 
-    GrokPattern update(GrokPattern pattern) throws ValidationException;
-
     List<GrokPattern> saveAll(Collection<GrokPattern> patterns, boolean replace) throws ValidationException;
 
-    Map<String, Object> match(GrokPattern pattern, String sampleData) throws GrokException;
-
-    boolean validate(GrokPattern pattern) throws GrokException;
-
-    boolean validateAll(Collection<GrokPattern> patterns) throws GrokException;
+    boolean validate(GrokPattern pattern);
 
     int delete(String patternId);
 
     int deleteAll();
-
-    static Set<String> extractPatternNames(String namedPattern) {
-        final Set<String> result = new HashSet<>();
-        final Set<String> namedGroups = GrokUtils.getNameGroups(GrokUtils.GROK_PATTERN.pattern());
-        final Matcher matcher = GrokUtils.GROK_PATTERN.matcher(namedPattern);
-        while (matcher.find()) {
-            final Map<String, String> group = GrokUtils.namedGroups(matcher, namedGroups);
-            final String patternName = group.get("pattern");
-            result.add(patternName);
-        }
-        return result;
-    }
 }
