@@ -14,8 +14,6 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Predicate;
-import com.google.common.base.Predicates;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -28,9 +26,9 @@ import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.MakeVariableInfo;
 import com.google.devtools.build.lib.analysis.MakeVariableSupplier;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.LocalMetadataCollector;
@@ -150,16 +148,27 @@ public final class CcCommon {
 
   public ImmutableList<String> getCopts() {
     Preconditions.checkState(hasAttribute("copts", Type.STRING_LIST));
+    // TODO(bazel-team): getAttributeCopts should not tokenize the strings. Make a warning for now.
+    List<String> tokens = new ArrayList<>();
+    for (String str : ruleContext.attributes().get("copts", Type.STRING_LIST)) {
+      tokens.clear();
+      try {
+        ShellUtils.tokenize(tokens, str);
+        if (tokens.size() > 1) {
+          ruleContext.attributeWarning("copts",
+              "each item in the list should contain only one option");
+        }
+      } catch (ShellUtils.TokenizationException e) {
+        // ignore, the error is reported in the getAttributeCopts call
+      }
+    }
 
-    if (!getCoptsFilter(ruleContext).apply("-Wno-future-warnings")) {
-      ruleContext.attributeWarning(
-          "nocopts",
-          String.format(
-              "Regular expression '%s' is too general; for example, it matches "
-                  + "'-Wno-future-warnings'.  Thus it might *re-enable* compiler warnings we wish "
-                  + "to disable globally.  To disable all compiler warnings, add '-w' to copts "
-                  + "instead",
-              Preconditions.checkNotNull(getNoCoptsPattern(ruleContext))));
+    Pattern nocopts = getNoCopts(ruleContext);
+    if (nocopts != null && nocopts.matcher("-Wno-future-warnings").matches()) {
+      ruleContext.attributeWarning("nocopts",
+          "Regular expression '" + nocopts.pattern() + "' is too general; for example, it matches "
+          + "'-Wno-future-warnings'.  Thus it might *re-enable* compiler warnings we wish to "
+          + "disable globally.  To disable all compiler warnings, add '-w' to copts instead");
     }
 
     return ImmutableList.<String>builder()
@@ -340,36 +349,27 @@ public final class CcCommon {
     return ImmutableList.copyOf(CppHelper.expandMakeVariables(ruleContext, "copts", unexpanded));
   }
 
-  /** Returns copts filter built from the make variable expanded nocopts attribute. */
-  Predicate<String> getCoptsFilter() {
-    return getCoptsFilter(ruleContext);
+  Pattern getNoCopts() {
+    return getNoCopts(ruleContext);
   }
 
-  /** @see CcCommon#getCoptsFilter() */
-  private static Predicate<String> getCoptsFilter(RuleContext ruleContext) {
-    Pattern noCoptsPattern = getNoCoptsPattern(ruleContext);
-    if (noCoptsPattern == null) {
-      return Predicates.alwaysTrue();
+  /**
+   * Returns nocopts pattern built from the make variable expanded nocopts
+   * attribute.
+   */
+  private static Pattern getNoCopts(RuleContext ruleContext) {
+    Pattern nocopts = null;
+    if (ruleContext.getRule().isAttrDefined(NO_COPTS_ATTRIBUTE, Type.STRING)) {
+      String nocoptsAttr = ruleContext.expandMakeVariables(NO_COPTS_ATTRIBUTE,
+          ruleContext.attributes().get(NO_COPTS_ATTRIBUTE, Type.STRING));
+      try {
+        nocopts = Pattern.compile(nocoptsAttr);
+      } catch (PatternSyntaxException e) {
+        ruleContext.attributeError(NO_COPTS_ATTRIBUTE,
+            "invalid regular expression '" + nocoptsAttr + "': " + e.getMessage());
+      }
     }
-    return flag -> !noCoptsPattern.matcher(flag).matches();
-  }
-
-  @Nullable
-  private static Pattern getNoCoptsPattern(RuleContext ruleContext) {
-    if (!ruleContext.getRule().isAttrDefined(NO_COPTS_ATTRIBUTE, Type.STRING)) {
-      return null;
-    }
-    String nocoptsAttr =
-        ruleContext.expandMakeVariables(
-            NO_COPTS_ATTRIBUTE, ruleContext.attributes().get(NO_COPTS_ATTRIBUTE, Type.STRING));
-    try {
-      return Pattern.compile(nocoptsAttr);
-    } catch (PatternSyntaxException e) {
-      ruleContext.attributeError(
-          NO_COPTS_ATTRIBUTE,
-          "invalid regular expression '" + nocoptsAttr + "': " + e.getMessage());
-      return null;
-    }
+    return nocopts;
   }
 
   // TODO(bazel-team): calculating nocopts every time is not very efficient,
@@ -381,7 +381,8 @@ public final class CcCommon {
    * otherwise.
    */
   static boolean noCoptsMatches(String option, RuleContext ruleContext) {
-    return !getCoptsFilter(ruleContext).apply(option);
+    Pattern nocopts = getNoCopts(ruleContext);
+    return nocopts == null ? false : nocopts.matcher(option).matches();
   }
 
   private static final String DEFINES_ATTRIBUTE = "defines";
@@ -692,7 +693,9 @@ public final class CcCommon {
       return null;
     }
 
-    Variables buildVariables = toolchainProvider.getBuildVariables();
+    Variables buildVariables = new Variables.Builder()
+        .addAllStringVariables(toolchainProvider.getBuildVariables())
+        .build();
     String toolchainCcFlags =
         Joiner.on(" ")
             .join(

@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.constraints.ConstraintSemantics;
 import com.google.devtools.build.lib.analysis.constraints.EnvironmentCollection;
 import com.google.devtools.build.lib.analysis.constraints.SupportedEnvironments;
@@ -65,8 +64,6 @@ public final class RuleConfiguredTargetBuilder {
 
   /** These are supported by all configured targets and need to be specially handled. */
   private NestedSet<Artifact> filesToBuild = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-
-  private NestedSetBuilder<Artifact> filesToRunBuilder = NestedSetBuilder.stableOrder();
   private RunfilesSupport runfilesSupport;
   private Artifact executable;
   private ImmutableSet<ActionAnalysisMetadata> actionsWithoutExtraAction = ImmutableSet.of();
@@ -88,9 +85,8 @@ public final class RuleConfiguredTargetBuilder {
       return null;
     }
 
-    FilesToRunProvider filesToRunProvider =
-        new FilesToRunProvider(
-            buildFilesToRun(runfilesSupport, filesToBuild), runfilesSupport, executable);
+    FilesToRunProvider filesToRunProvider = new FilesToRunProvider(
+        getFilesToRun(runfilesSupport, filesToBuild), runfilesSupport, executable);
     addProvider(new FileProvider(filesToBuild));
     addProvider(filesToRunProvider);
 
@@ -140,18 +136,21 @@ public final class RuleConfiguredTargetBuilder {
     return new RuleConfiguredTarget(ruleContext, providers);
   }
 
+
   /**
-   * Compute the artifacts to put into the {@link FilesToRunProvider} for this target. These are the
-   * filesToBuild, any artifacts added by the rule with {@link #addFilesToRun}, and the runfiles
-   * middleman if it exists.
+   * Like getFilesToBuild(), except that it also includes the runfiles middleman, if any. Middlemen
+   * are expanded in the SpawnStrategy or by the Distributor.
    */
-  private NestedSet<Artifact> buildFilesToRun(
+  private NestedSet<Artifact> getFilesToRun(
       RunfilesSupport runfilesSupport, NestedSet<Artifact> filesToBuild) {
-    filesToRunBuilder.addTransitive(filesToBuild);
-    if (runfilesSupport != null) {
-      filesToRunBuilder.add(runfilesSupport.getRunfilesMiddleman());
+    if (runfilesSupport == null) {
+      return filesToBuild;
+    } else {
+      NestedSetBuilder<Artifact> allFilesToBuild = NestedSetBuilder.stableOrder();
+      allFilesToBuild.addTransitive(filesToBuild);
+      allFilesToBuild.add(runfilesSupport.getRunfilesMiddleman());
+      return allFilesToBuild.build();
     }
-    return filesToRunBuilder.build();
   }
 
   /**
@@ -208,15 +207,6 @@ public final class RuleConfiguredTargetBuilder {
             .build();
     ImmutableList<String> testTags = ImmutableList.copyOf(ruleContext.getRule().getRuleTags());
     return new TestProvider(testParams, testTags);
-  }
-
-  /**
-   * Add files required to run the target. Artifacts from {@link #setFilesToBuild} and the runfiles
-   * middleman, if any, are added automatically.
-   */
-  public RuleConfiguredTargetBuilder addFilesToRun(NestedSet<Artifact> files) {
-    filesToRunBuilder.addTransitive(files);
-    return this;
   }
 
   /** Add a specific provider. */

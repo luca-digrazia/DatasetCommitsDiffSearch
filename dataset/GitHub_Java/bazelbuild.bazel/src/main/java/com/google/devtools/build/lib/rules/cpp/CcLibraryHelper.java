@@ -19,7 +19,6 @@ import static java.util.stream.Collectors.toCollection;
 
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
-import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -33,6 +32,7 @@ import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.LanguageDependentFragment;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
@@ -41,12 +41,12 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMapBuilder;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariablesExtension;
@@ -67,6 +67,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 
 /**
@@ -87,12 +88,6 @@ public final class CcLibraryHelper {
       OutputGroupProvider.HIDDEN_OUTPUT_GROUP_PREFIX
           + "hidden_header_tokens"
           + OutputGroupProvider.INTERNAL_SUFFIX;
-
-  /** A string constant for the name of archive library(.a, .lo) output group. */
-  public static final String ARCHIVE_LIBRARY_OUTPUT_GROUP_NAME = "archive";
-
-  /** A string constant for the name of dynamic library output group. */
-  public static final String DYNAMIC_LIBRARY_OUTPUT_GROUP_NAME = "dynamic_library";
 
   /**
    * A group of source file types and action names for builds controlled by CcLibraryHelper.
@@ -118,7 +113,6 @@ public final class CcLibraryHelper {
             CppCompileAction.ASSEMBLE,
             CppCompileAction.PREPROCESS_ASSEMBLE,
             CppCompileAction.CLIF_MATCH,
-            CppCompileAction.LINKSTAMP_COMPILE,
             Link.LinkTargetType.STATIC_LIBRARY.getActionName(),
             // We need to create pic-specific actions for link actions, as they will produce
             // differently named outputs.
@@ -147,7 +141,6 @@ public final class CcLibraryHelper {
             CppCompileAction.CPP_HEADER_PREPROCESSING,
             CppCompileAction.ASSEMBLE,
             CppCompileAction.PREPROCESS_ASSEMBLE,
-            CppCompileAction.LINKSTAMP_COMPILE,
             Link.LinkTargetType.STATIC_LIBRARY.getActionName(),
             // We need to create pic-specific actions for link actions, as they will produce
             // differently named outputs.
@@ -273,7 +266,7 @@ public final class CcLibraryHelper {
   private final List<Artifact> nonCodeLinkerInputs = new ArrayList<>();
   private ImmutableList<String> copts = ImmutableList.of();
   private final List<String> linkopts = new ArrayList<>();
-  private Predicate<String> coptsFilter = Predicates.alwaysTrue();
+  @Nullable private Pattern nocopts;
   private final Set<String> defines = new LinkedHashSet<>();
   private final List<TransitiveInfoCollection> deps = new ArrayList<>();
   private final List<CppCompilationContext> depContexts = new ArrayList<>();
@@ -385,7 +378,7 @@ public final class CcLibraryHelper {
     addLooseIncludeDirs(common.getLooseIncludeDirs());
     addNonCodeLinkerInputs(common.getLinkerScripts());
     addSystemIncludeDirs(common.getSystemIncludeDirs());
-    setCoptsFilter(common.getCoptsFilter());
+    setNoCopts(common.getNoCopts());
     setHeadersCheckingMode(semantics.determineHeadersCheckingMode(ruleContext));
     return this;
   }
@@ -647,9 +640,11 @@ public final class CcLibraryHelper {
     return this;
   }
 
-  /** Sets a pattern that is used to filter copts; set to {@code null} for no filtering. */
-  public CcLibraryHelper setCoptsFilter(Predicate<String> coptsFilter) {
-    this.coptsFilter = Preconditions.checkNotNull(coptsFilter);
+  /**
+   * Sets a pattern that is used to filter copts; set to {@code null} for no filtering.
+   */
+  public CcLibraryHelper setNoCopts(@Nullable Pattern nocopts) {
+    this.nocopts = nocopts;
     return this;
   }
 
@@ -932,6 +927,13 @@ public final class CcLibraryHelper {
    * @throws RuleErrorException
    */
   public Info build() throws RuleErrorException, InterruptedException {
+    // Fail early if there is no lipo context collector on the rule - otherwise we end up failing
+    // in lipo optimization.
+    Preconditions.checkState(
+        // 'cc_inc_library' rules do not compile, and thus are not affected by LIPO.
+        ruleContext.getRule().getRuleClass().equals("cc_inc_library")
+            || ruleContext.isAttrDefined(":lipo_context_collector", BuildType.LABEL));
+
     if (checkDepsGenerateCpp) {
       for (LanguageDependentFragment dep :
           AnalysisUtils.getProviders(deps, LanguageDependentFragment.class)) {
@@ -1137,20 +1139,10 @@ public final class CcLibraryHelper {
               configuration,
               Link.LinkTargetType.DYNAMIC_LIBRARY,
               linkedArtifactNameSuffix));
-
-      if (ccToolchain.getCppConfiguration().useInterfaceSharedObjects()
-          && emitInterfaceSharedObjects) {
-        dynamicLibrary.add(
-            CppHelper.getLinuxLinkedArtifact(
-                ruleContext,
-                configuration,
-                LinkTargetType.INTERFACE_DYNAMIC_LIBRARY,
-                linkedArtifactNameSuffix));
-      }
     }
 
-    outputGroups.put(ARCHIVE_LIBRARY_OUTPUT_GROUP_NAME, archiveFile.build());
-    outputGroups.put(DYNAMIC_LIBRARY_OUTPUT_GROUP_NAME, dynamicLibrary.build());
+    outputGroups.put("archive", archiveFile.build());
+    outputGroups.put("dynamic_library", dynamicLibrary.build());
   }
 
   /**
@@ -1158,7 +1150,12 @@ public final class CcLibraryHelper {
    */
   private CppModel initializeCppModel() {
     return new CppModel(
-            ruleContext, semantics, ccToolchain, fdoSupport, configuration, copts, coptsFilter)
+            ruleContext,
+            semantics,
+            ccToolchain,
+            fdoSupport,
+            configuration,
+            copts)
         .addCompilationUnitSources(compilationUnitSources)
         .setLinkTargetType(linkType)
         .setNeverLink(neverlink)
@@ -1169,6 +1166,7 @@ public final class CcLibraryHelper {
         // Note: this doesn't actually save the temps, it just makes the CppModel use the
         // configurations --save_temps setting to decide whether to actually save the temps.
         .setSaveTemps(true)
+        .setNoCopts(nocopts)
         .setDynamicLibrary(dynamicLibrary)
         .addLinkopts(linkopts)
         .setFeatureConfiguration(featureConfiguration)
@@ -1552,15 +1550,13 @@ public final class CcLibraryHelper {
           CcLinkParams.Builder builder, boolean linkingStatically, boolean linkShared) {
         builder.addLinkstamps(linkstamps.build(), cppCompilationContext);
         builder.addTransitiveTargets(
-            deps, CcLinkParamsInfo.TO_LINK_PARAMS, CcSpecificLinkParamsProvider.TO_LINK_PARAMS);
+            deps,
+            CcLinkParamsInfo.TO_LINK_PARAMS,
+            CcSpecificLinkParamsProvider.TO_LINK_PARAMS);
         if (!neverlink) {
           builder.addLibraries(
               ccLinkingOutputs.getPreferredLibraries(
                   linkingStatically, /*preferPic=*/ linkShared || forcePic));
-          if (!linkingStatically) {
-            builder.addExecutionDynamicLibraries(
-                LinkerInputs.toLibraryArtifacts(ccLinkingOutputs.getExecutionDynamicLibraries()));
-          }
           builder.addLinkOpts(linkopts);
         }
       }
