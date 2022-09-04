@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,12 +15,11 @@
  */
 package org.androidannotations.test15;
 
+import org.androidannotations.annotations.EActivity;
+import org.androidannotations.annotations.HttpsClient;
 import org.apache.http.client.HttpClient;
 
 import android.app.Activity;
-
-import org.androidannotations.annotations.EActivity;
-import org.androidannotations.annotations.HttpsClient;
 
 @EActivity
 public class SSLConnection extends Activity {
@@ -33,5 +32,8 @@ public class SSLConnection extends Activity {
 
 	@HttpsClient
 	HttpClient mHttpsClientTest3;
+
+	@HttpsClient(trustStoreResName = "cacerts", keyStoreResName = "cacerts")
+	HttpClient mHttpsClientTest4;
 
 }
