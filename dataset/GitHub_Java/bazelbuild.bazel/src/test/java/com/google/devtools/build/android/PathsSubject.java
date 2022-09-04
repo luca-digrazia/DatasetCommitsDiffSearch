@@ -83,6 +83,7 @@ public class PathsSubject extends Subject<PathsSubject, Path> {
         .containsAllIn(Arrays.asList(paths));
   }
 
+
   void containsExactlyArchivedFilesIn(String... paths) throws IOException {
     if (actual() == null) {
       fail("should not be null.");
@@ -90,11 +91,11 @@ public class PathsSubject extends Subject<PathsSubject, Path> {
     exists();
 
     assertThat(
-            new ZipFile(actual().toFile())
-                .stream()
-                .map(ZipEntry::getName)
-                .map(n -> n.replaceAll(PATH_NORMALIZER, "$1/$3"))
-                .collect(Collectors.toSet()))
+        new ZipFile(actual().toFile())
+            .stream()
+            .map(ZipEntry::getName)
+            .map(n -> n.replaceAll(PATH_NORMALIZER, "$1/$3"))
+            .collect(Collectors.toSet()))
         .containsExactly(Arrays.asList(paths));
   }
 
@@ -144,10 +145,5 @@ public class PathsSubject extends Subject<PathsSubject, Path> {
     StringWriter writer = new StringWriter();
     transformer.transform(new DOMSource(doc), new StreamResult(writer));
     return writer.toString().replaceAll("\n|\r", "").replaceAll(">\\s+<", "><");
-  }
-
-  public void containsExactlyTheseLines(String... lines) throws IOException {
-    assertThat(Files.readAllLines(actual(), StandardCharsets.UTF_8))
-        .containsExactlyElementsIn(lines);
   }
 }
