@@ -22,7 +22,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -168,40 +167,6 @@ public class CompileBuildVariablesTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testPresenceOfPerObjectDebugFileBuildVariable() throws Exception {
-    AnalysisMock.get()
-        .ccSupport()
-        .setupCrosstool(mockToolsConfig, MockCcSupport.PER_OBJECT_DEBUG_INFO_CONFIGURATION);
-    useConfiguration("--fission=yes");
-
-    scratch.file("x/BUILD", "cc_binary(name = 'bin', srcs = ['bin.cc'])");
-    scratch.file("x/bin.cc");
-
-    CcToolchainVariables variables = getCompileBuildVariables("//x:bin", "bin");
-
-    assertThat(
-            variables.getStringVariable(
-                CompileBuildVariables.PER_OBJECT_DEBUG_INFO_FILE.getVariableName()))
-        .isNotNull();
-  }
-
-  @Test
-  public void testPresenceOfPerObjectDebugFileBuildVariableUsingLegacyFields() throws Exception {
-    AnalysisMock.get().ccSupport().setupCrosstool(mockToolsConfig, "supports_fission: true");
-    useConfiguration("--fission=yes");
-
-    scratch.file("x/BUILD", "cc_binary(name = 'bin', srcs = ['bin.cc'])");
-    scratch.file("x/bin.cc");
-
-    CcToolchainVariables variables = getCompileBuildVariables("//x:bin", "bin");
-
-    assertThat(
-            variables.getStringVariable(
-                CompileBuildVariables.PER_OBJECT_DEBUG_INFO_FILE.getVariableName()))
-        .isNotNull();
-  }
-
-  @Test
   public void testPresenceOfMinOsVersionBuildVariable() throws Exception {
     AnalysisMock.get()
         .ccSupport()
@@ -211,8 +176,8 @@ public class CompileBuildVariablesTest extends BuildViewTestCase {
                 + "  name: 'min_os_version_flag'"
                 + "  flag_set {"
                 + "    action: 'c++-compile'"
+                + "    expand_if_all_available: 'minimum_os_version'"
                 + "    flag_group {"
-                + "      expand_if_all_available: 'minimum_os_version'"
                 + "      flag: '-DMIN_OS=%{minimum_os_version}'"
                 + "    }"
                 + "  }"

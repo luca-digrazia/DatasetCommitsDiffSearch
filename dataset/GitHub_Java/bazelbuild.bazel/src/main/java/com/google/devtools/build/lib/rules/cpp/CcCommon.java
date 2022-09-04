@@ -64,7 +64,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -116,6 +115,7 @@ public final class CcCommon {
           CppActionNames.C_COMPILE,
           CppActionNames.CPP_COMPILE,
           CppActionNames.CPP_HEADER_PARSING,
+          CppActionNames.CPP_HEADER_PREPROCESSING,
           CppActionNames.CPP_MODULE_COMPILE,
           CppActionNames.CPP_MODULE_CODEGEN,
           CppActionNames.ASSEMBLE,
@@ -577,8 +577,8 @@ public final class CcCommon {
    * Determines a list of loose include directories that are only allowed to be referenced when
    * headers checking is {@link HeadersCheckingMode#LOOSE} or {@link HeadersCheckingMode#WARN}.
    */
-  Set<PathFragment> getLooseIncludeDirs() {
-    ImmutableSet.Builder<PathFragment> result = ImmutableSet.builder();
+  List<PathFragment> getLooseIncludeDirs() {
+    List<PathFragment> result = new ArrayList<>();
     // The package directory of the rule contributes includes. Note that this also covers all
     // non-subpackage sub-directories.
     PathFragment rulePackage = ruleContext.getLabel().getPackageIdentifier()
@@ -589,8 +589,9 @@ public final class CcCommon {
     if (hasAttribute("srcs", BuildType.LABEL_LIST)) {
       for (TransitiveInfoCollection src :
           ruleContext.getPrerequisitesIf("srcs", Mode.TARGET, FileProvider.class)) {
-        result.add(src.getLabel().getPackageIdentifier().getPathUnderExecRoot());
+        PathFragment packageDir = src.getLabel().getPackageIdentifier().getPathUnderExecRoot();
         for (Artifact a : src.getProvider(FileProvider.class).getFilesToBuild()) {
+          result.add(packageDir);
           // Attempt to gather subdirectories that might contain include files.
           result.add(a.getRootRelativePath().getParentDirectory());
         }
@@ -604,7 +605,7 @@ public final class CcCommon {
       // For now, anything with an 'includes' needs a blanket declaration
       result.add(packageFragment.getRelative("**"));
     }
-    return result.build();
+    return result;
   }
 
   List<PathFragment> getSystemIncludeDirs() {
@@ -828,6 +829,7 @@ public final class CcCommon {
       // TODO(bazel-team): Remove once supports_header_parsing has been removed from the
       // cc_toolchain rule.
       unsupportedFeaturesBuilder.add(CppRuleClasses.PARSE_HEADERS);
+      unsupportedFeaturesBuilder.add(CppRuleClasses.PREPROCESS_HEADERS);
     }
     if (toolchain.getCcCompilationInfo().getCcCompilationContext().getCppModuleMap() == null) {
       unsupportedFeaturesBuilder.add(CppRuleClasses.MODULE_MAPS);

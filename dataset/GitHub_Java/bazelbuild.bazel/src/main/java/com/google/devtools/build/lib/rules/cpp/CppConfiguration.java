@@ -42,6 +42,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -218,12 +219,12 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
 
   static CppConfiguration create(CppConfigurationParameters params)
       throws InvalidConfigurationException {
+    CrosstoolConfig.CToolchain toolchain = params.toolchain;
     CppOptions cppOptions = params.cppOptions;
     PathFragment crosstoolTopPathFragment =
         params.crosstoolTop.getPackageIdentifier().getPathUnderExecRoot();
     CppToolchainInfo cppToolchainInfo =
-        CppToolchainInfo.create(
-            crosstoolTopPathFragment, params.ccToolchainLabel, params.crosstoolInfo);
+        CppToolchainInfo.create(toolchain, crosstoolTopPathFragment, params.ccToolchainLabel);
 
     CompilationMode compilationMode = params.commonOptions.compilationMode;
 
@@ -266,7 +267,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
         params.sysrootLabel,
         coptsBuilder.build(),
         cxxOpts,
-        cppToolchainInfo.getUnfilteredCompilerOptions(/* sysroot= */ null),
+        ImmutableList.copyOf(toolchain.getUnfilteredCxxFlagList()),
         ImmutableList.copyOf(cppOptions.conlyoptList),
         cppToolchainInfo.configureAllLegacyLinkOptions(compilationMode, LinkingMode.STATIC),
         cppToolchainInfo.configureAllLegacyLinkOptions(
@@ -1124,7 +1125,8 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.useLLVMCoverageMapFormat;
   }
 
-  public static PathFragment computeDefaultSysroot(String builtInSysroot) {
+  public static PathFragment computeDefaultSysroot(CToolchain toolchain) {
+    String builtInSysroot = toolchain.getBuiltinSysroot();
     if (builtInSysroot.isEmpty()) {
       return null;
     }
