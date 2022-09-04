@@ -1,7 +1,5 @@
 package io.quarkus.bootstrap.classloading;
 
-import io.smallrye.common.io.jar.JarEntries;
-import io.smallrye.common.io.jar.JarFiles;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -23,6 +21,7 @@ import java.util.function.Function;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
+import java.util.zip.ZipEntry;
 import org.jboss.logging.Logger;
 
 /**
@@ -41,7 +40,7 @@ public class JarClassPathElement implements ClassPathElement {
         try {
             jarPath = root.toUri().toURL();
             this.root = root;
-            jarFile = JarFiles.create(file = root.toFile());
+            jarFile = new JarFile(file = root.toFile());
         } catch (IOException e) {
             throw new UncheckedIOException("Error while reading file as JAR: " + root, e);
         }
@@ -57,7 +56,7 @@ public class JarClassPathElement implements ClassPathElement {
         return withJarFile(new Function<JarFile, ClassPathResource>() {
             @Override
             public ClassPathResource apply(JarFile jarFile) {
-                JarEntry res = jarFile.getJarEntry(name);
+                ZipEntry res = jarFile.getEntry(name);
                 if (res != null) {
                     return new ClassPathResource() {
                         @Override
@@ -73,15 +72,9 @@ public class JarClassPathElement implements ClassPathElement {
                         @Override
                         public URL getUrl() {
                             try {
-                                String realName = JarEntries.getRealName(res);
-                                // Avoid ending the URL with / to avoid breaking compatibility
-                                if (realName.endsWith("/")) {
-                                    realName = realName.substring(0, realName.length() - 1);
-                                }
-                                String urlFile = jarPath.getProtocol() + ":" + jarPath.getPath() + "!/" + realName;
-                                return new URL("jar", null, urlFile);
+                                return new URL("jar", null, jarPath.getProtocol() + ":" + jarPath.getPath() + "!/" + name);
                             } catch (MalformedURLException e) {
-                                throw new UncheckedIOException(e);
+                                throw new RuntimeException(e);
                             }
                         }
 
@@ -105,11 +98,6 @@ public class JarClassPathElement implements ClassPathElement {
                                 }
                             });
                         }
-
-                        @Override
-                        public boolean isDirectory() {
-                            return res.getName().endsWith("/");
-                        }
                     };
                 }
                 return null;
@@ -122,7 +110,7 @@ public class JarClassPathElement implements ClassPathElement {
         if (closed) {
             //we still need this to work if it is closed, so shutdown hooks work
             //once it is closed it simply does not hold on to any resources
-            try (JarFile jarFile = JarFiles.create(file)) {
+            try (JarFile jarFile = new JarFile(file)) {
                 return func.apply(jarFile);
             } catch (IOException e) {
                 throw new RuntimeException(e);

@@ -1,10 +1,7 @@
 package io.quarkus.bootstrap.classloading;
 
-import io.quarkus.bootstrap.BootstrapDebug;
 import java.io.ByteArrayInputStream;
 import java.io.Closeable;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
@@ -363,21 +360,6 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
                         Map<String, Predicate<byte[]>> constPoolEntries = transformerPredicates;
                         if (transformers != null) {
                             data = handleTransform(name, data, transformers, constPoolEntries);
-
-                            if (BootstrapDebug.DEBUG_TRANSFORMED_CLASSES_DIR != null) {
-                                File debugPath = new File(BootstrapDebug.DEBUG_TRANSFORMED_CLASSES_DIR);
-                                if (!debugPath.exists()) {
-                                    debugPath.mkdir();
-                                }
-                                File classFile = new File(debugPath, name.replace(".", "/") + ".class");
-                                classFile.getParentFile().mkdirs();
-                                try (FileOutputStream classWriter = new FileOutputStream(classFile)) {
-                                    classWriter.write(data);
-                                } catch (Exception e) {
-                                    log.errorf(e, "Failed to write transformed class %s", name);
-                                }
-                                log.infof("Wrote transformed class to %s", classFile.getAbsolutePath());
-                            }
                         }
                         definePackage(name, classPathElement);
                         return defineClass(name, data, 0, data.length,
@@ -435,12 +417,8 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
     }
 
     public List<ClassPathElement> getElementsWithResource(String name) {
-        return getElementsWithResource(name, false);
-    }
-
-    public List<ClassPathElement> getElementsWithResource(String name, boolean localOnly) {
         List<ClassPathElement> ret = new ArrayList<>();
-        if (parent instanceof QuarkusClassLoader && !localOnly) {
+        if (parent instanceof QuarkusClassLoader) {
             ret.addAll(((QuarkusClassLoader) parent).getElementsWithResource(name));
         }
         ClassPathElement[] classPathElements = getState().loadableResources.get(name);
