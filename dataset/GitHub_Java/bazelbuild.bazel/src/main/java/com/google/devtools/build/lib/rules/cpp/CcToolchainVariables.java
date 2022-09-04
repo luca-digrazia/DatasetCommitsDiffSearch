@@ -32,6 +32,8 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionExce
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcToolchainVariablesApi;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Starlark;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -41,8 +43,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.Stack;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Starlark;
 
 /**
  * Configured build variables usable by the toolchain configuration.
@@ -664,61 +664,63 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
 
     @VisibleForSerialization
     enum Type {
-      OBJECT_FILE("object_file", false),
-      OBJECT_FILE_GROUP("object_file_group", false),
-      INTERFACE_LIBRARY("interface_library", false),
-      STATIC_LIBRARY("static_library", false),
-      DYNAMIC_LIBRARY("dynamic_library", false),
-      VERSIONED_DYNAMIC_LIBRARY("versioned_dynamic_library", false),
-      OBJECT_FILE_WHOLE_ARCHIVE("object_file", true),
-      OBJECT_FILE_GROUP_WHOLE_ARCHIVE("object_file_group", true),
-      INTERFACE_LIBRARY_WHOLE_ARCHIVE("interface_library", true),
-      STATIC_LIBRARY_WHOLE_ARCHIVE("static_library", true),
-      DYNAMIC_LIBRARY_WHOLE_ARCHIVE("dynamic_library", true),
-      VERSIONED_DYNAMIC_LIBRARY_WHOLE_ARCHIVE("versioned_dynamic_library", true);
+      OBJECT_FILE("object_file"),
+      OBJECT_FILE_GROUP("object_file_group"),
+      INTERFACE_LIBRARY("interface_library"),
+      STATIC_LIBRARY("static_library"),
+      DYNAMIC_LIBRARY("dynamic_library"),
+      VERSIONED_DYNAMIC_LIBRARY("versioned_dynamic_library");
 
       private final String name;
-      private final boolean isWholeArchive;
 
-      Type(String name, boolean isWholeArchive) {
+      Type(String name) {
         this.name = name;
-        this.isWholeArchive = isWholeArchive;
       }
     }
 
     private final String name;
     private final ImmutableList<Artifact> objectFiles;
+    private final boolean isWholeArchive;
     private final Type type;
 
     public static LibraryToLinkValue forDynamicLibrary(String name) {
       return new LibraryToLinkValue(
-          Preconditions.checkNotNull(name), /* objectFiles= */ null, Type.DYNAMIC_LIBRARY);
+          Preconditions.checkNotNull(name),
+          /* objectFiles= */ null,
+          /* isWholeArchive= */ false,
+          Type.DYNAMIC_LIBRARY);
     }
 
     public static LibraryToLinkValue forVersionedDynamicLibrary(String name) {
       return new LibraryToLinkValue(
           Preconditions.checkNotNull(name),
           /* objectFiles= */ null,
+          /* isWholeArchive= */ false,
           Type.VERSIONED_DYNAMIC_LIBRARY);
     }
 
     public static LibraryToLinkValue forInterfaceLibrary(String name) {
       return new LibraryToLinkValue(
-          Preconditions.checkNotNull(name), /* objectFiles= */ null, Type.INTERFACE_LIBRARY);
+          Preconditions.checkNotNull(name),
+          /* objectFiles= */ null,
+          /* isWholeArchive= */ false,
+          Type.INTERFACE_LIBRARY);
     }
 
     public static LibraryToLinkValue forStaticLibrary(String name, boolean isWholeArchive) {
       return new LibraryToLinkValue(
           Preconditions.checkNotNull(name),
           /* objectFiles= */ null,
-          isWholeArchive ? Type.STATIC_LIBRARY_WHOLE_ARCHIVE : Type.STATIC_LIBRARY);
+          isWholeArchive,
+          Type.STATIC_LIBRARY);
     }
 
     public static LibraryToLinkValue forObjectFile(String name, boolean isWholeArchive) {
       return new LibraryToLinkValue(
           Preconditions.checkNotNull(name),
           /* objectFiles= */ null,
-          isWholeArchive ? Type.OBJECT_FILE_WHOLE_ARCHIVE : Type.OBJECT_FILE);
+          isWholeArchive,
+          Type.OBJECT_FILE);
     }
 
     public static LibraryToLinkValue forObjectFileGroup(
@@ -726,15 +728,15 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
       Preconditions.checkNotNull(objects);
       Preconditions.checkArgument(!objects.isEmpty());
       return new LibraryToLinkValue(
-          /* name= */ null,
-          objects,
-          isWholeArchive ? Type.OBJECT_FILE_GROUP_WHOLE_ARCHIVE : Type.OBJECT_FILE_GROUP);
+          /* name= */ null, objects, isWholeArchive, Type.OBJECT_FILE_GROUP);
     }
 
     @VisibleForSerialization
-    LibraryToLinkValue(String name, ImmutableList<Artifact> objectFiles, Type type) {
+    LibraryToLinkValue(
+        String name, ImmutableList<Artifact> objectFiles, boolean isWholeArchive, Type type) {
       this.name = name;
       this.objectFiles = objectFiles;
+      this.isWholeArchive = isWholeArchive;
       this.type = type;
     }
 
@@ -753,7 +755,8 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
           if (objectFile.isTreeArtifact() && (expander != null)) {
             List<Artifact> artifacts = new ArrayList<>();
             expander.expand(objectFile, artifacts);
-            expandedObjectFiles.addAll(Iterables.transform(artifacts, Artifact::getExecPathString));
+            expandedObjectFiles.addAll(
+                Iterables.transform(artifacts, artifact -> artifact.getExecPathString()));
           } else {
             expandedObjectFiles.add(objectFile.getExecPathString());
           }
@@ -762,7 +765,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
       } else if (TYPE_FIELD_NAME.equals(field)) {
         return new StringValue(type.name);
       } else if (IS_WHOLE_ARCHIVE_FIELD_NAME.equals(field)) {
-        return new IntegerValue(type.isWholeArchive ? 1 : 0);
+        return new IntegerValue(isWholeArchive ? 1 : 0);
       } else {
         return null;
       }
@@ -789,12 +792,13 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
       LibraryToLinkValue that = (LibraryToLinkValue) other;
       return Objects.equals(this.name, that.name)
           && Objects.equals(this.objectFiles, that.objectFiles)
+          && this.isWholeArchive == that.isWholeArchive
           && Objects.equals(this.type, that.type);
     }
 
     @Override
     public int hashCode() {
-      return 31 * Objects.hash(name, objectFiles, type);
+      return 31 * Objects.hash(name, objectFiles, type) + (isWholeArchive ? 1231 : 1237);
     }
   }
 
