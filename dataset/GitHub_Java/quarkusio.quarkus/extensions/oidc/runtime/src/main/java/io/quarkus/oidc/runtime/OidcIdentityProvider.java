@@ -87,13 +87,10 @@ public class OidcIdentityProvider implements IdentityProvider<TokenAuthenticatio
 
         Uni<TokenVerificationResult> codeAccessTokenUni = verifyCodeFlowAccessTokenUni(vertxContext, request, resolvedContext);
 
-        return codeAccessTokenUni.onItemOrFailure().transformToUni(
-                new BiFunction<TokenVerificationResult, Throwable, Uni<? extends SecurityIdentity>>() {
+        return codeAccessTokenUni.onItem().transformToUni(
+                new Function<TokenVerificationResult, Uni<? extends SecurityIdentity>>() {
                     @Override
-                    public Uni<SecurityIdentity> apply(TokenVerificationResult codeAccessToken, Throwable t) {
-                        if (t != null) {
-                            return Uni.createFrom().failure(new AuthenticationFailedException(t));
-                        }
+                    public Uni<SecurityIdentity> apply(TokenVerificationResult codeAccessToken) {
                         return validateTokenWithOidcServer(vertxContext, request, resolvedContext, codeAccessToken);
                     }
                 });

@@ -1,7 +1,7 @@
 package io.quarkus.it.keycloak;
 
-import static io.quarkus.test.keycloak.server.KeycloakTestResourceLifecycleManager.getAccessToken;
-import static io.quarkus.test.keycloak.server.KeycloakTestResourceLifecycleManager.getRefreshToken;
+import static io.quarkus.it.keycloak.KeycloakRealmResourceManager.getAccessToken;
+import static io.quarkus.it.keycloak.KeycloakRealmResourceManager.getRefreshToken;
 import static org.awaitility.Awaitility.await;
 import static org.hamcrest.Matchers.equalTo;
 
@@ -16,14 +16,13 @@ import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.keycloak.server.KeycloakTestResourceLifecycleManager;
 import io.restassured.RestAssured;
 
 /**
  * @author <a href="mailto:psilva@redhat.com">Pedro Igor</a>
  */
 @QuarkusTest
-@QuarkusTestResource(KeycloakTestResourceLifecycleManager.class)
+@QuarkusTestResource(KeycloakRealmResourceManager.class)
 public class BearerTokenAuthorizationTest {
 
     @Test
@@ -137,19 +136,18 @@ public class BearerTokenAuthorizationTest {
     public void testVerificationFailedNoBearerToken() {
         RestAssured.given()
                 .when().get("/api/users/me").then()
-                .statusCode(401)
-                .header("WWW-Authenticate", equalTo("Bearer"));
+                .statusCode(401);
     }
 
     @Test
     public void testVerificationFailedInvalidToken() {
         RestAssured.given().auth().oauth2("123")
                 .when().get("/api/users/me").then()
-                .statusCode(401)
-                .header("WWW-Authenticate", equalTo("Bearer"));
+                .statusCode(401);
     }
 
     //see https://github.com/quarkusio/quarkus/issues/5809
+    @Test
     @RepeatedTest(20)
     public void testOidcAndVertxHandler() {
         RestAssured.given().auth().oauth2(getAccessToken("alice"))
