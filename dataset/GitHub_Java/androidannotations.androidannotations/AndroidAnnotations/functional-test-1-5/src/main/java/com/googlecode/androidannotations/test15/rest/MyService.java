@@ -15,8 +15,6 @@
  */
 package com.googlecode.androidannotations.test15.rest;
 
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import org.springframework.http.HttpHeaders;
@@ -55,7 +53,8 @@ public interface MyService {
 	// The response can be a ResponseEntity<T>
 	@Get("/events/{year}/{location}")
 	/*
-	 * You may (or may not) declare throwing RestClientException (as a reminder, since it's a RuntimeException), but nothing else.
+	 * You may (or may not) declare throwing RestClientException (as a reminder,
+	 * since it's a RuntimeException), but nothing else.
 	 */
 	ResponseEntity<EventList> getEvents2(String location, int year) throws RestClientException;
 
@@ -64,18 +63,6 @@ public interface MyService {
 
 	@Get("/events/{year}/{location}")
 	ResponseEntity<Event[][]> getEventsArrayOfArrays2(String location, int year) throws RestClientException;
-
-	@Get("/events/{year}/{location}")
-	List<Event> getEventsGenericsList(String location, int year) throws RestClientException;
-
-	@Get("/events/{year}/{location}")
-	Set<Event> getEventsGenericsSet(String location, int year) throws RestClientException;
-
-	@Get("/events/{year}/{location}")
-	GenericEvent<GenericEvent<GenericEvent<String>>> getEventsGenericsInception(String location, int year) throws RestClientException;
-
-	@Get("/events/{year}/{location}")
-	Map<String, Event> getEventsGenericsMap(String location, int year) throws RestClientException;
 
 	// There should be max 1 parameter that is not mapped to an attribute. This
 	// parameter will be used as the post entity.
@@ -94,22 +81,6 @@ public interface MyService {
 	 */
 	@Post("/events/")
 	ResponseEntity<String> addEvent3(Event event);
-
-	@Post("/events/")
-	List<Event> addEventGenericsList(Event event);
-
-	// TODO: Handle generics in params
-	// @Post("/events/")
-	// List<Event> addEventGenericsList(List<Event> events);
-
-	@Post("/events/")
-	Set<Event> addEventGenericsSet(Event event);
-
-	@Post("/events/")
-	GenericEvent<GenericEvent<GenericEvent<String>>> addEventGenericsInception(Event event);
-
-	@Post("/events/")
-	Map<String, Event> addEventGenericsMap(Event event);
 
 	/**
 	 * Output different then input
