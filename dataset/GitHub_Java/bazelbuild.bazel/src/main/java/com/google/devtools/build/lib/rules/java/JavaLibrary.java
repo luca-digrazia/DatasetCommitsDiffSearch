@@ -163,6 +163,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
         new ClasspathConfiguredFragment(
             javaArtifacts, attributes, neverLink, helper.getBootclasspathOrDefault()));
 
+    // If sources are empty, treat this library as a forwarding node for dependencies.
     JavaCompilationArgs javaCompilationArgs =
         common.collectJavaCompilationArgs(false, neverLink, false);
     JavaCompilationArgs recursiveJavaCompilationArgs =
