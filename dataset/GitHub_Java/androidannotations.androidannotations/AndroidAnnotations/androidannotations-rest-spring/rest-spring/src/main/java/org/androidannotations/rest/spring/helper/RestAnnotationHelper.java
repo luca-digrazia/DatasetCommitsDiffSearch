@@ -109,7 +109,7 @@ public class RestAnnotationHelper extends TargetAnnotationHelper {
 	public JVar declareUrlVariables(ExecutableElement element, RestHolder holder, JBlock methodBody, SortedMap<String, JVar> methodParams) {
 		Map<String, String> urlNameToElementName = new HashMap<String, String>();
 		for (VariableElement variableElement : element.getParameters()) {
-			if (variableElement.getAnnotation(Path.class) != null) {
+			if (!hasPostParameterAnnotation(variableElement)) {
 				urlNameToElementName.put(getUrlVariableCorrespondingTo(variableElement), variableElement.getSimpleName().toString());
 			}
 		}
@@ -331,7 +331,14 @@ public class RestAnnotationHelper extends TargetAnnotationHelper {
 	}
 
 	public String getUrlVariableCorrespondingTo(VariableElement parameter) {
-		return extractParameter(parameter, Path.class);
+		Path path = parameter.getAnnotation(Path.class);
+		String parameterName;
+		if (path != null && !path.value().equals("")) {
+			parameterName = path.value();
+		} else {
+			parameterName = parameter.getSimpleName().toString();
+		}
+		return parameterName;
 	}
 
 	public IJExpression declareHttpEntity(JBlock body, JVar entitySentToServer, JVar httpHeaders) {
@@ -591,7 +598,11 @@ public class RestAnnotationHelper extends TargetAnnotationHelper {
 		return !value.equals("") ? value : parameter.getSimpleName().toString();
 	}
 
-	public boolean hasRestApiMethodParameterAnnotation(VariableElement variableElement) {
+	public boolean hasPostParameterAnnotation(VariableElement variableElement) {
+		return hasOneOfClassAnnotations(variableElement, Arrays.asList(Field.class, Part.class, Body.class));
+	}
+
+	public boolean hasRequestParameterAnnotation(VariableElement variableElement) {
 		return hasOneOfClassAnnotations(variableElement, Arrays.asList(Field.class, Part.class, Body.class, Path.class));
 	}
 }
