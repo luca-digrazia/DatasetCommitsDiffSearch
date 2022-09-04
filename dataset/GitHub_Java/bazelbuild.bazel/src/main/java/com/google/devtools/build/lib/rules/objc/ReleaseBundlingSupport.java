@@ -389,12 +389,9 @@ public final class ReleaseBundlingSupport {
         ObjcRuleClasses.spawnAppleEnvActionBuilder(configuration, platform)
             .setMnemonic("EnvironmentPlist")
             .setExecutable(attributes.environmentPlist())
+            .addArguments("--platform", platformWithVersion)
+            .addArguments("--output", getGeneratedEnvironmentPlist().getExecPathString())
             .addOutput(getGeneratedEnvironmentPlist())
-            .setCommandLine(
-                CustomCommandLine.builder()
-                    .add("--platform", platformWithVersion)
-                    .addExecPath("--output", getGeneratedEnvironmentPlist())
-                    .build())
             .build(ruleContext));
   }
 
@@ -606,13 +603,10 @@ public final class ReleaseBundlingSupport {
         new SpawnAction.Builder()
             .setMnemonic("MergeEntitlementsFiles")
             .setExecutable(attributes.plmerge())
+            .addArgument("--control")
+            .addInputArgument(plMergeControlArtifact)
             .addTransitiveInputs(entitlements)
             .addOutput(intermediateArtifacts.entitlements())
-            .addInput(plMergeControlArtifact)
-            .setCommandLine(
-                CustomCommandLine.builder()
-                    .addExecPath("--control", plMergeControlArtifact)
-                    .build())
             .build(ruleContext));
   }
 
@@ -858,11 +852,9 @@ public final class ReleaseBundlingSupport {
             .setMnemonic("IosBundle")
             .setProgressMessage("Bundling iOS application: %s", ruleContext.getLabel())
             .setExecutable(attributes.bundleMergeExecutable())
-            .addInput(bundleMergeControlArtifact)
+            .addInputArgument(bundleMergeControlArtifact)
             .addTransitiveInputs(bundling.getBundleContentArtifacts())
             .addOutput(intermediateArtifacts.unprocessedIpa())
-            .setCommandLine(
-                CustomCommandLine.builder().addExecPath(bundleMergeControlArtifact).build())
             .build(ruleContext));
   }
 

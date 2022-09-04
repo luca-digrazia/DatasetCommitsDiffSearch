@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.analysis.actions;
 
-import static java.nio.charset.StandardCharsets.ISO_8859_1;
-
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.errorprone.annotations.CompileTimeConstant;
@@ -31,14 +29,17 @@ import javax.annotation.concurrent.Immutable;
 public final class ParamFileInfo {
   private final ParameterFileType fileType;
   private final Charset charset;
-  private final String flagFormatString;
+  private final String flag;
   private final boolean always;
 
-  private ParamFileInfo(
-      ParameterFileType fileType, Charset charset, String flagFormatString, boolean always) {
+  public ParamFileInfo(
+      ParameterFileType fileType,
+      Charset charset,
+      @CompileTimeConstant String flag,
+      boolean always) {
     this.fileType = Preconditions.checkNotNull(fileType);
     this.charset = Preconditions.checkNotNull(charset);
-    this.flagFormatString = Preconditions.checkNotNull(flagFormatString);
+    this.flag = Preconditions.checkNotNull(flag);
     this.always = always;
   }
 
@@ -56,9 +57,11 @@ public final class ParamFileInfo {
     return charset;
   }
 
-  /** Returns the format string for the params filename on the command line (typically "@%s"). */
-  public String getFlagFormatString() {
-    return flagFormatString;
+  /**
+   * Returns the prefix for the params filename on the command line (typically "@").
+   */
+  public String getFlag() {
+    return flag;
   }
 
   /** Returns true if a params file should always be used. */
@@ -68,7 +71,7 @@ public final class ParamFileInfo {
 
   @Override
   public int hashCode() {
-    return Objects.hash(charset, flagFormatString, fileType, always);
+    return Objects.hash(charset, flag, fileType, always);
   }
 
   @Override
@@ -82,50 +85,7 @@ public final class ParamFileInfo {
     ParamFileInfo other = (ParamFileInfo) obj;
     return fileType.equals(other.fileType)
         && charset.equals(other.charset)
-        && flagFormatString.equals(other.flagFormatString)
+        && flag.equals(other.flag)
         && always == other.always;
-  }
-
-  public static Builder builder(ParameterFileType parameterFileType) {
-    return new Builder(parameterFileType);
-  }
-
-  /** Builder for a ParamFileInfo. */
-  public static class Builder {
-    private final ParameterFileType fileType;
-    private Charset charset = ISO_8859_1;
-    private String flagFormatString = "@%s";
-    private boolean always;
-
-    private Builder(ParameterFileType fileType) {
-      this.fileType = fileType;
-    }
-
-    /** Sets the encoding to write the parameter file with. */
-    public Builder setCharset(Charset charset) {
-      this.charset = charset;
-      return this;
-    }
-
-    /**
-     * Sets a format string to use for the flag that is passed to original command.
-     *
-     * <p>The format string must have a single "%s" that will be replaced by the execution path to
-     * the param file.
-     */
-    public Builder setFlagFormatString(@CompileTimeConstant String flagFormatString) {
-      this.flagFormatString = flagFormatString;
-      return this;
-    }
-
-    /** Set whether the parameter file is always used, regardless of parameter file length. */
-    public Builder setUseAlways(boolean always) {
-      this.always = always;
-      return this;
-    }
-
-    public ParamFileInfo build() {
-      return new ParamFileInfo(fileType, charset, flagFormatString, always);
-    }
   }
 }

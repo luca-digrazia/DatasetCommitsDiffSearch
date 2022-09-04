@@ -27,13 +27,13 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.MakeVariableExpander;
 import com.google.devtools.build.lib.analysis.MakeVariableExpander.ExpansionException;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.Builder;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
@@ -162,7 +162,7 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
     ruleContext.registerAction(
         ObjcRuleClasses.spawnAppleEnvActionBuilder(appleConfiguration, platform)
             .setExecutable(xcrunwrapper(ruleContext))
-            .addCommandLine(copyCommandLine)
+            .setCommandLine(copyCommandLine)
             .setMnemonic("CopyStubExecutable")
             .addOutput(outputBinary)
             .disableSandboxing()
@@ -194,8 +194,7 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
           AppleStubBinaryRule.XCENV_BASED_PATH_ATTR, PATH_NOT_NORMALIZED_ERROR);
     }
 
-    return ruleContext
-        .getExpander(makeVariableContext)
-        .expand(AppleStubBinaryRule.XCENV_BASED_PATH_ATTR, pathString);
+    return ruleContext.expandMakeVariables(
+        AppleStubBinaryRule.XCENV_BASED_PATH_ATTR, pathString, makeVariableContext);
   }
 }

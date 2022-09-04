@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.Builder;
+import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
@@ -450,7 +451,7 @@ public class AndroidResourcesProcessorBuilder {
       builder.addExecPath("--packagePath", apkOut);
       outs.add(apkOut);
     }
-    if (resourceFilter.shouldPropagateConfigs(ruleContext)) {
+    if (resourceFilter.hasConfigurationFilters() && !resourceFilter.isPrefiltering()) {
       builder.add("--resourceConfigs", resourceFilter.getConfigurationFilterString());
     }
     if (resourceFilter.hasDensities() && !resourceFilter.isPrefiltering()) {
@@ -458,16 +459,19 @@ public class AndroidResourcesProcessorBuilder {
     }
     ImmutableList<String> filteredResources = resourceFilter.getResourcesToIgnoreInExecution();
     if (!filteredResources.isEmpty()) {
-      builder.addJoined("--prefilteredResources", ",", filteredResources);
+      builder.add("--prefilteredResources", VectorArg.of(filteredResources).joinWith(","));
     }
     if (!uncompressedExtensions.isEmpty()) {
-      builder.addJoined("--uncompressedExtensions", ",", uncompressedExtensions);
+      builder.add(
+          "--uncompressedExtensions",
+          VectorArg.of(ImmutableList.copyOf(uncompressedExtensions)).joinWith(","));
     }
     if (!crunchPng) {
       builder.add("--useAaptCruncher=no");
     }
     if (!assetsToIgnore.isEmpty()) {
-      builder.addJoined("--assetsToIgnore", ",", assetsToIgnore);
+      builder.add(
+          "--assetsToIgnore", VectorArg.of(ImmutableList.copyOf(assetsToIgnore)).joinWith(","));
     }
     if (debug) {
       builder.add("--debug");

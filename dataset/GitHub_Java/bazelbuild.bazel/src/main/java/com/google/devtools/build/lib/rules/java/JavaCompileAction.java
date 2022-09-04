@@ -43,6 +43,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.CustomMultiArgv;
+import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -424,16 +425,17 @@ public final class JavaCompileAction extends SpawnAction {
         checkNotNull(javaBuilderJar);
 
         CustomCommandLine.Builder builder =
-            CustomCommandLine.builder().addPath(javaExecutable).addAll(javaBuilderJvmFlags);
+            CustomCommandLine.builder().addPath(javaExecutable).add(javaBuilderJvmFlags);
         if (!instrumentationJars.isEmpty()) {
           builder
-              .addJoinedExecPaths(
+              .addExecPaths(
                   "-cp",
-                  pathDelimiter,
-                  ImmutableList.<Artifact>builder()
-                      .addAll(instrumentationJars)
-                      .add(javaBuilderJar)
-                      .build())
+                  VectorArg.of(
+                          ImmutableList.<Artifact>builder()
+                              .addAll(instrumentationJars)
+                              .add(javaBuilderJar)
+                              .build())
+                      .joinWithDynamicString(pathDelimiter))
               .addDynamicString(javaBuilderMainClass);
         } else {
           // If there are no instrumentation jars, use simpler '-jar' option to launch JavaBuilder.
@@ -695,10 +697,10 @@ public final class JavaCompileAction extends SpawnAction {
         result.addExecPaths("--processorpath", processorPath);
       }
       if (!processorNames.isEmpty()) {
-        result.addAll("--processors", ImmutableList.copyOf(processorNames));
+        result.add("--processors", ImmutableList.copyOf(processorNames));
       }
       if (!processorFlags.isEmpty()) {
-        result.addAll("--javacopts", ImmutableList.copyOf(processorFlags));
+        result.add("--javacopts", ImmutableList.copyOf(processorFlags));
       }
       if (!sourceJars.isEmpty()) {
         result.addExecPaths("--source_jars", ImmutableList.copyOf(sourceJars));
@@ -707,7 +709,7 @@ public final class JavaCompileAction extends SpawnAction {
         result.addExecPaths("--sources", sourceFiles);
       }
       if (!javacOpts.isEmpty()) {
-        result.addAll("--javacopts", ImmutableList.copyOf(javacOpts));
+        result.add("--javacopts", ImmutableList.copyOf(javacOpts));
       }
       if (ruleKind != null) {
         result.add("--rule_kind", ruleKind);
@@ -720,7 +722,7 @@ public final class JavaCompileAction extends SpawnAction {
         } else {
           // @-prefixed strings will be assumed to be filenames and expanded by
           // {@link JavaLibraryBuildRequest}, so add an extra &at; to escape it.
-          result.addPrefixedLabel("@", targetLabel);
+          result.addWithPrefix("@", targetLabel);
         }
       }
       if (testOnly) {

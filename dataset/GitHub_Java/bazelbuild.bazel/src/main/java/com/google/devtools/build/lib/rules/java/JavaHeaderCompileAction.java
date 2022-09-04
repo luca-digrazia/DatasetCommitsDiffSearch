@@ -505,7 +505,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
       return CustomCommandLine.builder()
           .addPath(JavaCommon.getHostJavaExecutable(ruleContext))
           .add("-Xverify:none")
-          .addAll(javaToolchain.getJvmOptions())
+          .add(javaToolchain.getJvmOptions())
           .addExecPath("-jar", javaToolchain.getHeaderCompiler());
     }
 
@@ -531,7 +531,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
         result.addExecPaths("--source_jars", ImmutableList.copyOf(sourceJars));
       }
 
-      result.addAll("--javacopts", javacOpts);
+      result.add("--javacopts", javacOpts);
 
       if (ruleKind != null) {
         result.add("--rule_kind", ruleKind);
@@ -544,7 +544,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
         } else {
           // @-prefixed strings will be assumed to be params filenames and expanded,
           // so add an extra @ to escape it.
-          result.addPrefixedLabel("@", targetLabel);
+          result.addWithPrefix("@", targetLabel);
         }
       }
       result.addExecPaths("--classpath", classpathEntries);
@@ -556,10 +556,10 @@ public class JavaHeaderCompileAction extends SpawnAction {
       CustomCommandLine.Builder result = CustomCommandLine.builder();
       baseCommandLine(result, classpathEntries);
       if (!processorNames.isEmpty()) {
-        result.addAll("--processors", ImmutableList.copyOf(processorNames));
+        result.add("--processors", ImmutableList.copyOf(processorNames));
       }
       if (!processorFlags.isEmpty()) {
-        result.addAll("--javacopts", ImmutableList.copyOf(processorFlags));
+        result.add("--javacopts", ImmutableList.copyOf(processorFlags));
       }
       if (!processorPath.isEmpty()) {
         result.addExecPaths("--processorpath", processorPath);

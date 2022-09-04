@@ -35,8 +35,6 @@ import java.util.Map;
 
 /** Builds the action to package the resources for a Java rule into a jar. */
 public class ResourceJarActionBuilder {
-  public static final String MNEMONIC = "JavaResourceJar";
-
   private Artifact outputJar;
   private Map<PathFragment, Artifact> resources = ImmutableMap.of();
   private NestedSet<Artifact> resourceJars = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
@@ -143,7 +141,7 @@ public class ResourceJarActionBuilder {
             .addInputs(classpathResources)
             .setCommandLine(command.build())
             .setProgressMessage("Building Java resource jar")
-            .setMnemonic(MNEMONIC)
+            .setMnemonic("JavaResourceJar")
             .build(ruleContext));
   }
 

@@ -67,6 +67,7 @@ import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.actions.BinaryFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.Builder;
+import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
@@ -91,7 +92,6 @@ import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.apple.XcodeVersionProperties;
-import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
 import com.google.devtools.build.lib.rules.objc.ObjcCommandLineOptions.ObjcCrosstoolMode;
@@ -542,8 +542,8 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
    * @param objlistName the path suffix of the filelist artifact
    * @param inputArchives path suffixes of the expected contents of the filelist
    */
-  protected void verifyObjlist(Action originalAction, String objlistName, String... inputArchives)
-      throws Exception {
+  protected void verifyObjlist(Action originalAction, String objlistName,
+      String... inputArchives) {
     Artifact filelistArtifact =
         getFirstArtifactEndingWith(originalAction.getInputs(), objlistName);
 
@@ -568,14 +568,9 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
    * @param importedFrameworks custom framework path fragments
    * @param extraLinkArgs extra link arguments expected on the link action
    */
-  protected void verifyLinkAction(
-      Artifact binArtifact,
-      Artifact filelistArtifact,
-      String arch,
-      List<String> inputArchives,
-      List<PathFragment> importedFrameworks,
-      ExtraLinkArgs extraLinkArgs)
-      throws Exception {
+  protected void verifyLinkAction(Artifact binArtifact, Artifact filelistArtifact, String arch,
+      List<String> inputArchives, List<PathFragment> importedFrameworks,
+      ExtraLinkArgs extraLinkArgs) {
     final CommandAction binAction = (CommandAction) getGeneratingAction(binArtifact);
 
     for (String inputArchive : inputArchives) {
@@ -1360,9 +1355,6 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     assertOnlyRequiredInputsArePresentForBundledCompilation(topTarget);
     assertCoptsAndDefinesForBundlingTarget(topTarget);
     assertBundledGroupsGetCreatedAndLinked(topTarget);
-    if (getObjcCrosstoolMode() == ObjcCrosstoolMode.ALL) {
-      assertBundledCompilationUsesCrosstool(topTarget);
-    }
   }
 
   protected ImmutableList<Artifact> getAllObjectFilesLinkedInBin(Artifact bin) {
@@ -1461,22 +1453,6 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         .doesNotContain("protos/data_b.proto");
   }
 
-  /**
-   * Ensures that all middleman artifacts in the action input are expanded so that the real inputs
-   * are also included.
-   */
-  protected Iterable<Artifact> getExpandedActionInputs(Action action) {
-    List<Artifact> containedArtifacts = new ArrayList<>();
-    for (Artifact input : action.getInputs()) {
-      if (input.isMiddlemanArtifact()) {
-        Action middlemanAction = getGeneratingAction(input);
-        Iterables.addAll(containedArtifacts, getExpandedActionInputs(middlemanAction));
-      }
-      containedArtifacts.add(input);
-    }
-    return containedArtifacts;
-  }
-
   private void assertOnlyRequiredInputsArePresentForBundledCompilation(ConfiguredTarget topTarget) {
     Artifact protoHeaderA = getBinArtifact("_generated_protos/x/protos/DataA.pbobjc.h", topTarget);
     Artifact protoHeaderB = getBinArtifact("_generated_protos/x/protos/DataB.pbobjc.h", topTarget);
@@ -1502,19 +1478,19 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     assertThat(protoObjectActionC).isNotNull();
     assertThat(protoObjectActionD).isNotNull();
 
-    assertThat(getExpandedActionInputs(protoObjectActionA))
+    assertThat(protoObjectActionA.getInputs())
         .containsNoneOf(protoHeaderB, protoHeaderC, protoHeaderD);
-    assertThat(getExpandedActionInputs(protoObjectActionB))
+    assertThat(protoObjectActionB.getInputs())
         .containsNoneOf(protoHeaderA, protoHeaderC, protoHeaderD);
-    assertThat(getExpandedActionInputs(protoObjectActionC))
+    assertThat(protoObjectActionC.getInputs())
         .containsNoneOf(protoHeaderA, protoHeaderB, protoHeaderD);
-    assertThat(getExpandedActionInputs(protoObjectActionD))
+    assertThat(protoObjectActionD.getInputs())
         .containsAllOf(protoHeaderA, protoHeaderC, protoHeaderD);
-    assertThat(getExpandedActionInputs(protoObjectActionD))
+    assertThat(protoObjectActionD.getInputs())
         .doesNotContain(protoHeaderB);
   }
 
-  private void assertCoptsAndDefinesForBundlingTarget(ConfiguredTarget topTarget) throws Exception {
+  private void assertCoptsAndDefinesForBundlingTarget(ConfiguredTarget topTarget) {
     Artifact protoObject =
         getBinArtifact("_objs/x/x/_generated_protos/x/protos/DataA.pbobjc.o", topTarget);
     CommandAction protoObjectAction = (CommandAction) getGeneratingAction(protoObject);
@@ -1552,22 +1528,6 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     CommandAction binAction = (CommandAction) getGeneratingAction(bin);
     assertThat(binAction.getInputs())
         .containsAllOf(protosGroup0Lib, protosGroup1Lib, protosGroup2Lib, protosGroup3Lib);
-  }
-
-  private void assertBundledCompilationUsesCrosstool(ConfiguredTarget topTarget) {
-    Artifact protoObjectA =
-        getBinArtifact("_objs/x/x/_generated_protos/x/protos/DataA.pbobjc.o", topTarget);
-    Artifact protoObjectB =
-        getBinArtifact("_objs/x/x/_generated_protos/x/protos/DataB.pbobjc.o", topTarget);
-    Artifact protoObjectC =
-        getBinArtifact("_objs/x/x/_generated_protos/x/protos/DataC.pbobjc.o", topTarget);
-    Artifact protoObjectD =
-        getBinArtifact("_objs/x/x/_generated_protos/x/protos/DataD.pbobjc.o", topTarget);
-
-    assertThat(getGeneratingAction(protoObjectA)).isInstanceOf(CppCompileAction.class);
-    assertThat(getGeneratingAction(protoObjectB)).isInstanceOf(CppCompileAction.class);
-    assertThat(getGeneratingAction(protoObjectC)).isInstanceOf(CppCompileAction.class);
-    assertThat(getGeneratingAction(protoObjectD)).isInstanceOf(CppCompileAction.class);
   }
 
   protected void checkProtoBundlingDoesNotHappen(RuleType ruleType) throws Exception {
@@ -2182,8 +2142,9 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   }
 
   private void checkRegistersStoryboardCompileActions(
-      ConfiguredTarget target, DottedVersion minimumOsVersion, ImmutableList<String> targetDevices)
-      throws Exception {
+      ConfiguredTarget target,
+      DottedVersion minimumOsVersion,
+      ImmutableList<String> targetDevices) {
     Artifact storyboardZip = getBinArtifact("x/1.storyboard.zip", target);
     CommandAction compileAction = (CommandAction) getGeneratingAction(storyboardZip);
     assertThat(compileAction.getInputs()).containsExactly(
@@ -2201,7 +2162,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
                 .add("--minimum-deployment-target", minimumOsVersion.toString())
                 .add("--module")
                 .add("x")
-                .addBeforeEach("--target-device", targetDevices)
+                .add(VectorArg.of(targetDevices).beforeEach("--target-device"))
                 .add("x/1.storyboard")
                 .build()
                 .arguments())
@@ -2224,7 +2185,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
                 .add("--minimum-deployment-target", minimumOsVersion.toString())
                 .add("--module")
                 .add("x")
-                .addBeforeEach("--target-device", targetDevices)
+                .add(VectorArg.of(targetDevices).beforeEach("--target-device"))
                 .add("x/ja.lproj/loc.storyboard")
                 .build()
                 .arguments())

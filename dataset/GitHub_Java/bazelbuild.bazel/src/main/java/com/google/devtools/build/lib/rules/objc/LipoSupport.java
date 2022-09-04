@@ -20,8 +20,8 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
-import com.google.devtools.build.lib.rules.apple.XcodeConfigProvider;
 
 /**
  * Support for registering actions using the Apple tool "lipo", which combines artifacts of
@@ -48,12 +48,12 @@ public class LipoSupport {
     if (inputBinaries.toList().size() > 1) {
       ruleContext.registerAction(
           ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                  XcodeConfigProvider.fromRuleContext(ruleContext), platform)
+                  ruleContext.getFragment(AppleConfiguration.class), platform)
               .setMnemonic("ObjcCombiningArchitectures")
               .addTransitiveInputs(inputBinaries)
               .addOutput(outputBinary)
               .setExecutable(CompilationSupport.xcrunwrapper(ruleContext))
-              .addCommandLine(
+              .setCommandLine(
                   CustomCommandLine.builder()
                       .add(ObjcRuleClasses.LIPO)
                       .addExecPaths("-create", inputBinaries)
@@ -61,7 +61,7 @@ public class LipoSupport {
                       .build())
               .build(ruleContext));
     } else {
-      ruleContext.registerAction(SymlinkAction.toArtifact(
+      ruleContext.registerAction(new SymlinkAction(
           ruleContext.getActionOwner(),
           Iterables.getOnlyElement(inputBinaries),
           outputBinary,

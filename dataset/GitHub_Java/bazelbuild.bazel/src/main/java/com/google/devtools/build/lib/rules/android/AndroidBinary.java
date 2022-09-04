@@ -808,8 +808,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         resourceApk,
         zipAlignedApk,
         apksUnderTest,
-        nativeLibs,
-        /* isResourcesOnly = */ false);
+        nativeLibs);
 
     if (proguardOutput.getMapping() != null) {
       builder.add(
