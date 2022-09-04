@@ -14,9 +14,9 @@
 package com.google.devtools.build.lib.concurrent;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.MapMaker;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -35,16 +35,15 @@ public class FastHotKeyAtomicLongMap<T> {
   private final ConcurrentMap<T, AtomicLong> map;
 
   public static <T> FastHotKeyAtomicLongMap<T> create() {
-    return new FastHotKeyAtomicLongMap<>();
+    return new FastHotKeyAtomicLongMap<>(new MapMaker());
   }
 
-  // TODO(kak): Delete this in favor of create()
-  public static <T> FastHotKeyAtomicLongMap<T> create(int concurrencyLevel /* ignored */) {
-    return new FastHotKeyAtomicLongMap<>();
+  public static <T> FastHotKeyAtomicLongMap<T> create(int concurrencyLevel) {
+    return new FastHotKeyAtomicLongMap<>(new MapMaker().concurrencyLevel(concurrencyLevel));
   }
 
-  private FastHotKeyAtomicLongMap() {
-    this.map = new ConcurrentHashMap<>();
+  private FastHotKeyAtomicLongMap(MapMaker mapMaker) {
+    this.map = mapMaker.makeMap();
   }
 
   public long incrementAndGet(T key) {
