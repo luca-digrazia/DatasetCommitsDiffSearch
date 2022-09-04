@@ -31,6 +31,7 @@ import javax.persistence.spi.PersistenceUnitTransactionType;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.hibernate.boot.archive.scan.spi.ClassDescriptor;
 import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.cfg.Environment;
 import org.hibernate.dialect.H2Dialect;
 import org.hibernate.dialect.MariaDB103Dialect;
 import org.hibernate.dialect.PostgreSQL95Dialect;
@@ -120,25 +121,15 @@ public final class HibernateResourceProcessor {
                 hibernateOrmConfig
                         .flatMap(c -> c.schemaGeneration)
                         .ifPresent( p -> desc.getProperties().setProperty(AvailableSettings.HBM2DDL_DATABASE_ACTION, p) );
-                hibernateOrmConfig
-                        .flatMap(c -> c.showSql)
-                        .ifPresent( sql -> {
-                            if (sql.equals(Boolean.TRUE)) {
-                                desc.getProperties().setProperty(AvailableSettings.SHOW_SQL, "true");
-                                desc.getProperties().setProperty(AvailableSettings.FORMAT_SQL, "true");
-                            }
-                        });
                 descriptors.add(desc);
             });
 
         }
         else {
-            if (hibernateOrmConfig.isPresent() && hibernateOrmConfig.get().isAnyPropertySet()) {
-                hibernateOrmConfig.ifPresent(c -> {
-                    throw new ConfigurationError("Hibernate ORM configuration present in persistence.xml and Shamrock config file at the same time\n"
-                            + "If you use persistence.xml remove all shamrock.hibernate.* properties from the Shamrock config file.");
-                });
-            }
+            hibernateOrmConfig.ifPresent(c -> {
+                throw new ConfigurationError("Hibernate ORM configuration present in persistence.xml and Shamrock config file at the same time\n"
+                        + "If you use persistence.xml remove all shamrock.hibernate.* properties from the Shamrock config file.");
+            });
         }
     }
 
