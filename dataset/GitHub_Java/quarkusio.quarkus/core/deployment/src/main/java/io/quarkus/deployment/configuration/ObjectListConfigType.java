@@ -9,13 +9,11 @@ import java.util.Map;
 import java.util.function.IntFunction;
 
 import io.quarkus.deployment.AccessorFinder;
-import io.quarkus.deployment.steps.ConfigurationSetup;
 import io.quarkus.gizmo.BytecodeCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.runtime.configuration.ArrayListFactory;
 import io.quarkus.runtime.configuration.ConfigUtils;
-import io.quarkus.runtime.configuration.ExpandingConfigSource;
 import io.quarkus.runtime.configuration.NameIterator;
 import io.smallrye.config.SmallRyeConfig;
 
@@ -34,52 +32,41 @@ public class ObjectListConfigType extends ObjectConfigType {
         super(containingName, container, consumeSegment, defaultValue, expectedType);
     }
 
-    public void acceptConfigurationValue(final NameIterator name, final ExpandingConfigSource.Cache cache,
-            final SmallRyeConfig config) {
+    public void acceptConfigurationValue(final NameIterator name, final SmallRyeConfig config) {
         final CompoundConfigType container = getContainer();
         if (isConsumeSegment())
             name.previous();
-        container.acceptConfigurationValueIntoLeaf(this, name, cache, config);
+        container.acceptConfigurationValueIntoLeaf(this, name, config);
         // the iterator is not used after this point
         // if (isConsumeSegment()) name.next();
     }
 
     public void generateAcceptConfigurationValue(final BytecodeCreator body, final ResultHandle name,
-            final ResultHandle cache, final ResultHandle config) {
+            final ResultHandle config) {
         final CompoundConfigType container = getContainer();
         if (isConsumeSegment())
             body.invokeVirtualMethod(NI_PREV_METHOD, name);
-        container.generateAcceptConfigurationValueIntoLeaf(body, this, name, cache, config);
+        container.generateAcceptConfigurationValueIntoLeaf(body, this, name, config);
         // the iterator is not used after this point
         // if (isConsumeSegment()) body.invokeVirtualMethod(NI_NEXT_METHOD, name);
     }
 
-    void getDefaultValueIntoEnclosingGroup(final Object enclosing, final ExpandingConfigSource.Cache cache,
-            final SmallRyeConfig config, final Field field) {
+    void getDefaultValueIntoEnclosingGroup(final Object enclosing, final SmallRyeConfig config, final Field field) {
         try {
             field.set(enclosing, defaultValue.isEmpty() ? Collections.emptyList()
-                    : ConfigUtils.getDefaults(
-                            config,
-                            ExpandingConfigSource.expandValue(defaultValue, cache),
-                            expectedType,
-                            ArrayListFactory.getInstance()));
+                    : ConfigUtils.getDefaults(config, defaultValue, expectedType, ArrayListFactory.getInstance()));
         } catch (IllegalAccessException e) {
             throw toError(e);
         }
     }
 
     void generateGetDefaultValueIntoEnclosingGroup(final BytecodeCreator body, final ResultHandle enclosing,
-            final MethodDescriptor setter, final ResultHandle cache, final ResultHandle config) {
+            final MethodDescriptor setter, final ResultHandle config) {
         final ResultHandle value;
         if (defaultValue.isEmpty()) {
             value = body.invokeStaticMethod(EMPTY_LIST_METHOD);
         } else {
-            value = body.invokeStaticMethod(CU_GET_DEFAULTS_METHOD, config,
-                    cache == null ? body.load(defaultValue)
-                            : body.invokeStaticMethod(
-                                    ConfigurationSetup.ECS_EXPAND_VALUE,
-                                    body.load(defaultValue),
-                                    cache),
+            value = body.invokeStaticMethod(CU_GET_DEFAULTS_METHOD, config, body.load(defaultValue),
                     body.loadClass(expectedType), body.invokeStaticMethod(ALF_GET_INST_METHOD));
         }
         body.invokeStaticMethod(setter, enclosing, value);
@@ -111,7 +98,7 @@ public class ObjectListConfigType extends ObjectConfigType {
     }
 
     public ResultHandle writeInitialization(final BytecodeCreator body, final AccessorFinder accessorFinder,
-            final ResultHandle cache, final ResultHandle config) {
+            final ResultHandle config) {
         return body.checkCast(body.invokeStaticMethod(CU_GET_DEFAULTS_METHOD, config, body.load(defaultValue),
                 body.loadClass(expectedType), body.invokeStaticMethod(ALF_GET_INST_METHOD)), List.class);
     }
