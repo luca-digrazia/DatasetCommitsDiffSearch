@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.Root;
-import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAspectOrderException;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
@@ -963,8 +962,7 @@ public class BuildView {
   @VisibleForTesting
   public Iterable<ConfiguredTarget> getDirectPrerequisitesForTesting(
       EventHandler eventHandler, ConfiguredTarget ct, BuildConfigurationCollection configurations)
-      throws EvalException, InvalidConfigurationException,
-      InterruptedException, InconsistentAspectOrderException {
+          throws EvalException, InvalidConfigurationException, InterruptedException {
     return skyframeExecutor.getConfiguredTargets(
         eventHandler, ct.getConfiguration(),
         ImmutableSet.copyOf(
@@ -976,8 +974,7 @@ public class BuildView {
   public OrderedSetMultimap<Attribute, Dependency> getDirectPrerequisiteDependenciesForTesting(
       final EventHandler eventHandler, final ConfiguredTarget ct,
       BuildConfigurationCollection configurations)
-      throws EvalException, InvalidConfigurationException, InterruptedException,
-             InconsistentAspectOrderException {
+      throws EvalException, InvalidConfigurationException, InterruptedException {
     if (!(ct.getTarget() instanceof Rule)) {
       return OrderedSetMultimap.create();
     }
@@ -1065,8 +1062,7 @@ public class BuildView {
   private OrderedSetMultimap<Attribute, ConfiguredTarget> getPrerequisiteMapForTesting(
       final EventHandler eventHandler, ConfiguredTarget target,
       BuildConfigurationCollection configurations)
-      throws EvalException, InvalidConfigurationException,
-             InterruptedException, InconsistentAspectOrderException {
+      throws EvalException, InvalidConfigurationException, InterruptedException {
     OrderedSetMultimap<Attribute, Dependency> depNodeNames =
         getDirectPrerequisiteDependenciesForTesting(eventHandler, target, configurations);
 
@@ -1098,8 +1094,7 @@ public class BuildView {
   public RuleContext getRuleContextForTesting(
       ConfiguredTarget target, StoredEventHandler eventHandler,
       BuildConfigurationCollection configurations)
-      throws EvalException, InvalidConfigurationException, InterruptedException,
-             InconsistentAspectOrderException {
+          throws EvalException, InvalidConfigurationException, InterruptedException {
     BuildConfiguration targetConfig = target.getConfiguration();
     CachingAnalysisEnvironment env =
         new CachingAnalysisEnvironment(getArtifactFactory(),
@@ -1116,8 +1111,7 @@ public class BuildView {
   @VisibleForTesting
   public RuleContext getRuleContextForTesting(EventHandler eventHandler, ConfiguredTarget target,
       AnalysisEnvironment env, BuildConfigurationCollection configurations)
-      throws EvalException, InvalidConfigurationException, InterruptedException,
-             InconsistentAspectOrderException {
+          throws EvalException, InvalidConfigurationException, InterruptedException {
     BuildConfiguration targetConfig = target.getConfiguration();
     return new RuleContext.Builder(
             env,
@@ -1145,8 +1139,7 @@ public class BuildView {
   public ConfiguredTarget getPrerequisiteConfiguredTargetForTesting(
       EventHandler eventHandler, ConfiguredTarget dependentTarget, Label desiredTarget,
       BuildConfigurationCollection configurations)
-      throws EvalException, InvalidConfigurationException, InterruptedException,
-             InconsistentAspectOrderException {
+      throws EvalException, InvalidConfigurationException, InterruptedException {
     Collection<ConfiguredTarget> configuredTargets =
         getPrerequisiteMapForTesting(eventHandler, dependentTarget, configurations).values();
     for (ConfiguredTarget ct : configuredTargets) {
