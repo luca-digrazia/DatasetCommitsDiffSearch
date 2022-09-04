@@ -7,14 +7,14 @@ import io.dropwizard.setup.Environment;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.component.AbstractLifeCycle;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.io.IOException;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -32,8 +32,8 @@ public class ServerCommandTest {
         protected void doStop() throws Exception {
             super.doStop();
             if (ServerCommandTest.this.throwException) {
-                System.out.println("throw NullPointerException, see Issue#1557");
-                throw new NullPointerException();
+               System.out.println("throw NullPointerException, see Issue#1557");
+               throw new NullPointerException();
             }
         }
     };
@@ -44,31 +44,31 @@ public class ServerCommandTest {
     private final Configuration configuration = mock(Configuration.class);
     private boolean throwException = false;
 
-    @BeforeEach
+    @Before
     public void setUp() throws Exception {
         when(serverFactory.build(environment)).thenReturn(server);
         when(configuration.getServerFactory()).thenReturn(serverFactory);
     }
 
-    @AfterEach
+    @After
     public void tearDown() throws Exception {
         server.stop();
     }
 
     @Test
-    public void hasAName() {
+    public void hasAName() throws Exception {
         assertThat(command.getName())
                 .isEqualTo("server");
     }
 
     @Test
-    public void hasADescription() {
+    public void hasADescription() throws Exception {
         assertThat(command.getDescription())
                 .isEqualTo("Runs the Dropwizard application as an HTTP server");
     }
 
     @Test
-    public void hasTheApplicationsConfigurationClass() {
+    public void hasTheApplicationsConfigurationClass() throws Exception {
         assertThat(command.getConfigurationClass())
                 .isEqualTo(application.getConfigurationClass());
     }
@@ -82,7 +82,7 @@ public class ServerCommandTest {
     }
 
     @Test
-    public void stopsAServerIfThereIsAnErrorStartingIt() {
+    public void stopsAServerIfThereIsAnErrorStartingIt() throws Exception {
         this.throwException = true;
         server.addBean(new AbstractLifeCycle() {
             @Override
@@ -91,9 +91,13 @@ public class ServerCommandTest {
             }
         });
 
-        assertThatExceptionOfType(IOException.class)
-            .isThrownBy(() -> command.run(environment, namespace, configuration))
-            .withMessage("oh crap");
+        try {
+            command.run(environment, namespace, configuration);
+            failBecauseExceptionWasNotThrown(IOException.class);
+        } catch (IOException e) {
+            assertThat(e.getMessage())
+                    .isEqualTo("oh crap");
+        }
 
         assertThat(server.isStarted())
                 .isFalse();
