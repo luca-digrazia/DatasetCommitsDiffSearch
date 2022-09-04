@@ -24,12 +24,11 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.packages.StarlarkProviderIdentifier;
+import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.AndroidResourceSupportRule;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
-import com.google.devtools.build.lib.rules.java.JavaPluginInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleClasses;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.ProguardLibraryRule;
@@ -116,7 +115,7 @@ public final class AndroidLibraryBaseRule implements RuleDefinition {
         .add(
             attr("exported_plugins", LABEL_LIST)
                 .cfg(HostTransition.createFactory())
-                .mandatoryProviders(JavaPluginInfo.PROVIDER.id())
+                .allowedRuleClasses("java_plugin")
                 .allowedFileTypes(FileTypeSet.NO_FILE))
         .add(attr("alwayslink", BOOLEAN).undocumented("purely informational for now"))
         /* <!-- #BLAZE_RULE(android_library).ATTRIBUTE(neverlink) -->
@@ -192,7 +191,7 @@ public final class AndroidLibraryBaseRule implements RuleDefinition {
             attr("idl_preprocessed", LABEL_LIST)
                 .direct_compile_time_input()
                 .allowedFileTypes(AndroidRuleClasses.ANDROID_IDL))
-        .advertiseStarlarkProvider(StarlarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
+        .advertiseSkylarkProvider(SkylarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
         .build();
   }
 
