@@ -28,12 +28,14 @@ import javax.annotation.Nullable;
  * <p>V is the class of a defaultValue (Expression at compile-time, Object at runtime), T is the
  * class of a type (Expression at compile-time, SkylarkType at runtime).
  */
-public abstract class Parameter extends Node {
+public abstract class Parameter<V, T> extends Node {
 
-  @Nullable private final Identifier identifier;
+  @Nullable protected final Identifier identifier;
+  @Nullable protected final T type;
 
-  private Parameter(@Nullable Identifier identifier) {
+  private Parameter(@Nullable Identifier identifier, @Nullable T type) {
     this.identifier = identifier;
+    this.type = type;
   }
 
   @Nullable
@@ -46,8 +48,17 @@ public abstract class Parameter extends Node {
     return identifier;
   }
 
+  public boolean hasName() {
+    return true;
+  }
+
   @Nullable
-  public Expression getDefaultValue() {
+  public T getType() {
+    return type;
+  }
+
+  @Nullable
+  public V getDefaultValue() {
     return null;
   }
 
@@ -63,10 +74,14 @@ public abstract class Parameter extends Node {
    * Syntax node for a mandatory parameter, {@code f(id)}. It may be positional or keyword-only
    * depending on its position.
    */
-  public static final class Mandatory extends Parameter {
+  public static final class Mandatory<V, T> extends Parameter<V, T> {
 
     Mandatory(Identifier identifier) {
-      super(identifier);
+      this(identifier, null);
+    }
+
+    Mandatory(Identifier identifier, @Nullable T type) {
+      super(identifier, type);
     }
 
     @Override
@@ -79,18 +94,22 @@ public abstract class Parameter extends Node {
    * Syntax node for an optional parameter, {@code f(id=expr).}. It may be positional or
    * keyword-only depending on its position.
    */
-  public static final class Optional extends Parameter {
+  public static final class Optional<V, T> extends Parameter<V, T> {
 
-    public final Expression defaultValue;
+    public final V defaultValue;
 
-    Optional(Identifier identifier, @Nullable Expression defaultValue) {
-      super(identifier);
+    Optional(Identifier identifier, @Nullable V defaultValue) {
+      this(identifier, null, defaultValue);
+    }
+
+    Optional(Identifier identifier, @Nullable T type, @Nullable V defaultValue) {
+      super(identifier, type);
       this.defaultValue = defaultValue;
     }
 
     @Override
     @Nullable
-    public Expression getDefaultValue() {
+    public V getDefaultValue() {
       return defaultValue;
     }
 
@@ -98,9 +117,13 @@ public abstract class Parameter extends Node {
     public void prettyPrint(Appendable buffer) throws IOException {
       buffer.append(getName());
       buffer.append('=');
-      defaultValue.prettyPrint(buffer);
+      // This should only ever be used on a parameter representing static information, i.e. with V
+      // and T instantiated as Expression.
+      ((Expression) defaultValue).prettyPrint(buffer);
     }
 
+    // Keep this as a separate method so that it can be used regardless of what V and T are
+    // parameterized with.
     @Override
     public String toString() {
       return getName() + "=" + defaultValue;
@@ -108,10 +131,19 @@ public abstract class Parameter extends Node {
   }
 
   /** Syntax node for a star parameter, {@code f(*identifier)} or or {@code f(..., *, ...)}. */
-  public static final class Star extends Parameter {
+  public static final class Star<V, T> extends Parameter<V, T> {
+
+    Star(@Nullable Identifier identifier, @Nullable T type) {
+      super(identifier, type);
+    }
 
     Star(@Nullable Identifier identifier) {
-      super(identifier);
+      this(identifier, null);
+    }
+
+    @Override
+    public boolean hasName() {
+      return getName() != null;
     }
 
     @Override
@@ -124,10 +156,14 @@ public abstract class Parameter extends Node {
   }
 
   /** Syntax node for a parameter of the form {@code f(**identifier)}. */
-  public static final class StarStar extends Parameter {
+  public static final class StarStar<V, T> extends Parameter<V, T> {
+
+    StarStar(Identifier identifier, @Nullable T type) {
+      super(identifier, type);
+    }
 
     StarStar(Identifier identifier) {
-      super(identifier);
+      this(identifier, null);
     }
 
     @Override
@@ -138,7 +174,8 @@ public abstract class Parameter extends Node {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public void accept(NodeVisitor visitor) {
-    visitor.visit(this);
+    visitor.visit((Parameter<Expression, Expression>) this);
   }
 }

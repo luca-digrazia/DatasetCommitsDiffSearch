@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.syntax;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.devtools.build.lib.events.Location;
 import java.io.IOException;
 import java.util.List;
@@ -55,9 +56,17 @@ public abstract class Node {
 
   private Location location;
 
-  Node() {}
+  protected Node() {}
 
-  final void setLocation(Location location) {
+  /**
+   * Returns whether this node represents a new scope, e.g. a function call.
+   */
+  protected boolean isNewScope()  {
+    return false;
+  }
+
+  @VisibleForTesting  // productionVisibility = Visibility.PACKAGE_PRIVATE
+  public void setLocation(Location location) {
     this.location = location;
   }
 
@@ -67,7 +76,7 @@ public abstract class Node {
     return node;
   }
 
-  public final Location getLocation() {
+  public Location getLocation() {
     return location;
   }
 

@@ -101,18 +101,18 @@ final class Eval {
   }
 
   private void execDef(DefStatement node) throws EvalException, InterruptedException {
+    List<Expression> defaultExpressions = node.getSignature().getDefaultValues();
     ArrayList<Object> defaultValues = null;
-    for (Parameter param : node.getParameters()) {
-      if (param.getDefaultValue() != null) {
-        if (defaultValues == null) {
-          defaultValues = new ArrayList<>(node.getSignature().numOptionals());
-        }
-        defaultValues.add(eval(thread, param.getDefaultValue()));
+
+    if (defaultExpressions != null) {
+      defaultValues = new ArrayList<>(defaultExpressions.size());
+      for (Expression expr : defaultExpressions) {
+        defaultValues.add(eval(thread, expr));
       }
     }
 
     // TODO(laurentlb): Could be moved to the Parser or the ValidationEnvironment?
-    FunctionSignature sig = node.getSignature();
+    FunctionSignature sig = node.getSignature().getSignature();
     if (sig.numMandatoryNamedOnly() > 0) {
       throw new EvalException(node.getLocation(), "Keyword-only argument is forbidden.");
     }
