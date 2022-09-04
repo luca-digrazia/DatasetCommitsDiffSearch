@@ -22,11 +22,9 @@ import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 import org.eclipse.jetty.util.thread.Scheduler;
 import org.eclipse.jetty.util.thread.ThreadPool;
-import org.hibernate.validator.valuehandling.UnwrapValidatedValue;
 
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import static com.codahale.metrics.MetricRegistry.name;
@@ -143,15 +141,13 @@ import static com.codahale.metrics.MetricRegistry.name;
  *     </tr>
  *     <tr>
  *         <td>{@code acceptorThreads}</td>
- *         <td>(Jetty's default)</td>
- *         <td>The number of worker threads dedicated to accepting connections.
- *         By default is <i>max</i>(1, <i>min</i>(4, #CPUs/8)).</td>
+ *         <td>half the # of CPUs</td>
+ *         <td>The number of worker threads dedicated to accepting connections.</td>
  *     </tr>
  *     <tr>
  *         <td>{@code selectorThreads}</td>
- *         <td>(Jetty's default)</td>
- *         <td>The number of worker threads dedicated to sending and receiving data.
- *         By default is <i>max</i>(1, <i>min</i>(4, #CPUs/2)).</td>
+ *         <td>the # of CPUs</td>
+ *         <td>The number of worker threads dedicated to sending and receiving data.</td>
  *     </tr>
  *     <tr>
  *         <td>{@code acceptQueueSize}</td>
@@ -263,12 +259,10 @@ public class HttpConnectorFactory implements ConnectorFactory {
     private Size maxBufferPoolSize = Size.kilobytes(64);
 
     @Min(1)
-    @UnwrapValidatedValue
-    private Optional<Integer> acceptorThreads = Optional.empty();
+    private int acceptorThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
 
     @Min(1)
-    @UnwrapValidatedValue
-    private Optional<Integer> selectorThreads = Optional.empty();
+    private int selectorThreads = Runtime.getRuntime().availableProcessors();
 
     @Min(0)
     private Integer acceptQueueSize;
@@ -411,22 +405,22 @@ public class HttpConnectorFactory implements ConnectorFactory {
     }
 
     @JsonProperty
-    public Optional<Integer> getAcceptorThreads() {
+    public int getAcceptorThreads() {
         return acceptorThreads;
     }
 
     @JsonProperty
-    public void setAcceptorThreads(Optional<Integer> acceptorThreads) {
+    public void setAcceptorThreads(int acceptorThreads) {
         this.acceptorThreads = acceptorThreads;
     }
 
     @JsonProperty
-    public Optional<Integer> getSelectorThreads() {
+    public int getSelectorThreads() {
         return selectorThreads;
     }
 
     @JsonProperty
-    public void setSelectorThreads(Optional<Integer> selectorThreads) {
+    public void setSelectorThreads(int selectorThreads) {
         this.selectorThreads = selectorThreads;
     }
 
@@ -536,8 +530,8 @@ public class HttpConnectorFactory implements ConnectorFactory {
                                                               threadPool,
                                                               scheduler,
                                                               bufferPool,
-                                                              acceptorThreads.orElse(-1),
-                                                              selectorThreads.orElse(-1),
+                                                              acceptorThreads,
+                                                              selectorThreads,
                                                               factories);
         connector.setPort(port);
         connector.setHost(bindHost);
