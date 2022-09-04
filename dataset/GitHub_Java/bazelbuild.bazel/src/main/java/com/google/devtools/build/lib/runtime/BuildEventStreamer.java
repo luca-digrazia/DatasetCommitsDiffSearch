@@ -29,7 +29,6 @@ import com.google.common.eventbus.AllowConcurrentEvents;
 import com.google.common.eventbus.Subscribe;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.ActionExecutedEvent;
-import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BuildConfigurationEvent;
 import com.google.devtools.build.lib.actions.CompletionContext;
 import com.google.devtools.build.lib.actions.EventReportingArtifacts;
@@ -37,14 +36,12 @@ import com.google.devtools.build.lib.actions.EventReportingArtifacts.ReportedArt
 import com.google.devtools.build.lib.analysis.BuildInfoEvent;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.analysis.extra.ExtraAction;
-import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.buildeventstream.AbortedEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildCompletingEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventIdUtil;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.Aborted;
+import com.google.devtools.build.lib.buildeventstream.BuildEventId;
+import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.Aborted.AbortReason;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithConfiguration;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithOrderConstraint;
@@ -60,10 +57,10 @@ import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.NoAnalyzeEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.NoExecutionEvent;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.pkgcache.TargetParsingCompleteEvent;
-import com.google.devtools.build.lib.runtime.CountingArtifactGroupNamer.LatchedGroupName;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.errorprone.annotations.concurrent.GuardedBy;
 import java.util.ArrayList;
@@ -104,7 +101,6 @@ public class BuildEventStreamer {
   private int progressCount;
 
   private final CountingArtifactGroupNamer artifactGroupNamer;
-  private final String oomMessage;
   private OutErrProvider outErrProvider;
 
   @GuardedBy("this")
@@ -137,7 +133,9 @@ public class BuildEventStreamer {
   private ImmutableMap<BuildEventTransport, ListenableFuture<Void>> halfCloseFuturesMap =
       ImmutableMap.of();
 
-  /** Provider for stdout and stderr output. */
+  /**
+   * Provider for stdout and stderr output.
+   */
   public interface OutErrProvider {
     /**
      * Return the chunks of stdout that were produced since the last call to this function (or the
@@ -158,14 +156,19 @@ public class BuildEventStreamer {
   private BuildEventStreamer(
       Collection<BuildEventTransport> transports,
       BuildEventStreamOptions options,
-      CountingArtifactGroupNamer artifactGroupNamer,
-      String oomMessage) {
+      CountingArtifactGroupNamer artifactGroupNamer) {
     this.transports = transports;
     this.besOptions = options;
     this.announcedEvents = null;
     this.progressCount = 0;
     this.artifactGroupNamer = artifactGroupNamer;
-    this.oomMessage = oomMessage;
+  }
+
+  /** Creates a new build event streamer with default options. */
+  public BuildEventStreamer(
+      Collection<BuildEventTransport> transports,
+      CountingArtifactGroupNamer namer) {
+    this(transports, new BuildEventStreamOptions(), namer);
   }
 
   @ThreadCompatible
@@ -284,17 +287,19 @@ public class BuildEventStreamer {
    * {@link BuildCompletingEvent} that caused the early end of the stream.
    */
   private synchronized void clearMissingStartEvent(BuildEventId id) {
-    if (pendingEvents.containsKey(BuildEventIdUtil.buildStartedId())) {
-      ImmutableSet.Builder<BuildEventId> children = ImmutableSet.builder();
+    if (pendingEvents.containsKey(BuildEventId.buildStartedId())) {
+      ImmutableSet.Builder<BuildEventId> children = ImmutableSet.<BuildEventId>builder();
       children.add(ProgressEvent.INITIAL_PROGRESS_UPDATE);
       children.add(id);
       children.addAll(
-          pendingEvents.get(BuildEventIdUtil.buildStartedId()).stream()
+          pendingEvents
+              .get(BuildEventId.buildStartedId())
+              .stream()
               .map(BuildEvent::getEventId)
-              .collect(ImmutableSet.toImmutableSet()));
+              .collect(ImmutableSet.<BuildEventId>toImmutableSet()));
       buildEvent(
           new AbortedEvent(
-              BuildEventIdUtil.buildStartedId(),
+              BuildEventId.buildStartedId(),
               children.build(),
               getLastAbortReason(),
               getAbortReasonDetails()));
@@ -333,15 +338,11 @@ public class BuildEventStreamer {
     return closed;
   }
 
-  public void closeOnAbort(AbortReason reason) {
-    close(checkNotNull(reason));
-  }
-
   public void close() {
-    close(/*reason=*/ null);
+    close(null);
   }
 
-  private synchronized void close(@Nullable AbortReason reason) {
+  public synchronized void close(@Nullable AbortReason reason) {
     if (closed) {
       return;
     }
@@ -357,41 +358,42 @@ public class BuildEventStreamer {
 
     ImmutableMap.Builder<BuildEventTransport, ListenableFuture<Void>> closeFuturesMapBuilder =
         ImmutableMap.builder();
-    for (BuildEventTransport transport : transports) {
+    for (final BuildEventTransport transport : transports) {
       closeFuturesMapBuilder.put(transport, transport.close());
     }
     closeFuturesMap = closeFuturesMapBuilder.build();
 
     ImmutableMap.Builder<BuildEventTransport, ListenableFuture<Void>> halfCloseFuturesMapBuilder =
         ImmutableMap.builder();
-    for (BuildEventTransport transport : transports) {
+    for (final BuildEventTransport transport : transports) {
       halfCloseFuturesMapBuilder.put(transport, transport.getHalfCloseFuture());
     }
     halfCloseFuturesMap = halfCloseFuturesMapBuilder.build();
   }
 
-  private void maybeReportArtifactSet(CompletionContext ctx, NestedSet<?> set) {
-    try (LatchedGroupName lockedName = artifactGroupNamer.maybeName(set)) {
-      if (lockedName == null) {
-        return;
-      }
-      set = NamedArtifactGroup.expandSet(ctx, set);
-      // Invariant: all leaf successors ("direct elements") of set are ExpandedArtifacts.
-
-      // We only split if the max number of entries is at least 2 (it must be at least a binary
-      // tree). The method throws for smaller values.
-      if (besOptions.maxNamedSetEntries >= 2) {
-        // We only split the event after naming it to avoid splitting the same node multiple times.
-        // Note that the artifactGroupNames keeps references to the individual pieces, so this can
-        // double the memory consumption of large nested sets.
-        set = set.splitIfExceedsMaximumSize(besOptions.maxNamedSetEntries);
-      }
-
-      for (NestedSet<?> succ : set.getNonLeaves()) {
-        maybeReportArtifactSet(ctx, succ);
-      }
-      post(new NamedArtifactGroup(lockedName.getName(), ctx, set));
+  private void maybeReportArtifactSet(CompletionContext ctx, NestedSetView<?> view) {
+    String name = artifactGroupNamer.maybeName(view);
+    if (name == null) {
+      return;
     }
+    view = NamedArtifactGroup.expandView(ctx, view);
+
+    // We only split if the max number of entries is at least 2 (it must be at least a binary tree).
+    // The method throws for smaller values.
+    if (besOptions.maxNamedSetEntries >= 2) {
+      // We only split the event after naming it to avoid splitting the same node multiple times.
+      // Note that the artifactGroupNames keeps references to the individual pieces, so this can
+      // double the memory consumption of large nested sets.
+      view = view.splitIfExceedsMaximumSize(besOptions.maxNamedSetEntries);
+    }
+    for (NestedSetView<?> transitive : view.transitives()) {
+      maybeReportArtifactSet(ctx, transitive);
+    }
+    post(new NamedArtifactGroup(name, ctx, view));
+  }
+
+  private void maybeReportArtifactSet(CompletionContext ctx, NestedSet<?> set) {
+    maybeReportArtifactSet(ctx, new NestedSetView<>(set));
   }
 
   private void maybeReportConfiguration(BuildEvent configuration) {
@@ -426,6 +428,7 @@ public class BuildEventStreamer {
 
   @Subscribe
   @AllowConcurrentEvents
+  @SuppressWarnings("unchecked")
   public void buildEvent(BuildEvent event) {
     if (finalEventsToCome != null) {
       synchronized (this) {
@@ -444,9 +447,8 @@ public class BuildEventStreamer {
 
     if (event instanceof BuildStartingEvent) {
       BuildRequest buildRequest = ((BuildStartingEvent) event).getRequest();
-      isTestCommand =
-          "test".equals(buildRequest.getCommandName())
-              || "coverage".equals(buildRequest.getCommandName());
+      isTestCommand = "test".equals(buildRequest.getCommandName())
+          || "coverage".equals(buildRequest.getCommandName());
     }
 
     if (event instanceof BuildEventWithConfiguration) {
@@ -457,13 +459,14 @@ public class BuildEventStreamer {
 
     if (event instanceof EventReportingArtifacts) {
       ReportedArtifacts reportedArtifacts = ((EventReportingArtifacts) event).reportedArtifacts();
-      for (NestedSet<Artifact> artifactSet : reportedArtifacts.artifacts) {
-        maybeReportArtifactSet(reportedArtifacts.completionContext, artifactSet);
+      for (NestedSet<?> artifactSet : reportedArtifacts.artifacts) {
+        maybeReportArtifactSet(
+            reportedArtifacts.completionContext, (NestedSet<Object>) artifactSet);
       }
     }
 
     if (event instanceof BuildCompletingEvent
-        && !event.getEventId().equals(BuildEventIdUtil.buildStartedId())) {
+        && !event.getEventId().equals(BuildEventId.buildStartedId())) {
       clearMissingStartEvent(event.getEventId());
     }
 
@@ -484,7 +487,9 @@ public class BuildEventStreamer {
 
     if (event instanceof BuildCompleteEvent) {
       BuildCompleteEvent buildCompleteEvent = (BuildCompleteEvent) event;
-      if (isCrash(buildCompleteEvent) || isCatastrophe(buildCompleteEvent)) {
+      if (isCrash(buildCompleteEvent)) {
+        addAbortReason(AbortReason.INTERNAL);
+      } else if (isCatastrophe(buildCompleteEvent)) {
         addAbortReason(AbortReason.INTERNAL);
       } else if (isIncomplete(buildCompleteEvent)) {
         addAbortReason(AbortReason.INCOMPLETE);
@@ -514,7 +519,7 @@ public class BuildEventStreamer {
     return event.getResult().wasCatastrophe();
   }
 
-  private static boolean isIncomplete(BuildCompleteEvent event) {
+  private boolean isIncomplete(BuildCompleteEvent event) {
     return !event.getResult().getSuccess()
         && !event.getResult().wasCatastrophe()
         && event.getResult().getStopOnFirstFailure();
@@ -609,7 +614,7 @@ public class BuildEventStreamer {
     }
   }
 
-  private static void consumeAsPairsofStrings(
+  private static <T> void consumeAsPairsofStrings(
       Iterable<String> leftIterable,
       Iterable<String> rightIterable,
       BiConsumer<String, String> biConsumer,
@@ -621,7 +626,7 @@ public class BuildEventStreamer {
         (s1, s2) -> lastConsumer.accept(nullToEmpty(s1), nullToEmpty(s2)));
   }
 
-  private static void consumeAsPairsofStrings(
+  private static <T> void consumeAsPairsofStrings(
       Iterable<String> leftIterable,
       Iterable<String> rightIterable,
       BiConsumer<String, String> biConsumer) {
@@ -718,7 +723,7 @@ public class BuildEventStreamer {
   }
 
   /** Return true if the test summary contains no actual test runs. */
-  private static boolean isVacuousTestSummary(BuildEvent event) {
+  private boolean isVacuousTestSummary(BuildEvent event) {
     return event instanceof TestSummary && (((TestSummary) event).totalRuns() == 0);
   }
 
@@ -746,45 +751,38 @@ public class BuildEventStreamer {
   }
 
   /**
-   * Stores the {@link AbortReason} for later reporting on BEP pending events.
-   *
-   * <p>In case of multiple abort reasons:
+   * Stores the abort reason for later reporting on BEP pending events. In case of multiple abort
+   * reasons:
    *
    * <ul>
-   *   <li>Only the most recent reason will be reported as the main {@link AbortReason} in BEP.
-   *   <li>All previous reasons will appear in the {@link Aborted#getDescription} message.
+   *   <li>Only the most recent reason will be reported as the main AbortReason in BEP.
+   *   <li>All previous AbortReason will appear in Aborted#getDescription message.
    * </ul>
    */
-  private synchronized void addAbortReason(AbortReason reason) {
+  private synchronized void addAbortReason(BuildEventStreamProtos.Aborted.AbortReason reason) {
     abortReasons.add(reason);
   }
 
-  /**
-   * Returns the most recent {@link AbortReason} or {@link AbortReason#UNKNOWN} if no reason was
-   * set.
-   */
+  /** @return the most recent AbortReason or UNKNOWN if no value was set. */
   private synchronized AbortReason getLastAbortReason() {
-    return Iterables.getLast(abortReasons, AbortReason.UNKNOWN);
+    return abortReasons.isEmpty() ? AbortReason.UNKNOWN : Iterables.getLast(abortReasons);
   }
 
   /**
-   * Returns a detailed message explaining the most recent {@link AbortReason} (and possibly
-   * previous reasons).
+   * @return Detailed message explaining the most recent AbortReason (and possibly previous
+   *     reasons).
    */
   private synchronized String getAbortReasonDetails() {
-    if (abortReasons.size() == 1
-        && Iterables.getOnlyElement(abortReasons) == AbortReason.OUT_OF_MEMORY) {
-      return BugReport.constructOomExitMessage(oomMessage);
-    }
-    return abortReasons.size() > 1 ? "Multiple abort reasons reported: " + abortReasons : "";
+    return abortReasons.size() <= 1
+        ? ""
+        : String.format("Multiple abort reasons reported: %s", abortReasons);
   }
 
   /** A builder for {@link BuildEventStreamer}. */
-  public static final class Builder {
+  public static class Builder {
     private Set<BuildEventTransport> buildEventTransports;
     private BuildEventStreamOptions besStreamOptions;
     private CountingArtifactGroupNamer artifactGroupNamer;
-    private String oomMessage;
 
     public Builder buildEventTransports(Set<BuildEventTransport> value) {
       this.buildEventTransports = value;
@@ -801,17 +799,12 @@ public class BuildEventStreamer {
       return this;
     }
 
-    public Builder oomMessage(String oomMessage) {
-      this.oomMessage = oomMessage;
-      return this;
-    }
-
     public BuildEventStreamer build() {
       return new BuildEventStreamer(
           checkNotNull(buildEventTransports),
           checkNotNull(besStreamOptions),
-          checkNotNull(artifactGroupNamer),
-          nullToEmpty(oomMessage));
+          checkNotNull(artifactGroupNamer));
     }
   }
 }
+
