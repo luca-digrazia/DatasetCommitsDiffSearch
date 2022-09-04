@@ -20,6 +20,7 @@ import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.LabelAndConfiguration;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
@@ -32,10 +33,11 @@ import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkApiProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
+import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
+import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.Printer;
 import java.util.function.Consumer;
@@ -61,19 +63,18 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
     DONT_CHECK
   }
   /** A set of this target's implicitDeps. */
-  private final ImmutableSet<ConfiguredTargetKey> implicitDeps;
+  private final ImmutableSet<LabelAndConfiguration> implicitDeps;
 
   /*
    * An interner for the implicitDeps set. {@link Util.findImplicitDeps} is called upon every
    * construction of a RuleConfiguredTarget and we expect many of these targets to contain the same
    * set of implicit deps so this reduces the memory load per build.
    */
-  private static final Interner<ImmutableSet<ConfiguredTargetKey>> IMPLICIT_DEPS_INTERNER =
+  private static final Interner<ImmutableSet<LabelAndConfiguration>> IMPLICIT_DEPS_INTERNER =
       BlazeInterners.newWeakInterner();
 
   private final TransitiveInfoProviderMap providers;
   private final ImmutableMap<Label, ConfigMatchingProvider> configConditions;
-  private final String ruleClassString;
 
   public RuleConfiguredTarget(RuleContext ruleContext, TransitiveInfoProviderMap providers) {
     super(ruleContext);
@@ -96,7 +97,6 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
     this.providers = providerBuilder.build();
     this.configConditions = ruleContext.getConfigConditions();
     this.implicitDeps = IMPLICIT_DEPS_INTERNER.intern(Util.findImplicitDeps(ruleContext));
-    this.ruleClassString = ruleContext.getRule().getRuleClass();
 
     // If this rule is the run_under target, then check that we have an executable; note that
     // run_under is only set in the target configuration, and the target must also be analyzed for
@@ -124,13 +124,8 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
     return configConditions;
   }
 
-  public ImmutableSet<ConfiguredTargetKey> getImplicitDeps() {
+  public ImmutableSet<LabelAndConfiguration> getImplicitDeps() {
     return implicitDeps;
-  }
-
-  @Override
-  protected String getRuleClassString() {
-    return ruleClassString;
   }
 
   @Nullable
@@ -142,9 +137,14 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   }
 
   @Override
-  public String getErrorMessageForUnknownField(String name) {
-    return Printer.format(
-        "%r (rule '%s') doesn't have provider '%s'", this, getRuleClassString(), name);
+  public final Rule getTarget() {
+    return (Rule) super.getTarget();
+  }
+
+  @Override
+  public String errorMessage(String name) {
+    return Printer.format("%r (rule '%s') doesn't have provider '%s'",
+        this, getTarget().getRuleClass(), name);
   }
 
   @Override
@@ -170,5 +170,12 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   @Override
   public void repr(SkylarkPrinter printer) {
     printer.append("<target " + getLabel() + ">");
+  }
+
+  /**
+   * Returns a {@link ConfiguredAttributeMapper} containing values of this target's attributes.
+   */
+  public ConfiguredAttributeMapper getAttributeMapper() {
+    return ConfiguredAttributeMapper.of(getTarget(), getConfigConditions());
   }
 }
