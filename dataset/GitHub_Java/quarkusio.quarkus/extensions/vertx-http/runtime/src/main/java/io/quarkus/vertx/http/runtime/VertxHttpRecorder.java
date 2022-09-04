@@ -179,8 +179,7 @@ public class VertxHttpRecorder {
                 return new WebDeploymentVerticle(httpConfiguration.determinePort(launchMode),
                         httpConfiguration.determineSslPort(launchMode), httpConfiguration.host, httpServerOptions,
                         sslConfig,
-                        router,
-                        launchMode);
+                        router);
             }
         }, new DeploymentOptions().setInstances(ioThreads), new Handler<AsyncResult<String>>() {
             @Override
@@ -369,17 +368,15 @@ public class VertxHttpRecorder {
         private final HttpServerOptions httpOptions;
         private final HttpServerOptions httpsOptions;
         private final Router router;
-        private final LaunchMode launchMode;
 
         public WebDeploymentVerticle(int port, int httpsPort, String host, HttpServerOptions httpOptions,
-                HttpServerOptions httpsOptions, Router router, LaunchMode launchMode) {
+                HttpServerOptions httpsOptions, Router router) {
             this.port = port;
             this.httpsPort = httpsPort;
             this.host = host;
             this.httpOptions = httpOptions;
             this.httpsOptions = httpsOptions;
             this.router = router;
-            this.launchMode = launchMode;
         }
 
         @Override
@@ -392,14 +389,7 @@ public class VertxHttpRecorder {
                     startFuture.fail(event.cause());
                 } else {
                     // Port may be random, so set the actual port
-                    int actualPort = event.result().actualPort();
-                    if (actualPort != port) {
-                        // Override quarkus.http.(test-)?port
-                        System.setProperty(launchMode == LaunchMode.TEST ? "quarkus.http.test-port" : "quarkus.http.port",
-                                String.valueOf(actualPort));
-                        // Set in HttpOptions to output the port in the Timing class
-                        httpOptions.setPort(actualPort);
-                    }
+                    httpOptions.setPort(event.result().actualPort());
                     if (remainingCount.decrementAndGet() == 0) {
                         startFuture.complete(null);
                     }
@@ -412,14 +402,7 @@ public class VertxHttpRecorder {
                     if (event.cause() != null) {
                         startFuture.fail(event.cause());
                     } else {
-                        int actualPort = event.result().actualPort();
-                        if (actualPort != httpsPort) {
-                            // Override quarkus.https.(test-)?port
-                            System.setProperty(launchMode == LaunchMode.TEST ? "quarkus.https.test-port" : "quarkus.https.port",
-                                    String.valueOf(actualPort));
-                            // Set in HttpOptions to output the port in the Timing class
-                            httpsOptions.setPort(actualPort);
-                        }
+                        httpsOptions.setPort(event.result().actualPort());
                         if (remainingCount.decrementAndGet() == 0) {
                             startFuture.complete();
                         }

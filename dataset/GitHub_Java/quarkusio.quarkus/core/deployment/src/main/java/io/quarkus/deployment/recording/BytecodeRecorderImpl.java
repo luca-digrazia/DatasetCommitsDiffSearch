@@ -21,7 +21,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -30,8 +29,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
-import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -800,7 +797,7 @@ public class BytecodeRecorderImpl implements RecorderContext {
                     return out;
                 }
             };
-        } else if (AnnotationProxy.class.isAssignableFrom(expectedType)) {
+        } else if (param instanceof AnnotationProxy) {
             // new com.foo.MyAnnotation_Proxy_AnnotationLiteral("foo")
             AnnotationProxy annotationProxy = (AnnotationProxy) param;
             List<MethodInfo> constructorParams = annotationProxy.getAnnotationClass().methods().stream()
@@ -1234,16 +1231,12 @@ public class BytecodeRecorderImpl implements RecorderContext {
                         out = method.newInstance(ofConstructor(param.getClass()));
                     } catch (NoSuchMethodException e) {
                         //fallback for collection types, such as unmodifiableMap
-                        if (SortedMap.class.isAssignableFrom(expectedType)) {
-                            out = method.newInstance(ofConstructor(TreeMap.class));
-                        } else if (Map.class.isAssignableFrom(expectedType)) {
+                        if (expectedType == Map.class) {
                             out = method.newInstance(ofConstructor(LinkedHashMap.class));
-                        } else if (List.class.isAssignableFrom(expectedType)) {
+                        } else if (expectedType == List.class) {
                             out = method.newInstance(ofConstructor(ArrayList.class));
-                        } else if (SortedSet.class.isAssignableFrom(expectedType)) {
-                            out = method.newInstance(ofConstructor(TreeSet.class));
-                        } else if (Set.class.isAssignableFrom(expectedType)) {
-                            out = method.newInstance(ofConstructor(LinkedHashSet.class));
+                        } else if (expectedType == Set.class) {
+                            out = method.newInstance(ofConstructor(Set.class));
                         } else {
                             throw new RuntimeException("Unable to serialize objects of type " + param.getClass()
                                     + " to bytecode as it has no default constructor");
