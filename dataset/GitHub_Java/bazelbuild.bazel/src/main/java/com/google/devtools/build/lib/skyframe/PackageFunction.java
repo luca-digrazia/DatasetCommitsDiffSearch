@@ -101,8 +101,6 @@ public class PackageFunction implements SkyFunction {
   // Not final only for testing.
   @Nullable private SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining;
 
-  private final ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile;
-
   static final PathFragment DEFAULTS_PACKAGE_NAME = PathFragment.create("tools/defaults");
 
   public PackageFunction(
@@ -113,8 +111,7 @@ public class PackageFunction implements SkyFunction {
       Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> astCache,
       AtomicInteger numPackagesLoaded,
       @Nullable SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining,
-      @Nullable PackageProgressReceiver packageProgress,
-      ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile) {
+      @Nullable PackageProgressReceiver packageProgress) {
     this.skylarkImportLookupFunctionForInlining = skylarkImportLookupFunctionForInlining;
     // Can be null in tests.
     this.preludeLabel = packageFactory == null
@@ -127,7 +124,6 @@ public class PackageFunction implements SkyFunction {
     this.astCache = astCache;
     this.numPackagesLoaded = numPackagesLoaded;
     this.packageProgress = packageProgress;
-    this.actionOnIOExceptionReadingBuildFile = actionOnIOExceptionReadingBuildFile;
   }
 
   public PackageFunction(
@@ -146,52 +142,12 @@ public class PackageFunction implements SkyFunction {
         astCache,
         numPackagesLoaded,
         skylarkImportLookupFunctionForInlining,
-        null,
-        ActionOnIOExceptionReadingBuildFile.UseOriginalIOException.INSTANCE);
+        null);
   }
 
   public void setSkylarkImportLookupFunctionForInliningForTesting(
       SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining) {
     this.skylarkImportLookupFunctionForInlining = skylarkImportLookupFunctionForInlining;
-  }
-
-  /**
-   * What to do when encountering an {@link IOException} trying to read the contents of a BUILD
-   * file.
-   *
-   * <p>Any choice besides
-   * {@link ActionOnIOExceptionReadingBuildFile.UseOriginalIOException#INSTANCE} is potentially
-   * incrementally unsound: if the initial {@link IOException} is transient, then Blaze will
-   * "incorrectly" not attempt to redo package loading for this BUILD file on incremental builds.
-   *
-   * <p>The fact that this behavior is configurable and potentially unsound is a concession to
-   * certain desired use cases with fancy filesystems.
-   */
-  public interface ActionOnIOExceptionReadingBuildFile {
-    /**
-     * Given the {@link IOException} encountered when reading the contents of a BUILD file,
-     * returns the contents that should be used, or {@code null} if the original {@link IOException}
-     * should be respected (that is, we should error-out with a package loading error).
-     */
-    @Nullable
-    byte[] maybeGetBuildFileContentsToUse(IOException originalExn);
-
-    /**
-     * A {@link ActionOnIOExceptionReadingBuildFile} whose {@link #maybeGetBuildFileContentsToUse}
-     * has the sensible behavior of always respecting the initial {@link IOException}.
-     */
-    public static class UseOriginalIOException implements ActionOnIOExceptionReadingBuildFile {
-      public static final UseOriginalIOException INSTANCE = new UseOriginalIOException();
-
-      private UseOriginalIOException() {
-      }
-
-      @Override
-      @Nullable
-      public byte[] maybeGetBuildFileContentsToUse(IOException originalExn) {
-        return null;
-      }
-    }
   }
 
   /** An entry in {@link PackageFunction}'s internal caches. */
@@ -1186,29 +1142,23 @@ public class PackageFunction implements SkyFunction {
           ParserInputSource input;
           if (replacementContents == null) {
             Preconditions.checkNotNull(buildFileValue, packageId);
-            byte[] buildFileBytes = null;
             try {
-              buildFileBytes =
+              byte[] buildFileBytes =
                   buildFileValue.isSpecialFile()
                       ? FileSystemUtils.readContent(buildFilePath)
                       : FileSystemUtils.readWithKnownFileSize(
                           buildFilePath, buildFileValue.getSize());
+              input =
+                  ParserInputSource.create(
+                      FileSystemUtils.convertFromLatin1(buildFileBytes),
+                      buildFilePath.asFragment());
             } catch (IOException e) {
-              buildFileBytes =
-                  actionOnIOExceptionReadingBuildFile.maybeGetBuildFileContentsToUse(e);
-              if (buildFileBytes == null) {
-                // Note that we did the work that led to this IOException, so we should
-                // conservatively report this error as transient.
-                throw new PackageFunctionException(new BuildFileContainsErrorsException(
-                    packageId, e.getMessage(), e), Transience.TRANSIENT);
-              }
-              // If control flow reaches here, we're in territory that is deliberately unsound.
-              // See the javadoc for ActionOnIOExceptionReadingBuildFile.
+              // Note that we did this work, so we should conservatively report this error as
+              // transient.
+              throw new PackageFunctionException(
+                  new BuildFileContainsErrorsException(packageId, e.getMessage(), e),
+                  Transience.TRANSIENT);
             }
-            input =
-                ParserInputSource.create(
-                    FileSystemUtils.convertFromLatin1(buildFileBytes),
-                    buildFilePath.asFragment());
           } else {
             input = ParserInputSource.create(replacementContents, buildFilePath.asFragment());
           }
