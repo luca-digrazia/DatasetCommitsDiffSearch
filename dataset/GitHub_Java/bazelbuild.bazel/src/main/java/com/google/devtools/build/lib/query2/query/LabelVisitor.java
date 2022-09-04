@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
+import com.google.devtools.build.lib.concurrent.BlockingStack;
 import com.google.devtools.build.lib.concurrent.ErrorClassifier;
 import com.google.devtools.build.lib.concurrent.NamedForkJoinPool;
 import com.google.devtools.build.lib.concurrent.QuiescingExecutor;
@@ -41,7 +42,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Visit the transitive closure of a label. Primarily used to "fault in" packages to the
@@ -142,6 +144,7 @@ final class LabelVisitor {
   private final TargetProvider targetProvider;
   private final DependencyFilter edgeFilter;
   private final ConcurrentMap<Label, Integer> visitedTargets = new ConcurrentHashMap<>();
+  private final boolean useForkJoinPool;
 
   private VisitationAttributes lastVisitation;
 
@@ -154,10 +157,12 @@ final class LabelVisitor {
    * @param targetProvider how to resolve labels to targets
    * @param edgeFilter which edges may be traversed
    */
-  public LabelVisitor(TargetProvider targetProvider, DependencyFilter edgeFilter) {
+  public LabelVisitor(
+      TargetProvider targetProvider, DependencyFilter edgeFilter, boolean useForkJoinPool) {
     this.targetProvider = targetProvider;
     this.lastVisitation = NONE;
     this.edgeFilter = edgeFilter;
+    this.useForkJoinPool = useForkJoinPool;
   }
 
   public void syncWithVisitor(
@@ -241,15 +246,16 @@ final class LabelVisitor {
         int parallelThreads,
         int maxDepth,
         TargetEdgeObserver... observers) {
-      if (parallelThreads > 1) {
-        this.executorService = NamedForkJoinPool.newNamedPool(THREAD_NAME, parallelThreads);
-      } else {
-        // ForkJoinPool has a bug where it deadlocks with parallelism=1, so use a
-        // SingleThreadExecutor instead.
-        this.executorService =
-            Executors.newSingleThreadExecutor(
-                new ThreadFactoryBuilder().setNameFormat(THREAD_NAME + " %d").build());
-      }
+      this.executorService =
+          useForkJoinPool
+              ? NamedForkJoinPool.newNamedPool(THREAD_NAME, parallelThreads)
+              : new ThreadPoolExecutor(
+                  /*corePoolSize=*/ parallelThreads,
+                  /*maximumPoolSize=*/ parallelThreads,
+                  1L,
+                  TimeUnit.SECONDS,
+                  new BlockingStack<>(),
+                  new ThreadFactoryBuilder().setNameFormat(THREAD_NAME + " %d").build());
       this.executor =
           AbstractQueueVisitor.createWithExecutorService(
               executorService, /*failFastOnException=*/ !keepGoing, ErrorClassifier.DEFAULT);

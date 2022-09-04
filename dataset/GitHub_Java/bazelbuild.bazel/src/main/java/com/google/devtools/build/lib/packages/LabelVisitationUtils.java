@@ -91,6 +91,7 @@ public class LabelVisitationUtils {
 
     if (target instanceof PackageGroup) {
       visitPackageGroup((PackageGroup) target, labelProcessor);
+      return;
     }
   }
 

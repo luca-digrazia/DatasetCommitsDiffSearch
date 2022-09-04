@@ -92,11 +92,7 @@ public abstract class DependencyResolver {
 
   /** A dependency caused by something that's not an attribute. Special cases enumerated below. */
   private static final class NonAttributeDependencyKind implements DependencyKind {
-    private final String name;
-
-    private NonAttributeDependencyKind(String name) {
-      this.name = name;
-    }
+    private NonAttributeDependencyKind() {}
 
     @Override
     public Attribute getAttribute() {
@@ -108,24 +104,16 @@ public abstract class DependencyResolver {
     public AspectClass getOwningAspect() {
       throw new IllegalStateException();
     }
-
-    @Override
-    public String toString() {
-      return String.format("%s(%s)", getClass().getSimpleName(), this.name);
-    }
   }
 
   /** A dependency for visibility. */
-  public static final DependencyKind VISIBILITY_DEPENDENCY =
-      new NonAttributeDependencyKind("VISIBILITY");
+  public static final DependencyKind VISIBILITY_DEPENDENCY = new NonAttributeDependencyKind();
 
   /** The dependency on the rule that creates a given output file. */
-  public static final DependencyKind OUTPUT_FILE_RULE_DEPENDENCY =
-      new NonAttributeDependencyKind("OUTPUT_FILE");
+  public static final DependencyKind OUTPUT_FILE_RULE_DEPENDENCY = new NonAttributeDependencyKind();
 
   /** A dependency on a resolved toolchain. */
-  public static final DependencyKind TOOLCHAIN_DEPENDENCY =
-      new NonAttributeDependencyKind("TOOLCHAIN");
+  public static final DependencyKind TOOLCHAIN_DEPENDENCY = new NonAttributeDependencyKind();
 
   /** A dependency through an attribute, either that of an aspect or the rule itself. */
   @AutoValue

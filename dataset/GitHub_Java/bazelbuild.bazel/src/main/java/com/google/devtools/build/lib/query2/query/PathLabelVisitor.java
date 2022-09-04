@@ -165,29 +165,9 @@ final class PathLabelVisitor {
   }
 
   private enum VisitorMode {
-    DEPS,
     ALLPATHS,
     SOMEPATH,
     SAME_PKG_DIRECT_RDEPS
-  }
-
-  private static class Visit {
-    private final Target from;
-    private final Attribute attribute;
-    private final Target target;
-
-    private Visit(Target from, Attribute attribute, Target target) {
-      if (target == null) {
-        throw new NullPointerException(
-            String.format(
-                "'%s' attribute '%s'",
-                from == null ? "(null)" : from.getLabel().toString(),
-                attribute == null ? "(null)" : attribute.getName()));
-      }
-      this.from = from;
-      this.attribute = attribute;
-      this.target = target;
-    }
   }
 
   private class Visitor {
@@ -195,7 +175,6 @@ final class PathLabelVisitor {
     private final VisitorMode mode;
     private final Set<Target> visited = new HashSet<>();
     private final Map<Target, List<Target>> parentMap = new HashMap<>();
-    private final Queue<Visit> workQueue = new ArrayDeque<>();
 
     public Visitor(ExtendedEventHandler eventHandler, VisitorMode mode) {
       this.eventHandler = eventHandler;
@@ -219,33 +198,37 @@ final class PathLabelVisitor {
     @ThreadSafe
     private void visitTargets(Iterable<Target> targets)
         throws InterruptedException, NoSuchThingException {
-      for (Target t : targets) {
-        enqueue(null, null, t);
-      }
-      while (!workQueue.isEmpty()) {
-        Visit visit = workQueue.remove();
-        visit(visit.from, visit.attribute, visit.target);
+      for (Target target : targets) {
+        visit(/*from=*/ null, /*attribute=*/ null, target);
       }
     }
 
-    private void enqueue(Target from, Attribute attribute, Label label)
+    private void visit(Target from, Attribute attribute, Label label)
         throws InterruptedException, NoSuchThingException {
-      Target target;
-      target = targetProvider.getTarget(eventHandler, label);
-      enqueue(from, attribute, target);
-    }
+      if (label == null) {
+        throw new NullPointerException(
+            String.format(
+                "'%s' attribute '%s'",
+                from == null ? "(null)" : from.getLabel().toString(),
+                attribute == null ? "(null)" : attribute.getName()));
+      }
 
-    private void enqueue(Target from, Attribute attribute, Target target) {
-      workQueue.add(new Visit(from, attribute, target));
+      Target target = targetProvider.getTarget(eventHandler, label);
+      visit(from, attribute, target);
     }
 
     private void visit(Target from, Attribute attribute, Target target)
         throws InterruptedException, NoSuchThingException {
+      if (target == null) {
+        throw new NullPointerException(
+            String.format(
+                "'%s' attribute '%s'",
+                from == null ? "(null)" : from.getLabel().toString(),
+                attribute == null ? "(null)" : attribute.getName()));
+      }
+
       if (from != null) {
         switch (mode) {
-          case DEPS:
-            // Don't update parentMap; only use visited.
-            break;
           case SAME_PKG_DIRECT_RDEPS:
             // Only track same-package dependencies.
             if (target
@@ -280,7 +263,7 @@ final class PathLabelVisitor {
       }
 
       LabelVisitationUtils.<InterruptedException, NoSuchThingException>visitTargetExceptionally(
-          target, edgeFilter, this::enqueue);
+          target, edgeFilter, this::visit);
     }
 
     private void visitAspectsIfRequired(Target from, Attribute attribute, final Target to)
@@ -302,7 +285,7 @@ final class PathLabelVisitor {
           Multimap<Attribute, Label> allLabels = HashMultimap.create();
           AspectDefinition.addAllAttributesOfAspect(fromRule, allLabels, aspect, edgeFilter);
           for (Map.Entry<Attribute, Label> e : allLabels.entries()) {
-            enqueue(from, e.getKey(), e.getValue());
+            visit(from, e.getKey(), e.getValue());
           }
         }
       }
