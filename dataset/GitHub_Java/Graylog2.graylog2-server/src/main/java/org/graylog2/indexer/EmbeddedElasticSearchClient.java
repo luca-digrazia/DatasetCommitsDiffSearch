@@ -252,7 +252,7 @@ public class EmbeddedElasticSearchClient {
             throw new IndexNotFoundException();
         }
         
-        return index.getPrimaries().docs().count();
+        return index.getTotal().docs().count();
     }
 
     public boolean bulkIndex(final List<LogMessage> messages) {
