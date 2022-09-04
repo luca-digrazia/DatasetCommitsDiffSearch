@@ -2,6 +2,7 @@ package io.quarkus.hibernate.validator.deployment;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
 
+import java.lang.annotation.Annotation;
 import java.lang.annotation.Repeatable;
 import java.lang.reflect.Modifier;
 import java.util.Collection;
@@ -11,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
-import java.util.regex.Pattern;
 
 import javax.validation.ClockProvider;
 import javax.validation.Constraint;
@@ -43,7 +43,6 @@ import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.processor.BeanInfo;
-import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
@@ -62,8 +61,6 @@ import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodAnnota
 import io.quarkus.runtime.LocalesBuildTimeConfig;
 
 class HibernateValidatorProcessor {
-
-    private static final String META_INF_VALIDATION_XML = "META-INF/validation.xml";
 
     private static final DotName CONSTRAINT_VALIDATOR_FACTORY = DotName
             .createSimple(ConstraintValidatorFactory.class.getName());
@@ -86,13 +83,11 @@ class HibernateValidatorProcessor {
 
     private static final DotName REPEATABLE = DotName.createSimple(Repeatable.class.getName());
 
-    private static final Pattern BUILT_IN_CONSTRAINT_REPEATABLE_CONTAINER_PATTERN = Pattern.compile("\\$List$");
-
     private LocalesBuildTimeConfig localesBuildTimeConfig;
 
     @BuildStep
     HotDeploymentWatchedFileBuildItem configFile() {
-        return new HotDeploymentWatchedFileBuildItem(META_INF_VALIDATION_XML);
+        return new HotDeploymentWatchedFileBuildItem("META-INF/validation.xml");
     }
 
     @BuildStep
@@ -102,15 +97,14 @@ class HibernateValidatorProcessor {
 
     @BuildStep
     void registerAdditionalBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans,
-            BuildProducer<UnremovableBeanBuildItem> unremovableBean,
-            Capabilities capabilities) {
+            BuildProducer<UnremovableBeanBuildItem> unremovableBean) {
         // The bean encapsulating the Validator and ValidatorFactory
         additionalBeans.produce(new AdditionalBeanBuildItem(ValidatorProvider.class));
 
         // The CDI interceptor which will validate the methods annotated with @MethodValidated
         additionalBeans.produce(new AdditionalBeanBuildItem(MethodValidationInterceptor.class));
 
-        if (capabilities.isCapabilityPresent(Capabilities.RESTEASY)) {
+        if (isResteasyInClasspath()) {
             // The CDI interceptor which will validate the methods annotated with @JaxrsEndPointValidated
             additionalBeans.produce(new AdditionalBeanBuildItem(
                     "io.quarkus.hibernate.validator.runtime.jaxrs.JaxrsEndPointValidationInterceptor"));
@@ -142,8 +136,7 @@ class HibernateValidatorProcessor {
             BuildProducer<FeatureBuildItem> feature,
             BuildProducer<BeanContainerListenerBuildItem> beanContainerListener,
             ShutdownContextBuildItem shutdownContext,
-            List<AdditionalJaxRsResourceMethodAnnotationsBuildItem> additionalJaxRsResourceMethodAnnotations,
-            Capabilities capabilities) throws Exception {
+            List<AdditionalJaxRsResourceMethodAnnotationsBuildItem> additionalJaxRsResourceMethodAnnotations) throws Exception {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.HIBERNATE_VALIDATOR));
 
@@ -151,10 +144,8 @@ class HibernateValidatorProcessor {
 
         Set<DotName> consideredAnnotations = new HashSet<>();
 
-        Set<String> builtinConstraints = ConstraintHelper.getBuiltinConstraints();
-
         // Collect the constraint annotations provided by Hibernate Validator and Bean Validation
-        contributeBuiltinConstraints(builtinConstraints, consideredAnnotations);
+        contributeBuiltinConstraints(consideredAnnotations);
 
         // Add the constraint annotations present in the application itself
         for (AnnotationInstance constraint : indexView.getAnnotations(DotName.createSimple(Constraint.class.getName()))) {
@@ -166,6 +157,7 @@ class HibernateValidatorProcessor {
                     consideredAnnotations.add(repeatableConstraint.value().asClass().name());
                 }
             }
+
         }
 
         // Also consider elements that are marked with @Valid
@@ -176,21 +168,9 @@ class HibernateValidatorProcessor {
 
         Set<DotName> classNamesToBeValidated = new HashSet<>();
         Map<DotName, Set<String>> inheritedAnnotationsToBeValidated = new HashMap<>();
-        Set<String> detectedBuiltinConstraints = new HashSet<>();
 
         for (DotName consideredAnnotation : consideredAnnotations) {
             Collection<AnnotationInstance> annotationInstances = indexView.getAnnotations(consideredAnnotation);
-
-            if (annotationInstances.isEmpty()) {
-                continue;
-            }
-
-            // we trim the repeatable container suffix if needed
-            String builtinConstraintCandidate = BUILT_IN_CONSTRAINT_REPEATABLE_CONTAINER_PATTERN
-                    .matcher(consideredAnnotation.toString()).replaceAll("");
-            if (builtinConstraints.contains(builtinConstraintCandidate)) {
-                detectedBuiltinConstraints.add(builtinConstraintCandidate);
-            }
 
             for (AnnotationInstance annotation : annotationInstances) {
                 if (annotation.target().kind() == AnnotationTarget.Kind.FIELD) {
@@ -241,11 +221,7 @@ class HibernateValidatorProcessor {
 
         beanContainerListener
                 .produce(new BeanContainerListenerBuildItem(
-                        recorder.initializeValidatorFactory(classesToBeValidated, detectedBuiltinConstraints,
-                                hasXmlConfiguration(),
-                                capabilities.isCapabilityPresent(Capabilities.HIBERNATE_ORM),
-                                shutdownContext,
-                                localesBuildTimeConfig)));
+                        recorder.initializeValidatorFactory(classesToBeValidated, shutdownContext, localesBuildTimeConfig)));
     }
 
     @BuildStep
@@ -257,15 +233,18 @@ class HibernateValidatorProcessor {
                 .build();
     }
 
-    private static void contributeBuiltinConstraints(Set<String> builtinConstraints,
-            Set<DotName> consideredAnnotationsCollector) {
-        for (String builtinConstraint : builtinConstraints) {
-            consideredAnnotationsCollector.add(DotName.createSimple(builtinConstraint));
+    private static void contributeBuiltinConstraints(Set<DotName> constraintCollector) {
+        Set<Class<? extends Annotation>> builtinConstraints = new ConstraintHelper().getBuiltinConstraints();
+        for (Class<? extends Annotation> builtinConstraint : builtinConstraints) {
+            constraintCollector.add(DotName.createSimple(builtinConstraint.getName()));
 
-            // for all built-in constraints, we follow a strict convention for repeatable annotations,
-            // they are all inner classes called List
-            // while not all our built-in constraints are repeatable, let's avoid loading the class to check
-            consideredAnnotationsCollector.add(DotName.createSimple(builtinConstraint + "$List"));
+            if (builtinConstraint.isAnnotationPresent(Repeatable.class)) {
+                Repeatable repeatable = builtinConstraint.getAnnotation(Repeatable.class);
+                if (repeatable.value() != null) {
+                    constraintCollector.add(DotName.createSimple(repeatable.value().getName()));
+                }
+            }
+
         }
     }
 
@@ -325,7 +304,12 @@ class HibernateValidatorProcessor {
         }
     }
 
-    private static boolean hasXmlConfiguration() {
-        return Thread.currentThread().getContextClassLoader().getResource(META_INF_VALIDATION_XML) != null;
+    private static boolean isResteasyInClasspath() {
+        try {
+            Class.forName("org.jboss.resteasy.core.ResteasyContext");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
     }
 }
