@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.TransitionResolver;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition.TransitionException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -176,6 +177,8 @@ public final class AnalysisUtils {
    * each target.
    *
    * <p>Preserves the original input ordering.
+   *
+   * @throws TransitionException if there was a problem applying top level transitions.
    */
   // Keep this in sync with PrepareAnalysisPhaseFunction.
   public static List<TargetAndConfiguration> getTargetsWithConfigs(
@@ -183,7 +186,8 @@ public final class AnalysisUtils {
       Collection<Target> targets,
       ExtendedEventHandler eventHandler,
       ConfiguredRuleClassProvider ruleClassProvider,
-      SkyframeExecutor skyframeExecutor) {
+      SkyframeExecutor skyframeExecutor)
+      throws TransitionException {
     // We use a hash set here to remove duplicate nodes; this can happen for input files and package
     // groups.
     LinkedHashSet<TargetAndConfiguration> nodes = new LinkedHashSet<>(targets.size());
