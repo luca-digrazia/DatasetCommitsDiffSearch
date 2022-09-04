@@ -27,7 +27,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
-import com.google.common.eventbus.Subscribe;
 import com.google.common.io.Files;
 import com.google.common.primitives.Ints;
 import com.google.common.util.concurrent.AbstractIdleService;
@@ -78,11 +77,14 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static com.codahale.metrics.MetricRegistry.name;
 import static com.github.joschi.jadconfig.util.Size.megabytes;
-import static java.util.concurrent.TimeUnit.*;
+import static java.util.concurrent.TimeUnit.DAYS;
+import static java.util.concurrent.TimeUnit.HOURS;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.graylog2.plugin.Tools.bytesToHex;
 
 @Singleton
@@ -114,7 +116,7 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
     private final File committedReadOffsetFile;
     private final AtomicLong committedOffset = new AtomicLong(DEFAULT_COMMITTED_OFFSET);
     private final ScheduledExecutorService scheduler;
-    private final Size retentionSize;
+    private final long retentionSize;
     private final EventBus eventBus;
     private final MetricRegistry metricRegistry;
     private ProcessBuffer processBuffer;
@@ -139,22 +141,18 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
     private ScheduledFuture<?> logRetentionFuture;
     private ScheduledFuture<?> offsetFlusherFuture;
     private volatile boolean shuttingDown;
-    private final AtomicReference<ThrottleState> throttleState = new AtomicReference<>();
 
     @Inject
     public KafkaJournal(@Named("message_journal_dir") File journalDirectory,
                         @Named("scheduler") ScheduledExecutorService scheduler,
                         @Named("message_journal_segment_size") Size segmentSize,
-                        @Named("message_journal_segment_age") Duration segmentAge,
                         @Named("message_journal_max_size") Size retentionSize,
                         @Named("message_journal_max_age") Duration retentionAge,
-                        @Named("message_journal_flush_interval") long flushInterval,
-                        @Named("message_journal_flush_age") Duration flushAge,
                         EventBus eventBus,
                         MetricRegistry metricRegistry,
                         ProcessBuffer processBuffer) {
         this.scheduler = scheduler;
-        this.retentionSize = retentionSize;
+        this.retentionSize = retentionSize.toBytes();
         this.eventBus = eventBus;
         this.metricRegistry = metricRegistry;
         this.processBuffer = processBuffer;
@@ -171,11 +169,11 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
                         // segmentSize: The soft maximum for the size of a segment file in the log
                         Ints.saturatedCast(segmentSize.toBytes()),
                         // segmentMs: The soft maximum on the amount of time before a new log segment is rolled
-                        segmentAge.getMillis(),
+                        Long.MAX_VALUE,
                         // flushInterval: The number of messages that can be written to the log before a flush is forced
-                        flushInterval,
+                        Long.MAX_VALUE,
                         // flushMs: The amount of time the log can have dirty data before a flush is forced
-                        flushAge.getMillis(),
+                        Long.MAX_VALUE,
                         // retentionSize: The approximate total number of bytes this log can use
                         retentionSize.toBytes(),
                         // retentionMs: The age approximate maximum age of the last segment that is retained
@@ -187,7 +185,7 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
                         // indexInterval: The approximate number of bytes between index entries
                         4096,
                         // fileDeleteDelayMs: The time to wait before deleting a file from the filesystem
-                        MINUTES.toMillis(1l),
+                        HOURS.toMillis(1l),
                         // deleteRetentionMs: The time to retain delete markers in the log. Only applicable for logs that are being compacted.
                         DAYS.toMillis(1l),
                         // minCleanableRatio: The ratio of bytes that are available for cleaning to the bytes already cleaned
@@ -534,16 +532,12 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
         offsetFlusherFuture = scheduler.scheduleAtFixedRate(offsetFlusher, 1, 1, SECONDS);
 
         throttleUpdaterFuture = scheduler.scheduleAtFixedRate(throttleStateUpdater, 1, 1, SECONDS);
-
-        eventBus.register(this);
     }
 
     @Override
     protected void shutDown() throws Exception {
         LOG.warn("Shutting down journal!");
         shuttingDown = true;
-
-        eventBus.unregister(this);
 
         throttleUpdaterFuture.cancel(false);
         offsetFlusherFuture.cancel(false);
@@ -635,20 +629,6 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
         return kafkaLog.logEndOffset();
     }
 
-    @Subscribe
-    public void listenToThrottleState(ThrottleState state) {
-        this.throttleState.set(state);
-    }
-
-    /**
-     * For informational purposes this method provides access to the current state of the journal.
-     *
-     * @return the journal state for throttling purposes
-     */
-    public ThrottleState getThrottleState() {
-        return throttleState.get();
-    }
-
     /**
      * The ThrottleStateUpdater publishes the current state buffer state of the journal to other interested parties,
      * chiefly the ThrottleableTransports.
@@ -697,13 +677,13 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
             throttleState.readEventsPerSec = (long) Math.floor((currentReadOffset - previousReadOffset) / ((currentTs - prevTs) / 1.0E09));
 
             throttleState.journalSize = size();
-            throttleState.journalSizeLimit = retentionSize.toBytes();
+            throttleState.journalSizeLimit = retentionSize;
 
             throttleState.processBufferCapacity = processBuffer.getRemainingCapacity();
 
             if (committedOffset == DEFAULT_COMMITTED_OFFSET) {
                 // nothing committed at all, the entire log is uncommitted, or completely empty.
-                throttleState.uncommittedJournalEntries = size() == 0 ? 0 : logEndOffset - logStartOffset;
+                throttleState.uncommittedJournalEntries = size() == 0 ? size() : logEndOffset - logStartOffset;
             } else {
                 throttleState.uncommittedJournalEntries = logEndOffset - committedOffset;
             }

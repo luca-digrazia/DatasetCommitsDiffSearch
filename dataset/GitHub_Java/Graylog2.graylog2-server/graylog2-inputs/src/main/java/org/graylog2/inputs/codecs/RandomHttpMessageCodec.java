@@ -17,14 +17,15 @@
 package org.graylog2.inputs.codecs;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import javax.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import org.graylog2.inputs.random.generators.FakeHttpRawMessageGenerator;
-import org.graylog2.plugin.Message;
-import org.graylog2.plugin.configuration.Configuration;
-import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.inputs.annotations.Codec;
 import org.graylog2.plugin.inputs.annotations.ConfigClass;
 import org.graylog2.plugin.inputs.annotations.FactoryClass;
+import org.graylog2.plugin.Message;
+import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.inputs.codecs.AbstractCodec;
 import org.graylog2.plugin.inputs.codecs.CodecAggregator;
 import org.graylog2.plugin.journal.RawMessage;
@@ -33,7 +34,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import javax.inject.Inject;
 import java.io.IOException;
 
 import static org.graylog2.inputs.random.generators.FakeHttpRawMessageGenerator.GeneratorState;
@@ -84,7 +84,12 @@ public class RandomHttpMessageCodec extends AbstractCodec {
     }
 
     @ConfigClass
-    public static class Config extends AbstractCodec.Config {
+    public static class Config implements AbstractCodec.Config {
+        @Override
+        public ConfigurationRequest getRequestedConfiguration() {
+            return new ConfigurationRequest();
+        }
+
         @Override
         public void overrideDefaultValues(@Nonnull ConfigurationRequest cr) {
 

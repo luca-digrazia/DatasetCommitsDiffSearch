@@ -16,12 +16,9 @@
  */
 package org.graylog2.inputs;
 
-import com.google.common.base.Optional;
-import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Maps;
+import javax.inject.Inject;
 import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
@@ -31,7 +28,7 @@ import org.graylog2.cluster.Node;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.PersistedServiceImpl;
-import org.graylog2.plugin.database.ValidationException;
+import org.graylog2.database.ValidationException;
 import org.graylog2.inputs.converters.ConverterFactory;
 import org.graylog2.inputs.extractors.ExtractorFactory;
 import org.graylog2.plugin.configuration.Configuration;
@@ -44,7 +41,6 @@ import org.graylog2.shared.inputs.NoSuchInputTypeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -84,7 +80,6 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
     public List<Input> allOfRadio(Node radio) {
         final List<BasicDBObject> query = ImmutableList.of(
                 new BasicDBObject(MessageInput.FIELD_RADIO_ID, radio.getNodeId()),
-                new BasicDBObject(MessageInput.FIELD_NODE_ID, radio.getNodeId()),
                 new BasicDBObject(MessageInput.FIELD_GLOBAL, true));
 
         final ImmutableList.Builder<Input> inputs = ImmutableList.builder();
@@ -204,29 +199,6 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
     }
 
     @Override
-    public List<Map.Entry<String, String>> getStaticFields(Input input) {
-        if (input.getFields().get(InputImpl.EMBEDDED_STATIC_FIELDS) == null) {
-            return Collections.emptyList();
-        }
-
-        final ImmutableList.Builder<Map.Entry<String, String>> listBuilder = ImmutableList.builder();
-        final BasicDBList mSF = (BasicDBList) input.getFields().get(InputImpl.EMBEDDED_STATIC_FIELDS);
-        for (final Object element : mSF) {
-            final DBObject ex = (BasicDBObject) element;
-            try {
-                final Map.Entry<String, String> staticField =
-                        Maps.immutableEntry((String) ex.get(InputImpl.FIELD_STATIC_FIELD_KEY),
-                                            (String) ex.get(InputImpl.FIELD_STATIC_FIELD_VALUE));
-                listBuilder.add(staticField);
-            } catch (Exception e) {
-                LOG.error("Cannot build static field from persisted data. Skipping.", e);
-            }
-        }
-
-        return listBuilder.build();
-    }
-
-    @Override
     @SuppressWarnings("unchecked")
     public List<Extractor> getExtractors(Input input) {
         if (input.getFields().get(InputImpl.EMBEDDED_EXTRACTORS) == null) {
@@ -267,23 +239,6 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
         }
 
         return listBuilder.build();
-    }
-
-    @Override
-    public Extractor getExtractor(final Input input, final String extractorId) throws NotFoundException {
-        final Optional<Extractor> extractor = Iterables.tryFind(this.getExtractors(input), new Predicate<Extractor>() {
-            @Override
-            public boolean apply(Extractor extractor) {
-                return extractor.getId().equals(extractorId);
-            }
-        });
-
-        if (!extractor.isPresent()) {
-            LOG.error("Extractor <{}> not found.", extractorId);
-            throw new javax.ws.rs.NotFoundException("Couldn't find extractor " + extractorId);
-        }
-
-        return extractor.get();
     }
 
     @SuppressWarnings("unchecked")

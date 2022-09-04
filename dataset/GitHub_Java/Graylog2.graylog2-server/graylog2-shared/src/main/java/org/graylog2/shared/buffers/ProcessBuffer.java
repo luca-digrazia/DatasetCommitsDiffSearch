@@ -21,6 +21,8 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import javax.inject.Provider;
+import javax.inject.Named;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
@@ -35,8 +37,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.inject.Inject;
-import javax.inject.Named;
-import javax.inject.Provider;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -56,6 +56,8 @@ public class ProcessBuffer extends Buffer {
 
     private final Meter incomingMessages;
 
+    private final ServerStatus serverStatus;
+
     @Inject
     public ProcessBuffer(MetricRegistry metricRegistry,
                          ServerStatus serverStatus,
@@ -64,6 +66,7 @@ public class ProcessBuffer extends Buffer {
                          @Named("processbuffer_processors") int processorCount,
                          @Named("ring_size") int ringSize,
                          @Named("processor_wait_strategy") String waitStrategyName) {
+        this.serverStatus = serverStatus;
         this.ringBufferSize = ringSize;
 
         this.executor = executorService(metricRegistry);

@@ -16,9 +16,6 @@
  */
 package org.graylog2.restclient.lib;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
@@ -91,7 +88,6 @@ class ApiClientImpl implements ApiClient {
                 new ObjectMapper()
                         .setPropertyNamingStrategy(PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES)
                         .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                        .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
                         .registerModule(new GuavaModule())
                         .registerModule(new JodaModule()));
     }
@@ -222,7 +218,7 @@ class ApiClientImpl implements ApiClient {
         private Radio radio;
         private Collection<Node> nodes;
         private final Method method;
-        private Object body;
+        private ApiRequest body;
         private final Class<T> responseClass;
         private final ArrayList<Object> pathParams = Lists.newArrayList();
         private final ListMultimap<String, String> queryParams = ArrayListMultimap.create();
@@ -359,7 +355,7 @@ class ApiClientImpl implements ApiClient {
         }
 
         @Override
-        public org.graylog2.restclient.lib.ApiRequestBuilder<T> body(Object body) {
+        public org.graylog2.restclient.lib.ApiRequestBuilder<T> body(ApiRequest body) {
             this.body = body;
             return this;
         }
@@ -577,7 +573,7 @@ class ApiClientImpl implements ApiClient {
             return results;
         }
 
-        private AsyncHttpClient.BoundRequestBuilder requestBuilderForUrl(URL url) throws JsonProcessingException {
+        private AsyncHttpClient.BoundRequestBuilder requestBuilderForUrl(URL url) {
             // *sigh* the generic requestBuilder methods are protected/private making this verbose :(
             final AsyncHttpClient.BoundRequestBuilder requestBuilder;
             final String userInfo = url.getUserInfo();
@@ -614,7 +610,7 @@ class ApiClientImpl implements ApiClient {
                 }
                 requestBuilder.addHeader(HttpHeaders.CONTENT_TYPE, "application/json; charset=utf-8");
                 requestBuilder.setBodyEncoding("UTF-8");
-                requestBuilder.setBody(objectMapper.writeValueAsString(body));
+                requestBuilder.setBody(body.toJson());
             } else if (method == Method.POST) {
                 LOG.warn("POST without body, this doesn't make sense,", new IllegalStateException());
             }

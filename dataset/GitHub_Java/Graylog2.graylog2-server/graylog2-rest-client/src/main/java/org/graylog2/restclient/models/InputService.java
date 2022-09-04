@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models;
 
@@ -23,15 +23,13 @@ import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.ExclusiveInputException;
 import org.graylog2.restclient.lib.ServerNodes;
-import org.graylog2.restclient.models.api.responses.system.InputLaunchResponse;
-import org.graylog2.restclient.models.api.responses.system.InputStateSummaryResponse;
-import org.graylog2.restclient.models.api.responses.system.InputTypeSummaryResponse;
-import org.graylog2.restclient.models.api.responses.system.InputTypesResponse;
-import org.graylog2.restclient.models.api.responses.system.InputsResponse;
+import org.graylog2.restclient.models.api.requests.InputLaunchRequest;
+import org.graylog2.restclient.models.api.responses.system.*;
 import org.graylog2.restroutes.generated.InputsResource;
 import org.graylog2.restroutes.generated.routes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import play.mvc.Http;
 
 import java.io.IOException;
 import java.util.AbstractMap;
@@ -196,17 +194,19 @@ public class InputService {
 
         for (Node serverNode: serverNodes.all()) {
             if (!serverNode.isMaster())
-                serverNode.launchExistingInput(ilr.id);
+                serverNode.launchExistingInput(ilr.persistId);
         }
         try {
             for (Radio radio : nodeService.radios().values()) {
-                radio.launchExistingInput(ilr.id);
+                radio.launchExistingInput(ilr.persistId);
             }
-        } catch (APIException | IOException e) {
+        } catch (APIException e) {
+            log.error("Unable to fetch list of radios: " + e);
+        } catch (IOException e) {
             log.error("Unable to fetch list of radios: " + e);
         }
 
-        return ilr.id;
+        return ilr.persistId;
     }
 
     public Map<ClusterEntity, Boolean> terminateGlobal(String inputId) {

@@ -19,6 +19,7 @@ package org.graylog2.filters;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Lists;
+import javax.inject.Inject;
 import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputService;
 import org.graylog2.plugin.Message;
@@ -27,7 +28,6 @@ import org.graylog2.plugin.inputs.Extractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -35,8 +35,13 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class ExtractorFilter implements MessageFilter {
+
     private static final Logger LOG = LoggerFactory.getLogger(ExtractorFilter.class);
+
     private static final String NAME = "Extractor";
 
     private Cache<String, List<Extractor>> cache = CacheBuilder.newBuilder()
@@ -52,16 +57,17 @@ public class ExtractorFilter implements MessageFilter {
 
     @Override
     public boolean filter(Message msg) {
-        if (msg.getSourceInputId() == null) {
+        if (msg.getSourceInput() == null) {
             return false;
         }
 
-        for (final Extractor extractor : loadExtractors(msg.getSourceInputId())) {
+        for (Extractor extractor : loadExtractors(msg.getSourceInput().getId())) {
             try {
                 extractor.runExtractor(msg);
             } catch (Exception e) {
                 extractor.incrementExceptions();
-                LOG.error("Could not apply extractor " + extractor.getTitle() + " (id=" + extractor.getId() + ")", e);
+                LOG.error("Could not apply extractor.", e);
+                continue;
             }
         }
 

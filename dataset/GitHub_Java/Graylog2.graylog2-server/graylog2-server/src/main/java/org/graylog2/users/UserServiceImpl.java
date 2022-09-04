@@ -35,7 +35,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class UserServiceImpl extends PersistedServiceImpl implements UserService {
@@ -123,10 +122,8 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
     @Override
     public void updateFromLdap(UserImpl user, LdapEntry userEntry, LdapSettings ldapSettings, String username) {
         final String displayNameAttribute = ldapSettings.getDisplayNameAttribute();
-        final String fullName = firstNonNull(userEntry.get(displayNameAttribute), username);
-
         user.setName(username);
-        user.setFullName(fullName);
+        user.setFullName(userEntry.get(displayNameAttribute));
         user.setExternal(true);
 
         final String email = userEntry.getEmail();

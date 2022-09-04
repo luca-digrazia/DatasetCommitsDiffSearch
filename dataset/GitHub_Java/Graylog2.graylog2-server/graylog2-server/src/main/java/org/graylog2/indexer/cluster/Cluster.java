@@ -17,6 +17,10 @@
 package org.graylog2.indexer.cluster;
 
 import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.SettableFuture;
+import javax.inject.Inject;
+import javax.inject.Singleton;
+import javax.inject.Named;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
@@ -32,14 +36,11 @@ import org.graylog2.indexer.esplugin.ClusterStateMonitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -169,7 +170,7 @@ public class Cluster {
         LOG.debug("Waiting until cluster connection comes back and cluster is healthy, checking once per second.");
 
         final CountDownLatch latch = new CountDownLatch(1);
-        final ScheduledFuture<?> scheduledFuture = scheduler.scheduleAtFixedRate(new Runnable() {
+        scheduler.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
                 try {
@@ -182,7 +183,6 @@ public class Cluster {
         }, 0, 1, TimeUnit.SECONDS); // TODO should this be configurable?
 
         latch.await();
-        scheduledFuture.cancel(true); // Make sure to cancel the task to avoid task leaks!
     }
 
     public void updateDataNodeList(Map<String, DiscoveryNode> nodes) {
