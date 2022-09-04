@@ -1,19 +1,24 @@
 package io.dropwizard.views;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import io.dropwizard.Bundle;
+import io.dropwizard.Configuration;
 import io.dropwizard.ConfiguredBundle;
+import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
-import io.dropwizard.util.Sets;
 
 import java.util.Collections;
 import java.util.Map;
 import java.util.ServiceLoader;
 
+import static com.google.common.base.MoreObjects.firstNonNull;
 
 /**
- * A {@link ConfiguredBundle}, which by default, enables the rendering of FreeMarker & Mustache views by your application.
+ * A {@link Bundle}, which by default, enables the rendering of FreeMarker & Mustache views by your application.
  *
  * <p>Other instances of {@link ViewRenderer} can be used by initializing your {@link ViewBundle} with a
- * {@link Iterable} of the {@link ViewRenderer} instances to be used when configuring your {@link ConfiguredBundle}:</p>
+ * {@link Iterable} of the {@link ViewRenderer} instances to be used when configuring your {@link Bundle}:</p>
  *
  * <pre><code>
  * new ViewBundle(ImmutableList.of(myViewRenderer))
@@ -36,7 +41,7 @@ import java.util.ServiceLoader;
  * }
  * </code></pre>
  *
- * <p>The {@code "profile.ftl[hx]"} or {@code "profile.mustache"} is the path of the template relative to the class name. If
+ *<p>The {@code "profile.ftl[hx]"} or {@code "profile.mustache"} is the path of the template relative to the class name. If
  * this class was {@code com.example.application.PersonView}, Freemarker or Mustache would then look for the file
  * {@code src/main/resources/com/example/application/profile.ftl} or {@code
  * src/main/resources/com/example/application/profile.mustache} respectively. If the template path
@@ -84,7 +89,7 @@ import java.util.ServiceLoader;
  *
  * See Also: <a href="http://mustache.github.io/mustache.5.html">Mustache Manual</a>
  */
-public class ViewBundle<T> implements ConfiguredBundle<T>, ViewConfigurable<T> {
+public class ViewBundle<T extends Configuration> implements ConfiguredBundle<T>, ViewConfigurable<T> {
     private final Iterable<ViewRenderer> viewRenderers;
 
     public ViewBundle() {
@@ -92,12 +97,12 @@ public class ViewBundle<T> implements ConfiguredBundle<T>, ViewConfigurable<T> {
     }
 
     public ViewBundle(Iterable<ViewRenderer> viewRenderers) {
-        this.viewRenderers = Sets.of(viewRenderers);
+        this.viewRenderers = ImmutableSet.copyOf(viewRenderers);
     }
 
     @Override
     public Map<String, Map<String, String>> getViewConfiguration(T configuration) {
-        return Collections.emptyMap();
+        return ImmutableMap.of();
     }
 
     @Override
@@ -105,8 +110,13 @@ public class ViewBundle<T> implements ConfiguredBundle<T>, ViewConfigurable<T> {
         final Map<String, Map<String, String>> options = getViewConfiguration(configuration);
         for (ViewRenderer viewRenderer : viewRenderers) {
             final Map<String, String> viewOptions = options.get(viewRenderer.getConfigurationKey());
-            viewRenderer.configure(viewOptions == null ? Collections.emptyMap() : viewOptions);
+            viewRenderer.configure(firstNonNull(viewOptions, Collections.emptyMap()));
         }
         environment.jersey().register(new ViewMessageBodyWriter(environment.metrics(), viewRenderers));
+    }
+
+    @Override
+    public void initialize(Bootstrap<?> bootstrap) {
+        // nothing doing
     }
 }

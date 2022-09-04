@@ -10,6 +10,8 @@ import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerResponseContext;
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.ext.Provider;
+
+import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.google.common.base.Strings;
@@ -19,14 +21,20 @@ import com.google.common.base.Strings;
  * information: request method, request path, request ID, response status,
  * response length (or -1 if not known).
  *
- * @see https://devcenter.heroku.com/articles/http-request-id
+ * @see <a href="https://devcenter.heroku.com/articles/http-request-id">Heroku - HTTP Request IDs</a>
  */
 @Provider
 @Priority(Priorities.USER)
 public class RequestIdFilter implements ContainerResponseFilter {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(RequestIdFilter.class);
     private static final String REQUEST_ID = "X-Request-Id";
+
+    private Logger logger = LoggerFactory.getLogger(RequestIdFilter.class);
+
+    @VisibleForTesting
+    void setLogger(Logger logger) {
+        this.logger = logger;
+    }
 
     @Override
     public void filter(final ContainerRequestContext request,
@@ -36,8 +44,8 @@ public class RequestIdFilter implements ContainerResponseFilter {
         if (Strings.isNullOrEmpty(id)) {
             id = generateRandomUuid().toString();
         }
-        
-        LOGGER.trace("method={} path={} request_id={} status={} length={}",
+
+        logger.trace("method={} path={} request_id={} status={} length={}",
                 request.getMethod(), request.getUriInfo().getPath(), id,
                 response.getStatus(), response.getLength());
         response.getHeaders().putSingle(REQUEST_ID, id);
@@ -47,7 +55,7 @@ public class RequestIdFilter implements ContainerResponseFilter {
      * Generate a random UUID v4 that will perform reasonably when used by
      * multiple threads under load.
      *
-     * @see https://github.com/Netflix/netflix-commons/blob/v0.3.0/netflix-commons-util/src/main/java/com/netflix/util/concurrent/ConcurrentUUIDFactory.java
+     * @see <a href="https://github.com/Netflix/netflix-commons/blob/v0.3.0/netflix-commons-util/src/main/java/com/netflix/util/concurrent/ConcurrentUUIDFactory.java">ConcurrentUUIDFactory</a>
      * @return random UUID
      */
     private static UUID generateRandomUuid() {
