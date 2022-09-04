@@ -16,10 +16,8 @@
  */
 package org.graylog2.rest.resources.dashboards.requests;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-
-@JsonAutoDetect
 public class WidgetPositionRequest {
+
     public String id;
     public int col;
     public int row;
