@@ -14,24 +14,46 @@
 
 package com.google.devtools.build.lib.skylarkinterface;
 
-/** Base interface for all Starlark values besides boxed Java primitives. */
+/**
+ * Java objects that are also Skylark values.
+ *
+ * <p>This is used for extending the Skylark interpreter with domain-specific values.
+ */
 public interface SkylarkValue {
 
   /**
-   * Prints an official representation of object x.
+   * Returns if the value is immutable and thus suitable for being used as a dictionary key.
    *
-   * <p>Convention is that the string should be parseable back to the value x. If this isn't
-   * feasible then it should be a short human-readable description enclosed in angled brackets, e.g.
-   * {@code "<foo object>"}.
-   *
-   * @param printer a printer to be used for formatting nested values.
+   * <p>Immutability is deep, i.e. in order for a value to be immutable, all values it is composed
+   * of must be immutable, too.
    */
-  default void repr(SkylarkPrinter printer) {
-    printer.append("<unknown object ").append(getClass().getName()).append(">");
+  default boolean isImmutable() {
+      return false;
   }
 
   /**
-   * Prints an informal, human-readable representation of the value.
+   * Print an official representation of object x.
+   *
+   * <p>For regular data structures, the value should be parsable back into an equal data structure.
+   *
+   * @param printer a printer to be used for formatting nested values.
+   */
+  void repr(SkylarkPrinter printer);
+
+  /**
+   * Print a legacy representation of object x.
+   *
+   * <p>By default dispatches to the {@code repr} method. Should be called instead of {@code repr}
+   * if --incompatible_descriptive_string_representations=false is used.
+   *
+   * @param printer an instance of a printer to be used for formatting nested values
+   */
+  default void reprLegacy(SkylarkPrinter printer) {
+    repr(printer);
+  }
+
+  /**
+   * Print an informal, human-readable representation of the value.
    *
    * <p>By default dispatches to the {@code repr} method.
    *
@@ -42,37 +64,13 @@ public interface SkylarkValue {
   }
 
   /**
-   * Prints an informal debug representation of the value.
+   * Print a legacy informal, human-readable representation of the value.
    *
-   * <p>This debug representation is only ever printed to the terminal or to another out-of-band
-   * channel, and is never accessible to Skylark code. Therefore, it is safe for the debug
-   * representation to reveal properties of the value that are usually hidden for the sake of
-   * performance, determinism, or forward-compatibility.
-   *
-   * <p>By default dispatches to the {@code str} method.
+   * <p>By default dispatches to the {@code reprLegacy} method.
    *
    * @param printer a printer to be used for formatting nested values.
    */
-  default void debugPrint(SkylarkPrinter printer) {
-    str(printer);
-  }
-
-  /**
-   * Returns if the value is immutable.
-   *
-   * <p>Immutability is deep, i.e. in order for a value to be immutable, all values it is composed
-   * of must be immutable, too.
-   */
-  default boolean isImmutable() {
-      return false;
-  }
-
-  /**
-   * Returns if the value is hashable and thus suitable for being used as a dictionary key.
-   *
-   * <p>Hashability implies immutability, but not vice versa.
-   */
-  default boolean isHashable() {
-    return this.isImmutable();
+  default void strLegacy(SkylarkPrinter printer) {
+    reprLegacy(printer);
   }
 }

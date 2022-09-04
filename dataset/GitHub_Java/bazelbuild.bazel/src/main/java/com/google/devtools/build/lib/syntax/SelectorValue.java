@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * The value passed to a select({...}) statement, e.g.:
@@ -44,7 +45,8 @@ public final class SelectorValue implements SkylarkValue {
   private final String noMatchError;
 
   public SelectorValue(Map<?, ?> dictionary, String noMatchError) {
-    this.dictionary = ImmutableMap.copyOf(dictionary);
+    // Put the dict through a sorting to avoid depending on insertion order.
+    this.dictionary = ImmutableMap.copyOf(new TreeMap<>(dictionary));
     this.type =
         dictionary.isEmpty() ? Object.class : Iterables.get(dictionary.values(), 0).getClass();
     this.noMatchError = noMatchError;
@@ -78,5 +80,10 @@ public final class SelectorValue implements SkylarkValue {
   @Override
   public void repr(SkylarkPrinter printer) {
     printer.format("select(%r)", dictionary);
+  }
+
+  @Override
+  public void reprLegacy(SkylarkPrinter printer) {
+    printer.format("selector(%r)", dictionary);
   }
 }

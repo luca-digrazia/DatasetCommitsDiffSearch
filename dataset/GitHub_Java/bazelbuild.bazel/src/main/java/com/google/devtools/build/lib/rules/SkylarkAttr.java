@@ -1619,12 +1619,11 @@ public final class SkylarkAttr implements SkylarkValue {
 
   /** A descriptor of an attribute defined in Skylark. */
   @SkylarkModule(
-    name = "Attribute",
+    name = "attr_definition",
     category = SkylarkModuleCategory.NONE,
     doc =
-        "Representation of a definition of an attribute. Use the <a href=\"attr\"> module to "
-            + "create an Attribute. They are only for use with "
-            + "<a href=\"globals.html#rule\">rule</a> or "
+        "Representation of a definition of an attribute; constructed by <code>attr.*</code> "
+            + "functions. They are only for use with <a href=\"globals.html#rule\">rule</a> or "
             + "<a href=\"globals.html#aspect\">aspect</a>."
   )
   public static final class Descriptor implements SkylarkValue {
@@ -1672,3 +1671,4 @@ public final class SkylarkAttr implements SkylarkValue {
     SkylarkSignatureProcessor.configureSkylarkFunctions(SkylarkAttr.class);
   }
 }
+

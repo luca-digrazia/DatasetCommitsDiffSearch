@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -25,12 +24,14 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.packages.Provider;
+import com.google.devtools.build.lib.packages.ClassObjectConstructor;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
+import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
+import com.google.devtools.build.lib.util.Preconditions;
 import javax.annotation.Nullable;
 
 /**
@@ -78,7 +79,7 @@ public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObjec
 
   @Nullable
   @Override
-  public Info get(Provider.Key providerKey) {
+  public SkylarkClassObject get(ClassObjectConstructor.Key providerKey) {
     return actual.get(providerKey);
   }
 
@@ -90,6 +91,11 @@ public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObjec
   @Override
   public boolean containsKey(Object key, Location loc) throws EvalException {
     return actual.containsKey(key, loc);
+  }
+
+  @Override
+  public Target getTarget() {
+    return actual.getTarget();
   }
 
   @Override
@@ -116,12 +122,12 @@ public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObjec
   }
 
   @Override
-  public ImmutableCollection<String> getFieldNames() {
-    return actual.getFieldNames();
+  public ImmutableCollection<String> getKeys() {
+    return actual.getKeys();
   }
 
   @Override
-  public String getErrorMessageForUnknownField(String name) {
+  public String errorMessage(String name) {
     // Use the default error message.
     return null;
   }
@@ -131,10 +137,6 @@ public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObjec
    */
   public ConfiguredTarget getActual() {
     return actual;
-  }
-
-  public Label getOriginalLabel() {
-    return label;
   }
 
   @Override
