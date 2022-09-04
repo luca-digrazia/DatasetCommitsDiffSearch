@@ -110,15 +110,6 @@ import javax.annotation.Nullable;
 public class RunCommand implements BlazeCommand  {
   public static class RunOptions extends OptionsBase {
     @Option(
-        name = "as_test",
-        defaultValue = "true",
-        documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-        effectTags = {OptionEffectTag.EXECUTION},
-        help = "If set, the 'run' command will execute tests in an approximation of the official "
-            + "test environment. Otherwise, tests will be run as regular binaries.")
-    public boolean asTest;
-
-    @Option(
       name = "direct_run",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
@@ -246,8 +237,8 @@ public class RunCommand implements BlazeCommand  {
         null, "Running command line: " + ShellEscaper.escapeJoinAll(prettyCmdLine)));
 
     try {
-      com.google.devtools.build.lib.shell.Command command =
-          new CommandBuilder(workingDir).addArgs(cmdLine).setEnv(env.getClientEnv()).build();
+      com.google.devtools.build.lib.shell.Command command = new CommandBuilder()
+          .addArgs(cmdLine).setEnv(env.getClientEnv()).setWorkingDir(workingDir).build();
 
       // Restore a raw EventHandler if it is registered. This allows for blaze run to produce the
       // actual output of the command being run even if --color=no is specified.
@@ -445,7 +436,7 @@ public class RunCommand implements BlazeCommand  {
     runEnvironment.put("BUILD_WORKSPACE_DIRECTORY", env.getWorkspace().getPathString());
     runEnvironment.put("BUILD_WORKING_DIRECTORY", env.getWorkingDirectory().getPathString());
 
-    if (targetToRun.getProvider(TestProvider.class) != null && runOptions.asTest) {
+    if (targetToRun.getProvider(TestProvider.class) != null) {
       // This is a test. Provide it with a reasonable approximation of the actual test environment
       ImmutableList<Artifact> statusArtifacts = TestProvider.getTestStatusArtifacts(targetToRun);
       if (statusArtifacts.size() != 1) {
