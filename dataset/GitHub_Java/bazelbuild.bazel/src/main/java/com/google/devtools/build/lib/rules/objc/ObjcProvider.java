@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.NativeProvider.WithLegacySkylarkName;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsInfo;
-import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
@@ -934,17 +933,17 @@ public final class ObjcProvider extends NativeInfo {
    * Subtracts dependency subtrees from this provider and returns the result (subtraction does not
    * mutate this provider). Note that not all provider keys are subtracted; generally only keys
    * which correspond with compiled libraries will be subtracted.
-   *
-   * <p>This is an expensive operation, as it requires flattening of all nested sets contained in
-   * each provider.
+   * 
+   * <p>This is an expensive operation, as it requires flattening of all nested sets contained
+   * in each provider.
    *
    * @param avoidObjcProviders objc providers which contain the dependency subtrees to subtract
    * @param avoidCcProviders cc providers which contain the dependency subtrees to subtract
    */
   // TODO(b/65156211): Investigate subtraction generalized to NestedSet.
   @SuppressWarnings("unchecked") // Due to depending on Key types, when the keys map erases type.
-  public ObjcProvider subtractSubtrees(
-      Iterable<ObjcProvider> avoidObjcProviders, Iterable<CcLinkingInfo> avoidCcProviders) {
+  public ObjcProvider subtractSubtrees(Iterable<ObjcProvider> avoidObjcProviders,
+      Iterable<CcLinkParamsInfo> avoidCcProviders) {
     // LIBRARY and CC_LIBRARY need to be special cased for objc-cc interop.
     // A library which is a dependency of a cc_library may be present in all or any of
     // three possible locations (and may be duplicated!):
@@ -953,13 +952,9 @@ public final class ObjcProvider extends NativeInfo {
     // 3. CcLinkParamsInfo->LibraryToLink->getArtifact()
     // TODO(cpeyser): Clean up objc-cc interop.
     HashSet<PathFragment> avoidLibrariesSet = new HashSet<>();
-    for (CcLinkingInfo linkProvider : avoidCcProviders) {
-      CcLinkParamsInfo ccLinkParamsInfo = linkProvider.getCcLinkParamsInfo();
-      if (ccLinkParamsInfo == null) {
-        continue;
-      }
+    for (CcLinkParamsInfo linkProvider : avoidCcProviders) {
       NestedSet<LibraryToLink> librariesToLink =
-          ccLinkParamsInfo.getCcLinkParams(true, false).getLibraries();
+          linkProvider.getCcLinkParams(true, false).getLibraries();
       for (LibraryToLink libraryToLink : librariesToLink.toList()) {
         avoidLibrariesSet.add(libraryToLink.getArtifact().getRunfilesPath());
       }

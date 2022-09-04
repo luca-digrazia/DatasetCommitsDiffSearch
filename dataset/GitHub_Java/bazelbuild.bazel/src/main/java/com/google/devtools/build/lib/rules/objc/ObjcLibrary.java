@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTa
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.rules.cpp.CcCompilationContextInfo;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationInfo;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsInfo;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
@@ -93,8 +92,8 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
     J2ObjcEntryClassProvider j2ObjcEntryClassProvider = new J2ObjcEntryClassProvider.Builder()
       .addTransitive(ruleContext.getPrerequisites("deps", Mode.TARGET,
           J2ObjcEntryClassProvider.class)).build();
-    CcCompilationContextInfo ccCompilationContextInfo =
-        new CcCompilationContextInfo.Builder(ruleContext)
+    CcCompilationInfo ccCompilationInfo =
+        new CcCompilationInfo.Builder(ruleContext)
             .addDeclaredIncludeSrcs(
                 CompilationAttributes.Builder.fromRuleContext(ruleContext)
                     .build()
@@ -102,12 +101,9 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
                     .toCollection())
             .build();
 
-    CcCompilationInfo.Builder ccCompilationInfoBuilder = CcCompilationInfo.Builder.create();
-    ccCompilationInfoBuilder.setCcCompilationContextInfo(ccCompilationContextInfo);
-
     return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
         .addNativeDeclaredProvider(common.getObjcProvider())
-        .addNativeDeclaredProvider(ccCompilationInfoBuilder.build())
+        .addNativeDeclaredProvider(ccCompilationInfo)
         .addProvider(J2ObjcEntryClassProvider.class, j2ObjcEntryClassProvider)
         .addProvider(J2ObjcMappingFileProvider.class, j2ObjcMappingFileProvider)
         .addProvider(

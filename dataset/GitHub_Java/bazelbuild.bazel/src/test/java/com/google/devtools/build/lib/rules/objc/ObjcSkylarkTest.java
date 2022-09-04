@@ -1378,7 +1378,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     } catch (AssertionError e) {
       assertThat(e)
           .hasMessageThat()
-          .contains("Argument xib not a recognized key");
+          .contains("in call to new_objc_provider: Argument xib not a recognized key");
     }
   }
 
