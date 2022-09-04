@@ -21,27 +21,21 @@ import io.quarkus.test.common.http.TestHTTPResourceManager;
 
 public class NativeImageLauncher implements Closeable {
 
-    private static final int DEFAULT_PORT = 8081;
-    private static final long DEFAULT_IMAGE_WAIT_TIME = 60;
+    private static final long IMAGE_WAIT_TIME = 60000;
 
     private final Class<?> testClass;
     private Process quarkusProcess;
     private final int port;
-    private final long imageWaitTime;
     private final Map<String, String> systemProps = new HashMap<>();
     private List<NativeImageStartedNotifier> startedNotifiers;
 
     public NativeImageLauncher(Class<?> testClass) {
-        this(testClass,
-                ConfigProvider.getConfig().getOptionalValue("quarkus.http.test-port", Integer.class).orElse(DEFAULT_PORT),
-                ConfigProvider.getConfig().getOptionalValue("quarkus.test.native-image-wait-time", Long.class)
-                        .orElse(DEFAULT_IMAGE_WAIT_TIME));
+        this(testClass, ConfigProvider.getConfig().getOptionalValue("quarkus.http.test-port", Integer.class).orElse(8081));
     }
 
-    public NativeImageLauncher(Class<?> testClass, int port, long imageWaitTime) {
+    public NativeImageLauncher(Class<?> testClass, int port) {
         this.testClass = testClass;
         this.port = port;
-        this.imageWaitTime = imageWaitTime;
         List<NativeImageStartedNotifier> startedNotifiers = new ArrayList<>();
         for (NativeImageStartedNotifier i : ServiceLoader.load(NativeImageStartedNotifier.class)) {
             startedNotifiers.add(i);
@@ -51,8 +45,6 @@ public class NativeImageLauncher implements Closeable {
 
     public void start() throws IOException {
 
-        System.setProperty("test.url", TestHTTPResourceManager.getUri());
-
         String path = System.getProperty("native.image.path");
         if (path == null) {
             path = guessPath(testClass);
@@ -60,6 +52,7 @@ public class NativeImageLauncher implements Closeable {
         List<String> args = new ArrayList<>();
         args.add(path);
         args.add("-Dquarkus.http.port=" + port);
+        args.add("-Dquarkus.profile=test");
         args.add("-Dtest.url=" + TestHTTPResourceManager.getUri());
         args.add("-Dquarkus.log.file.path=" + PropertyTestUtil.getLogFileLocation());
         for (Map.Entry<String, String> e : systemProps.entrySet()) {
@@ -123,7 +116,7 @@ public class NativeImageLauncher implements Closeable {
     }
 
     private void waitForQuarkus() {
-        long bailout = System.currentTimeMillis() + imageWaitTime * 1000;
+        long bailout = System.currentTimeMillis() + IMAGE_WAIT_TIME;
 
         while (System.currentTimeMillis() < bailout) {
             try {
@@ -141,7 +134,7 @@ public class NativeImageLauncher implements Closeable {
             }
         }
 
-        throw new RuntimeException("Unable to start native image in " + imageWaitTime + "s");
+        throw new RuntimeException("Unable to start native image in " + IMAGE_WAIT_TIME + "ms");
     }
 
     public void addSystemProperties(Map<String, String> systemProps) {
