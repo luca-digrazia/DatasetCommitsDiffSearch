@@ -2,8 +2,6 @@ package com.codahale.dropwizard.testing.junit;
 
 import com.codahale.dropwizard.Configuration;
 import com.codahale.dropwizard.Service;
-import com.codahale.dropwizard.jetty.HttpConnectorFactory;
-import com.codahale.dropwizard.server.DefaultServerFactory;
 import com.codahale.dropwizard.setup.Bootstrap;
 import com.codahale.dropwizard.setup.Environment;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -40,9 +38,7 @@ public class DropwizardServiceRuleTest {
     public void returnsConfiguration() {
         final TestConfiguration config = RULE.getConfiguration();
         assertThat(config.getMessage(), is("Yes, it's here"));
-        final DefaultServerFactory serverFactory = (DefaultServerFactory) config.getServerFactory();
-        final HttpConnectorFactory connectorFactory = (HttpConnectorFactory) serverFactory.getApplicationConnectors().get(0);
-        assertThat(connectorFactory.getPort(), is(0));
+        assertThat(config.getServerConfiguration().getPort(), is(0));
     }
 
     @Test
@@ -86,8 +82,9 @@ public class DropwizardServiceRuleTest {
     }
 
     public static class TestConfiguration extends Configuration {
-        @NotEmpty
+
         @JsonProperty
+        @NotEmpty
         private String message;
 
         public String getMessage() {

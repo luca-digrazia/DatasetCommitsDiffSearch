@@ -157,7 +157,7 @@ public class ServerFactory {
                                                  env.healthChecks());
         handler.getServletContext().setAttribute(MetricsServlet.METRICS_REGISTRY,
                                                  env.metrics());
-        handler.addServlet(new NonblockingServletHolder(new AdminServlet()), "/*");
+        handler.addServlet(new ServletHolder(AdminServlet.class), "/*");
 
         if (config.getAdminUsername().isPresent() || config.getAdminPassword().isPresent()) {
             handler.setSecurityHandler(basicAuthHandler(config.getAdminUsername().or(""),

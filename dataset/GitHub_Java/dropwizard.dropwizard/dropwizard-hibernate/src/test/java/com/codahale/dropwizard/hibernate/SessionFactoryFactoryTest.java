@@ -1,8 +1,9 @@
 package com.codahale.dropwizard.hibernate;
 
-import com.codahale.dropwizard.config.Environment;
+import com.codahale.dropwizard.setup.Environment;
 import com.codahale.dropwizard.db.DatabaseConfiguration;
-import com.codahale.dropwizard.setup.LifecycleEnvironment;
+import com.codahale.dropwizard.logging.LoggingFactory;
+import com.codahale.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
 import org.hibernate.Session;
@@ -13,15 +14,13 @@ import org.joda.time.DateTimeZone;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.slf4j.bridge.SLF4JBridgeHandler;
 
 import static org.fest.assertions.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 public class SessionFactoryFactoryTest {
     static {
-        SLF4JBridgeHandler.removeHandlersForRootLogger();
-        SLF4JBridgeHandler.install();
+        LoggingFactory.bootstrap();
     }
 
     private final SessionFactoryFactory factory = new SessionFactoryFactory();
@@ -36,8 +35,8 @@ public class SessionFactoryFactoryTest {
 
     @Before
     public void setUp() throws Exception {
-        when(environment.getMetricRegistry()).thenReturn(metricRegistry);
-        when(environment.getLifecycleEnvironment()).thenReturn(lifecycleEnvironment);
+        when(environment.metrics()).thenReturn(metricRegistry);
+        when(environment.lifecycle()).thenReturn(lifecycleEnvironment);
 
         config.setUrl("jdbc:hsqldb:mem:DbTest-" + System.currentTimeMillis());
         config.setUser("sa");

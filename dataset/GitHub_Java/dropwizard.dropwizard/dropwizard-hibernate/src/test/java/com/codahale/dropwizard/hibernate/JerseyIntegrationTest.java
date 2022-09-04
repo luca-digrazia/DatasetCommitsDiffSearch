@@ -1,12 +1,12 @@
 package com.codahale.dropwizard.hibernate;
 
+import com.codahale.dropwizard.setup.Environment;
 import com.codahale.dropwizard.db.DatabaseConfiguration;
 import com.codahale.dropwizard.jackson.Jackson;
 import com.codahale.dropwizard.jersey.DropwizardResourceConfig;
 import com.codahale.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
-import com.codahale.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import com.codahale.dropwizard.logging.LoggingFactory;
-import com.codahale.dropwizard.setup.Environment;
+import com.codahale.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
@@ -16,7 +16,8 @@ import com.sun.jersey.test.framework.JerseyTest;
 import com.sun.jersey.test.framework.LowLevelAppDescriptor;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
-import org.joda.time.LocalDateTime;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.junit.After;
 import org.junit.Test;
 
@@ -146,7 +147,7 @@ public class JerseyIntegrationTest extends JerseyTest {
                 .isEqualTo("coda@example.com");
 
         assertThat(coda.getBirthday())
-                .isEqualTo(new LocalDateTime(1979, 1, 2, 0, 22));
+                .isEqualTo(new DateTime(1979, 1, 2, 0, 22, DateTimeZone.UTC));
     }
 
     @Test
@@ -167,7 +168,7 @@ public class JerseyIntegrationTest extends JerseyTest {
         final Person person = new Person();
         person.setName("Hank");
         person.setEmail("hank@example.com");
-        person.setBirthday(new LocalDateTime(1971, 3, 14, 19, 12));
+        person.setBirthday(new DateTime(1971, 3, 14, 19, 12, DateTimeZone.UTC));
 
         client().resource("/people/Hank").type(MediaType.APPLICATION_JSON).put(person);
 
