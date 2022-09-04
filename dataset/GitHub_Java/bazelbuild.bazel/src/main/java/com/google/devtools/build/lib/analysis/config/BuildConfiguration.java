@@ -1062,7 +1062,10 @@ public final class BuildConfiguration implements BuildEvent {
       }
 
       // === Runfiles ===
-      host.buildRunfiles = buildRunfiles;
+      // Ideally we could force this the other way, and skip runfiles construction
+      // for host tools which are never run locally, but that's probably a very
+      // small optimization.
+      host.buildRunfiles = true;
 
       // === Linkstamping ===
       // Disable all link stamping for the host configuration, to improve action
