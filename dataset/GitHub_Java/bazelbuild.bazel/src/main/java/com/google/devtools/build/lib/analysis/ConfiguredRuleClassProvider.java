@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
-import com.google.devtools.build.lib.analysis.config.DynamicTransitionMapper;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
@@ -215,8 +214,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     private final Digraph<Class<? extends RuleDefinition>> dependencyGraph =
         new Digraph<>();
     private ConfigurationCollectionFactory configurationCollectionFactory;
-    private ImmutableMap.Builder<Attribute.Transition, Attribute.Transition> dynamicTransitionMaps
-        = ImmutableMap.builder();
     private Class<? extends BuildConfiguration.Fragment> universalFragment;
     private PrerequisiteValidator prerequisiteValidator;
     private ImmutableMap.Builder<String, Object> skylarkAccessibleTopLevels =
@@ -320,11 +317,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
     public Builder setConfigurationCollectionFactory(ConfigurationCollectionFactory factory) {
       this.configurationCollectionFactory = factory;
-      return this;
-    }
-
-    public Builder addDynamicTransitionMaps(Map<Attribute.Transition, Attribute.Transition> maps) {
-      dynamicTransitionMaps.putAll(maps);
       return this;
     }
 
@@ -437,7 +429,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
           ImmutableList.copyOf(configurationOptions),
           ImmutableList.copyOf(configurationFragmentFactories),
           configurationCollectionFactory,
-          new DynamicTransitionMapper(dynamicTransitionMaps.build()),
           universalFragment,
           prerequisiteValidator,
           skylarkAccessibleTopLevels.build(),
@@ -538,11 +529,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   private final ConfigurationCollectionFactory configurationCollectionFactory;
 
   /**
-   * The dynamic configuration transition mapper.
-   */
-  private final DynamicTransitionMapper dynamicTransitionMapper;
-
-  /**
    * A configuration fragment that should be available to all rules even when they don't
    * explicitly require it.
    */
@@ -568,7 +554,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       ImmutableList<Class<? extends FragmentOptions>> configurationOptions,
       ImmutableList<ConfigurationFragmentFactory> configurationFragments,
       ConfigurationCollectionFactory configurationCollectionFactory,
-      DynamicTransitionMapper dynamicTransitionMapper,
       Class<? extends BuildConfiguration.Fragment> universalFragment,
       PrerequisiteValidator prerequisiteValidator,
       ImmutableMap<String, Object> skylarkAccessibleJavaClasses,
@@ -586,7 +571,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     this.configurationOptions = configurationOptions;
     this.configurationFragmentFactories = configurationFragments;
     this.configurationCollectionFactory = configurationCollectionFactory;
-    this.dynamicTransitionMapper = dynamicTransitionMapper;
     this.universalFragment = universalFragment;
     this.prerequisiteValidator = prerequisiteValidator;
     this.globals = createGlobals(skylarkAccessibleJavaClasses, skylarkModules);
@@ -663,13 +647,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
    */
   public ConfigurationCollectionFactory getConfigurationCollectionFactory() {
     return configurationCollectionFactory;
-  }
-
-  /**
-   * Returns the dynamic configuration transition mapper.
-   */
-  public DynamicTransitionMapper getDynamicTransitionMapper() {
-    return dynamicTransitionMapper;
   }
 
   /**

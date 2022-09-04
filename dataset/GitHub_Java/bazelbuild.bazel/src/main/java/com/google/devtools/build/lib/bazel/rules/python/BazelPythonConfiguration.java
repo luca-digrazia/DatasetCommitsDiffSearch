@@ -30,7 +30,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.proto.OptionFilters;
+import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 
 /**
@@ -65,9 +65,8 @@ public class BazelPythonConfiguration extends BuildConfiguration.Fragment {
       name = "python2_path",
       defaultValue = "python",
       category = "version",
-      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
-      metadataTags = { OptionFilters.OptionMetadataTag.DEPRECATED },
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Local path to the Python2 executable. "
                 + "Deprecated, please use python_path or python_top instead."
     )
@@ -78,9 +77,8 @@ public class BazelPythonConfiguration extends BuildConfiguration.Fragment {
       converter = Python3PathConverter.class,
       defaultValue = "auto",
       category = "version",
-      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
-      metadataTags = { OptionFilters.OptionMetadataTag.DEPRECATED },
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Local path to the Python3 executable. "
                 + "Deprecated, please use python_path or python_top instead."
     )
@@ -91,8 +89,8 @@ public class BazelPythonConfiguration extends BuildConfiguration.Fragment {
         converter = LabelConverter.class,
         defaultValue = "null",
         category = "version",
-        documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-        effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
+        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+        effectTags = {OptionEffectTag.UNKNOWN},
         help =
             "The label of py_runtime rule used for the Python interpreter invoked by Bazel."
     )
@@ -102,8 +100,8 @@ public class BazelPythonConfiguration extends BuildConfiguration.Fragment {
         name = "python_path",
         defaultValue = "python",
         category = "version",
-        documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-        effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
+        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+        effectTags = {OptionEffectTag.UNKNOWN},
         help =
             "The absolute path of the Python interpreter invoked by Bazel."
     )
@@ -112,8 +110,9 @@ public class BazelPythonConfiguration extends BuildConfiguration.Fragment {
     @Option(
       name = "experimental_python_import_all_repositories",
       defaultValue = "true",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
+      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Do not use."
     )
     public boolean experimentalPythonImportAllRepositories;

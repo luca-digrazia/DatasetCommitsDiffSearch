@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.PackageSpecification;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
@@ -211,15 +210,4 @@ public abstract class AbstractConfiguredTarget
   /** Implement in subclasses to get a skylark provider for a given {@code providerKey}. */
   protected abstract Object rawGetSkylarkProvider(String providerKey);
 
-  @Override
-  public boolean isImmutable() {
-    return false;
-  }
-
-  // All main target classes must override this method to provide more descriptive strings.
-  // Exceptions are currently EnvironmentGroupConfiguredTarget and PackageGroupConfiguredTarget.
-  @Override
-  public void repr(SkylarkPrinter printer) {
-    printer.append("<unknown target " + getTarget().getLabel() + ">");
-  }
 }

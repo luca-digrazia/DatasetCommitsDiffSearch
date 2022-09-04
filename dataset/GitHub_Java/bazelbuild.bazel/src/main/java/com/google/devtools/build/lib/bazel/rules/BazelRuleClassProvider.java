@@ -106,7 +106,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainSuiteRule;
 import com.google.devtools.build.lib.rules.cpp.CppBuildInfo;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
-import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.proto.CcProtoAspect;
 import com.google.devtools.build.lib.rules.cpp.proto.CcProtoLibraryRule;
 import com.google.devtools.build.lib.rules.extra.ActionListenerRule;
@@ -128,6 +127,7 @@ import com.google.devtools.build.lib.rules.objc.AppleSkylarkCommon;
 import com.google.devtools.build.lib.rules.objc.AppleStaticLibraryRule;
 import com.google.devtools.build.lib.rules.objc.AppleStubBinaryRule;
 import com.google.devtools.build.lib.rules.objc.AppleWatch1ExtensionRule;
+import com.google.devtools.build.lib.rules.objc.AppleWatch2ExtensionRule;
 import com.google.devtools.build.lib.rules.objc.AppleWatchExtensionBinaryRule;
 import com.google.devtools.build.lib.rules.objc.IosApplicationRule;
 import com.google.devtools.build.lib.rules.objc.IosDeviceRule;
@@ -150,7 +150,9 @@ import com.google.devtools.build.lib.rules.objc.ObjcImportRule;
 import com.google.devtools.build.lib.rules.objc.ObjcLibraryRule;
 import com.google.devtools.build.lib.rules.objc.ObjcProtoAspect;
 import com.google.devtools.build.lib.rules.objc.ObjcProtoLibraryRule;
+import com.google.devtools.build.lib.rules.objc.ObjcProvider;
 import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses;
+import com.google.devtools.build.lib.rules.objc.XcTestAppProvider;
 import com.google.devtools.build.lib.rules.platform.ConstraintSettingRule;
 import com.google.devtools.build.lib.rules.platform.ConstraintValueRule;
 import com.google.devtools.build.lib.rules.platform.PlatformCommon;
@@ -234,7 +236,6 @@ public class BazelRuleClassProvider {
         public void init(Builder builder) {
           builder.addConfigurationOptions(FeaturePolicyOptions.class);
           builder.addConfigurationFragment(new FeaturePolicyLoader(FEATURE_POLICY_FEATURES));
-          builder.addDynamicTransitionMaps(BaseRuleClasses.DYNAMIC_TRANSITIONS_MAP);
 
           builder.addRuleDefinition(new BaseRuleClasses.RootRule());
           builder.addRuleDefinition(new BaseRuleClasses.BaseRule());
@@ -383,7 +384,6 @@ public class BazelRuleClassProvider {
               CppOptions.class, new CppConfigurationLoader(Functions.<String>identity()));
 
           builder.addBuildInfoFactory(new CppBuildInfo());
-          builder.addDynamicTransitionMaps(CppRuleClasses.DYNAMIC_TRANSITIONS_MAP);
 
           builder.addRuleDefinition(new CcToolchainRule());
           builder.addRuleDefinition(new CcToolchainSuiteRule());
@@ -558,6 +558,10 @@ public class BazelRuleClassProvider {
           String toolsRepository = checkNotNull(builder.getToolsRepository());
 
           builder.addBuildInfoFactory(new ObjcBuildInfoFactory());
+          builder.registerSkylarkProvider(
+              ObjcProvider.OBJC_SKYLARK_PROVIDER_NAME, ObjcProvider.class);
+          builder.registerSkylarkProvider(
+              XcTestAppProvider.XCTEST_APP_SKYLARK_PROVIDER_NAME, XcTestAppProvider.class);
           builder.addSkylarkAccessibleTopLevels("apple_common", new AppleSkylarkCommon());
 
           builder.addConfig(ObjcCommandLineOptions.class, new ObjcConfigurationLoader());
@@ -578,6 +582,7 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new AppleCcToolchainRule());
           builder.addRuleDefinition(new AppleToolchain.RequiresXcodeConfigRule(toolsRepository));
           builder.addRuleDefinition(new AppleWatch1ExtensionRule());
+          builder.addRuleDefinition(new AppleWatch2ExtensionRule());
           builder.addRuleDefinition(new AppleWatchExtensionBinaryRule());
           builder.addRuleDefinition(new IosApplicationRule());
           builder.addRuleDefinition(new IosDeviceRule());
