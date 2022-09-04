@@ -626,7 +626,6 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
             Debuger.printfLog("onAutoComplete");
             mVideoAllCallBack.onAutoComplete(mOriginUrl, mTitle, this);
         }
-        mHadPlay = false;
     }
 
     @Override
@@ -659,7 +658,6 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
 
         releaseNetWorkState();
 
-        mHadPlay = false;
     }
 
     @Override
