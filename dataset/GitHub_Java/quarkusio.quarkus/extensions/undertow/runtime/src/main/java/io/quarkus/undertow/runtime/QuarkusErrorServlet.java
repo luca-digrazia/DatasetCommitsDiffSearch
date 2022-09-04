@@ -27,8 +27,7 @@ public class QuarkusErrorServlet extends HttpServlet {
         if (errorMessage != null) {
             details = errorMessage;
         }
-        final boolean showStack = Boolean.parseBoolean(getInitParameter(SHOW_STACK));
-        if (showStack && exception != null) {
+        if (Boolean.parseBoolean(getInitParameter(SHOW_STACK)) && exception != null) {
             details = generateHeaderMessage(exception, uuid == null ? null : uuid.toString());
             stack = generateStackTrace(exception);
 
@@ -48,11 +47,7 @@ public class QuarkusErrorServlet extends HttpServlet {
             //We default to HTML representation
             resp.setContentType("text/html");
             resp.setCharacterEncoding(StandardCharsets.UTF_8.name());
-            final TemplateHtmlBuilder htmlBuilder = new TemplateHtmlBuilder("Internal Server Error", details, details);
-            if (showStack && exception != null) {
-                htmlBuilder.stack(exception);
-            }
-            resp.getWriter().write(htmlBuilder.toString());
+            resp.getWriter().write(new TemplateHtmlBuilder("Internal Server Error", details, details).stack(stack).toString());
         }
     }
 
