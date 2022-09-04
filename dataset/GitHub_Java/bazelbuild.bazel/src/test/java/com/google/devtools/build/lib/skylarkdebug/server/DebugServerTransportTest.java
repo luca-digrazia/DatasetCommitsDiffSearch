@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.Deb
 import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.DebugRequest;
 import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.StartDebuggingRequest;
 import java.io.IOException;
-import java.net.BindException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -83,21 +82,9 @@ public class DebugServerTransportTest {
     }
   }
 
-  private static ServerSocket getServerSocket() throws IOException {
-    // For reasons only Apple knows, you cannot bind to IPv4-localhost when you run in a sandbox
-    // that only allows loopback traffic, but binding to IPv6-localhost works fine. This would
-    // however break on systems that don't support IPv6. So what we'll do is to try to bind to IPv6
-    // and if that fails, try again with IPv4.
-    try {
-      return new ServerSocket(0, 1, InetAddress.getByName("[::1]"));
-    } catch (BindException e) {
-      return new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
-    }
-  }
-
   @Test
   public void testConnectAndReceiveRequest() throws Exception {
-    ServerSocket serverSocket = getServerSocket();
+    ServerSocket serverSocket = new ServerSocket(0, 1, InetAddress.getByName(null));
     Future<DebugServerTransport> future =
         executor.submit(
             () ->
@@ -121,7 +108,7 @@ public class DebugServerTransportTest {
 
   @Test
   public void testConnectAndPostEvent() throws Exception {
-    ServerSocket serverSocket = getServerSocket();
+    ServerSocket serverSocket = new ServerSocket(0, 1, InetAddress.getByName(null));
     Future<DebugServerTransport> future =
         executor.submit(
             () ->
