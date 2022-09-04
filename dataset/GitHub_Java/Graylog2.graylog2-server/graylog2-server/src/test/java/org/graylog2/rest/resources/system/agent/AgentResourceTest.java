@@ -1,25 +1,6 @@
-/**
- * This file is part of Graylog.
- *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Graylog is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
- */
 package org.graylog2.rest.resources.system.agent;
 
-import com.github.joschi.jadconfig.util.Duration;
-import com.google.common.base.Function;
 import com.google.common.collect.Lists;
-import org.graylog2.Configuration;
 import org.graylog2.agents.Agent;
 import org.graylog2.agents.AgentNodeDetails;
 import org.graylog2.agents.AgentService;
@@ -37,7 +18,6 @@ import org.mockito.runners.MockitoJUnitRunner;
 import java.util.List;
 
 import static org.junit.Assert.*;
-import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -52,9 +32,7 @@ public class AgentResourceTest extends RestResourceBaseTest {
     @Before
     public void setUp() throws Exception {
         this.agents = getDummyAgentList();
-        final Configuration config = mock(Configuration.class);
-        when(config.getAgentInactiveThreshold()).thenReturn(Duration.minutes(1));
-        this.resource = new AgentResource(agentService, config);
+        this.resource = new AgentResource(agentService);
         when(agentService.all()).thenReturn(agents);
     }
 
@@ -79,7 +57,7 @@ public class AgentResourceTest extends RestResourceBaseTest {
         final Agent agent = agents.get(agents.size() - 1);
         when(agentService.findById(agent.getId())).thenReturn(agent);
         final AgentSummary agentSummary = mock(AgentSummary.class);
-        when(agent.toSummary(any(Function.class))).thenReturn(agentSummary);
+        when(agent.toSummary()).thenReturn(agentSummary);
 
         final AgentSummary response = this.resource.get(agent.getId());
 
@@ -95,7 +73,7 @@ public class AgentResourceTest extends RestResourceBaseTest {
         when(agent.getId()).thenReturn(id);
         when(agent.getNodeId()).thenReturn(nodeId);
         when(agent.getLastSeen()).thenReturn(lastSeen);
-        when(agent.getNodeDetails()).thenReturn(agentNodeDetails);
+        when(agent.nodeDetails()).thenReturn(agentNodeDetails);
         when(agent.getOperatingSystem()).thenReturn(operatingSystem);
 
         return agent;
