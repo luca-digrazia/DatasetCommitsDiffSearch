@@ -39,7 +39,7 @@ class VertxHttpProcessor {
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     FilterBuildItem cors(CORSRecorder recorder, HttpConfiguration configuration) {
-        return new FilterBuildItem(recorder.corsHandler(configuration), 100);
+        return new FilterBuildItem(recorder.corsHandler(configuration));
     }
 
     @BuildStep
@@ -93,14 +93,8 @@ class VertxHttpProcessor {
                 defaultRoute = Optional.of(defaultRoutes.get(0));
             }
         }
-
-        List<Handler<RoutingContext>> orderedFilters = filters.stream()
-                .sorted() // Sort the handler by priority, highest priority get registered first on the router.
-                .map(FilterBuildItem::getHandler).collect(Collectors.toList());
-
-        recorder.finalizeRouter(beanContainer.getValue(),
-                defaultRoute.map(DefaultRouteBuildItem::getHandler).orElse(null),
-                orderedFilters,
+        recorder.finalizeRouter(beanContainer.getValue(), defaultRoute.map(DefaultRouteBuildItem::getHandler).orElse(null),
+                filters.stream().map(FilterBuildItem::getHandler).collect(Collectors.toList()),
                 launchMode.getLaunchMode(), shutdown, router.getRouter());
 
         boolean startVirtual = requireVirtual.isPresent() || httpConfiguration.virtual;

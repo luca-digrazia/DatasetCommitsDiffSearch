@@ -39,7 +39,7 @@ import io.vertx.core.net.PfxOptions;
 @Recorder
 public class VertxCoreRecorder {
 
-    private static final Pattern COMMA_PATTERN = Pattern.compile(",");
+    public static final String ENABLE_JSON = "quarkus-internal.vertx.enabled-json";
 
     static volatile VertxSupplier vertx;
     //temporary vertx instance to work around a JAX-RS problem
@@ -260,9 +260,9 @@ public class VertxCoreRecorder {
             List<String> certs = new ArrayList<>();
             List<String> keys = new ArrayList<>();
             eb.keyCertificatePem.certs.ifPresent(
-                    s -> certs.addAll(COMMA_PATTERN.splitAsStream(s).map(String::trim).collect(Collectors.toList())));
+                    s -> certs.addAll(Pattern.compile(",").splitAsStream(s).map(String::trim).collect(Collectors.toList())));
             eb.keyCertificatePem.keys.ifPresent(
-                    s -> keys.addAll(COMMA_PATTERN.splitAsStream(s).map(String::trim).collect(Collectors.toList())));
+                    s -> keys.addAll(Pattern.compile(",").splitAsStream(s).map(String::trim).collect(Collectors.toList())));
             PemKeyCertOptions o = new PemKeyCertOptions()
                     .setCertPaths(certs)
                     .setKeyPaths(keys);
@@ -286,7 +286,7 @@ public class VertxCoreRecorder {
         if (eb.trustCertificatePem != null) {
             eb.trustCertificatePem.certs.ifPresent(s -> {
                 PemTrustOptions o = new PemTrustOptions();
-                COMMA_PATTERN.splitAsStream(s).map(String::trim).forEach(o::addCertPath);
+                Pattern.compile(",").splitAsStream(s).map(String::trim).forEach(o::addCertPath);
                 opts.setPemTrustOptions(o);
             });
         }
