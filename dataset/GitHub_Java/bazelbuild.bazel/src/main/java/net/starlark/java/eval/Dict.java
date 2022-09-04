@@ -180,6 +180,7 @@ public final class Dict<K, V>
             named = true,
             doc = "The default value to use (instead of None) if the key is not found.")
       },
+      allowReturnNones = true,
       useStarlarkThread = true)
   // TODO(adonovan): This method is named get2 as a temporary workaround for a bug in
   // StarlarkAnnotations.getStarlarkMethod. The two 'get' methods cause it to get
@@ -215,14 +216,11 @@ public final class Dict<K, V>
       },
       useStarlarkThread = true)
   public Object pop(Object key, Object defaultValue, StarlarkThread thread) throws EvalException {
-    Starlark.checkMutable(this);
-    Object value = contents.remove(key);
+    Object value = get(key);
     if (value != null) {
+      removeEntry(key);
       return value;
     }
-
-    Starlark.checkHashable(key);
-
     if (defaultValue != Starlark.UNBOUND) {
       return defaultValue;
     }
@@ -233,21 +231,20 @@ public final class Dict<K, V>
   @StarlarkMethod(
       name = "popitem",
       doc =
-          "Remove and return the first <code>(key, value)</code> pair from the dictionary. "
-              + "<code>popitem</code> is useful to destructively iterate over a dictionary, "
+          "Remove and return an arbitrary <code>(key, value)</code> pair from the dictionary. "
+              + "<code>popitem()</code> is useful to destructively iterate over a dictionary, "
               + "as often used in set algorithms. "
-              + "If the dictionary is empty, the <code>popitem</code> call fails.")
-  public Tuple popitem() throws EvalException {
+              + "If the dictionary is empty, calling <code>popitem()</code> fails. "
+              + "It is deterministic which pair is returned.",
+      useStarlarkThread = true)
+  public Tuple popitem(StarlarkThread thread) throws EvalException {
     if (isEmpty()) {
-      throw Starlark.errorf("popitem: empty dictionary");
+      throw Starlark.errorf("popitem(): dictionary is empty");
     }
-
-    Starlark.checkMutable(this);
-
-    Iterator<Entry<K, V>> iterator = contents.entrySet().iterator();
-    Entry<K, V> entry = iterator.next();
-    iterator.remove();
-    return Tuple.pair(entry.getKey(), entry.getValue());
+    Object key = keySet().iterator().next();
+    Object value = get(key);
+    removeEntry(key);
+    return Tuple.pair(key, value);
   }
 
   @StarlarkMethod(
@@ -265,12 +262,15 @@ public final class Dict<K, V>
             named = true,
             doc = "a default value if the key is absent."),
       })
-  public V setdefault(K key, V defaultValue) throws EvalException {
-    Starlark.checkMutable(this);
-    Starlark.checkHashable(key);
-
-    V prev = contents.putIfAbsent(key, defaultValue); // see class doc comment
-    return prev != null ? prev : defaultValue;
+  @SuppressWarnings("unchecked") // Cast of value to V
+  public Object setdefault(K key, Object defaultValue) throws EvalException {
+    // TODO(adonovan): opt: use putIfAbsent to avoid hashing twice.
+    Object value = get(key);
+    if (value != null) {
+      return value;
+    }
+    putEntry(key, (V) defaultValue);
+    return defaultValue;
   }
 
   @StarlarkMethod(
@@ -294,12 +294,13 @@ public final class Dict<K, V>
       },
       extraKeywords = @Param(name = "kwargs", doc = "Dictionary of additional entries."),
       useStarlarkThread = true)
-  public void update(Object pairs, Dict<String, Object> kwargs, StarlarkThread thread)
+  public NoneType update(Object pairs, Dict<String, Object> kwargs, StarlarkThread thread)
       throws EvalException {
     Starlark.checkMutable(this);
     @SuppressWarnings("unchecked")
     Dict<Object, Object> dict = (Dict) this; // see class doc comment
     update("update", dict, pairs, kwargs);
+    return Starlark.NONE;
   }
 
   // Common implementation of dict(pairs, **kwargs) and dict.update(pairs, **kwargs).

@@ -15,13 +15,10 @@
 package net.starlark.java.eval;
 
 import com.google.common.base.Ascii;
-import com.google.common.base.Joiner;
 import com.google.common.collect.Ordering;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Iterator;
-import java.util.List;
 import java.util.NoSuchElementException;
 import net.starlark.java.annot.Param;
 import net.starlark.java.annot.ParamType;
@@ -648,18 +645,15 @@ class MethodLibrary {
 
   @StarlarkMethod(
       name = "fail",
-      doc = "Causes execution to fail with an error.",
+      doc =
+          "Raises an error that cannot be intercepted. It can be used anywhere, "
+              + "both in the loading phase and in the analysis phase.",
       parameters = {
-        // TODO(adonovan): remove. See https://github.com/bazelbuild/starlark/issues/47.
         @Param(
             name = "msg",
-            doc =
-                "Deprecated: use positional arguments instead. "
-                    + "This argument acts like an implicit leading positional argument.",
+            doc = "Error to display for the user. The object is converted to a string.",
             defaultValue = "None",
-            positional = false,
             named = true),
-        // TODO(adonovan): remove. See https://github.com/bazelbuild/starlark/issues/47.
         @Param(
             name = "attr",
             allowedTypes = {
@@ -668,29 +662,14 @@ class MethodLibrary {
             },
             defaultValue = "None",
             doc =
-                "Deprecated. Causes an optional prefix containing this string to be added to the"
-                    + " error message.",
-            positional = false,
+                "The name of the attribute that caused the error. This is used only for "
+                    + "error reporting.",
             named = true)
-      },
-      extraPositionals =
-          @Param(
-              name = "args",
-              doc =
-                  "A list of values, formatted with str and joined with spaces, that appear in the"
-                      + " error message."))
-  public NoneType fail(Object msg, Object attr, Tuple args) throws EvalException {
-    List<String> elems = new ArrayList<>();
-    // msg acts like a leading element of args.
-    if (msg != Starlark.NONE) {
-      elems.add(Starlark.str(msg));
-    }
-    for (Object arg : args) {
-      elems.add(Starlark.str(arg));
-    }
-    String str = Joiner.on(" ").join(elems);
+      })
+  public NoneType fail(Object msg, Object attr) throws EvalException {
+    String str = Starlark.str(msg);
     if (attr != Starlark.NONE) {
-      str = String.format("attribute %s: %s", attr, str);
+      str = Starlark.format("attribute %s: %s", attr, str);
     }
     throw Starlark.errorf("%s", str);
   }
