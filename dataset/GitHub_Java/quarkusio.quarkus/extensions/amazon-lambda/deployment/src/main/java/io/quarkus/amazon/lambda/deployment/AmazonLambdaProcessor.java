@@ -1,6 +1,5 @@
 package io.quarkus.amazon.lambda.deployment;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -14,8 +13,8 @@ import org.jboss.jandex.MethodInfo;
 
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 
+import io.quarkus.amazon.lambda.runtime.AmazonLambdaServlet;
 import io.quarkus.amazon.lambda.runtime.AmazonLambdaTemplate;
-import io.quarkus.amazon.lambda.runtime.FunctionError;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -23,26 +22,24 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
-import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
-import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
-import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveHierarchyBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
+import io.quarkus.undertow.deployment.ServletBuildItem;
 
 @SuppressWarnings("unchecked")
 public final class AmazonLambdaProcessor {
     private static final DotName REQUEST_HANDLER = DotName.createSimple(RequestHandler.class.getName());
 
     @BuildStep
-    List<AmazonLambdaClassNameBuildItem> discover(CombinedIndexBuildItem combinedIndexBuildItem,
+    List<AmazonLambdaBuildItem> discover(CombinedIndexBuildItem combinedIndexBuildItem,
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveClasses) {
-        List<AmazonLambdaClassNameBuildItem> ret = new ArrayList<>();
+        List<AmazonLambdaBuildItem> ret = new ArrayList<>();
 
         for (ClassInfo info : combinedIndexBuildItem.getIndex().getAllKnownImplementors(REQUEST_HANDLER)) {
             final DotName name = info.name();
 
             final String lambda = name.toString();
-            ret.add(new AmazonLambdaClassNameBuildItem(lambda));
+            ret.add(new AmazonLambdaBuildItem(lambda));
 
             ClassInfo current = info;
             boolean done = false;
@@ -63,14 +60,9 @@ public final class AmazonLambdaProcessor {
     }
 
     @BuildStep
-    ReflectiveClassBuildItem functionError() {
-        return new ReflectiveClassBuildItem(true, true, FunctionError.class);
-    }
-
-    @BuildStep
-    AdditionalBeanBuildItem beans(List<AmazonLambdaClassNameBuildItem> lambdas) {
+    AdditionalBeanBuildItem beans(List<AmazonLambdaBuildItem> lambdas) {
         AdditionalBeanBuildItem.Builder builder = AdditionalBeanBuildItem.builder().setUnremovable();
-        for (AmazonLambdaClassNameBuildItem i : lambdas) {
+        for (AmazonLambdaBuildItem i : lambdas) {
             builder.addBeanClass(i.getClassName());
         }
         return builder.build();
@@ -78,48 +70,30 @@ public final class AmazonLambdaProcessor {
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    List<AmazonLambdaBuildItem> process(List<AmazonLambdaClassNameBuildItem> items,
-            RecorderContext context,
-            AmazonLambdaTemplate template) {
-        List<AmazonLambdaBuildItem> ret = new ArrayList<>();
-        for (AmazonLambdaClassNameBuildItem i : items) {
-            ret.add(new AmazonLambdaBuildItem(i.getClassName(),
-                    template.discoverParameterTypes((Class<? extends RequestHandler>) context.classProxy(i.getClassName()))));
-        }
-        return ret;
-    }
+    public void servlets(List<AmazonLambdaBuildItem> lambdas,
+            BuildProducer<ServletBuildItem> servletProducer,
+            BeanContainerBuildItem beanContainerBuildItem,
+            AmazonLambdaTemplate template,
+            RecorderContext context) throws IOException {
 
-    @BuildStep
-    @Record(ExecutionTime.STATIC_INIT)
-    void bootstrap(BuildProducer<GeneratedResourceBuildItem> generatedResources) throws IOException {
+        for (AmazonLambdaBuildItem lambda : lambdas) {
+            servletProducer.produce(ServletBuildItem.builder(lambda.getClassName(), AmazonLambdaServlet.class.getName())
+                    .setLoadOnStartup(1)
+                    .setInstanceFactory(template.lambdaServletInstanceFactory(
+                            (Class<? extends RequestHandler>) context.classProxy(lambda.getClassName()),
+                            beanContainerBuildItem.getValue()))
+                    .addMapping("/__lambda")
+                    .build());
+        }
+        final File bootstrap = new File("target/bundle/bootstrap");
+        bootstrap.getParentFile().mkdirs();
         try (final InputStream stream = getClass().getResourceAsStream("/bootstrap");
-                final ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+                final FileOutputStream outputStream = new FileOutputStream(bootstrap)) {
             byte[] bytes = new byte[4096];
             int read;
             while ((read = stream.read(bytes)) != -1) {
                 outputStream.write(bytes, 0, read);
             }
-            generatedResources.produce(new GeneratedResourceBuildItem("bootstrap", outputStream.toByteArray()));
         }
-    }
-
-    @BuildStep
-    @Record(ExecutionTime.RUNTIME_INIT)
-    public void servlets(List<AmazonLambdaBuildItem> lambdas,
-            BeanContainerBuildItem beanContainerBuildItem,
-            AmazonLambdaTemplate template,
-            RecorderContext context,
-            ShutdownContextBuildItem shutdownContextBuildItem) throws IOException {
-
-        if (lambdas.isEmpty()) {
-            return;
-        } else if (lambdas.size() != 1) {
-            throw new RuntimeException("More than one lambda discovered " + lambdas);
-        }
-        AmazonLambdaBuildItem lambda = lambdas.get(0);
-
-        template.start((Class<? extends RequestHandler>) context.classProxy(lambda.getHandlerClass()), shutdownContextBuildItem,
-                lambda.getTargetType(), beanContainerBuildItem.getValue());
-
     }
 }
