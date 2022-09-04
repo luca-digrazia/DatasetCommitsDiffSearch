@@ -16,27 +16,44 @@
  */
 package org.graylog.plugins.views.search;
 
-import org.graylog.plugins.views.search.views.ViewDTO;
 import org.graylog.plugins.views.search.views.ViewService;
+import org.graylog.plugins.views.search.views.sharing.IsViewSharedForUser;
+import org.graylog.plugins.views.search.views.sharing.ViewSharingService;
+import org.graylog2.plugin.database.users.User;
 
 import javax.inject.Inject;
-import java.util.Collection;
+import java.util.Set;
 import java.util.function.Predicate;
+
+import static org.graylog.plugins.views.search.views.ViewDTO.idsFrom;
 
 class ViewPermissions {
     private final ViewService viewService;
+    private final ViewSharingService viewSharingService;
+    private final IsViewSharedForUser isViewSharedForUser;
 
     @Inject
-    ViewPermissions(ViewService viewService) {
+    ViewPermissions(ViewService viewService, ViewSharingService viewSharingService, IsViewSharedForUser isViewSharedForUser) {
         this.viewService = viewService;
+        this.viewSharingService = viewSharingService;
+        this.isViewSharedForUser = isViewSharedForUser;
     }
 
-    boolean isSearchPermitted(String id, Predicate<ViewDTO> viewReadPermission) {
-        final Collection<ViewDTO> views = viewService.forSearch(id);
+    boolean isSearchPermitted(String id, User user, Predicate<String> viewReadPermission) {
+        final Set<String> viewIds = idsFrom(viewService.forSearch(id));
 
-        if (views.isEmpty())
+        if (viewIds.isEmpty())
             return false;
 
-        return views.stream().anyMatch(viewReadPermission);
+        return hasSharedView(user, viewIds) || hasDirectReadPermissionForAny(viewIds, viewReadPermission);
+    }
+
+    private boolean hasSharedView(User user, Set<String> viewIds) {
+        return viewSharingService.forViews(viewIds).stream()
+                .anyMatch(vs -> isViewSharedForUser.isAllowedToSee(user, vs));
+    }
+
+    private boolean hasDirectReadPermissionForAny(Set<String> viewIds, Predicate<String> viewReadPermission) {
+        return viewIds.stream().anyMatch(viewReadPermission);
     }
 }

@@ -77,7 +77,6 @@ import java.util.stream.StreamSupport;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkArgument;
-import static org.graylog2.indexer.cluster.jest.JestUtils.deduplicateErrors;
 
 public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContext> {
     private static final Logger LOG = LoggerFactory.getLogger(ElasticsearchBackend.class);
@@ -138,9 +137,7 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
         for (SearchType searchType : searchTypes) {
             final SearchSourceBuilder searchTypeSourceBuilder = queryContext.searchSourceBuilder(searchType);
 
-            final Set<String> effectiveStreamIds = searchType.effectiveStreams().isEmpty()
-                    ? query.usedStreamIds()
-                    : searchType.effectiveStreams();
+            final Set<String> effectiveStreamIds = searchType.streams().isEmpty() ? query.usedStreamIds() : searchType.streams();
 
             final BoolQueryBuilder searchTypeOverrides = QueryBuilders.boolQuery()
                     .must(searchTypeSourceBuilder.query())
@@ -232,15 +229,14 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
                     final Set<String> affectedIndicesForSearchType = query.searchTypes().stream()
                             .filter(s -> s.id().equalsIgnoreCase(searchTypeId)).findFirst()
                             .flatMap(searchType -> {
-                                if (searchType.effectiveStreams().isEmpty()
+                                if (searchType.streams().isEmpty()
                                         && !query.globalOverride().flatMap(GlobalOverride::timerange).isPresent()
                                         && !searchType.timerange().isPresent()) {
                                     return Optional.empty();
                                 }
-                                final Set<String> usedStreamIds = searchType.effectiveStreams().isEmpty()
+                                final Set<String> usedStreamIds = searchType.streams().isEmpty()
                                         ? query.usedStreamIds()
-                                        : searchType.effectiveStreams();
-
+                                        : searchType.streams();
                                 final Set<Stream> usedStreamsOfSearchType = loadStreams(usedStreamIds);
 
                                 return Optional.of(indicesByTimeRange(query.effectiveTimeRange(searchType)).stream()
@@ -259,7 +255,7 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
                 })
                 .collect(Collectors.toList());
         final MultiSearch.Builder multiSearchBuilder = new MultiSearch.Builder(searches);
-        final MultiSearchResult result = JestUtils.execute(jestClient, multiSearchBuilder.build(), () -> "Unable to perform search query: ");
+        final MultiSearchResult result = JestUtils.execute(jestClient, multiSearchBuilder.build(), () -> "Unable to perform search query");
 
         for (SearchType searchType : query.searchTypes()) {
             final String searchTypeId = searchType.id();
@@ -312,10 +308,10 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
                     .filter(error -> error.startsWith("Expected numeric type on field"))
                     .collect(Collectors.toList());
             if (!nonNumericFieldErrors.isEmpty()) {
-                return Optional.of(new FieldTypeException("Unable to perform search query: ", deduplicateErrors(nonNumericFieldErrors)));
+                return Optional.of(new FieldTypeException("Unable to perform search query", nonNumericFieldErrors));
             }
 
-            return Optional.of(new ElasticsearchException("Unable to perform search query: ", deduplicateErrors(errors)));
+            return Optional.of(new ElasticsearchException("Unable to perform search query", errors));
         }
 
         return Optional.empty();

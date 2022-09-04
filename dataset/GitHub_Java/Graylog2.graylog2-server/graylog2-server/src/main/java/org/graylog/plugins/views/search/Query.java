@@ -82,10 +82,8 @@ public abstract class Query {
     public abstract Optional<GlobalOverride> globalOverride();
 
     public TimeRange effectiveTimeRange(SearchType searchType) {
-        return this.globalOverride()
-                .flatMap(GlobalOverride::timerange)
-                .orElseGet(() -> searchType.timerange()
-                        .map(range -> range.effectiveTimeRange(this, searchType))
+        return this.globalOverride().flatMap(GlobalOverride::timerange)
+                .orElse(searchType.timerange()
                         .orElse(this.timerange()));
     }
 
@@ -96,7 +94,8 @@ public abstract class Query {
     public abstract Builder toBuilder();
 
     public static Builder builder() {
-        return Query.Builder.createWithDefaults();
+        return new AutoValue_Query.Builder()
+                .searchTypes(of());
     }
 
     Query applyExecutionState(ObjectMapper objectMapper, JsonNode state) {
@@ -213,8 +212,8 @@ public abstract class Query {
         abstract Query autoBuild();
 
         @JsonCreator
-        static Builder createWithDefaults() {
-            return new AutoValue_Query.Builder().searchTypes(of());
+        public static Builder createWithDefaults() {
+            return Query.builder();
         }
 
         public Query build() {

@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog.plugins.views.search.db;
 
@@ -21,11 +21,9 @@ import com.mongodb.BasicDBObject;
 import org.bson.types.ObjectId;
 import org.graylog.plugins.views.search.Search;
 import org.graylog.plugins.views.search.SearchRequirements;
-import org.graylog.plugins.views.search.SearchSummary;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.PaginatedList;
-import org.joda.time.Instant;
 import org.mongojack.DBCursor;
 import org.mongojack.DBQuery;
 import org.mongojack.DBSort;
@@ -49,7 +47,6 @@ import java.util.stream.Stream;
  */
 public class SearchDbService {
     protected final JacksonDBCollection<Search, ObjectId> db;
-    protected final JacksonDBCollection<SearchSummary, ObjectId> summarydb;
     private final SearchRequirements.Factory searchRequirementsFactory;
 
     @Inject
@@ -62,10 +59,6 @@ public class SearchDbService {
                 ObjectId.class,
                 mapper.get());
         db.createIndex(new BasicDBObject("created_at", 1), new BasicDBObject("unique", false));
-        summarydb = JacksonDBCollection.wrap(mongoConnection.getDatabase().getCollection("searches"),
-                SearchSummary.class,
-                ObjectId.class,
-                mapper.get());
     }
 
     public Optional<Search> get(String id) {
@@ -123,16 +116,5 @@ public class SearchDbService {
     private Search requirementsForSearch(Search search) {
         return searchRequirementsFactory.create(search)
                 .rebuildRequirements(Search::requires, (s, newRequirements) -> s.toBuilder().requires(newRequirements).build());
-    }
-
-    Stream<SearchSummary> findSummaries() {
-        return Streams.stream((Iterable<SearchSummary>) summarydb.find());
-    }
-
-    public Set<String> getExpiredSearches(final Set<String> neverDeleteIds, final Instant mustNotBeOlderThan) {
-        return this.findSummaries()
-                .filter(search -> !neverDeleteIds.contains(search.id()) && search.createdAt().isBefore(mustNotBeOlderThan))
-                .map(search -> search.id())
-                .collect(Collectors.toSet());
     }
 }
