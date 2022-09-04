@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,7 +15,6 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package lib.timeranges;
 
@@ -25,7 +24,7 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class RelativeRange implements TimeRange {
+public class RelativeRange extends TimeRange {
 
     private final int range;
 
@@ -37,7 +36,7 @@ public class RelativeRange implements TimeRange {
         this.range = range;
     }
 
-    public Type getType() {
+    public TimeRange.Type getType() {
         return Type.RELATIVE;
     }
 
