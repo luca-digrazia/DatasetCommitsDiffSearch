@@ -26,13 +26,14 @@ import static com.sun.codemodel.JMod.STATIC;
 
 import java.lang.annotation.Annotation;
 
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 
 import com.googlecode.androidannotations.annotations.EBean;
 import com.googlecode.androidannotations.api.Scope;
 import com.googlecode.androidannotations.helper.APTCodeModelHelper;
-import com.googlecode.androidannotations.processing.EBeansHolder.Classes;
+import com.googlecode.androidannotations.helper.AnnotationHelper;
 import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
@@ -41,9 +42,13 @@ import com.sun.codemodel.JFieldVar;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JVar;
 
-public class EBeanProcessor implements ElementProcessor {
+public class EBeanProcessor extends AnnotationHelper implements ElementProcessor {
 
 	public static final String GET_INSTANCE_METHOD_NAME = "getInstance" + GENERATION_SUFFIX;
+
+	public EBeanProcessor(ProcessingEnvironment processingEnv) {
+		super(processingEnv);
+	}
 
 	@Override
 	public Class<? extends Annotation> getTarget() {
@@ -67,9 +72,11 @@ public class EBeanProcessor implements ElementProcessor {
 
 		holder.eBean._extends(eBeanClass);
 
-		Classes classes = holder.classes();
+		JClass contextClass = holder.refClass("android.content.Context");
 
-		JFieldVar contextField = holder.eBean.field(PRIVATE, classes.CONTEXT, "context_");
+		JClass activityClass = holder.refClass("android.app.Activity");
+
+		JFieldVar contextField = holder.eBean.field(PRIVATE, contextClass, "context_");
 
 		holder.contextRef = contextField;
 
@@ -80,20 +87,22 @@ public class EBeanProcessor implements ElementProcessor {
 
 			JBlock afterSetContentViewBody = holder.afterSetContentView.body();
 
-			afterSetContentViewBody._if(holder.contextRef._instanceof(classes.ACTIVITY).not())._then()._return();
+			afterSetContentViewBody._if(holder.contextRef._instanceof(activityClass).not())._then()._return();
 		}
+
+		JClass viewClass = holder.refClass("android.view.View");
 
 		{
 			// findViewById
 
-			JMethod findViewById = holder.eBean.method(PUBLIC, classes.VIEW, "findViewById");
+			JMethod findViewById = holder.eBean.method(PUBLIC, viewClass, "findViewById");
 			JVar idParam = findViewById.param(codeModel.INT, "id");
 
 			findViewById.javadoc().add("You should check that context is an activity before calling this method");
 
 			JBlock findViewByIdBody = findViewById.body();
 
-			JVar activityVar = findViewByIdBody.decl(classes.ACTIVITY, "activity_", cast(classes.ACTIVITY, holder.contextRef));
+			JVar activityVar = findViewByIdBody.decl(activityClass, "activity", cast(activityClass, holder.contextRef));
 
 			findViewByIdBody._return(activityVar.invoke(findViewById).arg(idParam));
 		}
@@ -120,7 +129,7 @@ public class EBeanProcessor implements ElementProcessor {
 
 			JMethod constructor = holder.eBean.constructor(PRIVATE);
 
-			JVar constructorContextParam = constructor.param(classes.CONTEXT, "context");
+			JVar constructorContextParam = constructor.param(contextClass, "context");
 
 			JBlock constructorBody = constructor.body();
 
@@ -129,23 +138,20 @@ public class EBeanProcessor implements ElementProcessor {
 			constructorBody.invoke(holder.init);
 		}
 
-		EBean eBeanAnnotation = element.getAnnotation(EBean.class);
-		Scope eBeanScope = eBeanAnnotation.scope();
-		boolean hasSingletonScope = eBeanScope == Scope.Singleton;
-
 		{
 			// Factory method
 
 			JMethod factoryMethod = holder.eBean.method(PUBLIC | STATIC, holder.eBean, GET_INSTANCE_METHOD_NAME);
 
-			JVar factoryMethodContextParam = factoryMethod.param(classes.CONTEXT, "context");
+			JVar factoryMethodContextParam = factoryMethod.param(contextClass, "context");
 
 			JBlock factoryMethodBody = factoryMethod.body();
 
-			/*
-			 * Singletons are bound to the application context
-			 */
-			if (hasSingletonScope) {
+			EBean eBeanAnnotation = element.getAnnotation(EBean.class);
+
+			Scope eBeanScope = eBeanAnnotation.scope();
+
+			if (eBeanScope == Scope.Singleton) {
 
 				JFieldVar instanceField = holder.eBean.field(PRIVATE | STATIC, holder.eBean, "instance_");
 
@@ -153,26 +159,10 @@ public class EBeanProcessor implements ElementProcessor {
 						._if(instanceField.eq(_null())) //
 						._then() //
 						.assign(instanceField, _new(holder.eBean).arg(factoryMethodContextParam.invoke("getApplicationContext")));
-
+				
 				factoryMethodBody._return(instanceField);
 			} else {
 				factoryMethodBody._return(_new(holder.eBean).arg(factoryMethodContextParam));
-			}
-		}
-
-		{
-			// rebind(Context)
-			JMethod rebindMethod = holder.eBean.method(PUBLIC, codeModel.VOID, "rebind");
-			JVar contextParam = rebindMethod.param(classes.CONTEXT, "context");
-
-			/*
-			 * No rebinding of context for singletons, their are bound to the
-			 * application context
-			 */
-			if (!hasSingletonScope) {
-				JBlock body = rebindMethod.body();
-				body.assign(contextField, contextParam);
-				body.invoke(holder.init);
 			}
 		}
 
