@@ -20,7 +20,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Verify;
 import com.google.common.base.VerifyException;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.LinkedHashMultimap;
@@ -42,6 +41,7 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
+import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction;
@@ -219,21 +219,13 @@ public final class ConfigurationResolver {
       FragmentsAndTransition transitionKey = new FragmentsAndTransition(depFragments, transition);
       List<BuildOptions> toOptions = transitionsMap.get(transitionKey);
       if (toOptions == null) {
-        // Default values for all build settings read in {@code transition}
-        ImmutableMap<Label, Object> defaultBuildSettingValues;
-        try {
-          defaultBuildSettingValues = StarlarkTransition.getDefaultInputValues(env, transition);
-        } catch (TransitionException e) {
-          throw new ConfiguredTargetFunction.DependencyEvaluationException(e);
-        }
         toOptions =
             applyTransition(
                 currentConfiguration.getOptions(),
                 transition,
                 depFragments,
                 ruleClassProvider,
-                !sameFragments,
-                defaultBuildSettingValues);
+                !sameFragments);
         transitionsMap.put(transitionKey, toOptions);
       }
 
@@ -242,7 +234,7 @@ public final class ConfigurationResolver {
       // configured target.
       try {
         ImmutableSet<SkyKey> buildSettingPackageKeys =
-            StarlarkTransition.getBuildSettingPackageKeys(transition, "outputs");
+            StarlarkTransition.getBuildSettingPackageKeys(transition);
         Map<SkyKey, SkyValue> buildSettingPackages = env.getValues(buildSettingPackageKeys);
         if (env.valuesMissing()) {
           return null;
@@ -467,22 +459,18 @@ public final class ConfigurationResolver {
   /**
    * Applies a configuration transition over a set of build options.
    *
-   * @return the build options for the transitioned configuration. If trimResults is true, only
-   *     options needed by the required fragments are included. Else the same options as the
+   * @return the build options for the transitioned configuration. If trimResults is true,
+   *     only options needed by the required fragments are included. Else the same options as the
    *     original input are included (with different possible values, of course).
    */
   @VisibleForTesting
-  public static List<BuildOptions> applyTransition(
-      BuildOptions fromOptions,
+  public static List<BuildOptions> applyTransition(BuildOptions fromOptions,
       ConfigurationTransition transition,
       Iterable<Class<? extends BuildConfiguration.Fragment>> requiredFragments,
-      RuleClassProvider ruleClassProvider,
-      boolean trimResults,
-      ImmutableMap<Label, Object> buildSettingDefaults) {
-    BuildOptions fromOptionsWithDefaults =
-        addDefaultStarlarkOptions(fromOptions, buildSettingDefaults);
+      RuleClassProvider ruleClassProvider, boolean trimResults) {
     // TODO(bazel-team): safety-check that this never mutates fromOptions.
-    List<BuildOptions> result = transition.apply(fromOptionsWithDefaults);
+    List<BuildOptions> result = transition.apply(fromOptions);
+
     if (!trimResults) {
       return result;
     } else {
@@ -493,18 +481,6 @@ public final class ConfigurationResolver {
       }
       return trimmedOptions.build();
     }
-  }
-
-  private static BuildOptions addDefaultStarlarkOptions(
-      BuildOptions fromOptions, ImmutableMap<Label, Object> buildSettingDefaults) {
-    BuildOptions.Builder optionsWithDefaults = fromOptions.toBuilder();
-    for (Map.Entry<Label, Object> buildSettingDefault : buildSettingDefaults.entrySet()) {
-      Label buildSetting = buildSettingDefault.getKey();
-      if (!optionsWithDefaults.contains(buildSetting)) {
-        optionsWithDefaults.addStarlarkOption(buildSetting, buildSettingDefault.getValue());
-      }
-    }
-    return optionsWithDefaults.build();
   }
 
   /**
@@ -599,9 +575,7 @@ public final class ConfigurationResolver {
    *
    * <ol>
    *   <li>Apply the per-target transitions specified in {@code asDeps}. This can be used, e.g., to
-   *       apply {@link
-   *       com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory}s over global
-   *       top-level configurations.
+   *       apply {@link RuleTransitionFactory}s over global top-level configurations.
    *   <li>(Optionally) trim configurations to only the fragments the targets actually need. This is
    *       triggered by {@link BuildConfiguration.Options#trimConfigurations}.
    * </ol>
