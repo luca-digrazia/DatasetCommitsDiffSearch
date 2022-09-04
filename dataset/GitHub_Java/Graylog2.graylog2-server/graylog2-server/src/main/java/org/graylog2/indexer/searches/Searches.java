@@ -220,12 +220,9 @@ public class Searches {
 
         fb.facetFilter(standardFilters(range, filter));
 
-        QueryStringQueryBuilder qs = queryString(query);
-        qs.allowLeadingWildcard(server.getConfiguration().isAllowLeadingWildcardSearches());
-
         SearchRequestBuilder srb = c.prepareSearch();
         srb.setIndices(IndexHelper.determineAffectedIndices(server, range).toArray(new String[]{}));
-        srb.setQuery(qs);
+        srb.setQuery(queryString(query));
         srb.addFacet(fb);
 
         SearchResponse r;
@@ -263,15 +260,7 @@ public class Searches {
 
         SearchRequestBuilder srb = c.prepareSearch();
         srb.setIndices(indices.toArray(new String[]{}));
-
-        if (query.trim().equals("*")) {
-            srb.setQuery(matchAllQuery());
-        } else {
-            QueryStringQueryBuilder qs = queryString(query);
-            qs.allowLeadingWildcard(server.getConfiguration().isAllowLeadingWildcardSearches());
-            srb.setQuery(qs);
-        }
-
+        srb.setQuery(queryString(query));
         srb.setFrom(offset);
 
         if (limit > 0) {
