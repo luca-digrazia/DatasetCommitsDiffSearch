@@ -10,7 +10,6 @@ import ch.qos.logback.core.rolling.DefaultTimeBasedFileNamingAndTriggeringPolicy
 import ch.qos.logback.core.rolling.RollingFileAppender;
 import ch.qos.logback.core.rolling.TimeBasedRollingPolicy;
 import ch.qos.logback.core.spi.FilterAttachable;
-import com.google.common.base.Optional;
 
 import static com.yammer.dropwizard.config.LoggingConfiguration.*;
 
@@ -22,14 +21,10 @@ public class LogbackFactory {
 
     public static SyslogAppender buildSyslogAppender(SyslogConfiguration syslog,
                                                      LoggerContext context,
-                                                     String name,
-                                                     Optional<String> logFormat) {
+                                                     String name) {
         final SyslogFormatter layout = new SyslogFormatter(context, syslog.getTimeZone(), name);
         layout.setOutputPatternAsHeader(false);
         layout.setContext(context);
-        for (String format : logFormat.asSet()) {
-            layout.setPattern(format);
-        }
         layout.start();
 
         final SyslogAppender appender = new SyslogAppender();
@@ -44,8 +39,7 @@ public class LogbackFactory {
     }
 
     public static RollingFileAppender<ILoggingEvent> buildFileAppender(FileConfiguration file,
-                                                                       LoggerContext context,
-                                                                       Optional<String> logFormat) {
+                                                                       LoggerContext context) {
         final DefaultTimeBasedFileNamingAndTriggeringPolicy<ILoggingEvent> triggeringPolicy =
                 new DefaultTimeBasedFileNamingAndTriggeringPolicy<ILoggingEvent>();
         triggeringPolicy.setContext(context);
@@ -59,9 +53,6 @@ public class LogbackFactory {
         rollingPolicy.setMaxHistory(file.getArchivedFileCount());
 
         final LogFormatter formatter = new LogFormatter(context, file.getTimeZone());
-        for (String format : logFormat.asSet()) {
-            formatter.setPattern(format);
-        }
         formatter.start();
 
         final RollingFileAppender<ILoggingEvent> appender = new RollingFileAppender<ILoggingEvent>();
@@ -84,12 +75,8 @@ public class LogbackFactory {
     }
 
     public static ConsoleAppender<ILoggingEvent> buildConsoleAppender(ConsoleConfiguration console,
-                                                                      LoggerContext context,
-                                                                      Optional<String> logFormat) {
+                                                                      LoggerContext context) {
         final LogFormatter formatter = new LogFormatter(context, console.getTimeZone());
-        for (String format : logFormat.asSet()) {
-            formatter.setPattern(format);
-        }
         formatter.start();
 
         final ConsoleAppender<ILoggingEvent> appender = new ConsoleAppender<ILoggingEvent>();
