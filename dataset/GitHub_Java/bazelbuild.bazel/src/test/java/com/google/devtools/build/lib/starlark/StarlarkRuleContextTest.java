@@ -75,7 +75,8 @@ import org.junit.runners.JUnit4;
 public final class StarlarkRuleContextTest extends BuildViewTestCase {
 
   private StarlarkRuleContext createRuleContext(String label) throws Exception {
-    return new StarlarkRuleContext(getRuleContextForStarlark(getConfiguredTarget(label)), null);
+    return new StarlarkRuleContext(
+        getRuleContextForStarlark(getConfiguredTarget(label)), null, getStarlarkSemantics());
   }
 
   private final BazelEvaluationTestCase ev = new BazelEvaluationTestCase();
