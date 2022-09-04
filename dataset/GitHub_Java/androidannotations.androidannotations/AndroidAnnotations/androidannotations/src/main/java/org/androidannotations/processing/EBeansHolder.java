@@ -43,7 +43,6 @@ public class EBeansHolder {
 		 */
 		public final JClass RUNTIME_EXCEPTION = refClass(RuntimeException.class);
 		public final JClass EXCEPTION = refClass(Exception.class);
-		public final JClass THROWABLE = refClass(Throwable.class);
 		public final JClass CHAR_SEQUENCE = refClass(CharSequence.class);
 		public final JClass CLASS_CAST_EXCEPTION = refClass(ClassCastException.class);
 		public final JClass SERIALIZABLE = refClass(Serializable.class);
@@ -152,10 +151,6 @@ public class EBeansHolder {
 		public final JClass SCHEME_REGISTRY = refClass(CanonicalNameConstants.SCHEME_REGISTRY);
 		public final JClass SINGLE_CLIENT_CONN_MANAGER = refClass(CanonicalNameConstants.SINGLE_CLIENT_CONN_MANAGER);
 
-		/*
-		 * Springframework
-		 */
-		public final JClass REST_CLIENT_EXCEPTION = refClass(CanonicalNameConstants.REST_CLIENT_EXCEPTION);
 	}
 
 	private final Map<Element, EBeanHolder> eBeanHolders = new HashMap<Element, EBeanHolder>();

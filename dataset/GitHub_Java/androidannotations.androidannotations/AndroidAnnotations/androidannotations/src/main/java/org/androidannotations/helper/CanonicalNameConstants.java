@@ -38,7 +38,6 @@ public final class CanonicalNameConstants {
 	public static final String COLLECTION = Collection.class.getCanonicalName();
 	public static final String COLLECTIONS = Collections.class.getCanonicalName();
 	public static final String STRING = String.class.getCanonicalName();
-	public static final String STRING_BUILDER = StringBuilder.class.getCanonicalName();
 	public static final String CHAR_SEQUENCE = CharSequence.class.getCanonicalName();
 	public static final String SQL_EXCEPTION = SQLException.class.getCanonicalName();
 	public static final String INTEGER = Integer.class.getCanonicalName();
@@ -61,9 +60,7 @@ public final class CanonicalNameConstants {
 	public static final String SEEKBAR = "android.widget.SeekBar";
 	public static final String ON_SEEKBAR_CHANGE_LISTENER = "android.widget.SeekBar.OnSeekBarChangeListener";
 	public static final String TEXT_VIEW = "android.widget.TextView";
-	public static final String TEXT_VIEW_ON_EDITOR_ACTION_LISTENER = "android.widget.TextView.OnEditorActionListener";
 	public static final String COMPOUND_BUTTON = "android.widget.CompoundButton";
-	public static final String COMPOUND_BUTTON_ON_CHECKED_CHANGE_LISTENER = "android.widget.CompoundButton.OnCheckedChangeListener";
 	public static final String VIEW = "android.view.View";
 	public static final String VIEW_ON_CLICK_LISTENER = "android.view.View.OnClickListener";
 	public static final String VIEW_ON_TOUCH_LISTENER = "android.view.View.OnTouchListener";
@@ -94,7 +91,6 @@ public final class CanonicalNameConstants {
 	public static final String MOTION_EVENT = "android.view.MotionEvent";
 	public static final String HANDLER = "android.os.Handler";
 	public static final String SERVICE = "android.app.Service";
-	public static final String INTENT_SERVICE = "android.app.IntentService";
 	public static final String BROADCAST_RECEIVER = "android.content.BroadcastReceiver";
 	public static final String CONTENT_PROVIDER = "android.content.ContentProvider";
 	public static final String SQLITE_DATABASE = "android.database.sqlite.SQLiteDatabase";
@@ -131,9 +127,6 @@ public final class CanonicalNameConstants {
 	public static final String REST_TEMPLATE = "org.springframework.web.client.RestTemplate";
 	public static final String HTTP_MESSAGE_CONVERTER = "org.springframework.http.converter.HttpMessageConverter";
 	public static final String CLIENT_HTTP_REQUEST_INTERCEPTOR = "org.springframework.http.client.ClientHttpRequestInterceptor";
-	public static final String HTTP_AUTHENTICATION = "org.springframework.http.HttpAuthentication";
-	public static final String HTTP_BASIC_AUTHENTICATION = "org.springframework.http.HttpBasicAuthentication";
-	public static final String REST_CLIENT_EXCEPTION = "org.springframework.web.client.RestClientException";
 
 	/*
 	 * RoboGuice
