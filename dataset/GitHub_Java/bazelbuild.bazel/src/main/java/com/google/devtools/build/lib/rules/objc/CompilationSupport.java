@@ -1086,9 +1086,6 @@ public class CompilationSupport {
     if (Iterables.contains(extraLinkArgs, "-dynamiclib")) {
       return StrippingType.DYNAMIC_LIB;
     }
-    if (Iterables.contains(extraLinkArgs, "-bundle")) {
-      return StrippingType.LOADABLE_BUNDLE;
-    }
     if (Iterables.contains(extraLinkArgs, "-kext")) {
       return StrippingType.KERNEL_EXTENSION;
     }
@@ -1596,7 +1593,6 @@ public class CompilationSupport {
   private enum StrippingType {
     DEFAULT,
     DYNAMIC_LIB,
-    LOADABLE_BUNDLE,
     KERNEL_EXTENSION
   }
 
@@ -1608,9 +1604,8 @@ public class CompilationSupport {
     final ImmutableList<String> stripArgs;
     switch (strippingType) {
       case DYNAMIC_LIB:
-      case LOADABLE_BUNDLE:
       case KERNEL_EXTENSION:
-        // For dylibs, loadable bundles, and kexts, must strip only local symbols.
+        // For dylibs and kexts, must strip only local symbols.
         stripArgs = ImmutableList.of("-x");
         break;
       case DEFAULT:
