@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,40 +14,27 @@
 
 package com.google.devtools.build.lib.rules.java;
 
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.rules.SkylarkApiProvider;
-import com.google.devtools.build.lib.syntax.SkylarkCallable;
-import com.google.devtools.build.lib.syntax.SkylarkModule;
+import com.google.devtools.build.lib.analysis.skylark.SkylarkApiProvider;
+import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
+import com.google.devtools.build.lib.skylarkbuildapi.java.JavaSkylarkApiProviderApi;
 
 /**
- * A class that exposes the Java providers to Skylark. It is intended to provide a
- * simple and stable interface for Skylark users.
+ * A class that exposes the Java providers to Skylark. It is intended to provide a simple and stable
+ * interface for Skylark users.
  */
-@SkylarkModule(
-    name = "JavaSkylarkApiProvider", doc = "Provides access to information about Java rules")
-public final class JavaSkylarkApiProvider extends SkylarkApiProvider {
+public final class JavaSkylarkApiProvider extends SkylarkApiProvider
+    implements JavaSkylarkApiProviderApi<Artifact> {
   /** The name of the field in Skylark used to access this class. */
-  static final String NAME = "java";
+  public static final String NAME = "java";
+  /** The name of the field in Skylark proto aspects used to access this class. */
+  public static final SkylarkProviderIdentifier SKYLARK_NAME =
+      SkylarkProviderIdentifier.forLegacy(NAME);
 
-  @SkylarkCallable(
-      name = "source_jars",
-      doc = "Returns the Jars containing Java source files for the target",
-      structField = true)
-  public ImmutableList<Artifact> getSourceJars() {
-    JavaSourceJarsProvider sourceJars = getInfo().getProvider(JavaSourceJarsProvider.class);
-    return sourceJars.getSourceJars();
-  }
-
-  @SkylarkCallable(
-      name = "transitive_source_jars",
-      doc =
-          "Returns the Jars containing Java source files for the target and all of its transitive "
-              + "dependencies",
-      structField = true)
-  public NestedSet<Artifact> getTransitiveSourceJars() {
-    JavaSourceJarsProvider sourceJars = getInfo().getProvider(JavaSourceJarsProvider.class);
-    return sourceJars.getTransitiveSourceJars();
+  /**
+   * Creates a Skylark API provider that reads information from its associated target's providers.
+   */
+  public static JavaSkylarkApiProvider fromRuleContext() {
+    return new JavaSkylarkApiProvider();
   }
 }
