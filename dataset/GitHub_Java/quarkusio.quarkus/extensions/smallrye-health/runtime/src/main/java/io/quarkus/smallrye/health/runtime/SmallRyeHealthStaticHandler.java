@@ -43,12 +43,13 @@ public class SmallRyeHealthStaticHandler implements Handler<RoutingContext> {
                 .setWebRoot(healthUiFinalDestination)
                 .setDefaultContentEncoding("UTF-8");
 
-        if (event.normalizedPath().length() == healthUiPath.length()) {
+        if (event.normalisedPath().length() == healthUiPath.length()) {
+
             event.response().setStatusCode(302);
             event.response().headers().set(HttpHeaders.LOCATION, healthUiPath + "/");
             event.response().end();
             return;
-        } else if (event.normalizedPath().length() == healthUiPath.length() + 1) {
+        } else if (event.normalisedPath().length() == healthUiPath.length() + 1) {
             event.reroute(healthUiPath + "/index.html");
             return;
         }

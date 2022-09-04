@@ -69,6 +69,7 @@ import io.quarkus.smallrye.openapi.runtime.OpenApiRuntimeConfig;
 import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
+import io.quarkus.vertx.http.runtime.HandlerType;
 import io.smallrye.openapi.api.OpenApiConfig;
 import io.smallrye.openapi.api.OpenApiConfigImpl;
 import io.smallrye.openapi.api.OpenApiDocument;
@@ -112,11 +113,6 @@ public class SmallRyeOpenApiProcessor {
     private static final String JAX_RS = "JAX-RS";
     private static final String SPRING = "Spring";
     private static final String VERT_X = "Vert.x";
-
-    static {
-        System.setProperty(io.smallrye.openapi.api.constants.OpenApiConstants.DEFAULT_PRODUCES, "application/json");
-        System.setProperty(io.smallrye.openapi.api.constants.OpenApiConstants.DEFAULT_CONSUMES, "application/json");
-    }
 
     @BuildStep
     CapabilityBuildItem capability() {
@@ -168,12 +164,7 @@ public class SmallRyeOpenApiProcessor {
         }
 
         Handler<RoutingContext> handler = recorder.handler(openApiRuntimeConfig);
-        return new RouteBuildItem.Builder()
-                .route(openApiConfig.path)
-                .handler(handler)
-                .blockingRoute()
-                .nonApplicationRoute()
-                .build();
+        return new RouteBuildItem(openApiConfig.path, handler, HandlerType.BLOCKING);
     }
 
     @BuildStep
@@ -373,12 +364,11 @@ public class SmallRyeOpenApiProcessor {
             return false;
         }
 
-        // Only scan if either RESTEasy, Quarkus REST, Spring Web or Vert.x Web (with @Route) is used
-        boolean isRestEasy = capabilities.isPresent(Capability.RESTEASY);
-        boolean isQuarkusRest = capabilities.isPresent(Capability.RESTEASY_REACTIVE);
+        // Only scan if either JaxRS, Spring Web or Vert.x Web (with @Route) is used
+        boolean isJaxrs = capabilities.isPresent(Capability.RESTEASY);
         boolean isSpring = capabilities.isPresent(Capability.SPRING_WEB);
         boolean isVertx = isUsingVertxRoute(index);
-        return isRestEasy || isQuarkusRest || isSpring || isVertx;
+        return isJaxrs || isSpring || isVertx;
     }
 
     private boolean isUsingVertxRoute(IndexView index) {
@@ -411,7 +401,6 @@ public class SmallRyeOpenApiProcessor {
         if (capabilities.isPresent(Capability.RESTEASY)) {
             extensions.add(new RESTEasyExtension(indexView));
         }
-        // TODO: add a Quarkus-REST specific extension that knows the Quarkus REST specific annotations as well as the fact that *param annotations aren't necessary
 
         String defaultPath;
         if (resteasyJaxrsConfig.isPresent()) {
@@ -429,7 +418,7 @@ public class SmallRyeOpenApiProcessor {
 
     private String[] getScanners(Capabilities capabilities, IndexView index) {
         List<String> scanners = new ArrayList<>();
-        if (capabilities.isPresent(Capability.RESTEASY) || capabilities.isPresent(Capability.RESTEASY_REACTIVE)) {
+        if (capabilities.isPresent(Capability.RESTEASY)) {
             scanners.add(JAX_RS);
         }
         if (capabilities.isPresent(Capability.SPRING_WEB)) {
@@ -494,6 +483,7 @@ public class SmallRyeOpenApiProcessor {
         }
         document.modelFromReader(readerModel);
         document.modelFromStaticFile(staticModel);
+        document.filter(filter(openApiConfig));
         for (AddToOpenAPIDefinitionBuildItem openAPIBuildItem : openAPIBuildItems) {
             OASFilter otherExtensionFilter = openAPIBuildItem.getOASFilter();
             document.filter(otherExtensionFilter);
@@ -507,5 +497,10 @@ public class SmallRyeOpenApiProcessor {
         document.reset();
         document.config(openApiConfig);
         return document;
+    }
+
+    private OASFilter filter(OpenApiConfig openApiConfig) {
+        return OpenApiProcessor.getFilter(openApiConfig,
+                Thread.currentThread().getContextClassLoader());
     }
 }
