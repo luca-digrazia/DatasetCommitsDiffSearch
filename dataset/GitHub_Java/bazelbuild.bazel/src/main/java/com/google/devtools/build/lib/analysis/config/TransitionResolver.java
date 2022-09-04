@@ -60,6 +60,7 @@ public final class TransitionResolver {
    */
   public static ConfigurationTransition evaluateTransition(
       BuildConfiguration fromConfig,
+      final Rule fromRule,
       final Attribute attribute,
       final Target toTarget,
       ConfiguredAttributeMapper attributeMap,
