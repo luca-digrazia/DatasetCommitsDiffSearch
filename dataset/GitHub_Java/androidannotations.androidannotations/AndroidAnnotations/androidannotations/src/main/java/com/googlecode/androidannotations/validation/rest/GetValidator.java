@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -58,9 +58,9 @@ public class GetValidator implements ElementValidator {
 
 		validatorHelper.throwsOnlyRestClientException(executableElement, valid);
 
-		validatorHelper.returnTypeNotGenericUnlessResponseEntity(executableElement, valid);
+		validatorHelper.doesNotReturnPrimitive(executableElement, valid);
 
-		restAnnotationHelper.urlVariableNamesExistInParameters(executableElement, valid);
+		restAnnotationHelper.urlVariableNamesExistInParametersAndHasNoOneMoreParameter(executableElement, valid);
 
 		return valid.isValid();
 	}

@@ -18,7 +18,6 @@ package com.googlecode.androidannotations.processing.rest;
 import java.lang.annotation.Annotation;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -67,6 +66,9 @@ public abstract class MethodProcessor implements DecoratingElementProcessor {
 			method = holder.restImplementationClass.method(JMod.PUBLIC, methodHolder.getGeneratedReturnType(), methodName);
 		}
 		method.annotate(Override.class);
+		if (expectedClass != generatedReturnType && !generatedReturnType.fullName().startsWith(CanonicalNameConstants.RESPONSE_ENTITY)) {
+			method.annotate(SuppressWarnings.class).param("value", "unchecked");
+		}
 
 		JBlock body = method.body();
 
@@ -82,7 +84,7 @@ public abstract class MethodProcessor implements DecoratingElementProcessor {
 		EBeanHolder eBeanHolder = methodHolder.getHolder();
 		JClass httpMethod = eBeanHolder.refClass(CanonicalNameConstants.HTTP_METHOD);
 		// add method type param
-		String restMethodInCapitalLetters = getTarget().getSimpleName().toUpperCase(Locale.ENGLISH);
+		String restMethodInCapitalLetters = getTarget().getSimpleName().toUpperCase();
 		restCall.arg(httpMethod.staticRef(restMethodInCapitalLetters));
 
 		TreeMap<String, JVar> methodParams = (TreeMap<String, JVar>) generateMethodParamsVar(eBeanHolder, method, executableElement, holder);
