@@ -102,7 +102,7 @@ public class UserDefinedFunction extends BaseFunction {
 
   @Override
   public void repr(SkylarkPrinter printer) {
-    Label label = this.definitionGlobals.getLabel();
+    Label label = this.definitionGlobals.getTransitiveLabel();
 
     printer.append("<function " + getName());
     if (label != null) {
