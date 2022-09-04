@@ -17,8 +17,6 @@
 
 package org.graylog2.dashboards.widgets;
 
-import com.github.joschi.jadconfig.util.Duration;
-import com.google.common.primitives.Ints;
 import com.google.inject.assistedinject.Assisted;
 
 import javax.inject.Inject;
@@ -32,9 +30,9 @@ public class WidgetCacheTime {
     }
 
     @Inject
-    public WidgetCacheTime(@Named("dashboard_widget_default_cache_time") Duration defaultCacheTime,
+    public WidgetCacheTime(@Named("dashboard_widget_default_cache_time") int defaultCacheTime,
                            @Assisted int cacheTime) {
-        this.cacheTime = cacheTime < 1 ? Ints.saturatedCast(defaultCacheTime.toSeconds()) : cacheTime;
+        this.cacheTime = cacheTime < 1 ? defaultCacheTime : cacheTime;
     }
 
     public int getCacheTime() {

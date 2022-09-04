@@ -42,8 +42,7 @@ public abstract class DashboardWidget implements EmbeddedPersistable {
         FIELD_CHART,
         QUICKVALUES,
         SEARCH_RESULT_CHART,
-        STATS_COUNT,
-        STACKED_CHART
+        STATS_COUNT
     }
 
     private final MetricRegistry metricRegistry;

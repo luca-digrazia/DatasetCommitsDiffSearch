@@ -18,26 +18,27 @@ package org.graylog2.dashboards.widgets;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableMap;
+import org.graylog2.indexer.InvalidRangeFormatException;
 import org.graylog2.indexer.results.HistogramResult;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import java.util.Map;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 
-public class FieldChartWidget extends ChartWidget {
+public class FieldChartWidget extends DashboardWidget {
 
     private static final Logger LOG = LoggerFactory.getLogger(FieldChartWidget.class);
 
     private final String query;
     private final TimeRange timeRange;
-    private final String field;
-    private final String statisticalFunction;
-    private final String renderer;
-    private final String interpolation;
+    @Nullable
+    private final String streamId;
+    private final Map<String, Object> config;
     private final Searches searches;
 
     public FieldChartWidget(MetricRegistry metricRegistry, Searches searches, String id, String description, WidgetCacheTime cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) throws InvalidWidgetConfigurationException {
@@ -55,10 +56,8 @@ public class FieldChartWidget extends ChartWidget {
         }
 
         this.timeRange = timeRange;
-        this.field = (String) config.get("field");
-        this.statisticalFunction = (String) config.get("valuetype");
-        this.renderer = (String) config.get("renderer");
-        this.interpolation = (String) config.get("interpolation");
+        this.config = config;
+        this.streamId = (String) config.get("stream_id");
     }
 
     @Override
@@ -66,11 +65,15 @@ public class FieldChartWidget extends ChartWidget {
         final ImmutableMap.Builder<String, Object> persistedConfig = ImmutableMap.<String, Object>builder()
                 .put("query", query)
                 .put("timerange", timeRange.getPersistedConfig())
-                .put("field", field)
-                .put("valuetype", statisticalFunction)
-                .put("renderer", renderer)
-                .put("interpolation", interpolation)
-                .putAll(super.getPersistedConfig());
+                .put("field", config.get("field"))
+                .put("valuetype", config.get("valuetype"))
+                .put("renderer", config.get("renderer"))
+                .put("interpolation", config.get("interpolation"))
+                .put("interval", config.get("interval"));
+
+        if (!isNullOrEmpty(streamId)) {
+            persistedConfig.put("stream_id", streamId);
+        }
 
         return persistedConfig.build();
     }
@@ -85,15 +88,15 @@ public class FieldChartWidget extends ChartWidget {
         try {
             final HistogramResult histogramResult = searches.fieldHistogram(
                     query,
-                    field,
-                    Searches.DateHistogramInterval.valueOf(interval.toString().toUpperCase()),
+                    (String) config.get("field"),
+                    Searches.DateHistogramInterval.valueOf(((String) config.get("interval")).toUpperCase()),
                     filter,
                     timeRange
             );
 
             return new ComputationResult(histogramResult.getResults(), histogramResult.took().millis(), histogramResult.getHistogramBoundaries());
         } catch (Searches.FieldTypeException e) {
-            String msg = "Could not calculate [" + this.getClass().getCanonicalName() + "] widget <" + getId() + ">. Not a numeric field? The field was [" + field + "]";
+            String msg = "Could not calculate [" + this.getClass().getCanonicalName() + "] widget <" + getId() + ">. Not a numeric field? The field was [" + config.get("field") + "]";
             LOG.error(msg, e);
             throw new RuntimeException(msg);
         }

@@ -89,10 +89,6 @@ public class QuickvaluesWidget extends DashboardWidget {
 
     @Override
     protected ComputationResult compute() {
-        if (timeRange == null) {
-            throw new RuntimeException("Invalid time range provided");
-        }
-
         String filter = null;
         if (!isNullOrEmpty(streamId)) {
             filter = "streams:" + streamId;
