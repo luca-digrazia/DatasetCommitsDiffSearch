@@ -38,8 +38,6 @@ import java.util.TimerTask;
 import moe.codeest.enviews.ENDownloadView;
 import moe.codeest.enviews.ENPlayView;
 
-import static com.shuyu.gsyvideoplayer.utils.CommonUtil.hideNavKey;
-
 
 /**
  * 标准播放器
@@ -794,7 +792,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
             gsyVideoPlayer.setLockClickListener(mLockClickListener);
             gsyVideoPlayer.setNeedLockFull(isNeedLockFull());
             initFullUI(gsyVideoPlayer);
-            //比如你自定义了返回案件，但是因为返回按键底层已经设置了返回事件，所以你需要在这里重新增加的逻辑
         }
         return gsyBaseVideoPlayer;
     }
@@ -874,9 +871,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
                         public void run() {
                             hideAllWidget();
                             mLockScreen.setVisibility(GONE);
-                            if (mHideKey && mIfCurrentIsFullscreen && mShowVKey) {
-                                hideNavKey(mContext);
-                            }
                         }
                     });
                 }
