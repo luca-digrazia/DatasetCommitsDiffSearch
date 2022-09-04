@@ -511,10 +511,6 @@ public class BlazeCommandDispatcher {
 
       env.getEventBus().post(originalCommandLine);
 
-      for (BlazeModule module : runtime.getBlazeModules()) {
-        env.getSkyframeExecutor().injectExtraPrecomputedValues(module.getPrecomputedValues());
-      }
-
       ExitCode outcome = command.exec(env, optionsParser);
       outcome = env.precompleteCommand(outcome);
       numericExitCode = outcome.getNumericExitCode();
@@ -538,10 +534,10 @@ public class BlazeCommandDispatcher {
       System.setOut(savedOut);
       System.setErr(savedErr);
       reporter.removeHandler(handler);
-      releaseHandler(handler, eventHandlerOptions);
+      releaseHandler(handler);
       if (!eventHandlerOptions.useColor()) {
         reporter.removeHandler(ansiAllowingHandler);
-        releaseHandler(ansiAllowingHandler, eventHandlerOptions);
+        releaseHandler(ansiAllowingHandler);
       }
       env.getTimestampGranularityMonitor().waitForTimestampGranularity(outErr);
     }
@@ -801,15 +797,13 @@ public class BlazeCommandDispatcher {
   /**
    * Unsets the event handler.
    */
-  private void releaseHandler(EventHandler eventHandler,
-      BlazeCommandEventHandler.Options eventOptions) {
+  private void releaseHandler(EventHandler eventHandler) {
     if (eventHandler instanceof FancyTerminalEventHandler) {
       // Make sure that the terminal state of the old event handler is clear
       // before creating a new one.
       ((FancyTerminalEventHandler) eventHandler).resetTerminal();
     }
-    if ((eventHandler instanceof ExperimentalEventHandler)
-        && (eventOptions.useColor())) {
+    if (eventHandler instanceof ExperimentalEventHandler) {
       ((ExperimentalEventHandler) eventHandler).resetTerminal();
     }
   }
