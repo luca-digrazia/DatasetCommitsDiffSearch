@@ -53,7 +53,6 @@ import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.BeanDefiningAnnotationBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.processor.BuiltinScope;
-import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
@@ -124,7 +123,6 @@ import io.quarkus.rest.runtime.util.Encode;
 import io.quarkus.rest.spi.ContainerRequestFilterBuildItem;
 import io.quarkus.rest.spi.ContainerResponseFilterBuildItem;
 import io.quarkus.rest.spi.DynamicFeatureBuildItem;
-import io.quarkus.rest.spi.ExceptionMapperBuildItem;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.security.AuthenticationFailedException;
 import io.quarkus.security.UnauthorizedException;
@@ -276,12 +274,7 @@ public class QuarkusRestProcessor {
     }
 
     @BuildStep
-    void additionalBeans(Capabilities capabilities,
-            List<ContainerRequestFilterBuildItem> additionalContainerRequestFilters,
-            List<ContainerResponseFilterBuildItem> additionalContainerResponseFilters,
-            List<DynamicFeatureBuildItem> additionalDynamicFeatures,
-            List<ExceptionMapperBuildItem> additionalExceptionMappers,
-            BuildProducer<AdditionalBeanBuildItem> additionalBean) {
+    void additionalBeans(Capabilities capabilities, BuildProducer<AdditionalBeanBuildItem> additionalBean) {
         if (capabilities.isPresent(Capability.JACKSON)) {
             additionalBean.produce(AdditionalBeanBuildItem.builder()
                     .addBeanClass(VertxJsonMessageBodyWriter.class.getName())
@@ -294,22 +287,6 @@ public class QuarkusRestProcessor {
                     .addBeanClass(JsonbMessageBodyWriter.class.getName())
                     .setUnremovable().build());
         }
-
-        // TODO: we currently make all additional providers beans, even if they don't inject anything, perhaps we want to change that?
-        AdditionalBeanBuildItem.Builder additionalProviders = AdditionalBeanBuildItem.builder();
-        for (ContainerRequestFilterBuildItem requestFilter : additionalContainerRequestFilters) {
-            additionalProviders.addBeanClass(requestFilter.getClassName());
-        }
-        for (ContainerResponseFilterBuildItem responseFilter : additionalContainerResponseFilters) {
-            additionalProviders.addBeanClass(responseFilter.getClassName());
-        }
-        for (ExceptionMapperBuildItem exceptionMapper : additionalExceptionMappers) {
-            additionalProviders.addBeanClass(exceptionMapper.getClassName());
-        }
-        for (DynamicFeatureBuildItem dynamicFeature : additionalDynamicFeatures) {
-            additionalProviders.addBeanClass(dynamicFeature.getClassName());
-        }
-        additionalBean.produce(additionalProviders.setUnremovable().setDefaultScope(DotNames.SINGLETON).build());
     }
 
     @BuildStep
@@ -327,7 +304,6 @@ public class QuarkusRestProcessor {
             Capabilities capabilities,
             List<ContainerRequestFilterBuildItem> additionalContainerRequestFilters,
             List<ContainerResponseFilterBuildItem> additionalContainerResponseFilters,
-            List<ExceptionMapperBuildItem> additionalExceptionMappers,
             List<DynamicFeatureBuildItem> additionalDynamicFeatures,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<RouteBuildItem> routes) {
@@ -621,7 +597,7 @@ public class QuarkusRestProcessor {
             }
 
             ExceptionMapping exceptionMapping = new ExceptionMapping();
-            Map<DotName, ResourceExceptionMapper<Throwable>> handledExceptionToHigherPriorityMapper = new HashMap<>();
+            Map<DotName, ResourceExceptionMapper<Throwable>> handledExceptionToHigherPriorityMapper = new HashMap();
             for (ClassInfo mapperClass : exceptionMappers) {
                 KeepProviderResult keepProviderResult = keepProvider(mapperClass, filterClasses, allowedClasses);
                 if (keepProviderResult != KeepProviderResult.DISCARD) {
@@ -634,32 +610,20 @@ public class QuarkusRestProcessor {
                     if (priorityInstance != null) {
                         priority = priorityInstance.value().asInt();
                     }
-                    registerExceptionMapper(recorder, handledExceptionToHigherPriorityMapper,
+                    registerExceptionMapper(recorder, exceptionMapping, handledExceptionToHigherPriorityMapper,
                             beanContainerBuildItem,
                             mapperClass.name().toString(),
                             handledExceptionDotName,
                             priority, singletonClasses);
                 }
             }
-            for (ExceptionMapperBuildItem additionalExceptionMapper : additionalExceptionMappers) {
-                DotName handledExceptionDotName = DotName.createSimple(additionalExceptionMapper.getHandledExceptionName());
-                int priority = Priorities.USER;
-                if (additionalExceptionMapper.getPriority() != null) {
-                    priority = additionalExceptionMapper.getPriority();
-                }
-                registerExceptionMapper(recorder, handledExceptionToHigherPriorityMapper,
-                        beanContainerBuildItem,
-                        additionalExceptionMapper.getClassName(),
-                        handledExceptionDotName,
-                        priority, singletonClasses);
-            }
             // built-ins
-            registerExceptionMapper(recorder, handledExceptionToHigherPriorityMapper,
+            registerExceptionMapper(recorder, exceptionMapping, handledExceptionToHigherPriorityMapper,
                     beanContainerBuildItem,
                     UnauthorizedExceptionMapper.class.getName(),
                     DotName.createSimple(UnauthorizedException.class.getName()),
                     Priorities.USER, singletonClasses);
-            registerExceptionMapper(recorder, handledExceptionToHigherPriorityMapper,
+            registerExceptionMapper(recorder, exceptionMapping, handledExceptionToHigherPriorityMapper,
                     beanContainerBuildItem,
                     AuthenticationFailedExceptionMapper.class.getName(),
                     DotName.createSimple(AuthenticationFailedException.class.getName()),
@@ -862,6 +826,7 @@ public class QuarkusRestProcessor {
     }
 
     private void registerExceptionMapper(QuarkusRestRecorder recorder,
+            ExceptionMapping exceptionMapping,
             Map<DotName, ResourceExceptionMapper<Throwable>> handledExceptionToHigherPriorityMapper,
             BeanContainerBuildItem beanContainerBuildItem,
             String mapperClassName,
