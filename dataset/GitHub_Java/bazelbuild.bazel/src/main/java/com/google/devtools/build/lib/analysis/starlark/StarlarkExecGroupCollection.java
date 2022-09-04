@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.starlark;
 
-import static com.google.devtools.build.lib.analysis.ToolchainCollection.DEFAULT_EXEC_GROUP_NAME;
+import static com.google.devtools.build.lib.packages.ExecGroup.DEFAULT_EXEC_GROUP_NAME;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.annotations.VisibleForTesting;
@@ -62,7 +62,7 @@ public abstract class StarlarkExecGroupCollection implements ExecGroupCollection
   public boolean containsKey(StarlarkSemantics semantics, Object key) throws EvalException {
     String group = castGroupName(key);
     return !DEFAULT_EXEC_GROUP_NAME.equals(group)
-        && toolchainCollection().getExecGroups().contains(group);
+        && toolchainCollection().getExecGroupNames().contains(group);
   }
 
   /**
@@ -81,8 +81,9 @@ public abstract class StarlarkExecGroupCollection implements ExecGroupCollection
           execGroup,
           String.join(", ", getScrubbedExecGroups()));
     }
-    ToolchainContextApi toolchainContext = toolchainCollection().getToolchainContext(execGroup);
-    return new StarlarkExecGroupContext(toolchainContext);
+    ToolchainContextApi toolchainContext =
+        StarlarkToolchainContext.create(toolchainCollection().getToolchainContext(execGroup));
+    return new AutoValue_StarlarkExecGroupCollection_StarlarkExecGroupContext(toolchainContext);
   }
 
   private static String castGroupName(Object key) throws EvalException {
@@ -103,7 +104,7 @@ public abstract class StarlarkExecGroupCollection implements ExecGroupCollection
   }
 
   private List<String> getScrubbedExecGroups() {
-    return toolchainCollection().getExecGroups().stream()
+    return toolchainCollection().getExecGroupNames().stream()
         .filter(group -> !DEFAULT_EXEC_GROUP_NAME.equals(group))
         .sorted()
         .collect(Collectors.toList());
@@ -113,17 +114,10 @@ public abstract class StarlarkExecGroupCollection implements ExecGroupCollection
    * The starlark object that is returned by ctx.exec_groups[<name>]. Gives information about that
    * exec group.
    */
-  public static class StarlarkExecGroupContext implements ExecGroupContextApi {
-    ToolchainContextApi toolchainContext;
-
-    private StarlarkExecGroupContext(ToolchainContextApi toolchainContext) {
-      this.toolchainContext = toolchainContext;
-    }
-
+  @AutoValue
+  public abstract static class StarlarkExecGroupContext implements ExecGroupContextApi {
     @Override
-    public ToolchainContextApi toolchains() {
-      return toolchainContext;
-    }
+    public abstract ToolchainContextApi toolchains();
 
     @Override
     public void repr(Printer printer) {
