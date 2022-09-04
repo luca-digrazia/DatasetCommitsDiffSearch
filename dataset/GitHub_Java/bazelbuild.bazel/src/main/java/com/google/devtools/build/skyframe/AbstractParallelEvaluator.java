@@ -176,7 +176,7 @@ abstract class AbstractParallelEvaluator {
                 : childEntry.addReverseDepAndCheckIfDone(skyKey);
       } catch (IllegalStateException e) {
         // Add some more context regarding crashes.
-        throw new IllegalStateException("child key: " + child + " error: " + e.getMessage(), e);
+        throw new IllegalStateException(e.getMessage() + " child key: " + child, e);
       }
       switch (dependencyState) {
         case DONE:
@@ -314,10 +314,7 @@ abstract class AbstractParallelEvaluator {
         case VERIFIED_CLEAN:
           // No child has a changed value. This node can be marked done and its parents signaled
           // without any re-evaluation.
-          NodeEntry.NodeValueAndRdepsToSignal nodeValueAndRdeps = state.markClean();
-          Set<SkyKey> rDepsToSignal = nodeValueAndRdeps.getRdepsToSignal();
-          // Make sure to replay events once change-pruned
-          replay(ValueWithMetadata.wrapWithMetadata(nodeValueAndRdeps.getValue()));
+          Set<SkyKey> reverseDeps = state.markClean();
           // Tell the receiver that the value was not actually changed this run.
           evaluatorContext
               .getProgressReceiver()
@@ -327,10 +324,10 @@ abstract class AbstractParallelEvaluator {
             if (!evaluatorContext.getVisitor().preventNewEvaluations()) {
               return DirtyOutcome.ALREADY_PROCESSED;
             }
-            throw SchedulerException.ofError(state.getErrorInfo(), skyKey, rDepsToSignal);
+            throw SchedulerException.ofError(state.getErrorInfo(), skyKey, reverseDeps);
           }
           evaluatorContext.signalValuesAndEnqueueIfReady(
-              skyKey, rDepsToSignal, state.getVersion(), EnqueueParentBehavior.ENQUEUE);
+              skyKey, reverseDeps, state.getVersion(), EnqueueParentBehavior.ENQUEUE);
           return DirtyOutcome.ALREADY_PROCESSED;
         case NEEDS_REBUILDING:
           if (state.canPruneDepsByFingerprint()) {
@@ -758,18 +755,6 @@ abstract class AbstractParallelEvaluator {
     }
 
     private static final int MAX_REVERSEDEP_DUMP_LENGTH = 1000;
-  }
-
-  protected void replay(ValueWithMetadata valueWithMetadata) {
-    // Replaying actions is done on a small number of nodes, but potentially over a large dependency
-    // graph. Under those conditions, using the regular NestedSet flattening with .toList() is more
-    // efficient than using NestedSetVisitor's custom traversal logic.
-    evaluatorContext
-        .getReplayingNestedSetPostableVisitor()
-        .visit(valueWithMetadata.getTransitivePostables().toList());
-    evaluatorContext
-        .getReplayingNestedSetEventVisitor()
-        .visit(valueWithMetadata.getTransitiveEvents().toList());
   }
 
   /**
