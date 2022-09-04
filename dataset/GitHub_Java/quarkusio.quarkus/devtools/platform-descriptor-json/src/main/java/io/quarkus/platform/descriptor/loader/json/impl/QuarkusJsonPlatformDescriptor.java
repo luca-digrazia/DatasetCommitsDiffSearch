@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import org.apache.maven.model.Dependency;
+
 import io.quarkus.dependencies.Category;
 import io.quarkus.dependencies.Extension;
 import io.quarkus.devtools.messagewriter.MessageWriter;
@@ -27,6 +29,7 @@ public class QuarkusJsonPlatformDescriptor implements QuarkusPlatformDescriptor,
     private String quarkusVersion;
 
     private List<Extension> extensions = Collections.emptyList();
+    private List<Dependency> managedDeps = Collections.emptyList();
     private List<Category> categories = Collections.emptyList();
     private Map<String, Object> metadata = Collections.emptyMap();
     private transient ResourceLoader resourceLoader;
@@ -51,6 +54,10 @@ public class QuarkusJsonPlatformDescriptor implements QuarkusPlatformDescriptor,
 
     public void setMetadata(Map<String, Object> metadata) {
         this.metadata = metadata;
+    }
+
+    void setManagedDependencies(List<Dependency> managedDeps) {
+        this.managedDeps = managedDeps;
     }
 
     void setResourceLoader(ResourceLoader resourceLoader) {
@@ -87,6 +94,11 @@ public class QuarkusJsonPlatformDescriptor implements QuarkusPlatformDescriptor,
     @Override
     public String getQuarkusVersion() {
         return quarkusVersion;
+    }
+
+    @Override
+    public List<Dependency> getManagedDependencies() {
+        return managedDeps;
     }
 
     @Override
