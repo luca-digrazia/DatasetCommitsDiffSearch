@@ -1,6 +1,7 @@
 package io.quarkus.agroal.runtime;
 
 import java.sql.Driver;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -65,7 +66,7 @@ public abstract class AbstractDataSourceProducer {
 
     public AgroalDataSource createDataSource(String dataSourceName,
             DataSourceBuildTimeConfig dataSourceBuildTimeConfig,
-            Optional<DataSourceRuntimeConfig> dataSourceRuntimeConfigOptional) {
+            Optional<DataSourceRuntimeConfig> dataSourceRuntimeConfigOptional) throws SQLException {
         if (!dataSourceRuntimeConfigOptional.isPresent() || !dataSourceRuntimeConfigOptional.get().url.isPresent()) {
             log.warn("Datasource " + dataSourceName + " not started: driver and/or url are not defined.");
             return null;
