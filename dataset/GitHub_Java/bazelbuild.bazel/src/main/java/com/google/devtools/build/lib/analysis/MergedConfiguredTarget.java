@@ -78,7 +78,7 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
     ExtraActionArtifactsProvider mergedExtraActionProviders = ExtraActionArtifactsProvider.merge(
         getAllProviders(base, aspects, ExtraActionArtifactsProvider.class));
 
-    TransitiveInfoProviderMapBuilder aspectProviders = new TransitiveInfoProviderMapBuilder();
+    TransitiveInfoProviderMap.Builder aspectProviders = TransitiveInfoProviderMap.builder();
     if (mergedOutputGroupProvider != null) {
       aspectProviders.add(mergedOutputGroupProvider);
     }
