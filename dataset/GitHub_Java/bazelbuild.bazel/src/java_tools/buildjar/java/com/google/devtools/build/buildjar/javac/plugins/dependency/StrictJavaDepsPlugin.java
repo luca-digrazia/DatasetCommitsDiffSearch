@@ -229,9 +229,8 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
         "[strict] Using {0} from an indirect dependency (TOOL_INFO: \"{1}\"). "
             + "See command below **";
 
-    private final ImmutableSet<Path> directJars;
-
-    private final Map<Path, JarOwner> jarsToTargets;
+    /** Lookup for jars coming from transitive dependencies */
+    private final Map<Path, JarOwner> indirectJarsToTargets;
 
     /** Strict deps diagnostics. */
     private final List<SjdDiagnostic> diagnostics;
@@ -264,8 +263,7 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
         List<SjdDiagnostic> diagnostics,
         Set<JarOwner> missingTargets,
         Set<Path> platformJars) {
-      this.directJars = dependencyModule.directJars();
-      this.jarsToTargets = dependencyModule.jarsToTargets();
+      this.indirectJarsToTargets = dependencyModule.getIndirectMapping();
       this.strictJavaDepsMode = dependencyModule.getStrictJavaDeps();
       this.diagnostics = diagnostics;
       this.missingTargets = missingTargets;
@@ -300,7 +298,7 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
       if (strictJavaDepsMode.isEnabled() && !isStrictDepsExempt) {
         // Does it make sense to emit a warning/error for this pair of (type, owner)?
         // We want to emit only one error/warning per owner.
-        JarOwner owner = !directJars.contains(jarPath) ? jarsToTargets.get(jarPath) : null;
+        JarOwner owner = indirectJarsToTargets.get(jarPath);
         if (owner != null && seenTargets.add(owner)) {
           // owner is of the form "//label/of:rule <Aspect name>" where <Aspect name> is optional.
           String canonicalTargetName = canonicalizeTarget(remapTarget(owner.label()));
