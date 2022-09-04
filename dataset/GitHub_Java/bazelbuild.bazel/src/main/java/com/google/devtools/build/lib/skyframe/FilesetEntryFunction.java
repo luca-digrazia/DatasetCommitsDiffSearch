@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -26,6 +25,7 @@ import com.google.devtools.build.lib.actions.FilesetTraversalParams.DirectTraver
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalFunction.DanglingSymlinkException;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalFunction.RecursiveFilesystemTraversalException;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.ResolvedFile;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
@@ -149,7 +149,7 @@ public final class FilesetEntryFunction implements SkyFunction {
         DirectoryTree root = new DirectoryTree();
         for (ResolvedFile f : rftv.getTransitiveFiles().toCollection()) {
           PathFragment path = f.getNameInSymlinkTree().relativeTo(prefixToRemove);
-          if (!path.isEmpty()) {
+          if (path.segmentCount() > 0) {
             path = t.getDestPath().getRelative(path);
             DirectoryTree dir = root;
             for (int i = 0; i < path.segmentCount() - 1; ++i) {
