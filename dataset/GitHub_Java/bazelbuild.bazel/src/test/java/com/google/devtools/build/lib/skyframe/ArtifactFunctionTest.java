@@ -278,7 +278,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     omittedOutputs.add(treeFileArtifact2);
 
     SkyValue value = evaluateArtifactValue(artifact2);
-    assertThat(value).isEqualTo(TreeArtifactValue.OMITTED_TREE_MARKER);
+    assertThat(value).isEqualTo(FileArtifactValue.OMITTED_FILE_MARKER);
   }
 
   @Test
@@ -434,7 +434,8 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     }
     SkyValue value = result.get(key);
     if (value instanceof ActionExecutionValue) {
-      return ((ActionExecutionValue) value).getExistingFileArtifactValue(artifact);
+      return ((ActionExecutionValue) value)
+          .getExistingFileArtifactValue((DerivedArtifact) artifact);
     }
     return value;
   }

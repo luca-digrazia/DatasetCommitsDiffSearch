@@ -133,7 +133,9 @@ class ArtifactFunction implements SkyFunction {
             artifactDependencies.actionLookupValue.getAction(generatingActionKey.getActionIndex()),
             "Null middleman action? %s",
             artifactDependencies);
-    FileArtifactValue individualMetadata = actionValue.getExistingFileArtifactValue(artifact);
+    FileArtifactValue individualMetadata =
+        Preconditions.checkNotNull(
+            actionValue.getArtifactValue(artifact), "%s %s", artifact, actionValue);
     if (isAggregatingValue(action)) {
       return createAggregatingValue(artifact, action, individualMetadata, env);
     }
@@ -159,7 +161,7 @@ class ArtifactFunction implements SkyFunction {
     }
   }
 
-  private static TreeArtifactValue createTreeArtifactValueFromActionKey(
+  private static SkyValue createTreeArtifactValueFromActionKey(
       ArtifactDependencies artifactDependencies, Environment env) throws InterruptedException {
     // Request the list of expanded actions from the ActionTemplate.
     ActionTemplateExpansion actionTemplateExpansion =
@@ -230,7 +232,7 @@ class ArtifactFunction implements SkyFunction {
           children.isEmpty(),
           "Action template expansion has some but not all outputs omitted, present outputs: %s",
           children);
-      return TreeArtifactValue.OMITTED_TREE_MARKER;
+      return FileArtifactValue.OMITTED_FILE_MARKER;
     }
     return TreeArtifactValue.create(children);
   }
@@ -329,7 +331,9 @@ class ArtifactFunction implements SkyFunction {
       } else if (inputValue instanceof ActionExecutionValue) {
         fileInputsBuilder.add(
             Pair.of(
-                input, ((ActionExecutionValue) inputValue).getExistingFileArtifactValue(input)));
+                input,
+                ((ActionExecutionValue) inputValue)
+                    .getExistingFileArtifactValue((DerivedArtifact) input)));
       } else if (inputValue instanceof TreeArtifactValue) {
         directoryInputsBuilder.add(Pair.of(input, (TreeArtifactValue) inputValue));
       } else {
