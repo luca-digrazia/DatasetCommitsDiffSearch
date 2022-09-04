@@ -60,7 +60,7 @@ public class MultipleContentTypeTest extends JerseyTest {
     }
 
     @Test
-    void testJsonContentType() {
+    public void testJsonContentType() {
         final Response response = target("/").request().accept(MediaType.APPLICATION_JSON_TYPE).get();
 
         assertThat(response.getStatus()).isEqualTo(200);
@@ -68,7 +68,7 @@ public class MultipleContentTypeTest extends JerseyTest {
     }
 
     @Test
-    void testHtmlContentType() {
+    public void testHtmlContentType() {
         final Response response = target("/").request().accept(MediaType.TEXT_HTML_TYPE).get();
 
         assertThat(response.getStatus()).isEqualTo(200);
@@ -79,7 +79,7 @@ public class MultipleContentTypeTest extends JerseyTest {
     }
 
     @Test
-    void testOnlyJsonContentType() {
+    public void testOnlyJsonContentType() {
         final Response response = target("/json").request().accept(MediaType.APPLICATION_JSON_TYPE).get();
 
         assertThat(response.getStatus()).isEqualTo(200);
@@ -87,7 +87,7 @@ public class MultipleContentTypeTest extends JerseyTest {
     }
 
     @Test
-    void testOnlyHtmlContentType() {
+    public void testOnlyHtmlContentType() {
         final Response response = target("/html").request().accept(MediaType.TEXT_HTML_TYPE).get();
 
         assertThat(response.getStatus()).isEqualTo(200);
