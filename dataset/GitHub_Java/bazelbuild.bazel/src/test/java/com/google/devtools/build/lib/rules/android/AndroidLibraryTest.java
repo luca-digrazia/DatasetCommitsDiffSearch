@@ -264,7 +264,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
 
   @Test
   public void testStrictAndroidDepsWarn() throws Exception {
-    useConfiguration("--strict_java_deps=WARN");
+    useConfiguration("--strict_android_deps=WARN");
     scratch.file(
         "java/android/strict/BUILD",
         "android_library(",
@@ -842,7 +842,6 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         "    proguard = 'proguard',",
         "    shrinked_android_jar = 'shrinked_android_jar',",
         "    zipalign = 'zipalign',",
-        "    tags = ['__ANDROID_RULES_MIGRATION__'],",
         ")",
         "java_library(",
         "    name = 'aidl_lib',",
@@ -1842,7 +1841,6 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         "    proguard = 'proguard',",
         "    shrinked_android_jar = 'shrinked_android_jar',",
         "    zipalign = 'zipalign',",
-        "    tags = ['__ANDROID_RULES_MIGRATION__'],",
         ")");
     scratch.file(
         "java/a/BUILD",
@@ -1945,7 +1943,6 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         "    proguard = 'proguard',",
         "    shrinked_android_jar = 'shrinked_android_jar',",
         "    zipalign = 'zipalign',",
-        "    tags = ['__ANDROID_RULES_MIGRATION__'],",
         ")");
     scratch.file(
         "java/a/BUILD",
@@ -2463,7 +2460,6 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
             target
                 .get(AndroidCcLinkParamsProvider.PROVIDER)
                 .getLinkParams()
-                .getCcLinkingInfo()
                 .getDynamicModeParamsForDynamicLibrary()
                 .flattenedLinkopts())
         .containsExactly("-CC_DEP")
