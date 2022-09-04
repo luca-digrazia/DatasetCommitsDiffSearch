@@ -41,6 +41,7 @@ import com.google.devtools.build.skyframe.EvaluationProgressReceiver.NodeState;
 import com.google.devtools.build.skyframe.MemoizingEvaluator.EmittedEventState;
 import com.google.devtools.build.skyframe.NodeEntry.DependencyState;
 import com.google.devtools.build.skyframe.NodeEntry.DirtyState;
+import com.google.devtools.build.skyframe.ParallelEvaluatorContext.EnqueueParentBehavior;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import com.google.devtools.build.skyframe.SkyFunction.Restart;
 import com.google.devtools.build.skyframe.SkyFunctionEnvironment.UndonePreviouslyRequestedDeps;
@@ -210,7 +211,7 @@ abstract class AbstractParallelEvaluator {
     /**
      * Notes the rdep from the parent to the child, and then does the appropriate thing with the
      * child or the parent, returning whether the parent has both been signalled and also is ready
-     * for evaluation.
+     * for evaluation (but wasn't enqueued).
      */
     private boolean enqueueChild(
         SkyKey skyKey,
@@ -219,7 +220,7 @@ abstract class AbstractParallelEvaluator {
         NodeEntry childEntry,
         boolean depAlreadyExists,
         int childEvaluationPriority,
-        boolean enqueueParentIfReady)
+        EnqueueParentBehavior enqueueParent)
         throws InterruptedException {
       Preconditions.checkState(!entry.isDone(), "%s %s", skyKey, entry);
       DependencyState dependencyState;
@@ -234,13 +235,18 @@ abstract class AbstractParallelEvaluator {
       }
       switch (dependencyState) {
         case DONE:
-          if (entry.signalDep(childEntry.getVersion(), child)) {
-            if (enqueueParentIfReady) {
-              // Maximum priority, since this node has already started evaluation before, and we
-              // want it off our plate.
-              evaluatorContext.getVisitor().enqueueEvaluation(skyKey, Integer.MAX_VALUE);
-            }
-            return true;
+          switch (enqueueParent) {
+            case SIGNAL:
+              return entry.signalDep(childEntry.getVersion(), child);
+            case ENQUEUE:
+              if (entry.signalDep(childEntry.getVersion(), child)) {
+                // Maximum priority, since this node has already started evaluation before, and we
+                // want it off our plate.
+                evaluatorContext.getVisitor().enqueueEvaluation(skyKey, Integer.MAX_VALUE);
+              }
+              break;
+            case NO_ACTION:
+              break;
           }
           break;
         case ALREADY_EVALUATING:
@@ -369,7 +375,7 @@ abstract class AbstractParallelEvaluator {
                 entriesToCheck,
                 state,
                 globalEnqueuedIndex.incrementAndGet(),
-                /*enqueueParentIfReady=*/ false);
+                EnqueueParentBehavior.SIGNAL);
         if (!parentIsSignalledAndReady
             || evaluatorContext.getVisitor().shouldPreventNewEvaluations()) {
           return DirtyOutcome.ALREADY_PROCESSED;
@@ -403,8 +409,8 @@ abstract class AbstractParallelEvaluator {
             }
             throw SchedulerException.ofError(state.getErrorInfo(), skyKey, rDepsToSignal);
           }
-          evaluatorContext.signalParentsAndEnqueueIfReady(
-              skyKey, rDepsToSignal, state.getVersion());
+          evaluatorContext.signalValuesAndEnqueueIfReady(
+              skyKey, rDepsToSignal, state.getVersion(), EnqueueParentBehavior.ENQUEUE);
           return DirtyOutcome.ALREADY_PROCESSED;
         case NEEDS_REBUILDING:
           state.markRebuilding();
@@ -420,13 +426,16 @@ abstract class AbstractParallelEvaluator {
       }
     }
 
-    /** Returns whether the parent has both been signalled and also is ready for evaluation. */
+    /**
+     * Returns whether the parent has both been signalled and also is ready for evaluation (but
+     * wasn't enqueued).
+     */
     private boolean handleKnownChildrenForDirtyNode(
         Collection<SkyKey> knownChildren,
         Map<SkyKey, ? extends NodeEntry> oldChildren,
         NodeEntry state,
         int childEvaluationPriority,
-        boolean enqueueParentIfReady)
+        EnqueueParentBehavior enqueueParent)
         throws InterruptedException {
       boolean parentIsSignalledAndReady = false;
       if (oldChildren.size() != knownChildren.size()) {
@@ -449,7 +458,7 @@ abstract class AbstractParallelEvaluator {
                   recreatedEntry.getValue(),
                   /*depAlreadyExists=*/ false,
                   childEvaluationPriority,
-                  enqueueParentIfReady);
+                  enqueueParent);
         }
       }
       for (Map.Entry<SkyKey, ? extends NodeEntry> e : oldChildren.entrySet()) {
@@ -463,7 +472,7 @@ abstract class AbstractParallelEvaluator {
                 directDepEntry,
                 /*depAlreadyExists=*/ true,
                 childEvaluationPriority,
-                enqueueParentIfReady);
+                enqueueParent);
       }
       return parentIsSignalledAndReady;
     }
@@ -590,14 +599,14 @@ abstract class AbstractParallelEvaluator {
                   errorString.substring(0, min(1000, errorString.length())));
             }
             env.setError(state, errorInfo);
-            Set<SkyKey> rdepsToBubbleUpTo = env.commitAndGetParents(state);
-            if (shouldFailFast) {
-              evaluatorContext.signalParentsOnAbort(skyKey, rdepsToBubbleUpTo, state.getVersion());
-              throw SchedulerException.ofError(errorInfo, skyKey, rdepsToBubbleUpTo);
+            Set<SkyKey> rdepsToBubbleUpTo =
+                env.commit(
+                    state,
+                    shouldFailFast ? EnqueueParentBehavior.SIGNAL : EnqueueParentBehavior.ENQUEUE);
+            if (!shouldFailFast) {
+              return;
             }
-            evaluatorContext.signalParentsAndEnqueueIfReady(
-                skyKey, rdepsToBubbleUpTo, state.getVersion());
-            return;
+            throw SchedulerException.ofError(errorInfo, skyKey, rdepsToBubbleUpTo);
           }
         } catch (RuntimeException re) {
           // Programmer error (most likely NPE or a failed precondition in a SkyFunction). Output
@@ -639,9 +648,7 @@ abstract class AbstractParallelEvaluator {
               return;
             }
             env.setValue(value);
-            Set<SkyKey> reverseDeps = env.commitAndGetParents(state);
-            evaluatorContext.signalParentsAndEnqueueIfReady(
-                skyKey, reverseDeps, state.getVersion());
+            env.commit(state, EnqueueParentBehavior.ENQUEUE);
           } finally {
             evaluatorContext.getProgressReceiver().stateEnding(skyKey, NodeState.COMMIT, -1);
           }
@@ -741,8 +748,7 @@ abstract class AbstractParallelEvaluator {
           // If the child error was catastrophic, committing this parent to the graph is not
           // necessary, but since we don't do error bubbling in catastrophes, it doesn't violate any
           // invariants either.
-          Set<SkyKey> reverseDeps = env.commitAndGetParents(state);
-          evaluatorContext.signalParentsAndEnqueueIfReady(skyKey, reverseDeps, state.getVersion());
+          env.commit(state, EnqueueParentBehavior.ENQUEUE);
           return;
         }
 
@@ -772,7 +778,7 @@ abstract class AbstractParallelEvaluator {
             graph.getBatch(skyKey, Reason.ENQUEUING_CHILD, newDepsThatWereInTheLastEvaluation),
             state,
             childEvaluationPriority,
-            /*enqueueParentIfReady=*/ true);
+            EnqueueParentBehavior.ENQUEUE);
 
         // Due to multi-threading, this can potentially cause the current node to be re-enqueued if
         // all 'new' children of this node are already done. Therefore, there should not be any
@@ -789,7 +795,7 @@ abstract class AbstractParallelEvaluator {
               newDirectDepEntry,
               /*depAlreadyExists=*/ false,
               childEvaluationPriority,
-              /*enqueueParentIfReady=*/ true);
+              EnqueueParentBehavior.ENQUEUE);
         }
         if (externalDeps != null) {
           // This can cause the current node to be re-enqueued if all futures are already done.
@@ -983,7 +989,7 @@ abstract class AbstractParallelEvaluator {
     }
   }
 
-  static void propagateInterruption(SchedulerException e) throws InterruptedException {
+  void propagateInterruption(SchedulerException e) throws InterruptedException {
     boolean mustThrowInterrupt = Thread.interrupted();
     Throwables.propagateIfPossible(e.getCause(), InterruptedException.class);
     if (mustThrowInterrupt) {
@@ -1014,6 +1020,8 @@ abstract class AbstractParallelEvaluator {
    * <p>If this returns {@code true}, this node should not actually finish, and this evaluation
    * attempt should make no changes to the node after this method returns, because a completing dep
    * may schedule a new evaluation attempt at any time.
+   *
+   * @throws InterruptedException
    */
   private boolean maybeHandleRegisteringNewlyDiscoveredDepsForDoneEntry(
       SkyKey skyKey,

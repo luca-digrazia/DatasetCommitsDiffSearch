@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.baseArtifactNames;
@@ -903,8 +904,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
     assertThat(objcProvider.get(CC_LIBRARY).toList()).isEmpty();
   }
 
-  @Test
-  public void testIncludesDirsGetPassedToCompileAction() throws Exception {
+  private void checkIncludesGetPassedToCompileAction() throws Exception {
     createLibraryTargetWriter("//lib:lib")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
         .setList("includes", "../third_party/foo", "opensource/bar")
@@ -917,6 +917,25 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
       assertThat(Joiner.on("").join(removeConfigFragment(compileAction.getArguments())))
           .contains("-I" + path);
     }
+  }
+
+  @Test
+  public void testIncludesDirsGetPassedToCompileAction_separateGenfilesBinDirs() throws Exception {
+    checkIncludesGetPassedToCompileAction();
+  }
+
+  @Test
+  public void testIncludesDirsGetPassedToCompileAction_mergedGenfilesBinDirs() throws Exception {
+    useConfiguration("--incompatible_merge_genfiles_directory");
+    checkIncludesGetPassedToCompileAction();
+
+    // Verify that the paths aren't added twice when binDir and genfilesDir are the same.
+    CommandAction compileAction = compileAction("//lib:lib", "a.o");
+    ImmutableList<String> includeFlags =
+        removeConfigFragment(compileAction.getArguments()).stream()
+            .filter((flag) -> flag.startsWith("-I"))
+            .collect(toImmutableList());
+    assertThat(includeFlags).containsNoDuplicates();
   }
 
   @Test
@@ -1242,6 +1261,54 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
     CommandAction action = compileAction("//objc:lib", "a.o");
 
     assertXcodeVersionEnv(action, "5.8");
+  }
+
+  @Test
+  public void testXcodeVersionFeature() throws Exception {
+    useConfiguration("--xcode_version=5.8");
+
+    createLibraryTargetWriter("//objc:lib")
+        .setAndCreateFiles("srcs", "a.m")
+        .write();
+    CommandAction action = compileAction("//objc:lib", "a.o");
+
+    assertThat(action.getArguments()).contains("-DXCODE_FEATURE_FOR_TESTING=xcode_5.8");
+  }
+
+  @Test
+  public void testXcodeVersionFeatureUnused() throws Exception {
+    useConfiguration("--xcode_version=7.3");
+
+    createLibraryTargetWriter("//objc:lib")
+        .setAndCreateFiles("srcs", "a.m")
+        .write();
+    CommandAction action = compileAction("//objc:lib", "a.o");
+
+    assertThat(action.getArguments()).doesNotContain("-DXCODE_FEATURE_FOR_TESTING=xcode_5.8");
+  }
+
+  @Test
+  public void testXcodeVersionFeatureTwoComponentsTooMany() throws Exception {
+    useConfiguration("--xcode_version=7.3.1");
+
+    createLibraryTargetWriter("//objc:lib")
+        .setAndCreateFiles("srcs", "a.m")
+        .write();
+    CommandAction action = compileAction("//objc:lib", "a.o");
+
+    assertThat(action.getArguments()).contains("-DXCODE_FEATURE_FOR_TESTING=xcode_7.3");
+  }
+
+  @Test
+  public void testXcodeVersionFeatureTwoComponentsTooFew() throws Exception {
+    useConfiguration("--xcode_version=5");
+
+    createLibraryTargetWriter("//objc:lib")
+        .setAndCreateFiles("srcs", "a.m")
+        .write();
+    CommandAction action = compileAction("//objc:lib", "a.o");
+
+    assertThat(action.getArguments()).contains("-DXCODE_FEATURE_FOR_TESTING=xcode_5.0");
   }
 
   @Test
