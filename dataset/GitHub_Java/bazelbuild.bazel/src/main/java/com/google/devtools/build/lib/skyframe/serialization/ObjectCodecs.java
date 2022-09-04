@@ -53,43 +53,21 @@ public class ObjectCodecs {
     }
   }
 
-  public void serialize(
-      Object subject, CodedOutputStream codedOut, MemoizationPermission memoizationPermission)
-      throws SerializationException {
-    SerializationContext context = serializationContext;
-    if (memoizationPermission == MemoizationPermission.DISABLED) {
-      context = context.disableMemoization();
-    }
+  public void serialize(Object subject, CodedOutputStream codedOut) throws SerializationException {
     try {
-      context.serialize(subject, codedOut);
+      serializationContext.serialize(subject, codedOut);
     } catch (IOException e) {
       throw new SerializationException("Failed to serialize " + subject, e);
     }
   }
 
-  /**
-   * Controls whether memoization can occur for serialization/deserialization. Should be allowed
-   * unless bit-equivalence is needed.
-   */
-  public enum MemoizationPermission {
-    ALLOWED,
-    DISABLED
-  }
-
   public Object deserialize(ByteString data) throws SerializationException {
-    return deserialize(data.newCodedInput(), MemoizationPermission.ALLOWED);
+    return deserialize(data.newCodedInput());
   }
 
-  public Object deserialize(CodedInputStream codedIn, MemoizationPermission memoizationPermission)
-      throws SerializationException {
-    // Allow access to buffer without copying (although this means buffer may be pinned in memory).
-    codedIn.enableAliasing(true);
-    DeserializationContext context = deserializationContext;
-    if (memoizationPermission == MemoizationPermission.DISABLED) {
-      context = context.disableMemoization();
-    }
+  public Object deserialize(CodedInputStream codedIn) throws SerializationException {
     try {
-      return context.deserialize(codedIn);
+      return deserializationContext.deserialize(codedIn);
     } catch (IOException e) {
       throw new SerializationException("Failed to deserialize data", e);
     }

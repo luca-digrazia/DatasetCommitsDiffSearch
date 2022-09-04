@@ -24,18 +24,19 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.io.NotSerializableException;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 /** Tests for {@link ObjectCodecs}. */
 @RunWith(JUnit4.class)
@@ -46,13 +47,6 @@ public class ObjectCodecsTest {
     @Override
     public Class<Integer> getEncodedClass() {
       return Integer.class;
-    }
-
-    // We have to override the default explicitly here because Mockito can't delegate to default
-    // methods on interfaces.
-    @Override
-    public List<Class<? extends Integer>> additionalEncodedClasses() {
-      return ImmutableList.of();
     }
 
     @Override
@@ -80,55 +74,35 @@ public class ObjectCodecsTest {
     spyObjectCodec = spy(new IntegerCodec());
     this.underTest =
         new ObjectCodecs(
-            ObjectCodecRegistry.newBuilder().add(spyObjectCodec).build(), ImmutableMap.of());
+            ObjectCodecRegistry.newBuilder().add(Integer.class, spyObjectCodec).build(),
+            ImmutableMap.of());
   }
 
   @Test
   public void testSerializeDeserializeUsesCustomLogicWhenAvailable() throws Exception {
-    Integer original = 12345;
+    Integer original = Integer.valueOf(12345);
 
     doAnswer(
-            invocation -> {
-              CodedOutputStream codedOutArg = (CodedOutputStream) invocation.getArguments()[2];
-              codedOutArg.writeInt32NoTag(42);
-              return null;
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocation) throws IOException {
+                CodedOutputStream codedOutArg = (CodedOutputStream) invocation.getArguments()[2];
+                codedOutArg.writeInt32NoTag(42);
+                return null;
+              }
             })
         .when(spyObjectCodec)
         .serialize(any(SerializationContext.class), eq(original), any(CodedOutputStream.class));
-    AtomicInteger readInteger = new AtomicInteger(0);
-    doAnswer(
-            invocation -> {
-              readInteger.set(((CodedInputStream) invocation.getArguments()[1]).readInt32());
-              return original;
-            })
+    ArgumentCaptor<CodedInputStream> captor = ArgumentCaptor.forClass(CodedInputStream.class);
+    doReturn(original)
         .when(spyObjectCodec)
-        .deserialize(any(DeserializationContext.class), any(CodedInputStream.class));
+        .deserialize(any(DeserializationContext.class), captor.capture());
 
     ByteString serialized = underTest.serialize(original);
     Object deserialized = underTest.deserialize(serialized);
     assertThat(deserialized).isEqualTo(original);
 
-    assertThat(readInteger.get()).isEqualTo(42);
-  }
-
-  @Test
-  public void tooManyBytesCausesFailure() throws Exception {
-    doReturn(1)
-        .when(spyObjectCodec)
-        .deserialize(any(DeserializationContext.class), any(CodedInputStream.class));
-    doAnswer(
-            invocation -> {
-              ((CodedOutputStream) invocation.getArguments()[2]).writeInt64NoTag(0xAAAAAA);
-              return null;
-            })
-        .when(spyObjectCodec)
-        .serialize(any(SerializationContext.class), eq(1), any(CodedOutputStream.class));
-    try {
-      underTest.deserialize(underTest.serialize(1));
-      fail("Expected exception");
-    } catch (SerializationException e) {
-      assertThat(e).hasMessageThat().isEqualTo("input stream not exhausted after deserializing 1");
-    }
+    assertThat(captor.getValue().readInt32()).isEqualTo(42);
   }
 
   @Test
@@ -192,6 +166,13 @@ public class ObjectCodecsTest {
   }
 
   @Test
+  public void testSerializePropagatesSerializationExceptionFromDefaultCodec() {
+    SerializationException exception =
+        assertThrows(SerializationException.class, () -> underTest.serialize(new Object()));
+    assertThat(exception).hasCauseThat().isInstanceOf(NotSerializableException.class);
+  }
+
+  @Test
   public void testDeserializePropagatesSerializationExceptionFromDefaultCodec() {
     ByteString serialized = ByteString.copyFromUtf8("probably not serialized anything");
 
@@ -218,8 +199,7 @@ public class ObjectCodecsTest {
         new ObjectCodecs(
             ObjectCodecRegistry.newBuilder().setAllowDefaultCodec(false).build(),
             ImmutableMap.of());
-    assertThrows(
-        SerializationException.NoCodecException.class, () -> underTest.deserialize(serialized));
+    assertThrows(RuntimeException.class, () -> underTest.deserialize(serialized));
   }
 
   @Test
