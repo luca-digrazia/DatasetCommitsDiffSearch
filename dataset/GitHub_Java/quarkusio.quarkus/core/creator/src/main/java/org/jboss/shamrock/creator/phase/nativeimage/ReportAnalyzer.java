@@ -18,8 +18,6 @@ package org.jboss.shamrock.creator.phase.nativeimage;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -52,7 +50,7 @@ public class ReportAnalyzer {
      */
     public static String analyse(String report, String className, String methodName) throws Exception {
         Deque<String> lines = new ArrayDeque<>();
-        try (BufferedReader in = Files.newBufferedReader(Paths.get(report))) {
+        try (BufferedReader in = new BufferedReader(new FileReader(report))) {
             for (String re = in.readLine(); re != null; re = in.readLine()) {
                 lines.add(re);
             }
