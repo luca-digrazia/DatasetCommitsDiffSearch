@@ -130,8 +130,7 @@ public class ASTFileLookupFunction implements SkyFunction {
         byte[] bytes = FileSystemUtils.readWithKnownFileSize(path, astFileSize);
         ParserInput input = ParserInput.create(bytes, path.asFragment());
         file = StarlarkFile.parseWithDigest(input, path.getDigest());
-        ValidationEnvironment.validateFile(
-            file, thread.getGlobals(), thread.getSemantics(), /*isBuildFile=*/ false);
+        ValidationEnvironment.validateFile(file, thread, /*isBuildFile=*/ false);
         Event.replayEventsOn(env.getListener(), file.errors());
       }
     } catch (IOException e) {

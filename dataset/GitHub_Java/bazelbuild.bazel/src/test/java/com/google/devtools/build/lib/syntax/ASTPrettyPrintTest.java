@@ -198,9 +198,12 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
     assertExprPrettyMatches(
         "[1, 2, 3, [10, 20, 30, 40, 50, 60], 4, 5, 6]",
         "[1, 2, 3, [10, 20, 30, 40, 50, 60], 4, 5, 6]");
-    // It doesn't matter as much what toString does.
+    // It doesn't matter as much what toString does. This case demonstrates an apparent bug in how
+    // Printer#printList abbreviates the nested contents. We can keep this test around to help
+    // monitor changes in the buggy behavior or eventually fix it.
     assertExprTostringMatches(
-        "[1, 2, 3, [10, 20, 30, 40, 50, 60], 4, 5, 6]", "[1, 2, 3, <4 more arguments>]");
+        "[1, 2, 3, [10, 20, 30, 40, 50, 60], 4, 5, 6]",
+        "[1, 2, 3, [10, 20, 30, 40, <2 more argu...<2 more arguments>], <3 more arguments>]");
   }
 
   @Test

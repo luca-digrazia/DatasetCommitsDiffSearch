@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.collect.ImmutableList;
 import com.google.common.hash.HashCode;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.Parser.ParseResult;
 import java.io.IOException;
@@ -205,6 +206,25 @@ public final class StarlarkFile extends Node {
         /* allowImportInternal=*/ false);
   }
 
+  // TODO(adonovan): legacy function for copybara compatibility; delete ASAP.
+  public static StarlarkFile parseWithoutImports(ParserInput input, EventHandler handler) {
+    StarlarkFile file = parse(input);
+    Event.replayEventsOn(handler, file.errors());
+    return file;
+  }
+
+  // TODO(adonovan): legacy function for copybara compatibility; delete ASAP.
+  public boolean exec(StarlarkThread thread, EventHandler eventHandler)
+      throws InterruptedException {
+    try {
+      EvalUtils.exec(this, thread);
+      return true;
+    } catch (EvalException ex) {
+      eventHandler.handle(Event.error(ex.getLocation(), ex.getMessage()));
+      return false;
+    }
+  }
+
   /**
    * Evaluates the code and return the value of the last statement if it's an Expression or else
    * null.
@@ -236,11 +256,24 @@ public final class StarlarkFile extends Node {
   @Nullable
   public static Object eval(ParserInput input, StarlarkThread thread)
       throws SyntaxError, EvalException, InterruptedException {
-    StarlarkFile file = EvalUtils.parseAndValidateSkylark(input, thread);
+    StarlarkFile file = parseAndValidateSkylark(input, thread);
     if (!file.ok()) {
       throw new SyntaxError(file.errors());
     }
     return file.eval(thread);
+  }
+
+  /**
+   * Parses and validates the input and returns the syntax tree. It uses Starlark (not BUILD)
+   * validation semantics.
+   *
+   * <p>The thread is primarily used for its GlobalFrame. Scan/parse/validate errors are recorded in
+   * the StarlarkFile. It is the caller's responsibility to inspect them.
+   */
+  public static StarlarkFile parseAndValidateSkylark(ParserInput input, StarlarkThread thread) {
+    StarlarkFile file = parse(input);
+    ValidationEnvironment.validateFile(file, thread, /*isBuildFile=*/ false);
+    return file;
   }
 
   /**

@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.SymbolGenerator;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Expression;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInput;
@@ -36,6 +35,7 @@ import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.SkylarkUtils.Phase;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.StarlarkThread.FailFastException;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.syntax.SyntaxError;
 import com.google.devtools.build.lib.syntax.ValidationEnvironment;
@@ -160,7 +160,8 @@ public class EvaluationTestCase {
 
   private StarlarkFile parseStarlarkFile(String... lines) {
     ParserInput input = ParserInput.fromLines(lines);
-    StarlarkFile file = EvalUtils.parseAndValidateSkylark(input, thread);
+    StarlarkFile file = StarlarkFile.parse(input);
+    ValidationEnvironment.validateFile(file, thread, /*isBuildFile=*/ false);
     Event.replayEventsOn(getEventHandler(), file.errors());
     return file;
   }
@@ -201,8 +202,7 @@ public class EvaluationTestCase {
   public Object eval(String... lines) throws Exception {
     ParserInput input = ParserInput.fromLines(lines);
     StarlarkFile file = StarlarkFile.parse(input);
-    ValidationEnvironment.validateFile(
-        file, thread.getGlobals(), thread.getSemantics(), testMode == TestMode.BUILD);
+    ValidationEnvironment.validateFile(file, thread, testMode == TestMode.BUILD);
     if (testMode == TestMode.SKYLARK) { // .bzl and other dialects
       if (!file.ok()) {
         throw new SyntaxError(file.errors());
@@ -220,7 +220,7 @@ public class EvaluationTestCase {
     try {
       eval(input);
       fail("Expected error '" + msg + "' but got no error");
-    } catch (SyntaxError | EvalException | EventCollectionApparatus.FailFastException e) {
+    } catch (SyntaxError | EvalException | FailFastException e) {
       assertThat(e).hasMessageThat().isEqualTo(msg);
     }
   }
@@ -229,7 +229,7 @@ public class EvaluationTestCase {
     try {
       eval(input);
       fail("Expected error containing '" + msg + "' but got no error");
-    } catch (SyntaxError | EvalException | EventCollectionApparatus.FailFastException e) {
+    } catch (SyntaxError | EvalException | FailFastException e) {
       assertThat(e).hasMessageThat().contains(msg);
     }
   }
@@ -237,7 +237,7 @@ public class EvaluationTestCase {
   public void checkEvalErrorDoesNotContain(String msg, String... input) throws Exception {
     try {
       eval(input);
-    } catch (SyntaxError | EvalException | EventCollectionApparatus.FailFastException e) {
+    } catch (SyntaxError | EvalException | FailFastException e) {
       assertThat(e).hasMessageThat().doesNotContain(msg);
     }
   }

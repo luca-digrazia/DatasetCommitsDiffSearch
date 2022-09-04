@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.pkgcache;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -264,21 +264,21 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
   }
 
   @Test
-  public void testSequenceOfTargetPatterns_union() throws Exception {
+  public void testSequenceOfTargetPatterns_Union() throws Exception {
     // No prefix negation operator => union.  Order is not significant.
     assertThat(parseList("foo/...", "foo/bar/...")).containsExactlyElementsIn(rulesBeneathFoo);
     assertThat(parseList("foo/bar/...", "foo/...")).containsExactlyElementsIn(rulesBeneathFoo);
   }
 
   @Test
-  public void testSequenceOfTargetPatterns_setDifference() throws Exception {
+  public void testSequenceOfTargetPatterns_SetDifference() throws Exception {
     // Prefix negation operator => set difference.  Order is significant.
     assertThat(parseList("foo/...", "-foo/bar/...")).containsExactlyElementsIn(rulesInFoo);
     assertThat(parseList("-foo/bar/...", "foo/...")).containsExactlyElementsIn(rulesBeneathFoo);
   }
 
   @Test
-  public void testSequenceOfTargetPatterns_setDifferenceRelative() throws Exception {
+  public void testSequenceOfTargetPatterns_SetDifferenceRelative() throws Exception {
     // Prefix negation operator => set difference.  Order is significant.
     assertThat(parseListRelative("...", "-bar/...")).containsExactlyElementsIn(rulesInFoo);
     assertThat(parseListRelative("-bar/...", "...")).containsExactlyElementsIn(rulesBeneathFoo);
@@ -545,65 +545,65 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
   }
 
   @Test
-  public void testTopLevelPackage_relative_buildFile() throws Exception {
+  public void testTopLevelPackage_Relative_BuildFile() throws Exception {
     Set<Label> result = parseList("BUILD");
     assertThat(result).containsExactly(Label.parseAbsolute("//:BUILD", ImmutableMap.of()));
   }
 
   @Test
-  public void testTopLevelPackage_relative_declaredTarget() throws Exception {
+  public void testTopLevelPackage_Relative_DeclaredTarget() throws Exception {
     Set<Label> result = parseList("fg");
     assertThat(result).containsExactly(Label.parseAbsolute("//:fg", ImmutableMap.of()));
   }
 
   @Test
-  public void testTopLevelPackage_relative_all() throws Exception {
+  public void testTopLevelPackage_Relative_All() throws Exception {
     expectError("no such target '//:all'", "all");
   }
 
   @Test
-  public void testTopLevelPackage_relative_colonAll() throws Exception {
+  public void testTopLevelPackage_Relative_ColonAll() throws Exception {
     Set<Label> result = parseList(":all");
     assertThat(result).containsExactly(Label.parseAbsolute("//:fg", ImmutableMap.of()));
   }
 
   @Test
-  public void testTopLevelPackage_relative_inputFile() throws Exception {
+  public void testTopLevelPackage_Relative_InputFile() throws Exception {
     Set<Label> result = parseList("foo.cc");
     assertThat(result).containsExactly(Label.parseAbsolute("//:foo.cc", ImmutableMap.of()));
   }
 
   @Test
-  public void testTopLevelPackage_relative_inputFile_noSuchInputFile() throws Exception {
+  public void testTopLevelPackage_Relative_InputFile_NoSuchInputFile() throws Exception {
     expectError("no such target '//:nope.cc'", "nope.cc");
   }
 
   @Test
-  public void testTopLevelPackage_absolute_buildFile() throws Exception {
+  public void testTopLevelPackage_Absolute_BuildFile() throws Exception {
     Set<Label> result = parseList("//:BUILD");
     assertThat(result).containsExactly(Label.parseAbsolute("//:BUILD", ImmutableMap.of()));
   }
 
   @Test
-  public void testTopLevelPackage_absolute_declaredTarget() throws Exception {
+  public void testTopLevelPackage_Absolute_DeclaredTarget() throws Exception {
     Set<Label> result = parseList("//:fg");
     assertThat(result).containsExactly(Label.parseAbsolute("//:fg", ImmutableMap.of()));
   }
 
   @Test
-  public void testTopLevelPackage_absolute_all() throws Exception {
+  public void testTopLevelPackage_Absolute_All() throws Exception {
     Set<Label> result = parseList("//:all");
     assertThat(result).containsExactly(Label.parseAbsolute("//:fg", ImmutableMap.of()));
   }
 
   @Test
-  public void testTopLevelPackage_absolute_inputFile() throws Exception {
+  public void testTopLevelPackage_Absolute_InputFile() throws Exception {
     Set<Label> result = parseList("//:foo.cc");
     assertThat(result).containsExactly(Label.parseAbsolute("//:foo.cc", ImmutableMap.of()));
   }
 
   @Test
-  public void testTopLevelPackage_absolute_inputFile_noSuchInputFile() throws Exception {
+  public void testTopLevelPackage_Absolute_InputFile_NoSuchInputFile() throws Exception {
     expectError("no such target '//:nope.cc'", "//:nope.cc");
   }
 }

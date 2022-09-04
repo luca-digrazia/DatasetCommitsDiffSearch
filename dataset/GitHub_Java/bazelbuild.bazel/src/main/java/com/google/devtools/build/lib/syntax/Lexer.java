@@ -643,7 +643,6 @@ final class Lexer {
 
   private String scanInteger() {
     int oldPos = pos - 1;
-    loop:
     while (pos < buffer.length) {
       char c = buffer[pos];
       switch (c) {
@@ -655,12 +654,6 @@ final class Lexer {
         case 'd': case 'D':
         case 'e': case 'E':
         case 'f': case 'F':
-          if (buffer[oldPos] != '0') {
-            // A number not starting with zero must be decimal and can only contain decimal digits.
-            break loop;
-          }
-          pos++;
-          break;
         case '0': case '1':
         case '2': case '3':
         case '4': case '5':
@@ -669,7 +662,7 @@ final class Lexer {
           pos++;
           break;
         default:
-          break loop;
+          return bufferSlice(oldPos, pos);
       }
     }
     // TODO(bazel-team): (2009) to do roundtripping when we evaluate the integer
