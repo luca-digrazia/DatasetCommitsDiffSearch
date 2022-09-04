@@ -29,10 +29,8 @@ import com.googlecode.androidannotations.annotations.OnActivityResult;
 import com.googlecode.androidannotations.helper.CanonicalNameConstants;
 import com.googlecode.androidannotations.helper.IdAnnotationHelper;
 import com.googlecode.androidannotations.helper.IdValidatorHelper;
-import com.googlecode.androidannotations.helper.IdValidatorHelper.FallbackStrategy;
 import com.googlecode.androidannotations.model.AnnotationElements;
 import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRClass.Res;
 
 /**
  * @author Mathieu Boniface
@@ -58,23 +56,24 @@ public class OnActivityResultValidator implements ElementValidator {
 
 		IsValid valid = new IsValid();
 
-		validatorHelper.enclosingElementHasEActivity(element, validatedElements, valid);
+		validatorHelper.enclosingElementHasEActivityOrEFragment(element, validatedElements, valid);
 
 		validatorHelper.isNotPrivate(element, valid);
 
 		validatorHelper.doesntThrowException(element, valid);
 
-		validatorHelper.resIdsExist(element, Res.ID, FallbackStrategy.USE_ELEMENT_NAME, valid);
+		OnActivityResult onResultAnnotation = element.getAnnotation(OnActivityResult.class);
+		validatorHelper.annotationValuePositiveAndInAShort(element, valid, onResultAnnotation.value());
 
 		ExecutableElement executableElement = (ExecutableElement) element;
 		validatorHelper.returnTypeIsVoid(executableElement, valid);
 
-		hasOnActivityResultMethodParameters(executableElement, valid);
+		hasOnResultMethodParameters(executableElement, valid);
 
 		return valid.isValid();
 	}
 
-	private void hasOnActivityResultMethodParameters(ExecutableElement executableElement, IsValid valid) {
+	private void hasOnResultMethodParameters(ExecutableElement executableElement, IsValid valid) {
 		List<? extends VariableElement> parameters = executableElement.getParameters();
 		boolean resultCodeParameterFound = false;
 		boolean intentParameterFound = false;
