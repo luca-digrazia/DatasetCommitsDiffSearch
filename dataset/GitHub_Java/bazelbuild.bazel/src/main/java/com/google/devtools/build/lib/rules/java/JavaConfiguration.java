@@ -93,6 +93,7 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
   private final JavaClasspathMode javaClasspath;
   private final boolean inmemoryJdepsFiles;
   private final ImmutableList<String> defaultJvmFlags;
+  private final ImmutableList<String> checkedConstraints;
   private final StrictDepsMode strictJavaDeps;
   private final String fixDepsTool;
   private final Label proguardBinary;
@@ -111,6 +112,7 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
   private final boolean addTestSupportToCompileTimeDeps;
   private final boolean isJlplStrictDepsEnforced;
   private final ImmutableList<Label> pluginList;
+  private final boolean requireJavaToolchainHeaderCompilerDirect;
   private final boolean disallowResourceJars;
   private final boolean disallowLegacyJavaToolchainFlags;
   private final boolean experimentalTurbineAnnotationProcessing;
@@ -131,6 +133,7 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
     this.javaClasspath = javaOptions.javaClasspath;
     this.inmemoryJdepsFiles = javaOptions.inmemoryJdepsFiles;
     this.defaultJvmFlags = ImmutableList.copyOf(javaOptions.jvmOpts);
+    this.checkedConstraints = ImmutableList.copyOf(javaOptions.checkedConstraints);
     this.strictJavaDeps = javaOptions.strictJavaDeps;
     this.fixDepsTool = javaOptions.fixDepsTool;
     this.proguardBinary = javaOptions.proguard;
@@ -190,6 +193,8 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
     this.bytecodeOptimizer = NamedLabel.create(mnemonic, Optional.fromNullable(optimizerLabel));
 
     this.pluginList = ImmutableList.copyOf(javaOptions.pluginList);
+    this.requireJavaToolchainHeaderCompilerDirect =
+        javaOptions.requireJavaToolchainHeaderCompilerDirect;
     this.disallowLegacyJavaToolchainFlags = javaOptions.disallowLegacyJavaToolchainFlags;
     this.experimentalTurbineAnnotationProcessing =
         javaOptions.experimentalTurbineAnnotationProcessing;
@@ -262,6 +267,10 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
 
   public ImmutableList<String> getDefaultJvmFlags() {
     return defaultJvmFlags;
+  }
+
+  public ImmutableList<String> getCheckedConstraints() {
+    return checkedConstraints;
   }
 
   public StrictDepsMode getStrictJavaDeps() {
@@ -442,6 +451,10 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
   @Override
   public ImmutableList<Label> getPlugins() {
     return pluginList;
+  }
+
+  public boolean requireJavaToolchainHeaderCompilerDirect() {
+    return requireJavaToolchainHeaderCompilerDirect;
   }
 
   public boolean disallowResourceJars() {
