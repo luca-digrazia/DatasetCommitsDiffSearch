@@ -69,7 +69,7 @@ public class QuarkusIdentityProviderManagerImpl implements IdentityProviderManag
                     "No IdentityProviders were registered to handle AuthenticationRequest " + request));
             return cf;
         }
-        return handleProvider(0, (List) providers, request, new AsyncAuthenticationRequestContext());
+        return handleProvider(0, (List) providers, request, new AsyncAthenticationRequestContext());
     }
 
     /**
@@ -211,7 +211,7 @@ public class QuarkusIdentityProviderManagerImpl implements IdentityProviderManag
         }
     }
 
-    private class AsyncAuthenticationRequestContext implements AuthenticationRequestContext {
+    private class AsyncAthenticationRequestContext implements AuthenticationRequestContext {
 
         private boolean inBlocking = false;
 
