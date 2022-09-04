@@ -22,6 +22,7 @@ import com.google.common.base.Stopwatch;
 import com.google.common.base.Strings;
 import com.google.common.io.Files;
 import com.google.devtools.build.android.AndroidDataMerger.MergeConflictException;
+import com.google.devtools.build.android.AndroidManifestProcessor.MergeErrorException;
 import com.google.devtools.build.android.AndroidResourceMerger.MergingException;
 import com.google.devtools.build.android.AndroidResourceProcessor.AaptConfigOptions;
 import com.google.devtools.build.android.Converters.ExistingPathConverter;
@@ -264,13 +265,11 @@ public class AndroidResourceMergingAction {
       if (options.resourcesOutput != null) {
         Path resourcesDir =
             AndroidResourceProcessor.processDataBindings(
-                tmp.resolve("res_no_binding"),
                 mergedData.getResourceDir(),
                 options.dataBindingInfoOut,
                 packageType,
                 options.packageForR,
-                options.primaryManifest,
-                true);
+                options.primaryManifest);
 
         // For now, try compressing the library resources that we pass to the validator. This takes
         // extra CPU resources to pack and unpack (~2x), but can reduce the zip size (~4x).
@@ -286,7 +285,7 @@ public class AndroidResourceMergingAction {
     } catch (MergingException e) {
       logger.log(Level.SEVERE, "Error during merging resources", e);
       throw e;
-    } catch (AndroidManifestProcessor.ManifestProcessingException e) {
+    } catch (MergeErrorException e) {
       System.exit(1);
     } catch (Exception e) {
       logger.log(Level.SEVERE, "Unexpected", e);

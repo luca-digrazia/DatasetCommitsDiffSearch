@@ -23,6 +23,7 @@ import com.android.utils.StdLogger;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.android.AndroidDataMerger.MergeConflictException;
+import com.google.devtools.build.android.AndroidManifestProcessor.MergeErrorException;
 import com.google.devtools.build.android.AndroidResourceMerger.MergingException;
 import com.google.devtools.build.android.AndroidResourceProcessor.AaptConfigOptions;
 import com.google.devtools.build.android.AndroidResourceProcessor.FlagAaptOptions;
@@ -297,14 +298,12 @@ public class AndroidResourceProcessingAction {
     )
     public List<String> prefilteredResources;
 
-    @Option(
-      name = "throwOnResourceConflict",
-      defaultValue = "false",
-      category = "config",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help = "If passed, resource merge conflicts will be treated as errors instead of warnings"
-    )
+    @Option(name = "throwOnResourceConflict",
+        defaultValue = "false",
+        category = "config",
+        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+        effectTags = {OptionEffectTag.UNKNOWN},
+        help = "If passed, resource merge conflicts will be treated as errors instead of warnings")
     public boolean throwOnResourceConflict;
   }
 
@@ -453,7 +452,7 @@ public class AndroidResourceProcessingAction {
         | UnrecognizedSplitsException e) {
       logger.log(java.util.logging.Level.SEVERE, "Error during processing resources", e);
       throw e;
-    } catch (AndroidManifestProcessor.ManifestProcessingException e) {
+    } catch (MergeErrorException e) {
       System.exit(1);
     } catch (Exception e) {
       logger.log(java.util.logging.Level.SEVERE, "Unexpected", e);
