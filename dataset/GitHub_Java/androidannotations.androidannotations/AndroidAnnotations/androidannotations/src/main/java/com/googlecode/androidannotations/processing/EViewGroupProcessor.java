@@ -39,6 +39,8 @@ import com.googlecode.androidannotations.rclass.IRClass;
 import com.googlecode.androidannotations.rclass.IRClass.Res;
 import com.googlecode.androidannotations.rclass.IRInnerClass;
 import com.sun.codemodel.ClassType;
+import com.sun.codemodel.JAssignment;
+import com.sun.codemodel.JAssignmentTarget;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
@@ -82,20 +84,20 @@ public class EViewGroupProcessor extends AnnotationHelper implements ElementProc
 		}
 
 		holder.eBean = codeModel._class(modifiers, generatedBeanQualifiedName, ClassType.CLASS);
+
 		JClass eBeanClass = codeModel.directClass(eBeanQualifiedName);
 
 		holder.eBean._extends(eBeanClass);
-		
-		holder.eBean.annotate(SuppressWarnings.class).param("value", "unused");
-		holder.eBean.javadoc().append( //
-				"We use @SuppressWarning here because our java code\n" +
-				"generator doesn't know that there is no need\n" +
-				"to import OnXXXListeners from View as we already\n" +
-				"are in a View. <b>See issue #21.</b>");
 
+		{
+			JClass contextClass = holder.refClass("android.content.Context");
+			holder.contextRef = holder.eBean.field(PRIVATE, contextClass, "context_");
+		}
+		
 		{
 			// init
 			holder.init = holder.eBean.method(PRIVATE, codeModel.VOID, "init_");
+			holder.init.body().assign((JFieldVar) holder.contextRef, JExpr.invoke("getContext"));
 		}
 		
 		{
@@ -140,8 +142,6 @@ public class EViewGroupProcessor extends AnnotationHelper implements ElementProc
 				constructors.add((ExecutableElement) e);
 			}
 		}
-		
-		JClass contextClass = holder.refClass("android.content.Context");
 
 		for (ExecutableElement userConstructor : constructors) {
 			JMethod copyConstructor = holder.eBean.constructor(PUBLIC);
@@ -154,13 +154,7 @@ public class EViewGroupProcessor extends AnnotationHelper implements ElementProc
 				superCall.arg(JExpr.ref(paramName));
 			}
 			
-			JFieldVar contextField = holder.eBean.field(PRIVATE, contextClass, "context_");
-			holder.contextRef = contextField;
-			
-			body.assign(contextField, JExpr.invoke("getContext"));
-			
 			body.invoke(holder.init);
-			
 		}
 	}
 
