@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.rest.resources.system;
 
@@ -23,7 +23,6 @@ import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.Configuration;
 import org.graylog2.buffers.OutputBuffer;
-import org.graylog2.plugin.buffers.InputBuffer;
 import org.graylog2.rest.models.system.buffers.responses.BufferClasses;
 import org.graylog2.rest.models.system.buffers.responses.BuffersUtilizationSummary;
 import org.graylog2.rest.models.system.buffers.responses.RingSummary;
@@ -45,17 +44,14 @@ import javax.ws.rs.core.MediaType;
 public class BuffersResource extends RestResource {
 
     private final Configuration configuration;
-    private final InputBuffer inputBuffer;
     private final ProcessBuffer processBuffer;
     private final OutputBuffer outputBuffer;
 
     @Inject
     public BuffersResource(Configuration configuration,
-                           InputBuffer inputBuffer,
                            ProcessBuffer processBuffer,
                            OutputBuffer outputBuffer) {
         this.configuration = configuration;
-        this.inputBuffer = inputBuffer;
         this.processBuffer = processBuffer;
         this.outputBuffer = outputBuffer;
     }
@@ -87,9 +83,7 @@ public class BuffersResource extends RestResource {
     @ApiOperation(value = "Get classnames of current buffer implementations.")
     @RequiresPermissions(RestPermissions.BUFFERS_READ)
     public BufferClasses getBufferClasses() {
-        return BufferClasses.create(
-                inputBuffer.getClass().getCanonicalName(),
-                processBuffer.getClass().getCanonicalName(),
+        return BufferClasses.create(processBuffer.getClass().getCanonicalName(),
                 outputBuffer.getClass().getCanonicalName());
     }
 }
