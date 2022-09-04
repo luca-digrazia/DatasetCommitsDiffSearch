@@ -24,10 +24,9 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.AnalysisOptions;
-import com.google.devtools.build.lib.analysis.AnalysisResult;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView;
+import com.google.devtools.build.lib.analysis.BuildView.AnalysisResult;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
@@ -51,6 +50,7 @@ import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
+import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
 import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
@@ -130,6 +130,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   protected BuildOptions buildOptions;
   private OptionsParser optionsParser;
   protected PackageManager packageManager;
+  private LoadingPhaseRunner loadingPhaseRunner;
   private BuildView buildView;
   protected final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
@@ -219,6 +220,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
         ImmutableMap.<RepositoryName, PathFragment>of())));
     packageManager = skyframeExecutor.getPackageManager();
+    loadingPhaseRunner = skyframeExecutor.getLoadingPhaseRunner(pkgFactory.getRuleClassNames());
     buildView = new BuildView(directories, ruleClassProvider, skyframeExecutor, null);
 
   }
@@ -244,7 +246,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
                     PackageCacheOptions.class,
                     SkylarkSemanticsOptions.class,
                     BuildRequestOptions.class,
-                    AnalysisOptions.class,
+                    BuildView.Options.class,
                     KeepGoingOption.class,
                     LoadingPhaseThreadsOption.class,
                     LoadingOptions.class),
@@ -309,7 +311,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
     LoadingOptions loadingOptions = optionsParser.getOptions(LoadingOptions.class);
 
-    AnalysisOptions viewOptions = optionsParser.getOptions(AnalysisOptions.class);
+    BuildView.Options viewOptions = optionsParser.getOptions(BuildView.Options.class);
     // update --keep_going option if test requested it.
     boolean keepGoing = flags.contains(Flag.KEEP_GOING);
 
@@ -342,7 +344,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         reporter, ModifiedFileSet.EVERYTHING_MODIFIED, Root.fromPath(rootDirectory));
 
     LoadingResult loadingResult =
-        skyframeExecutor.loadTargetPatterns(
+        loadingPhaseRunner.execute(
             reporter,
             ImmutableList.copyOf(labels),
             PathFragment.EMPTY_FRAGMENT,
