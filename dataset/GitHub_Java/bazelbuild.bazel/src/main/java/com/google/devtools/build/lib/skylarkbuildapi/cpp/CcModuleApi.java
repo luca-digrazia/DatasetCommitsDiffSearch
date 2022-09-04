@@ -351,30 +351,6 @@ public interface CcModuleApi<
             noneable = true,
             allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = Depset.class)}),
         @Param(
-            name = "thinlto_index",
-            doc = "LTO index file path.",
-            named = true,
-            positional = false,
-            defaultValue = "None",
-            noneable = true,
-            allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = String.class)}),
-        @Param(
-            name = "thinlto_input_bitcode_file",
-            doc = "Bitcode file that is input to LTO backend.",
-            named = true,
-            positional = false,
-            defaultValue = "None",
-            noneable = true,
-            allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = String.class)}),
-        @Param(
-            name = "thinlto_output_object_file",
-            doc = "Object file that is output by LTO backend.",
-            named = true,
-            positional = false,
-            defaultValue = "None",
-            noneable = true,
-            allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = String.class)}),
-        @Param(
             name = "use_pic",
             doc = "When true the compilation will generate position independent code.",
             positional = false,
@@ -399,9 +375,6 @@ public interface CcModuleApi<
       Object systemIncludeDirs,
       Object frameworkIncludeDirs,
       Object defines,
-      Object thinLtoIndex,
-      Object thinLtoInputBitcodeFile,
-      Object thinLtoOutputObjectFile,
       boolean usePic,
       boolean addLegacyCxxOptions)
       throws EvalException;
@@ -676,21 +649,6 @@ public interface CcModuleApi<
       useStarlarkThread = true,
       documented = false)
   void checkExperimentalCcSharedLibrary(StarlarkThread thread) throws EvalException;
-
-  @StarlarkMethod(
-      name = "check_experimental_starlark_cc_import",
-      doc = "DO NOT USE. This is to guard use of cc_import.bzl",
-      documented = false,
-      parameters = {
-        @Param(
-            name = "actions",
-            type = StarlarkActionFactoryApi.class,
-            positional = false,
-            named = true,
-            doc = "<code>actions</code> object."),
-      })
-  void checkExperimentalStarlarkCcImport(StarlarkActionFactoryT starlarkActionFactoryApi)
-      throws EvalException;
 
   @StarlarkMethod(
       name = "create_linking_context",

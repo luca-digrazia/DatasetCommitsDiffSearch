@@ -123,9 +123,6 @@ public class FakeCcModule
       Object systemIncludeDirs,
       Object frameworkIncludeDirs,
       Object defines,
-      Object thinLtoIndex,
-      Object thinLtoInputBitcodeFile,
-      Object thinLtoOutputObjectFile,
       boolean usePic,
       boolean addLegacyCxxOptions)
       throws EvalException {
@@ -184,10 +181,6 @@ public class FakeCcModule
 
   @Override
   public void checkExperimentalCcSharedLibrary(StarlarkThread thread) {}
-
-  @Override
-  public void checkExperimentalStarlarkCcImport(
-      StarlarkActionFactoryApi starlarkActionFactoryApi) {}
 
   @Override
   public CcLinkingContextApi<FileApi> createCcLinkingInfo(
