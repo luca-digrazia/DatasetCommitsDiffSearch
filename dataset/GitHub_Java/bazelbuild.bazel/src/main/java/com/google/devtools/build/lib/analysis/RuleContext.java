@@ -57,7 +57,6 @@ import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.constraints.ConstraintSemantics;
-import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.analysis.stringtemplate.TemplateContext;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -1070,8 +1069,8 @@ public final class RuleContext extends TargetContext
    * Returns all the providers of the specified type that are listed under the specified attribute
    * of this target in the BUILD file.
    */
-  public <C extends TransitiveInfoProvider> List<C> getPrerequisites(
-      String attributeName, Mode mode, final Class<C> classType) {
+  public <C extends TransitiveInfoProvider> Iterable<C> getPrerequisites(String attributeName,
+      Mode mode, final Class<C> classType) {
     AnalysisUtils.checkProvider(classType);
     return AnalysisUtils.getProviders(getPrerequisites(attributeName, mode), classType);
   }
@@ -1080,7 +1079,7 @@ public final class RuleContext extends TargetContext
    * Returns all the declared providers (native and Skylark) for the specified constructor under the
    * specified attribute of this target in the BUILD file.
    */
-  public <T extends Info> List<T> getPrerequisites(
+  public <T extends Info> Iterable<T> getPrerequisites(
       String attributeName, Mode mode, final NativeProvider<T> skylarkKey) {
     return AnalysisUtils.getProviders(getPrerequisites(attributeName, mode), skylarkKey);
   }
@@ -1089,7 +1088,7 @@ public final class RuleContext extends TargetContext
    * Returns all the declared providers (native and Skylark) for the specified constructor under the
    * specified attribute of this target in the BUILD file.
    */
-  public <T extends Info> List<T> getPrerequisites(
+  public <T extends Info> Iterable<T> getPrerequisites(
       String attributeName, Mode mode, final BuiltinProvider<T> skylarkKey) {
     return AnalysisUtils.getProviders(getPrerequisites(attributeName, mode), skylarkKey);
   }
@@ -1224,13 +1223,6 @@ public final class RuleContext extends TargetContext
   @Nullable
   public ResolvedToolchainContext getToolchainContext() {
     return toolchainContext;
-  }
-
-  public boolean targetPlatformHasConstraint(ConstraintValueInfo constraintValue) {
-    if (toolchainContext == null || toolchainContext.targetPlatform() == null) {
-      return false;
-    }
-    return toolchainContext.targetPlatform().constraints().hasConstraintValue(constraintValue);
   }
 
   public ConstraintSemantics getConstraintSemantics() {
@@ -1556,7 +1548,7 @@ public final class RuleContext extends TargetContext
   public static boolean isVisible(Label label, TransitiveInfoCollection prerequisite) {
     // Check visibility attribute
     for (PackageGroupContents specification :
-        prerequisite.getProvider(VisibilityProvider.class).getVisibility().toList()) {
+        prerequisite.getProvider(VisibilityProvider.class).getVisibility()) {
       if (specification.containsPackage(label.getPackageIdentifier())) {
         return true;
       }
@@ -2026,15 +2018,15 @@ public final class RuleContext extends TargetContext
       // If we performed this check when allowedFileTypes == NO_FILE this would
       // always throw an error in those cases
       if (allowedFileTypes != FileTypeSet.NO_FILE) {
-        NestedSet<Artifact> artifacts =
+        Iterable<Artifact> artifacts =
             prerequisite.getConfiguredTarget().getProvider(FileProvider.class).getFilesToBuild();
-        if (attribute.isSingleArtifact() && !artifacts.isSingleton()) {
+        if (attribute.isSingleArtifact() && Iterables.size(artifacts) != 1) {
           attributeError(
               attribute.getName(),
               "'" + prerequisite.getTarget().getLabel() + "' must produce a single file");
           return;
         }
-        for (Artifact sourceArtifact : artifacts.toList()) {
+        for (Artifact sourceArtifact : artifacts) {
           if (allowedFileTypes.apply(sourceArtifact.getFilename())) {
             return;
           }

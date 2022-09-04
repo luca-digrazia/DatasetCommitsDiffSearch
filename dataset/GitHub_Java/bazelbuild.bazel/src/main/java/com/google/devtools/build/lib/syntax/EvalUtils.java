@@ -450,14 +450,14 @@ public final class EvalUtils {
   /** Returns the named field or method of value {@code x}, or null if not found. */
   static Object getAttr(StarlarkThread thread, Location loc, Object x, String name)
       throws EvalException, InterruptedException {
-    // @SkylarkCallable-annotated field or method?
+    // @SkylarkCallable-annotated field?
     MethodDescriptor method = CallUtils.getMethod(thread.getSemantics(), x.getClass(), name);
-    if (method != null) {
-      if (method.isStructField()) {
-        return method.callField(x, loc, thread.getSemantics(), thread.mutability());
-      } else {
-        return new BuiltinCallable(x, name, method);
-      }
+    if (method != null && method.isStructField()) {
+      return method.call(
+          x,
+          CallUtils.extraInterpreterArgs(method, /*ast=*/ null, loc, thread).toArray(),
+          loc,
+          thread);
     }
 
     // user-defined field?
@@ -475,11 +475,16 @@ public final class EvalUtils {
       }
     }
 
+    // @SkylarkCallable-annotated method?
+    if (method != null) {
+      return new BuiltinCallable(x, name);
+    }
+
     return null;
   }
 
-  static EvalException getMissingAttrException(
-      Object object, String name, StarlarkSemantics semantics) {
+  static EvalException getMissingFieldException(
+      Object object, String name, StarlarkSemantics semantics, String accessName) {
     String suffix = "";
     if (object instanceof ClassObject) {
       String customErrorMessage = ((ClassObject) object).getErrorMessageForUnknownField(name);
@@ -490,10 +495,20 @@ public final class EvalUtils {
     } else {
       suffix = SpellChecker.didYouMean(name, CallUtils.getFieldNames(semantics, object));
     }
+    if (suffix.isEmpty() && hasMethod(semantics, object, name)) {
+      // If looking up the field failed, then we know that this method must have struct_field=false
+      suffix = ", however, a method of that name exists";
+    }
     return new EvalException(
         null,
         String.format(
-            "'%s' value has no field or method '%s'%s", getDataTypeName(object), name, suffix));
+            "object of type '%s' has no %s '%s'%s",
+            getDataTypeName(object), accessName, name, suffix));
+  }
+
+  /** Returns whether the given object has a method with the given name. */
+  static boolean hasMethod(StarlarkSemantics semantics, Object object, String name) {
+    return CallUtils.getMethodNames(semantics, object.getClass()).contains(name);
   }
 
   /** Evaluates an eager binary operation, {@code x op y}. (Excludes AND and OR.) */

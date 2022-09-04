@@ -879,10 +879,6 @@ public class BuildConfiguration implements BuildConfigurationApi {
     return options.skipRunfilesManifests;
   }
 
-  public boolean remotableSourceManifestActions() {
-    return options.remotableSourceManifestActions;
-  }
-
   /**
    * Returns a modified copy of {@code executionInfo} if any {@code executionInfoModifiers} apply to
    * the given {@code mnemonic}. Otherwise returns {@code executionInfo} unchanged.
