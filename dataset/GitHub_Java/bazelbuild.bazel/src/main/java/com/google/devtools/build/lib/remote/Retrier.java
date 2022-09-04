@@ -273,7 +273,6 @@ public class Retrier {
         throw e;
       } catch (Exception e) {
         circuitBreaker.recordFailure();
-        Exception orig = e;
         if (e instanceof RetryException) {
           // Support nested retry calls.
           e = (Exception) e.getCause();
@@ -284,15 +283,12 @@ public class Retrier {
         }
         int attempts = backoff.getRetryAttempts();
         if (!shouldRetry.test(e)) {
-          throw new RetryException(
-              "Call failed with not retriable error: " + orig.getMessage(), attempts, e);
+          throw new RetryException("Call failed with not retriable error: " + e, attempts, e);
         }
         final long delayMillis = backoff.nextDelayMillis();
         if (delayMillis < 0) {
           throw new RetryException(
-              "Call failed after " + attempts + " retry attempts: " + orig.getMessage(),
-              attempts,
-              e);
+              "Call failed after " + attempts + " retry attempts: " + e, attempts, e);
         }
         sleeper.sleep(delayMillis);
       }
@@ -349,11 +345,7 @@ public class Retrier {
       try {
         ListenableScheduledFuture<?> sf =
             retryService.schedule(
-                () -> {
-                  executeAsync(call, outerF, backoff);
-                },
-                waitMillis,
-                TimeUnit.MILLISECONDS);
+                () -> executeAsync(call, outerF, backoff), waitMillis, TimeUnit.MILLISECONDS);
         Futures.addCallback(
             sf,
             new FutureCallback<Object>() {
@@ -380,13 +372,8 @@ public class Retrier {
       Exception e = t instanceof Exception ? (Exception) t : new Exception(t);
       String message =
           waitMillis >= 0
-              ? "Status not retriable"
+              ? "Status not retriable."
               : "Exhausted retry attempts (" + backoff.getRetryAttempts() + ")";
-      if (!e.getMessage().isEmpty()) {
-        message += ": " + e.getMessage();
-      } else {
-        message += ".";
-      }
       RetryException error = new RetryException(message, backoff.getRetryAttempts(), e);
       outerF.setException(error);
     }
