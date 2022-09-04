@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2014 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,21 +15,21 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.periodical;
 
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Maps;
-import com.google.inject.Inject;
 import com.mongodb.BasicDBObject;
 import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.graylog2.Core;
-import org.graylog2.database.CollectionName;
-import org.graylog2.indexer.*;
+import org.graylog2.indexer.DeadLetter;
+import org.graylog2.indexer.IndexFailure;
+import org.graylog2.indexer.PersistedDeadLetter;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.database.Persisted;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,15 +42,6 @@ import java.util.Map;
 public class DeadLetterThread extends Periodical {
 
     private static final Logger LOG = LoggerFactory.getLogger(DeadLetterThread.class);
-
-    private final PersistedDeadLetterService persistedDeadLetterService;
-    private final IndexFailureService indexFailureService;
-
-    @Inject
-    public DeadLetterThread(PersistedDeadLetterService persistedDeadLetterService, IndexFailureService indexFailureService) {
-        this.persistedDeadLetterService = persistedDeadLetterService;
-        this.indexFailureService = indexFailureService;
-    }
 
     @Override
     public void run() {
@@ -76,8 +67,7 @@ public class DeadLetterThread extends Periodical {
                         doc.put("timestamp", Tools.iso8601());
                         doc.put("message", message.toElasticSearchObject());
 
-                        PersistedDeadLetter persistedDeadLetter = new PersistedDeadLetterImpl(doc);
-                        persistedDeadLetterService.saveWithoutValidation(persistedDeadLetter);
+                        new PersistedDeadLetter(doc, core).saveWithoutValidation();
                         written = true;
                     } catch(Exception e) {
                         LOG.error("Could not write message to dead letter queue.", e);
@@ -96,8 +86,7 @@ public class DeadLetterThread extends Periodical {
                     doc.put("timestamp", item.getTimestamp());
                     doc.put("written", written);
 
-                    IndexFailure indexFailure = new IndexFailureImpl(doc);
-                    indexFailureService.saveWithoutValidation(indexFailure);
+                    new IndexFailure(doc, core).saveWithoutValidation();
                 } catch(Exception e) {
                     LOG.error("Could not persist index failure.", e);
                     continue;
@@ -106,17 +95,12 @@ public class DeadLetterThread extends Periodical {
         }
     }
 
-    // TODO: Move this to the related persisted service classes
     private void verifyIndices() {
-        core.getMongoConnection().getDatabase().getCollection(getCollectionName(IndexFailureImpl.class)).ensureIndex(new BasicDBObject("timestamp", 1));
-        core.getMongoConnection().getDatabase().getCollection(getCollectionName(IndexFailureImpl.class)).ensureIndex(new BasicDBObject("letter_id", 1));
+        core.getMongoConnection().getDatabase().getCollection(IndexFailure.COLLECTION).ensureIndex(new BasicDBObject("timestamp", 1));
+        core.getMongoConnection().getDatabase().getCollection(IndexFailure.COLLECTION).ensureIndex(new BasicDBObject("letter_id", 1));
 
-        core.getMongoConnection().getDatabase().getCollection(getCollectionName(PersistedDeadLetterImpl.class)).ensureIndex(new BasicDBObject("timestamp", 1));
-        core.getMongoConnection().getDatabase().getCollection(getCollectionName(PersistedDeadLetterImpl.class)).ensureIndex(new BasicDBObject("letter_id", 1));
-    }
-
-    private String getCollectionName(Class<? extends Persisted> modelClass) {
-        return modelClass.getAnnotation(CollectionName.class).value();
+        core.getMongoConnection().getDatabase().getCollection(PersistedDeadLetter.COLLECTION).ensureIndex(new BasicDBObject("timestamp", 1));
+        core.getMongoConnection().getDatabase().getCollection(PersistedDeadLetter.COLLECTION).ensureIndex(new BasicDBObject("letter_id", 1));
     }
 
     @Override
