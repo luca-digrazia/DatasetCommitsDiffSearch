@@ -1,5 +1,6 @@
 package io.quarkus.security.test;
 
+import static org.hamcrest.Matchers.containsStringIgnoringCase;
 import static org.hamcrest.Matchers.equalTo;
 
 import org.jboss.shrinkwrap.api.ShrinkWrap;
@@ -7,7 +8,6 @@ import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.elytron.security.runtime.SecurityContextPrincipal;
 import io.quarkus.test.QuarkusUnitTest;
 import io.restassured.RestAssured;
 
@@ -17,8 +17,9 @@ import io.restassured.RestAssured;
 public class BasicAuthTestCase {
     static Class[] testClasses = {
             TestSecureServlet.class, TestApplication.class, RolesEndpointClassLevel.class,
-            ParametrizedPathsResource.class, SubjectExposingResource.class, SecurityContextPrincipal.class
+            ParametrizedPathsResource.class, SubjectExposingResource.class
     };
+
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
@@ -54,6 +55,7 @@ public class BasicAuthTestCase {
     @Test
     public void testJaxrsGetFailure() {
         RestAssured.when().get("/jaxrs-secured/rolesClass").then()
+                .header("www-authenticate", containsStringIgnoringCase("basic"))
                 .statusCode(401);
     }
 
