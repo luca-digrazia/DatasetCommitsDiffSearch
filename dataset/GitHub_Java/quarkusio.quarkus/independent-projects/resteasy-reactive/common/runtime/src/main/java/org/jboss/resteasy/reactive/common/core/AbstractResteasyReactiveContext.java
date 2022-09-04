@@ -11,6 +11,7 @@ import java.util.concurrent.Executor;
 import javax.ws.rs.container.CompletionCallback;
 import javax.ws.rs.container.ConnectionCallback;
 import org.jboss.logging.Logger;
+import org.jboss.resteasy.reactive.common.PreserveTargetException;
 import org.jboss.resteasy.reactive.spi.RestHandler;
 import org.jboss.resteasy.reactive.spi.ThreadSetupAction;
 
@@ -24,7 +25,8 @@ public abstract class AbstractResteasyReactiveContext<T extends AbstractResteasy
     private boolean suspended = false;
     private volatile boolean requestScopeActivated = false;
     private volatile boolean running = false;
-    private volatile Executor executor;
+    private volatile Executor executor; // ephemerally set by handlers to signal that we resume, it needs to be on this executor
+    private volatile Executor lastExecutor; // contains the last executor which was provided during resume - needed to submit there if suspended again
     private Map<String, Object> properties;
     private final ThreadSetupAction requestContext;
     private ThreadSetupAction.ThreadState currentRequestScope;
@@ -50,16 +52,35 @@ public abstract class AbstractResteasyReactiveContext<T extends AbstractResteasy
         resume((Executor) null);
     }
 
+    public synchronized void resume(Throwable throwable, boolean keepTarget) {
+        handleException(throwable, keepTarget);
+        resume((Executor) null);
+    }
+
     public synchronized void resume(Executor executor) {
         if (running) {
             this.executor = executor;
             if (executor == null) {
                 suspended = false;
+            } else {
+                this.lastExecutor = executor;
             }
         } else {
             suspended = false;
             if (executor == null) {
-                getEventLoop().execute(this);
+                if (lastExecutor == null) {
+                    // TODO CES - Ugly Ugly hack!
+                    Executor ctxtExecutor = getContextExecutor();
+                    if (ctxtExecutor == null) {
+                        // Won't use the TCCL.
+                        getEventLoop().execute(this);
+                    } else {
+                        // Use the TCCL.
+                        ctxtExecutor.execute(this);
+                    }
+                } else {
+                    lastExecutor.execute(this);
+                }
             } else {
                 executor.execute(this);
             }
@@ -89,6 +110,10 @@ public abstract class AbstractResteasyReactiveContext<T extends AbstractResteasy
 
     protected abstract Executor getEventLoop();
 
+    protected Executor getContextExecutor() {
+        return null;
+    }
+
     protected boolean isRequestScopeManagementRequired() {
         return true;
     }
@@ -96,7 +121,7 @@ public abstract class AbstractResteasyReactiveContext<T extends AbstractResteasy
     @Override
     public void run() {
         running = true;
-        boolean submittedToExecutor = false;
+        boolean processingSuspended = false;
         //if this is a blocking target we don't activate for the initial non-blocking part
         //unless there are pre-mapping filters as these may require CDI
         boolean disasociateRequestScope = false;
@@ -116,26 +141,36 @@ public abstract class AbstractResteasyReactiveContext<T extends AbstractResteasy
                                     }
                                     requestScopeActivated = false;
                                 }
+                            } else {
+                                requestScopeActivated = false;
+                                requestScopeDeactivated();
                             }
                             if (this.executor != null) {
                                 //resume happened in the meantime
                                 suspended = false;
                                 exec = this.executor;
+                                // prevent future suspensions from re-submitting the task
+                                this.executor = null;
                             } else if (suspended) {
                                 running = false;
+                                processingSuspended = true;
                                 return;
                             }
                         }
                         if (exec != null) {
                             //outside sync block
                             exec.execute(this);
-                            submittedToExecutor = true;
+                            processingSuspended = true;
                             return;
                         }
                     }
                 } catch (Throwable t) {
                     boolean over = handlers == abortHandlerChain;
-                    handleException(t);
+                    if (t instanceof PreserveTargetException) {
+                        handleException(t.getCause(), true);
+                    } else {
+                        handleException(t);
+                    }
                     if (over) {
                         running = false;
                         return;
@@ -149,12 +184,12 @@ public abstract class AbstractResteasyReactiveContext<T extends AbstractResteasy
         } finally {
             // we need to make sure we don't close the underlying stream in the event loop if the task
             // has been offloaded to the executor
-            if (position == handlers.length && !suspended && !submittedToExecutor) {
+            if (position == handlers.length && !processingSuspended) {
                 close();
             } else {
                 if (disasociateRequestScope) {
-                    currentRequestScope.deactivate();
                     requestScopeDeactivated();
+                    currentRequestScope.deactivate();
                 }
                 beginAsyncProcessing();
             }
@@ -169,6 +204,9 @@ public abstract class AbstractResteasyReactiveContext<T extends AbstractResteasy
 
     }
 
+    /**
+     * Ensures the CDI request scope is running when inside a handler chain
+     */
     public void requireCDIRequestScope() {
         if (!running) {
             throw new RuntimeException("Cannot be called when outside a handler chain");
@@ -177,12 +215,24 @@ public abstract class AbstractResteasyReactiveContext<T extends AbstractResteasy
             return;
         }
         requestScopeActivated = true;
-        if (currentRequestScope == null) {
-            currentRequestScope = requestContext.activateInitial();
-            handleRequestScopeActivation();
+        if (isRequestScopeManagementRequired()) {
+            if (currentRequestScope == null) {
+                currentRequestScope = requestContext.activateInitial();
+            } else {
+                currentRequestScope.activate();
+            }
         } else {
-            currentRequestScope.activate();
+            currentRequestScope = requestContext.currentState();
         }
+        handleRequestScopeActivation();
+    }
+
+    /**
+     * Captures the CDI request scope for use outside of handler chains.
+     */
+    public ThreadSetupAction.ThreadState captureCDIRequestScope() {
+        requireCDIRequestScope();
+        return currentRequestScope;
     }
 
     protected abstract void handleRequestScopeActivation();
@@ -221,15 +271,6 @@ public abstract class AbstractResteasyReactiveContext<T extends AbstractResteasy
 
     public T setRunning(boolean running) {
         this.running = running;
-        return (T) this;
-    }
-
-    public Executor getExecutor() {
-        return executor;
-    }
-
-    public T setExecutor(Executor executor) {
-        this.executor = executor;
         return (T) this;
     }
 
