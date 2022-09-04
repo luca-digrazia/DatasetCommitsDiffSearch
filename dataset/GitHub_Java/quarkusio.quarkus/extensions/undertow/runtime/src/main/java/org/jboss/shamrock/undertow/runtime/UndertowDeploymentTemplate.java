@@ -235,7 +235,7 @@ public class UndertowDeploymentTemplate {
      */
     public static void startUndertowEagerly(HttpConfig config, HandlerWrapper hotDeploymentWrapper, LaunchMode launchMode) throws ServletException {
         if (undertow == null) {
-            int port = config.determinePort(launchMode);
+            int port = launchMode == LaunchMode.TEST ? config.testPort : config.port;
             log.debugf("Starting Undertow on port %d", port);
             HttpHandler rootHandler = new CanonicalPathHandler(ROOT_HANDLER);
             if (hotDeploymentWrapper != null) {
@@ -247,13 +247,15 @@ public class UndertowDeploymentTemplate {
                     .setHandler(rootHandler);
             if (config.ioThreads.isPresent()) {
                 builder.setIoThreads(config.ioThreads.getAsInt());
-            } else if(launchMode.isDevOrTest()) {
-                //we limit the number of IO and worker threads in development and testing mode
+            } else if(launchMode == LaunchMode.TEST
+                    || launchMode == LaunchMode.DEVELOPMENT) {
+                //we limit the numner of IO and worker threads in development and testing mode
                 builder.setIoThreads(2);
             }
             if (config.workerThreads.isPresent()) {
                 builder.setWorkerThreads(config.workerThreads.getAsInt());
-            } else if(launchMode.isDevOrTest()) {
+            } else if(launchMode == LaunchMode.TEST
+                    || launchMode == LaunchMode.DEVELOPMENT) {
                 builder.setWorkerThreads(6);
             }
             undertow = builder
