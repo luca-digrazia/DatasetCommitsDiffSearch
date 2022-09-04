@@ -661,6 +661,8 @@ public class CcToolchainProviderHelper {
         builtInIncludeDirectories,
         sysroot,
         new FdoContext(branchFdoProfile, prefetchHintsArtifact),
+        cppConfiguration.useLLVMCoverageMapFormat(),
+        configuration.isCodeCoverageEnabled(),
         configuration.isHostConfiguration(),
         attributes.getLicensesProvider());
   }

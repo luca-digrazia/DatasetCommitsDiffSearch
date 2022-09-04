@@ -93,8 +93,7 @@ public final class CcCompilationHelper {
       CppCompileActionBuilder builder,
       FeatureConfiguration featureConfiguration,
       FdoContext fdoContext,
-      String fdoInstrument,
-      CppConfiguration cppConfiguration) {
+      String fdoInstrument) {
     if (featureConfiguration.isEnabled(CppRuleClasses.FDO_INSTRUMENT)) {
       variablesBuilder.put(
           CompileBuildVariables.FDO_INSTRUMENT_PATH.getVariableName(), fdoInstrument);
@@ -102,7 +101,7 @@ public final class CcCompilationHelper {
 
     // FDO is disabled -> do nothing.
     Preconditions.checkNotNull(fdoContext);
-    if (!fdoContext.hasArtifacts(cppConfiguration)) {
+    if (!fdoContext.hasArtifacts()) {
       return;
     }
 
@@ -1436,8 +1435,7 @@ public final class CcCompilationHelper {
           builder,
           featureConfiguration,
           fdoContext,
-          cppConfiguration.getFdoInstrument(),
-          cppConfiguration);
+          cppConfiguration.getFdoInstrument());
     }
     return CompileBuildVariables.setupVariablesOrReportRuleError(
         ruleErrorConsumer,
