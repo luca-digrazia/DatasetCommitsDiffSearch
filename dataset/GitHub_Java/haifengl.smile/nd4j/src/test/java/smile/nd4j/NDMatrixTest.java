@@ -61,7 +61,7 @@ public class NDMatrixTest {
     }
 
     /**
-     * Test of nrows method, of class NDMatrix.
+     * Test of nrows method, of class ColumnMajorMatrix.
      */
     @Test
     public void testNrows() {
@@ -70,7 +70,7 @@ public class NDMatrixTest {
     }
 
     /**
-     * Test of ncols method, of class NDMatrix.
+     * Test of ncols method, of class ColumnMajorMatrix.
      */
     @Test
     public void testNcols() {
@@ -79,7 +79,7 @@ public class NDMatrixTest {
     }
 
     /**
-     * Test of get method, of class NDMatrix.
+     * Test of get method, of class ColumnMajorMatrix.
      */
     @Test
     public void testGet() {
@@ -93,7 +93,7 @@ public class NDMatrixTest {
     }
 
     /**
-     * Test of ax method, of class NDMatrix.
+     * Test of ax method, of class ColumnMajorMatrix.
      */
     @Test
     public void testAx() {
@@ -106,7 +106,7 @@ public class NDMatrixTest {
     }
 
     /**
-     * Test of atx method, of class NDMatrix.
+     * Test of atx method, of class ColumnMajorMatrix.
      */
     @Test
     public void testAtx() {
@@ -119,7 +119,7 @@ public class NDMatrixTest {
     }
 
     /**
-     * Test of AAT method, of class NDMatrix.
+     * Test of AAT method, of class ColumnMajorMatrix.
      */
     @Test
     public void testAAT() {
@@ -135,7 +135,7 @@ public class NDMatrixTest {
     }
 
     /**
-     * Test of mm method, of class NDMatrix.
+     * Test of mm method, of class ColumnMajorMatrix.
      */
     @Test
     public void testMm() {
@@ -168,11 +168,9 @@ public class NDMatrixTest {
 
         NDMatrix a = new NDMatrix(A);
         NDMatrix b = new NDMatrix(B);
-        double[][] F = b.abmm(a).transpose().array();
-
+        System.out.println(a.atbmm(b));
         assertTrue(MathEx.equals(a.abmm(b).array(), C, 1E-7));
         assertTrue(MathEx.equals(a.abtmm(b).array(), D, 1E-7));
-        assertTrue(MathEx.equals(a.atbmm(b).array(), E, 1E-7));
-        assertTrue(MathEx.equals(a.atbtmm(b).array(), F, 1E-7));
+        assertTrue(MathEx.equals(a.atbmm(b).array(), E, 1E-5));
     }
 }
