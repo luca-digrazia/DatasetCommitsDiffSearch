@@ -21,12 +21,10 @@
 package org.graylog2.inputs.gelf;
 
 import java.io.ByteArrayOutputStream;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.log4j.Logger;
-import org.graylog2.GraylogServer;
-
-import com.google.common.collect.Maps;
 
 /**
  * GELFChunkManager.java: 13.04.2012 22:38:40
@@ -38,16 +36,10 @@ public class GELFChunkManager extends Thread {
     private static final Logger LOG = Logger.getLogger(GELFChunkManager.class);
 
     private Map<String, Map<Integer, GELFMessageChunk>> chunks = new ConcurrentHashMap<String, Map<Integer, GELFMessageChunk>>();
-    private GELFProcessor processor;
-    private GraylogServer server;
+    private final GELFProcessor processor = new GELFProcessor();
 
     // The number of seconds a chunk is valid. Every message with chunks older than this will be dropped.
-    public static final int SECONDS_VALID = 5;
-
-    public GELFChunkManager(GraylogServer server) {
-        this.server = server;
-        this.processor = new GELFProcessor(server);
-    }
+    private static final int SECONDS_VALID = 5;
 
     @Override
     public void run() {
@@ -143,14 +135,6 @@ public class GELFChunkManager extends Thread {
 
         return out.toByteArray();
     }
-    
-    public boolean hasMessage(String messageId) {
-        return chunks.containsKey(messageId);
-    }
-
-    public void insert(GELFMessage msg) {
-        insert(new GELFMessageChunk(msg));
-    }
 
     public void insert(GELFMessageChunk chunk) {
         LOG.debug("Handling GELF chunk: " + chunk);
@@ -160,7 +144,7 @@ public class GELFChunkManager extends Thread {
             chunks.get(chunk.getId()).put(chunk.getSequenceNumber(), chunk);
         } else {
             // First chunk of message.
-            Map<Integer, GELFMessageChunk> c = Maps.newHashMap();
+            Map<Integer, GELFMessageChunk> c = new HashMap<Integer, GELFMessageChunk>();
             c.put(chunk.getSequenceNumber(), chunk);
             chunks.put(chunk.getId(), c);
         }
