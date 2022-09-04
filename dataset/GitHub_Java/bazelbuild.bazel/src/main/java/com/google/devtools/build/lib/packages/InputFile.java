@@ -33,7 +33,6 @@ import net.starlark.java.syntax.Location;
  */
 @Immutable @ThreadSafe
 public final class InputFile extends FileTarget {
-  private final Package pkg;
   private final Location location;
   private final RuleVisibility visibility;
   private final License license;
@@ -43,7 +42,7 @@ public final class InputFile extends FileTarget {
    * the given package, and package-default visibility.
    */
   InputFile(Package pkg, Label label, Location location) {
-    this(pkg, label, location, /*visibility=*/ null, License.NO_LICENSE);
+    this(pkg, label, location, null, License.NO_LICENSE);
   }
 
   /**
@@ -53,15 +52,10 @@ public final class InputFile extends FileTarget {
   InputFile(Package pkg, Label label, Location location, RuleVisibility visibility,
       License license) {
     super(pkg, label);
-    this.pkg = pkg;
-    this.location = Preconditions.checkNotNull(location);
+    Preconditions.checkNotNull(location);
+    this.location = location;
     this.visibility = visibility;
     this.license = license;
-  }
-
-  @Override
-  public Package getPackage() {
-    return pkg;
   }
 
   public boolean isVisibilitySpecified() {

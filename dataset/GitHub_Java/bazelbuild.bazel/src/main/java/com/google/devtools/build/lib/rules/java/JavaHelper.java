@@ -54,20 +54,12 @@ public abstract class JavaHelper {
 
   /**
    * Control structure abstraction for safely extracting a prereq from the launcher attribute or
-   * {@code --java_launcher} flag.
-   *
-   * <p>Returns {@code null} if either {@code create_executable} or {@code use_launcher} are
-   * disabled.
+   * --java_launcher flag.
    */
   private static String filterLauncherForTarget(RuleContext ruleContext) {
     // create_executable=0 disables the launcher
     if (ruleContext.getRule().isAttrDefined("create_executable", Type.BOOLEAN)
         && !ruleContext.attributes().get("create_executable", Type.BOOLEAN)) {
-      return null;
-    }
-    // use_launcher=False disables the launcher
-    if (ruleContext.getRule().isAttrDefined("use_launcher", Type.BOOLEAN)
-        && !ruleContext.attributes().get("use_launcher", Type.BOOLEAN)) {
       return null;
     }
     // BUILD rule "launcher" attribute

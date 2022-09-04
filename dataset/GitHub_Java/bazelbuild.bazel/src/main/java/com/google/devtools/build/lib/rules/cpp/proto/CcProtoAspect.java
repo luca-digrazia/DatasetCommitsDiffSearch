@@ -51,6 +51,7 @@ import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingContext;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingHelper;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingOutputs;
+import com.google.devtools.build.lib.rules.cpp.CcNativeLibraryProvider;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
@@ -226,6 +227,8 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
           libraryToLink = ImmutableList.of(ccLinkingOutputs.getLibraryToLink());
         }
       }
+      CcNativeLibraryProvider ccNativeLibraryProvider =
+          CppHelper.collectNativeCcLibraries(deps, libraryToLink);
       CcLinkingContext ccLinkingContext =
           ccLinkingHelper.buildCcLinkingContextFromLibrariesToLink(
               libraryToLink, compilationInfo.getCcCompilationContext());
@@ -241,6 +244,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
                               compilationInfo.getCcCompilationOutputs(),
                               AnalysisUtils.getProviders(deps, CcInfo.PROVIDER)))
                       .build())
+              .add(ccNativeLibraryProvider)
               .build();
       outputGroups =
           ImmutableMap.copyOf(

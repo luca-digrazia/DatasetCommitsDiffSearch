@@ -35,11 +35,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Module;
+import net.starlark.java.eval.NoneType;
 import net.starlark.java.eval.Sequence;
 import net.starlark.java.eval.Starlark;
 import net.starlark.java.eval.StarlarkThread;
@@ -47,7 +49,7 @@ import net.starlark.java.eval.StarlarkThread;
 /** A collection of global Starlark build API functions that apply to WORKSPACE files. */
 public class WorkspaceGlobals implements WorkspaceGlobalsApi {
 
-  // Must start with a letter. Can contain ASCII letters and digits, underscore, dash, and dot.
+  // Must start with a letter and can contain letters, numbers, underscores and hyphens.
   private static final Pattern LEGAL_WORKSPACE_NAME = Pattern.compile("^\\p{Alpha}[-.\\w]*$");
 
   private final boolean allowOverride;
@@ -65,7 +67,7 @@ public class WorkspaceGlobals implements WorkspaceGlobalsApi {
   }
 
   @Override
-  public void workspace(
+  public NoneType workspace(
       String name,
       Dict<?, ?> managedDirectories, // <String, Object>
       StarlarkThread thread)
@@ -85,7 +87,7 @@ public class WorkspaceGlobals implements WorkspaceGlobalsApi {
     Package.Builder builder = PackageFactory.getContext(thread).pkgBuilder;
     RuleClass localRepositoryRuleClass = ruleFactory.getRuleClass("local_repository");
     RuleClass bindRuleClass = ruleFactory.getRuleClass("bind");
-    Map<String, Object> kwargs = ImmutableMap.of("name", name, "path", ".");
+    Map<String, Object> kwargs = ImmutableMap.<String, Object>of("name", name, "path", ".");
     try {
       // This effectively adds a "local_repository(name = "<ws>", path = ".")"
       // definition to the WORKSPACE file.
@@ -105,11 +107,12 @@ public class WorkspaceGlobals implements WorkspaceGlobalsApi {
         RepositoryName.MAIN, RepositoryName.createFromValidStrippedName(name), RepositoryName.MAIN);
     parseManagedDirectories(
         Dict.cast(managedDirectories, String.class, Object.class, "managed_directories"));
+    return NONE;
   }
 
   @Override
-  public void dontSymlinkDirectoriesInExecroot(Sequence<?> paths, StarlarkThread thread)
-      throws EvalException {
+  public NoneType dontSymlinkDirectoriesInExecroot(Sequence<?> paths, StarlarkThread thread)
+      throws EvalException, InterruptedException {
     List<String> pathsList = Sequence.cast(paths, String.class, "paths");
     Set<String> set = Sets.newHashSet();
     for (String path : pathsList) {
@@ -117,7 +120,7 @@ public class WorkspaceGlobals implements WorkspaceGlobalsApi {
       if (pathFragment.isEmpty()) {
         throw Starlark.errorf("Empty path can not be passed to toplevel_output_directories.");
       }
-      if (pathFragment.containsUplevelReferences() || pathFragment.isMultiSegment()) {
+      if (pathFragment.containsUplevelReferences() || pathFragment.segmentCount() > 1) {
         throw Starlark.errorf(
             "toplevel_output_directories can only accept top level directories under"
                 + " workspace, \"%s\" can not be specified as an attribute.",
@@ -137,6 +140,7 @@ public class WorkspaceGlobals implements WorkspaceGlobalsApi {
       }
     }
     doNotSymlinkInExecrootPaths = ImmutableSortedSet.copyOf(set);
+    return NONE;
   }
 
   private void parseManagedDirectories(
@@ -243,25 +247,27 @@ public class WorkspaceGlobals implements WorkspaceGlobalsApi {
   }
 
   @Override
-  public void registerExecutionPlatforms(Sequence<?> platformLabels, StarlarkThread thread)
-      throws EvalException {
+  public NoneType registerExecutionPlatforms(Sequence<?> platformLabels, StarlarkThread thread)
+      throws EvalException, InterruptedException {
     // Add to the package definition for later.
     Package.Builder builder = PackageFactory.getContext(thread).pkgBuilder;
     List<String> patterns = Sequence.cast(platformLabels, String.class, "platform_labels");
     builder.addRegisteredExecutionPlatforms(renamePatterns(patterns, builder, thread));
+    return NONE;
   }
 
   @Override
-  public void registerToolchains(Sequence<?> toolchainLabels, StarlarkThread thread)
-      throws EvalException {
+  public NoneType registerToolchains(Sequence<?> toolchainLabels, StarlarkThread thread)
+      throws EvalException, InterruptedException {
     // Add to the package definition for later.
     Package.Builder builder = PackageFactory.getContext(thread).pkgBuilder;
     List<String> patterns = Sequence.cast(toolchainLabels, String.class, "toolchain_labels");
     builder.addRegisteredToolchains(renamePatterns(patterns, builder, thread));
+    return NONE;
   }
 
   @Override
-  public void bind(String name, Object actual, StarlarkThread thread)
+  public NoneType bind(String name, Object actual, StarlarkThread thread)
       throws EvalException, InterruptedException {
     Label nameLabel;
     try {
@@ -282,12 +288,15 @@ public class WorkspaceGlobals implements WorkspaceGlobalsApi {
     } catch (InvalidRuleException | Package.NameConflictException | LabelSyntaxException e) {
       throw Starlark.errorf("%s", e.getMessage());
     }
+
+    return NONE;
   }
 
   /**
    * Returns true if the given name is a valid workspace name.
    */
   public static boolean isLegalWorkspaceName(String name) {
-    return LEGAL_WORKSPACE_NAME.matcher(name).matches();
+    Matcher matcher = LEGAL_WORKSPACE_NAME.matcher(name);
+    return matcher.matches();
   }
 }

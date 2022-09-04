@@ -118,27 +118,23 @@ public abstract class ToolchainTestCase extends BuildViewTestCase {
         "platform(name = 'mac',",
         "    constraint_values = ['//constraints:mac', '//constraints:non_default_value'])");
 
-    setting = ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//constraints:os"));
-    linuxConstraint =
-        ConstraintValueInfo.create(setting, Label.parseAbsoluteUnchecked("//constraints:linux"));
-    macConstraint =
-        ConstraintValueInfo.create(setting, Label.parseAbsoluteUnchecked("//constraints:mac"));
+    setting = ConstraintSettingInfo.create(makeLabel("//constraints:os"));
+    linuxConstraint = ConstraintValueInfo.create(setting, makeLabel("//constraints:linux"));
+    macConstraint = ConstraintValueInfo.create(setting, makeLabel("//constraints:mac"));
     defaultedSetting =
-        ConstraintSettingInfo.create(
-            Label.parseAbsoluteUnchecked("//constraints:setting_with_default"));
+        ConstraintSettingInfo.create(makeLabel("//constraints:setting_with_default"));
     defaultedConstraint =
-        ConstraintValueInfo.create(
-            defaultedSetting, Label.parseAbsoluteUnchecked("//constraints:non_default_value"));
+        ConstraintValueInfo.create(defaultedSetting, makeLabel("//constraints:non_default_value"));
 
     linuxPlatform =
         PlatformInfo.builder()
-            .setLabel(Label.parseAbsoluteUnchecked("//platforms:linux"))
+            .setLabel(makeLabel("//platforms:linux"))
             .addConstraint(linuxConstraint)
             .addConstraint(defaultedConstraint)
             .build();
     macPlatform =
         PlatformInfo.builder()
-            .setLabel(Label.parseAbsoluteUnchecked("//platforms:mac"))
+            .setLabel(makeLabel("//platforms:mac"))
             .addConstraint(macConstraint)
             .addConstraint(defaultedConstraint)
             .build();
@@ -194,7 +190,7 @@ public abstract class ToolchainTestCase extends BuildViewTestCase {
         ImmutableList.of("//constraints:linux"),
         "bar");
 
-    testToolchainTypeLabel = Label.parseAbsoluteUnchecked("//toolchain:test_toolchain");
+    testToolchainTypeLabel = makeLabel("//toolchain:test_toolchain");
     testToolchainType = ToolchainTypeInfo.create(testToolchainTypeLabel);
   }
 
