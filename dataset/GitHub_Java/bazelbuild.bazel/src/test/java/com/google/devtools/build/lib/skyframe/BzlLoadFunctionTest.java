@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.BazelModuleContext;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.pkgcache.PackageOptions;
@@ -186,8 +185,7 @@ public class BzlLoadFunctionTest extends BuildViewTestCase {
   private void checkSuccessfulLookup(String label) throws Exception {
     SkyKey skyKey = key(label);
     EvaluationResult<BzlLoadValue> result = get(skyKey);
-    assertThat(label)
-        .isEqualTo(BazelModuleContext.of(result.get(skyKey).getModule()).label().toString());
+    assertThat(label).isEqualTo(result.get(skyKey).getDependency().getLabel().toString());
   }
 
   @Test
@@ -269,7 +267,7 @@ public class BzlLoadFunctionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testLoadFromSubdirInSamePackageIsOk() throws Exception {
+  public void testLoadUsingLabelThatDoesntCrossBoundaryOfPackage() throws Exception {
     scratch.file("a/BUILD");
     scratch.file("a/a.bzl", "load('//a:b/b.bzl', 'b')");
     scratch.file("a/b/b.bzl", "b = 42");
@@ -278,7 +276,7 @@ public class BzlLoadFunctionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testLoadMustRespectPackageBoundary_ofSubpkg() throws Exception {
+  public void testLoadUsingLabelThatCrossesBoundaryOfPackage_Disallow_OfSamePkg() throws Exception {
     scratch.file("a/BUILD");
     scratch.file("a/a.bzl", "load('//a:b/b.bzl', 'b')");
     scratch.file("a/b/BUILD", "");
@@ -290,7 +288,8 @@ public class BzlLoadFunctionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testLoadMustRespectPackageBoundary_ofSubpkg_relative() throws Exception {
+  public void testLoadUsingLabelThatCrossesBoundaryOfPackage_Disallow_OfSamePkg_Relative()
+      throws Exception {
     scratch.file("a/BUILD");
     scratch.file("a/a.bzl", "load('b/b.bzl', 'b')");
     scratch.file("a/b/BUILD", "");
@@ -302,7 +301,8 @@ public class BzlLoadFunctionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testLoadMustRespectPackageBoundary_ofIndirectSubpkg() throws Exception {
+  public void testLoadUsingLabelThatCrossesBoundaryOfPackage_Disallow_OfDifferentPkgUnder()
+      throws Exception {
     scratch.file("a/BUILD");
     scratch.file("a/a.bzl", "load('//a/b:c/c.bzl', 'c')");
     scratch.file("a/b/BUILD", "");
@@ -315,7 +315,8 @@ public class BzlLoadFunctionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testLoadMustRespectPackageBoundary_ofParentPkg() throws Exception {
+  public void testLoadUsingLabelThatCrossesBoundaryOfPackage_Disallow_OfDifferentPkgAbove()
+      throws Exception {
     scratch.file("a/b/BUILD");
     scratch.file("a/b/b.bzl", "load('//a/c:c/c.bzl', 'c')");
     scratch.file("a/BUILD");
@@ -346,7 +347,8 @@ public class BzlLoadFunctionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testLoadFromNonExistentRepository_producesMeaningfulError() throws Exception {
+  public void testWithNonExistentRepository_And_DisallowLoadUsingLabelThatCrossesBoundaryOfPackage()
+      throws Exception {
     scratch.file("BUILD", "load(\"@repository//dir:file.bzl\", \"foo\")");
 
     SkyKey skyKey = key("@repository//dir:file.bzl");
@@ -405,7 +407,7 @@ public class BzlLoadFunctionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testErrorReadingBzlFileIsTransientWhenUsingASTInlining() throws Exception {
+  public void testErrorReadingBzlFileInlineIsTransient() throws Exception {
     CustomInMemoryFs fs = (CustomInMemoryFs) fileSystem;
     scratch.file("a/BUILD");
     fs.badPathForRead = scratch.file("a/a1.bzl", "doesntmatter");
