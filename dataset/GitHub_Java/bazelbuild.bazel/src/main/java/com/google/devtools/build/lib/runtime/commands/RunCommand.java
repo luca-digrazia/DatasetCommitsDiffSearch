@@ -77,7 +77,7 @@ import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.OptionsParsingResult;
+import com.google.devtools.common.options.OptionsProvider;
 import com.google.protobuf.ByteString;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -233,7 +233,7 @@ public class RunCommand implements BlazeCommand  {
   }
 
   @Override
-  public BlazeCommandResult exec(CommandEnvironment env, OptionsParsingResult options) {
+  public BlazeCommandResult exec(CommandEnvironment env, OptionsProvider options) {
     RunOptions runOptions = options.getOptions(RunOptions.class);
     // This list should look like: ["//executable:target", "arg1", "arg2"]
     List<String> targetAndArgs = options.getResidue();
@@ -419,10 +419,7 @@ public class RunCommand implements BlazeCommand  {
     if (runOptions.scriptPath != null) {
       String unisolatedCommand = CommandFailureUtils.describeCommand(
           CommandDescriptionForm.COMPLETE_UNISOLATED,
-          /* prettyPrintArgs= */ false,
-          cmdLine,
-          runEnvironment,
-          workingDir.getPathString());
+          cmdLine, runEnvironment, workingDir.getPathString());
       if (writeScript(env, shExecutable, runOptions.scriptPath, unisolatedCommand)) {
         return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
       } else {
