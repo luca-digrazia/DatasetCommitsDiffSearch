@@ -531,6 +531,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
             } else {
                 if (mFullscreenButton != null)
                     mFullscreenButton.setImageResource(getEnlargeImageRes());
+                setViewShowState(mBackButton, GONE);
             }
             return true;
         }
