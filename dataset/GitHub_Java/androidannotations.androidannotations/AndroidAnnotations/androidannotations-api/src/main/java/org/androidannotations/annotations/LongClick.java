@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,27 +21,75 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Should be used on long click listener methods in activity classes
+ * <p>
+ * This annotation is intended to be used on methods to receive events defined
+ * by
+ * {@link android.view.View.OnLongClickListener#onLongClick(android.view.View)}
+ * when the view has been long clicked by the user.
+ * </p>
+ * <p>
+ * The annotation value should be one or several of R.id.* fields. If not set,
+ * the method name will be used as the R.id.* field name.
+ * </p>
+ * <p>
+ * The method may return a <code>boolean</code>, void, or a
+ * {@link java.lang.Boolean}. If returning void, it will be considered as
+ * returning true (ie: the method has handled the event).
+ * </p>
+ * <p>
+ * The method MAY have one parameter:
+ * </p>
+ * <ul>
+ * <li>A {@link android.view.View} (or a subclass) parameter to know which view
+ * has been long clicked</li>
+ * </ul>
+ *
+ * <blockquote>
  * 
- * The method may have zero or one parameter, that MUST be of type
- * android.view.View .
+ * Example :
  * 
- * The annotation value should be one of R.id.* fields. If not set, the method
- * name will be used as the R.id.* field name.
+ * <pre>
+ * &#064;LongClick(<b>R.id.myButton</b>)
+ * void longClickOnMyButton() {
+ * 	// Something Here
+ * }
  * 
- * The method may return a boolean, void, or a java.lang.Boolean. If returning
- * void, it will be considered as returning true (ie the method has handled the
- * event).
+ * &#064;LongClick
+ * void <b>myButton</b>LongClicked(View view) {
+ * 	// Something Here
+ * }
  * 
- * @author Benjamin Fellous
- * @author Pierre-Yves Ricau
- * @author Mathieu Boniface
+ * &#064;LongClick
+ * void <b>myButton</b>LongClicked(Button view) {
+ * 	// Something Here
+ * }
  * 
+ * &#064;LongClick(<b>R.id.myButton</b>)
+ * boolean longClick<b>Consumed</b>OnMyButton(View view) {
+ * 	return true;
+ * }
+ * </pre>
+ * 
+ * </blockquote>
+ * 
+ * @see Touch
+ * @see Click
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
 public @interface LongClick {
+
+	/**
+	 * The R.id.* fields which refer to the Views.
+	 * 
+	 * @return the ids of the Views
+	 */
 	int[] value() default ResId.DEFAULT_VALUE;
 
+	/**
+	 * The resource names as strings which refer to the Views.
+	 * 
+	 * @return the resource names of the Views
+	 */
 	String[] resName() default "";
 }
