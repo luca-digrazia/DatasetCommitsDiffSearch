@@ -15,7 +15,7 @@ import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 
@@ -29,7 +29,6 @@ import io.quarkus.bootstrap.model.AppArtifactKey;
 import io.quarkus.bootstrap.model.PathsCollection;
 import io.quarkus.deployment.util.ProcessUtil;
 import io.quarkus.dev.appstate.ApplicationStateNotification;
-import io.quarkus.dev.spi.DevModeType;
 
 /**
  * The main entry point for the dev mojo execution
@@ -88,14 +87,14 @@ public class DevModeMain implements Closeable {
                 }
             }
             final PathsCollection.Builder appRoots = PathsCollection.builder();
-            Path p = Paths.get(context.getApplicationRoot().getMain().getClassesPath());
+            Path p = Paths.get(context.getApplicationRoot().getClassesPath());
             if (Files.exists(p)) {
                 appRoots.add(p);
             }
-            if (context.getApplicationRoot().getMain().getResourcesOutputPath() != null
-                    && !context.getApplicationRoot().getMain().getResourcesOutputPath()
-                            .equals(context.getApplicationRoot().getMain().getClassesPath())) {
-                p = Paths.get(context.getApplicationRoot().getMain().getResourcesOutputPath());
+            if (context.getApplicationRoot().getResourcesOutputPath() != null
+                    && !context.getApplicationRoot().getResourcesOutputPath()
+                            .equals(context.getApplicationRoot().getClassesPath())) {
+                p = Paths.get(context.getApplicationRoot().getResourcesOutputPath());
                 if (Files.exists(p)) {
                     appRoots.add(p);
                 }
@@ -120,14 +119,13 @@ public class DevModeMain implements Closeable {
                 bootstrapBuilder.addLocalArtifact(i);
             }
 
-            for (DevModeContext.ModuleInfo i : context.getAdditionalModules()) {
-                if (i.getMain().getClassesPath() != null) {
-                    Path classesPath = Paths.get(i.getMain().getClassesPath());
+            for (DevModeContext.ModuleInfo i : context.getAllModules()) {
+                if (i.getClassesPath() != null) {
+                    Path classesPath = Paths.get(i.getClassesPath());
                     bootstrapBuilder.addAdditionalApplicationArchive(new AdditionalDependency(classesPath, true, false));
                 }
-                if (i.getMain().getResourcesOutputPath() != null
-                        && !i.getMain().getResourcesOutputPath().equals(i.getMain().getClassesPath())) {
-                    Path resourceOutputPath = Paths.get(i.getMain().getResourcesOutputPath());
+                if (i.getResourcesOutputPath() != null && !i.getResourcesOutputPath().equals(i.getClassesPath())) {
+                    Path resourceOutputPath = Paths.get(i.getResourcesOutputPath());
                     bootstrapBuilder.addAdditionalApplicationArchive(new AdditionalDependency(resourceOutputPath, true, false));
                 }
             }
@@ -137,15 +135,11 @@ public class DevModeMain implements Closeable {
             Properties buildSystemProperties = new Properties();
             buildSystemProperties.putAll(context.getBuildSystemProperties());
             bootstrapBuilder.setBuildSystemProperties(buildSystemProperties);
-
-            Map<String, Object> map = new HashMap<>();
-            map.put(DevModeContext.class.getName(), context);
-            map.put(DevModeType.class.getName(), DevModeType.LOCAL);
             curatedApplication = bootstrapBuilder.setTest(context.isTest()).build().bootstrap();
             realCloseable = (Closeable) curatedApplication.runInAugmentClassLoader(
                     context.getAlternateEntryPoint() == null ? IsolatedDevModeMain.class.getName()
                             : context.getAlternateEntryPoint(),
-                    map);
+                    Collections.singletonMap(DevModeContext.class.getName(), context));
         } catch (Throwable t) {
             log.error("Quarkus dev mode failed to start", t);
             throw new RuntimeException(t);
@@ -226,7 +220,5 @@ public class DevModeMain implements Closeable {
         if (ApplicationStateNotification.getState() == ApplicationStateNotification.State.STARTED) {
             ApplicationStateNotification.waitForApplicationStop();
         }
-        curatedApplication.close();
-        curatedApplication = null;
     }
 }

@@ -9,11 +9,8 @@ import static io.vertx.core.file.impl.FileResolver.CACHE_DIR_BASE_PROP_NAME;
 
 import java.io.File;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -54,12 +51,6 @@ public class VertxCoreRecorder {
 
     static volatile int blockingThreadPoolSize;
 
-    /**
-     * This is a bit of a hack. In dev mode we undeploy all the verticles on restart, except
-     * for this one
-     */
-    private static volatile String webDeploymentId;
-
     public Supplier<Vertx> configureVertx(VertxConfiguration config,
             LaunchMode launchMode, ShutdownContext shutdown, List<Consumer<VertxOptions>> customizers) {
         if (launchMode != LaunchMode.DEVELOPMENT) {
@@ -81,28 +72,19 @@ public class VertxCoreRecorder {
             shutdown.addLastShutdownTask(new Runnable() {
                 @Override
                 public void run() {
-                    List<CountDownLatch> latches = new ArrayList<>();
+                    CountDownLatch latch = new CountDownLatch(1);
                     if (vertx.v != null) {
-                        Set<String> ids = new HashSet<>(vertx.v.deploymentIDs());
-                        for (String id : ids) {
-                            if (!id.equals(webDeploymentId)) {
-                                CountDownLatch latch = new CountDownLatch(1);
-                                latches.add(latch);
-                                vertx.v.undeploy(id, new Handler<AsyncResult<Void>>() {
+                        vertx.v.eventBus().close(new Handler<AsyncResult<Void>>() {
+                            @Override
+                            public void handle(AsyncResult<Void> event) {
+                                vertx.v.eventBus().start(new Handler<AsyncResult<Void>>() {
                                     @Override
                                     public void handle(AsyncResult<Void> event) {
                                         latch.countDown();
                                     }
                                 });
                             }
-                        }
-                        for (CountDownLatch latch : latches) {
-                            try {
-                                latch.await();
-                            } catch (InterruptedException e) {
-                                LOGGER.error("Failed waiting for verticle undeploy", e);
-                            }
-                        }
+                        });
                     }
                 }
             });
@@ -408,9 +390,5 @@ public class VertxCoreRecorder {
             }
             return options;
         }
-    }
-
-    public static void setWebDeploymentId(String webDeploymentId) {
-        VertxCoreRecorder.webDeploymentId = webDeploymentId;
     }
 }
