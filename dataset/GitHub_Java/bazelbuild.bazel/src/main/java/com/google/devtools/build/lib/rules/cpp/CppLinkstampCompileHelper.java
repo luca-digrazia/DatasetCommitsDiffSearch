@@ -138,42 +138,39 @@ public class CppLinkstampCompileHelper {
     Variables.Builder variables = new Variables.Builder(ccToolchainProvider.getBuildVariables());
     // We need to force inclusion of build_info headers
     variables.addStringSequenceVariable(
-        CcCommon.INCLUDES_VARIABLE_NAME,
+        CppModel.INCLUDES_VARIABLE_NAME,
         buildInfoHeaderArtifacts
             .stream()
             .map(Artifact::getExecPathString)
             .collect(ImmutableList.toImmutableList()));
     // Input/Output files.
+    variables.addStringVariable(CppModel.SOURCE_FILE_VARIABLE_NAME, sourceFile.getExecPathString());
+    variables.addStringVariable(CppModel.OUTPUT_FILE_VARIABLE_NAME, outputFile.getExecPathString());
     variables.addStringVariable(
-        CcCompilationHelper.SOURCE_FILE_VARIABLE_NAME, sourceFile.getExecPathString());
-    variables.addStringVariable(
-        CcCompilationHelper.OUTPUT_FILE_VARIABLE_NAME, outputFile.getExecPathString());
-    variables.addStringVariable(
-        CcCompilationHelper.OUTPUT_OBJECT_FILE_VARIABLE_NAME, outputFile.getExecPathString());
+        CppModel.OUTPUT_OBJECT_FILE_VARIABLE_NAME, outputFile.getExecPathString());
     // Include directories for (normal includes with ".", empty quote- and system- includes).
     variables.addStringSequenceVariable(
-        CcCompilationHelper.INCLUDE_PATHS_VARIABLE_NAME, ImmutableList.of("."));
+        CppModel.INCLUDE_PATHS_VARIABLE_NAME, ImmutableList.of("."));
     variables.addStringSequenceVariable(
-        CcCompilationHelper.QUOTE_INCLUDE_PATHS_VARIABLE_NAME, ImmutableList.of());
+        CppModel.QUOTE_INCLUDE_PATHS_VARIABLE_NAME, ImmutableList.of());
     variables.addStringSequenceVariable(
-        CcCompilationHelper.SYSTEM_INCLUDE_PATHS_VARIABLE_NAME, ImmutableList.of());
+        CppModel.SYSTEM_INCLUDE_PATHS_VARIABLE_NAME, ImmutableList.of());
     // Legacy flags coming from fields such as compiler_flag
     variables.addLazyStringSequenceVariable(
-        CcCompilationHelper.LEGACY_COMPILE_FLAGS_VARIABLE_NAME,
-        CcCompilationHelper.getLegacyCompileFlagsSupplier(
+        CppModel.LEGACY_COMPILE_FLAGS_VARIABLE_NAME,
+        CppModel.getLegacyCompileFlagsSupplier(
             cppConfiguration,
             ccToolchainProvider,
             sourceFile.getExecPathString(),
             ImmutableSet.of()));
     // Unfilterable flags coming from unfiltered_cxx_flag fields
     variables.addLazyStringSequenceVariable(
-        CcCompilationHelper.UNFILTERED_COMPILE_FLAGS_VARIABLE_NAME,
-        CcCompilationHelper.getUnfilteredCompileFlagsSupplier(
-            ccToolchainProvider, ImmutableSet.of()));
+        CppModel.UNFILTERED_COMPILE_FLAGS_VARIABLE_NAME,
+        CppModel.getUnfilteredCompileFlagsSupplier(ccToolchainProvider, ImmutableSet.of()));
     // Collect all preprocessor defines, and in each replace ${LABEL} by labelReplacements, and
     // ${OUTPUT_PATH} with outputPathReplacement.
     variables.addStringSequenceVariable(
-        CcCompilationHelper.PREPROCESSOR_DEFINES_VARIABLE_NAME,
+        CppModel.PREPROCESSOR_DEFINES_VARIABLE_NAME,
         computeAllLinkstampDefines(
             labelReplacement,
             outputReplacement,
@@ -183,7 +180,7 @@ public class CppLinkstampCompileHelper {
             codeCoverageEnabled));
     // For dynamic libraries, produce position independent code.
     if (needsPic) {
-      variables.addStringVariable(CcCompilationHelper.PIC_VARIABLE_NAME, "");
+      variables.addStringVariable(CppModel.PIC_VARIABLE_NAME, "");
     }
 
     return variables.build();
