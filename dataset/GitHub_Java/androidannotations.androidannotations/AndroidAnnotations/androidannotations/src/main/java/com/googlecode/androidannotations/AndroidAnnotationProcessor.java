@@ -18,7 +18,6 @@ package com.googlecode.androidannotations;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.processing.Messager;
@@ -39,7 +38,6 @@ import com.googlecode.androidannotations.annotations.BeforeCreate;
 import com.googlecode.androidannotations.annotations.Click;
 import com.googlecode.androidannotations.annotations.EActivity;
 import com.googlecode.androidannotations.annotations.EViewGroup;
-import com.googlecode.androidannotations.annotations.Enhanced;
 import com.googlecode.androidannotations.annotations.Extra;
 import com.googlecode.androidannotations.annotations.FromHtml;
 import com.googlecode.androidannotations.annotations.Fullscreen;
@@ -83,7 +81,6 @@ import com.googlecode.androidannotations.annotations.rest.Options;
 import com.googlecode.androidannotations.annotations.rest.Post;
 import com.googlecode.androidannotations.annotations.rest.Put;
 import com.googlecode.androidannotations.annotations.rest.Rest;
-import com.googlecode.androidannotations.annotations.rest.RestService;
 import com.googlecode.androidannotations.annotations.sharedpreferences.Pref;
 import com.googlecode.androidannotations.annotations.sharedpreferences.SharedPref;
 import com.googlecode.androidannotations.generation.CodeModelGenerator;
@@ -103,7 +100,6 @@ import com.googlecode.androidannotations.processing.BeforeCreateProcessor;
 import com.googlecode.androidannotations.processing.ClickProcessor;
 import com.googlecode.androidannotations.processing.EActivityProcessor;
 import com.googlecode.androidannotations.processing.EViewGroupProcessor;
-import com.googlecode.androidannotations.processing.EnhancedProcessor;
 import com.googlecode.androidannotations.processing.ExtraProcessor;
 import com.googlecode.androidannotations.processing.FromHtmlProcessor;
 import com.googlecode.androidannotations.processing.FullscreenProcessor;
@@ -117,7 +113,6 @@ import com.googlecode.androidannotations.processing.OptionsItemProcessor;
 import com.googlecode.androidannotations.processing.OptionsMenuProcessor;
 import com.googlecode.androidannotations.processing.PrefProcessor;
 import com.googlecode.androidannotations.processing.ResProcessor;
-import com.googlecode.androidannotations.processing.RestServiceProcessor;
 import com.googlecode.androidannotations.processing.RoboGuiceProcessor;
 import com.googlecode.androidannotations.processing.SharedPrefProcessor;
 import com.googlecode.androidannotations.processing.SystemServiceProcessor;
@@ -145,7 +140,6 @@ import com.googlecode.androidannotations.validation.BeforeCreateValidator;
 import com.googlecode.androidannotations.validation.ClickValidator;
 import com.googlecode.androidannotations.validation.EActivityValidator;
 import com.googlecode.androidannotations.validation.EViewGroupValidator;
-import com.googlecode.androidannotations.validation.EnhancedValidator;
 import com.googlecode.androidannotations.validation.ExtraValidator;
 import com.googlecode.androidannotations.validation.FromHtmlValidator;
 import com.googlecode.androidannotations.validation.FullscreenValidator;
@@ -159,7 +153,6 @@ import com.googlecode.androidannotations.validation.OptionsItemValidator;
 import com.googlecode.androidannotations.validation.OptionsMenuValidator;
 import com.googlecode.androidannotations.validation.PrefValidator;
 import com.googlecode.androidannotations.validation.ResValidator;
-import com.googlecode.androidannotations.validation.RestServiceValidator;
 import com.googlecode.androidannotations.validation.RoboGuiceValidator;
 import com.googlecode.androidannotations.validation.RunnableValidator;
 import com.googlecode.androidannotations.validation.SharedPrefValidator;
@@ -229,8 +222,6 @@ import com.sun.codemodel.JCodeModel;
 		HtmlRes.class, //
 		NoTitle.class, //
 		Fullscreen.class, //
-		RestService.class, //
-		Enhanced.class, //
 		Trace.class //
 })
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
@@ -345,7 +336,6 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		ModelValidator modelValidator = new ModelValidator();
 		modelValidator.register(new EActivityValidator(processingEnv, rClass, androidManifest));
 		modelValidator.register(new EViewGroupValidator(processingEnv, rClass));
-		modelValidator.register(new EnhancedValidator(processingEnv));
 		modelValidator.register(new RoboGuiceValidator(processingEnv));
 		modelValidator.register(new ViewByIdValidator(processingEnv, rClass));
 		modelValidator.register(new FromHtmlValidator(processingEnv, rClass));
@@ -378,24 +368,11 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelValidator.register(new OptionsItemValidator(processingEnv, rClass));
 		modelValidator.register(new NoTitleValidator(processingEnv));
 		modelValidator.register(new FullscreenValidator(processingEnv));
-		modelValidator.register(new RestServiceValidator(processingEnv));
 		modelValidator.register(new RunnableValidator(UiThreadDelayed.class, processingEnv));
 		modelValidator.register(new RunnableValidator(UiThread.class, processingEnv));
 		modelValidator.register(new RunnableValidator(Background.class, processingEnv));
-		if (traceActivated()) {
-			modelValidator.register(new TraceValidator(processingEnv));
-		}
+		modelValidator.register(new TraceValidator(processingEnv));
 		return modelValidator;
-	}
-
-	private boolean traceActivated() {
-		Map<String, String> options = processingEnv.getOptions();
-		if (options.containsKey("trace")) {
-			String trace = options.get("trace");
-			return !"false".equals(trace);
-		} else {
-			return true;
-		}
 	}
 
 	private JCodeModel processAnnotations(AnnotationElements validatedModel, IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) {
@@ -410,7 +387,6 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		ModelProcessor modelProcessor = new ModelProcessor();
 		modelProcessor.register(new EActivityProcessor(processingEnv, rClass));
 		modelProcessor.register(new EViewGroupProcessor(processingEnv, rClass));
-		modelProcessor.register(new EnhancedProcessor(processingEnv));
 		modelProcessor.register(new SharedPrefProcessor(processingEnv));
 		modelProcessor.register(new PrefProcessor());
 		modelProcessor.register(new RoboGuiceProcessor());
@@ -443,7 +419,6 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelProcessor.register(new OptionsItemProcessor(rClass));
 		modelProcessor.register(new NoTitleProcessor());
 		modelProcessor.register(new FullscreenProcessor());
-		modelProcessor.register(new RestServiceProcessor());
 		modelProcessor.register(new TraceProcessor());
 		modelProcessor.register(new UiThreadProcessor());
 		modelProcessor.register(new UiThreadDelayedProcessor());

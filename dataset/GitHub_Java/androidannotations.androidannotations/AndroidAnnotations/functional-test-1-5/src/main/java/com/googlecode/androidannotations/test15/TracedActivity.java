@@ -23,15 +23,13 @@ import java.util.Set;
 import android.app.Activity;
 import android.util.Log;
 
-import com.googlecode.androidannotations.annotations.Background;
 import com.googlecode.androidannotations.annotations.EActivity;
 import com.googlecode.androidannotations.annotations.Trace;
 import com.googlecode.androidannotations.annotations.UiThread;
-import com.googlecode.androidannotations.annotations.UiThreadDelayed;
 
 @EActivity 
 public class TracedActivity extends Activity {
-
+	
 	public boolean tracedMethodCalled = false;
 	public boolean voidTracedMethodCalled = false;
 	public boolean voidTracedMethodDebugCalled = false;
@@ -90,19 +88,7 @@ public class TracedActivity extends Activity {
 	
 	@Trace
 	@UiThread
-	void mixedUiThreadMethod() {
-		
-	}
-	
-	@Trace
-	@UiThreadDelayed(1000)
-	void mixedUiThreadDelayedMethod() {
-		
-	}
-	
-	@Trace
-	@Background
-	void mixedBackgroundMethod() {
+	void mixedMethod() {
 		
 	}
 }

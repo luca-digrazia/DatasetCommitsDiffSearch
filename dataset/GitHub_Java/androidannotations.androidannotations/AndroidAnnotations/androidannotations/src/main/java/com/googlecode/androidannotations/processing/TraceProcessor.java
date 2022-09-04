@@ -47,7 +47,7 @@ public class TraceProcessor implements ElementProcessor {
 
 	@Override
 	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
-		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
+		EBeanHolder holder = activitiesHolder.getEnclosingActivityHolder(element);
 		ExecutableElement executableElement = (ExecutableElement) element;
 
 		String tag = extractTag(executableElement);
@@ -57,48 +57,38 @@ public class TraceProcessor implements ElementProcessor {
 		JClass systemClass = holder.refClass(System.class);
 
 		JMethod method = helper.overrideAnnotatedMethod(executableElement, holder);
-
+		
 		JBlock previousMethodBody = helper.removeBody(method);
 
 		JBlock methodBody = method.body();
-
+		
 		JInvocation isLoggableInvocation = logClass.staticInvoke("isLoggable");
 		isLoggableInvocation.arg(JExpr.lit(tag)).arg(logLevelFromInt(level, logClass));
 
 		JConditional ifStatement = methodBody._if(isLoggableInvocation);
 
 		JInvocation currentTimeInvoke = systemClass.staticInvoke("currentTimeMillis");
-		JBlock _thenBody = ifStatement._then();
-		JVar startDeclaration = _thenBody.decl(codeModel.LONG, "start", currentTimeInvoke);
+		JVar startDeclaration = ifStatement._then().decl(codeModel.LONG, "start", currentTimeInvoke);
 
-		String methodName = "[" + element.toString() + "]";
-
-		// Log In
-		String logMethodName = logMethodNameFromLevel(level);
-		JInvocation logEnterInvoke = logClass.staticInvoke(logMethodName);
-		logEnterInvoke.arg(tag);
-
-		JExpression enterMessage = JExpr.lit("Entering " + methodName);
-		logEnterInvoke.arg(enterMessage);
-		_thenBody.add(logEnterInvoke);
-
-		JTryBlock tryBlock = _thenBody._try();
-
+		JTryBlock tryBlock = ifStatement._then()._try();
+		
 		tryBlock.body().add(previousMethodBody);
-
+		
 		JBlock finallyBlock = tryBlock._finally();
 
 		JVar durationDeclaration = finallyBlock.decl(codeModel.LONG, "duration", currentTimeInvoke.minus(startDeclaration));
 
-		JInvocation logExitInvoke = logClass.staticInvoke(logMethodName);
-		logExitInvoke.arg(tag);
+		String logMethodString = logMethodNameFromLevel(level);
+		JInvocation logInvoke = logClass.staticInvoke(logMethodString);
+		logInvoke.arg(tag);
 
-		JExpression exitMessage = JExpr.lit("Exiting " + methodName + ", duration in ms: ").plus(durationDeclaration);
-		logExitInvoke.arg(exitMessage);
-		finallyBlock.add(logExitInvoke);
+		String methodName = element.getSimpleName().toString();
+		JExpression message = JExpr.lit("out " + methodName + ", duration in ms: ").plus(durationDeclaration);
+		logInvoke.arg(message);
+		finallyBlock.add(logInvoke);
 
 		JBlock elseBlock = ifStatement._else();
-
+		
 		elseBlock.add(previousMethodBody);
 	}
 
