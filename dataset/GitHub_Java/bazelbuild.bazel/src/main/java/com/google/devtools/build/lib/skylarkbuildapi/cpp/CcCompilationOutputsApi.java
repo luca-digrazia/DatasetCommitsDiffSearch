@@ -14,25 +14,32 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.cpp;
 
-import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
+import net.starlark.java.annot.StarlarkBuiltin;
+import net.starlark.java.annot.StarlarkDocumentationCategory;
+import net.starlark.java.annot.StarlarkMethod;
 
 /** Interface for a structured representation of the compilation outputs of a C++ rule. */
-@SkylarkModule(
-    name = "cc_compilation_outputs",
-    category = SkylarkModuleCategory.BUILTIN,
-    documented = false,
+@StarlarkBuiltin(
+    name = "CcCompilationOutputs",
+    category = StarlarkDocumentationCategory.BUILTIN,
+    documented = true,
     doc = "Helper class containing CC compilation outputs.")
-public interface CcCompilationOutputsApi {
-  @SkylarkCallable(
-      name = "object_files",
-      documented = false,
-      parameters = {
-        @Param(name = "use_pic", doc = "use_pic", positional = false, named = true),
-      })
-  SkylarkList<Artifact> getSkylarkObjectFiles(boolean usePic);
+public interface CcCompilationOutputsApi<FileT extends FileApi> extends StarlarkValue {
+  @StarlarkMethod(
+      name = "objects",
+      doc = "Non-PIC object files.",
+      documented = true,
+      structField = true)
+  Sequence<FileT> getStarlarkObjects() throws EvalException;
+
+  @StarlarkMethod(
+      name = "pic_objects",
+      doc = "PIC object files.",
+      documented = true,
+      structField = true)
+  Sequence<FileT> getStarlarkPicObjects() throws EvalException;
 }

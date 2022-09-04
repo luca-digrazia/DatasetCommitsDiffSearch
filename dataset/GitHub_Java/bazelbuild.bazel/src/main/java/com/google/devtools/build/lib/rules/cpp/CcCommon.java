@@ -34,7 +34,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkRuleContext;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkRuleContext;
 import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.LocalMetadataCollector;
@@ -940,6 +940,7 @@ public final class CcCommon {
       for (String feature : unsupportedFeatures) {
         if (featureConfiguration.isEnabled(feature)) {
           throw new EvalException(
+              /* location= */ null,
               "The C++ toolchain '"
                   + toolchain.getCcToolchainLabel()
                   + "' unconditionally implies feature '"
