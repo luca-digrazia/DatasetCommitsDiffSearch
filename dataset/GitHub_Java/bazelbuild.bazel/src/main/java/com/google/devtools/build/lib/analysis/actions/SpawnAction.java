@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.BaseSpawn;
@@ -263,10 +262,11 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
   }
 
   @Override
-  public ActionResult execute(ActionExecutionContext actionExecutionContext)
+  public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     try {
-      return ActionResult.create(internalExecute(actionExecutionContext));
+      // TODO(b/62588075): internalExecute() now returns a set of SpawnResults, we could capture it.
+      internalExecute(actionExecutionContext);
     } catch (ExecException e) {
       String failMessage;
       if (isShellCommand()) {

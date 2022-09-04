@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
-import java.util.List;
+import java.util.Set;
 
 /**
  * A context that allows execution of {@link Spawn} instances.
@@ -22,6 +22,6 @@ import java.util.List;
 public interface SpawnActionContext extends ActionContext {
 
   /** Executes the given spawn and returns metadata about the execution. */
-  List<SpawnResult> exec(Spawn spawn, ActionExecutionContext actionExecutionContext)
+  Set<SpawnResult> exec(Spawn spawn, ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException;
 }
