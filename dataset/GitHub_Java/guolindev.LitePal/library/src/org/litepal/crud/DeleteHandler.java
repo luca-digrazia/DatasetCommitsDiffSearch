@@ -73,11 +73,10 @@ public class DeleteHandler extends DataHandler {
 	 */
 	int onDelete(DataSupport baseObj) {
 		if (baseObj.isSaved()) {
-			Collection<AssociationsInfo> associationInfos = analyzeAssociations(baseObj);
+			analyzeAssociations(baseObj);
 			int rowsAffected = deleteCascade(baseObj);
 			rowsAffected += mDatabase.delete(baseObj.getTableName(),
 					"id = " + baseObj.getBaseObjId(), null);
-			clearAssociatedModelSaveState(baseObj, associationInfos);;
 			return rowsAffected;
 		}
 		return 0;
@@ -195,49 +194,11 @@ public class DeleteHandler extends DataHandler {
 	 * @param baseObj
 	 *            The record to delete.
 	 */
-	private Collection<AssociationsInfo> analyzeAssociations(DataSupport baseObj) {
+	private void analyzeAssociations(DataSupport baseObj) {
 		try {
 			Collection<AssociationsInfo> associationInfos = getAssociationInfo(baseObj
 					.getClassName());
 			analyzeAssociatedModels(baseObj, associationInfos);
-			return associationInfos;
-		} catch (Exception e) {
-			throw new DataSupportException(e.getMessage());
-		}
-	}
-	
-	/**
-	 * Clear associated models' save state. After this method, the associated
-	 * models of baseObj which data is removed from database will become
-	 * unsaved.
-	 * 
-	 * @param baseObj
-	 *            The record to delete.
-	 * @param associationInfos
-	 *            The associated info.
-	 */
-	private void clearAssociatedModelSaveState(DataSupport baseObj, Collection<AssociationsInfo> associationInfos) {
-		try {
-			for (AssociationsInfo associationInfo : associationInfos) {
-				if (associationInfo.getAssociationType() == Const.Model.MANY_TO_ONE
-						&& !baseObj.getClassName().equals(
-								associationInfo.getClassHoldsForeignKey())) {
-					Collection<DataSupport> associatedModels = getAssociatedModels(
-							baseObj, associationInfo);
-					if (associatedModels != null && !associatedModels.isEmpty()) {
-						for (DataSupport model : associatedModels) {
-							if (model != null) {
-								model.resetBaseObjId();
-							}
-						}
-					}
-				} else if (associationInfo.getAssociationType() == Const.Model.ONE_TO_ONE) {
-					DataSupport model = getAssociatedModel(baseObj, associationInfo);
-					if (model != null) {
-						model.resetBaseObjId();
-					}
-				}
-			}
 		} catch (Exception e) {
 			throw new DataSupportException(e.getMessage());
 		}
