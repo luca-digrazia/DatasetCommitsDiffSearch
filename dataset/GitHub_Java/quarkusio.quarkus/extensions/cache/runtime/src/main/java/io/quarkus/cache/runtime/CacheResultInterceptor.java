@@ -2,9 +2,11 @@ package io.quarkus.cache.runtime;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Function;
+import java.util.function.BiFunction;
+import java.util.function.Supplier;
 
 import javax.annotation.Priority;
 import javax.interceptor.AroundInvoke;
@@ -27,66 +29,95 @@ public class CacheResultInterceptor extends CacheInterceptor {
         CacheResultInterceptorBinding binding = getInterceptorBinding(context, CacheResultInterceptorBinding.class);
 
         CaffeineCache cache = cacheRepository.getCache(binding.cacheName());
-        short[] cacheKeyParameterPositions = getCacheKeyParameterPositions(context);
-        Object key = getCacheKey(cache, cacheKeyParameterPositions, context.getParameters());
+        Object key = getCacheKey(cache, binding.cacheKeyParameterPositions(), context.getParameters());
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debugf("Loading entry with key [%s] from cache [%s]", key, cache.getName());
         }
 
-        try {
-
-            CompletableFuture<Object> cacheValue = cache.get(key, new Function<Object, Object>() {
-                @Override
-                public Object apply(Object k) {
-                    try {
-                        return context.proceed();
-                    } catch (Exception e) {
-                        throw new CacheException(e);
-                    }
-                }
-            });
-
-            if (binding.lockTimeout() <= 0) {
+        if (binding.lockTimeout() <= 0) {
+            CompletableFuture<Object> cacheValue = cache.get(key,
+                    new BiFunction<Object, Executor, CompletableFuture<Object>>() {
+                        @Override
+                        public CompletableFuture<Object> apply(Object k, Executor executor) {
+                            return getValueLoader(context, executor);
+                        }
+                    });
+            try {
                 return cacheValue.get();
-            } else {
+            } catch (ExecutionException e) {
+                throw getExceptionToThrow(e);
+            }
+        } else {
+
+            // The lock timeout logic starts here.
+
+            /*
+             * If the current key is not already associated with a value in the Caffeine cache, there's no way to know if the
+             * current thread or another one started the missing value computation. The following variable will be used to
+             * determine whether or not a timeout should be triggered during the computation depending on which thread started
+             * it.
+             */
+            boolean[] isCurrentThreadComputation = { false };
+
+            CompletableFuture<Object> cacheValue = cache.get(key,
+                    new BiFunction<Object, Executor, CompletableFuture<Object>>() {
+                        @Override
+                        public CompletableFuture<Object> apply(Object k, Executor executor) {
+                            isCurrentThreadComputation[0] = true;
+                            return getValueLoader(context, executor);
+                        }
+                    });
+
+            if (isCurrentThreadComputation[0]) {
+                // The value is missing and its computation was started from the current thread.
+                // We'll wait for the result no matter how long it takes.
                 try {
-                    /*
-                     * If the current thread started the cache value computation, then the computation is already finished since
-                     * it was done synchronously and the following call will never time out.
-                     */
+                    return cacheValue.get();
+                } catch (ExecutionException e) {
+                    throw getExceptionToThrow(e);
+                }
+            } else {
+                // The value is either already present in the cache or missing and its computation was started from another thread.
+                // We want to retrieve it from the cache within the lock timeout delay.
+                try {
                     return cacheValue.get(binding.lockTimeout(), TimeUnit.MILLISECONDS);
+                } catch (ExecutionException e) {
+                    throw getExceptionToThrow(e);
                 } catch (TimeoutException e) {
+                    // Timeout triggered! We don't want to wait any longer for the value computation and we'll simply invoke the
+                    // cached method and return its result without caching it.
                     // TODO: Add statistics here to monitor the timeout.
                     return context.proceed();
                 }
             }
+        }
+    }
 
-        } catch (ExecutionException e) {
-            /*
-             * Any exception raised during a cache computation will be encapsulated into an ExecutionException because it is
-             * thrown during a CompletionStage execution.
-             */
-            if (e.getCause() instanceof CacheException) {
-                // The ExecutionException was caused by a CacheException (most likely case).
-                CacheException cacheException = (CacheException) e.getCause();
-                // Let's see if we can throw the root cause of the exceptions chain.
-                if (cacheException.getCause() instanceof Exception) {
-                    // If it is an Exception, the root cause is thrown.
-                    throw (Exception) cacheException.getCause();
-                } else {
-                    // If it is an Error, the CacheException itself is thrown because interceptors have to throw exceptions.
-                    throw cacheException;
+    private CompletableFuture<Object> getValueLoader(InvocationContext context, Executor executor) {
+        return CompletableFuture.supplyAsync(new Supplier<Object>() {
+            @Override
+            public Object get() {
+                try {
+                    return context.proceed();
+                } catch (Exception e) {
+                    throw new CacheException(e);
                 }
-            } else if (e.getCause() instanceof Exception) {
-                // The ExecutionException was caused by another type of Exception (very unlikely case). Let's throw that cause!
-                throw (Exception) e.getCause();
-            } else {
-                /*
-                 * The ExecutionException was caused by an Error which can't be thrown because interceptors have to throw
-                 * exceptions. The ExecutionException itself is thrown instead.
-                 */
-                throw e;
             }
+        }, executor);
+    }
+
+    private Exception getExceptionToThrow(ExecutionException e) {
+        if (e.getCause() instanceof CacheException && e.getCause().getCause() instanceof Exception) {
+            return (Exception) e.getCause().getCause();
+        } else {
+            /*
+             * If:
+             * - the cause is not a CacheException
+             * - the cause is a CacheException which doesn't have a cause itself
+             * - the cause is a CacheException which was caused itself by an Error
+             * ... then we'll throw the original ExecutionException.
+             */
+            return e;
         }
     }
 }
