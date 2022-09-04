@@ -57,7 +57,16 @@ public final class BazelAnalysisMock extends AnalysisMock {
         ImmutableList.of(
             "local_repository(name = 'bazel_tools', path = '" + bazelToolWorkspace + "')",
             "local_repository(name = 'local_config_xcode', path = '/local_config_xcode')",
+            "bind(",
+            "  name = 'objc_proto_lib',",
+            "  actual = '@bazel_tools//objcproto:ProtocolBuffers_lib',",
+            ")",
+            "bind(",
+            "  name = 'objc_protobuf_lib',",
+            "  actual = '@bazel_tools//objcproto:protobuf_lib',",
+            ")",
             "local_repository(name = 'com_google_protobuf', path = '/protobuf')",
+            "local_repository(name = 'com_google_protobuf_java', path = '/protobuf')",
             "bind(name = 'android/sdk', actual='@bazel_tools//tools/android:sdk')",
             "bind(name = 'tools/python', actual='//tools/python')"));
   }
@@ -112,10 +121,6 @@ public final class BazelAnalysisMock extends AnalysisMock {
     config.create(
         "/bazel_tools_workspace/tools/android/emulator/BUILD",
         Iterables.toArray(createToolsAndroidEmulatorContents(), String.class));
-    // Bundled Proguard used by android_sdk_repository
-    config.create(
-        "/bazel_tools_workspace/third_party/java/proguard/BUILD",
-        "exports_files(['proguard'])");
 
     config.create(
         "/bazel_tools_workspace/tools/genrule/BUILD", "exports_files(['genrule-setup.sh'])");
@@ -162,6 +167,10 @@ public final class BazelAnalysisMock extends AnalysisMock {
     config.create(
         "/bazel_tools_workspace/objcproto/BUILD",
         "package(default_visibility=['//visibility:public'])",
+        "objc_library(",
+        "  name = 'ProtocolBuffers_lib',",
+        "  srcs = ['empty.m'],",
+        ")",
         "objc_library(",
         "  name = 'protobuf_lib',",
         "  srcs = ['empty.m'],",
@@ -247,8 +256,7 @@ public final class BazelAnalysisMock extends AnalysisMock {
         .add("sh_binary(name = 'instrumentation_test_entry_point', srcs = ['empty.sh'])")
         .add("java_plugin(name = 'databinding_annotation_processor',")
         .add("    processor_class = 'android.databinding.annotationprocessor.ProcessDataBinding')")
-        .add("sh_binary(name = 'jarjar_bin', srcs = ['empty.sh'])")
-        .add("package_group(name = 'android_device_whitelist', packages = ['//...'])");
+        .add("sh_binary(name = 'jarjar_bin', srcs = ['empty.sh'])");
 
     return androidBuildContents.build();
   }

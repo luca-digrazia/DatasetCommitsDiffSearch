@@ -128,8 +128,7 @@ public class ContainingPackageLookupFunctionTest extends FoundationTestCase {
             LocalRepositoryRule.NAME, (RepositoryFunction) new LocalRepositoryFunction());
     skyFunctions.put(
         SkyFunctions.REPOSITORY_DIRECTORY,
-        new RepositoryDelegatorFunction(
-            repositoryHandlers, null, new AtomicBoolean(true), ImmutableMap::of, directories));
+        new RepositoryDelegatorFunction(repositoryHandlers, null, new AtomicBoolean(true)));
     skyFunctions.put(SkyFunctions.REPOSITORY, new RepositoryLoaderFunction());
 
     differencer = new RecordingDifferencer();

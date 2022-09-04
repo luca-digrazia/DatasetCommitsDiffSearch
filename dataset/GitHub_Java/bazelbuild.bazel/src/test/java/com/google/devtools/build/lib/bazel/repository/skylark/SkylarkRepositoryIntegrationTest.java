@@ -79,11 +79,8 @@ public class SkylarkRepositoryIntegrationTest extends BuildViewTestCase {
 
       RepositoryDelegatorFunction function =
           new RepositoryDelegatorFunction(
-              repositoryHandlers,
-              skylarkRepositoryFunction,
-              new AtomicBoolean(true),
-              ImmutableMap::of,
-              directories);
+              repositoryHandlers, skylarkRepositoryFunction, new AtomicBoolean(true));
+      function.setClientEnvironment(ImmutableMap.<String, String>of());
       return ImmutableMap.of(
           SkyFunctions.REPOSITORY_DIRECTORY,
           function,

@@ -128,8 +128,7 @@ public abstract class AnalysisMock extends LoadingMock {
 
     return ImmutableMap.of(
         SkyFunctions.REPOSITORY_DIRECTORY,
-        new RepositoryDelegatorFunction(
-            repositoryHandlers, null, new AtomicBoolean(true), ImmutableMap::of, directories),
+        new RepositoryDelegatorFunction(repositoryHandlers, null, new AtomicBoolean(true)),
         SkyFunctions.REPOSITORY,
         new RepositoryLoaderFunction(),
         FdoSupportValue.SKYFUNCTION,
