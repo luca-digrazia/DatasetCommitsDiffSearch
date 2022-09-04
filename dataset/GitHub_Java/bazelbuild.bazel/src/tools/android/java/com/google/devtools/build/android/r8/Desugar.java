@@ -420,7 +420,6 @@ public class Desugar {
         D8Command.builder(new DesugarDiagnosticsHandler(consumer))
             .addClasspathResourceProvider(classpath)
             .addProgramFiles(input)
-            .setIntermediate(true)
             .setMinApiLevel(options.minSdkVersion)
             .setProgramConsumer(consumer);
     bootclasspathProviders.forEach(builder::addLibraryResourceProvider);
