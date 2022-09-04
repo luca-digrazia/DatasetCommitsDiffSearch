@@ -228,7 +228,8 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
       if (prevEntry != null && prevEntry.isDone()) {
         if (keepEdges) {
           try {
-            if (prevEntry.getNumberOfDirectDepGroups() == 0) {
+            Iterable<SkyKey> directDeps = prevEntry.getDirectDeps();
+            if (Iterables.isEmpty(directDeps)) {
               if (newValue.equals(prevEntry.getValue())
                   && !valuesToDirty.contains(key)
                   && !valuesToDelete.contains(key)) {

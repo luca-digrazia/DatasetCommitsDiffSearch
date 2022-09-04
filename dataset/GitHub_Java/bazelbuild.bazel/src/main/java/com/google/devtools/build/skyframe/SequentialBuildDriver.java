@@ -46,9 +46,7 @@ public class SequentialBuildDriver implements BuildDriver {
                   .setExecutorServiceSupplier(
                       () ->
                           AbstractQueueVisitor.createExecutorService(
-                              evaluationContext.getParallelism(),
-                              "skyframe-evaluator",
-                              evaluationContext.getUseForkJoinPool()))
+                              evaluationContext.getParallelism(), "skyframe-evaluator"))
                   .build());
     } finally {
       curVersion = curVersion.next();
