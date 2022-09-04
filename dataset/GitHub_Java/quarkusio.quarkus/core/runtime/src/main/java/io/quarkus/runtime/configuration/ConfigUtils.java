@@ -4,14 +4,12 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -54,23 +52,18 @@ public final class ConfigUtils {
         return size -> new TreeSet<>();
     }
 
-    public static SmallRyeConfigBuilder configBuilder(final boolean runTime) {
-        return configBuilder(runTime, true);
-    }
-
     /**
      * Get the basic configuration builder.
      *
      * @param runTime {@code true} if the configuration is run time, {@code false} if build time
-     * @param addDiscovered {@code true} if the ConfigSource and Converter objects should be auto-discovered
      * @return the configuration builder
      */
-    public static SmallRyeConfigBuilder configBuilder(final boolean runTime, final boolean addDiscovered) {
+    public static SmallRyeConfigBuilder configBuilder(final boolean runTime) {
         final SmallRyeConfigBuilder builder = new SmallRyeConfigBuilder();
         final ApplicationPropertiesConfigSource.InFileSystem inFileSystem = new ApplicationPropertiesConfigSource.InFileSystem();
         final ApplicationPropertiesConfigSource.InJar inJar = new ApplicationPropertiesConfigSource.InJar();
         final ApplicationPropertiesConfigSource.MpConfigInJar mpConfig = new ApplicationPropertiesConfigSource.MpConfigInJar();
-        builder.withSources(inFileSystem, inJar, mpConfig, new DotEnvConfigSource());
+        builder.withSources(inFileSystem, inJar, mpConfig);
         final ExpandingConfigSource.Cache cache = new ExpandingConfigSource.Cache();
         builder.withWrapper(ExpandingConfigSource.wrapper(cache));
         builder.withWrapper(DeploymentProfileConfigSource.wrapper());
@@ -85,14 +78,13 @@ public final class ConfigUtils {
             sources.addAll(
                     new PropertiesConfigSourceProvider("WEB-INF/classes/META-INF/microprofile-config.properties", true,
                             classLoader).getConfigSources(classLoader));
+            sources.add(new DotEnvConfigSource());
             sources.add(new EnvConfigSource());
             sources.add(new SysPropConfigSource());
             builder.withSources(sources);
         }
-        if (addDiscovered) {
-            builder.addDiscoveredSources();
-            builder.addDiscoveredConverters();
-        }
+        builder.addDiscoveredSources();
+        builder.addDiscoveredConverters();
         return builder;
     }
 
@@ -109,21 +101,7 @@ public final class ConfigUtils {
         }
     }
 
-    /**
-     * Add a configuration source providers to the builder.
-     *
-     * @param builder the builder
-     * @param providers the providers to add
-     */
-    public static void addSourceProviders(SmallRyeConfigBuilder builder, Collection<ConfigSourceProvider> providers) {
-        for (ConfigSourceProvider provider : providers) {
-            addSourceProvider(builder, provider);
-        }
-    }
-
-    static class EnvConfigSource implements ConfigSource, Serializable {
-        private static final long serialVersionUID = 8786096039970882529L;
-
+    static class EnvConfigSource implements ConfigSource {
         static final Pattern REP_PATTERN = Pattern.compile("[^a-zA-Z0-9_]");
 
         EnvConfigSource() {
@@ -151,8 +129,6 @@ public final class ConfigUtils {
     }
 
     static class DotEnvConfigSource extends EnvConfigSource {
-        private static final long serialVersionUID = -6718168105190376482L;
-
         private final Map<String, String> values;
 
         DotEnvConfigSource() {
