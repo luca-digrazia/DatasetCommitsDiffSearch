@@ -229,10 +229,6 @@ public class GELFMessage {
      * @param value
      */
     public void addAdditionalData(String key, Object value) {
-        if (!key.startsWith(GELF.USER_DEFINED_FIELD_PREFIX)) {
-           key = GELF.USER_DEFINED_FIELD_PREFIX + key;
-        }
-
         if (key != null && value != null) {
 
             if (value instanceof Long) {
@@ -246,16 +242,6 @@ public class GELFMessage {
             }
 
             LOG.info("Skipping additional data field in not allowed format. Allowed: String or Integral");
-        }
-    }
-
-    /**
-     * Add a whole set of additional fields.
-     * @param fields
-     */
-    public void addAdditionalData(Map<String, String> fields) {
-        for (Map.Entry<String, String> field : fields.entrySet()) {
-            addAdditionalData(field.getKey(), field.getValue());
         }
     }
 
