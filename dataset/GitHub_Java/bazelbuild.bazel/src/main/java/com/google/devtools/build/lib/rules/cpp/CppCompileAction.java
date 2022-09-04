@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
@@ -38,7 +37,6 @@ import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ResourceSet;
-import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.extra.CppCompileInfo;
 import com.google.devtools.build.lib.actions.extra.EnvironmentVariable;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
@@ -1152,9 +1150,11 @@ public class CppCompileAction extends AbstractAction
 
   @Override
   @ThreadCompatible
-  public ActionResult execute(ActionExecutionContext actionExecutionContext)
-      throws ActionExecutionException, InterruptedException {
+  public void execute(
+      ActionExecutionContext actionExecutionContext)
+          throws ActionExecutionException, InterruptedException {
     setModuleFileFlags();
+
     CppCompileActionContext.Reply reply;
     ShowIncludesFilter showIncludesFilterForStdout = null;
     ShowIncludesFilter showIncludesFilterForStderr = null;
@@ -1166,15 +1166,13 @@ public class CppCompileAction extends AbstractAction
       actionExecutionContext.getFileOutErr().setOutputFilter(showIncludesFilterForStdout);
       actionExecutionContext.getFileOutErr().setErrorFilter(showIncludesFilterForStderr);
     }
-
-    Set<SpawnResult> spawnResults;
     try {
       CppCompileActionResult cppCompileActionResult =
           actionExecutionContext
               .getContext(actionContext)
               .execWithReply(this, actionExecutionContext);
+      // TODO(b/62588075) Save spawnResults from cppCompileActionResult and return them upwards.
       reply = cppCompileActionResult.contextReply();
-      spawnResults = cppCompileActionResult.spawnResults();
     } catch (ExecException e) {
       throw e.toActionExecutionException(
           "C++ compilation of rule '" + getOwner().getLabel() + "'",
@@ -1215,7 +1213,6 @@ public class CppCompileAction extends AbstractAction
           actionExecutionContext.getArtifactExpander(),
           actionExecutionContext.getEventHandler());
     }
-    return ActionResult.create(spawnResults);
   }
 
   @VisibleForTesting

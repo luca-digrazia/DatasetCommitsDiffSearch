@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
@@ -303,11 +302,10 @@ public final class CppLinkAction extends AbstractAction
 
   @Override
   @ThreadCompatible
-  public ActionResult execute(ActionExecutionContext actionExecutionContext)
+  public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     if (fake) {
       executeFake();
-      return ActionResult.EMPTY;
     } else {
       try {
         Spawn spawn = new SimpleSpawn(
@@ -318,10 +316,8 @@ public final class CppLinkAction extends AbstractAction
             ImmutableList.copyOf(getMandatoryInputs()),
             getOutputs().asList(),
             estimateResourceConsumptionLocal());
-        return ActionResult.create(
-            actionExecutionContext
-                .getSpawnActionContext(getMnemonic())
-                .exec(spawn, actionExecutionContext));
+        actionExecutionContext.getSpawnActionContext(getMnemonic())
+            .exec(spawn, actionExecutionContext);
       } catch (ExecException e) {
         throw e.toActionExecutionException(
             "Linking of rule '" + getOwner().getLabel() + "'",

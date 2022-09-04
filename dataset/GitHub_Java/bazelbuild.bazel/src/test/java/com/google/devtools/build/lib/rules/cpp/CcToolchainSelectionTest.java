@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.analysis.util.ScratchAttributeWriter;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import com.google.devtools.build.lib.packages.util.MockPlatformSupport;
+import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.ToolPath;
 import java.util.List;
@@ -54,7 +55,7 @@ public class CcToolchainSelectionTest extends BuildViewTestCase {
   }
 
   private static final String CPP_TOOLCHAIN_TYPE =
-      TestConstants.TOOLS_REPOSITORY + "//tools/cpp:toolchain_type";
+      TestConstants.TOOLS_REPOSITORY + "//tools/cpp:toolchain_category";
 
   @Test
   public void testResolvedCcToolchain() throws Exception {
@@ -127,7 +128,7 @@ public class CcToolchainSelectionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testIncompleteCcToolchain() throws Exception {
+  public void testErrorForIncompleteCcToolchain() throws Exception {
     mockToolsConfig.create(
         "incomplete_toolchain/BUILD",
         "toolchain(",
@@ -155,7 +156,17 @@ public class CcToolchainSelectionTest extends BuildViewTestCase {
         "--experimental_platforms=//mock_platform:mock-piii-platform",
         "--extra_toolchains=//incomplete_toolchain:incomplete_toolchain_cc-compiler-piii");
 
-    // should not throw.
+    AssertionError thrown =
+        MoreAsserts.expectThrows(
+            AssertionError.class,
+            () ->
+                ScratchAttributeWriter.fromLabelString(this, "cc_library", "//lib")
+                    .setList("srcs", "a.cc")
+                    .write());
+
+    assertThat(thrown)
+        .hasMessageThat()
+        .contains("Using cc_toolchain target requires the attribute 'compiler' to be present");
   }
 
   @Test
