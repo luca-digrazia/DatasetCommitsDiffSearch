@@ -25,45 +25,26 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
-import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequestBuilder;
-import org.elasticsearch.client.Client;
-
 /**
+ * Mapping.java: Sep 05, 2011 3:34:57 PM
+ *
  * Representing the message type mapping in ElasticSearch. This is giving ES more
  * information about what the fields look like and how it should analyze them.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-@SuppressWarnings({"rawtypes", "unchecked"})
 public class Mapping {
 
-    public static PutMappingRequest getPutMappingRequest(final Client client, final String index) {
-        final PutMappingRequestBuilder builder = client.admin().indices().preparePutMapping(new String[] {index});
-        builder.setType(EmbeddedElasticSearchClient.TYPE);
-
-        final Map<String, Object> mapping = new HashMap<String, Object>();
-        mapping.put("properties", partFieldProperties());
-        mapping.put("dynamic_templates", partDefaultAllInDynamicTemplate());
-        mapping.put("_source", enabledAndCompressed()); // Compress source field..
-
-        final Map completeMapping = new HashMap();
-        completeMapping.put(EmbeddedElasticSearchClient.TYPE, mapping);
-
-        builder.setSource(completeMapping);
-        return builder.request();
-    }
-
     public static Map get() {
-        final Map mapping = new HashMap();
+        Map mapping = new HashMap();
         mapping.put("properties", partFieldProperties());
         mapping.put("dynamic_templates", partDefaultAllInDynamicTemplate());
         mapping.put("_source", enabledAndCompressed()); // Compress source field..
 
-        final Map completeMapping = new HashMap();
-        completeMapping.put(EmbeddedElasticSearchClient.TYPE, mapping);
+        Map completeMapping = new HashMap();
+        completeMapping.put(Indexer.TYPE, mapping);
 
-        final Map spec = new HashMap();
+        Map spec = new HashMap();
         spec.put("mappings", completeMapping);
 
         return spec;
@@ -73,10 +54,10 @@ public class Mapping {
      * Disable analyzing for every field by default.
      */
     private static List partDefaultAllInDynamicTemplate() {
-        final List dynamicTemplates = new LinkedList();
-        final Map template = new HashMap();
-        final Map defaultAll = new HashMap();
-        final Map notAnalyzed = new HashMap();
+        List dynamicTemplates = new LinkedList();
+        Map template = new HashMap();
+        Map defaultAll = new HashMap();
+        Map notAnalyzed = new HashMap();
         notAnalyzed.put("index", "not_analyzed");
 
         // Match all.
@@ -94,7 +75,7 @@ public class Mapping {
      * Enable analyzing for some fields again. Like for message and full_message.
      */
     private static Map partFieldProperties() {
-        final Map properties = new HashMap();
+        Map properties = new HashMap();
 
         properties.put("message", analyzedString());
         properties.put("full_message", analyzedString());
@@ -109,23 +90,23 @@ public class Mapping {
     }
 
     private static Map analyzedString() {
-        final Map type = new HashMap();
+        Map type = new HashMap();
         type.put("index", "analyzed");
         type.put("type", "string");
         type.put("analyzer", "whitespace");
-
+        
         return type;
     }
 
     private static Map typeNumberDouble() {
-        final Map type = new HashMap();
+        Map type = new HashMap();
         type.put("type", "double");
 
         return type;
     }
 
     private static Map typeTimeNoMillis() {
-        final Map type = new HashMap();
+        Map type = new HashMap();
         type.put("type", "date");
         type.put("format", "yyyy-MM-dd HH-mm-ss");
 
@@ -133,9 +114,9 @@ public class Mapping {
     }
 
     private static Map enabledAndCompressed() {
-        final Map e = new HashMap();
+        Map e = new HashMap();
         e.put("enabled", true);
-        e.put("compress", true);
+        e.put("compressed", true);
 
         return e;
     }
