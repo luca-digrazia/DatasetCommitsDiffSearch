@@ -31,9 +31,7 @@ import javax.inject.Inject;
  */
 public class TvShowCatalogFragment extends BaseFragment implements TvShowCatalogPresenter.View {
 
-  private static final String EXTRA_TV_SHOW_CATALOG = "extra_tv_show_catalog";
-
-  @Inject TvShowCatalogPresenter tvShowCatalogPresenter;
+  @Inject TvShowCatalogPresenter presenter;
   @Inject TvShowRendererAdapterFactory tvShowRendererAdapterFactory;
 
   private RendererAdapter<TvShow> adapter;
@@ -48,8 +46,8 @@ public class TvShowCatalogFragment extends BaseFragment implements TvShowCatalog
   @Override public void onViewCreated(View view, Bundle savedInstanceState) {
     super.onViewCreated(view, savedInstanceState);
     initializeGridView();
-    tvShowCatalogPresenter.setView(this);
-    tvShowCatalogPresenter.initialize();
+    presenter.setView(this);
+    presenter.initialize();
   }
 
   @Override public void onAttach(Activity activity) {
@@ -61,32 +59,12 @@ public class TvShowCatalogFragment extends BaseFragment implements TvShowCatalog
 
   @Override public void onResume() {
     super.onResume();
-    tvShowCatalogPresenter.resume();
+    presenter.resume();
   }
 
   @Override public void onPause() {
     super.onPause();
-    tvShowCatalogPresenter.pause();
-  }
-
-  @Override public void onSaveInstanceState(Bundle outState) {
-    super.onSaveInstanceState(outState);
-    outState.putSerializable(EXTRA_TV_SHOW_CATALOG, tvShowCatalogPresenter.getCurrentTvShows());
-  }
-
-  @Override public void onViewStateRestored(Bundle savedInstanceState) {
-    super.onViewStateRestored(savedInstanceState);
-    if (savedInstanceState != null) {
-      final TvShowCollection tvShowCollection =
-          (TvShowCollection) savedInstanceState.getSerializable(EXTRA_TV_SHOW_CATALOG);
-      updatePresenterWithSavedTvShow(tvShowCollection);
-    }
-  }
-
-  private void updatePresenterWithSavedTvShow(TvShowCollection tvShowCollection) {
-    if (tvShowCollection != null) {
-      tvShowCatalogPresenter.loadCatalog(tvShowCollection);
-    }
+    presenter.pause();
   }
 
   @Override public void hideLoading() {
@@ -129,10 +107,6 @@ public class TvShowCatalogFragment extends BaseFragment implements TvShowCatalog
 
   @Override public boolean isReady() {
     return isAdded();
-  }
-
-  @Override public boolean isAlreadyLoaded() {
-    return adapter.getCount() > 0;
   }
 
   @Override protected int getFragmentLayout() {

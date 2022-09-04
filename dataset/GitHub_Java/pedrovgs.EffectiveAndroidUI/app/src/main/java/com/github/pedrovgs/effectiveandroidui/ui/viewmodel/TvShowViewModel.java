@@ -34,13 +34,8 @@ public class TvShowViewModel {
     this.showTvShowOnBrowserActionCommand = showTvShowOnBrowserActionCommand;
   }
 
-  public void initialize() {
-    listener.onEmptyCaseVisibilityChanged(true);
-  }
-
   public void loadTvShow(final String tvShowId) {
     listener.onLoadVisibilityChanged(true);
-    listener.onEmptyCaseVisibilityChanged(false);
     getTvShowById.execute(tvShowId, new GetTvShowById.Callback() {
       @Override public void onTvShowLoaded(TvShow tvShow) {
         showTvShowOnBrowserActionCommand.setTvShowUrl(tvShow.getPoster());
@@ -57,7 +52,6 @@ public class TvShowViewModel {
       @Override public void onTvShowNotFound() {
         if (isReady) {
           listener.onLoadVisibilityChanged(false);
-          listener.onVisibilityChanged(false);
           listener.onEmptyCaseVisibilityChanged(true);
           listener.onTvShowMessageNotFound();
         }
@@ -66,7 +60,6 @@ public class TvShowViewModel {
       @Override public void onConnectionError() {
         if (isReady) {
           listener.onLoadVisibilityChanged(false);
-          listener.onVisibilityChanged(false);
           listener.onEmptyCaseVisibilityChanged(true);
           listener.onConnectionErrorMessageNotFound();
         }
