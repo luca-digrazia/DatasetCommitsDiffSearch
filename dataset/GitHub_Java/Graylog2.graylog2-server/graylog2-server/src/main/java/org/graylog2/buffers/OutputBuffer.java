@@ -1,130 +1,107 @@
 /**
- * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.buffers;
 
+import com.codahale.metrics.Gauge;
+import com.codahale.metrics.InstrumentedThreadFactory;
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.lmax.disruptor.MultiThreadedClaimStrategy;
-import com.lmax.disruptor.RingBuffer;
+import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
-import com.yammer.metrics.Metrics;
-import com.yammer.metrics.core.Meter;
-import org.graylog2.Core;
+import com.lmax.disruptor.dsl.ProducerType;
 import org.graylog2.buffers.processors.OutputBufferProcessor;
-import org.graylog2.plugin.buffers.Buffer;
+import org.graylog2.plugin.GlobalMetricNames;
 import org.graylog2.plugin.Message;
+import org.graylog2.plugin.buffers.Buffer;
+import org.graylog2.plugin.buffers.MessageEvent;
+import org.graylog2.shared.buffers.LoggingExceptionHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.inject.Provider;
+import javax.inject.Singleton;
+import java.util.concurrent.ThreadFactory;
 
-/**
- * @author Lennart Koopmann <lennart@socketfeed.com>
- */
-public class OutputBuffer implements Buffer {
+import static com.codahale.metrics.MetricRegistry.name;
+import static org.graylog2.shared.metrics.MetricUtils.constantGauge;
+import static org.graylog2.shared.metrics.MetricUtils.safelyRegister;
 
+@Singleton
+public class OutputBuffer extends Buffer {
     private static final Logger LOG = LoggerFactory.getLogger(OutputBuffer.class);
-    
-    protected static RingBuffer<MessageEvent> ringBuffer;
 
-    protected ExecutorService executor = Executors.newCachedThreadPool(
-            new ThreadFactoryBuilder()
-                .setNameFormat("outputbufferprocessor-%d")
-                .build()
-    );
-    
-    private Core server;
-    
-    private final Cache overflowCache;
+    private final Meter incomingMessages;
 
-    private final Meter incomingMessages = Metrics.newMeter(OutputBuffer.class, "InsertedMessages", "messages", TimeUnit.SECONDS);
-    private final Meter rejectedMessages = Metrics.newMeter(OutputBuffer.class, "RejectedMessages", "messages", TimeUnit.SECONDS);
-    private final Meter cachedMessages = Metrics.newMeter(OutputBuffer.class, "CachedMessages", "messages", TimeUnit.SECONDS);
+    @Inject
+    public OutputBuffer(MetricRegistry metricRegistry,
+                        Provider<OutputBufferProcessor> processorProvider,
+                        @Named("outputbuffer_processors") int processorCount,
+                        @Named("ring_size") int ringSize,
+                        @Named("processor_wait_strategy") String waitStrategyName) {
+        this.ringBufferSize = ringSize;
+        this.incomingMessages = metricRegistry.meter(name(OutputBuffer.class, "incomingMessages"));
 
-    public OutputBuffer(Core server, Cache overflowCache) {
-        this.server = server;
-        this.overflowCache = overflowCache;
-    }
+        safelyRegister(metricRegistry, GlobalMetricNames.OUTPUT_BUFFER_USAGE, new Gauge<Long>() {
+            @Override
+            public Long getValue() {
+                return OutputBuffer.this.getUsage();
+            }
+        });
+        safelyRegister(metricRegistry, GlobalMetricNames.OUTPUT_BUFFER_SIZE, constantGauge(ringBufferSize));
 
-    public void initialize() {
-        Disruptor<MessageEvent> disruptor = new Disruptor<MessageEvent>(
+        final ThreadFactory threadFactory = threadFactory(metricRegistry);
+        final WaitStrategy waitStrategy = getWaitStrategy(waitStrategyName, "processor_wait_strategy");
+        final Disruptor<MessageEvent> disruptor = new Disruptor<>(
                 MessageEvent.EVENT_FACTORY,
-                executor,
-                new MultiThreadedClaimStrategy(server.getConfiguration().getRingSize()),
-                server.getConfiguration().getProcessorWaitStrategy()
+                this.ringBufferSize,
+                threadFactory,
+                ProducerType.MULTI,
+                waitStrategy
         );
-        
-        LOG.info("Initialized OutputBuffer with ring size <{}> "
-                + "and wait strategy <{}>.", server.getConfiguration().getRingSize(),
-                server.getConfiguration().getProcessorWaitStrategy().getClass().getSimpleName());
+        disruptor.setDefaultExceptionHandler(new LoggingExceptionHandler(LOG));
 
-        OutputBufferProcessor[] processors = new OutputBufferProcessor[server.getConfiguration().getOutputBufferProcessors()];
-        
-        for (int i = 0; i < server.getConfiguration().getOutputBufferProcessors(); i++) {
-            processors[i] = new OutputBufferProcessor(this.server, i, server.getConfiguration().getOutputBufferProcessors());
+        LOG.info("Initialized OutputBuffer with ring size <{}> and wait strategy <{}>.",
+                ringBufferSize, waitStrategy.getClass().getSimpleName());
+
+        final OutputBufferProcessor[] processors = new OutputBufferProcessor[processorCount];
+
+        for (int i = 0; i < processorCount; i++) {
+            processors[i] = processorProvider.get();
         }
-        
-        disruptor.handleEventsWith(processors);
-        
+
+        disruptor.handleEventsWithWorkerPool(processors);
+
         ringBuffer = disruptor.start();
     }
 
-    @Override
-    public void insertCached(Message message) {
-        if (!hasCapacity()) {
-            LOG.debug("Out of capacity. Writing to cache.");
-            cachedMessages.mark();
-            overflowCache.add(message);
-            return;
-        }
-        
+    private ThreadFactory threadFactory(final MetricRegistry metricRegistry) {
+        final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("outputbufferprocessor-%d").build();
+        return new InstrumentedThreadFactory(threadFactory, metricRegistry, name(this.getClass(), "thread-factory"));
+    }
+
+    public void insertBlocking(Message message) {
         insert(message);
     }
-    
-    @Override
-    public void insertFailFast(Message message) throws BufferOutOfCapacityException {
-        if (!hasCapacity()) {
-            LOG.debug("Rejecting message, because I am full and caching was disabled by input. Raise my size or add more processors.");
-            rejectedMessages.mark();
-            throw new BufferOutOfCapacityException();
-        }
-        
-        insert(message);
-    }
-    
-    private void insert(Message message) {
-        long sequence = ringBuffer.next();
-        MessageEvent event = ringBuffer.get(sequence);
-        event.setMessage(message);
-        ringBuffer.publish(sequence);
-
-        server.outputBufferWatermark().incrementAndGet();
-        incomingMessages.mark();
-    }
 
     @Override
-    public boolean hasCapacity() {
-        return ringBuffer.remainingCapacity() > 0;
+    protected void afterInsert(int n) {
+        incomingMessages.mark(n);
     }
-
 }
