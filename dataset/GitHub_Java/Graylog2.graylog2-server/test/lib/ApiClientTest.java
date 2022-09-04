@@ -1,10 +1,28 @@
+/*
+ * Copyright 2013 TORCH UG
+ *
+ * This file is part of Graylog2.
+ *
+ * Graylog2 is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog2 is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package lib;
 
 import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.AsyncHttpClientConfig;
-import models.Node;
-import models.api.responses.EmptyResponse;
-import models.api.responses.NodeSummaryResponse;
+import org.graylog2.restclient.lib.ApiRequestBuilder;
+import org.graylog2.restclient.models.Node;
+import org.graylog2.restclient.models.api.responses.EmptyResponse;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -14,8 +32,11 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URL;
 import java.util.Collection;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
-public class ApiClientTest {
+public class ApiClientTest extends BaseApiTest {
     private static final Logger log = LoggerFactory.getLogger(ApiClientTest.class);
 
     private StubHttpProvider stubHttpProvider;
@@ -23,31 +44,42 @@ public class ApiClientTest {
 
     @Test
     public void testBuildTarget() throws Exception {
-        final NodeSummaryResponse r = new NodeSummaryResponse();
-        r.transportAddress = "http://horst:12900";
-        Node node = new Node(null, r); // TODO DI
-        final URL url = ApiClient.get(EmptyResponse.class).path("/some/resource").credentials("user", "password").node(node).prepareUrl(node);
-        final URL passwordWithAmpInUrl = ApiClient.get(EmptyResponse.class).path("/some/resource").credentials("user", "pass@word").node(node).prepareUrl(node);
-        final URL usernameWithAmpInUrl = ApiClient.get(EmptyResponse.class).path("/some/resource").credentials("us@er", "password").node(node).prepareUrl(node);
-        final URL queryParamWithPlus = ApiClient.get(EmptyResponse.class).path("/some/resource").queryParam("query", " (.+)").node(node).prepareUrl(node);
+        setupNodes(AddressNodeId.create("http://horst:12900"));
 
-        Assert.assertEquals(url.getUserInfo(), "user:password");
-        Assert.assertEquals("password should be escaped", "user:pass%40word", passwordWithAmpInUrl.getUserInfo());
-        Assert.assertEquals("username should be escaped", "us%40er:password",  usernameWithAmpInUrl.getUserInfo());
-        Assert.assertEquals("query param with + should be escaped", "query=%20(.%2b)",  queryParamWithPlus.getQuery());
+        // we only have one node configured here
+        final Node node = serverNodes.any();
+        api.setHttpClient(client);
 
-        final URL urlWithNonAsciiChars = ApiClient.get(EmptyResponse.class).node(node).path("/some/resourçe").credentials("Sigurðsson", "password").prepareUrl(node);
+        final URL url = api.get(EmptyResponse.class).path("/some/resource").session("foo").node(node).prepareUrl(node);
+        final URL queryParamWithPlus = api.get(EmptyResponse.class).path("/some/resource").queryParam("query", " (.+)").node(node).unauthenticated().prepareUrl(node);
+
+        Assert.assertEquals(url.getUserInfo(), "foo:session");
+        Assert.assertEquals("query param with + should be escaped", "query=+(.%2B)", queryParamWithPlus.getQuery());
+
+        final URL queryParamWithDoubleQuotes = api.get(EmptyResponse.class).path("/some/resource").queryParam("query", " \".+\"").node(node).unauthenticated().prepareUrl(node);
+        Assert.assertEquals("query param with \" should be escaped", "query=+%22.%2B%22", queryParamWithDoubleQuotes.getQuery());
+        
+        final URL urlWithNonAsciiChars = api.get(EmptyResponse.class).node(node).path("/some/resourçe").unauthenticated().prepareUrl(node);
         Assert.assertEquals("non-ascii chars are escaped in path", "/some/resour%C3%A7e", urlWithNonAsciiChars.getPath());
-        Assert.assertEquals("non-ascii chars are escape in userinfo", "Sigur%C3%B0sson:password", urlWithNonAsciiChars.getUserInfo());
+
+        final URL queryWithAmp = api.get(EmptyResponse.class).node(node).path("/").queryParam("foo", "this&that").prepareUrl(node);
+        Assert.assertEquals("Query params are escaped", "foo=this%26that", queryWithAmp.getQuery());
     }
 
     @Test
     public void testSingleExecute() throws Exception {
-        final NodeSummaryResponse r = new NodeSummaryResponse();
-        r.transportAddress = "http://horst:12900";
-        Node node = new Node(null, r); // TODO DI
+        setupNodes(AddressNodeId.create("http://horst:12900"));
 
-        final ApiClient.ApiRequestBuilder<EmptyResponse> requestBuilder = ApiClient.get(EmptyResponse.class).path("/some/resource").credentials("user", "password").node(node);
+        // we only have one node configured here
+        final Node node = serverNodes.any();
+        api.setHttpClient(client);
+
+        final ApiRequestBuilder<EmptyResponse> requestBuilder =
+                api.get(EmptyResponse.class)
+                        .path("/some/resource")
+                        .unauthenticated()
+                        .node(node)
+                        .timeout(1, TimeUnit.SECONDS);
         stubHttpProvider.expectResponse(requestBuilder.prepareUrl(node), 200, "{}");
         final EmptyResponse response = requestBuilder.execute();
 
@@ -57,19 +89,21 @@ public class ApiClientTest {
 
     @Test
     public void testParallelExecution() throws Exception {
-        final NodeSummaryResponse r = new NodeSummaryResponse();
-        r.transportAddress = "http://horst1:12900";
-        Node node1 = new Node(null, r); // TODO DI
-        r.transportAddress = "http://horst2:12900";
-        Node node2 = new Node(null, r); // TODO DI
+        setupNodes(AddressNodeId.create("http://horst1:12900"), AddressNodeId.create("http://horst2:12900"));
 
-        final ApiClient.ApiRequestBuilder<EmptyResponse> requestBuilder = ApiClient.get(EmptyResponse.class).path("/some/resource");
+        final Collection<Node> nodes = serverNodes.all();
+        final Iterator<Node> it = nodes.iterator();
+        Node node1 = it.next();
+        Node node2 = it.next();
+        api.setHttpClient(client);
+
+        final ApiRequestBuilder<EmptyResponse> requestBuilder = api.get(EmptyResponse.class).path("/some/resource");
         final URL url1 = requestBuilder.prepareUrl(node1);
         final URL url2 = requestBuilder.prepareUrl(node2);
         stubHttpProvider.expectResponse(url1, 200, "{}");
         stubHttpProvider.expectResponse(url2, 200, "{}");
 
-        final Collection<EmptyResponse> responses = requestBuilder.nodes(node1, node2).executeOnAll();
+        final Map<Node, EmptyResponse> responses = requestBuilder.nodes(node1, node2).executeOnAll();
         Assert.assertFalse(responses.isEmpty());
         Assert.assertTrue(stubHttpProvider.isExpectationsFulfilled());
     }
@@ -80,11 +114,12 @@ public class ApiClientTest {
         builder.setAllowPoolingConnection(false);
         stubHttpProvider = new StubHttpProvider();
         client = new AsyncHttpClient(stubHttpProvider, builder.build());
-        ApiClient.setHttpClient(client);
     }
 
     @After
     public void tearDown() throws Exception {
         client.close();
+        client = null;
     }
+
 }
