@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.runtime.commands;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -500,7 +499,7 @@ public class RunCommand implements BlazeCommand  {
         runfilesSupport.getRunfilesDirectory(),
         false);
     helper.createSymlinksUsingCommand(
-        env.getExecRoot(), env.getBlazeWorkspace().getBinTools(), ImmutableMap.of());
+        env.getExecRoot(), configuration, env.getBlazeWorkspace().getBinTools());
     return workingDir;
   }
 
