@@ -24,18 +24,14 @@ import net.starlark.java.eval.Sequence;
  * Fake implementation of {@link ObjcProviderApi}.
  */
 public class FakeObjcProvider implements ObjcProviderApi<FileApi> {
-  @Override
-  public Depset /*<LibraryToLink>*/ ccLibrariesForStarlark() {
-    return null;
-  }
-
-  @Override
-  public Depset /*<Linkstamp>*/ linkstampForstarlark() {
-    return null;
-  }
 
   @Override
   public Depset /*<FileApi>*/ dynamicFrameworkFileForStarlark() {
+    return null;
+  }
+
+  @Override
+  public Depset /*<FileApi>*/ exportedDebugArtifacts() {
     return null;
   }
 
@@ -80,6 +76,16 @@ public class FakeObjcProvider implements ObjcProviderApi<FileApi> {
   }
 
   @Override
+  public Depset /*<FileApi>*/ linkedBinary() {
+    return null;
+  }
+
+  @Override
+  public Depset /*<FileApi>*/ linkmapFile() {
+    return null;
+  }
+
+  @Override
   public Depset /*<String>*/ linkopt() {
     return null;
   }
@@ -91,6 +97,21 @@ public class FakeObjcProvider implements ObjcProviderApi<FileApi> {
 
   @Override
   public Sequence<FileApi> directModuleMaps() {
+    return null;
+  }
+
+  @Override
+  public Depset /*<FileApi>*/ multiArchDynamicLibraries() {
+    return null;
+  }
+
+  @Override
+  public Depset /*<FileApi>*/ multiArchLinkedArchives() {
+    return null;
+  }
+
+  @Override
+  public Depset /*<FileApi>*/ multiArchLinkedBinaries() {
     return null;
   }
 

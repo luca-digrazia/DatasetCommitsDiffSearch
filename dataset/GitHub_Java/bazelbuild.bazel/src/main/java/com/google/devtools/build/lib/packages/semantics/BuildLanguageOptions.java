@@ -18,7 +18,6 @@ package com.google.devtools.build.lib.packages.semantics;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
-import com.google.devtools.common.options.Converters.CommaSeparatedNonEmptyOptionListConverter;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
@@ -85,8 +84,8 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
           "This flag tells Bazel how to find the \"@_builtins\" .bzl files that govern how "
               + "predeclared symbols for BUILD and .bzl files are defined. This flag is only "
               + "intended for Bazel developers, to help when writing @_builtins .bzl code. "
-              + "Ordinarily this value is set to \"%bundled%\", which means to use the "
-              + "builtins_bzl/ directory packaged in the Bazel binary. However, it can be set to "
+              + "Ordinarily this value is set to \"%install_base%\", which means to use the "
+              + "builtins_bzl/ directory located in the install base. However, it can be set to "
               + "the path (relative to the root of the current workspace) of an alternate "
               + "builtins_bzl/ directory, such as one in a Bazel source tree workspace. A literal "
               + "value of \"%workspace%\" is equivalent to the relative package path of "
@@ -103,28 +102,6 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
       metadataTags = {OptionMetadataTag.EXPERIMENTAL},
       help = "Enables an internal dummy symbol used to test builtins injection.")
   public boolean experimentalBuiltinsDummy;
-
-  @Option(
-      name = "experimental_builtins_injection_override",
-      converter = CommaSeparatedNonEmptyOptionListConverter.class,
-      defaultValue = "null",
-      allowMultiple = true,
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      help =
-          "A comma-separated list of symbol names prefixed by a + or - character, indicating which"
-              + " symbols from `@_builtins//:exports.bzl` to inject, overriding their default"
-              + " injection status. Precisely, this works as follows. Each dict key of"
-              + " `exported_toplevels` or `exported_rules` has the form `foo`, `+foo`, or `-foo`."
-              + " The first two forms mean it gets injected by default, while the last form means"
-              + " it does not get injected by default. In the first case (unprefixed), the default"
-              + " is absolute and cannot be overridden. Otherwise, we then consult this options"
-              + " list, and if we see foo occur here, we take the prefix of its last occurrence and"
-              + " use that to decide whether or not to inject. It is a no-op to specify an unknown"
-              + " symbol, or to attempt to not inject a symbol that occurs unprefixed in a dict"
-              + " key.")
-  public List<String> experimentalBuiltinsInjectionOverride;
 
   @Option(
       name = "experimental_cc_skylark_api_enabled_packages",
@@ -604,18 +581,6 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
               + " (zero means no limit).")
   public long maxComputationSteps;
 
-  @Option(
-      name = "experimental_shadowed_action",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.EXECUTION},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      help =
-          "If set to true, allows passing an action for Starlark created actions to shadow and use"
-              + " its environment, inputs and discovered inputs combined with the starlark action's"
-              + " environment and inputs during execution.")
-  public boolean experimentalShadowedAction;
-
   /**
    * An interner to reduce the number of StarlarkSemantics instances. A single Blaze instance should
    * never accumulate a large number of these and being able to shortcut on object identity makes a
@@ -633,7 +598,6 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
             .setBool(EXPERIMENTAL_ALLOW_TAGS_PROPAGATION, experimentalAllowTagsPropagation)
             .set(EXPERIMENTAL_BUILTINS_BZL_PATH, experimentalBuiltinsBzlPath)
             .setBool(EXPERIMENTAL_BUILTINS_DUMMY, experimentalBuiltinsDummy)
-            .set(EXPERIMENTAL_BUILTINS_INJECTION_OVERRIDE, experimentalBuiltinsInjectionOverride)
             .set(
                 EXPERIMENTAL_CC_STARLARK_API_ENABLED_PACKAGES,
                 ImmutableList.copyOf(experimentalCcStarlarkApiEnabledPackages))
@@ -685,7 +649,6 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
             .setBool(INCOMPATIBLE_RESTRICT_STRING_ESCAPES, incompatibleRestrictStringEscapes)
             .setBool(INCOMPATIBLE_LINKOPTS_TO_LINKLIBS, incompatibleLinkoptsToLinklibs)
             .set(MAX_COMPUTATION_STEPS, maxComputationSteps)
-            .setBool(EXPERIMENTAL_SHADOWED_ACTION, experimentalShadowedAction)
             .build();
     return INTERNER.intern(semantics);
   }
@@ -758,13 +721,10 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
       "-incompatible_visibility_private_attributes_at_definition";
   public static final String RECORD_RULE_INSTANTIATION_CALLSTACK =
       "+record_rule_instantiation_callstack";
-  public static final String EXPERIMENTAL_SHADOWED_ACTION = "-experimental_shadowed_action";
 
   // non-booleans
   public static final StarlarkSemantics.Key<String> EXPERIMENTAL_BUILTINS_BZL_PATH =
       new StarlarkSemantics.Key<>("experimental_builtins_bzl_path", "");
-  public static final StarlarkSemantics.Key<List<String>> EXPERIMENTAL_BUILTINS_INJECTION_OVERRIDE =
-      new StarlarkSemantics.Key<>("experimental_builtins_injection_override", ImmutableList.of());
   public static final StarlarkSemantics.Key<ImmutableList<String>>
       EXPERIMENTAL_CC_STARLARK_API_ENABLED_PACKAGES =
           new StarlarkSemantics.Key<>(

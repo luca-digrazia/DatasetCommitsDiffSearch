@@ -106,8 +106,7 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
         "    )",
         "my_rule = rule(implementation = my_rule_impl,",
         "   attrs = {",
-        "   'deps': attr.label_list(allow_files = False, mandatory = False,",
-        "                           providers = ['objc', CcInfo]),",
+        "   'deps': attr.label_list(allow_files = False, mandatory = False, providers = ['objc']),",
         "})");
     scratch.file("examples/apple_starlark/a.m");
     scratch.file(
