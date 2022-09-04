@@ -66,7 +66,7 @@ class ArtifactFunction implements SkyFunction {
       }
     }
 
-    ActionLookupKey actionLookupKey = getActionLookupKey(artifact);
+    SkyKey actionLookupKey = getActionLookupKey(artifact);
     ActionLookupValue actionLookupValue = getActionLookupValue(actionLookupKey, env, artifact);
     if (actionLookupValue == null) {
       return null;
@@ -137,8 +137,7 @@ class ArtifactFunction implements SkyFunction {
       final ActionTemplate<?> actionTemplate, final Artifact treeArtifact, Environment env)
           throws InterruptedException {
     // Request the list of expanded actions from the ActionTemplate.
-    ActionTemplateExpansionValue.ActionTemplateExpansionKey templateKey =
-        ActionTemplateExpansionValue.key(actionTemplate);
+    SkyKey templateKey = ActionTemplateExpansionValue.key(actionTemplate);
     ActionTemplateExpansionValue expansionValue =
         (ActionTemplateExpansionValue) env.getValue(templateKey);
 
@@ -310,7 +309,7 @@ class ArtifactFunction implements SkyFunction {
   }
 
   @VisibleForTesting
-  static ActionLookupKey getActionLookupKey(Artifact artifact) {
+  static SkyKey getActionLookupKey(Artifact artifact) {
     ArtifactOwner artifactOwner = artifact.getArtifactOwner();
 
     Preconditions.checkState(artifactOwner instanceof ActionLookupKey, "", artifact, artifactOwner);
