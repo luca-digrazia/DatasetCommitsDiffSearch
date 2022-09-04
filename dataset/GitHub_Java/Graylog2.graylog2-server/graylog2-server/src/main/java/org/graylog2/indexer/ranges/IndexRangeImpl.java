@@ -27,10 +27,12 @@ import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 @CollectionName("index_ranges")
 public class IndexRangeImpl extends PersistedImpl implements IndexRange {
 
@@ -53,7 +55,7 @@ public class IndexRangeImpl extends PersistedImpl implements IndexRange {
     public DateTime getCalculatedAt() {
         if (fields.containsKey("calculated_at")) {
             int ts = (Integer) fields.get("calculated_at");
-            long unixMs = ts * 1000L;
+            long unixMs = ts*1000L;
             return new DateTime(unixMs, DateTimeZone.UTC);
         } else {
             return null;
@@ -63,7 +65,7 @@ public class IndexRangeImpl extends PersistedImpl implements IndexRange {
     @Override
     public DateTime getStart() {
         int ts = (Integer) fields.get("start");
-        long unixMs = ts * 1000L;
+        long unixMs = ts*1000L;
         return new DateTime(unixMs, DateTimeZone.UTC);
     }
 
@@ -78,12 +80,12 @@ public class IndexRangeImpl extends PersistedImpl implements IndexRange {
 
     @Override
     public Map<String, Validator> getValidations() {
-        return Collections.emptyMap();
+        return Maps.newHashMap();
     }
 
     @Override
     public Map<String, Validator> getEmbeddedValidations(String key) {
-        return Collections.emptyMap();
+        return com.google.common.collect.Maps.newHashMap();
     }
 
     @JsonValue

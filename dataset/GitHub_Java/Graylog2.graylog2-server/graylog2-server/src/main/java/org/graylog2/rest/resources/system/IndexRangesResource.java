@@ -18,35 +18,38 @@ package org.graylog2.rest.resources.system;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Lists;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiResponse;
-import com.wordnik.swagger.annotations.ApiResponses;
+import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
+import org.graylog2.plugin.Tools;
+import org.graylog2.rest.documentation.annotations.Api;
+import org.graylog2.rest.documentation.annotations.ApiOperation;
+import org.graylog2.rest.documentation.annotations.ApiResponse;
+import org.graylog2.rest.documentation.annotations.ApiResponses;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.responses.IndexRangesResponse;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.system.jobs.SystemJob;
 import org.graylog2.system.jobs.SystemJobConcurrencyException;
 import org.graylog2.system.jobs.SystemJobManager;
+import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.ws.rs.ForbiddenException;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
+import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.List;
+import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 @RequiresAuthentication
 @Api(value = "System/IndexRanges", description = "Index timeranges")
 @Path("/system/indices/ranges")
@@ -70,12 +73,13 @@ public class IndexRangesResource extends RestResource {
         this.systemJobManager = systemJobManager;
     }
 
-    @GET
-    @Timed
+    @GET @Timed
     @ApiOperation(value = "Get a list of all index ranges")
     @Produces(MediaType.APPLICATION_JSON)
     public IndexRangesResponse list() {
-        final List<IndexRange> ranges = Lists.newArrayList();
+        IndexRangesResponse irp = new IndexRangesResponse();
+        List<IndexRange> ranges = Lists.newArrayList();
+
         for (IndexRange range : indexRangeService.getFrom(0)) {
             if (!isPermitted(RestPermissions.INDEXRANGES_READ, range.getIndexName())) {
                 continue;
@@ -83,35 +87,33 @@ public class IndexRangesResource extends RestResource {
             ranges.add(range);
         }
 
-        final IndexRangesResponse irp = new IndexRangesResponse();
         irp.ranges = ranges;
         irp.total = ranges.size();
 
         return irp;
     }
 
-    @POST
-    @Timed
+    @POST @Timed
     @Path("/rebuild")
     @RequiresPermissions(RestPermissions.INDEXRANGES_REBUILD)
     @ApiOperation(value = "Rebuild/sync index range information.",
-            notes = "This triggers a systemjob that scans every index and stores meta information " +
-                    "about what indices contain messages in what timeranges. It atomically overwrites " +
-                    "already existing meta information.")
+                  notes = "This triggers a systemjob that scans every index and stores meta information " +
+                          "about what indices contain messages in what timeranges. It atomically overwrites " +
+                          "already existing meta information.")
     @ApiResponses(value = {
             @ApiResponse(code = 202, message = "Rebuild/sync systemjob triggered.")
     })
     @Produces(MediaType.APPLICATION_JSON)
     public Response rebuild() {
-        final SystemJob rebuildJob = rebuildIndexRangesJobFactory.create(this.deflector);
+        SystemJob rebuildJob = rebuildIndexRangesJobFactory.create(this.deflector);
         try {
             this.systemJobManager.submit(rebuildJob);
         } catch (SystemJobConcurrencyException e) {
             LOG.error("Concurrency level of this job reached: " + e.getMessage());
-            throw new ForbiddenException();
+            throw new WebApplicationException(403);
         }
 
-        return Response.accepted().build();
+        return Response.status(Response.Status.ACCEPTED).build();
     }
 
 }
