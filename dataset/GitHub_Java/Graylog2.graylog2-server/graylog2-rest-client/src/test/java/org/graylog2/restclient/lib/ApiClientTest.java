@@ -18,7 +18,6 @@ package org.graylog2.restclient.lib;
 
 import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.AsyncHttpClientConfig;
-import com.ning.http.client.uri.Uri;
 import org.graylog2.restclient.models.Node;
 import org.graylog2.restclient.models.api.responses.EmptyResponse;
 import org.junit.After;
@@ -56,23 +55,13 @@ public class ApiClientTest extends BaseApiTest {
 
         final URL queryParamWithDoubleQuotes = api.get(EmptyResponse.class).path("/some/resource").queryParam("query", " \".+\"").node(node).unauthenticated().prepareUrl(node);
         Assert.assertEquals("query param with \" should be escaped",
-                "query=+%22.%2B%22",
-                queryParamWithDoubleQuotes.getQuery());
-
-        final URL queryParamWithColon = api.get(EmptyResponse.class).path("/some/resource").queryParam("query", "mac:00\\:12\\:f0\\:53\\:42\\:2b").node(node).unauthenticated().prepareUrl(node);
-        Assert.assertEquals("query param with \\ should be escaped",
-                "query=mac:00%5C:12%5C:f0%5C:53%5C:42%5C:2b",
-                queryParamWithColon.getQuery());
-
-        final URL queryParamWithPercentage = api.get(EmptyResponse.class).path("/some/resource").queryParam("query", "%bcd").node(node).unauthenticated().prepareUrl(node);
-        Assert.assertEquals("query param with % should be escaped",
-                "query=%25bcd",
-                queryParamWithPercentage.getQuery());
-
+                            "query=+%22.%2B%22",
+                            queryParamWithDoubleQuotes.getQuery());
+        
         final URL urlWithNonAsciiChars = api.get(EmptyResponse.class).node(node).path("/some/resourçe").unauthenticated().prepareUrl(node);
         Assert.assertEquals("non-ascii chars are escaped in path",
-                "/some/resour%C3%A7e",
-                urlWithNonAsciiChars.getPath());
+                            "/some/resour%C3%A7e",
+                            urlWithNonAsciiChars.getPath());
 
         final URL queryWithAmp = api.get(EmptyResponse.class).node(node).path("/").queryParam("foo", "this&that").prepareUrl(node);
         Assert.assertEquals("Query params are escaped", "foo=this%26that", queryWithAmp.getQuery());
@@ -92,8 +81,7 @@ public class ApiClientTest extends BaseApiTest {
                         .unauthenticated()
                         .node(node)
                         .timeout(1, TimeUnit.SECONDS);
-        final URL url = requestBuilder.prepareUrl(node);
-        stubHttpProvider.expectResponse(Uri.create(url.toString()), 200, "{}");
+        stubHttpProvider.expectResponse(requestBuilder.prepareUrl(node), 200, "{}");
         final EmptyResponse response = requestBuilder.execute();
 
         Assert.assertNotNull(response);
@@ -113,8 +101,8 @@ public class ApiClientTest extends BaseApiTest {
         final ApiRequestBuilder<EmptyResponse> requestBuilder = api.get(EmptyResponse.class).path("/some/resource");
         final URL url1 = requestBuilder.prepareUrl(node1);
         final URL url2 = requestBuilder.prepareUrl(node2);
-        stubHttpProvider.expectResponse(Uri.create(url1.toString()), 200, "{}");
-        stubHttpProvider.expectResponse(Uri.create(url2.toString()), 200, "{}");
+        stubHttpProvider.expectResponse(url1, 200, "{}");
+        stubHttpProvider.expectResponse(url2, 200, "{}");
 
         final Map<Node, EmptyResponse> responses = requestBuilder.nodes(node1, node2).executeOnAll();
         Assert.assertFalse(responses.isEmpty());
@@ -124,7 +112,7 @@ public class ApiClientTest extends BaseApiTest {
     @Before
     public void setUp() throws Exception {
         AsyncHttpClientConfig.Builder builder = new AsyncHttpClientConfig.Builder();
-        builder.setAllowPoolingConnections(false);
+        builder.setAllowPoolingConnection(false);
         stubHttpProvider = new StubHttpProvider();
         client = new AsyncHttpClient(stubHttpProvider, builder.build());
     }
