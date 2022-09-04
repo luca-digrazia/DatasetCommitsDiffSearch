@@ -144,12 +144,12 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
 
     private RuntimeUpdatesProcessor setupRuntimeCompilation(DevModeContext context, CuratedApplication application)
             throws Exception {
-        if (!context.getAllModules().isEmpty()) {
+        if (!context.getModules().isEmpty()) {
             ServiceLoader<CompilationProvider> serviceLoader = ServiceLoader.load(CompilationProvider.class);
             List<CompilationProvider> compilationProviders = new ArrayList<>();
             for (CompilationProvider provider : serviceLoader) {
                 compilationProviders.add(provider);
-                context.getAllModules().forEach(moduleInfo -> moduleInfo.addSourcePaths(provider.handledSourcePaths()));
+                context.getModules().forEach(moduleInfo -> moduleInfo.addSourcePaths(provider.handledSourcePaths()));
             }
             ClassLoaderCompiler compiler;
             try {
@@ -253,11 +253,9 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
                                             for (AdditionalDependency i : curatedApplication.getQuarkusBootstrap()
                                                     .getAdditionalApplicationArchives()) {
                                                 if (i.isHotReloadable()) {
-                                                    for (Path path : i.getArchivePath()) {
-                                                        Path p = path.resolve(s.replace(".", "/") + ".class");
-                                                        if (Files.exists(p)) {
-                                                            return true;
-                                                        }
+                                                    Path p = i.getArchivePath().resolve(s.replace(".", "/") + ".class");
+                                                    if (Files.exists(p)) {
+                                                        return true;
                                                     }
                                                 }
                                             }
