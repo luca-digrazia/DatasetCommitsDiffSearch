@@ -26,8 +26,6 @@ import io.dekorate.deps.kubernetes.api.model.HasMetadata;
 import io.dekorate.deps.kubernetes.api.model.KubernetesList;
 import io.dekorate.deps.kubernetes.client.KubernetesClient;
 import io.dekorate.deps.kubernetes.client.KubernetesClientException;
-import io.dekorate.deps.openshift.api.model.Route;
-import io.dekorate.deps.openshift.client.OpenShiftClient;
 import io.dekorate.utils.Clients;
 import io.dekorate.utils.Serialization;
 import io.quarkus.container.image.deployment.ContainerImageCapabilitiesUtil;
@@ -37,7 +35,6 @@ import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.ApplicationInfoBuildItem;
 import io.quarkus.deployment.pkg.builditem.ArtifactResultBuildItem;
 import io.quarkus.deployment.pkg.builditem.DeploymentResultBuildItem;
 import io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem;
@@ -76,8 +73,6 @@ public class KubernetesDeployer {
             Capabilities capabilities,
             Optional<SelectedKubernetesDeploymentTargetBuildItem> selectedDeploymentTarget,
             OutputTargetBuildItem outputTarget,
-            OpenshiftConfig openshiftConfig,
-            ApplicationInfoBuildItem applicationInfo,
             BuildProducer<DeploymentResultBuildItem> deploymentResult,
             // needed to ensure that this step runs after the container image has been built
             @SuppressWarnings("unused") List<ArtifactResultBuildItem> artifactResults) {
@@ -100,8 +95,7 @@ public class KubernetesDeployer {
 
         final KubernetesClient client = Clients.fromConfig(kubernetesClient.getClient().getConfiguration());
         deploymentResult
-                .produce(deploy(selectedDeploymentTarget.get().getEntry(), client, outputTarget.getOutputDirectory(),
-                        openshiftConfig, applicationInfo));
+                .produce(deploy(selectedDeploymentTarget.get().getEntry(), client, outputTarget.getOutputDirectory()));
     }
 
     /**
@@ -165,8 +159,7 @@ public class KubernetesDeployer {
     }
 
     private DeploymentResultBuildItem deploy(DeploymentTargetEntry deploymentTarget,
-            KubernetesClient client, Path outputDir,
-            OpenshiftConfig openshiftConfig, ApplicationInfoBuildItem applicationInfo) {
+            KubernetesClient client, Path outputDir) {
         String namespace = Optional.ofNullable(client.getNamespace()).orElse("default");
         log.info("Deploying to " + deploymentTarget.getName().toLowerCase() + " server: " + client.getMasterUrl()
                 + " in namespace: " + namespace + ".");
@@ -184,8 +177,6 @@ public class KubernetesDeployer {
                 log.info("Applied: " + i.getKind() + " " + i.getMetadata().getName() + ".");
             });
 
-            printExposeInformation(client, list, openshiftConfig, applicationInfo);
-
             HasMetadata m = list.getItems().stream().filter(r -> r.getKind().equals(deploymentTarget.getKind()))
                     .findFirst().orElseThrow(() -> new IllegalStateException(
                             "No " + deploymentTarget.getKind() + " found under: " + manifest.getAbsolutePath()));
@@ -199,27 +190,6 @@ public class KubernetesDeployer {
             throw new RuntimeException("Error closing file: " + manifest.getAbsolutePath());
         }
 
-    }
-
-    private void printExposeInformation(KubernetesClient client, KubernetesList list, OpenshiftConfig openshiftConfig,
-            ApplicationInfoBuildItem applicationInfo) {
-        String generatedRouteName = ResourceNameUtil.getResourceName(openshiftConfig, applicationInfo);
-        List<HasMetadata> items = list.getItems();
-        for (HasMetadata item : items) {
-            if (Constants.ROUTE_API_GROUP.equals(item.getApiVersion()) && Constants.ROUTE.equals(item.getKind())
-                    && generatedRouteName.equals(item.getMetadata().getName())) {
-                try {
-                    OpenShiftClient openShiftClient = client.adapt(OpenShiftClient.class);
-                    Route route = openShiftClient.routes().withName(generatedRouteName).get();
-                    boolean isTLS = (route.getSpec().getTls() != null);
-                    String host = route.getSpec().getHost();
-                    log.infov("The deployed application can be accessed at: http{0}://{1}", isTLS ? "s" : "", host);
-                } catch (KubernetesClientException ignored) {
-
-                }
-                break;
-            }
-        }
     }
 
     public static Predicate<HasMetadata> distictByResourceKey() {
