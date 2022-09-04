@@ -84,7 +84,6 @@ import org.jboss.shamrock.deployment.builditem.substrate.SubstrateConfigBuildIte
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateProxyDefinitionBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import org.jboss.shamrock.jaxrs.runtime.ResteasyFilter;
-import org.jboss.shamrock.jaxrs.runtime.RolesFilterRegistrar;
 import org.jboss.shamrock.jaxrs.runtime.graal.JaxrsTemplate;
 import org.jboss.shamrock.jaxrs.runtime.graal.ShamrockInjectorFactory;
 import org.jboss.shamrock.undertow.FilterBuildItem;
@@ -349,6 +348,7 @@ public class JaxrsScanningProcessor {
                 servletContextParams.produce(new ServletInitParamBuildItem(ResteasyContextParameters.RESTEASY_SCANNED_RESOURCES, sb.toString()));
             }
             servletContextParams.produce(new ServletInitParamBuildItem("resteasy.servlet.mapping.prefix", path));
+            servletContextParams.produce(new ServletInitParamBuildItem("resteasy.injector.factory", ShamrockInjectorFactory.class.getName()));
             if (appClass != null) {
                 servletContextParams.produce(new ServletInitParamBuildItem(JAX_RS_APPLICATION_PARAMETER_NAME, appClass));
             }
@@ -375,16 +375,11 @@ public class JaxrsScanningProcessor {
         registerReflectionForSerialization(reflectiveClass, reflectiveHierarchy, combinedIndexBuildItem);
     }
 
-    @Record(STATIC_INIT)
     @BuildStep
     void registerProviders(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
                            BuildProducer<ServletInitParamBuildItem> servletContextParams,
                            CombinedIndexBuildItem combinedIndexBuildItem,
-                           List<JaxrsProviderBuildItem> contributedProviderBuildItems,
-                           JaxrsTemplate template,
-                           BeanContainerBuildItem beanContainerBuildItem,
-                           List<ProxyUnwrapperBuildItem> proxyUnwrappers,
-                           BuildProducer<FeatureBuildItem> feature) throws Exception {
+                           List<JaxrsProviderBuildItem> contributedProviderBuildItems) throws Exception {
         IndexView index = combinedIndexBuildItem.getIndex();
 
         Set<String> contributedProviders = new HashSet<>();
@@ -435,31 +430,22 @@ public class JaxrsScanningProcessor {
         for (String providerToRegister : providersToRegister) {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, providerToRegister));
         }
+    }
 
-
+    @Record(STATIC_INIT)
+    @BuildStep
+    void integrate(JaxrsTemplate template, BeanContainerBuildItem beanContainerBuildItem, List<ProxyUnwrapperBuildItem> proxyUnwrappers, BuildProducer<FeatureBuildItem> feature) {
         feature.produce(new FeatureBuildItem(FeatureBuildItem.JAX_RS));
         List<Function<Object, Object>> unwrappers = new ArrayList<>();
         for (ProxyUnwrapperBuildItem i : proxyUnwrappers) {
             unwrappers.add(i.getUnwrapper());
         }
         template.setupIntegration(beanContainerBuildItem.getValue(), unwrappers);
-
-        servletContextParams.produce(new ServletInitParamBuildItem("resteasy.injector.factory", ShamrockInjectorFactory.class.getName()));
     }
-
     
     @BuildStep
     List<BeanDefiningAnnotationBuildItem> beanDefiningAnnotations() {
         return Collections.singletonList(new BeanDefiningAnnotationBuildItem(PATH, singletonResources ? SINGLETON_SCOPE : null));
-    }
-
-    /**
-     * Install the JAXRS security provider
-     * @param providers - the JaxrsProviderBuildItem providers producer to use
-     */
-    @BuildStep
-    void setupFilter(BuildProducer<JaxrsProviderBuildItem> providers) {
-        providers.produce(new JaxrsProviderBuildItem(RolesFilterRegistrar.class.getName()));
     }
 
     private void registerReflectionForSerialization(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
