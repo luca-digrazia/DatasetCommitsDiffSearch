@@ -25,8 +25,6 @@ import io.quarkus.arc.processor.AnnotationStore;
 import io.quarkus.arc.processor.AnnotationsTransformer;
 import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.arc.processor.BuildExtension;
-import io.quarkus.deployment.Capabilities;
-import io.quarkus.deployment.GizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -37,11 +35,13 @@ import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateSystemPropertyBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.gizmo.ClassOutput;
 import io.quarkus.vertx.ConsumeEvent;
 import io.quarkus.vertx.core.deployment.CoreVertxBuildItem;
+import io.quarkus.vertx.core.runtime.VertxCoreRecorder;
 import io.quarkus.vertx.runtime.VertxProducer;
 import io.quarkus.vertx.runtime.VertxRecorder;
 
@@ -52,9 +52,9 @@ class VertxProcessor {
     @Inject
     BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
 
-    @BuildStep(providesCapabilities = Capabilities.RESTEASY_JSON_EXTENSION)
-    FeatureBuildItem feature() {
-        return new FeatureBuildItem(FeatureBuildItem.VERTX);
+    @BuildStep
+    SubstrateSystemPropertyBuildItem enableJson() {
+        return new SubstrateSystemPropertyBuildItem(VertxCoreRecorder.ENABLE_JSON, "true");
     }
 
     @BuildStep
@@ -65,13 +65,20 @@ class VertxProcessor {
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     VertxBuildItem build(CoreVertxBuildItem internalVertx, VertxRecorder recorder, BeanContainerBuildItem beanContainer,
+            BuildProducer<FeatureBuildItem> feature,
             List<EventConsumerBusinessMethodItem> messageConsumerBusinessMethods,
             BuildProducer<GeneratedClassBuildItem> generatedClass,
             AnnotationProxyBuildItem annotationProxy, LaunchModeBuildItem launchMode, ShutdownContextBuildItem shutdown,
             BuildProducer<ServiceStartBuildItem> serviceStart,
             List<MessageCodecBuildItem> codecs, RecorderContext recorderContext) {
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.VERTX));
         Map<String, ConsumeEvent> messageConsumerConfigurations = new HashMap<>();
-        ClassOutput classOutput = new GizmoAdaptor(generatedClass, true);
+        ClassOutput classOutput = new ClassOutput() {
+            @Override
+            public void write(String name, byte[] data) {
+                generatedClass.produce(new GeneratedClassBuildItem(true, name, data));
+            }
+        };
         for (EventConsumerBusinessMethodItem businessMethod : messageConsumerBusinessMethods) {
             String invokerClass = EventBusConsumer.generateInvoker(businessMethod.getBean(), businessMethod.getMethod(),
                     businessMethod.getConsumeEvent(), classOutput);

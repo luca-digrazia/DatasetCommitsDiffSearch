@@ -85,8 +85,7 @@ class EventBusConsumer {
         ClassCreator invokerCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName)
                 .interfaces(EventConsumerInvoker.class).build();
 
-        // The method descriptor is: void invokeBean(Object message)
-        MethodCreator invoke = invokerCreator.getMethodCreator("invokeBean", void.class, Object.class);
+        MethodCreator invoke = invokerCreator.getMethodCreator("invoke", void.class, Message.class);
         ResultHandle containerHandle = invoke.invokeStaticMethod(ARC_CONTAINER);
 
         AnnotationValue blocking = consumeEvent.value("blocking");
