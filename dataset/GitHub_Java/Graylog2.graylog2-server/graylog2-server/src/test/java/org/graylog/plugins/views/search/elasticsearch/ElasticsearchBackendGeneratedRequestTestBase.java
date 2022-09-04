@@ -75,30 +75,19 @@ public class ElasticsearchBackendGeneratedRequestTestBase extends ElasticsearchB
     @Mock
     protected StreamService streamService;
 
-    @Mock
-    protected FieldTypesLookup fieldTypesLookup;
-
-    protected Map<String, Provider<ESSearchTypeHandler<? extends SearchType>>> elasticSearchTypeHandlers;
-
     @Captor
     protected ArgumentCaptor<MultiSearch> clientRequestCaptor;
 
     @Before
     public void setUpSUT() {
-        this.elasticSearchTypeHandlers = new HashMap<>();
+        Map<String, Provider<ESSearchTypeHandler<? extends SearchType>>> elasticSearchTypeHandlers = new HashMap<>();
         final Map<String, ESPivotBucketSpecHandler<? extends BucketSpec, ? extends Aggregation>> bucketHandlers = Collections.emptyMap();
         final Map<String, ESPivotSeriesSpecHandler<? extends SeriesSpec, ? extends Aggregation>> seriesHandlers = new HashMap<>();
         seriesHandlers.put(Average.NAME, new ESAverageHandler());
         seriesHandlers.put(Max.NAME, new ESMaxHandler());
         elasticSearchTypeHandlers.put(Pivot.NAME, () -> new ESPivot(bucketHandlers, seriesHandlers));
 
-        this.elasticsearchBackend = new ElasticsearchBackend(elasticSearchTypeHandlers,
-                queryStringParser,
-                jestClient,
-                indexRangeService,
-                streamService,
-                new ESQueryDecorators.Fake(),
-                (elasticsearchBackend, ssb, job, query, results) -> new ESGeneratedQueryContext(elasticsearchBackend, ssb, job, query, results, fieldTypesLookup));
+        this.elasticsearchBackend = new ElasticsearchBackend(elasticSearchTypeHandlers, queryStringParser, jestClient, indexRangeService, streamService, new ESQueryDecorators.Fake());
     }
 
     SearchJob searchJobForQuery(Query query) {
