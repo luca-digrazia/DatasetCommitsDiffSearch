@@ -17,7 +17,6 @@
 package org.graylog2.users;
 
 import com.google.common.base.Function;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.mongodb.BasicDBObject;
@@ -154,9 +153,8 @@ public class RoleServiceImpl implements RoleService {
 
     @Override
     public Set<Role> loadAll() throws NotFoundException {
-        try (DBCursor<RoleImpl> rolesCursor = dbCollection.find()) {
-            return ImmutableSet.copyOf((Iterable<? extends Role>) rolesCursor);
-        }
+        final DBCursor<RoleImpl> rolesCursor = dbCollection.find();
+        return Sets.newHashSet((Iterable<? extends Role>) rolesCursor);
     }
 
     @Override

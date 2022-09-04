@@ -23,6 +23,7 @@ import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableMap;
 import org.graylog2.plugin.Tools;
 import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormatter;
 import org.joda.time.format.ISODateTimeFormat;
 
 import java.util.Map;
@@ -74,9 +75,9 @@ public abstract class AbsoluteRange extends TimeRange {
     @Override
     public Map<String, Object> getPersistedConfig() {
         return ImmutableMap.<String, Object>of(
-                "type", ABSOLUTE,
-                "from", getFrom(),
-                "to", getTo());
+            "type", ABSOLUTE,
+            "from", getFrom(),
+            "to", getTo());
     }
 
     @AutoValue.Builder
@@ -94,7 +95,7 @@ public abstract class AbsoluteRange extends TimeRange {
             try {
                 return to(parseDateTime(to));
             } catch (IllegalArgumentException e) {
-                throw new InvalidRangeParametersException();
+                throw new InvalidRangeParametersException("Invalid end of range: " + to, e);
             }
         }
 
@@ -103,18 +104,19 @@ public abstract class AbsoluteRange extends TimeRange {
             try {
                 return from(parseDateTime(from));
             } catch (IllegalArgumentException e) {
-                throw new InvalidRangeParametersException();
+                throw new InvalidRangeParametersException("Invalid start of range: " + from, e);
             }
         }
 
         private DateTime parseDateTime(String to) {
-            DateTime ts;
+            final DateTimeFormatter formatter;
             if (to.contains("T")) {
-                ts = DateTime.parse(to, ISODateTimeFormat.dateTime());
+                formatter = ISODateTimeFormat.dateTime();
             } else {
-                ts = DateTime.parse(to, Tools.timeFormatterWithOptionalMilliseconds());
+                formatter = Tools.timeFormatterWithOptionalMilliseconds();
             }
-            return ts;
+            // Use withOffsetParsed() to keep the timezone!
+            return formatter.withOffsetParsed().parseDateTime(to);
         }
     }
 }

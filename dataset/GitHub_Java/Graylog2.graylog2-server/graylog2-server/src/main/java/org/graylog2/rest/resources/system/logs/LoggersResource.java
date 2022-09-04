@@ -35,9 +35,7 @@ import org.apache.logging.log4j.core.config.Configuration;
 import org.apache.logging.log4j.core.config.LoggerConfig;
 import org.apache.logging.log4j.core.impl.ThrowableProxy;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog2.audit.AuditEventTypes;
-import org.graylog2.audit.jersey.AuditEvent;
+import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.log4j.MemoryAppender;
 import org.graylog2.rest.models.system.loggers.responses.InternalLogMessage;
 import org.graylog2.rest.models.system.loggers.responses.LogMessagesSummary;
@@ -47,12 +45,12 @@ import org.graylog2.rest.models.system.loggers.responses.SingleSubsystemSummary;
 import org.graylog2.rest.models.system.loggers.responses.SubsystemSummary;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
+import org.hibernate.validator.constraints.NotEmpty;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.LoggerFactory;
 
 import javax.validation.constraints.Min;
-import javax.validation.constraints.NotEmpty;
 import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.InternalServerErrorException;
@@ -171,7 +169,7 @@ public class LoggersResource extends RestResource {
             @ApiResponse(code = 404, message = "No such subsystem.")
     })
     @Path("/subsystems/{subsystem}/level/{level}")
-    @AuditEvent(type = AuditEventTypes.LOG_LEVEL_UPDATE)
+    @AuditLog(object = "subsystem log level")
     public void setSubsystemLoggerLevel(
         @ApiParam(name = "subsystem", required = true) @PathParam("subsystem") @NotEmpty String subsystemTitle,
         @ApiParam(name = "level", required = true) @PathParam("level") @NotEmpty String level) {
@@ -194,7 +192,7 @@ public class LoggersResource extends RestResource {
     @ApiOperation(value = "Set the loglevel of a single logger",
             notes = "Provided level is falling back to DEBUG if it does not exist")
     @Path("/{loggerName}/level/{level}")
-    @AuditEvent(type = AuditEventTypes.LOG_LEVEL_UPDATE)
+    @AuditLog(object = "log level")
     public void setSingleLoggerLevel(
         @ApiParam(name = "loggerName", required = true) @PathParam("loggerName") @NotEmpty String loggerName,
         @ApiParam(name = "level", required = true) @NotEmpty @PathParam("level") String level) {
@@ -214,7 +212,6 @@ public class LoggersResource extends RestResource {
     })
     @Path("/messages/recent")
     @Produces(MediaType.APPLICATION_JSON)
-    @RequiresPermissions(RestPermissions.LOGGERSMESSAGES_READ)
     public LogMessagesSummary messages(@ApiParam(name = "limit", value = "How many log messages should be returned", defaultValue = "500", allowableValues = "range[0, infinity]")
                                        @QueryParam("limit") @DefaultValue("500") @Min(0L) int limit,
                                        @ApiParam(name = "level", value = "Which log level (or higher) should the messages have", defaultValue = "ALL", allowableValues = "[OFF, FATAL, ERROR, WARN, INFO, DEBUG, TRACE, ALL]")
@@ -242,7 +239,7 @@ public class LoggersResource extends RestResource {
             if (thrownProxy == null) {
                 throwable = null;
             } else {
-                throwable = thrownProxy.getExtendedStackTraceAsString("");
+                throwable = thrownProxy.getExtendedStackTraceAsString();
             }
 
             final Marker marker = event.getMarker();
@@ -254,7 +251,7 @@ public class LoggersResource extends RestResource {
                     new DateTime(event.getTimeMillis(), DateTimeZone.UTC),
                     throwable,
                     event.getThreadName(),
-                    event.getContextData().toMap()
+                    event.getContextMap()
             ));
         }
 

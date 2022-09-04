@@ -1,22 +1,23 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.grok;
 
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import oi.thekraken.grok.api.Grok;
@@ -25,14 +26,17 @@ import org.bson.types.ObjectId;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.database.ValidationException;
+import org.graylog2.plugin.database.ValidationException;
 import org.mongojack.DBCursor;
+import org.mongojack.DBQuery;
 import org.mongojack.JacksonDBCollection;
 import org.mongojack.WriteResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
+import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.PatternSyntaxException;
 
@@ -56,7 +60,7 @@ public class GrokPatternServiceImpl implements GrokPatternService {
     public GrokPattern load(String patternId) throws NotFoundException {
         final GrokPattern pattern = dbCollection.findOneById(new ObjectId(patternId));
         if (pattern == null) {
-            throw new NotFoundException();
+            throw new NotFoundException("Couldn't find Grok pattern with ID " + patternId);
         }
         return pattern;
     }
@@ -79,6 +83,21 @@ public class GrokPatternServiceImpl implements GrokPatternService {
     }
 
     @Override
+    public List<GrokPattern> saveAll(Collection<GrokPattern> patterns, boolean replace) throws ValidationException {
+        final ImmutableList.Builder<GrokPattern> savedPatterns = ImmutableList.builder();
+
+        if (replace) {
+            deleteAll();
+        }
+
+        for (final GrokPattern pattern : patterns) {
+            savedPatterns.add(save(pattern));
+        }
+
+        return savedPatterns.build();
+    }
+
+    @Override
     public boolean validate(GrokPattern pattern) {
         final boolean fieldsMissing = !(Strings.isNullOrEmpty(pattern.name) || Strings.isNullOrEmpty(pattern.pattern));
         try {
@@ -97,5 +116,10 @@ public class GrokPatternServiceImpl implements GrokPatternService {
     @Override
     public int delete(String patternId) {
         return dbCollection.removeById(new ObjectId(patternId)).getN();
+    }
+
+    @Override
+    public int deleteAll() {
+        return dbCollection.remove(DBQuery.empty()).getN();
     }
 }

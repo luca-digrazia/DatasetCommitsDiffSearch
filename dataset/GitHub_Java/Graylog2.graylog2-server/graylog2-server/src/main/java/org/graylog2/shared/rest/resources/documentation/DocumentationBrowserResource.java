@@ -16,10 +16,7 @@
  */
 package org.graylog2.shared.rest.resources.documentation;
 
-import com.floreysoft.jmte.Engine;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
-import org.graylog2.Configuration;
 import org.graylog2.shared.rest.resources.RestResource;
 
 import javax.activation.MimetypesFileTypeMap;
@@ -29,56 +26,38 @@ import javax.ws.rs.GET;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 import static java.util.Objects.requireNonNull;
 
 @Path("/api-browser")
 public class DocumentationBrowserResource extends RestResource {
     private final MimetypesFileTypeMap mimeTypes;
-    private final String apiPrefix;
 
-    private final ClassLoader classLoader = ClassLoader.getSystemClassLoader();
-    private final Engine templateEngine;
+    private ClassLoader classLoader = ClassLoader.getSystemClassLoader();
 
     @Inject
-    public DocumentationBrowserResource(MimetypesFileTypeMap mimeTypes, Configuration configuration, Engine templateEngine) {
-        this.mimeTypes = requireNonNull(mimeTypes, "mimeTypes");
-        this.apiPrefix = requireNonNull(configuration, "configuration").getRestListenUri().getPath();
-        this.templateEngine = requireNonNull(templateEngine, "templateEngine");
+    public DocumentationBrowserResource(MimetypesFileTypeMap mimeTypes) {
+        this.mimeTypes = requireNonNull(mimeTypes);
     }
 
     @GET
-    public Response root() throws IOException {
-        final String index = index();
-        return Response.ok(index, MediaType.TEXT_HTML_TYPE)
-                .header(HttpHeaders.CONTENT_LENGTH, index.length())
-                .build();
-    }
-
-    @GET
-    @Produces(MediaType.TEXT_HTML)
-    @Path("index.html")
-    public String index() throws IOException {
-        final URL templateUrl = this.getClass().getResource("/swagger/index.html.template");
-        final String template = Resources.toString(templateUrl, StandardCharsets.UTF_8);
-        final Map<String, Object> model = ImmutableMap.of("apiPrefix", apiPrefix);
-        return templateEngine.transform(template, model);
+    public Response root() {
+        return asset("index.html");
     }
 
     @GET
     @Path("/{route: .*}")
-    public Response asset(@PathParam("route") String route) throws IOException {
+    public Response asset(@PathParam("route") String route) {
         // Directory traversal should not be possible but just to make sure..
         if (route.contains("..")) {
             throw new BadRequestException("Not allowed to access parent directory");
+        }
+
+        if (route.trim().equals("")) {
+            route = "index.html";
         }
 
         final URL resource = classLoader.getResource("swagger/" + route);

@@ -24,17 +24,14 @@ import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.audit.AuditEventTypes;
-import org.graylog2.audit.jersey.AuditEvent;
+import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.dashboards.Dashboard;
 import org.graylog2.dashboards.DashboardService;
 import org.graylog2.dashboards.widgets.DashboardWidget;
 import org.graylog2.dashboards.widgets.DashboardWidgetCreator;
 import org.graylog2.dashboards.widgets.InvalidWidgetConfigurationException;
 import org.graylog2.dashboards.widgets.WidgetResultCache;
-import org.graylog2.dashboards.widgets.events.WidgetUpdatedEvent;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.events.ClusterEventBus;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.rest.models.dashboards.requests.AddWidgetRequest;
@@ -74,19 +71,13 @@ public class DashboardWidgetsResource extends RestResource {
     private final ActivityWriter activityWriter;
     private final WidgetResultCache widgetResultCache;
     private final DashboardService dashboardService;
-    private final ClusterEventBus clusterEventBus;
 
     @Inject
-    public DashboardWidgetsResource(DashboardWidgetCreator dashboardWidgetCreator,
-                                    ActivityWriter activityWriter,
-                                    WidgetResultCache widgetResultCache,
-                                    DashboardService dashboardService,
-                                    ClusterEventBus clusterEventBus) {
+    public DashboardWidgetsResource(DashboardWidgetCreator dashboardWidgetCreator, ActivityWriter activityWriter, WidgetResultCache widgetResultCache, DashboardService dashboardService) {
         this.dashboardWidgetCreator = dashboardWidgetCreator;
         this.activityWriter = activityWriter;
         this.widgetResultCache = widgetResultCache;
         this.dashboardService = dashboardService;
-        this.clusterEventBus = clusterEventBus;
     }
 
     @POST
@@ -99,7 +90,7 @@ public class DashboardWidgetsResource extends RestResource {
             @ApiResponse(code = 400, message = "Validation error."),
             @ApiResponse(code = 400, message = "No such widget type."),
     })
-    @AuditEvent(type = AuditEventTypes.DASHBOARD_WIDGET_CREATE)
+    @AuditLog(object = "dashboard widget", captureRequestEntity = true, captureResponseEntity = true)
     public Response addWidget(
             @ApiParam(name = "dashboardId", required = true)
             @PathParam("dashboardId") String dashboardId,
@@ -172,7 +163,7 @@ public class DashboardWidgetsResource extends RestResource {
             @ApiResponse(code = 404, message = "Widget not found."),
     })
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditEvent(type = AuditEventTypes.DASHBOARD_WIDGET_DELETE)
+    @AuditLog(object = "dashboard widget")
     public void remove(
             @ApiParam(name = "dashboardId", required = true)
             @PathParam("dashboardId") String dashboardId,
@@ -183,8 +174,8 @@ public class DashboardWidgetsResource extends RestResource {
         final Dashboard dashboard = dashboardService.load(dashboardId);
 
         final DashboardWidget widget = dashboard.getWidget(widgetId);
+        this.widgetResultCache.invalidate(widget);
         dashboardService.removeWidget(dashboard, widget);
-        this.clusterEventBus.post(WidgetUpdatedEvent.create(widget));
 
         final String msg = "Deleted widget <" + widgetId + "> from dashboard <" + dashboardId + ">. Reason: REST request.";
         LOG.info(msg);
@@ -228,7 +219,7 @@ public class DashboardWidgetsResource extends RestResource {
             @ApiResponse(code = 404, message = "Widget not found."),
     })
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditEvent(type = AuditEventTypes.DASHBOARD_WIDGET_UPDATE)
+    @AuditLog(object = "dashboard widget", captureRequestEntity = true, captureResponseEntity = true)
     public void updateWidget(@ApiParam(name = "dashboardId", required = true)
                              @PathParam("dashboardId") String dashboardId,
                              @ApiParam(name = "widgetId", required = true)
@@ -252,7 +243,7 @@ public class DashboardWidgetsResource extends RestResource {
 
             dashboardService.removeWidget(dashboard, widget);
             dashboardService.addWidget(dashboard, updatedWidget);
-            this.clusterEventBus.post(WidgetUpdatedEvent.create(updatedWidget));
+            this.widgetResultCache.invalidate(widget);
         } catch (DashboardWidget.NoSuchWidgetTypeException e2) {
             LOG.error("No such widget type.", e2);
             throw new BadRequestException(e2);
@@ -277,7 +268,7 @@ public class DashboardWidgetsResource extends RestResource {
             @ApiResponse(code = 404, message = "Widget not found."),
     })
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditEvent(type = AuditEventTypes.DASHBOARD_WIDGET_UPDATE)
+    @AuditLog(object = "dashboard widget description", captureRequestEntity = true, captureResponseEntity = true)
     public void updateDescription(@ApiParam(name = "dashboardId", required = true)
                                   @PathParam("dashboardId") String dashboardId,
                                   @ApiParam(name = "widgetId", required = true)
@@ -310,7 +301,7 @@ public class DashboardWidgetsResource extends RestResource {
             @ApiResponse(code = 404, message = "Widget not found."),
     })
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditEvent(type = AuditEventTypes.DASHBOARD_WIDGET_UPDATE)
+    @AuditLog(object = "dashboard widget cache time", captureRequestEntity = true, captureResponseEntity = true)
     public void updateCacheTime(@ApiParam(name = "dashboardId", required = true)
                                 @PathParam("dashboardId") String dashboardId,
                                 @ApiParam(name = "widgetId", required = true)
@@ -329,7 +320,7 @@ public class DashboardWidgetsResource extends RestResource {
         }
 
         dashboardService.updateWidgetCacheTime(dashboard, widget, uwr.cacheTime());
-        this.clusterEventBus.post(WidgetUpdatedEvent.create(widget));
+        this.widgetResultCache.invalidate(widget);
 
         LOG.info("Updated cache time of widget <" + widgetId + "> on dashboard <" + dashboardId + "> to " +
                 "[" + uwr.cacheTime() + "]. Reason: REST request.");

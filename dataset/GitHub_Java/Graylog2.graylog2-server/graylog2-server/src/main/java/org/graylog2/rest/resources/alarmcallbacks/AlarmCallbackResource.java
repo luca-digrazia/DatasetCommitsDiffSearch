@@ -29,8 +29,7 @@ import org.graylog2.alarmcallbacks.AlarmCallbackConfiguration;
 import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationAVImpl;
 import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationService;
 import org.graylog2.alarmcallbacks.AlarmCallbackFactory;
-import org.graylog2.audit.AuditEventTypes;
-import org.graylog2.audit.jersey.AuditEvent;
+import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
@@ -141,14 +140,14 @@ public class AlarmCallbackResource extends RestResource {
             response = CreateAlarmCallbackResponse.class)
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditEvent(type = AuditEventTypes.ALARM_CALLBACK_CREATE)
+    @AuditLog(object = "alarm callback", captureRequestEntity = true, captureResponseEntity = true)
     public Response create(@ApiParam(name = "streamid", value = "The stream id this new alarm callback belongs to.", required = true)
                            @PathParam("streamid") String streamid,
-                           @ApiParam(name = "JSON body", required = true) CreateAlarmCallbackRequest originalCr) throws NotFoundException {
+                           @ApiParam(name = "JSON body", required = true) CreateAlarmCallbackRequest cr) throws NotFoundException {
         checkPermission(RestPermissions.STREAMS_EDIT, streamid);
 
         // make sure the values are correctly converted to the declared configuration types
-        final CreateAlarmCallbackRequest cr = CreateAlarmCallbackRequest.create(originalCr.type(), convertConfigurationValues(originalCr));
+        cr.configuration = convertConfigurationValues(cr);
 
         final AlarmCallbackConfiguration alarmCallbackConfiguration = alarmCallbackConfigurationService.create(streamid, cr, getCurrentUser().getName());
 
@@ -197,7 +196,7 @@ public class AlarmCallbackResource extends RestResource {
             @ApiResponse(code = 404, message = "Alarm callback not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    @AuditEvent(type = AuditEventTypes.ALARM_CALLBACK_DELETE)
+    @AuditLog(object = "alarm callback")
     public void delete(@ApiParam(name = "streamid", value = "The stream id this alarm callback belongs to.", required = true)
                        @PathParam("streamid") String streamid,
                        @ApiParam(name = "alarmCallbackId", required = true)
@@ -223,7 +222,7 @@ public class AlarmCallbackResource extends RestResource {
     @ApiOperation(value = "Update an alarm callback")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditEvent(type = AuditEventTypes.ALARM_CALLBACK_UPDATE)
+    @AuditLog(object = "alarm callback", captureRequestEntity = true, captureResponseEntity = true)
     public void update(@ApiParam(name = "streamid", value = "The stream id this alarm callback belongs to.", required = true)
                        @PathParam("streamid") String streamid,
                        @ApiParam(name = "alarmCallbackId", required = true)
@@ -256,16 +255,16 @@ public class AlarmCallbackResource extends RestResource {
     private Map<String, Object> convertConfigurationValues(final CreateAlarmCallbackRequest alarmCallbackRequest) {
         final ConfigurationRequest requestedConfiguration;
         try {
-            final AlarmCallback alarmCallback = alarmCallbackFactory.create(alarmCallbackRequest.type());
+            final AlarmCallback alarmCallback = alarmCallbackFactory.create(alarmCallbackRequest.type);
             requestedConfiguration = alarmCallback.getRequestedConfiguration();
         } catch (ClassNotFoundException e) {
-            throw new BadRequestException("Unable to load alarm callback of type " + alarmCallbackRequest.type(), e);
+            throw new BadRequestException("Unable to load alarm callback of type " + alarmCallbackRequest.type, e);
         }
 
         // coerce the configuration to their correct types according to the alarmcallback's requested config
         final Map<String, Object> configuration;
         try {
-            configuration = ConfigurationMapConverter.convertValues(alarmCallbackRequest.configuration(),
+            configuration = ConfigurationMapConverter.convertValues(alarmCallbackRequest.configuration,
                                                                     requestedConfiguration);
         } catch (ValidationException e) {
             throw new BadRequestException("Invalid configuration map", e);

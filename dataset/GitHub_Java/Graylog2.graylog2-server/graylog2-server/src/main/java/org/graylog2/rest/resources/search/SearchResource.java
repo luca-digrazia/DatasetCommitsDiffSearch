@@ -35,6 +35,7 @@ import org.graylog2.indexer.results.SearchResult;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.SearchesClusterConfig;
 import org.graylog2.indexer.searches.Sorting;
+import org.graylog2.plugin.Message;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.rest.models.messages.responses.ResultMessageSummary;
@@ -57,11 +58,10 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.ForbiddenException;
-import javax.ws.rs.InternalServerErrorException;
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -173,10 +173,11 @@ public abstract class SearchResource extends RestResource {
                                                  org.graylog2.plugin.indexer.searches.timeranges.TimeRange timeRange,
                                                  boolean decorate,
                                                  Optional<String> streamId) {
+        final List<ResultMessage> resultMessages = decorate ? decoratorProcessor.decorate(sr.getResults(), streamId) : sr.getResults();
         final SearchResponse result = SearchResponse.create(sr.getOriginalQuery(),
             sr.getBuiltQuery(),
             indexRangeListToValueList(sr.getUsedIndices()),
-            resultMessageListtoValueList(sr.getResults()),
+            resultMessageListtoValueList(resultMessages),
             sr.getFields(),
             sr.took().millis(),
             sr.getTotalResults(),
@@ -248,7 +249,7 @@ public abstract class SearchResource extends RestResource {
         return output;
     }
 
-    protected WebApplicationException createRequestExceptionForParseFailure(String query, SearchPhaseExecutionException e) {
+    protected BadRequestException createRequestExceptionForParseFailure(String query, SearchPhaseExecutionException e) {
         LOG.warn("Unable to execute search: {}", e.getMessage());
 
         QueryParseError errorMessage = QueryParseError.create(query, "Unable to execute search", e.getClass().getCanonicalName());
@@ -299,14 +300,12 @@ public abstract class SearchResource extends RestResource {
                         parseException.getClass().getCanonicalName());
                 }
             }
+        }
 
         return new BadRequestException(Response
             .status(Response.Status.BAD_REQUEST)
             .entity(errorMessage)
             .build());
-        } else {
-            return new InternalServerErrorException("Unable to fulfill search request", e);
-        }
     }
 
     public void checkSearchPermission(String filter, String searchPermission) {

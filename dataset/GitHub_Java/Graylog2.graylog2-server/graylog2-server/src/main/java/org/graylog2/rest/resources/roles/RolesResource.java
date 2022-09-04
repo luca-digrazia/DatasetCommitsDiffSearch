@@ -199,11 +199,8 @@ public class RolesResource extends RestResource {
                     user.isReadOnly(),
                     user.isExternalUser(),
                     user.getStartpage(),
-                    roleNames,
-                    // there is no session information available in this call, so we set it to null
-                    false,
-                    null,
-                    null));
+                    roleNames
+            ));
         }
 
         return RoleMembershipResponse.create(role.getName(), userSummaries);
@@ -215,7 +212,7 @@ public class RolesResource extends RestResource {
     @AuditLog(object = "role membership", captureResponseEntity = true)
     public Response addMember(@ApiParam(name = "rolename") @PathParam("rolename") String rolename,
                               @ApiParam(name = "username") @PathParam("username") String username,
-                              @ApiParam(name = "JSON Body", value = "Placeholder because PUT requests should have a body. Set to '{}', the content will be ignored.", defaultValue = "{}") String body) throws NotFoundException {
+                              @ApiParam(name = "JSON Body", value = "Placeholder because PUT requests should have a body. Set to '{}', the content will be ignored.") String body) throws NotFoundException {
         checkPermission(RestPermissions.ROLES_EDIT, username);
 
         final User user = userService.load(username);
