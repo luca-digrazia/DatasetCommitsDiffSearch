@@ -420,10 +420,7 @@ public final class ApplicationManifest {
           .setSourceJarOut(resourceContainer.getJavaSourceJar());
     }
     ResourceContainer processed =
-        builder.build(
-            dataContext,
-            resourceContainer,
-            DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()));
+        builder.build(dataContext, resourceContainer, DataBinding.contextFrom(ruleContext));
 
     ResourceContainer finalContainer =
         new RClassGeneratorActionBuilder()
@@ -499,10 +496,7 @@ public final class ApplicationManifest {
             .setStaticLibraryOut(merged.getStaticLibrary())
             .build(dataContext, merged);
 
-    return ResourceApk.of(
-        processed,
-        resourceDeps,
-        DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()));
+    return ResourceApk.of(processed, resourceDeps, DataBinding.contextFrom(ruleContext));
   }
 
   /* Creates an incremental apk from assets and data. */
@@ -556,19 +550,12 @@ public final class ApplicationManifest {
                     .getFragment(AndroidConfiguration.class)
                     .throwOnResourceConflict())
             .setPackageUnderTest(null)
-            .build(
-                dataContext,
-                resourceContainer,
-                DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()));
+            .build(dataContext, resourceContainer, DataBinding.contextFrom(ruleContext));
 
     // Intentionally skip building an R class JAR - incremental binaries handle this separately.
 
     return ResourceApk.of(
-        processed,
-        resourceDeps,
-        proguardCfg,
-        null,
-        DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()));
+        processed, resourceDeps, proguardCfg, null, DataBinding.contextFrom(ruleContext));
   }
 
   /** Packages up the manifest with resource and assets from the rule and dependent resources. */
@@ -649,10 +636,7 @@ public final class ApplicationManifest {
             .setRTxtOut(resourceContainer.getRTxt())
             .setSymbols(resourceContainer.getSymbols())
             .setSourceJarOut(resourceContainer.getJavaSourceJar())
-            .build(
-                dataContext,
-                resourceContainer,
-                DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()));
+            .build(dataContext, resourceContainer, DataBinding.contextFrom(ruleContext));
 
     ResourceContainer finalContainer =
         new RClassGeneratorActionBuilder()

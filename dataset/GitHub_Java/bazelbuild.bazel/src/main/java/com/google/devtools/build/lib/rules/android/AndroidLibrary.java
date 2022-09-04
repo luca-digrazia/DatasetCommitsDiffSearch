@@ -30,6 +30,8 @@ import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryAarInfo.Aar;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
+import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
@@ -248,7 +250,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     // Start building the configured target by adding all the necessary transitive providers/infos.
     // Includes databinding, IDE, Java. Also declares the output groups and sets the files to build.
     RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
-    System.out.println(ruleContext.getLabel() + " adding transitive providers");
     androidCommon.addTransitiveInfoProviders(
         builder,
         aar.getAar(),
@@ -259,7 +260,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         // TODO(elenairina): Use JavaCommon.isNeverlink(ruleContext) for consistency among rules.
         androidCommon.isNeverLink(),
         /* isLibrary = */ true);
-    System.out.println(builder);
 
     NestedSetBuilder<Artifact> transitiveResourcesJars = collectTransitiveResourceJars(ruleContext);
     if (resourceApk.getResourceJavaClassJar() != null) {
@@ -271,11 +271,15 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         .addNativeDeclaredProvider(
             new AndroidNativeLibsInfo(
                 AndroidCommon.collectTransitiveNativeLibs(ruleContext).build()))
-        .addNativeDeclaredProvider(
-            new AndroidCcLinkParamsProvider(androidCommon.getCcLinkingInfo()))
         .add(
             JavaSourceInfoProvider.class,
             JavaSourceInfoProvider.fromJavaTargetAttributes(javaTargetAttributes, javaSemantics))
+        .addNativeDeclaredProvider(
+            new AndroidCcLinkParamsProvider(
+                CcLinkingInfo.Builder.create()
+                    .setCcLinkParamsStore(
+                        new CcLinkParamsStore(androidCommon.getCcLinkParamsStore()))
+                    .build()))
         .addNativeDeclaredProvider(new ProguardSpecProvider(transitiveProguardConfigs))
         .addNativeDeclaredProvider(
             new AndroidProguardInfo(proguardLibrary.collectLocalProguardSpecs()))
@@ -287,7 +291,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     if (!JavaCommon.isNeverLink(ruleContext)) {
       builder.addNativeDeclaredProvider(aar.toProvider(ruleContext, definesLocalResources));
     }
-
 
     return builder.build();
   }

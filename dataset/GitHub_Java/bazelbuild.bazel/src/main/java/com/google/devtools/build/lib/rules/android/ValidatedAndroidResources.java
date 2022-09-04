@@ -17,15 +17,13 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
-import com.google.devtools.build.lib.skylarkbuildapi.android.ValidatedAndroidDataApi;
-import com.google.devtools.build.lib.syntax.SkylarkList;
 import java.util.Objects;
 import java.util.Optional;
 import javax.annotation.Nullable;
 
 /** Wraps validated and packaged Android resource information */
 public class ValidatedAndroidResources extends MergedAndroidResources
-    implements ValidatedAndroidDataApi<Artifact, AndroidResourcesInfo> {
+    implements ValidatedAndroidData {
   private final Artifact rTxt;
   private final Artifact sourceJar;
   private final Artifact apk;
@@ -92,9 +90,9 @@ public class ValidatedAndroidResources extends MergedAndroidResources
       Artifact rTxt,
       Artifact sourceJar,
       Artifact apk,
-      @Nullable Artifact aapt2RTxt,
-      @Nullable Artifact aapt2SourceJar,
-      @Nullable Artifact staticLibrary) {
+      Artifact aapt2RTxt,
+      Artifact aapt2SourceJar,
+      Artifact staticLibrary) {
     return new ValidatedAndroidResources(
         merged, rTxt, sourceJar, apk, aapt2RTxt, aapt2SourceJar, staticLibrary);
   }
@@ -116,7 +114,6 @@ public class ValidatedAndroidResources extends MergedAndroidResources
     this.staticLibrary = staticLibrary;
   }
 
-  @Override
   public AndroidResourcesInfo toProvider() {
     return getResourceDependencies().toInfo(this);
   }
@@ -124,11 +121,6 @@ public class ValidatedAndroidResources extends MergedAndroidResources
   @Override
   public Artifact getRTxt() {
     return rTxt;
-  }
-
-  @Override
-  public Artifact getJavaClassJar() {
-    return super.getClassJar();
   }
 
   @Override
@@ -147,7 +139,6 @@ public class ValidatedAndroidResources extends MergedAndroidResources
     return aapt2RTxt;
   }
 
-  @Override
   @Nullable
   public Artifact getAapt2SourceJar() {
     return aapt2SourceJar;
@@ -160,10 +151,6 @@ public class ValidatedAndroidResources extends MergedAndroidResources
   }
 
   @Override
-  public SkylarkList<Artifact> getResourcesList() {
-    return SkylarkList.createImmutable(getResources());
-  }
-
   public ValidatedAndroidResources filter(
       RuleErrorConsumer errorConsumer, ResourceFilter resourceFilter, boolean isDependency)
       throws RuleErrorException {
@@ -183,7 +170,7 @@ public class ValidatedAndroidResources extends MergedAndroidResources
 
   @Override
   public boolean equals(Object object) {
-    if (!super.equals(object) || !(object instanceof ValidatedAndroidResources)) {
+    if (!super.equals(object)) {
       return false;
     }
 
@@ -202,7 +189,8 @@ public class ValidatedAndroidResources extends MergedAndroidResources
         super.hashCode(), rTxt, sourceJar, apk, aapt2RTxt, aapt2SourceJar, staticLibrary);
   }
 
-  public ValidatedAndroidResources export() {
+  @Override
+  public ValidatedAndroidData export() {
     return new ValidatedAndroidResources(
         new MergedAndroidResources(
             new ParsedAndroidResources(
