@@ -17,7 +17,7 @@ package smile.plot;
 
 import java.awt.Color;
 import java.util.Arrays;
-import smile.math.Math;
+import smile.math.MathEx;
 import smile.math.matrix.SparseMatrix;
 
 /**
@@ -112,18 +112,33 @@ public class SparseMatrixPlot extends Plot {
             y[i] = y.length - i - 0.5;
         }
 
-        // In case of outliers, we use 1% and 99% quantiles as lower and
-        // upper limits instead of min and max.
-        double[] values = sparse.nonzeros().mapToDouble(entry -> entry.x).filter(x -> !Double.isNaN(x)).toArray();
-
-        if (values.length == 0) {
-            throw new IllegalArgumentException("Sparse matrix has no non-zero values");
+        min = Double.POSITIVE_INFINITY;
+        max = Double.NEGATIVE_INFINITY;
+        for (double z : sparse.values()) {
+            if (z < min) {
+                min = z;
+            }
+            if (z > max) {
+                max = z;
+            }
         }
 
-        Arrays.sort(values);
-        min = values[(int) Math.round(0.01 * values.length)];
-        max = values[(int) Math.round(0.99 * (values.length-1))];
-        width = (max - min) / palette.length;
+        // In case of outliers, we use 1% and 99% quantiles as lower and
+        // upper limits instead of min and max.
+        double[] values = new double[sparse.size()];
+        int i = 0;
+        for (double z : sparse.values()) {
+            if (!Double.isNaN(z)) {
+                values[i++] = z;
+            }
+        }
+
+        if (i > 0) {
+            Arrays.sort(values, 0, i);
+            min = values[(int) Math.round(0.01 * i)];
+            max = values[(int) Math.round(0.99 * (i-1))];
+            width = (max - min) / palette.length;
+        }
     }
 
     @Override
@@ -250,7 +265,7 @@ public class SparseMatrixPlot extends Plot {
             if (log < 0) {
                 decimal = (int) -log + 1;
             }
-            g.drawTextBaseRatio(String.valueOf(Math.round(max, decimal)), 0.0, 1.0, start);
+            g.drawTextBaseRatio(String.valueOf(MathEx.round(max, decimal)), 0.0, 1.0, start);
 
             start[1] = 0.15 - height;
             log = Math.log10(Math.abs(min));
@@ -258,7 +273,7 @@ public class SparseMatrixPlot extends Plot {
             if (log < 0) {
                 decimal = (int) -log + 1;
             }
-            g.drawTextBaseRatio(String.valueOf(Math.round(min, decimal)), 0.0, 0.0, start);
+            g.drawTextBaseRatio(String.valueOf(MathEx.round(min, decimal)), 0.0, 0.0, start);
         }
 
         g.setColor(c);

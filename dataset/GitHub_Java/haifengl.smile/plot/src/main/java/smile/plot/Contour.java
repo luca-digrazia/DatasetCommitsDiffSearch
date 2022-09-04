@@ -18,7 +18,8 @@ package smile.plot;
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
-import smile.math.Math;
+
+import smile.math.MathEx;
 
 /**
  * A contour plot is a graphical technique for representing a 3-dimensional
@@ -31,6 +32,8 @@ import smile.math.Math;
  */
 public class Contour extends Plot {
 
+    private static final String DIMENSIONS_XZ_DONT_MATCH = "The dimensions of x and z don't match.";
+    private static final String DIMENSIONS_YZ_DONT_MATCH = "The dimensions of y and z don't match.";
     /**
      * The x coordinate of surface.
      */
@@ -84,7 +87,7 @@ public class Contour extends Plot {
         /**
          * The coordinates of points along the contour line.
          */
-        List<double[]> points = new ArrayList<double[]>();
+        List<double[]> points = new ArrayList<>();
         /**
          * The level value of contour line.
          */
@@ -278,11 +281,11 @@ public class Contour extends Plot {
      */
     public Contour(double[] x, double[] y, double[][] z) {
         if (x.length != z[0].length) {
-            throw new IllegalArgumentException("The dimensions of x and z don't match.");
+            throw new IllegalArgumentException(DIMENSIONS_XZ_DONT_MATCH);
         }
 
         if (y.length != z.length) {
-            throw new IllegalArgumentException("The dimensions of y and z don't match.");
+            throw new IllegalArgumentException(DIMENSIONS_YZ_DONT_MATCH);
         }
 
         this.x = x;
@@ -300,11 +303,11 @@ public class Contour extends Plot {
      */
     public Contour(double[] x, double[] y, double[][] z, int numLevels) {
         if (x.length != z[0].length) {
-            throw new IllegalArgumentException("The dimensions of x and z don't match.");
+            throw new IllegalArgumentException(DIMENSIONS_XZ_DONT_MATCH);
         }
 
         if (y.length != z.length) {
-            throw new IllegalArgumentException("The dimensions of y and z don't match.");
+            throw new IllegalArgumentException(DIMENSIONS_YZ_DONT_MATCH);
         }
 
         this.x = x;
@@ -324,11 +327,11 @@ public class Contour extends Plot {
      */
     public Contour(double[] x, double[] y, double[][] z, int numLevels, boolean logScale) {
         if (x.length != z[0].length) {
-            throw new IllegalArgumentException("The dimensions of x and z don't match.");
+            throw new IllegalArgumentException(DIMENSIONS_XZ_DONT_MATCH);
         }
 
         if (y.length != z.length) {
-            throw new IllegalArgumentException("The dimensions of y and z don't match.");
+            throw new IllegalArgumentException(DIMENSIONS_YZ_DONT_MATCH);
         }
 
         this.x = x;
@@ -348,11 +351,11 @@ public class Contour extends Plot {
      */
     public Contour(double[] x, double[] y, double[][] z, double[] levels) {
         if (x.length != z[0].length) {
-            throw new IllegalArgumentException("The dimensions of x and z don't match.");
+            throw new IllegalArgumentException(DIMENSIONS_XZ_DONT_MATCH);
         }
 
         if (y.length != z.length) {
-            throw new IllegalArgumentException("The dimensions of y and z don't match.");
+            throw new IllegalArgumentException(DIMENSIONS_YZ_DONT_MATCH);
         }
 
         this.x = x;
@@ -372,11 +375,11 @@ public class Contour extends Plot {
      */
     public Contour(double[] x, double[] y, double[][] z, double[] levels, Color[] colors) {
         if (x.length != z[0].length) {
-            throw new IllegalArgumentException("The dimensions of x and z don't match.");
+            throw new IllegalArgumentException(DIMENSIONS_XZ_DONT_MATCH);
         }
 
         if (y.length != z.length) {
-            throw new IllegalArgumentException("The dimensions of y and z don't match.");
+            throw new IllegalArgumentException(DIMENSIONS_YZ_DONT_MATCH);
         }
 
         if (levels.length != colors.length) {
@@ -447,10 +450,10 @@ public class Contour extends Plot {
             z = zz;
         }
 
-        zMin = Math.min(z);
-        zMax = Math.max(z);
+        zMin = MathEx.min(z);
+        zMax = MathEx.max(z);
 
-        contours = new ArrayList<Isoline>(numLevels);
+        contours = new ArrayList<>(numLevels);
 
         if (logScale && zMin <= 0.0) {
             throw new IllegalArgumentException("Log scale is not support for non-positive data");
@@ -789,7 +792,7 @@ public class Contour extends Plot {
                         }
                         contour.add(s.x1, s.y1);
                         
-                        if (contour.points.size() > 0) {
+                        if (!contour.points.isEmpty()) {
                             contours.add(contour);
                         }
                     }
@@ -971,7 +974,7 @@ public class Contour extends Plot {
             if (log < 0) {
                 decimal = (int) -log + 1;
             }
-            g.drawTextBaseRatio(String.valueOf(Math.round(levels[levels.length-1], decimal)), 0.0, 1.0, start);
+            g.drawTextBaseRatio(String.valueOf(MathEx.round(levels[levels.length-1], decimal)), 0.0, 1.0, start);
 
             start[1] = 0.15 - height;
             log = Math.log10(Math.abs(levels[0]));
@@ -979,7 +982,7 @@ public class Contour extends Plot {
             if (log < 0) {
                 decimal = (int) -log + 1;
             }
-            g.drawTextBaseRatio(String.valueOf(Math.round(levels[0], decimal)), 0.0, 0.0, start);
+            g.drawTextBaseRatio(String.valueOf(MathEx.round(levels[0], decimal)), 0.0, 0.0, start);
 
             g.setColor(c);
         }
@@ -1022,8 +1025,8 @@ public class Contour extends Plot {
      * @param z a matrix.
      */
     public static PlotCanvas plot(double[] x, double[] y, double[][] z) {
-        double[] lowerBound = {Math.min(x), Math.min(y)};
-        double[] upperBound = {Math.max(x), Math.max(y)};
+        double[] lowerBound = {MathEx.min(x), MathEx.min(y)};
+        double[] upperBound = {MathEx.max(x), MathEx.max(y)};
         PlotCanvas canvas = new PlotCanvas(lowerBound, upperBound, false);
         canvas.add(new Contour(x, y, z));
 
@@ -1035,8 +1038,8 @@ public class Contour extends Plot {
      * @param z a matrix.
      */
     public static PlotCanvas plot(double[] x, double[] y, double[][] z, double[] levels, Color[] palette) {
-        double[] lowerBound = {Math.min(x), Math.min(y)};
-        double[] upperBound = {Math.max(x), Math.max(y)};
+        double[] lowerBound = {MathEx.min(x), MathEx.min(y)};
+        double[] upperBound = {MathEx.max(x), MathEx.max(y)};
         PlotCanvas canvas = new PlotCanvas(lowerBound, upperBound, false);
         canvas.add(new Contour(x, y, z, levels, palette));
 

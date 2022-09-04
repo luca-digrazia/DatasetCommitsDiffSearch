@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.plot;
 
 import java.awt.BorderLayout;
@@ -1188,7 +1186,7 @@ public class PlotCanvas extends JPanel {
         }
         
         this.margin = margin;
-        //repaint();
+        repaint();
         return this;
     }
 
@@ -1212,7 +1210,7 @@ public class PlotCanvas extends JPanel {
      */
     public PlotCanvas setTitle(String title) {
         this.title = title;
-        //repaint();
+        repaint();
         return this;
     }
 
@@ -1235,7 +1233,7 @@ public class PlotCanvas extends JPanel {
      */
     public PlotCanvas setTitleFont(Font font) {
         this.titleFont = font;
-        //repaint();
+        repaint();
         return this;
     }
 
@@ -1244,7 +1242,7 @@ public class PlotCanvas extends JPanel {
      */
     public PlotCanvas setTitleColor(Color color) {
         this.titleColor = color;
-        //repaint();
+        repaint();
         return this;
     }
 
@@ -1278,7 +1276,7 @@ public class PlotCanvas extends JPanel {
      */
     public PlotCanvas setAxisLabels(String... labels) {
         baseGrid.setAxisLabel(labels);
-        //repaint();
+        repaint();
         return this;
     }
 
@@ -1287,7 +1285,7 @@ public class PlotCanvas extends JPanel {
      */
     public PlotCanvas setAxisLabel(int axis, String label) {
         baseGrid.setAxisLabel(axis, label);
-        //repaint();
+        repaint();
         return this;
     }
 
@@ -1304,7 +1302,7 @@ public class PlotCanvas extends JPanel {
      */
     public void add(Shape p) {
         shapes.add(p);
-        //repaint();
+        repaint();
     }
 
     /**
@@ -1312,7 +1310,7 @@ public class PlotCanvas extends JPanel {
      */
     public void remove(Shape p) {
         shapes.remove(p);
-        //repaint();
+        repaint();
     }
 
     /**
@@ -1329,7 +1327,7 @@ public class PlotCanvas extends JPanel {
             }
         }
 
-        //repaint();
+        repaint();
     }
 
     /**
@@ -1345,7 +1343,7 @@ public class PlotCanvas extends JPanel {
             }
         }
 
-        //repaint();
+        repaint();
     }
 
     /**
@@ -1353,7 +1351,7 @@ public class PlotCanvas extends JPanel {
      */
     public void clear() {
         shapes.clear();
-        //repaint();
+        repaint();
     }
 
     /**
@@ -1376,7 +1374,7 @@ public class PlotCanvas extends JPanel {
     public void extendLowerBound(double[] bound) {
         base.extendLowerBound(bound);
         baseGrid.setBase(base);
-        //repaint();
+        repaint();
     }
 
     /**
@@ -1385,7 +1383,7 @@ public class PlotCanvas extends JPanel {
     public void extendUpperBound(double[] bound) {
         base.extendUpperBound(bound);
         baseGrid.setBase(base);
-        //repaint();
+        repaint();
     }
 
     /**
@@ -1394,7 +1392,7 @@ public class PlotCanvas extends JPanel {
     public void extendBound(double[] lowerBound, double[] upperBound) {
         base.extendBound(lowerBound, upperBound);
         baseGrid.setBase(base);
-        //repaint();
+        repaint();
     }
 
     /**
