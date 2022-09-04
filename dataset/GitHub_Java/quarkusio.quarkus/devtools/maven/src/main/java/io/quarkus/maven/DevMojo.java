@@ -49,7 +49,6 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
-import org.apache.maven.shared.utils.cli.CommandLineUtils;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
@@ -68,8 +67,8 @@ import org.twdata.maven.mojoexecutor.MojoExecutor;
 
 import io.quarkus.bootstrap.model.AppArtifactKey;
 import io.quarkus.bootstrap.resolver.maven.workspace.LocalProject;
-import io.quarkus.deployment.dev.DevModeContext;
-import io.quarkus.deployment.dev.DevModeMain;
+import io.quarkus.dev.DevModeContext;
+import io.quarkus.dev.DevModeMain;
 import io.quarkus.maven.components.MavenVersionEnforcer;
 import io.quarkus.maven.utilities.MojoUtils;
 import io.quarkus.utilities.JavaBinFinder;
@@ -185,9 +184,6 @@ public class DevMojo extends AbstractMojo {
     @Parameter(defaultValue = "${jvm.args}")
     private String jvmArgs;
 
-    @Parameter(defaultValue = "${quarkus.args}")
-    private String argsString;
-
     @Parameter(defaultValue = "${session}")
     private MavenSession session;
 
@@ -244,8 +240,6 @@ public class DevMojo extends AbstractMojo {
 
     @Component
     private BuildPluginManager pluginManager;
-
-    private Boolean debugPortOk;
 
     @Override
     public void execute() throws MojoFailureException, MojoExecutionException {
@@ -494,18 +488,15 @@ public class DevMojo extends AbstractMojo {
          */
         void prepare() throws Exception {
             if (debug == null) {
+                boolean useDebugMode = true;
                 // debug mode not specified
                 // make sure 5005 is not used, we don't want to just fail if something else is using it
-                // we don't check this on restarts, as the previous process is still running
-                if (debugPortOk == null) {
-                    try (Socket socket = new Socket(InetAddress.getByAddress(new byte[] { 127, 0, 0, 1 }), 5005)) {
-                        getLog().error("Port 5005 in use, not starting in debug mode");
-                        debugPortOk = false;
-                    } catch (IOException e) {
-                        debugPortOk = true;
-                    }
+                try (Socket socket = new Socket(InetAddress.getByAddress(new byte[] { 127, 0, 0, 1 }), 5005)) {
+                    getLog().error("Port 5005 in use, not starting in debug mode");
+                    useDebugMode = false;
+                } catch (IOException e) {
                 }
-                if (debugPortOk) {
+                if (useDebugMode) {
                     args.add("-Xdebug");
                     args.add("-Xrunjdwp:transport=dt_socket,address=0.0.0.0:5005,server=y,suspend=" + suspend);
                 }
@@ -649,14 +640,12 @@ public class DevMojo extends AbstractMojo {
             }
             args.add("-jar");
             args.add(tempFile.getAbsolutePath());
-            if (argsString != null) {
-                args.addAll(Arrays.asList(CommandLineUtils.translateCommandline(argsString)));
-            }
+
         }
 
         private void addQuarkusDevModeDeps(StringBuilder classPathManifest, final DevModeContext devModeContext)
                 throws MojoExecutionException, DependencyResolutionException {
-            final String pomPropsPath = "META-INF/maven/io.quarkus/quarkus-core-deployment/pom.properties";
+            final String pomPropsPath = "META-INF/maven/io.quarkus/quarkus-development-mode/pom.properties";
             final InputStream devModePomPropsIs = DevModeMain.class.getClassLoader().getResourceAsStream(pomPropsPath);
             if (devModePomPropsIs == null) {
                 throw new MojoExecutionException("Failed to locate " + pomPropsPath + " on the classpath");
@@ -689,11 +678,8 @@ public class DevMojo extends AbstractMojo {
                                             .setRepositories(repos)));
 
             for (ArtifactResult appDep : cpRes.getArtifactResults()) {
-                //we only use the launcher for launching from the IDE, we need to exclude it
-                if (!(appDep.getArtifact().getGroupId().equals("io.quarkus")
-                        && appDep.getArtifact().getArtifactId().equals("quarkus-ide-launcher"))) {
-                    addToClassPaths(classPathManifest, devModeContext, appDep.getArtifact().getFile());
-                }
+                File file = appDep.getArtifact().getFile();
+                addToClassPaths(classPathManifest, devModeContext, file);
             }
         }
 
