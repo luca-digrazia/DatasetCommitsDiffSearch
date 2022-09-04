@@ -52,7 +52,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollectio
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.BuildOptions.OptionsDiff;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.causes.Cause;
@@ -229,7 +228,7 @@ public final class SkyframeBuildView {
       // detection.
       optionsWithCacheInvalidatingDifferences =
           optionsWithCacheInvalidatingDifferences.filter(
-              (definition) -> !CoreOptions.CPU.equals(definition));
+              (definition) -> !BuildConfiguration.Options.CPU.equals(definition));
       ImmutableSet<String> oldCpus =
           oldTargetConfigs.stream().map(BuildConfiguration::getCpu).collect(toImmutableSet());
       ImmutableSet<String> newCpus =
