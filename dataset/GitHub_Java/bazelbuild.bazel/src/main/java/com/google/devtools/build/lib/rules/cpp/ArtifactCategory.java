@@ -10,153 +10,76 @@
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
-// limitations under the License.
+// limitations under the License
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.common.collect.ImmutableList;
 
 /**
  * A category of artifacts that are candidate input/output to an action, for which the toolchain can
  * select a single artifact.
  */
 public enum ArtifactCategory {
-  STATIC_LIBRARY {
-    @Override
-    public String getCategoryName() {
-      return STATIC_LIBRARY_CATEGORY_NAME;
-    }
+  STATIC_LIBRARY("lib", ".a", ".lib"),
+  ALWAYSLINK_STATIC_LIBRARY("lib", ".lo", ".lo.lib"),
+  DYNAMIC_LIBRARY("lib", ".so", ".dylib", ".dll"),
+  EXECUTABLE("", "", ".exe"),
+  INTERFACE_LIBRARY("lib", ".ifso", ".tbd", ".if.lib"),
+  PIC_FILE("", ".pic"),
+  INCLUDED_FILE_LIST("", ".d"),
+  OBJECT_FILE("", ".o", ".obj"),
+  PIC_OBJECT_FILE("", ".pic.o"),
+  CPP_MODULE("", ".pcm"),
+  GENERATED_ASSEMBLY("", ".s", ".asm"),
+  PROCESSED_HEADER("", ".processed"),
+  GENERATED_HEADER("", ".h"),
+  PREPROCESSED_C_SOURCE("", ".i"),
+  PREPROCESSED_CPP_SOURCE("", ".ii"),
+  COVERAGE_DATA_FILE("", ".gcno"),
+  // A matched-clif protobuf. Typically in binary format, but could be text depending on
+  // the options passed to the clif_matcher.
+  CLIF_OUTPUT_PROTO("", ".opb");
 
-    @Override
-    public ImmutableMap<String, String> getTemplateVariables(RuleContext ruleContext) {
-      return ImmutableMap.of("base_name", ruleContext.getLabel().getName());
-    }
-  },
+  private final String defaultPrefix;
+  private final String defaultExtension;
+  private final String starlarkName;
+  // The extensions allowed for this artifact name pattern, Bazel should recognized them as
+  // corresponding file type in CppFileTypes.java
+  final ImmutableList<String> allowedExtensions;
 
-  PIC_STATIC_LIBRARY {
-    @Override
-    public String getCategoryName() {
-      return PIC_STATIC_LIBRARY_CATEGORY_NAME;
-    }
+  ArtifactCategory(
+      String defaultPrefix,
+      String defaultExtension,
+      String... extraAllowedExtensions) {
+    this.defaultPrefix = defaultPrefix;
+    this.defaultExtension = defaultExtension;
+    this.allowedExtensions =
+        new ImmutableList.Builder<String>()
+            .add(defaultExtension)
+            .add(extraAllowedExtensions)
+            .build();
 
-    @Override
-    public ImmutableMap<String, String> getTemplateVariables(RuleContext ruleContext) {
-      return ImmutableMap.of("base_name", ruleContext.getLabel().getName());
-    }
-  },
-
-  ALWAYS_LINK_STATIC_LIBRARY {
-    @Override
-    public String getCategoryName() {
-      return ALWAYS_LINK_STATIC_LIBRARY_CATEGORY_NAME;
-    }
-
-    @Override
-    public ImmutableMap<String, String> getTemplateVariables(RuleContext ruleContext) {
-      return ImmutableMap.of("base_name", ruleContext.getLabel().getName());
-    }
-  },
-
-  ALWAYS_LINK_PIC_STATIC_LIBRARY {
-    @Override
-    public String getCategoryName() {
-      return ALWAYS_LINK_PIC_STATIC_LIBRARY_CATEGORY_NAME;
-    }
-
-    @Override
-    public ImmutableMap<String, String> getTemplateVariables(RuleContext ruleContext) {
-      return ImmutableMap.of("base_name", ruleContext.getLabel().getName());
-    }
-  },
-
-  DYNAMIC_LIBRARY {
-    @Override
-    public String getCategoryName() {
-      return DYNAMIC_LIBRARY_CATEGORY_NAME;
-    }
-
-    @Override
-    public ImmutableMap<String, String> getTemplateVariables(RuleContext ruleContext) {
-      return ImmutableMap.of("base_name", ruleContext.getLabel().getName());
-    }
-  },
-
-  EXECUTABLE {
-    @Override
-    public String getCategoryName() {
-      return EXECUTABLE_CATEGORY_NAME;
-    }
-
-    @Override
-    public ImmutableMap<String, String> getTemplateVariables(RuleContext ruleContext) {
-      return ImmutableMap.of("base_name", ruleContext.getLabel().getName());
-    }
-  },
-
-  INTERFACE {
-    @Override
-    public String getCategoryName() {
-      return INTERFACE_CATEGORY_NAME;
-    }
-
-    @Override
-    public ImmutableMap<String, String> getTemplateVariables(RuleContext ruleContext) {
-      return ImmutableMap.of("base_name", ruleContext.getLabel().getName());
-    }
-  },
-
-  DEBUG_SYMBOLS {
-    @Override
-    public String getCategoryName() {
-      return DEBUG_SYMBOL_CATEGORY_NAME;
-    }
-
-    @Override
-    public ImmutableMap<String, String> getTemplateVariables(RuleContext ruleContext) {
-      return ImmutableMap.of();
-    }
-  };
-
-  /** Error for template evaluation failure. */
-  @VisibleForTesting
-  public static final String TEMPLATE_EVAL_FAILURE =
-      "Error evaluating file name pattern for artifact category %s: %s";
-
-  @VisibleForTesting public static final String STATIC_LIBRARY_CATEGORY_NAME = "static_library";
-
-  @VisibleForTesting
-  public static final String PIC_STATIC_LIBRARY_CATEGORY_NAME = "pic_static_library";
-
-  @VisibleForTesting
-  public static final String ALWAYS_LINK_STATIC_LIBRARY_CATEGORY_NAME = "alwayslink_static_library";
-
-  @VisibleForTesting
-  public static final String ALWAYS_LINK_PIC_STATIC_LIBRARY_CATEGORY_NAME =
-      "alwayslink_pic_static_library";
-
-  @VisibleForTesting public static final String DYNAMIC_LIBRARY_CATEGORY_NAME = "dynamic_library";
-  @VisibleForTesting public static final String EXECUTABLE_CATEGORY_NAME = "executable";
-  @VisibleForTesting public static final String INTERFACE_CATEGORY_NAME = "interface_library";
-  private static final String DEBUG_SYMBOL_CATEGORY_NAME = "debug_symbol";
-
-  /** Returns the name of the category. */
-  public abstract String getCategoryName();
-
-  /** Returns an artifact given a templated name. */
-  public Artifact getArtifactForName(String artifactName, RuleContext ruleContext) {
-    PathFragment name =
-        new PathFragment(ruleContext.getLabel().getName()).replaceName(artifactName);
-    return ruleContext.getPackageRelativeArtifact(
-        name, ruleContext.getConfiguration().getBinDirectory());
+    this.starlarkName = toString().toLowerCase();
   }
 
-  /**
-   * Returns a map of candidate template variables to their values. For example, the entry (foo,
-   * bar) indicates that the crosstool artifact name "library_%{foo}.extension" should be templated
-   * to "library_bar.extension".
-   */
-  public abstract ImmutableMap<String, String> getTemplateVariables(RuleContext ruleContext);
+  public String getStarlarkName() {
+    return starlarkName;
+  }
+
+  /** Returns the name of the category. */
+  public String getCategoryName() {
+    return this.toString().toLowerCase();
+  }
+
+  public String getDefaultPrefix() {
+    return defaultPrefix;
+  }
+
+  public String getDefaultExtension() {
+    return defaultExtension;
+  }
+
+  public ImmutableList<String> getAllowedExtensions() {
+    return allowedExtensions;
+  }
 }
