@@ -1,28 +1,14 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-package org.jboss.quarkus.arc.processor;
+package io.quarkus.arc.processor;
 
 import static java.util.Collections.singletonList;
-import static org.jboss.jandex.Type.Kind.*;
+import static org.jboss.jandex.Type.Kind.ARRAY;
 import static org.jboss.jandex.Type.Kind.CLASS;
-import static org.jboss.quarkus.arc.processor.DotNames.*;
+import static org.jboss.jandex.Type.Kind.PARAMETERIZED_TYPE;
+import static org.jboss.jandex.Type.Kind.TYPE_VARIABLE;
+import static org.jboss.jandex.Type.Kind.WILDCARD_TYPE;
 
+import io.quarkus.arc.processor.InjectionPointInfo.TypeAndQualifiers;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -31,14 +17,16 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
-
-import org.jboss.jandex.*;
+import org.jboss.jandex.ClassInfo;
+import org.jboss.jandex.ClassType;
+import org.jboss.jandex.DotName;
+import org.jboss.jandex.Type;
 import org.jboss.jandex.Type.Kind;
-import org.jboss.quarkus.arc.processor.InjectionPointInfo.TypeAndQualifiers;
+import org.jboss.jandex.TypeVariable;
+import org.jboss.jandex.WildcardType;
 
 /**
- *
- * @author Martin Kouba
+ * Implements type-safe resolution rules.
  */
 class BeanResolver {
 
@@ -55,13 +43,19 @@ class BeanResolver {
         this.assignableFromMap = new ConcurrentHashMap<>();
         this.assignableFromMapFunction = name -> {
             Set<DotName> assignables = new HashSet<>();
-            Collection<ClassInfo> subclasses = beanDeployment.getIndex().getAllKnownSubclasses(name);
-            for (ClassInfo subclass : subclasses) {
+            for (ClassInfo subclass : beanDeployment.getBeanArchiveIndex().getAllKnownSubclasses(name)) {
                 assignables.add(subclass.name());
             }
-            Collection<ClassInfo> implementors = beanDeployment.getIndex().getAllKnownImplementors(name);
-            for (ClassInfo implementor : implementors) {
+            for (ClassInfo implementor : beanDeployment.getBeanArchiveIndex().getAllKnownImplementors(name)) {
                 assignables.add(implementor.name());
+            }
+            if (beanDeployment.hasApplicationIndex()) {
+                for (ClassInfo subclass : beanDeployment.getApplicationIndex().getAllKnownSubclasses(name)) {
+                    assignables.add(subclass.name());
+                }
+                for (ClassInfo implementor : beanDeployment.getApplicationIndex().getAllKnownImplementors(name)) {
+                    assignables.add(implementor.name());
+                }
             }
             return assignables;
         };
@@ -82,18 +76,29 @@ class BeanResolver {
         return resolved.isEmpty() ? Collections.emptyList() : resolved;
     }
 
-    boolean matches(Type requiredType, Type beanType) {
+    List<BeanInfo> findTypeMatching(Type type) {
+        List<BeanInfo> resolved = new ArrayList<>();
+        for (BeanInfo b : beanDeployment.getBeans()) {
+            if (Beans.matchesType(b, type)) {
+                resolved.add(b);
+            }
+        }
+        return resolved.isEmpty() ? Collections.emptyList() : resolved;
+    }
 
+    boolean matches(Type requiredType, Type beanType) {
+        return matchesNoBoxing(Types.box(requiredType), Types.box(beanType));
+    }
+
+    boolean matchesNoBoxing(Type requiredType, Type beanType) {
         if (requiredType == beanType) {
             return true;
         }
 
-        // TODO box types
-
         if (ARRAY.equals(requiredType.kind())) {
             if (ARRAY.equals(beanType.kind())) {
                 // Array types are considered to match only if their element types are identical
-                return matches(requiredType.asArrayType().component(), beanType.asArrayType().component());
+                return matchesNoBoxing(requiredType.asArrayType().component(), beanType.asArrayType().component());
             }
         } else if (CLASS.equals(requiredType.kind())) {
             if (CLASS.equals(beanType.kind())) {
@@ -134,74 +139,50 @@ class BeanResolver {
                 }
                 return true;
             }
-        } else if (PRIMITIVE.equals(requiredType.kind())) {
-            return primitiveMatch(requiredType.asPrimitiveType().primitive(), beanType);
+        } else if (WILDCARD_TYPE.equals(requiredType.kind())) {
+            return parametersMatch(requiredType, beanType);
         }
         return false;
-    }
-
-    static boolean primitiveMatch(PrimitiveType.Primitive requiredType, Type beanType) {
-        switch (requiredType) {
-            case INT: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(INTEGER))
-                    || (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.INT);
-
-            case LONG: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(LONG))
-                    ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.LONG);
-
-            case SHORT: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(SHORT))
-                    ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.SHORT);
-
-            case BYTE: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(BYTE))
-                    ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.BYTE);
-
-            case FLOAT: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(FLOAT))
-                    ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.FLOAT);
-
-            case DOUBLE: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(DOUBLE))
-                    ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.DOUBLE);
-
-            case CHAR: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(CHARACTER))
-                    ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.CHAR);
-
-            case BOOLEAN: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(BOOLEAN))
-                    ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.BOOLEAN);
-
-            default: throw new IllegalArgumentException("Not supported yet");
-        }
     }
 
     boolean parametersMatch(Type requiredParameter, Type beanParameter) {
         if (isActualType(requiredParameter) && isActualType(beanParameter)) {
             /*
-             * the required type parameter and the bean type parameter are actual types with identical raw type, and, if the type is parameterized, the bean
+             * the required type parameter and the bean type parameter are actual types with identical raw type, and, if the
+             * type is parameterized, the bean
              * type parameter is assignable to the required type parameter according to these rules, or
              */
             return matches(requiredParameter, beanParameter);
         }
         if (WILDCARD_TYPE.equals(requiredParameter.kind()) && isActualType(beanParameter)) {
             /*
-             * the required type parameter is a wildcard, the bean type parameter is an actual type and the actual type is assignable to the upper bound, if
+             * the required type parameter is a wildcard, the bean type parameter is an actual type and the actual type is
+             * assignable to the upper bound, if
              * any, of the wildcard and assignable from the lower bound, if any, of the wildcard, or
              */
             return parametersMatch(requiredParameter.asWildcardType(), beanParameter);
         }
         if (WILDCARD_TYPE.equals(requiredParameter.kind()) && TYPE_VARIABLE.equals(beanParameter.kind())) {
             /*
-             * the required type parameter is a wildcard, the bean type parameter is a type variable and the upper bound of the type variable is assignable to
-             * or assignable from the upper bound, if any, of the wildcard and assignable from the lower bound, if any, of the wildcard, or
+             * the required type parameter is a wildcard, the bean type parameter is a type variable and the upper bound of the
+             * type variable is assignable to
+             * or assignable from the upper bound, if any, of the wildcard and assignable from the lower bound, if any, of the
+             * wildcard, or
              */
             return parametersMatch(requiredParameter.asWildcardType(), beanParameter.asTypeVariable());
         }
         if (isActualType(requiredParameter) && TYPE_VARIABLE.equals(beanParameter.kind())) {
             /*
-             * the required type parameter is an actual type, the bean type parameter is a type variable and the actual type is assignable to the upper bound,
+             * the required type parameter is an actual type, the bean type parameter is a type variable and the actual type is
+             * assignable to the upper bound,
              * if any, of the type variable, or
              */
             return parametersMatch(requiredParameter, beanParameter.asTypeVariable());
         }
         if (TYPE_VARIABLE.equals(requiredParameter.kind()) && TYPE_VARIABLE.equals(beanParameter.kind())) {
             /*
-             * the required type parameter and the bean type parameter are both type variables and the upper bound of the required type parameter is assignable
+             * the required type parameter and the bean type parameter are both type variables and the upper bound of the
+             * required type parameter is assignable
              * to the upper bound, if any, of the bean type parameter
              */
             return parametersMatch(requiredParameter.asTypeVariable(), beanParameter.asTypeVariable());
@@ -210,7 +191,8 @@ class BeanResolver {
     }
 
     boolean parametersMatch(WildcardType requiredParameter, Type beanParameter) {
-        return (lowerBoundsOfWildcardMatch(beanParameter, requiredParameter) && upperBoundsOfWildcardMatch(requiredParameter, beanParameter));
+        return (lowerBoundsOfWildcardMatch(beanParameter, requiredParameter)
+                && upperBoundsOfWildcardMatch(requiredParameter, beanParameter));
     }
 
     boolean parametersMatch(WildcardType requiredParameter, TypeVariable beanParameter) {
@@ -238,7 +220,8 @@ class BeanResolver {
     }
 
     /**
-     * Returns <tt>true</tt> iff for each bound T, there is at least one bound from <tt>stricterBounds</tt> assignable to T. This reflects that
+     * Returns <tt>true</tt> iff for each bound T, there is at least one bound from <tt>stricterBounds</tt> assignable to T.
+     * This reflects that
      * <tt>stricterBounds</tt> are at least as strict as <tt>bounds</tt> are.
      */
     boolean boundsMatch(List<Type> bounds, List<Type> stricterBounds) {
@@ -287,7 +270,8 @@ class BeanResolver {
     }
 
     /*
-     * TypeVariable bounds are treated specially - CDI assignability rules are applied. Standard Java covariant assignability rules are applied to all other
+     * TypeVariable bounds are treated specially - CDI assignability rules are applied. Standard Java covariant assignability
+     * rules are applied to all other
      * types of bounds. This is not explicitly mentioned in the specification but is implied.
      */
     List<Type> getUppermostTypeVariableBounds(TypeVariable bound) {

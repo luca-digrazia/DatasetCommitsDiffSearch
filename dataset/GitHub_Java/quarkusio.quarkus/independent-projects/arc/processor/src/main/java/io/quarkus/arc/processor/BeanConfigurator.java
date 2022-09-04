@@ -62,7 +62,6 @@ public final class BeanConfigurator<T> extends BeanConfiguratorBase<BeanConfigur
                     .params(params)
                     .defaultBean(defaultBean)
                     .removable(removable)
-                    .forceApplicationClass(forceApplicationClass)
                     .build());
         }
     }

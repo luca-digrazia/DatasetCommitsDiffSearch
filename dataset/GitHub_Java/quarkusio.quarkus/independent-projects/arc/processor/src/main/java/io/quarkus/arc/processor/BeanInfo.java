@@ -352,8 +352,8 @@ public class BeanInfo implements InjectionTargetInfo {
     }
 
     void validate(List<Throwable> errors, List<BeanDeploymentValidator> validators,
-            Consumer<BytecodeTransformer> bytecodeTransformerConsumer, Set<DotName> classesReceivingNoArgsCtor) {
-        Beans.validateBean(this, errors, validators, bytecodeTransformerConsumer, classesReceivingNoArgsCtor);
+            Consumer<BytecodeTransformer> bytecodeTransformerConsumer) {
+        Beans.validateBean(this, errors, validators, bytecodeTransformerConsumer);
     }
 
     void init(List<Throwable> errors, Consumer<BytecodeTransformer> bytecodeTransformerConsumer,

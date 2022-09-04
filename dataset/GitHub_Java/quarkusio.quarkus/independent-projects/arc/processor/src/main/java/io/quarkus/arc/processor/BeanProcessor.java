@@ -34,7 +34,6 @@ import org.jboss.logging.Logger;
  *
  * <ol>
  * <li>{@link #registerCustomContexts()}</li>
- * <li>{@link #registerScopes()}</li>
  * <li>{@link #registerBeans()}</li>
  * <li>{@link #initialize(Consumer)}</li>
  * <li>{@link #validate(Consumer)}</li>
@@ -99,10 +98,6 @@ public class BeanProcessor {
 
     public ContextRegistrar.RegistrationContext registerCustomContexts() {
         return beanDeployment.registerCustomContexts(contextRegistrars);
-    }
-
-    public void registerScopes() {
-        beanDeployment.registerScopes();
     }
 
     /**
@@ -239,7 +234,6 @@ public class BeanProcessor {
             }
         };
         registerCustomContexts();
-        registerScopes();
         registerBeans();
         registerSyntheticObservers();
         initialize(unsupportedBytecodeTransformer);
@@ -251,66 +245,46 @@ public class BeanProcessor {
 
     public static class Builder {
 
-        String name;
+        String name = DEFAULT_NAME;
+
         IndexView beanArchiveIndex;
         IndexView applicationIndex;
-        Collection<BeanDefiningAnnotation> additionalBeanDefiningAnnotations;
-        Map<DotName, Collection<AnnotationInstance>> additionalStereotypes;
-        ResourceOutput output;
-        boolean sharedAnnotationLiterals;
-        ReflectionRegistration reflectionRegistration;
 
-        final List<DotName> resourceAnnotations;
-        final List<AnnotationsTransformer> annotationTransformers;
-        final List<InjectionPointsTransformer> injectionPointTransformers;
-        final List<ObserverTransformer> observerTransformers;
-        final List<BeanRegistrar> beanRegistrars;
-        final List<ObserverRegistrar> observerRegistrars;
-        final List<ContextRegistrar> contextRegistrars;
-        final List<InterceptorBindingRegistrar> additionalInterceptorBindingRegistrars;
-        final List<BeanDeploymentValidator> beanDeploymentValidators;
+        Collection<BeanDefiningAnnotation> additionalBeanDefiningAnnotations = Collections.emptySet();
+        Map<DotName, Collection<AnnotationInstance>> additionalStereotypes = Collections.emptyMap();
+
+        ResourceOutput output;
+
+        boolean sharedAnnotationLiterals = true;
+        ReflectionRegistration reflectionRegistration = ReflectionRegistration.NOOP;
+
+        final List<DotName> resourceAnnotations = new ArrayList<>();
+        final List<AnnotationsTransformer> annotationTransformers = new ArrayList<>();
+        final List<InjectionPointsTransformer> injectionPointTransformers = new ArrayList<>();
+        final List<ObserverTransformer> observerTransformers = new ArrayList<>();
+        final List<BeanRegistrar> beanRegistrars = new ArrayList<>();
+        final List<ObserverRegistrar> observerRegistrars = new ArrayList<>();
+        final List<ContextRegistrar> contextRegistrars = new ArrayList<>();
+        final List<InterceptorBindingRegistrar> additionalInterceptorBindingRegistrars = new ArrayList<>();
+        final List<BeanDeploymentValidator> beanDeploymentValidators = new ArrayList<>();
 
         boolean removeUnusedBeans = false;
-        final List<Predicate<BeanInfo>> removalExclusions;
+        final List<Predicate<BeanInfo>> removalExclusions = new ArrayList<>();
 
-        boolean generateSources;
-        boolean jtaCapabilities;
-        boolean transformUnproxyableClasses;
-        boolean allowMocking;
+        boolean generateSources = false;
+        boolean jtaCapabilities = false;
+        boolean transformUnproxyableClasses = false;
+        boolean allowMocking = false;
 
         AlternativePriorities alternativePriorities;
-        final List<Predicate<ClassInfo>> excludeTypes;
+        List<Predicate<ClassInfo>> excludeTypes = new ArrayList<>();
 
-        Predicate<DotName> applicationClassPredicate;
-
-        public Builder() {
-            name = DEFAULT_NAME;
-            additionalBeanDefiningAnnotations = Collections.emptySet();
-            additionalStereotypes = Collections.emptyMap();
-            sharedAnnotationLiterals = true;
-            reflectionRegistration = ReflectionRegistration.NOOP;
-            resourceAnnotations = new ArrayList<>();
-            annotationTransformers = new ArrayList<>();
-            injectionPointTransformers = new ArrayList<>();
-            observerTransformers = new ArrayList<>();
-            beanRegistrars = new ArrayList<>();
-            observerRegistrars = new ArrayList<>();
-            contextRegistrars = new ArrayList<>();
-            additionalInterceptorBindingRegistrars = new ArrayList<>();
-            beanDeploymentValidators = new ArrayList<>();
-
-            removeUnusedBeans = false;
-            removalExclusions = new ArrayList<>();
-
-            generateSources = false;
-            jtaCapabilities = false;
-            transformUnproxyableClasses = false;
-            allowMocking = false;
-
-            excludeTypes = new ArrayList<>();
-
-            applicationClassPredicate = dn -> true;
-        }
+        private Predicate<DotName> applicationClassPredicate = new Predicate<DotName>() {
+            @Override
+            public boolean test(DotName dotName) {
+                return true;
+            }
+        };
 
         public Builder setName(String name) {
             this.name = name;
