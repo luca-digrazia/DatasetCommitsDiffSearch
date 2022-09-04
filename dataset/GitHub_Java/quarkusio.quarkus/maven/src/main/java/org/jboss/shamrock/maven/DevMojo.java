@@ -23,7 +23,6 @@ import java.net.JarURLConnection;
 import java.net.URL;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
@@ -106,7 +105,7 @@ public class DevMojo extends AbstractMojo {
                 }
             }
             if(jvmArgs != null) {
-                args.addAll(Arrays.asList(jvmArgs.split(" ")));
+                args.add(jvmArgs);
             }
 
             for (Resource r : project.getBuild().getResources()) {
