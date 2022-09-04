@@ -22,8 +22,6 @@ import com.google.devtools.build.lib.actions.ActionLookupData;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.DerivedArtifact;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FilesetOutputSymlink;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
@@ -53,7 +51,7 @@ class ActionInputMapHelper {
         inputMap.put(artifact, entry.second, /*depOwner=*/ key);
         if (artifact.isFileset()) {
           ImmutableList<FilesetOutputSymlink> expandedFileset =
-              getFilesets(env, (SpecialArtifact) artifact);
+              getFilesets(env, (Artifact.SpecialArtifact) artifact);
           if (expandedFileset != null) {
             filesetsInsideRunfiles.put(artifact, expandedFileset);
           }
@@ -89,10 +87,11 @@ class ActionInputMapHelper {
     } else if (value instanceof ActionExecutionValue) {
       inputMap.put(
           key,
-          ((ActionExecutionValue) value).getExistingFileArtifactValue((DerivedArtifact) key),
+          ActionExecutionValue.createSimpleFileArtifactValue(
+              (Artifact.DerivedArtifact) key, (ActionExecutionValue) value),
           key);
       if (key.isFileset()) {
-        topLevelFilesets.put(key, getFilesets(env, (SpecialArtifact) key));
+        topLevelFilesets.put(key, getFilesets(env, (Artifact.SpecialArtifact) key));
       }
     } else {
       Preconditions.checkState(value instanceof FileArtifactValue);
@@ -101,7 +100,7 @@ class ActionInputMapHelper {
   }
 
   static ImmutableList<FilesetOutputSymlink> getFilesets(
-      Environment env, SpecialArtifact actionInput) throws InterruptedException {
+      Environment env, Artifact.SpecialArtifact actionInput) throws InterruptedException {
     Preconditions.checkState(actionInput.isFileset(), actionInput);
     ActionLookupData generatingActionKey = actionInput.getGeneratingActionKey();
     ActionLookupKey filesetActionLookupKey = generatingActionKey.getActionLookupKey();
@@ -114,8 +113,8 @@ class ActionInputMapHelper {
     ActionLookupData filesetActionKey;
 
     if (generatingAction instanceof SymlinkAction) {
-      DerivedArtifact outputManifest =
-          (DerivedArtifact) generatingAction.getInputs().getSingleton();
+      Artifact.DerivedArtifact outputManifest =
+          (Artifact.DerivedArtifact) generatingAction.getInputs().getSingleton();
       ActionLookupData manifestGeneratingKey = outputManifest.getGeneratingActionKey();
       Preconditions.checkState(
           manifestGeneratingKey.getActionLookupKey().equals(filesetActionLookupKey),
@@ -126,8 +125,8 @@ class ActionInputMapHelper {
           manifestGeneratingKey);
       ActionAnalysisMetadata symlinkTreeAction =
           filesetActionLookupValue.getAction(manifestGeneratingKey.getActionIndex());
-      DerivedArtifact inputManifest =
-          (DerivedArtifact) symlinkTreeAction.getInputs().getSingleton();
+      Artifact.DerivedArtifact inputManifest =
+          (Artifact.DerivedArtifact) symlinkTreeAction.getInputs().getSingleton();
       ActionLookupData inputManifestGeneratingKey = inputManifest.getGeneratingActionKey();
       Preconditions.checkState(
           inputManifestGeneratingKey.getActionLookupKey().equals(filesetActionLookupKey),

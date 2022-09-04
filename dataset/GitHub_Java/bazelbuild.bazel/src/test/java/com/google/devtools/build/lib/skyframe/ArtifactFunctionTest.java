@@ -295,7 +295,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
         .runTests();
   }
 
-  private static void file(Path path, String contents) throws Exception {
+  private void file(Path path, String contents) throws Exception {
     FileSystemUtils.createDirectoryAndParents(path.getParentDirectory());
     writeFile(path, contents);
   }
@@ -333,8 +333,11 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
         ArtifactRoot.asDerivedRoot(root, "out"), execPath, ALL_OWNER, SpecialArtifactType.TREE);
   }
 
-  private static TreeFileArtifact createFakeTreeFileArtifact(
-      SpecialArtifact treeArtifact, String parentRelativePath, String content) throws Exception {
+  private TreeFileArtifact createFakeTreeFileArtifact(
+      SpecialArtifact treeArtifact,
+      String parentRelativePath,
+      String content)
+      throws Exception {
     TreeFileArtifact treeFileArtifact =
         ActionsTestUtil.createTreeFileArtifactWithNoGeneratingAction(
             treeArtifact, parentRelativePath);
@@ -344,7 +347,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     return treeFileArtifact;
   }
 
-  private static void assertValueMatches(FileStatus file, byte[] digest, FileArtifactValue value)
+  private void assertValueMatches(FileStatus file, byte[] digest, FileArtifactValue value)
       throws IOException {
     assertThat(value.getSize()).isEqualTo(file.getSize());
     if (digest == null) {
