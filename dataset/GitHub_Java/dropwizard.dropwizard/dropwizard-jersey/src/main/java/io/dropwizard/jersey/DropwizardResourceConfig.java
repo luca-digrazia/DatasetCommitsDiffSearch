@@ -1,67 +1,109 @@
 package io.dropwizard.jersey;
 
+import com.codahale.metrics.Clock;
 import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.jersey.InstrumentedResourceMethodDispatchAdapter;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Ordering;
-import com.sun.jersey.api.core.ScanningResourceConfig;
-import com.sun.jersey.api.model.AbstractResource;
-import com.sun.jersey.api.model.AbstractResourceMethod;
-import com.sun.jersey.api.model.AbstractSubResourceLocator;
-import com.sun.jersey.api.model.AbstractSubResourceMethod;
-import com.sun.jersey.server.impl.modelapi.annotation.IntrospectionModeller;
-import io.dropwizard.jersey.caching.CacheControlledResourceMethodDispatchAdapter;
-import io.dropwizard.jersey.errors.LoggingExceptionMapper;
-import io.dropwizard.jersey.guava.OptionalQueryParamInjectableProvider;
-import io.dropwizard.jersey.guava.OptionalResourceMethodDispatchAdapter;
-import io.dropwizard.jersey.jackson.JsonProcessingExceptionMapper;
-import io.dropwizard.jersey.validation.ConstraintViolationExceptionMapper;
+import com.codahale.metrics.jersey2.InstrumentedResourceMethodApplicationListener;
+import com.fasterxml.classmate.ResolvedType;
+import com.fasterxml.classmate.TypeResolver;
+import io.dropwizard.jersey.caching.CacheControlledResponseFeature;
+import io.dropwizard.jersey.params.AbstractParamConverterProvider;
+import io.dropwizard.jersey.sessions.SessionFactoryProvider;
+import io.dropwizard.jersey.validation.FuzzyEnumParamConverterProvider;
+import io.dropwizard.util.JavaVersion;
+import io.dropwizard.util.Strings;
+import javassist.ClassPool;
+import javassist.CtClass;
+import javassist.LoaderClassPath;
+import org.glassfish.jersey.internal.inject.AbstractBinder;
+import org.glassfish.jersey.internal.inject.Providers;
+import org.glassfish.jersey.server.ResourceConfig;
+import org.glassfish.jersey.server.ServerProperties;
+import org.glassfish.jersey.server.model.Resource;
+import org.glassfish.jersey.server.model.ResourceMethod;
+import org.glassfish.jersey.server.monitoring.ApplicationEvent;
+import org.glassfish.jersey.server.monitoring.ApplicationEventListener;
+import org.glassfish.jersey.server.monitoring.RequestEvent;
+import org.glassfish.jersey.server.monitoring.RequestEventListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.Path;
-import javax.ws.rs.ext.Provider;
+import javax.annotation.Nullable;
+import javax.validation.constraints.NotNull;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.UUID;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
-public class DropwizardResourceConfig extends ScanningResourceConfig {
-    private static final String NEWLINE = String.format("%n");
+import static java.util.Objects.requireNonNull;
+
+public class DropwizardResourceConfig extends ResourceConfig {
     private static final Logger LOGGER = LoggerFactory.getLogger(DropwizardResourceConfig.class);
-    private String urlPattern;
+    private static final String NEWLINE = String.format("%n");
+    private static final TypeResolver TYPE_RESOLVER = new TypeResolver();
 
-    public static DropwizardResourceConfig forTesting(MetricRegistry metricRegistry) {
-        return new DropwizardResourceConfig(true, metricRegistry);
+    private static final Pattern PATH_DIRTY_SLASHES = Pattern.compile("\\s*/\\s*/+\\s*");
+
+    private String urlPattern = "/*";
+    private String contextPath = "/";
+    private final ComponentLoggingListener loggingListener = new ComponentLoggingListener(this);
+
+    public DropwizardResourceConfig() {
+        this(null);
     }
 
-    public DropwizardResourceConfig(MetricRegistry metricRegistry) {
-        this(false, metricRegistry);
-    }
-
-    private DropwizardResourceConfig(boolean testOnly, MetricRegistry metricRegistry) {
+    public DropwizardResourceConfig(@Nullable MetricRegistry metricRegistry) {
         super();
-        urlPattern = "/*";
-        getFeatures().put(FEATURE_DISABLE_WADL, Boolean.TRUE);
-        if (!testOnly) {
-            // create a subclass to pin it to Throwable
-            getSingletons().add(new LoggingExceptionMapper<Throwable>() {});
-            getSingletons().add(new ConstraintViolationExceptionMapper());
-            getSingletons().add(new JsonProcessingExceptionMapper());
+
+        if (metricRegistry == null) {
+            metricRegistry = new MetricRegistry();
         }
-        getSingletons().add(new InstrumentedResourceMethodDispatchAdapter(metricRegistry));
-        getClasses().add(CacheControlledResourceMethodDispatchAdapter.class);
-        getClasses().add(OptionalResourceMethodDispatchAdapter.class);
-        getClasses().add(OptionalQueryParamInjectableProvider.class);
+
+        property(ServerProperties.WADL_FEATURE_DISABLE, Boolean.TRUE);
+        register(loggingListener);
+
+        register(new InstrumentedResourceMethodApplicationListener(metricRegistry, Clock.defaultClock(), true));
+        register(CacheControlledResponseFeature.class);
+        register(io.dropwizard.jersey.guava.OptionalMessageBodyWriter.class);
+        register(new io.dropwizard.jersey.guava.OptionalParamBinder());
+        register(io.dropwizard.jersey.optional.OptionalMessageBodyWriter.class);
+        register(io.dropwizard.jersey.optional.OptionalDoubleMessageBodyWriter.class);
+        register(io.dropwizard.jersey.optional.OptionalIntMessageBodyWriter.class);
+        register(io.dropwizard.jersey.optional.OptionalLongMessageBodyWriter.class);
+        register(new io.dropwizard.jersey.optional.OptionalParamBinder());
+        register(AbstractParamConverterProvider.class);
+        register(new FuzzyEnumParamConverterProvider());
+        register(new SessionFactoryProvider.Binder());
     }
 
-    @Override
-    public void validate() {
-        super.validate();
+    /**
+     * Build a {@link DropwizardResourceConfig} which makes Jersey Test run on a random port,
+     * also see {@code org.glassfish.jersey.test.TestProperties#CONTAINER_PORT}.
+     *
+     * @since 2.0
+     */
+    public static DropwizardResourceConfig forTesting() {
+        return forTesting(null);
+    }
 
-        logResources();
-        logProviders();
-        logEndpoints();
+    /**
+     * Build a {@link DropwizardResourceConfig} which makes Jersey Test run on a random port,
+     * also see {@code org.glassfish.jersey.test.TestProperties#CONTAINER_PORT}.
+     *
+     * @since 2.0
+     */
+    public static DropwizardResourceConfig forTesting(@Nullable MetricRegistry metricRegistry) {
+        final DropwizardResourceConfig config = new DropwizardResourceConfig(metricRegistry);
+        // See org.glassfish.jersey.test.TestProperties#CONTAINER_PORT
+        config.property("jersey.config.test.container.port", "0");
+        return config;
     }
 
     public String getUrlPattern() {
@@ -72,133 +114,267 @@ public class DropwizardResourceConfig extends ScanningResourceConfig {
         this.urlPattern = urlPattern;
     }
 
-    private void logResources() {
-        final ImmutableSet.Builder<String> builder = ImmutableSet.builder();
+    /**
+     * @since 2.0
+     */
+    public String getContextPath() {
+        return contextPath;
+    }
 
-        for (Class<?> klass : getClasses()) {
-            if (klass.isAnnotationPresent(Path.class)) {
-                builder.add(klass.getCanonicalName());
+    public void setContextPath(String contextPath) {
+        this.contextPath = contextPath;
+    }
+
+    /**
+     * @since 2.0
+     */
+    public String getEndpointsInfo() {
+        return loggingListener.getEndpointsInfo();
+    }
+
+    /**
+     * Combines types of getClasses() and getSingletons in one Set.
+     *
+     * @return all registered types
+     */
+    Set<Class<?>> allClasses() {
+        final Set<Class<?>> allClasses = new HashSet<>(getClasses());
+        for (Object singleton : getSingletons()) {
+            allClasses.add(singleton.getClass());
+        }
+        return allClasses;
+    }
+
+    @Override
+    public ResourceConfig register(final Object component) {
+        final Object object = requireNonNull(component);
+        Class<?> clazz = object.getClass();
+        // If a class gets passed through as an object, cast to Class and register directly
+        if (component instanceof Class<?>) {
+            return super.register((Class<?>) component);
+        } else if (Providers.isProvider(clazz) || org.glassfish.hk2.utilities.Binder.class.isAssignableFrom(clazz)) {
+            // If Jersey supports this component's class (including Binders), register directly
+            return super.register(object);
+        } else {
+            // Else register a binder that binds the instance to its class type
+            try {
+                // Need to create a new subclass dynamically here because Jersey
+                // doesn't add new bindings for the same class
+                final ClassPool pool = ClassPool.getDefault();
+                pool.insertClassPath(new LoaderClassPath(this.getClass().getClassLoader()));
+                final CtClass cc = pool.makeClass(SpecificBinder.class.getName() + UUID.randomUUID());
+                cc.setSuperclass(pool.get(SpecificBinder.class.getName()));
+                final Object binderProxy;
+                if (JavaVersion.isJava8()) {
+                    binderProxy = cc.toClass().getConstructor(Object.class, Class.class).newInstance(object, clazz);
+                } else {
+                    binderProxy = cc.toClass(SpecificBinder.class).getConstructor(Object.class, Class.class).newInstance(object, clazz);
+                }
+                super.register(binderProxy);
+                return super.register(clazz);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
         }
+    }
 
-        for (Object o : getSingletons()) {
-            if (o.getClass().isAnnotationPresent(Path.class)) {
-                builder.add(o.getClass().getCanonicalName());
-            }
+    static String cleanUpPath(String path) {
+        return PATH_DIRTY_SLASHES.matcher(path).replaceAll("/").trim();
+    }
+
+    private static String mergePaths(@NotNull String context, String... pathSegments) {
+        if (pathSegments == null || pathSegments.length == 0) {
+            return cleanUpPath(context);
         }
 
-        for (Object o : getExplicitRootResources().values()) {
-            if (o instanceof Class) {
-                builder.add(((Class<?>)o).getCanonicalName());
+        final StringBuilder path = new StringBuilder();
+        if (context.endsWith("/")) {
+            path.append(context, 0, context.length() - 1);
+        } else {
+            path.append(context);
+        }
+
+        for (String segment : pathSegments) {
+            if (Strings.isNullOrEmpty(segment)) {
+                continue;
+            }
+            if ("/".equals(segment)) {
+                path.append('/');
             } else {
-                builder.add(o.getClass().getCanonicalName());
+                final int startIndex = segment.startsWith("/") ? 1 : 0;
+                final int endIndex = segment.endsWith("/") ? segment.length() - 1 : segment.length();
+                path.append('/').append(segment, startIndex, endIndex);
             }
         }
 
-        LOGGER.debug("resources = {}", builder.build());
+        return cleanUpPath(path.toString());
     }
 
-    private void logProviders() {
-        final ImmutableSet.Builder<String> builder = ImmutableSet.builder();
+    /**
+     * @since 2.0
+     */
+    public static class SpecificBinder extends AbstractBinder {
+        private Object object;
+        private Class<?> clazz;
 
-        for (Class<?> klass : getClasses()) {
-            if (klass.isAnnotationPresent(Provider.class)) {
-                builder.add(klass.getCanonicalName());
-            }
+        public SpecificBinder(Object object, Class<?> clazz) {
+            this.object = object;
+            this.clazz = clazz;
         }
 
-        for (Object o : getSingletons()) {
-            if (o.getClass().isAnnotationPresent(Provider.class)) {
-                builder.add(o.getClass().getCanonicalName());
-            }
-        }
-
-        LOGGER.debug("providers = {}", builder.build());
-    }
-
-    private void logEndpoints() {
-        final StringBuilder msg = new StringBuilder(1024);
-        msg.append("The following paths were found for the configured resources:");
-        msg.append(NEWLINE).append(NEWLINE);
-
-        final ImmutableList.Builder<Class<?>> builder = ImmutableList.builder();
-        for (Object o : getSingletons()) {
-            if (o.getClass().isAnnotationPresent(Path.class)) {
-                builder.add(o.getClass());
-            }
-        }
-        for (Class<?> klass : getClasses()) {
-            if (klass.isAnnotationPresent(Path.class)) {
-                builder.add(klass);
-            }
-        }
-
-        String rootPath = urlPattern;
-        if (rootPath.endsWith("/*")) {
-            rootPath = rootPath.substring(0, rootPath.length() - 1);
-        }
-
-        for (Class<?> klass : builder.build()) {
-            final List<String> endpoints = Lists.newArrayList();
-            populateEndpoints(endpoints, rootPath, klass, false);
-
-            for (String line : Ordering.natural().sortedCopy(endpoints)) {
-                msg.append(line).append(NEWLINE);
-            }
-        }
-        for (Map.Entry<String, Object> entry : getExplicitRootResources().entrySet()) {
-            final Class<?> klass  = entry.getValue() instanceof Class ?
-                    (Class<?>) entry.getValue() :
-                    entry.getValue().getClass();
-            final AbstractResource resource =
-                    new AbstractResource(entry.getKey(),
-                                         IntrospectionModeller.createResource(klass));
-
-            final List<String> endpoints = Lists.newArrayList();
-            populateEndpoints(endpoints, rootPath, klass, false, resource);
-
-            for (String line : Ordering.natural().sortedCopy(endpoints)) {
-                msg.append(line).append(NEWLINE);
-            }
-        }
-
-        LOGGER.info(msg.toString());
-    }
-
-    private void populateEndpoints(List<String> endpoints, String basePath, Class<?> klass,
-                                   boolean isLocator) {
-        populateEndpoints(endpoints, basePath, klass, isLocator, IntrospectionModeller.createResource(klass));
-    }
-
-    private void populateEndpoints(List<String> endpoints, String basePath, Class<?> klass,
-                                   boolean isLocator, AbstractResource resource) {
-        if (!isLocator) {
-            basePath = normalizePath(basePath, resource.getPath().getValue());
-        }
-
-        for (AbstractResourceMethod method : resource.getResourceMethods()) {
-            endpoints.add(formatEndpoint(method.getHttpMethod(), basePath, klass));
-        }
-
-        for (AbstractSubResourceMethod method : resource.getSubResourceMethods()) {
-            final String path = normalizePath(basePath, method.getPath().getValue());
-            endpoints.add(formatEndpoint(method.getHttpMethod(), path, klass));
-        }
-
-        for (AbstractSubResourceLocator locator : resource.getSubResourceLocators()) {
-            final String path = normalizePath(basePath, locator.getPath().getValue());
-            populateEndpoints(endpoints, path, locator.getMethod().getReturnType(), true);
+        @Override
+        public void configure() {
+            bind(object).to(clazz);
         }
     }
 
-    private String formatEndpoint(String method, String path, Class<?> klass) {
-        return String.format("    %-7s %s (%s)", method, path, klass.getCanonicalName());
+    private static class EndpointLogLine {
+        private final String httpMethod;
+        private final String basePath;
+        private final Class<?> klass;
+
+        EndpointLogLine(String httpMethod, String basePath, Class<?> klass) {
+            this.basePath = basePath;
+            this.klass = klass;
+            this.httpMethod = httpMethod;
+        }
+
+        @Override
+        public String toString() {
+            final String method = httpMethod == null ? "UNKNOWN" : httpMethod;
+            return String.format("    %-7s %s (%s)", method, basePath, klass.getCanonicalName());
+        }
     }
 
-    private String normalizePath(String basePath, String path) {
-        if (basePath.endsWith("/")) {
-            return path.startsWith("/") ? basePath + path.substring(1) : basePath + path;
+    private static class EndpointComparator implements Comparator<EndpointLogLine>, Serializable {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public int compare(EndpointLogLine endpointA, EndpointLogLine endpointB) {
+            return Comparator.<EndpointLogLine, String>comparing(endpoint -> endpoint.basePath)
+                    .thenComparing(endpoint -> endpoint.httpMethod, Comparator.nullsLast(Comparator.naturalOrder()))
+                    .compare(endpointA, endpointB);
         }
-        return path.startsWith("/") ? basePath + path : basePath + "/" + path;
+    }
+
+    private static class ComponentLoggingListener implements ApplicationEventListener {
+        private final DropwizardResourceConfig config;
+        private List<Resource> resources = Collections.emptyList();
+        private Set<Class<?>> providers = Collections.emptySet();
+
+        ComponentLoggingListener(DropwizardResourceConfig config) {
+            this.config = config;
+        }
+
+        @Override
+        public void onEvent(ApplicationEvent event) {
+            if (event.getType() == ApplicationEvent.Type.INITIALIZATION_APP_FINISHED) {
+                resources = event.getResourceModel().getResources();
+                providers = event.getProviders();
+
+                final String resourceClasses = resources.stream()
+                        .map(x -> x.getClass().getCanonicalName())
+                        .collect(Collectors.joining(", "));
+
+                final String providerClasses = providers.stream()
+                        .map(Class::getCanonicalName)
+                        .collect(Collectors.joining(", "));
+
+                LOGGER.debug("resources = {}", resourceClasses);
+                LOGGER.debug("providers = {}", providerClasses);
+                LOGGER.info(getEndpointsInfo());
+            }
+        }
+
+        private List<EndpointLogLine> logMethodLines(Resource resource, String contextPath) {
+            final List<EndpointLogLine> methodLines = new ArrayList<>();
+            for (ResourceMethod method : resource.getAllMethods()) {
+                if ("OPTIONS".equalsIgnoreCase(method.getHttpMethod())) {
+                    continue;
+                }
+
+                final String path = mergePaths(contextPath, resource.getPath());
+                final Class<?> handler = method.getInvocable().getHandler().getHandlerClass();
+                switch (method.getType()) {
+                    case RESOURCE_METHOD:
+                        methodLines.add(new EndpointLogLine(method.getHttpMethod(), path, handler));
+                        break;
+                    case SUB_RESOURCE_LOCATOR:
+                        final ResolvedType responseType = TYPE_RESOLVER
+                                .resolve(method.getInvocable().getResponseType());
+                        final Class<?> erasedType = !responseType.getTypeBindings().isEmpty() ?
+                                responseType.getTypeBindings().getBoundType(0).getErasedType() :
+                                responseType.getErasedType();
+
+                        final Resource res = Resource.from(erasedType);
+                        if (res == null) {
+                            methodLines.add(new EndpointLogLine(method.getHttpMethod(), path, handler));
+                        } else {
+                            methodLines.addAll(logResourceLines(res, path));
+                        }
+
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            return methodLines;
+        }
+
+        private List<EndpointLogLine> logResourceLines(Resource resource, String contextPath) {
+            final List<EndpointLogLine> resourceLines = new ArrayList<>();
+            for (Resource child : resource.getChildResources()) {
+                resourceLines.addAll(logResourceLines(child, mergePaths(contextPath, resource.getPath())));
+            }
+
+            resourceLines.addAll(logMethodLines(resource, contextPath));
+
+            return resourceLines;
+        }
+
+        String getEndpointsInfo() {
+            final StringBuilder msg = new StringBuilder(1024);
+            final Set<EndpointLogLine> endpointLogLines = new TreeSet<>(new EndpointComparator());
+            final String contextPath = config.getContextPath();
+            final String normalizedContextPath = contextPath.isEmpty() || contextPath.equals("/") ? "" :
+                    contextPath.startsWith("/") ? contextPath : "/" + contextPath;
+            final String pattern = config.getUrlPattern().endsWith("/*") ?
+                    config.getUrlPattern().substring(0, config.getUrlPattern().length() - 1) :
+                    config.getUrlPattern();
+
+            final String path = mergePaths(normalizedContextPath, pattern);
+
+            msg.append("The following paths were found for the configured resources:");
+            msg.append(NEWLINE).append(NEWLINE);
+
+            for (Resource resource : resources) {
+                endpointLogLines.addAll(logResourceLines(resource, path));
+            }
+
+            final List<EndpointLogLine> providerLines = providers.stream()
+                    .map(Resource::from)
+                    .filter(Objects::nonNull)
+                    .flatMap(res -> logResourceLines(res, path).stream())
+                    .collect(Collectors.toList());
+
+            endpointLogLines.addAll(providerLines);
+
+            if (!endpointLogLines.isEmpty()) {
+                for (EndpointLogLine line : endpointLogLines) {
+                    msg.append(line).append(NEWLINE);
+                }
+            } else {
+                msg.append("    NONE").append(NEWLINE);
+            }
+
+            return msg.toString();
+        }
+
+        @Override
+        @Nullable
+        public RequestEventListener onRequest(RequestEvent requestEvent) {
+            return null;
+        }
     }
 }
