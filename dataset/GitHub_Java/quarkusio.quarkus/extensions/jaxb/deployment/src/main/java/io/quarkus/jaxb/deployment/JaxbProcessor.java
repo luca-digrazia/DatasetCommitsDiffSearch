@@ -218,9 +218,8 @@ class JaxbProcessor {
             addResource(path);
 
             for (String line : Files.readAllLines(p)) {
-                line = line.trim();
-                if (!line.isEmpty() && !line.startsWith("#")) {
-                    String clazz = pkg + line;
+                if (!line.startsWith("#")) {
+                    String clazz = pkg + line.trim();
                     Class<?> cl = Class.forName(clazz);
 
                     while (cl != Object.class) {
