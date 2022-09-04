@@ -31,15 +31,13 @@ class Parser implements Function<String, Expression>, ParserHelper {
     private static final Logger LOGGER = Logger.getLogger(Parser.class);
     private static final String ROOT_HELPER_NAME = "$root";
 
-    static final Origin SYNTHETIC_ORIGIN = new OriginImpl(0, 0, 0, "<<synthetic>>", "<<synthetic>>", Optional.empty());
+    static final Origin SYNTHETIC_ORIGIN = new OriginImpl(0, 0, "<<synthetic>>", "<<synthetic>>", Optional.empty());
 
     private static final char START_DELIMITER = '{';
     private static final char END_DELIMITER = '}';
     private static final char COMMENT_DELIMITER = '!';
-    private static final char CDATA_START_DELIMITER = '|';
-    private static final char CDATA_START_DELIMITER_OLD = '[';
-    private static final char CDATA_END_DELIMITER = '|';
-    private static final char CDATA_END_DELIMITER_OLD = ']';
+    private static final char CDATA_START_DELIMITER = '[';
+    private static final char CDATA_END_DELIMITER = ']';
     private static final char UNDERSCORE = '_';
     private static final char ESCAPE_CHAR = '\\';
 
@@ -73,7 +71,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
         this.buffer = new StringBuilder();
         this.sectionStack = new ArrayDeque<>();
         this.sectionStack
-                .addFirst(SectionNode.builder(ROOT_HELPER_NAME, origin(0))
+                .addFirst(SectionNode.builder(ROOT_HELPER_NAME, origin())
                         .setEngine(engine)
                         .setHelperFactory(ROOT_SECTION_HELPER_FACTORY));
         this.sectionBlockStack = new ArrayDeque<>();
@@ -243,8 +241,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
     }
 
     private void cdata(char character) {
-        if (character == END_DELIMITER && buffer.length() > 0
-                && isCdataEnd(buffer.charAt(buffer.length() - 1))) {
+        if (character == END_DELIMITER && buffer.length() > 0 && buffer.charAt(buffer.length() - 1) == CDATA_END_DELIMITER) {
             // End of cdata
             state = State.TEXT;
             buffer.deleteCharAt(buffer.length() - 1);
@@ -252,10 +249,6 @@ class Parser implements Function<String, Expression>, ParserHelper {
         } else {
             buffer.append(character);
         }
-    }
-
-    private boolean isCdataEnd(char character) {
-        return character == CDATA_END_DELIMITER || character == CDATA_END_DELIMITER_OLD;
     }
 
     private void tag(char character) {
@@ -273,7 +266,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
             if (character == COMMENT_DELIMITER) {
                 buffer.append(character);
                 state = State.COMMENT;
-            } else if (character == CDATA_START_DELIMITER || character == CDATA_START_DELIMITER_OLD) {
+            } else if (character == CDATA_START_DELIMITER) {
                 state = State.CDATA;
             } else {
                 buffer.append(character);
@@ -294,7 +287,6 @@ class Parser implements Function<String, Expression>, ParserHelper {
     private boolean isValidIdentifierStart(char character) {
         // A valid identifier must start with a digit, alphabet, underscore, comment delimiter, cdata start delimiter or a tag command (e.g. # for sections)
         return Tag.isCommand(character) || character == COMMENT_DELIMITER || character == CDATA_START_DELIMITER
-                || character == CDATA_START_DELIMITER_OLD
                 || character == UNDERSCORE
                 || Character.isDigit(character)
                 || Character.isAlphabetic(character);
@@ -321,7 +313,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
     private void flushText() {
         if (buffer.length() > 0 && !ignoreContent) {
             SectionBlock.Builder block = sectionBlockStack.peek();
-            block.addNode(new TextNode(buffer.toString(), origin(0)));
+            block.addNode(new TextNode(buffer.toString(), origin()));
         }
         this.buffer = new StringBuilder();
     }
@@ -329,7 +321,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
     private void flushNextLine() {
         if (buffer.length() > 0 && !ignoreContent) {
             SectionBlock.Builder block = sectionBlockStack.peek();
-            block.addNode(new LineSeparatorNode(buffer.toString(), origin(0)));
+            block.addNode(new LineSeparatorNode(buffer.toString(), origin()));
         }
         this.buffer = new StringBuilder();
         line++;
@@ -370,7 +362,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
                 }
                 // Add the new block
                 SectionBlock.Builder block = SectionBlock.builder("" + sectionBlockIdx++, this, this::parserError)
-                        .setOrigin(origin(0));
+                        .setOrigin(origin());
                 sectionBlockStack.addFirst(block.setLabel(sectionName));
                 processParams(tag, sectionName, iter);
 
@@ -391,7 +383,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
                 paramsStack.addFirst(factory.getParameters());
                 SectionBlock.Builder mainBlock = SectionBlock
                         .builder(SectionHelperFactory.MAIN_BLOCK_NAME, this, this::parserError)
-                        .setOrigin(origin(0));
+                        .setOrigin(origin());
                 sectionBlockStack.addFirst(mainBlock);
                 processParams(tag, SectionHelperFactory.MAIN_BLOCK_NAME, iter);
 
@@ -399,7 +391,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
                 Scope currentScope = scopeStack.peek();
                 Scope newScope = factory.initializeBlock(currentScope, mainBlock);
                 SectionNode.Builder sectionNode = SectionNode
-                        .builder(sectionName, origin(0))
+                        .builder(sectionName, origin())
                         .setEngine(engine)
                         .setHelperFactory(factory);
 
@@ -461,10 +453,10 @@ class Parser implements Function<String, Expression>, ParserHelper {
             String key = content.substring(spaceIdx + 1, content.length());
             String value = content.substring(1, spaceIdx);
             currentScope.put(key, Expressions.TYPE_INFO_SEPARATOR + value + Expressions.TYPE_INFO_SEPARATOR);
-            sectionBlockStack.peek().addNode(new ParameterDeclarationNode(content, origin(0)));
+            sectionBlockStack.peek().addNode(new ParameterDeclarationNode(content, origin()));
 
         } else {
-            sectionBlockStack.peek().addNode(new ExpressionNode(apply(content), engine, origin(content.length() + 1)));
+            sectionBlockStack.peek().addNode(new ExpressionNode(apply(content), engine, origin()));
         }
         this.buffer = new StringBuilder();
     }
@@ -476,7 +468,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
         }
         builder.append(" on line ").append(line).append(": ")
                 .append(message);
-        return new TemplateException(origin(0),
+        return new TemplateException(origin(),
                 builder.toString());
     }
 
@@ -486,11 +478,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
         List<String> paramValues = new ArrayList<>();
 
         while (iter.hasNext()) {
-            // Ignore whitespace strings
-            String val = iter.next().trim();
-            if (!val.isEmpty()) {
-                paramValues.add(val);
-            }
+            paramValues.add(iter.next());
         }
         if (paramValues.size() > factoryParams.size()) {
             LOGGER.debugf("Too many params [label=%s, params=%s, factoryParams=%s]", label, paramValues, factoryParams);
@@ -553,12 +541,9 @@ class Parser implements Function<String, Expression>, ParserHelper {
      *
      * @param part
      * @return the index of an equals char outside of any string literal,
-     *         <code>-1</code> if no such char is found or if the part represents a composite param
+     *         <code>-1</code> if no such char is found
      */
     static int getFirstDeterminingEqualsCharPosition(String part) {
-        if (!part.isEmpty() && part.charAt(0) == START_COMPOSITE_PARAM) {
-            return -1;
-        }
         boolean stringLiteral = false;
         for (int i = 0; i < part.length(); i++) {
             if (LiteralSupport.isStringLiteralSeparator(part.charAt(i))) {
@@ -767,11 +752,11 @@ class Parser implements Function<String, Expression>, ParserHelper {
 
     @Override
     public ExpressionImpl apply(String value) {
-        return parseExpression(value, scopeStack.peek(), origin(value.length() + 1));
+        return parseExpression(value, scopeStack.peek(), origin());
     }
 
-    Origin origin(int lineCharacterOffset) {
-        return new OriginImpl(line, lineCharacter - lineCharacterOffset, lineCharacter, id, generatedId, variant);
+    Origin origin() {
+        return new OriginImpl(line, lineCharacter, id, generatedId, variant);
     }
 
     private List<List<TemplateNode>> readLines(SectionNode rootNode) {
@@ -851,17 +836,14 @@ class Parser implements Function<String, Expression>, ParserHelper {
     static class OriginImpl implements Origin {
 
         private final int line;
-        private final int lineCharacterStart;
-        private final int lineCharacterEnd;
+        private final int lineCharacter;
         private final String templateId;
         private final String templateGeneratedId;
         private final Optional<Variant> variant;
 
-        OriginImpl(int line, int lineCharacterStart, int lineCharacterEnd, String templateId, String templateGeneratedId,
-                Optional<Variant> variant) {
+        OriginImpl(int line, int lineCharacter, String templateId, String templateGeneratedId, Optional<Variant> variant) {
             this.line = line;
-            this.lineCharacterStart = lineCharacterStart;
-            this.lineCharacterEnd = lineCharacterEnd;
+            this.lineCharacter = lineCharacter;
             this.templateId = templateId;
             this.templateGeneratedId = templateGeneratedId;
             this.variant = variant;
@@ -873,13 +855,8 @@ class Parser implements Function<String, Expression>, ParserHelper {
         }
 
         @Override
-        public int getLineCharacterStart() {
-            return lineCharacterStart;
-        }
-
-        @Override
-        public int getLineCharacterEnd() {
-            return lineCharacterEnd;
+        public int getLineCharacter() {
+            return lineCharacter;
         }
 
         @Override

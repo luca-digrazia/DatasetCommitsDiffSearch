@@ -80,7 +80,6 @@ class EvaluatorImpl implements Evaluator {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private CompletionStage<Object> resolve(EvalContextImpl evalContext, Iterator<ValueResolver> resolvers,
             boolean tryCachedResolver) {
 
@@ -92,10 +91,6 @@ class EvaluatorImpl implements Evaluator {
                     if (Result.NOT_FOUND.equals(r)) {
                         return resolve(evalContext, resolvers, false);
                     } else {
-                        if (r instanceof CompletionStage) {
-                            // If the result is a completion stage return it as is
-                            return (CompletionStage<Object>) r;
-                        }
                         return CompletableFuture.completedFuture(r);
                     }
                 });
@@ -123,10 +118,6 @@ class EvaluatorImpl implements Evaluator {
                 } else {
                     // Cache the first resolver where a result is found
                     ((PartImpl) evalContext.part).setCachedResolver(resolver);
-                    if (r instanceof CompletionStage) {
-                        // If the result is a completion stage return it as is
-                        return (CompletionStage<Object>) r;
-                    }
                     return CompletableFuture.completedFuture(r);
                 }
             });

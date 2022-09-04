@@ -1,8 +1,8 @@
 package io.quarkus.qute;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -19,10 +19,10 @@ public interface TemplateNode {
 
     /**
      * 
-     * @return a list of expressions
+     * @return a set of expressions
      */
-    default List<Expression> getExpressions() {
-        return Collections.emptyList();
+    default Set<Expression> getExpressions() {
+        return Collections.emptySet();
     }
 
     /**
@@ -44,29 +44,9 @@ public interface TemplateNode {
      */
     public interface Origin {
 
-        /**
-         * 
-         * @return the line where the node can be found
-         */
         int getLine();
 
-        /**
-         * Note that this information is not available for all nodes.
-         * <p>
-         * However, it's always available for an expression node.
-         * 
-         * @return the line character the node starts
-         */
-        int getLineCharacterStart();
-
-        /**
-         * Note that this information is not available for all nodes.
-         * <p>
-         * However, it's always available for an expression node.
-         * 
-         * @return the line character the node ends
-         */
-        int getLineCharacterEnd();
+        int getLineCharacter();
 
         String getTemplateId();
 

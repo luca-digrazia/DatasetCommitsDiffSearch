@@ -113,14 +113,8 @@ public class ParserTest {
                 + "{#for item in foo.items}\n\n"
                 + "{item.name}"
                 + "{/}");
-        Origin fooItemsOrigin = find(template.getExpressions(), "foo.items").getOrigin();
-        assertEquals(6, fooItemsOrigin.getLine());
-        assertEquals(14, fooItemsOrigin.getLineCharacterStart());
-        assertEquals(24, fooItemsOrigin.getLineCharacterEnd());
-        Origin itemNameOrigin = find(template.getExpressions(), "item.name").getOrigin();
-        assertEquals(8, itemNameOrigin.getLine());
-        assertEquals(1, itemNameOrigin.getLineCharacterStart());
-        assertEquals(11, itemNameOrigin.getLineCharacterEnd());
+        assertEquals(6, find(template.getExpressions(), "foo.items").getOrigin().getLine());
+        assertEquals(8, find(template.getExpressions(), "item.name").getOrigin().getLine());
     }
 
     @Test
@@ -170,18 +164,12 @@ public class ParserTest {
                 1);
         assertParserError("{#if (foo || bar}{/}",
                 "Parser error on line 1: unterminated string literal or composite parameter detected for [#if (foo || bar]", 1);
-        assertParams("item.name == 'foo' and item.name is false", "item.name", "==", "'foo'", "and", "item.name", "is",
-                "false");
-        assertParams("(item.name == 'foo') and (item.name is false)", "(item.name == 'foo')", "and", "(item.name is false)");
-        assertParams("(item.name != 'foo') || (item.name == false)", "(item.name != 'foo')", "||", "(item.name == false)");
     }
 
     @Test
     public void testWhitespace() {
         Engine engine = Engine.builder().addDefaults().build();
         assertEquals("Hello world", engine.parse("{#if true  }Hello {name }{/if  }").data("name", "world").render());
-        assertEquals("Hello world", engine.parse("{#if true \n }Hello {name }{/if  }").data("name", "world").render());
-        assertEquals("Hello world", engine.parse("{#if true \n || false}Hello {name }{/if  }").data("name", "world").render());
         assertEquals("Hello world", engine.parse("Hello {name ?: 'world'  }").render());
     }
 
@@ -198,11 +186,6 @@ public class ParserTest {
                 + jsSnippet
                 + "]}").data("name", "world").render());
         assertEquals("Hello world <strong>", engine.parse("Hello {name} {[<strong>]}").data("name", "world").render());
-        assertEquals("Hello world <script>const foo = function(){alert('bar');};</script>", engine.parse("Hello {name} {|"
-                + jsSnippet
-                + "|}").data("name", "world").render());
-        assertEquals("Hello world <strong>", engine.parse("Hello {name} {|<strong>|}").data("name", "world").render());
-        assertEquals("Hello {name} world", engine.parse("Hello{| {name} |}{name}").data("name", "world").render());
     }
 
     @Test

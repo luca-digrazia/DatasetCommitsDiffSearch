@@ -11,21 +11,21 @@ import java.util.concurrent.ExecutionException;
 
 final class ExpressionImpl implements Expression {
 
-    static final ExpressionImpl EMPTY = new ExpressionImpl(0, null, Collections.emptyList(), null, null);
+    static final ExpressionImpl EMPTY = new ExpressionImpl(null, Collections.emptyList(), null, null);
 
     /**
      * 
      * @param value
-     * @return a new expression
+     * @return a "non-contextual" expression
      */
     static ExpressionImpl from(String value) {
         if (value == null || value.isEmpty()) {
             return EMPTY;
         }
-        return Parser.parseExpression(ExpressionImpl::syntheticId, value, Scope.EMPTY, Parser.SYNTHETIC_ORIGIN);
+        return Parser.parseExpression(value, Scope.EMPTY, Parser.SYNTHETIC_ORIGIN);
     }
 
-    static ExpressionImpl literalFrom(int id, String literal) {
+    static ExpressionImpl literalFrom(String literal) {
         if (literal == null || literal.isEmpty()) {
             return EMPTY;
         }
@@ -33,14 +33,14 @@ final class ExpressionImpl implements Expression {
         if (literalValue == null) {
             throw new IllegalArgumentException("Not a literal value: " + literal);
         }
-        return literal(id, literal, literalValue, Parser.SYNTHETIC_ORIGIN);
+        return literal(literal, literalValue, Parser.SYNTHETIC_ORIGIN);
     }
 
-    static ExpressionImpl literal(int id, String literal, Object value, Origin origin) {
+    static ExpressionImpl literal(String literal, Object value, Origin origin) {
         if (literal == null) {
             throw new IllegalArgumentException("Literal must not be null");
         }
-        return new ExpressionImpl(id, null,
+        return new ExpressionImpl(null,
                 Collections.singletonList(new PartImpl(literal,
                         value != null
                                 ? Expressions.TYPE_INFO_SEPARATOR + value.getClass().getName() + Expressions.TYPE_INFO_SEPARATOR
@@ -48,18 +48,12 @@ final class ExpressionImpl implements Expression {
                 value, origin);
     }
 
-    static Integer syntheticId() {
-        return -1;
-    }
-
-    private final int id;
     private final String namespace;
     private final List<Part> parts;
     private final CompletableFuture<Object> literal;
     private final Origin origin;
 
-    ExpressionImpl(int id, String namespace, List<Part> parts, Object literal, Origin origin) {
-        this.id = id;
+    ExpressionImpl(String namespace, List<Part> parts, Object literal, Origin origin) {
         this.namespace = namespace;
         this.parts = parts;
         this.literal = literal != Result.NOT_FOUND ? CompletableFuture.completedFuture(literal) : null;
@@ -88,29 +82,23 @@ final class ExpressionImpl implements Expression {
     }
 
     @Override
-    public int getGeneratedId() {
-        return id;
-    }
-
-    @Override
     public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + Objects.hashCode(toOriginalString());
-        result = prime * result + Objects.hashCode(origin);
-        return result;
+        return Objects.hash(toOriginalString());
     }
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj)
+        if (this == obj) {
             return true;
-        if (obj == null)
+        }
+        if (obj == null) {
             return false;
-        if (getClass() != obj.getClass())
+        }
+        if (getClass() != obj.getClass()) {
             return false;
+        }
         ExpressionImpl other = (ExpressionImpl) obj;
-        return Objects.equals(toOriginalString(), other.toOriginalString()) && Objects.equals(origin, other.origin);
+        return Objects.equals(toOriginalString(), other.toOriginalString());
     }
 
     @Override
@@ -152,8 +140,8 @@ final class ExpressionImpl implements Expression {
 
         private final List<Expression> parameters;
 
-        VirtualMethodPartImpl(String name, List<Expression> parameters, String lastPartHint) {
-            super(name, buildTypeInfo(name, parameters, lastPartHint));
+        VirtualMethodPartImpl(String name, List<Expression> parameters) {
+            super(name, null);
             this.parameters = parameters;
         }
 
@@ -169,6 +157,11 @@ final class ExpressionImpl implements Expression {
         @Override
         public VirtualMethodPart asVirtualMethod() {
             return this;
+        }
+
+        @Override
+        public String getTypeInfo() {
+            return toString();
         }
 
         @Override
@@ -196,10 +189,6 @@ final class ExpressionImpl implements Expression {
 
         @Override
         public String toString() {
-            return buildTypeInfo(name, parameters, null);
-        }
-
-        private static String buildTypeInfo(String name, List<Expression> parameters, String lastPartHint) {
             StringBuilder builder = new StringBuilder();
             builder.append(name).append("(");
             for (Iterator<Expression> iterator = parameters.iterator(); iterator.hasNext();) {
@@ -210,9 +199,6 @@ final class ExpressionImpl implements Expression {
                 }
             }
             builder.append(")");
-            if (lastPartHint != null) {
-                builder.append(lastPartHint);
-            }
             return builder.toString();
         }
 
