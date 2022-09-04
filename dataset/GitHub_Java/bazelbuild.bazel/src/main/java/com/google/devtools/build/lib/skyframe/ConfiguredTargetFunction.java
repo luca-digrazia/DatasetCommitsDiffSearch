@@ -334,7 +334,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
         String targetDescription = target.toString();
         toolchainContext =
             ResolvedToolchainContext.load(
-                target.getPackage().getRepositoryMapping(),
                 unloadedToolchainContext,
                 targetDescription,
                 depValueMap.get(DependencyResolver.TOOLCHAIN_DEPENDENCY));

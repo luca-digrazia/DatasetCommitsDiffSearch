@@ -27,8 +27,8 @@ import com.google.devtools.build.lib.packages.Attribute.ComputedDefault;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import java.io.IOException;
@@ -507,7 +507,7 @@ public class ConfigurableAttributesTest extends BuildViewTestCase {
         ")");
     assertThat(getConfiguredTarget("//foo:g")).isNull();
     assertContainsEvent(
-        "While resolving configuration keys for //foo:g: no such target '//bar:fake'");
+        "While resolving configuation keys for //foo:g: no such target '//bar:fake'");
   }
 
   /**
