@@ -20,7 +20,6 @@ import javax.enterprise.context.Initialized;
 import javax.enterprise.context.control.ActivateRequestContext;
 import javax.enterprise.inject.Any;
 import javax.enterprise.inject.Default;
-import javax.enterprise.inject.Intercepted;
 import javax.inject.Named;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
@@ -41,13 +40,13 @@ public final class BeanArchives {
     public static IndexView buildBeanArchiveIndex(IndexView... applicationIndexes) {
         List<IndexView> indexes = new ArrayList<>();
         Collections.addAll(indexes, applicationIndexes);
-        indexes.add(buildAdditionalIndex());
+        indexes.add(buildCdiApiIndex());
+        indexes.add(buildBuiltinIndex());
         return new IndexWrapper(CompositeIndex.create(indexes));
     }
 
-    private static IndexView buildAdditionalIndex() {
+    private static IndexView buildCdiApiIndex() {
         Indexer indexer = new Indexer();
-        // CDI API
         index(indexer, ActivateRequestContext.class.getName());
         index(indexer, Default.class.getName());
         index(indexer, Any.class.getName());
@@ -55,8 +54,11 @@ public final class BeanArchives {
         index(indexer, Initialized.class.getName());
         index(indexer, BeforeDestroyed.class.getName());
         index(indexer, Destroyed.class.getName());
-        index(indexer, Intercepted.class.getName());
-        // Arc built-in beans
+        return indexer.complete();
+    }
+
+    private static IndexView buildBuiltinIndex() {
+        Indexer indexer = new Indexer();
         index(indexer, ActivateRequestContextInterceptor.class.getName());
         index(indexer, InjectableRequestContextController.class.getName());
         return indexer.complete();

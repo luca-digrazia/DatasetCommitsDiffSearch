@@ -19,7 +19,6 @@ package io.quarkus.arc;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.Set;
-import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
 import javax.enterprise.context.ContextNotActiveException;
 import javax.enterprise.inject.spi.BeanManager;
@@ -106,14 +105,6 @@ public interface ArcContainer {
     <T> InstanceHandle<T> instance(InjectableBean<T> bean);
 
     /**
-     * Returns true if Arc container is running.
-     * This can be used as a quick check to determine CDI availability in Quarkus.
-     *
-     * @return true is {@link ArcContainer} is running, false otherwise
-     */
-    boolean isRunning();
-
-    /**
      *
      * @param beanIdentifier
      * @return an injectable bean or null
@@ -135,30 +126,4 @@ public interface ArcContainer {
      */
     BeanManager beanManager();
 
-    /**
-     * Indicates if there is a current request, and it has been turned asynchronous.
-     * This uses the information provided by the currently registered
-     * {@link AsyncRequestStatusProvider}.
-     * 
-     * @return true if there is a current request, and it has been turned asynchronous.
-     */
-    boolean isCurrentRequestAsync();
-
-    /**
-     * <p>
-     * Returns a {@link CompletionStage} that represents completion of the current
-     * asynchronous request. This uses the information provided by all currently registered
-     * {@link AsyncRequestNotifierProvider}. The returned {@link CompletionStage} will notify
-     * failure if any provider fails, or notify completion when all providers complete. This
-     * allows us to get notified of exceptions in any part of the async request, even if other
-     * parts are not aware of those failures.
-     * </p>
-     * <p>
-     * If there is no current asynchronous request, this returns a completed {@link CompletionStage},
-     * which will not reflect any eventual synchronous previously raised exception.
-     * </p>
-     * 
-     * @return a {@link CompletionStage} to notify failure or completion of the current asynchronous request.
-     */
-    CompletionStage<Void> getAsyncRequestNotifier();
 }

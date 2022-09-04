@@ -2,16 +2,14 @@ package io.quarkus.arc.deployment;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
-import javax.enterprise.inject.spi.BeanManager;
-import javax.enterprise.inject.spi.InjectionPoint;
 import javax.inject.Inject;
 import javax.inject.Qualifier;
 
 import io.quarkus.arc.Arc;
-import io.quarkus.arc.CurrentInjectionPointProvider.InjectionPointImpl;
+import io.quarkus.arc.ArcContainer;
 import io.quarkus.deployment.test.TestResourceProvider;
 
 public class ArcTestResourceProvider implements TestResourceProvider {
@@ -21,37 +19,31 @@ public class ArcTestResourceProvider implements TestResourceProvider {
     @Override
     public void inject(Object test) {
         Class<?> c = test.getClass();
-        BeanManager beanManager = Arc.container().beanManager();
+        ArcContainer container = Arc.container();
         while (c != Object.class) {
-            for (Field field : c.getDeclaredFields()) {
-                if (field.isAnnotationPresent(Inject.class)) {
+            for (Field f : c.getDeclaredFields()) {
+                if (f.isAnnotationPresent(Inject.class)) {
                     try {
-                        Set<Annotation> qualifiers = new HashSet<>();
-                        Set<Annotation> annotations = new HashSet<>();
-                        for (Annotation a : field.getAnnotations()) {
-                            annotations.add(a);
+                        List<Annotation> qualifiers = new ArrayList<>();
+                        for (Annotation a : f.getAnnotations()) {
                             if (a.annotationType().isAnnotationPresent(Qualifier.class)) {
                                 qualifiers.add(a);
                             }
                         }
-                        Object instance = beanManager.getInjectableReference(
-                                new InjectionPointImpl(field.getGenericType(), field.getGenericType(),
-                                        qualifiers, null, annotations, field, -1),
-                                beanManager.createCreationalContext(null));
-                        // Set the field value
-                        field.setAccessible(true);
+                        Object instance = container.instance(f.getGenericType(), qualifiers.toArray(EMPTY_ANNOTATION_ARRAY))
+                                .get();
+                        f.setAccessible(true);
                         try {
-                            field.set(test, instance);
+                            f.set(test, instance);
                         } catch (IllegalAccessException e) {
                             throw new RuntimeException(e);
                         }
                     } catch (Throwable t) {
-                        throw new RuntimeException("Failed to inject field " + field, t);
+                        throw new RuntimeException("Failed to inject field " + f, t);
                     }
                 }
             }
             c = c.getSuperclass();
         }
     }
-
 }
