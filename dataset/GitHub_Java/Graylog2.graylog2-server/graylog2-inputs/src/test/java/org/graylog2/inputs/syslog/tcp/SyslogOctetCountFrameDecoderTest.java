@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.inputs.syslog.tcp;
 
@@ -21,18 +21,18 @@ import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
 import org.jboss.netty.handler.codec.embedder.CodecEmbedderException;
 import org.jboss.netty.handler.codec.embedder.DecoderEmbedder;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
+import org.junit.Before;
+import org.junit.Test;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertNull;
-import static org.testng.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class SyslogOctetCountFrameDecoderTest {
     private DecoderEmbedder<ChannelBuffer> embedder;
 
-    @BeforeMethod
+    @Before
     public void setUp() throws Exception {
         embedder = new DecoderEmbedder<ChannelBuffer>(new SyslogOctetCountFrameDecoder());
     }
@@ -81,7 +81,29 @@ public class SyslogOctetCountFrameDecoderTest {
         assertEquals(embedder.poll().toString(Charsets.UTF_8), "<45>1 2014-10-21T10:21:09+00:00 c4dc57ba1ebb syslog-ng 7120 - [meta sequenceId=\"1\"] syslog-ng starting up; version='3.5.3'\n");
     }
 
-    @Test(expectedExceptions = CodecEmbedderException.class)
+    @Test
+    public void testIncompleteFramesAndSmallBuffer() throws Exception {
+        /*
+         * This test has been added to reproduce this issue: https://github.com/Graylog2/graylog2-server/issues/1105
+         *
+         * It triggers an edge case where the buffer is missing <frame size value length + 1> bytes.
+         * The SyslogOctetCountFrameDecoder was handling this wrong in previous versions and tried to read more from
+         * the buffer than there was available after the frame size value bytes have been skipped.
+         */
+        final byte[] bytes = "123 <45>1 2014-10-21T10:21:09+00:00 c4dc57ba1ebb syslog-ng 7120 - [meta sequenceId=\"1\"] syslog-ng starting up; version='3.5.".getBytes();
+        final ChannelBuffer buf = ChannelBuffers.dynamicBuffer(bytes.length);
+        buf.writeBytes(bytes);
+
+        assertFalse(embedder.offer(buf));
+        assertNull(embedder.poll());
+
+        buf.writeBytes("3'\n".getBytes());
+
+        assertTrue(embedder.offer(buf));
+        assertEquals(embedder.poll().toString(Charsets.UTF_8), "<45>1 2014-10-21T10:21:09+00:00 c4dc57ba1ebb syslog-ng 7120 - [meta sequenceId=\"1\"] syslog-ng starting up; version='3.5.3'\n");
+    }
+
+    @Test(expected = CodecEmbedderException.class)
     public void testBrokenFrames() throws Exception {
         final ChannelBuffer buf1 = ChannelBuffers.copiedBuffer("1 2014-10-21T10:21:09+00:00 c4dc57ba1ebb syslog-ng 7120 - ", Charsets.UTF_8);
 
