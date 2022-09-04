@@ -37,8 +37,7 @@ public class ConfiguredTargetKey extends ActionLookupKey {
 
   private transient int hashCode;
 
-  @AutoCodec.VisibleForSerialization
-  ConfiguredTargetKey(Label label, @Nullable BuildConfigurationValue.Key configurationKey) {
+  private ConfiguredTargetKey(Label label, @Nullable BuildConfigurationValue.Key configurationKey) {
     this.label = Preconditions.checkNotNull(label);
     this.configurationKey = configurationKey;
   }
@@ -115,6 +114,12 @@ public class ConfiguredTargetKey extends ActionLookupKey {
   @Override
   public String toString() {
     return String.format("%s %s", label, configurationKey);
+  }
+
+  @AutoCodec.Instantiator
+  static ConfiguredTargetKey create(
+      Label label, @Nullable BuildConfigurationValue.Key configurationKey) {
+    return builder().setLabel(label).setConfigurationKey(configurationKey).build();
   }
 
   /** Returns a new {@link Builder} to create instances of {@link ConfiguredTargetKey}. */
