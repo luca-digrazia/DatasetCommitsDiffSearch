@@ -19,7 +19,6 @@ import smile.hash.MurmurHash;
 import smile.math.distance.HammingDistance;
 import smile.sort.HeapSelect;
 
-import java.io.Serializable;
 import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -65,8 +64,7 @@ import java.util.HashSet;
  * @see LSH
  * @author Qiyang Zuo
  */
-public class SNLSH<E> implements NearestNeighborSearch<SNLSH.AbstractSentence, E>, KNNSearch<SNLSH.AbstractSentence, E>, RNNSearch<SNLSH.AbstractSentence, E>, Serializable {
-    private static final long serialVersionUID = 1L;
+public class SNLSH<E> implements NearestNeighborSearch<SNLSH.AbstractSentence, E>, KNNSearch<SNLSH.AbstractSentence, E>, RNNSearch<SNLSH.AbstractSentence, E> {
 
 
     private final int bandSize;
