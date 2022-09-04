@@ -101,7 +101,7 @@ public abstract class ImplicitOutputsFunction {
         if (!map.isConfigurable(attrName)) {
           Object value = map.get(attrName, attrType);
           attrValues.put(
-              Attribute.getStarlarkName(attrName), Starlark.fromJava(value, /*mutability=*/ null));
+              Attribute.getSkylarkName(attrName), Starlark.fromJava(value, /*mutability=*/ null));
         }
       }
       ClassObject attrs =
@@ -162,6 +162,7 @@ public abstract class ImplicitOutputsFunction {
         Iterable<String> substitutions = outputsFunction.getImplicitOutputs(eventHandler, map);
         if (Iterables.isEmpty(substitutions)) {
           throw new EvalException(
+              null,
               String.format(
                   "For attribute '%s' in outputs: %s",
                   entry.getKey(), "Invalid placeholder(s) in template"));
@@ -543,6 +544,7 @@ public abstract class ImplicitOutputsFunction {
     for (String placeholder : parsedTemplate.attributeNames()) {
       if (rule.isConfigurable(placeholder)) {
         throw new EvalException(
+            /*location=*/ null,
             String.format(
                 "Attribute %s is configurable and cannot be used in outputs", placeholder));
       }

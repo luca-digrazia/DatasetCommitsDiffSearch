@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.analysis.BashCommandConstructor;
 import com.google.devtools.build.lib.analysis.CommandHelper;
 import com.google.devtools.build.lib.analysis.ConfigurationMakeVariableContext;
 import com.google.devtools.build.lib.analysis.DefaultInfo;
-import com.google.devtools.build.lib.analysis.ExecGroupCollection;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.LabelExpander;
@@ -699,11 +698,6 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
   }
 
   @Override
-  public ExecGroupCollection execGroups() {
-    return new ExecGroupCollection(ruleContext.getToolchainContexts());
-  }
-
-  @Override
   public String toString() {
     return ruleLabelCanonicalName;
   }
@@ -1008,7 +1002,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
     }
     if (transitiveFiles != Starlark.NONE) {
       builder.addTransitiveArtifacts(
-          Depset.cast(transitiveFiles, Artifact.class, "transitive_files"));
+          ((Depset) transitiveFiles).getSetFromParam(Artifact.class, "transitive_files"));
     }
     if (!symlinks.isEmpty()) {
       // If Starlark code directly manipulates symlinks, activate more stringent validity checking.
