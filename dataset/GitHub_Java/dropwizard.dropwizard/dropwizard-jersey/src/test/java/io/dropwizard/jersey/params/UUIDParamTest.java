@@ -37,7 +37,7 @@ public class UUIDParamTest {
             ErrorMessage entity = (ErrorMessage) response.getEntity();
             assertThat(entity.getCode()).isEqualTo(400);
             assertThat(entity.getMessage())
-                    .isEqualTo("Parameter is not a UUID.");
+                    .isEqualTo("\"foo\" is not a UUID.");
         }
     }
 }

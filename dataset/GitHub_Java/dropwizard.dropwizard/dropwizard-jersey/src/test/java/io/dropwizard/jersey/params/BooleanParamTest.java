@@ -57,7 +57,7 @@ public class BooleanParamTest {
             ErrorMessage entity = (ErrorMessage) response.getEntity();
             assertThat(entity.getCode()).isEqualTo(400);
             assertThat(entity.getMessage())
-                    .isEqualTo("Parameter must be \"true\" or \"false\".");
+                    .isEqualTo("\"null\" must be \"true\" or \"false\".");
         }
     }
 
@@ -76,7 +76,7 @@ public class BooleanParamTest {
             ErrorMessage entity = (ErrorMessage) response.getEntity();
             assertThat(entity.getCode()).isEqualTo(400);
             assertThat(entity.getMessage())
-                    .isEqualTo("Parameter must be \"true\" or \"false\".");
+                    .isEqualTo("\"foo\" must be \"true\" or \"false\".");
         }
     }
 }

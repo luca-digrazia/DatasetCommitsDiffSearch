@@ -33,7 +33,7 @@ public class LongParamTest {
             ErrorMessage entity = (ErrorMessage) response.getEntity();
             assertThat(entity.getCode()).isEqualTo(400);
             assertThat(entity.getMessage())
-                    .isEqualTo("Parameter is not a number.");
+                    .isEqualTo("\"foo\" is not a number.");
         }
     }
 }
