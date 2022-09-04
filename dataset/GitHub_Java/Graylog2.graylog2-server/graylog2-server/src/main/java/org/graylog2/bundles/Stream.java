@@ -26,8 +26,6 @@ import java.util.Set;
 
 public class Stream {
     @JsonProperty
-    private String id;
-    @JsonProperty
     @NotBlank
     private String title;
     @JsonProperty
@@ -40,14 +38,6 @@ public class Stream {
     @JsonProperty
     @NotNull
     private Set<String> outputs = Collections.emptySet();
-
-    public String getId() {
-        return id;
-    }
-
-    public void setId(String id) {
-        this.id = id;
-    }
 
     public String getTitle() {
         return title;

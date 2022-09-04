@@ -38,10 +38,10 @@ public class DashboardWidget {
     private Map<String, Object> configuration = Collections.emptyMap();
     @JsonProperty
     @Min(0)
-    private int col = -1;
+    private int col;
     @JsonProperty
     @Min(0)
-    private int row = -1;
+    private int row;
 
     public String getDescription() {
         return description;
