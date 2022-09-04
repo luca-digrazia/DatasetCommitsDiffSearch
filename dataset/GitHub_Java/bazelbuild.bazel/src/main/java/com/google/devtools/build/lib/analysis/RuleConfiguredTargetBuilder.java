@@ -61,8 +61,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
 import javax.annotation.Nullable;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.syntax.Location;
@@ -71,10 +69,10 @@ import net.starlark.java.syntax.Location;
  * Builder class for analyzed rule instances.
  *
  * <p>This is used to tell Bazel which {@link TransitiveInfoProvider}s are produced by the analysis
- * of a configured target. For more information about analysis, see {@link
- * RuleConfiguredTargetFactory}.
+ * of a configured target. For more information about analysis, see
+ * {@link com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory}.
  *
- * @see RuleConfiguredTargetFactory
+ * @see com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory
  */
 public final class RuleConfiguredTargetBuilder {
   private final RuleContext ruleContext;
@@ -322,32 +320,14 @@ public final class RuleConfiguredTargetBuilder {
    * validation action output group itself.
    */
   private void propagateTransitiveValidationOutputGroups() {
-    collectTransitiveValidationOutputGroups(
-        ruleContext,
-        unused -> true,
-        validationArtifacts -> addOutputGroup(OutputGroupInfo.VALIDATION, validationArtifacts));
-  }
 
-  /**
-   * Collects the validation action output groups from every dependency-type attribute of the given
-   * target that matches the given predicate and passes them to the given consumer.
-   *
-   * <p>This function can be used to implement custom validation action propagation logic that for
-   * example ignores some attributes.
-   */
-  public static void collectTransitiveValidationOutputGroups(
-      RuleContext ruleContext,
-      Predicate<String> includeAttribute,
-      Consumer<NestedSet<Artifact>> consumer) {
     for (String attributeName : ruleContext.attributes().getAttributeNames()) {
-      if (!includeAttribute.test(attributeName)) {
-        continue;
-      }
+
+      Attribute attribute = ruleContext.attributes().getAttributeDefinition(attributeName);
 
       // Validation actions for tools, or from implicit deps should
       // not fail the overall build, since those dependencies should have their own builds
       // and tests that should surface any failing validations.
-      Attribute attribute = ruleContext.attributes().getAttributeDefinition(attributeName);
       if (!attribute.getTransitionFactory().isTool()
           && !attribute.isImplicit()
           && attribute.getType().getLabelClass() == LabelClass.DEPENDENCY) {
@@ -359,7 +339,7 @@ public final class RuleConfiguredTargetBuilder {
               outputGroup.getOutputGroup(OutputGroupInfo.VALIDATION);
 
           if (!validationArtifacts.isEmpty()) {
-            consumer.accept(validationArtifacts);
+            addOutputGroup(OutputGroupInfo.VALIDATION, validationArtifacts);
           }
         }
       }
