@@ -93,11 +93,7 @@ class CoreLibrarySupport {
     this.retargetConfig = retargetConfig;
     checkArgument(
         renamedPrefixes.stream()
-            .allMatch(
-                prefix ->
-                    prefix.startsWith("java/")
-                        || prefix.startsWith("sun/")
-                        || prefix.startsWith("javadesugar/")),
+            .allMatch(prefix -> prefix.startsWith("java/") || prefix.startsWith("javadesugar/")),
         "Unexpected renamedPrefixes: Actual (%s).",
         renamedPrefixes);
     this.renamedPrefixes = ImmutableSet.copyOf(renamedPrefixes);
@@ -115,9 +111,7 @@ class CoreLibrarySupport {
 
   public boolean isRenamedCoreLibrary(String internalName) {
     String unprefixedName = rewriter.unprefix(internalName);
-    if (!(unprefixedName.startsWith("java/")
-            || unprefixedName.startsWith("sun/")
-            || unprefixedName.startsWith("javadesugar/"))
+    if (!(unprefixedName.startsWith("java/") || unprefixedName.startsWith("javadesugar/"))
         || renamedPrefixes.isEmpty()) {
       return false; // shortcut
     }
@@ -131,9 +125,6 @@ class CoreLibrarySupport {
     internalName = rewriter.unprefix(internalName);
     if (internalName.startsWith("java/")) {
       return "j$/" + internalName.substring(/* cut away "java/" prefix */ 5);
-    }
-    if (internalName.startsWith("sun/")) {
-      return "j$/" + internalName;
     }
     if (internalName.startsWith("javadesugar/")) {
       return "jd$/" + internalName.substring(/* cut away "javadesugar/" prefix */ 12);
