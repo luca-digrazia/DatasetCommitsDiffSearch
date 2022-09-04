@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.testutil.ManualSleeper;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -380,7 +379,7 @@ public class HttpConnectorTest {
                     readHttpRequest(socket.getInputStream());
                     sendLines(
                         socket,
-                        "HTTP/1.1 401 Unauthorized",
+                        "HTTP/1.1 404 Not Here",
                         "Date: Fri, 31 Dec 1999 23:59:59 GMT",
                         "Connection: close",
                         "Content-Type: text/plain",
@@ -392,39 +391,7 @@ public class HttpConnectorTest {
                 }
               });
       thrown.expect(IOException.class);
-      thrown.expectMessage("401 Unauthorized");
-      connector.connect(
-          new URL(String.format("http://localhost:%d", server.getLocalPort())),
-          url -> ImmutableMap.<String, String>of());
-    }
-  }
-
-  @Test
-  public void permanentErrorNotFound_doesNotRetryAndThrowsFileNotFoundException() throws Exception {
-    try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName(null))) {
-      @SuppressWarnings("unused")
-      Future<?> possiblyIgnoredError =
-          executor.submit(
-              new Callable<Object>() {
-                @Override
-                public Object call() throws Exception {
-                  try (Socket socket = server.accept()) {
-                    readHttpRequest(socket.getInputStream());
-                    sendLines(
-                        socket,
-                        "HTTP/1.1 404 Not Found",
-                        "Date: Fri, 31 Dec 1999 23:59:59 GMT",
-                        "Connection: close",
-                        "Content-Type: text/plain",
-                        "Content-Length: 0",
-                        "",
-                        "");
-                  }
-                  return null;
-                }
-              });
-      thrown.expect(FileNotFoundException.class);
-      thrown.expectMessage("404 Not Found");
+      thrown.expectMessage("404 Not Here");
       connector.connect(
           new URL(String.format("http://localhost:%d", server.getLocalPort())),
           url -> ImmutableMap.<String, String>of());
