@@ -37,13 +37,11 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nonnull;
 import javax.annotation.concurrent.NotThreadSafe;
 import java.net.InetAddress;
-import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
-import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -124,7 +122,6 @@ public class Message implements Messages {
         FIELD_MESSAGE, FIELD_ID
     );
 
-    @Deprecated
     public static final Function<Message, String> ID_FUNCTION = new MessageIdFunction();
 
     private final Map<String, Object> fields = Maps.newHashMap();
@@ -141,39 +138,6 @@ public class Message implements Messages {
     private long journalOffset = Long.MIN_VALUE;
 
     private ArrayList<Recording> recordings;
-
-    private com.codahale.metrics.Counter sizeCounter = new com.codahale.metrics.Counter();
-
-    private static final IdentityHashMap<Class<?>, Integer> classSizes = Maps.newIdentityHashMap();
-    static {
-        classSizes.put(byte.class, 1);
-        classSizes.put(Byte.class, 1);
-
-        classSizes.put(char.class, 2);
-        classSizes.put(Character.class, 2);
-
-        classSizes.put(short.class, 2);
-        classSizes.put(Short.class, 2);
-
-        classSizes.put(boolean.class, 4);
-        classSizes.put(Boolean.class, 4);
-
-        classSizes.put(int.class, 4);
-        classSizes.put(Integer.class, 4);
-
-        classSizes.put(float.class, 4);
-        classSizes.put(Float.class, 4);
-
-        classSizes.put(long.class, 8);
-        classSizes.put(Long.class, 8);
-
-        classSizes.put(double.class, 8);
-        classSizes.put(Double.class, 8);
-
-        classSizes.put(DateTime.class, 8);
-        classSizes.put(Date.class, 8);
-        classSizes.put(ZonedDateTime.class, 8);
-    }
 
     public Message(final String message, final String source, final DateTime timestamp) {
         fields.put(FIELD_ID, new UUID().toString());
@@ -196,9 +160,6 @@ public class Message implements Messages {
         for (final String key : REQUIRED_FIELDS) {
             final Object field = getField(key);
             if (field == null || field instanceof String && ((String) field).isEmpty()) {
-                if (LOG.isTraceEnabled()) {
-                    LOG.trace("Message <{}> is incomplete because the field <{}> is <{}>", fields.get(FIELD_ID), key, field);
-                }
                 return false;
             }
         }
@@ -206,7 +167,6 @@ public class Message implements Messages {
         return true;
     }
 
-    @Deprecated
     public String getValidationErrors() {
         final StringBuilder sb = new StringBuilder();
 
@@ -238,32 +198,31 @@ public class Message implements Messages {
                 continue;
             }
 
-            final Object value = entry.getValue();
             // Elasticsearch does not allow "." characters in keys since version 2.0.
             // See: https://www.elastic.co/guide/en/elasticsearch/reference/2.0/breaking_20_mapping_changes.html#_field_names_may_not_contain_dots
-            if (key.contains(".")) {
+            if (key != null && key.contains(".")) {
                 final String newKey = key.replace('.', KEY_REPLACEMENT_CHAR);
 
                 // If the message already contains the transformed key, we skip the field and emit a warning.
                 // This is still not optimal but better than implementing expensive logic with multiple replacement
                 // character options. Conflicts should be rare...
                 if (!obj.containsKey(newKey)) {
-                    obj.put(newKey, value);
+                    obj.put(newKey, entry.getValue());
                 } else {
                     LOG.warn("Keys must not contain a \".\" character! Ignoring field \"{}\"=\"{}\" in message [{}] - Unable to replace \".\" with a \"{}\" because of key conflict: \"{}\"=\"{}\"",
-                        key, value, getId(), KEY_REPLACEMENT_CHAR, newKey, obj.get(newKey));
+                        key, entry.getValue(), getId(), KEY_REPLACEMENT_CHAR, newKey, obj.get(newKey));
                     LOG.debug("Full message with \".\" in message key: {}", this);
                 }
             } else {
-                if (obj.containsKey(key)) {
+                if (key != null && obj.containsKey(key)) {
                     final String newKey = key.replace(KEY_REPLACEMENT_CHAR, '.');
                     // Deliberate warning duplicates because the key with the "." might be transformed before reaching
                     // the duplicate original key with a "_". Otherwise we would silently overwrite the transformed key.
                     LOG.warn("Keys must not contain a \".\" character! Ignoring field \"{}\"=\"{}\" in message [{}] - Unable to replace \".\" with a \"{}\" because of key conflict: \"{}\"=\"{}\"",
-                        newKey, fields.get(newKey), getId(), KEY_REPLACEMENT_CHAR, key, value);
+                        newKey, fields.get(newKey), getId(), KEY_REPLACEMENT_CHAR, key, entry.getValue());
                     LOG.debug("Full message with \".\" in message key: {}", this);
                 }
-                obj.put(key, value);
+                obj.put(key, entry.getValue());
             }
         }
 
@@ -298,11 +257,6 @@ public class Message implements Messages {
         }
 
         return obj;
-    }
-
-    // estimate the byte/char length for a field and its value
-    static long sizeForField(@Nonnull String key, @Nonnull Object value) {
-        return key.length() + sizeForValue(value);
     }
 
     @Override
@@ -341,8 +295,7 @@ public class Message implements Messages {
     }
 
     public void setSource(final String source) {
-        final Object previousSource = fields.put(FIELD_SOURCE, source);
-        updateSize(FIELD_SOURCE, source, previousSource);
+        fields.put(FIELD_SOURCE, source);
     }
 
     public void addField(final String key, final Object value) {
@@ -365,65 +318,16 @@ public class Message implements Messages {
         }
 
         if (FIELD_TIMESTAMP.equals(trimmedKey) && value != null && value instanceof Date) {
-            final DateTime timestamp = new DateTime(value);
-            final Object previousValue = fields.put(FIELD_TIMESTAMP, timestamp);
-            updateSize(trimmedKey, timestamp, previousValue);
+            fields.put(FIELD_TIMESTAMP, new DateTime(value));
         } else if (value instanceof String) {
             final String str = ((String) value).trim();
 
             if (isRequiredField || !str.isEmpty()) {
-                final Object previousValue = fields.put(trimmedKey, str);
-                updateSize(trimmedKey, str, previousValue);
+                fields.put(trimmedKey, str);
             }
         } else if (value != null) {
-            final Object previousValue = fields.put(trimmedKey, value);
-            updateSize(trimmedKey, value, previousValue);
+            fields.put(trimmedKey, value);
         }
-    }
-
-    private void updateSize(String fieldName, Object newValue, Object previousValue) {
-        // don't count internal fields
-        if (GRAYLOG_FIELDS.contains(fieldName)) {
-            return;
-        }
-        long newValueSize = 0;
-        long oldValueSize = 0;
-        final long oldSize = sizeCounter.getCount();
-        final int keyLength = fieldName.length();
-        // if the field is being removed, also subtract the name's length
-        if (newValue == null) {
-            sizeCounter.dec(keyLength);
-        } else {
-            newValueSize = sizeForValue(newValue);
-            sizeCounter.inc(newValueSize);
-        }
-        // if the field is new, also count its name's length
-        if (previousValue == null) {
-            sizeCounter.inc(keyLength);
-        } else {
-            oldValueSize = sizeForValue(previousValue);
-            sizeCounter.dec(oldValueSize);
-        }
-        if (LOG.isTraceEnabled()) {
-            final long newSize = sizeCounter.getCount();
-            LOG.trace("[Message size update][{}] key {}/{}, new/old/change: {}/{}/{} total: {}",
-                    getId(), fieldName, keyLength, newValueSize, oldValueSize, newSize - oldSize, newSize);
-        }
-    }
-
-    static long sizeForValue(@Nonnull Object value) {
-        long valueSize;
-        if (value instanceof CharSequence) {
-            valueSize = ((CharSequence) value).length();
-        } else {
-            final Integer classSize = classSizes.get(value.getClass());
-            valueSize = classSize == null ? 0 : classSize;
-        }
-        return valueSize;
-    }
-
-    public long getSize() {
-        return sizeCounter.getCount();
     }
 
     public static boolean validKey(final String key) {
@@ -440,7 +344,6 @@ public class Message implements Messages {
         }
     }
 
-    @Deprecated
     public void addStringFields(final Map<String, String> fields) {
         if (fields == null) {
             return;
@@ -451,7 +354,6 @@ public class Message implements Messages {
         }
     }
 
-    @Deprecated
     public void addLongFields(final Map<String, Long> fields) {
         if (fields == null) {
             return;
@@ -462,7 +364,6 @@ public class Message implements Messages {
         }
     }
 
-    @Deprecated
     public void addDoubleFields(final Map<String, Double> fields) {
         if (fields == null) {
             return;
@@ -475,8 +376,7 @@ public class Message implements Messages {
 
     public void removeField(final String key) {
         if (!RESERVED_FIELDS.contains(key)) {
-            final Object removedValue = fields.remove(key);
-            updateSize(key, null, removedValue);
+            fields.remove(key);
         }
     }
 
@@ -528,12 +428,7 @@ public class Message implements Messages {
      */
     public void addStream(Stream stream) {
         indexSets.add(stream.getIndexSet());
-        if (streams.add(stream)) {
-            sizeCounter.inc(8);
-            if (LOG.isTraceEnabled()) {
-                LOG.trace("[Message size update][{}] stream added: {}", getId(), sizeCounter.getCount());
-            }
-        }
+        streams.add(stream);
     }
 
     /**
@@ -558,10 +453,6 @@ public class Message implements Messages {
             indexSets.clear();
             for (Stream s : streams) {
                 indexSets.add(s.getIndexSet());
-            }
-            sizeCounter.dec(8);
-            if (LOG.isTraceEnabled()) {
-                LOG.trace("[Message size update][{}] stream removed: {}", getId(), sizeCounter.getCount());
             }
         }
 
@@ -672,7 +563,6 @@ public class Message implements Messages {
     }
 
     @Override
-    @Nonnull
     public Iterator<Message> iterator() {
         if (getFilterOut()) {
             return Collections.emptyIterator();
@@ -681,10 +571,10 @@ public class Message implements Messages {
     }
 
     public static abstract class Recording {
-        static Timing timing(String name, long elapsedNanos) {
+        public static Timing timing(String name, long elapsedNanos) {
             return new Timing(name, elapsedNanos);
         }
-        public static Message.Counter counter(String name, int counter) {
+        public static Counter counter(String name, int counter) {
             return new Counter(name, counter);
         }
 
@@ -694,7 +584,7 @@ public class Message implements Messages {
         private final String name;
         private final long elapsedNanos;
 
-        Timing(String name, long elapsedNanos) {
+        public Timing(String name, long elapsedNanos) {
             this.name = name;
             this.elapsedNanos = elapsedNanos;
         }
@@ -720,8 +610,6 @@ public class Message implements Messages {
         }
     }
 
-    // since we are on Java8 we can replace this with a method reference where needed
-    @Deprecated
     public static class MessageIdFunction implements Function<Message, String> {
         @Override
         public String apply(final Message input) {
