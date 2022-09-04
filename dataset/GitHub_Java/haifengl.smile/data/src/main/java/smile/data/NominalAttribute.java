@@ -75,8 +75,8 @@ public class NominalAttribute extends Attribute {
      */
     public NominalAttribute(String name, String description, double weight) {
         super(Type.NOMINAL, name, description, weight);
-        this.values = new ArrayList<String>();
-        this.map = new HashMap<String, Integer>();
+        this.values = new ArrayList<>();
+        this.map = new HashMap<>();
         this.open = true;
     }
 
@@ -116,8 +116,8 @@ public class NominalAttribute extends Attribute {
      */
     public NominalAttribute(String name, String description, double weight, String[] values) {
         super(Type.NOMINAL, name, description, weight);
-        this.values = new ArrayList<String>();
-        this.map = new HashMap<String, Integer>();
+        this.values = new ArrayList<>();
+        this.map = new HashMap<>();
         this.open = false;
         for (int i = 0; i < values.length; i++) {
             this.values.add(values[i]);
@@ -170,7 +170,7 @@ public class NominalAttribute extends Attribute {
                 map.put(s, i);
                 values.add(s);
             } else {
-                throw new IllegalArgumentException("Invalid string value: " + s);
+                throw new ParseException("Invalid string value: " + s, 0);
             }
         }
         
