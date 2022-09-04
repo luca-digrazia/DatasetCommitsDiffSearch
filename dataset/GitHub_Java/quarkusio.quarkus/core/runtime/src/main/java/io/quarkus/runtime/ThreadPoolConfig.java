@@ -2,6 +2,7 @@ package io.quarkus.runtime;
 
 import java.time.Duration;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
@@ -21,17 +22,26 @@ public class ThreadPoolConfig {
     public int coreThreads;
 
     /**
-     * The maximum number of threads. If this is not specified or <= to zero then
-     * it will be automatically sized to 4 * the number of available processors
+     * Prefill core thread pool.
+     * The core thread pool will be initialised with the core number of threads at startup
      */
-    @ConfigItem(defaultValue = "0")
-    public int maxThreads;
+    @ConfigItem(defaultValue = "true")
+    public boolean prefill;
+
+    /**
+     * The maximum number of threads. If this is not specified then
+     * it will be automatically sized to the greater of 8 * the number of available processors and 200.
+     * For example if there are 4 processors the max threads will be 200.
+     * If there are 48 processors it will be 384.
+     */
+    @ConfigItem
+    public OptionalInt maxThreads;
 
     /**
      * The queue size. For most applications this should be unbounded
      */
-    @ConfigItem(defaultValue = "0")
-    public int queueSize;
+    @ConfigItem
+    public OptionalInt queueSize;
 
     /**
      * The executor growth resistance.
@@ -41,7 +51,7 @@ public class ThreadPoolConfig {
      * threads beyond the core size should be created as aggressively as threads within it; a value of {@code 1.0f}
      * implies that threads beyond the core size should never be created.
      */
-    @ConfigItem(defaultValue = "0")
+    @ConfigItem
     public float growthResistance;
 
     /**
@@ -49,7 +59,7 @@ public class ThreadPoolConfig {
      * then additional threads will be spawned to attempt to finish any pending tasks, and the shutdown process will
      * continue
      */
-    @ConfigItem(defaultValue = "PT60S")
+    @ConfigItem(defaultValue = "1M")
     public Duration shutdownTimeout;
 
     /**
@@ -57,7 +67,7 @@ public class ThreadPoolConfig {
      * greater than or equal to the value for {@link #shutdownTimeout}, then tasks will not be interrupted before
      * the shutdown timeout occurs.
      */
-    @ConfigItem(defaultValue = "PT10S")
+    @ConfigItem(defaultValue = "10")
     public Duration shutdownInterrupt;
 
     /**
@@ -65,13 +75,13 @@ public class ThreadPoolConfig {
      * waiting tasks and threads will be checked and possibly logged at this interval. Setting this key to an empty
      * value disables the shutdown check interval.
      */
-    @ConfigItem(defaultValue = "PT5S")
+    @ConfigItem(defaultValue = "5")
     public Optional<Duration> shutdownCheckInterval;
 
     /**
-     * The amount of time in milliseconds a thread will stay alive with no work. Defaults to 1 second
+     * The amount of time a thread will stay alive with no work.
      */
-    @ConfigItem(defaultValue = "PT1S")
+    @ConfigItem(defaultValue = "30")
     public Duration keepAliveTime;
 
 }

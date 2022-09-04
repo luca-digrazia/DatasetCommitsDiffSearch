@@ -54,7 +54,7 @@ public class ExecutorRecorder {
             executor = devModeExecutor;
             Runtime.getRuntime().addShutdownHook(new Thread(shutdownTask, "Executor shutdown thread"));
         } else {
-            shutdownContext.addLastShutdownTask(shutdownTask);
+            shutdownContext.addShutdownTask(shutdownTask);
             executor = underlying;
         }
         if (threadPoolConfig.prefill) {
@@ -74,9 +74,7 @@ public class ExecutorRecorder {
     }
 
     static void shutdownDevMode() {
-        if (devModeExecutor != null) {
-            devModeExecutor.shutdown();
-        }
+        devModeExecutor.shutdown();
     }
 
     private static Runnable createShutdownTask(ThreadPoolConfig threadPoolConfig, EnhancedQueueExecutor executor) {
