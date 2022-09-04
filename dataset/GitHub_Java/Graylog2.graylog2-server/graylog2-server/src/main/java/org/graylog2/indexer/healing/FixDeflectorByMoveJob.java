@@ -54,10 +54,8 @@ public class FixDeflectorByMoveJob extends SystemJob {
 
         LOG.info("Attempting to fix deflector with move strategy.");
 
-        boolean wasProcessing = true;
         try {
             // Pause message processing and lock the pause.
-            wasProcessing = core.isProcessing();
             core.pauseMessageProcessing(true);
             progress = 5;
 
@@ -95,10 +93,7 @@ public class FixDeflectorByMoveJob extends SystemJob {
             // Start message processing again.
             try {
                 core.unlockProcessingPause();
-
-                if (wasProcessing) {
-                    core.resumeMessageProcessing();
-                }
+                core.resumeMessageProcessing();
             } catch (ProcessingPauseLockedException e) {
                 // lol checked exceptions
                 throw new RuntimeException("Could not unlock processing pause.", e);

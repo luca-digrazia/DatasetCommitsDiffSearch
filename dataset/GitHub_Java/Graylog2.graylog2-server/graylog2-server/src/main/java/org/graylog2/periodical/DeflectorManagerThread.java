@@ -87,11 +87,8 @@ public class DeflectorManagerThread implements Runnable { // public class Klimpe
         if (!graylogServer.getDeflector().isUp()) {
             if (graylogServer.getIndexer().indices().exists(Deflector.DEFLECTOR_NAME)) {
                 // Publish a notification if there is an *index* called graylog2_deflector
-                final boolean published = Notification.buildNow(graylogServer)
-                        .addType(Notification.Type.DEFLECTOR_EXISTS_AS_INDEX)
-                        .addSeverity(Notification.Severity.URGENT)
-                        .publishIfFirst();
-                if (published) {
+                if (Notification.isFirst(graylogServer, Notification.Type.DEFLECTOR_EXISTS_AS_INDEX)) {
+                    Notification.publish(graylogServer, Notification.Type.DEFLECTOR_EXISTS_AS_INDEX, Notification.Severity.URGENT);
                     LOG.warn("There is an index called [" + Deflector.DEFLECTOR_NAME + "]. Cannot fix this automatically and published a notification.");
                 }
             } else {

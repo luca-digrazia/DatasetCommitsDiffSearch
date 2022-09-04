@@ -23,7 +23,6 @@ package org.graylog2;
 import com.codahale.metrics.JmxReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.log4j.InstrumentedAppender;
-import org.elasticsearch.discovery.MasterNotDiscoveredException;
 import org.graylog2.cluster.Node;
 import org.graylog2.cluster.NodeNotFoundException;
 import org.graylog2.plugin.Tools;
@@ -41,6 +40,7 @@ import org.graylog2.alarms.transports.EmailTransport;
 import org.graylog2.alarms.transports.JabberTransport;
 import org.graylog2.filters.*;
 import org.graylog2.initializers.*;
+import org.graylog2.inputs.amqp.AMQPInput;
 import org.graylog2.inputs.gelf.GELFTCPInput;
 import org.graylog2.inputs.gelf.GELFUDPInput;
 import org.graylog2.inputs.http.GELFHttpInput;
@@ -112,6 +112,7 @@ public final class Main {
             PluginInstaller installer = new PluginInstaller(
                     commandLineArguments.getPluginShortname(),
                     commandLineArguments.getPluginVersion(),
+                    configuration,
                     commandLineArguments.isForcePlugin()
             );
             
@@ -163,7 +164,7 @@ public final class Main {
         // Le server object. This is where all the magic happens.
         Core server = new Core();
         server.initialize(configuration, metrics);
-
+        
         // Could it be that there is another master instance already?
         Node.register(server, configuration.isMaster(), configuration.getRestListenUri());
 
@@ -206,21 +207,41 @@ public final class Main {
             server.setStatsMode(true);
         }
 
+        // Register transports.
+        if (configuration.isTransportEmailEnabled()) { server.registerTransport(new EmailTransport()); }
+        if (configuration.isTransportJabberEnabled()) {  server.registerTransport(new JabberTransport()); }
+
         // Register initializers.
-        server.initializers().register(new DroolsInitializer());
-        server.initializers().register(new HostCounterCacheWriterInitializer());
-        server.initializers().register(new ThroughputCounterInitializer());
-        server.initializers().register(new NodePingInitializer());
-        server.initializers().register(new AlarmScannerInitializer());
-        if (configuration.isEnableGraphiteOutput())       { server.initializers().register(new GraphiteInitializer()); }
-        if (configuration.isEnableLibratoMetricsOutput()) { server.initializers().register(new LibratoMetricsInitializer()); }
-        server.initializers().register(new DeflectorThreadsInitializer());
-        server.initializers().register(new AnonymousInformationCollectorInitializer());
+        server.registerInitializer(new DroolsInitializer());
+        server.registerInitializer(new HostCounterCacheWriterInitializer());
+        server.registerInitializer(new ThroughputCounterInitializer());
+        server.registerInitializer(new NodePingInitializer());
+        server.registerInitializer(new AlarmScannerInitializer());
+        if (configuration.isEnableGraphiteOutput())       { server.registerInitializer(new GraphiteInitializer()); }
+        if (configuration.isEnableLibratoMetricsOutput()) { server.registerInitializer(new LibratoMetricsInitializer()); }
+        server.registerInitializer(new DeflectorThreadsInitializer());
+        server.registerInitializer(new AnonymousInformationCollectorInitializer());
         if (configuration.performRetention() && commandLineArguments.performRetention()) {
-            server.initializers().register(new IndexRetentionInitializer());
+            server.registerInitializer(new IndexRetentionInitializer());
         }
-        if (commandLineArguments.isStats()) { server.initializers().register(new StatisticsPrinterInitializer()); }
-        server.initializers().register(new MasterCacheWorkersInitializer());
+        if (configuration.isAmqpEnabled()) {
+            server.registerInitializer(new AMQPSyncInitializer());
+        }
+        if (commandLineArguments.isStats()) { server.registerInitializer(new StatisticsPrinterInitializer()); }
+        server.registerInitializer(new MasterCacheWorkersInitializer());
+        
+        // Register inputs.
+        if (configuration.isUseGELF()) {
+            server.registerInput(new GELFUDPInput());
+            server.registerInput(new GELFTCPInput());
+        }
+        
+        if (configuration.isSyslogUdpEnabled()) { server.registerInput(new SyslogUDPInput()); }
+        if (configuration.isSyslogTcpEnabled()) { server.registerInput(new SyslogTCPInput()); }
+
+        if (configuration.isAmqpEnabled()) { server.registerInput(new AMQPInput()); }
+
+        if (configuration.isHttpEnabled()) { server.registerInput(new GELFHttpInput()); }
 
         // Register message filters.
         server.registerFilter(new BlacklistFilter());
@@ -229,7 +250,7 @@ public final class Main {
         server.registerFilter(new RewriteFilter());
 
         // Register outputs.
-        server.outputs().register(new ElasticSearchOutput(server));
+        server.registerOutput(new ElasticSearchOutput(server));
         
         try {
         	server.startRestApi();

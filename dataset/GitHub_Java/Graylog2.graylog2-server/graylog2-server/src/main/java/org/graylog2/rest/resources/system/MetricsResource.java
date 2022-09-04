@@ -47,6 +47,7 @@ public class MetricsResource extends RestResource {
 
     @GET
     @Timed
+    @Path("/")
     @Produces(MediaType.APPLICATION_JSON)
     public String metrics(@QueryParam("pretty") boolean prettyPrint) {
         Core core = (Core) rc.getProperty("core");

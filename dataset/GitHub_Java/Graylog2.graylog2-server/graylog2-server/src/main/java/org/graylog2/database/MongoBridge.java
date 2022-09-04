@@ -23,9 +23,8 @@ package org.graylog2.database;
 import java.util.Map;
 import java.util.Set;
 
-import com.google.inject.Inject;
 import org.graylog2.Core;
-import org.graylog2.plugin.buffers.BufferWatermark;
+import org.graylog2.buffers.BufferWatermark;
 import org.graylog2.plugin.Tools;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
@@ -47,17 +46,16 @@ public class MongoBridge {
     private static final Logger LOG = LoggerFactory.getLogger(MongoBridge.class);
     private MongoConnection connection;
     
-    /*Core server;
+    Core server;
 
     public MongoBridge(Core server) {
         this.server = server;
-    }*/
+    }
 
     public MongoConnection getConnection() {
         return connection;
     }
 
-    @Inject
     public void setConnection(MongoConnection connection) {
         this.connection = connection;
     }
@@ -150,7 +148,7 @@ public class MongoBridge {
         coll.update(query, update, true, false);
     }
 
-    /*public void writeMessageCounts(int total, Map<String, Integer> streams, Map<String, Integer> hosts) {
+    public void writeMessageCounts(int total, Map<String, Integer> streams, Map<String, Integer> hosts) {
         // We store the first second of the current minute, to allow syncing (summing) message counts
         // from different graylog-server nodes later
         DateTime dt = new DateTime();
@@ -161,10 +159,10 @@ public class MongoBridge {
         obj.put("total", total);
         obj.put("streams", streams);
         obj.put("hosts", hosts);
-        obj.put("server_id", server.getNodeId());
+        obj.put("server_id", server.getServerId());
 
         getConnection().getMessageCountsColl().insert(obj);
-    }*/
+    }
     
     public void writeDeflectorInformation(Map<String, Object> info) {
         DBCollection coll = connection.getDatabase().getCollection("deflector_informations");

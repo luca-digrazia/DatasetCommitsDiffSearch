@@ -25,7 +25,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.sun.jersey.api.core.ResourceConfig;
 import org.graylog2.Core;
-import org.graylog2.activities.SystemMessage;
+import org.graylog2.system.activities.SystemMessage;
 import org.graylog2.plugin.Tools;
 import org.graylog2.rest.resources.RestResource;
 import org.slf4j.Logger;
@@ -61,7 +61,7 @@ public class MessagesResource extends RestResource {
 
         List<Map<String, Object>> messages = Lists.newArrayList();
 
-        for (SystemMessage sm : SystemMessage.all(core, page(page))) {
+        for (SystemMessage sm : SystemMessage.all(core, page)) {
             Map<String, Object> message = Maps.newHashMap();
             message.put("caller", sm.getCaller());
             message.put("content", sm.getContent());

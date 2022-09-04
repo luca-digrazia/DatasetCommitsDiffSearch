@@ -80,9 +80,4 @@ public class IndexRange extends Persisted {
         return Maps.newHashMap();
     }
 
-    @Override
-    protected Map<String, Validator> getEmbeddedValidations(String key) {
-        return com.google.common.collect.Maps.newHashMap();
-    }
-
 }
