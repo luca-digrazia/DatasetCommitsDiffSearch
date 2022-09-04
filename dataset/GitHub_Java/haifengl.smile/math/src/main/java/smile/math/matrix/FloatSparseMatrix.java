@@ -124,7 +124,7 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
 
         @Override
         public String toString() {
-            return String.format("(%d, %d):%s", i, j, Strings.format(x));
+            return String.format("(%d, %d):%s", i, j, Strings.decimal(x));
         }
     }
 
@@ -332,15 +332,17 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
     }
 
     /** Returns the element at the storage index. */
+    /*
     public float get(int index) {
         return nonzeros[index];
     }
-
+*/
     /** Sets the element at the storage index. */
+    /*
     public float set(int index, float value) {
         return nonzeros[index] = value;
     }
-
+*/
     @Override
     public float get(int i, int j) {
         if (i < 0 || i >= m || j < 0 || j >= n) {

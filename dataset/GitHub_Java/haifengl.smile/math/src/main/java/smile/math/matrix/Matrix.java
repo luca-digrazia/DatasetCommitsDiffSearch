@@ -57,12 +57,12 @@ public class Matrix extends DMatrix {
     /**
      * If not null, the matrix is symmetric or triangular.
      */
-    UPLO uplo;
+    UPLO uplo = null;
     /**
      * If not null, the matrix is triangular. The flag specifies if a
      * triangular matrix has unit diagonal elements.
      */
-    Diag diag;
+    Diag diag = null;
 
     /**
      * Constructor of zero matrix.
@@ -279,38 +279,15 @@ public class Matrix extends DMatrix {
      * Returns a square diagonal matrix with the elements of vector
      * v on the main diagonal.
      *
-     * @param diag the diagonal elements.
+     * @param v the diagonal elements.
      */
-    public static Matrix diag(double[] diag) {
-        int n = diag.length;
+    public static Matrix diag(double[] v) {
+        int n = v.length;
         Matrix D = new Matrix(n, n);
         for (int i = 0; i < n; i++) {
-            D.set(i, i, diag[i]);
+            D.set(i, i, v[i]);
         }
         return D;
-    }
-
-    /**
-     * Returns a symmetric Toeplitz matrix in which each descending diagonal
-     * from left to right is constant.
-     *
-     * @param a A[i, j] = a[i - j] for i >= j (or a[j - i] when j > i)
-     */
-    public static Matrix toeplitz(double[] a) {
-        int n = a.length;
-        Matrix toeplitz = new Matrix(n, n);
-
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < i; j++) {
-                toeplitz.set(i, j, a[i - j]);
-            }
-
-            for (int j = i; j < n; j++) {
-                toeplitz.set(i, j, a[j - i]);
-            }
-        }
-
-        return toeplitz;
     }
 
     /**
@@ -348,19 +325,12 @@ public class Matrix extends DMatrix {
     private void writeObject(ObjectOutputStream out) throws IOException {
         // write default properties
         out.defaultWriteObject();
-
+        // leading dimension is compacted to m
+        out.writeInt(m);
         // write buffer
-        if (layout() == COL_MAJOR) {
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    out.writeDouble(get(i, j));
-                }
-            }
-        } else {
+        for (int j = 0; j < n; j++) {
             for (int i = 0; i < m; i++) {
-                for (int j = 0; j < n; j++) {
-                    out.writeDouble(get(i, j));
-                }
+                out.writeDouble(get(i, j));
             }
         }
     }
@@ -369,25 +339,17 @@ public class Matrix extends DMatrix {
     private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
         //read default properties
         in.defaultReadObject();
+        this.ld = in.readInt();
 
         // read buffer data
-        this.A = DoubleBuffer.wrap(new double[m * n]);
-
-        if (layout() == COL_MAJOR) {
-            this.ld = m;
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    set(i, j, in.readDouble());
-                }
-            }
-        } else {
-            this.ld = n;
+        int size = m * n;
+        double[] buffer = new double[size];
+        for (int j = 0; j < n; j++) {
             for (int i = 0; i < m; i++) {
-                for (int j = 0; j < n; j++) {
-                    set(i, j, in.readDouble());
-                }
+                set(i, j, in.readDouble());
             }
         }
+        this.A = DoubleBuffer.wrap(buffer);
     }
 
     @Override
@@ -839,41 +801,6 @@ public class Matrix extends DMatrix {
         return this;
     }
 
-    /**
-     * A[i,j] = alpha * A[i,j] + beta
-     */
-    public double add(int i, int j, double alpha, double beta) {
-        int k = index(i, j);
-        double y = alpha * A.get(k) + beta;
-        A.put(k, y);
-        return y;
-    }
-
-    /** Element-wise submatrix addition A[i, j] = alpha * A[i, j] + beta * B */
-    public Matrix add(int i, int j, double alpha, double beta, Matrix B) {
-        for (int jj = 0; jj < B.n; jj++) {
-            for (int ii = 0; ii < B.m; ii++) {
-                add(i+ii, j+jj, alpha, beta * B.get(ii, jj));
-            }
-        }
-        return this;
-    }
-
-    /** Element-wise addition A = alpha * A + beta * B */
-    public Matrix add(double alpha, double beta, Matrix B) {
-        if (m != B.m || n != B.n) {
-            throw new IllegalArgumentException("Matrix B is not of same size.");
-        }
-
-        for (int j = 0; j < n; j++) {
-            for (int i = 0; i < m; i++) {
-                set(i, j, alpha * get(i, j) + beta * B.get(i, j));
-            }
-        }
-
-        return this;
-    }
-
     /** Rank-1 update A += alpha * x * y' */
     public Matrix add(double alpha, double[] x, double[] y) {
         if (m != x.length || n != y.length) {
@@ -1236,23 +1163,27 @@ public class Matrix extends DMatrix {
      * </code></pre>
      */
     public void mm(Transpose transA, Transpose transB, double alpha, Matrix B, double beta, Matrix C) {
-        if (isSymmetric() && transB == NO_TRANSPOSE && B.layout() == C.layout()) {
+        if (layout() != C.layout()) {
+            throw new IllegalArgumentException();
+        }
+
+        if (isSymmetric()) {
             BLAS.engine.symm(C.layout(), LEFT, uplo, C.m, C.n, alpha, A, ld, B.A, B.ld, beta, C.A, C.ld);
-        } else if (B.isSymmetric() && transA == NO_TRANSPOSE && layout() == C.layout()) {
-            BLAS.engine.symm(C.layout(), RIGHT, B.uplo, C.m, C.n, alpha, B.A, B.ld, A, ld, beta, C.A, C.ld);
+        } else if (B.isSymmetric()) {
+            BLAS.engine.symm(C.layout(), RIGHT, uplo, C.m, C.n, alpha, B.A, B.ld, A, ld, beta, C.A, C.ld);
         } else {
             if (C.layout() != layout()) transA = flip(transA);
             if (C.layout() != B.layout()) transB = flip(transB);
             int k = transA == NO_TRANSPOSE ? n : m;
 
-            BLAS.engine.gemm(layout(), transA, transB, C.m, C.n, k, alpha,  A, ld,  B.A, B.ld, beta, C.A, C.ld);
+            BLAS.engine.gemm(layout(), transA, transB, C.m, C.n, k, alpha,  A, ld,  B.A, B.ld, beta, C.A, ld);
         }
     }
 
     /** Returns A' * A */
     public Matrix ata() {
         Matrix C = new Matrix(n, n);
-        mm(TRANSPOSE, NO_TRANSPOSE, 1.0f, this, 0.0f, C);
+        mm(TRANSPOSE, NO_TRANSPOSE, 1.0f, transpose(), 0.0f, C);
         C.uplo(LOWER);
         return C;
     }
@@ -1260,7 +1191,7 @@ public class Matrix extends DMatrix {
     /** Returns A * A' */
     public Matrix aat() {
         Matrix C = new Matrix(m, m);
-        mm(NO_TRANSPOSE, TRANSPOSE, 1.0f, this, 0.0f, C);
+        mm(NO_TRANSPOSE, TRANSPOSE, 1.0f, transpose(), 0.0f, C);
         C.uplo(LOWER);
         return C;
     }
@@ -1603,7 +1534,7 @@ public class Matrix extends DMatrix {
          * Singular values S(i) <= RCOND are treated as zero.
          */
         private double rcond() {
-            return 0.5 * Math.sqrt(m + n + 1) * s[0] * MathEx.EPSILON;
+            return Math.max(m, n) * MathEx.FLOAT_EPSILON * s[0];
         }
 
         /**
@@ -2198,9 +2129,9 @@ public class Matrix extends DMatrix {
          */
         public Cholesky CholeskyOfAtA() {
             int n = qr.n;
-            Matrix L = new Matrix(n, n);
+            Matrix L = Matrix.diag(tau);
             for (int i = 0; i < n; i++) {
-                for (int j = 0; j <= i; j++) {
+                for (int j = 0; j < i; j++) {
                     L.set(i, j, qr.get(j, i));
                 }
             }
