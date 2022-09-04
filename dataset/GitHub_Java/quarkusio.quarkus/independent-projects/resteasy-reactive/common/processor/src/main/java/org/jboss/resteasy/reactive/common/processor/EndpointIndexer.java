@@ -20,7 +20,6 @@ import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNa
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.LONG;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.MATRIX_PARAM;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.MULTI;
-import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.NON_BLOCKING;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.PATH;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.PATH_PARAM;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.PATH_SEGMENT;
@@ -110,7 +109,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
             ResteasyReactiveDotNames.RESOURCE_INFO)));
 
     protected static final Logger log = Logger.getLogger(EndpointIndexer.class);
-    protected static final String[] EMPTY_STRING_ARRAY = new String[] {};
     private static final String[] PRODUCES_PLAIN_TEXT_NEGOTIATED = new String[] { MediaType.TEXT_PLAIN, MediaType.WILDCARD };
     private static final String[] PRODUCES_PLAIN_TEXT = new String[] { MediaType.TEXT_PLAIN };
 
@@ -155,7 +153,7 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
     protected final IndexView index;
     private final Map<String, String> existingConverters;
     private final Map<DotName, String> scannedResourcePaths;
-    protected final ResteasyReactiveConfig config;
+    private final ResteasyReactiveConfig config;
     private final AdditionalReaders additionalReaders;
     private final Map<DotName, String> httpAnnotationToMethod;
     private final Map<String, InjectableBean> injectableBeans;
@@ -439,11 +437,11 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
             boolean blocking = defaultBlocking;
             AnnotationInstance blockingAnnotation = getInheritableAnnotation(info, BLOCKING);
             if (blockingAnnotation != null) {
-                blocking = true;
-            } else {
-                AnnotationInstance nonBlockingAnnotation = getInheritableAnnotation(info, NON_BLOCKING);
-                if (nonBlockingAnnotation != null) {
-                    blocking = false;
+                AnnotationValue value = blockingAnnotation.value();
+                if (value != null) {
+                    blocking = value.asBoolean();
+                } else {
+                    blocking = true;
                 }
             }
 
@@ -503,11 +501,8 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
         // FIXME: primitives
         if (STRING.equals(nonAsyncReturnType.name()))
             return config.isSingleDefaultProduces() ? PRODUCES_PLAIN_TEXT : PRODUCES_PLAIN_TEXT_NEGOTIATED;
-        return applyAdditionalDefaults(nonAsyncReturnType);
-    }
-
-    protected String[] applyAdditionalDefaults(Type nonAsyncReturnType) {
-        return EMPTY_STRING_ARRAY;
+        // FIXME: JSON
+        return produces;
     }
 
     private Type getNonAsyncReturnType(Type returnType) {
@@ -893,7 +888,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
         return NameBindingUtil.nameBindingNames(index, methodInfo, forClass);
     }
 
-    @SuppressWarnings({ "unchecked", "rawtypes" })
     public static abstract class Builder<T extends EndpointIndexer<T, ?, METHOD>, B extends Builder<T, B, METHOD>, METHOD extends ResourceMethod> {
         private Function<String, BeanFactory<Object>> factoryCreator = new ReflectionBeanFactoryCreator();
         private boolean defaultBlocking;
