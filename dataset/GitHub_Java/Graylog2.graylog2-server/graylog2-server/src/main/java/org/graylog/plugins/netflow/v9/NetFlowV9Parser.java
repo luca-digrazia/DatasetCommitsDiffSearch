@@ -342,10 +342,6 @@ public class NetFlowV9Parser {
             } else {
                 records.add(NetFlowV9Record.create(fields.build()));
             }
-            // This flowset cannot contain another record, treat as padding
-            if (end - bb.readerIndex() < unitSize) {
-                break;
-            }
         }
 
         bb.readerIndex(end);
