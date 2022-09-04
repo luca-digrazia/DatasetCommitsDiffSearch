@@ -24,11 +24,7 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 
 /**
  * Rule definition for ios_framework_binary.
- *
- * @deprecated The native bundling rules have been deprecated. This class will be removed in the
- *     future.
  */
-@Deprecated
 public class IosFrameworkBinaryRule implements RuleDefinition {
 
   @Override
@@ -45,7 +41,6 @@ public class IosFrameworkBinaryRule implements RuleDefinition {
         .setImplicitOutputsFunction(XcodeSupport.PBXPROJ)
         // TODO(bazel-team): Add version fields that are passed to the linker as
         // -compatibility_version X -current_version Y and then embedded into dynamic library.
-        .cfg(AppleCrosstoolTransition.APPLE_CROSSTOOL_TRANSITION)
         .build();
   }
 
@@ -61,10 +56,6 @@ public class IosFrameworkBinaryRule implements RuleDefinition {
 }
 
 /*<!-- #BLAZE_RULE (NAME = ios_framework_binary, TYPE = BINARY, FAMILY = Objective-C) -->
-
-<p><strong>This rule is deprecated.</strong> Please use the new Apple build rules
-(<a href="https://github.com/bazelbuild/rules_apple">https://github.com/bazelbuild/rules_apple</a>)
-to build Apple targets.</p>
 
 <p>This rule produces a dynamic library for a framework by linking one or more Objective-C
 libraries.</p>

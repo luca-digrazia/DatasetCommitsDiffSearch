@@ -24,17 +24,20 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 
 /**
  * Rule definition for apple_watch_extension_binary.
- *
- * @deprecated The native bundling rules have been deprecated. This class will be removed in the
- *     future.
  */
-@Deprecated
 public class AppleWatchExtensionBinaryRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
     return builder
         .requiresConfigurationFragments(ObjcConfiguration.class, J2ObjcConfiguration.class,
             AppleConfiguration.class, CppConfiguration.class)
+        /*<!-- #BLAZE_RULE(apple_watch_extension_binary).IMPLICIT_OUTPUTS -->
+        <ul>
+         <li><code><var>name</var>.xcodeproj/project.pbxproj</code>: An Xcode project file which
+             can be used to develop or build on a Mac.</li>
+        </ul>
+        <!-- #END_BLAZE_RULE.IMPLICIT_OUTPUTS -->*/
+        .setImplicitOutputsFunction(XcodeSupport.PBXPROJ)
         .cfg(AppleCrosstoolTransition.APPLE_CROSSTOOL_TRANSITION)
         .build();
   }
@@ -51,10 +54,6 @@ public class AppleWatchExtensionBinaryRule implements RuleDefinition {
 }
 
 /*<!-- #BLAZE_RULE (NAME = apple_watch_extension_binary, TYPE = BINARY, FAMILY = Objective-C) -->
-
-<p><strong>This rule is deprecated.</strong> Please use the new Apple build rules
-(<a href="https://github.com/bazelbuild/rules_apple">https://github.com/bazelbuild/rules_apple</a>)
-to build Apple targets.</p>
 
 <p>This rule produces a binary for watch extension by linking one or more
 Objective-C libraries.</p>
