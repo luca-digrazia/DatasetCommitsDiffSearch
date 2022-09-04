@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,19 +13,21 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.io;
 
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Path;
 import java.time.*;
 import java.util.List;
 import java.util.ArrayList;
+
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.page.PageReadStore;
 import org.apache.parquet.example.data.Group;
@@ -65,7 +67,7 @@ public class Parquet {
      * @param path an Apache Parquet file path.
      */
     public static DataFrame read(Path path) throws IOException {
-        return read(new LocalInputFile(path));
+        return read(path, Integer.MAX_VALUE);
     }
 
     /**
@@ -75,6 +77,23 @@ public class Parquet {
      */
     public static DataFrame read(Path path, int limit) throws IOException {
         return read(new LocalInputFile(path), limit);
+    }
+
+    /**
+     * Reads a HDFS parquet file.
+     * @param path an Apache Parquet file path.
+     */
+    public static DataFrame read(String path) throws IOException, URISyntaxException {
+        return read(path, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Reads a HDFS parquet file.
+     * @param path an Apache Parquet file path.
+     * @param limit reads a limited number of records.
+     */
+    public static DataFrame read(String path, int limit) throws IOException, URISyntaxException {
+        return read(HadoopInput.file(path), limit);
     }
 
     /**
@@ -93,12 +112,11 @@ public class Parquet {
      * @param limit reads a limited number of records.
      */
     public static DataFrame read(InputFile file, int limit) throws IOException {
-
         try (ParquetFileReader reader = ParquetFileReader.open(file)) {
             ParquetMetadata footer = reader.getFooter();
             MessageType schema = footer.getFileMetaData().getSchema();
             StructType struct = toSmileSchema(schema);
-            logger.info("The meta data of parquet file {}: {}", file.toString(), ParquetMetadata.toPrettyJSON(footer));
+            logger.debug("The meta data of parquet file {}: {}", file.toString(), ParquetMetadata.toPrettyJSON(footer));
 
             int nrows = (int) Math.min(reader.getRecordCount(), limit);
             List<Tuple> rows = new ArrayList<>(nrows);

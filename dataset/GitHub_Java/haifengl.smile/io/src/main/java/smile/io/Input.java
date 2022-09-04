@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.io;
 
@@ -42,15 +42,23 @@ public interface Input {
 
     /** Returns the reader of a file path or URI. */
     static InputStream stream(String path) throws IOException, URISyntaxException {
-        URI uri = new URI(path);
-        if (uri.getScheme() == null) return Files.newInputStream(Paths.get(path));
-
-        switch (uri.getScheme().toLowerCase()) {
-            case "file":
-                return Files.newInputStream(Paths.get(path));
-
-            default: // http, ftp, ...
-                return uri.toURL().openStream();
+        // Windows file path
+        if (path.matches("[a-zA-Z]:\\\\[\\\\\\S|*\\S]?.*")) {
+            return Files.newInputStream(Paths.get(path));
         }
+
+        URI uri = new URI(path);
+        String scheme = uri.getScheme();
+        // If scheme is single character, assume it is the drive letter in Windows.
+        if (scheme == null || scheme.length() < 2) {
+            return Files.newInputStream(Paths.get(path));
+        }
+
+        if ("file".equalsIgnoreCase(uri.getScheme())) {
+            return Files.newInputStream(Paths.get(uri.getPath()));
+        }
+
+        // http, ftp, ...
+        return uri.toURL().openStream();
     }
 }

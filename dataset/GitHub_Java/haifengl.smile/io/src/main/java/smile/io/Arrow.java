@@ -1,37 +1,41 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.io;
 
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.*;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.*;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
-import org.apache.arrow.vector.ipc.ArrowFileReader;
-import org.apache.arrow.vector.ipc.ArrowFileWriter;
-import org.apache.arrow.vector.ipc.message.ArrowBlock;
+import org.apache.arrow.vector.ipc.ArrowStreamReader;
+import org.apache.arrow.vector.ipc.ArrowStreamWriter;
 import org.apache.arrow.vector.types.DateUnit;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.TimeUnit;
@@ -41,7 +45,6 @@ import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.types.pojo.Schema;
 import static org.apache.arrow.vector.types.FloatingPointPrecision.DOUBLE;
 import static org.apache.arrow.vector.types.FloatingPointPrecision.SINGLE;
-
 import smile.data.DataFrame;
 import smile.data.type.*;
 
@@ -57,48 +60,58 @@ public class Arrow {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Arrow.class);
 
     /**
-     * The memory limit for allocator.
+     * The root allocator. Typically only one created for a JVM.
+     * Arrow provides a tree-based model for memory allocation.
+     * The RootAllocator is created first, then all allocators are
+     * created as children of that allocator. The RootAllocator is
+     * responsible for being the master bookeeper for memory
+     * allocations. All other allocators are created as children
+     * of this tree. Each allocator can first determine whether
+     * it has enough local memory to satisfy a particular request.
+     * If not, the allocator can ask its parent for an additional
+     * memory allocation.
      */
-    private long limit;
+    private static RootAllocator allocator;
     /**
-     * The number of rows in a record batch.
+     * The number of records in a record batch.
      * An Apache Arrow record batch is conceptually similar
      * to the Parquet row group. Parquet recommends a
      * disk/block/row group/file size of 512 to 1024 MB on HDFS.
      * 1 million rows x 100 columns of double will be about
      * 800 MB and also cover many use cases in machine learning.
      */
-    private int batch;
+    private final int batch;
 
     /** Constructor. */
     public Arrow() {
-        this(Long.MAX_VALUE);
+        this(1000000);
     }
 
     /**
      * Constructor.
-     * @param limit the maximum amount of memory in bytes that can be allocated.
+     * @param batch the number of records in a record batch.
      */
-    public Arrow(long limit) {
-        this(limit, 1000000);
-    }
-
-    /**
-     * Constructor.
-     * @param limit the maximum amount of memory in bytes that can be allocated.
-     * @param batch the number of rows in each record batch.
-     */
-    public Arrow(long limit, int batch) {
-        if (limit <= 0) {
-            throw new IllegalArgumentException("Invalid limit: " + limit);
-        }
-
+    public Arrow(int batch) {
         if (batch <= 0) {
             throw new IllegalArgumentException("Invalid batch size: " + batch);
         }
 
-        this.limit = limit;
         this.batch = batch;
+    }
+
+    /**
+     * Creates the root allocator.
+     * The RootAllocator is responsible for being the master
+     * bookeeper for memory allocations.
+     *
+     * @param limit memory allocation limit in bytes.
+     */
+    public static void allocate(long limit) {
+        if (limit <= 0) {
+            throw new IllegalArgumentException("Invalid RootAllocator limit: " + limit);
+        }
+
+        allocator = new RootAllocator(limit);
     }
 
     /**
@@ -106,22 +119,53 @@ public class Arrow {
      * @param path an Apache Arrow file path.
      */
     public DataFrame read(Path path) throws IOException {
-        try (RootAllocator allocator = new RootAllocator(limit);
-             FileInputStream input = new FileInputStream(path.toFile());
-             ArrowFileReader reader = new ArrowFileReader(input.getChannel(), allocator)) {
+        return read(path, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Reads an arrow file.
+     * @param path an Apache Arrow file path.
+     */
+    public DataFrame read(Path path, int limit) throws IOException {
+        return read(Files.newInputStream(path), limit);
+    }
+
+    /**
+     * Reads a limited number of records from an arrow file.
+     * @param path an Apache Arrow file path or URI.
+     */
+    public DataFrame read(String path) throws IOException, URISyntaxException {
+        return read(path, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Reads a limited number of records from an arrow file.
+     * @param path an Apache Arrow file path or URI.
+     * @param limit reads a limited number of records.
+     */
+    public DataFrame read(String path, int limit) throws IOException, URISyntaxException {
+        return read(Input.stream(path), limit);
+    }
+
+    /**
+     * Reads a limited number of records from an arrow file.
+     * @param input an Apache Arrow file input stream.
+     * @param limit reads a limited number of records.
+     */
+    public DataFrame read(InputStream input, int limit) throws IOException {
+        if (allocator == null) {
+            allocate(Long.MAX_VALUE);
+        }
+
+        try (ArrowStreamReader reader = new ArrowStreamReader(input, allocator)) {
 
             // The holder for a set of vectors to be loaded/unloaded.
             VectorSchemaRoot root = reader.getVectorSchemaRoot();
-            List<ArrowBlock> blocks = reader.getRecordBlocks();
-            DataFrame[] frames = new DataFrame[blocks.size()];
-            for (int i = 0; i < frames.length; i++) {
-                ArrowBlock block = blocks.get(i);
-                if (!reader.loadRecordBatch(block)) {
-                    throw new IOException("Failed to load record batch: " + block);
-                }
-
+            List<DataFrame> frames = new ArrayList<>();
+            int size = 0;
+            while (reader.loadNextBatch() && size < limit) {
                 List<FieldVector> fieldVectors = root.getFieldVectors();
-                logger.info("read {} rows and {} columns from block {}", root.getRowCount(), fieldVectors.size(), block);
+                logger.info("read {} rows and {} columns", root.getRowCount(), fieldVectors.size());
 
                 smile.data.vector.BaseVector[] vectors = new smile.data.vector.BaseVector[fieldVectors.size()];
                 for (int j = 0; j < fieldVectors.size(); j++) {
@@ -155,7 +199,7 @@ public class Arrow {
                             FloatingPointPrecision precision = ((ArrowType.FloatingPoint) type).getPrecision();
                             switch (precision) {
                                 case DOUBLE:
-                                    readDoubleField(fieldVector);
+                                    vectors[j] = readDoubleField(fieldVector);
                                     break;
                                 case SINGLE:
                                     vectors[j] = readFloatField(fieldVector);
@@ -190,17 +234,30 @@ public class Arrow {
                     }
                 }
 
-                frames[i] = DataFrame.of(vectors);
+                DataFrame frame = DataFrame.of(vectors);
+                frames.add(frame);
+                size += frames.size();
             }
 
-            return frames[0];
+            if (frames.isEmpty()) {
+                throw new IllegalStateException("No record batch");
+            } else if (frames.size() == 1) {
+                return frames.get(0);
+            } else {
+                DataFrame df = frames.get(0);
+                return df.union(frames.subList(1, frames.size()).toArray(new DataFrame[frames.size() - 1]));
+            }
         }
     }
 
     /** Writes the DataFrame to a file. */
     public void write(DataFrame df, Path path) throws IOException {
+        if (allocator == null) {
+            allocate(Long.MAX_VALUE);
+        }
+
         Schema schema = toArrowSchema(df.schema());
-        /**
+        /*
          * When a field is dictionary encoded, the values are represented
          * by an array of Int32 representing the index of the value in the
          * dictionary. The Dictionary is received as one or more
@@ -212,15 +269,14 @@ public class Arrow {
          * it must send at least one DictionaryBatch for this id.
          */
         DictionaryProvider provider = new DictionaryProvider.MapDictionaryProvider();
-        try (RootAllocator allocator = new RootAllocator(limit);
-             VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
-             FileOutputStream output = new FileOutputStream(path.toFile());
-             ArrowFileWriter writer = new ArrowFileWriter(root, provider, output.getChannel())) {
+        try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
+             OutputStream output = Files.newOutputStream(path);
+             ArrowStreamWriter writer = new ArrowStreamWriter(root, provider, output)) {
 
             writer.start();
             final int size = df.size();
-            for (int from = 0, entries = size; from < size; from += batch) {
-                int count = Math.min(batch, entries - from);
+            for (int from = 0; from < size; from += batch) {
+                int count = Math.min(batch, size - from);
                 // set the batch row count
                 root.setRowCount(count);
 
@@ -252,8 +308,20 @@ public class Arrow {
                         case Char:
                             writeCharField(df, vector, from, count);
                             break;
+                        case String:
+                            writeStringField(df, vector, from, count);
+                            break;
+                        case Date:
+                            writeDateField(df, vector, from, count);
+                            break;
+                        case Time:
+                            writeTimeField(df, vector, from, count);
+                            break;
+                        case DateTime:
+                            writeDateTimeField(df, vector, from, count);
+                            break;
                         case Object: {
-                            Class clazz = ((ObjectType) type).getObjectClass();
+                            Class<?> clazz = ((ObjectType) type).getObjectClass();
                             if (clazz == Integer.class) {
                                 writeIntObjectField(df, vector, from, count);
                             } else if (clazz == Long.class) {
@@ -287,12 +355,10 @@ public class Arrow {
                         }
                         case Array: {
                             DataType etype = ((ArrayType) type).getComponentType();
-                            switch (etype.id()) {
-                                case Byte:
-                                    writeByteArrayField(df, vector, from, count);
-                                    break;
-                                default:
-                                    throw new UnsupportedOperationException("Unsupported type: " + type);
+                            if (etype.id() == DataType.ID.Byte) {
+                                writeByteArrayField(df, vector, from, count);
+                            } else {
+                                throw new UnsupportedOperationException("Unsupported type: " + type);
                             }
                             break;
                         }
@@ -305,11 +371,6 @@ public class Arrow {
                 writer.writeBatch();
                 logger.info("write {} rows", count);
             }
-
-            writer.end();
-            writer.close();
-            output.flush();
-            output.close();
         }
     }
 
@@ -318,7 +379,7 @@ public class Arrow {
         int count = fieldVector.getValueCount();
         BitVector vector = (BitVector) fieldVector;
 
-        if (fieldVector.getField().isNullable()) {
+        if (!fieldVector.getField().isNullable()) {
             boolean[] a = new boolean[count];
             for (int i = 0; i < count; i++) {
                 a[i] = vector.get(i) != 0;
@@ -334,7 +395,7 @@ public class Arrow {
                     a[i] = vector.get(i) != 0;
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Boolean.class, a);
         }
     }
 
@@ -343,7 +404,7 @@ public class Arrow {
         int count = fieldVector.getValueCount();
         TinyIntVector vector = (TinyIntVector) fieldVector;
 
-        if (fieldVector.getField().isNullable()) {
+        if (!fieldVector.getField().isNullable()) {
             byte[] a = new byte[count];
             for (int i = 0; i < count; i++) {
                 a[i] = vector.get(i);
@@ -359,7 +420,7 @@ public class Arrow {
                     a[i] = vector.get(i);
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Byte.class, a);
         }
     }
 
@@ -368,7 +429,7 @@ public class Arrow {
         int count = fieldVector.getValueCount();
         SmallIntVector vector = (SmallIntVector) fieldVector;
 
-        if (fieldVector.getField().isNullable()) {
+        if (!fieldVector.getField().isNullable()) {
             char[] a = new char[count];
             for (int i = 0; i < count; i++) {
                 a[i] = (char) vector.get(i);
@@ -384,7 +445,7 @@ public class Arrow {
                     a[i] = (char) vector.get(i);
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Character.class, a);
         }
     }
 
@@ -393,7 +454,7 @@ public class Arrow {
         int count = fieldVector.getValueCount();
         SmallIntVector vector = (SmallIntVector) fieldVector;
 
-        if (fieldVector.getField().isNullable()) {
+        if (!fieldVector.getField().isNullable()) {
             short[] a = new short[count];
             for (int i = 0; i < count; i++) {
                 a[i] = vector.get(i);
@@ -409,7 +470,7 @@ public class Arrow {
                     a[i] = vector.get(i);
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Short.class, a);
         }
     }
 
@@ -418,7 +479,7 @@ public class Arrow {
         int count = fieldVector.getValueCount();
         IntVector vector = (IntVector) fieldVector;
 
-        if (fieldVector.getField().isNullable()) {
+        if (!fieldVector.getField().isNullable()) {
             int[] a = new int[count];
             for (int i = 0; i < count; i++) {
                 a[i] = vector.get(i);
@@ -434,7 +495,7 @@ public class Arrow {
                     a[i] = vector.get(i);
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Integer.class, a);
         }
     }
 
@@ -443,7 +504,7 @@ public class Arrow {
         int count = fieldVector.getValueCount();
         BigIntVector vector = (BigIntVector) fieldVector;
 
-        if (fieldVector.getField().isNullable()) {
+        if (!fieldVector.getField().isNullable()) {
             long[] a = new long[count];
             for (int i = 0; i < count; i++) {
                 a[i] = vector.get(i);
@@ -459,7 +520,7 @@ public class Arrow {
                     a[i] = vector.get(i);
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Long.class, a);
         }
     }
 
@@ -468,7 +529,7 @@ public class Arrow {
         int count = fieldVector.getValueCount();
         Float4Vector vector = (Float4Vector) fieldVector;
 
-        if (fieldVector.getField().isNullable()) {
+        if (!fieldVector.getField().isNullable()) {
             float[] a = new float[count];
             for (int i = 0; i < count; i++) {
                 a[i] = vector.get(i);
@@ -484,7 +545,7 @@ public class Arrow {
                     a[i] = vector.get(i);
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Float.class, a);
         }
     }
 
@@ -493,7 +554,7 @@ public class Arrow {
         int count = fieldVector.getValueCount();
         Float8Vector vector = (Float8Vector) fieldVector;
 
-        if (fieldVector.getField().isNullable()) {
+        if (!fieldVector.getField().isNullable()) {
             double[] a = new double[count];
             for (int i = 0; i < count; i++) {
                 a[i] = vector.get(i);
@@ -509,11 +570,11 @@ public class Arrow {
                     a[i] = vector.get(i);
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Double.class, a);
         }
     }
 
-    /** Reads a decmal column. */
+    /** Reads a decimal column. */
     private smile.data.vector.BaseVector readDecimalField(FieldVector fieldVector) {
         int count = fieldVector.getValueCount();
         BigDecimal[] a = new BigDecimal[count];
@@ -522,7 +583,7 @@ public class Arrow {
             a[i] = vector.isNull(i) ? null : vector.getObject(i);
         }
 
-        return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
+        return smile.data.vector.Vector.of(fieldVector.getField().getName(), DataTypes.DecimalType, a);
     }
 
     /** Reads a date column. */
@@ -542,7 +603,7 @@ public class Arrow {
             }
         }
 
-        return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
+        return smile.data.vector.Vector.of(fieldVector.getField().getName(), DataTypes.DateType, a);
     }
 
     /** Reads a time column. */
@@ -570,7 +631,7 @@ public class Arrow {
                 a[i] = vector.isNull(i) ? null : LocalTime.ofSecondOfDay(vector.get(i));
             }
         }
-        return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
+        return smile.data.vector.Vector.of(fieldVector.getField().getName(), DataTypes.TimeType, a);
     }
 
     /** Reads a DateTime column. */
@@ -598,7 +659,7 @@ public class Arrow {
             }
         }
 
-        return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
+        return smile.data.vector.Vector.of(fieldVector.getField().getName(), DataTypes.DateTimeType, a);
     }
 
     /** Reads a byte[] column. */
@@ -625,7 +686,7 @@ public class Arrow {
             throw new UnsupportedOperationException("Unsupported binary vector: " + fieldVector);
         }
 
-        return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
+        return smile.data.vector.Vector.of(fieldVector.getField().getName(), DataTypes.ByteArrayType, a);
     }
 
     /** Reads a String column. */
@@ -640,7 +701,7 @@ public class Arrow {
                 a[i] = new String(vector.get(i));
         }
 
-        return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
+        return smile.data.vector.Vector.of(fieldVector.getField().getName(), DataTypes.StringType, a);
     }
 
     /** Writes an int column. */
@@ -916,19 +977,19 @@ public class Arrow {
     }
 
     /** Writes a string column. */
-    private void writeStringField(DataFrame df, FieldVector fieldVector, int from, int count) throws UnsupportedEncodingException {
+    private void writeStringField(DataFrame df, FieldVector fieldVector, int from, int count) {
         fieldVector.setInitialCapacity(count);
         fieldVector.allocateNew();
 
         VarCharVector vector = (VarCharVector) fieldVector;
-        smile.data.vector.Vector<String> column = df.vector(fieldVector.getField().getName());
+        smile.data.vector.StringVector column = df.stringVector(fieldVector.getField().getName());
         for (int i = 0, j = from; i < count; i++, j++) {
             String x = column.get(j);
             if (x == null) {
                 vector.setNull(i);
             } else {
                 vector.setIndexDefined(i);
-                vector.setSafe(i, x.getBytes("UTF-8"));
+                vector.setSafe(i, x.getBytes(StandardCharsets.UTF_8));
             }
         }
 
@@ -936,7 +997,7 @@ public class Arrow {
     }
 
     /** Writes a decimal column. */
-    private void writeDecimalField(DataFrame df, FieldVector fieldVector, int from, int count) throws UnsupportedEncodingException {
+    private void writeDecimalField(DataFrame df, FieldVector fieldVector, int from, int count) {
         fieldVector.setInitialCapacity(count);
         fieldVector.allocateNew();
 
@@ -956,7 +1017,7 @@ public class Arrow {
     }
 
     /** Writes a date column. */
-    private void writeDateField(DataFrame df, FieldVector fieldVector, int from, int count) throws UnsupportedEncodingException {
+    private void writeDateField(DataFrame df, FieldVector fieldVector, int from, int count) {
         fieldVector.setInitialCapacity(count);
         fieldVector.allocateNew();
 
@@ -976,7 +1037,7 @@ public class Arrow {
     }
 
     /** Writes a time column. */
-    private void writeTimeField(DataFrame df, FieldVector fieldVector, int from, int count) throws UnsupportedEncodingException {
+    private void writeTimeField(DataFrame df, FieldVector fieldVector, int from, int count) {
         fieldVector.setInitialCapacity(count);
         fieldVector.allocateNew();
 
@@ -996,11 +1057,11 @@ public class Arrow {
     }
 
     /** Writes a datetime column. */
-    private void writeDateTimeField(DataFrame df, FieldVector fieldVector, int from, int count) throws UnsupportedEncodingException {
+    private void writeDateTimeField(DataFrame df, FieldVector fieldVector, int from, int count) {
         fieldVector.setInitialCapacity(count);
         fieldVector.allocateNew();
 
-        TimeStampMilliVector vector = (TimeStampMilliVector) fieldVector;
+        TimeStampMilliTZVector vector = (TimeStampMilliTZVector) fieldVector;
         smile.data.vector.Vector<LocalDateTime> column = df.vector(fieldVector.getField().getName());
         for (int i = 0, j = from; i < count; i++, j++) {
             LocalDateTime x = column.get(j);
@@ -1036,7 +1097,7 @@ public class Arrow {
     }
 
     /** Converts a smile schema to arrow schema. */
-    public static Schema toArrowSchema(StructType schema) {
+    private Schema toArrowSchema(StructType schema) {
         List<Field> fields = new ArrayList<>();
         for (StructField field : schema.fields()) {
             fields.add(toArrowField(field));
@@ -1046,7 +1107,7 @@ public class Arrow {
     }
 
     /** Converts an arrow schema to smile schema. */
-    public static StructType toSmileSchema(Schema schema) {
+    private StructType toSmileSchema(Schema schema) {
         List<StructField> fields = new ArrayList<>();
         for (Field field : schema.getFields()) {
             fields.add(toSmileField(field));
@@ -1056,7 +1117,7 @@ public class Arrow {
     }
 
     /** Converts a smile struct field to arrow field. */
-    public static Field toArrowField(smile.data.type.StructField field) {
+    private Field toArrowField(StructField field) {
         switch (field.type.id()) {
             case Integer:
                 return new Field(field.name, new FieldType(false, new ArrowType.Int(32, true), null), null);
@@ -1085,7 +1146,7 @@ public class Arrow {
             case DateTime:
                 return new Field(field.name, FieldType.nullable(new ArrowType.Timestamp(TimeUnit.MILLISECOND, java.time.ZoneOffset.UTC.getId())), null);
             case Object: {
-                Class clazz = ((ObjectType) field.type).getObjectClass();
+                Class<?> clazz = ((ObjectType) field.type).getObjectClass();
                 if (clazz == Integer.class) {
                     return new Field(field.name, FieldType.nullable(new ArrowType.Int(32, true)), null);
                 } else if (clazz == Long.class) {
@@ -1102,9 +1163,8 @@ public class Arrow {
                     return new Field(field.name, FieldType.nullable(new ArrowType.Int(16, true)), null);
                 } else if (clazz == Character.class) {
                     return new Field(field.name, FieldType.nullable(new ArrowType.Int(16, false)), null);
-                } else {
-                    throw new UnsupportedOperationException("Unsupported smile to arrow type conversion: " + field.type);
                 }
+                break;
             }
             case Array: {
                 DataType etype = ((ArrayType) field.type).getComponentType();
@@ -1113,31 +1173,31 @@ public class Arrow {
                         return new Field(field.name,
                                 new FieldType(false, new ArrowType.List(), null),
                                 // children type
-                                Arrays.asList(new Field(null, new FieldType(false, new ArrowType.Int(32, true), null), null))
+                                Collections.singletonList(new Field(null, new FieldType(false, new ArrowType.Int(32, true), null), null))
                         );
                     case Long:
                         return new Field(field.name,
                                 new FieldType(false, new ArrowType.List(), null),
                                 // children type
-                                Arrays.asList(new Field(null, new FieldType(false, new ArrowType.Int(64, true), null), null))
+                                Collections.singletonList(new Field(null, new FieldType(false, new ArrowType.Int(64, true), null), null))
                         );
                     case Double:
                         return new Field(field.name,
                                 new FieldType(false, new ArrowType.List(), null),
                                 // children type
-                                Arrays.asList(new Field(null, new FieldType(false, new ArrowType.FloatingPoint(DOUBLE), null), null))
+                                Collections.singletonList(new Field(null, new FieldType(false, new ArrowType.FloatingPoint(DOUBLE), null), null))
                         );
                     case Float:
                         return new Field(field.name,
                                 new FieldType(false, new ArrowType.List(), null),
                                 // children type
-                                Arrays.asList(new Field(null, new FieldType(false, new ArrowType.FloatingPoint(SINGLE), null), null))
+                                Collections.singletonList(new Field(null, new FieldType(false, new ArrowType.FloatingPoint(SINGLE), null), null))
                         );
                     case Boolean:
                         return new Field(field.name,
                                 new FieldType(false, new ArrowType.List(), null),
                                 // children type
-                                Arrays.asList(new Field(null, new FieldType(false, new ArrowType.Bool(), null), null))
+                                Collections.singletonList(new Field(null, new FieldType(false, new ArrowType.Bool(), null), null))
                         );
                     case Byte:
                         return new Field(field.name, FieldType.nullable(new ArrowType.Binary()), null);
@@ -1145,29 +1205,28 @@ public class Arrow {
                         return new Field(field.name,
                                 new FieldType(false, new ArrowType.List(), null),
                                 // children type
-                                Arrays.asList(new Field(null, new FieldType(false, new ArrowType.Int(16, true), null), null))
+                                Collections.singletonList(new Field(null, new FieldType(false, new ArrowType.Int(16, true), null), null))
                         );
                     case Char:
                         return new Field(field.name, FieldType.nullable(new ArrowType.Utf8()), null);
-                    default:
-                        throw new UnsupportedOperationException("Unsupported smile to arrow type conversion: " + field.type);
                 }
+                break;
             }
             case Struct: {
-                smile.data.type.StructType children = (smile.data.type.StructType) field.type;
+                StructType children = (StructType) field.type;
                 return new Field(field.name,
                         new FieldType(false, new ArrowType.Struct(), null),
                         // children type
-                        Arrays.stream(children.fields()).map(Arrow::toArrowField).collect(Collectors.toList())
+                        Arrays.stream(children.fields()).map(this::toArrowField).collect(Collectors.toList())
                 );
             }
-            default:
-                throw new UnsupportedOperationException("Unsupported smile to arrow type conversion: " + field.type);
         }
+
+        throw new UnsupportedOperationException("Unsupported smile to arrow type conversion: " + field.type);
     }
 
     /** Converts an arrow field to smile struct field. */
-    public static StructField toSmileField(Field field) {
+    private StructField toSmileField(Field field) {
         String name = field.getName();
         ArrowType type = field.getType();
         boolean nullable = field.isNullable();
@@ -1215,7 +1274,7 @@ public class Arrow {
 
             case Binary:
             case FixedSizeBinary:
-                return new StructField(name, DataTypes.array(DataTypes.ByteType));
+                return new StructField(name, DataTypes.ByteArrayType);
 
             case List:
             case FixedSizeList:
@@ -1227,7 +1286,7 @@ public class Arrow {
                 return new StructField(name, DataTypes.array(toSmileField(child.get(0)).type));
 
             case Struct:
-                List<StructField> children = field.getChildren().stream().map(Arrow::toSmileField).collect(Collectors.toList());
+                List<StructField> children = field.getChildren().stream().map(this::toSmileField).collect(Collectors.toList());
                 return new StructField(name, DataTypes.struct(children));
 
             default:
