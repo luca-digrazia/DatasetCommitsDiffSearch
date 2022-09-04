@@ -75,7 +75,7 @@ public interface EvaluationProgressReceiver {
   }
 
   /**
-   * Notifies that the node for {@code key} has been invalidated.
+   * Notifies that the node named by {@code key} has been invalidated.
    *
    * <p>{@code state} indicates the new state of the value.
    *
@@ -97,7 +97,8 @@ public interface EvaluationProgressReceiver {
   void enqueueing(SkyKey skyKey);
 
   /**
-   * Notifies that the node for {@code skyKey} is about to enter the given {@code nodeState}.
+   * Notifies that a node corresponding to {@code skyKey} is about to enter the given
+   * {@code nodeState}.
    *
    * <p>Notably, this includes {@link SkyFunction#compute} calls due to Skyframe restarts, but also
    * dirtiness checking and node completion.
@@ -105,7 +106,8 @@ public interface EvaluationProgressReceiver {
   void stateStarting(SkyKey skyKey, NodeState nodeState);
 
   /**
-   * Notifies that the node for {@code skyKey} is about to complete the given {@code nodeState}.
+   * Notifies that a node corresponding to {@code skyKey} is about to complete the given
+   * {@code nodeState}.
    *
    * <p>Always called symmetrically with {@link #stateStarting(SkyKey, NodeState)}}.
    *
@@ -115,23 +117,19 @@ public interface EvaluationProgressReceiver {
   void stateEnding(SkyKey skyKey, NodeState nodeState, long elapsedTimeNanos);
 
   /**
-   * Notifies that the node for {@code skyKey} has been evaluated, or found to not need
-   * re-evaluation.
+   * Notifies that the node for {@code skyKey} has been evaluated.
    *
-   * @param newValue The new value. Only available if just evaluated, i.e. on success *and* {@code
-   *     state == EvaluationState.BUILT}
-   * @param newError The new error. Only available if just evaluated, i.e. on error *and* {@code
-   *     state == EvaluationState.BUILT}
-   * @param evaluationSuccessState whether the node has a value or only an error, behind a {@link
-   *     Supplier} for lazy retrieval. Available regardless of whether the node was just evaluated
-   * @param state {@code EvaluationState.BUILT} if the node needed to be evaluated and has a new
-   *     value or error (i.e., {@code EvaluationState.BUILT} if and only if at least one of newValue
-   *     and newError is non-null)
+   * <p>{@code state} indicates the new state of the node.
+   *
+   * <p>If the value builder threw an error when building this node, then {@code
+   * valueSupplier.get()} evaluates to null.
+   *
+   * @param value The sky value. Only available if just evaluated, eg. on success *and* <code>
+   *     state == EvalutionState.BUILT</code>
    */
   void evaluated(
       SkyKey skyKey,
-      @Nullable SkyValue newValue,
-      @Nullable ErrorInfo newError,
+      @Nullable SkyValue value,
       Supplier<EvaluationSuccessState> evaluationSuccessState,
       EvaluationState state);
 
@@ -156,8 +154,7 @@ public interface EvaluationProgressReceiver {
     @Override
     public void evaluated(
         SkyKey skyKey,
-        @Nullable SkyValue newValue,
-        @Nullable ErrorInfo newError,
+        @Nullable SkyValue value,
         Supplier<EvaluationSuccessState> evaluationSuccessState,
         EvaluationState state) {}
   }

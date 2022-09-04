@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import static java.lang.Math.min;
-
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
@@ -22,7 +20,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.common.flogger.GoogleLogger;
 import com.google.common.graph.ImmutableGraph;
 import com.google.common.graph.Traverser;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -36,6 +33,7 @@ import com.google.devtools.build.lib.supplier.InterruptibleSupplier;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationState;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver.NodeState;
+import com.google.devtools.build.skyframe.GraphInconsistencyReceiver.Inconsistency;
 import com.google.devtools.build.skyframe.MemoizingEvaluator.EmittedEventState;
 import com.google.devtools.build.skyframe.NodeEntry.DependencyState;
 import com.google.devtools.build.skyframe.NodeEntry.DirtyState;
@@ -45,8 +43,6 @@ import com.google.devtools.build.skyframe.SkyFunction.Restart;
 import com.google.devtools.build.skyframe.SkyFunctionEnvironment.UndonePreviouslyRequestedDeps;
 import com.google.devtools.build.skyframe.SkyFunctionException.ReifiedSkyFunctionException;
 import com.google.devtools.build.skyframe.ThinNodeEntry.DirtyType;
-import com.google.devtools.build.skyframe.proto.GraphInconsistency.Inconsistency;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -58,6 +54,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -69,7 +66,7 @@ import javax.annotation.Nullable;
  * result. Derived classes should do this.
  */
 abstract class AbstractParallelEvaluator {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger = Logger.getLogger(AbstractParallelEvaluator.class.getName());
 
   final ProcessableGraph graph;
   final ParallelEvaluatorContext evaluatorContext;
@@ -360,7 +357,7 @@ abstract class AbstractParallelEvaluator {
             Sets.difference(ImmutableSet.copyOf(knownChildren), oldChildren.keySet());
         if (!missingChildren.isEmpty()) {
           inconsistencyReceiver.noteInconsistencyAndMaybeThrow(
-              skyKey, missingChildren, Inconsistency.DIRTY_PARENT_HAD_MISSING_CHILD);
+              skyKey, missingChildren, Inconsistency.CHILD_MISSING_FOR_DIRTY_NODE);
         }
         Map<SkyKey, ? extends NodeEntry> recreatedEntries =
             graph.createIfAbsentBatch(skyKey, Reason.ENQUEUING_CHILD, missingChildren);
@@ -475,8 +472,10 @@ abstract class AbstractParallelEvaluator {
                 // with the first error.
                 return;
               } else {
-                logger.atWarning().withCause(builderException).log(
-                    "Aborting evaluation while evaluating %s", skyKey);
+                logger.warning(
+                    String.format(
+                        "Aborting evaluation due to %s while evaluating %s",
+                        builderException, skyKey));
               }
             }
 
@@ -499,19 +498,6 @@ abstract class AbstractParallelEvaluator {
                 evaluatorContext
                     .getErrorInfoManager()
                     .fromException(skyKey, reifiedBuilderException, isTransitivelyTransient);
-            // TODO(b/166268889): Remove when resolved. ActionExecutionValues are ending up with
-            //  IOExceptions in them.
-            if (isTransitivelyTransient
-                && !shouldFailFast
-                && errorInfo.getException() instanceof IOException) {
-              // This is essentially unconditionally logged, and not often. Ok to evaluate eagerly.
-              String keyString = skyKey.toString();
-              String errorString = errorInfo.toString();
-              logger.atInfo().log(
-                  "Got IOException for %s (%s)",
-                  keyString.substring(0, min(1000, keyString.length())),
-                  errorString.substring(0, min(1000, errorString.length())));
-            }
             env.setError(state, errorInfo);
             Set<SkyKey> rdepsToBubbleUpTo =
                 env.commit(
