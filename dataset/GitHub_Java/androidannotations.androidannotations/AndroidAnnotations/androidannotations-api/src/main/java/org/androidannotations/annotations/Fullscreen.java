@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,10 +21,24 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Should be used on Activity classes that must be fullscreen
+ * <p>
+ * Should be used on {@link EActivity} classes that must be fullscreen.
+ * </p>
+ * <blockquote>
  * 
- * The activity must be annotated with {@link EActivity}.
+ * Example :
  * 
+ * <pre>
+ * &#064;Fullscreen
+ * &#064;EActivity
+ * public class MyActivity extends Activity {
+ * 
+ * }
+ * </pre>
+ * 
+ * </blockquote>
+ * 
+ * @see WindowFeature
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
