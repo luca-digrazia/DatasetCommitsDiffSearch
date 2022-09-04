@@ -167,7 +167,8 @@ public class SpawnActionTest extends BuildViewTestCase {
     collectingAnalysisEnvironment.registerAction(actions);
     SpawnAction action = (SpawnAction) actions[0];
     assertThat(action.getArguments())
-        .containsExactly("/bin/java", "-jvmarg", "-cp", "pkg/exe.jar", "MyMainClass")
+        .containsExactly(
+            "/bin/java", "-Xverify:none", "-jvmarg", "-cp", "pkg/exe.jar", "MyMainClass")
         .inOrder();
   }
 
@@ -193,7 +194,8 @@ public class SpawnActionTest extends BuildViewTestCase {
 
     // The action reports all arguments, including those inside the param file
     assertThat(action.getArguments())
-        .containsExactly("/bin/java", "-jvmarg", "-cp", "pkg/exe.jar", "MyMainClass", "-X")
+        .containsExactly(
+            "/bin/java", "-Xverify:none", "-jvmarg", "-cp", "pkg/exe.jar", "MyMainClass", "-X")
         .inOrder();
 
     Spawn spawn =
@@ -204,7 +206,7 @@ public class SpawnActionTest extends BuildViewTestCase {
     assertThat(spawn.getArguments())
         .containsExactly(
             "/bin/java",
-
+            "-Xverify:none",
             "-jvmarg",
             "-cp",
             "pkg/exe.jar",
@@ -240,7 +242,7 @@ public class SpawnActionTest extends BuildViewTestCase {
     assertThat(action.getArguments())
         .containsExactly(
             "/bin/java",
-
+            "-Xverify:none",
             "-jvmarg",
             "-cp",
             "pkg/exe.jar",
