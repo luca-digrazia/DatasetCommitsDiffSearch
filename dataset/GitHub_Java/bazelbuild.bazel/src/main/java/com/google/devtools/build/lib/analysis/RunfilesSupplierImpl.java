@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
@@ -76,7 +75,7 @@ public class RunfilesSupplierImpl implements RunfilesSupplier {
   }
 
   @Override
-  public NestedSet<Artifact> getArtifacts() {
+  public Iterable<Artifact> getArtifacts() {
     return runfiles.getAllArtifacts();
   }
 

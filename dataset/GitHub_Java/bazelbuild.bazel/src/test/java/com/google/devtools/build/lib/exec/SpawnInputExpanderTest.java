@@ -68,7 +68,6 @@ public class SpawnInputExpanderTest {
 
   private FileSystem fs;
   private Path execRoot;
-  private ArtifactRoot rootDir;
   private SpawnInputExpander expander;
   private Map<PathFragment, ActionInput> inputMappings;
 
@@ -76,7 +75,6 @@ public class SpawnInputExpanderTest {
   public final void createSpawnInputExpander() {
     fs = new InMemoryFileSystem();
     execRoot = fs.getPath("/root");
-    rootDir = ArtifactRoot.asDerivedRoot(execRoot, fs.getPath("/root/out"));
     expander = new SpawnInputExpander(execRoot, /*strict=*/ true);
     inputMappings = Maps.newHashMap();
   }
@@ -393,19 +391,11 @@ public class SpawnInputExpanderTest {
         PathFragment.create(from), PathFragment.create(to));
   }
 
-  private ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> simpleFilesetManifest() {
+  private ImmutableMap<PathFragment, ImmutableList<FilesetOutputSymlink>> simpleFilesetManifest() {
     return ImmutableMap.of(
-        createFileset("out"),
+        PathFragment.create("out"),
         ImmutableList.of(
             filesetSymlink("workspace/bar", "foo"), filesetSymlink("workspace/foo", "/foo/bar")));
-  }
-
-  private SpecialArtifact createFileset(String execPath) {
-    return new SpecialArtifact(
-        rootDir,
-        PathFragment.create(execPath),
-        ArtifactOwner.NullArtifactOwner.INSTANCE,
-        SpecialArtifactType.FILESET);
   }
 
   @Test

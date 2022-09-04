@@ -927,7 +927,7 @@ public class RemoteSpawnRunnerTest {
             logDir);
 
     when(cache.getCachedActionResult(any(ActionKey.class))).thenReturn(null);
-    when(executor.executeRemotely(any(ExecuteRequest.class))).thenThrow(new IOException("reasons"));
+    when(executor.executeRemotely(any(ExecuteRequest.class))).thenThrow(new IOException());
 
     Spawn spawn = newSimpleSpawn();
     SpawnExecutionContext policy = new FakeSpawnExecutionContext(spawn);
@@ -938,7 +938,6 @@ public class RemoteSpawnRunnerTest {
     } catch (SpawnExecException e) {
       assertThat(e.getSpawnResult().exitCode())
           .isEqualTo(ExitCode.REMOTE_ERROR.getNumericExitCode());
-      assertThat(e.getSpawnResult().getDetailMessage("", "", false, false)).contains("reasons");
     }
   }
 
@@ -965,7 +964,7 @@ public class RemoteSpawnRunnerTest {
             digestUtil,
             logDir);
 
-    when(cache.getCachedActionResult(any(ActionKey.class))).thenThrow(new IOException("reasons"));
+    when(cache.getCachedActionResult(any(ActionKey.class))).thenThrow(new IOException());
 
     Spawn spawn = newSimpleSpawn();
     SpawnExecutionContext policy = new FakeSpawnExecutionContext(spawn);
@@ -976,7 +975,6 @@ public class RemoteSpawnRunnerTest {
     } catch (SpawnExecException e) {
       assertThat(e.getSpawnResult().exitCode())
           .isEqualTo(ExitCode.REMOTE_ERROR.getNumericExitCode());
-      assertThat(e.getSpawnResult().getDetailMessage("", "", false, false)).contains("reasons");
     }
   }
 

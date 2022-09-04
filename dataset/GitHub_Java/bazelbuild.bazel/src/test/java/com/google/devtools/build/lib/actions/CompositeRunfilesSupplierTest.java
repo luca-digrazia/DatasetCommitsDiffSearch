@@ -21,12 +21,11 @@ import static org.mockito.Mockito.when;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
@@ -54,29 +53,11 @@ public class CompositeRunfilesSupplierTest {
   }
 
   @Test
-  public void emptySuppliersIgnored() {
-    assertThat(
-            CompositeRunfilesSupplier.of(
-                EmptyRunfilesSupplier.INSTANCE, EmptyRunfilesSupplier.INSTANCE))
-        .isSameAs(EmptyRunfilesSupplier.INSTANCE);
-    assertThat(CompositeRunfilesSupplier.of(EmptyRunfilesSupplier.INSTANCE, mockFirst))
-        .isSameAs(mockFirst);
-    assertThat(CompositeRunfilesSupplier.of(mockFirst, EmptyRunfilesSupplier.INSTANCE))
-        .isSameAs(mockFirst);
-  }
-
-  @Test
-  public void fromSuppliersSeleton() {
-    assertThat(CompositeRunfilesSupplier.fromSuppliers(ImmutableList.of(mockFirst)))
-        .isSameAs(mockFirst);
-  }
-
-  @Test
   public void testGetArtifactsReturnsCombinedArtifacts() {
     when(mockFirst.getArtifacts()).thenReturn(mkArtifacts(rootDir, "first", "shared"));
     when(mockSecond.getArtifacts()).thenReturn(mkArtifacts(rootDir, "second", "shared"));
 
-    RunfilesSupplier underTest = CompositeRunfilesSupplier.of(mockFirst, mockSecond);
+    CompositeRunfilesSupplier underTest = new CompositeRunfilesSupplier(mockFirst, mockSecond);
     assertThat(underTest.getArtifacts()).containsExactlyElementsIn(
         mkArtifacts(rootDir, "first", "second", "shared"));
   }
@@ -90,7 +71,7 @@ public class CompositeRunfilesSupplierTest {
     when(mockFirst.getRunfilesDirs()).thenReturn(ImmutableSet.of(first, shared));
     when(mockSecond.getRunfilesDirs()).thenReturn(ImmutableSet.of(second, shared));
 
-    RunfilesSupplier underTest = CompositeRunfilesSupplier.of(mockFirst, mockSecond);
+    CompositeRunfilesSupplier underTest = new CompositeRunfilesSupplier(mockFirst, mockSecond);
     assertThat(underTest.getRunfilesDirs()).containsExactly(first, second, shared);
   }
 
@@ -114,7 +95,7 @@ public class CompositeRunfilesSupplierTest {
         shared, secondSharedMappings));
 
     // We expect the mappings for shared added by mockSecond to be dropped.
-    RunfilesSupplier underTest = CompositeRunfilesSupplier.of(mockFirst, mockSecond);
+    CompositeRunfilesSupplier underTest = new CompositeRunfilesSupplier(mockFirst, mockSecond);
     assertThat(underTest.getMappings(ArtifactPathResolver.IDENTITY)).containsExactly(
         first, firstMappings,
         second, secondMappings,
@@ -142,7 +123,8 @@ public class CompositeRunfilesSupplierTest {
         shared, secondSharedMappings));
 
     // We expect the mappings for shared added by mockSecond to be dropped.
-    RunfilesSupplier underTest = CompositeRunfilesSupplier.of(mockFirst, mockSecond);
+    CompositeRunfilesSupplier underTest =
+        new CompositeRunfilesSupplier(ImmutableList.of(mockFirst, mockSecond));
     assertThat(underTest.getMappings(ArtifactPathResolver.IDENTITY)).containsExactly(
         first, firstMappings,
         second, secondMappings,
@@ -161,8 +143,8 @@ public class CompositeRunfilesSupplierTest {
     return new Artifact(PathFragment.create(path), rootDir);
   }
 
-  private static NestedSet<Artifact> mkArtifacts(ArtifactRoot rootDir, String... paths) {
-    NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
+  private static List<Artifact> mkArtifacts(ArtifactRoot rootDir, String... paths) {
+    ImmutableList.Builder<Artifact> builder = ImmutableList.builder();
     for (String path : paths) {
       builder.add(mkArtifact(rootDir, path));
     }

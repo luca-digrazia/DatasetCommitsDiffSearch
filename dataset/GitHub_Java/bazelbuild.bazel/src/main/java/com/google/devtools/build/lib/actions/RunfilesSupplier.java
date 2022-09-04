@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.actions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.util.Map;
@@ -28,7 +27,7 @@ import java.util.Map;
 public interface RunfilesSupplier {
 
   /** @return the contained artifacts */
-  NestedSet<Artifact> getArtifacts();
+  Iterable<Artifact> getArtifacts();
 
   /** @return the runfiles' root directories. */
   ImmutableSet<PathFragment> getRunfilesDirs();

@@ -19,6 +19,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.common.hash.HashCode;
@@ -36,9 +37,7 @@ import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.exec.SpawnRunner;
-import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -52,6 +51,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.regex.Pattern;
 
@@ -76,7 +76,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
   private final Multimap<String, String> extraFlags;
   private final EventHandler reporter;
   private final SpawnRunner fallbackRunner;
-  private final LocalEnvProvider localEnvProvider;
   private final boolean sandboxUsesExpandedTreeArtifactsInRunfiles;
 
   public WorkerSpawnRunner(
@@ -85,14 +84,12 @@ final class WorkerSpawnRunner implements SpawnRunner {
       Multimap<String, String> extraFlags,
       EventHandler reporter,
       SpawnRunner fallbackRunner,
-      LocalEnvProvider localEnvProvider,
       boolean sandboxUsesExpandedTreeArtifactsInRunfiles) {
     this.execRoot = execRoot;
     this.workers = Preconditions.checkNotNull(workers);
     this.extraFlags = extraFlags;
     this.reporter = reporter;
     this.fallbackRunner = fallbackRunner;
-    this.localEnvProvider = localEnvProvider;
     this.sandboxUsesExpandedTreeArtifactsInRunfiles = sandboxUsesExpandedTreeArtifactsInRunfiles;
   }
 
@@ -131,8 +128,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
     // its args and put them into the WorkRequest instead.
     List<String> flagFiles = new ArrayList<>();
     ImmutableList<String> workerArgs = splitSpawnArgsIntoWorkerArgsAndFlagFiles(spawn, flagFiles);
-    Map<String, String> env =
-        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, "/tmp");
+    ImmutableMap<String, String> env = spawn.getEnvironment();
 
     MetadataProvider inputFileCache = context.getMetadataProvider();
 
@@ -146,7 +142,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
     Map<PathFragment, Path> inputFiles =
         SandboxHelpers.processInputFiles(
             spawn, context, execRoot, sandboxUsesExpandedTreeArtifactsInRunfiles);
-    SandboxOutputs outputs = SandboxHelpers.getOutputs(spawn);
+    Set<PathFragment> outputFiles = SandboxHelpers.getOutputFiles(spawn);
 
     WorkerKey key =
         new WorkerKey(
@@ -161,7 +157,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
     WorkRequest workRequest = createWorkRequest(spawn, context, flagFiles, inputFileCache);
 
     long startTime = System.currentTimeMillis();
-    WorkResponse response = execInWorker(spawn, key, workRequest, context, inputFiles, outputs);
+    WorkResponse response = execInWorker(spawn, key, workRequest, context, inputFiles, outputFiles);
     Duration wallTime = Duration.ofMillis(System.currentTimeMillis() - startTime);
 
     FileOutErr outErr = context.getFileOutErr();
@@ -274,7 +270,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
       WorkRequest request,
       SpawnExecutionContext context,
       Map<PathFragment, Path> inputFiles,
-      SandboxOutputs outputs)
+      Set<PathFragment> outputFiles)
       throws InterruptedException, ExecException {
     Worker worker = null;
     WorkResponse response;
@@ -307,7 +303,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
           ResourceManager.instance().acquireResources(owner, spawn.getLocalResources())) {
         context.report(ProgressStatus.EXECUTING, getName());
         try {
-          worker.prepareExecution(inputFiles, outputs, key.getWorkerFilesWithHashes().keySet());
+          worker.prepareExecution(inputFiles, outputFiles, key.getWorkerFilesWithHashes().keySet());
         } catch (IOException e) {
           throw new UserExecException(
               ErrorMessage.builder()

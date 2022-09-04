@@ -66,6 +66,7 @@ import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.OsUtils;
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -916,7 +917,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testRunfilesSymlinkConflict() throws Exception {
-    // Two different artifacts mapped to same path in runfiles
+    // Two different artifacts mapped to same path in runfiles.
     Object result =
         evalRuleContextCode(
             "artifacts = ruleContext.files.srcs",
@@ -926,8 +927,10 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
             "symlinks = {'sym1': artifacts[1]})");
     Runfiles runfiles = (Runfiles) result;
     reporter.removeHandler(failFastHandler); // So it doesn't throw an exception.
-    runfiles.getRunfilesInputs(reporter, null, ArtifactPathResolver.IDENTITY);
-    assertContainsEvent("ERROR <no location>: overwrote runfile");
+    assertThat(assertThrows(IOException.class,
+        () -> runfiles.getRunfilesInputs(reporter, null, ArtifactPathResolver.IDENTITY)))
+        .hasMessageThat()
+        .matches("runfile [\\w_]+/sym1 mapped to both foo/b.img and foo/a.txt");
   }
 
   private Iterable<Artifact> getRunfileArtifacts(Object runfiles) {

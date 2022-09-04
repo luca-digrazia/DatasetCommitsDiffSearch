@@ -175,14 +175,14 @@ public class SpawnInputExpander {
 
   @VisibleForTesting
   void addFilesetManifests(
-      Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings,
+      Map<PathFragment, ImmutableList<FilesetOutputSymlink>> filesetMappings,
       Map<PathFragment, ActionInput> inputMappings)
       throws IOException {
-    for (Artifact fileset : filesetMappings.keySet()) {
-      ImmutableList<FilesetOutputSymlink> outputSymlinks = filesetMappings.get(fileset);
+    for (PathFragment manifestExecpath : filesetMappings.keySet()) {
+      ImmutableList<FilesetOutputSymlink> outputSymlinks = filesetMappings.get(manifestExecpath);
       FilesetManifest filesetManifest =
           FilesetManifest.constructFilesetManifest(
-              outputSymlinks, fileset.getExecPath(), relSymlinkBehavior);
+              outputSymlinks, manifestExecpath, relSymlinkBehavior);
 
       for (Map.Entry<PathFragment, String> mapping : filesetManifest.getEntries().entrySet()) {
         String value = mapping.getValue();
