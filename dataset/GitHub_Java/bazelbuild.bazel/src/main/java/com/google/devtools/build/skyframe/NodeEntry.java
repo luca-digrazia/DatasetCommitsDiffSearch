@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 import java.math.BigInteger;
 import java.util.Collection;
-import java.util.List;
 import java.util.Set;
 import javax.annotation.Nullable;
 
@@ -300,7 +299,7 @@ public interface NodeEntry extends ThinNodeEntry {
    * @see DirtyBuildingState#getNextDirtyDirectDeps()
    */
   @ThreadSafe
-  List<SkyKey> getNextDirtyDirectDeps() throws InterruptedException;
+  Collection<SkyKey> getNextDirtyDirectDeps() throws InterruptedException;
 
   /**
    * Returns all deps of a node that has not yet finished evaluating. In other words, if a node has
@@ -426,7 +425,7 @@ public interface NodeEntry extends ThinNodeEntry {
    * checking.
    */
   @ThreadSafe
-  void addTemporaryDirectDepsGroupToDirtyEntry(List<SkyKey> group);
+  void addTemporaryDirectDepsGroupToDirtyEntry(Collection<SkyKey> group);
 
   /**
    * Returns true if the node is ready to be evaluated, i.e., it has been signaled exactly as many
