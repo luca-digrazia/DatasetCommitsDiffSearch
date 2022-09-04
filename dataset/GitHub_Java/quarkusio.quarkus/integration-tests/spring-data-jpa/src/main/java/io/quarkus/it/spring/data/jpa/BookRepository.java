@@ -5,7 +5,6 @@ import java.util.Optional;
 
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
-import org.springframework.data.repository.query.Param;
 
 /**
  * Demonstrates the ability to add methods defined in the various Spring Data Repository interfaces
@@ -36,14 +35,6 @@ public interface BookRepository extends Repository<Book, Integer> {
     // issue 6205
     @Query(value = "SELECT COUNT(*), publicationYear FROM Book GROUP BY publicationYear")
     List<BookCountByYear> findAllByPublicationYear2();
-
-    // issue 9192
-    @Query(value = "SELECT b.publicationYear FROM Book b where b.bid = :bid")
-    int customFindPublicationYearPrimitive(@Param("bid") Integer bid);
-
-    // issue 9192
-    @Query(value = "SELECT b.publicationYear FROM Book b where b.bid = :bid")
-    Integer customFindPublicationYearObject(@Param("bid") Integer bid);
 
     interface BookCountByYear {
         int getPublicationYear();

@@ -101,18 +101,4 @@ public class BookResource {
         return list;
     }
 
-    @GET
-    @Path("/customPublicationYearPrimitive/{bid}")
-    @Produces("text/plain")
-    public Integer customFindPublicationYearPrimitive(@PathParam("bid") Integer bid) {
-        return bookRepository.customFindPublicationYearPrimitive(bid);
-    }
-
-    @GET
-    @Path("/customPublicationYearObject/{bid}")
-    @Produces("text/plain")
-    public Integer customFindPublicationYearObject(@PathParam("bid") Integer bid) {
-        return bookRepository.customFindPublicationYearObject(bid);
-    }
-
 }
