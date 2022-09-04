@@ -579,10 +579,12 @@ public final class PackageFactory {
     }
 
     GlobList<String> globList = GlobList.captureResults(includes, excludes, matches);
-
-    // TODO(laurentlb): Get rid of globList type.
-    // Converting to ImmutableList will remove glob information from the list.
-    return MutableList.copyOf(env, ImmutableList.copyOf(globList));
+    if (env.getSemantics().incompatibleDisableGlobTracking()) {
+      // Converting to ImmutableList will remove glob information from the list.
+      return MutableList.copyOf(env, ImmutableList.copyOf(globList));
+    } else {
+      return MutableList.copyOf(env, globList);
+    }
   }
 
   /**

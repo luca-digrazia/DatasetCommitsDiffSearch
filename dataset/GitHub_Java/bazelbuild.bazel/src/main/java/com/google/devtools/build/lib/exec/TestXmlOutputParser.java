@@ -14,12 +14,11 @@
 
 package com.google.devtools.build.lib.exec;
 
+import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.view.test.TestStatus.TestCase;
-import com.google.devtools.build.lib.view.test.TestStatus.TestCase.Type;
 import com.google.protobuf.UninitializedMessageException;
 import java.io.InputStream;
-import java.util.Collection;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
@@ -31,7 +30,7 @@ import javax.xml.stream.XMLStreamReader;
  */
 final class TestXmlOutputParser {
   // jUnit can use either "testsuites" or "testsuite".
-  private static final Collection<String> TOPLEVEL_ELEMENT_NAMES =
+  private static final ImmutableCollection<String> TOPLEVEL_ELEMENT_NAMES =
       ImmutableSet.of("testsuites", "testsuite");
 
   public TestCase parseXmlIntoTestResult(InputStream xmlStream)
@@ -140,7 +139,7 @@ final class TestXmlOutputParser {
   private TestCase parseTestSuite(XMLStreamReader parser, String elementName)
       throws XMLStreamException, TestXmlOutputParserException {
     TestCase.Builder builder = TestCase.newBuilder();
-    builder.setType(Type.TEST_SUITE);
+    builder.setType(TestCase.Type.TEST_SUITE);
     for (int i = 0; i < parser.getAttributeCount(); i++) {
       String name = parser.getAttributeLocalName(i).intern();
       String value = parser.getAttributeValue(i);
@@ -184,7 +183,7 @@ final class TestXmlOutputParser {
   private TestCase parseTestDecorator(XMLStreamReader parser)
       throws XMLStreamException, TestXmlOutputParserException {
     TestCase.Builder builder = TestCase.newBuilder();
-    builder.setType(Type.TEST_DECORATOR);
+    builder.setType(TestCase.Type.TEST_DECORATOR);
     for (int i = 0; i < parser.getAttributeCount(); i++) {
       String name = parser.getAttributeLocalName(i);
       String value = parser.getAttributeValue(i);
@@ -291,7 +290,7 @@ final class TestXmlOutputParser {
   private TestCase parseTestCase(XMLStreamReader parser)
       throws XMLStreamException, TestXmlOutputParserException {
     TestCase.Builder builder = TestCase.newBuilder();
-    builder.setType(Type.TEST_CASE);
+    builder.setType(TestCase.Type.TEST_CASE);
     for (int i = 0; i < parser.getAttributeCount(); i++) {
       String name = parser.getAttributeLocalName(i).intern();
       String value = parser.getAttributeValue(i);

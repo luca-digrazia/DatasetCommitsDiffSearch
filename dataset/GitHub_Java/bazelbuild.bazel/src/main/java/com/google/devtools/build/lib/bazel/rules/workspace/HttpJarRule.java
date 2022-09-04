@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,54 +15,59 @@
 package com.google.devtools.build.lib.bazel.rules.workspace;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.Type.STRING;
+import static com.google.devtools.build.lib.syntax.Type.STRING;
 
-import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
+import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
+import com.google.devtools.build.lib.rules.repository.WorkspaceConfiguredTargetFactory;
 
 /**
  * Rule definition for the http_jar rule.
  */
-@BlazeRule(name = HttpJarRule.NAME,
-  type = RuleClassType.WORKSPACE,
-  ancestors = { WorkspaceBaseRule.class },
-  factoryClass = WorkspaceConfiguredTargetFactory.class)
 public class HttpJarRule implements RuleDefinition {
 
   public static final String NAME = "http_jar";
 
   @Override
-  public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
+  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
     return builder
         /* <!-- #BLAZE_RULE(http_jar).ATTRIBUTE(url) -->
-        A URL to an archive file containing a Bazel repository
+        A URL to an archive file containing a Bazel repository.
 
-        <p>This must be an http or https URL that ends with .jar. Redirects are not followed.</p>
+        <p>This must be an http or https URL that ends with .jar.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("url", STRING).mandatory())
         /* <!-- #BLAZE_RULE(http_jar).ATTRIBUTE(sha256) -->
-        The expected SHA-256 of the file downloaded
+        The expected SHA-256 of the file downloaded.
 
-        <p>This must match the SHA-256 of the file downloaded.</p>
+        <p>This must match the SHA-256 of the file downloaded. <em>It is a security risk to
+        omit the SHA-256 as remote files can change.</em> At best omitting this field will make
+        your build non-hermetic. It is optional to make development easier but should be set
+        before shipping.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("sha256", STRING).mandatory())
+        .add(attr("sha256", STRING))
         .setWorkspaceOnly()
         .build();
   }
-}
-/*<!-- #BLAZE_RULE (NAME = http_jar, TYPE = OTHER, FAMILY = General)[GENERIC_RULE] -->
 
-${ATTRIBUTE_SIGNATURE}
+  @Override
+  public Metadata getMetadata() {
+    return RuleDefinition.Metadata.builder()
+        .name(HttpJarRule.NAME)
+        .type(RuleClassType.WORKSPACE)
+        .ancestors(WorkspaceBaseRule.class)
+        .factoryClass(WorkspaceConfiguredTargetFactory.class)
+        .build();
+  }
+}
+/*<!-- #BLAZE_RULE (NAME = http_jar, TYPE = OTHER, FAMILY = Workspace)[GENERIC_RULE] -->
 
 <p>Downloads a jar from a URL and makes it available to be used as a Java dependency.</p>
 
 <p>Downloaded files must have a .jar extension.</p>
-
-${ATTRIBUTE_DEFINITION}
 
 <h4 id="http_jar_examples">Examples</h4>
 
@@ -75,17 +80,12 @@ ${ATTRIBUTE_DEFINITION}
 
 <pre class="code">
 http_jar(
-    name = "my-ssl",
+    name = "my_ssl",
     url = "http://example.com/openssl-0.2.jar",
     sha256 = "03a58ac630e59778f328af4bcc4acb4f80208ed4",
 )
-
-bind(
-    name = "openssl",
-    actual = "@my-ssl//jar:openssl-0.2.jar",
-)
 </pre>
 
-<p>See <a href="#bind_examples">Bind</a> for how to use bound targets.</p>
+<p>Targets would specify <code>@my_ssl//jar</code> as a dependency to depend on this jar.</p>
 
 <!-- #END_BLAZE_RULE -->*/

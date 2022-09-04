@@ -214,7 +214,7 @@ public final class ConfiguredTargetFactory {
                   BuildConfigurationValue.key(
                       fromConfig.fragmentClasses(),
                       BuildOptions.diffForReconstruction(
-                          defaultBuildOptions, ownerTransition.patch(fromConfig.getOptions()))),
+                          defaultBuildOptions, ownerTransition.apply(fromConfig.getOptions()))),
                   InvalidConfigurationException.class);
       return ownerConfig == null ? null : ownerConfig.getConfiguration();
     } catch (InvalidConfigurationException e) {

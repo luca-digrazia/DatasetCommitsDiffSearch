@@ -25,13 +25,13 @@ import static com.google.devtools.build.lib.packages.BuildType.NODEP_LABEL_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.OUTPUT;
 import static com.google.devtools.build.lib.packages.BuildType.OUTPUT_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.TRISTATE;
-import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
-import static com.google.devtools.build.lib.packages.Type.INTEGER;
-import static com.google.devtools.build.lib.packages.Type.INTEGER_LIST;
-import static com.google.devtools.build.lib.packages.Type.STRING;
-import static com.google.devtools.build.lib.packages.Type.STRING_DICT;
-import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
-import static com.google.devtools.build.lib.packages.Type.STRING_LIST_DICT;
+import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
+import static com.google.devtools.build.lib.syntax.Type.INTEGER;
+import static com.google.devtools.build.lib.syntax.Type.INTEGER_LIST;
+import static com.google.devtools.build.lib.syntax.Type.STRING;
+import static com.google.devtools.build.lib.syntax.Type.STRING_DICT;
+import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
+import static com.google.devtools.build.lib.syntax.Type.STRING_LIST_DICT;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
@@ -47,17 +47,17 @@ import com.google.devtools.build.lib.query2.proto.proto2api.Build.LabelKeyedStri
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.LabelListDictEntry;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.StringDictEntry;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.StringListDictEntry;
+import com.google.devtools.build.lib.syntax.Type;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.StarlarkInt;
 
 /** Common utilities for serializing {@link Attribute}s as protocol buffers. */
 public class AttributeFormatter {
 
   private static final ImmutableSet<Type<?>> depTypes =
-      ImmutableSet.of(
+      ImmutableSet.<Type<?>>of(
           STRING,
           LABEL,
           OUTPUT,
@@ -69,7 +69,7 @@ public class AttributeFormatter {
           DISTRIBUTIONS);
 
   private static final ImmutableSet<Type<?>> noDepTypes =
-      ImmutableSet.of(NODEP_LABEL_LIST, NODEP_LABEL);
+      ImmutableSet.<Type<?>>of(NODEP_LABEL_LIST, NODEP_LABEL);
 
   private AttributeFormatter() {}
 
@@ -142,7 +142,7 @@ public class AttributeFormatter {
           .setHasDefaultValue(selector.hasDefault());
 
       // Note that the order of entries returned by selector.getEntries is stable. The map's
-      // entries' order is preserved from the fact that Starlark dictionary entry order is stable
+      // entries' order is preserved from the fact that Skylark dictionary entry order is stable
       // (it's determined by insertion order).
       for (Map.Entry<Label, ?> entry : selector.getEntries().entrySet()) {
         Label condition = entry.getKey();
@@ -169,10 +169,11 @@ public class AttributeFormatter {
    * Set the appropriate type and value. Since string and string list store values for multiple
    * types, use the toString() method on the objects instead of casting them.
    */
+  @SuppressWarnings("unchecked")
   private static void writeAttributeValueToBuilder(
       AttributeValueBuilderAdapter builder, Type<?> type, Object value) {
     if (type == INTEGER) {
-      builder.setIntValue(((StarlarkInt) value).toIntUnchecked());
+      builder.setIntValue((Integer) value);
     } else if (type == STRING || type == LABEL || type == NODEP_LABEL || type == OUTPUT) {
       builder.setStringValue(value.toString());
     } else if (type == STRING_LIST || type == LABEL_LIST || type == NODEP_LABEL_LIST
@@ -181,8 +182,8 @@ public class AttributeFormatter {
         builder.addStringListValue(entry.toString());
       }
     } else if (type == INTEGER_LIST) {
-      for (Object elem : (Collection<?>) value) {
-        builder.addIntListValue(((StarlarkInt) elem).toIntUnchecked());
+      for (Integer entry : (Collection<Integer>) value) {
+        builder.addIntListValue(entry);
       }
     } else if (type == BOOLEAN) {
       builder.setBooleanValue((Boolean) value);
@@ -199,7 +200,6 @@ public class AttributeFormatter {
       }
       builder.setLicense(licensePb);
     } else if (type == STRING_DICT) {
-      @SuppressWarnings("unchecked")
       Map<String, String> dict = (Map<String, String>) value;
       for (Map.Entry<String, String> keyValueList : dict.entrySet()) {
         StringDictEntry.Builder entry =
@@ -209,7 +209,6 @@ public class AttributeFormatter {
         builder.addStringDictValue(entry);
       }
     } else if (type == STRING_LIST_DICT) {
-      @SuppressWarnings("unchecked")
       Map<String, List<String>> dict = (Map<String, List<String>>) value;
       for (Map.Entry<String, List<String>> dictEntry : dict.entrySet()) {
         StringListDictEntry.Builder entry =
@@ -220,7 +219,6 @@ public class AttributeFormatter {
         builder.addStringListDictValue(entry);
       }
     } else if (type == LABEL_DICT_UNARY) {
-      @SuppressWarnings("unchecked")
       Map<String, Label> dict = (Map<String, Label>) value;
       for (Map.Entry<String, Label> dictEntry : dict.entrySet()) {
         LabelDictUnaryEntry.Builder entry =
@@ -230,7 +228,6 @@ public class AttributeFormatter {
         builder.addLabelDictUnaryValue(entry);
       }
     } else if (type == LABEL_KEYED_STRING_DICT) {
-      @SuppressWarnings("unchecked")
       Map<Label, String> dict = (Map<Label, String>) value;
       for (Map.Entry<Label, String> dictEntry : dict.entrySet()) {
         LabelKeyedStringDictEntry.Builder entry =
@@ -240,7 +237,6 @@ public class AttributeFormatter {
         builder.addLabelKeyedStringDictValue(entry);
       }
     } else if (type == FILESET_ENTRY_LIST) {
-      @SuppressWarnings("unchecked")
       List<FilesetEntry> filesetEntries = (List<FilesetEntry>) value;
       for (FilesetEntry filesetEntry : filesetEntries) {
         Build.FilesetEntry.Builder filesetEntryPb =
@@ -308,6 +304,8 @@ public class AttributeFormatter {
 
     void addFilesetListValue(Build.FilesetEntry.Builder builder);
 
+    void addGlobCriteria(Build.GlobCriteria.Builder builder);
+
     void addLabelDictUnaryValue(LabelDictUnaryEntry.Builder builder);
 
     void addLabelKeyedStringDictValue(LabelKeyedStringDictEntry.Builder builder);
@@ -357,6 +355,11 @@ public class AttributeFormatter {
     @Override
     public void addFilesetListValue(Build.FilesetEntry.Builder builder) {
       attributeBuilder.addFilesetListValue(builder);
+    }
+
+    @Override
+    public void addGlobCriteria(Build.GlobCriteria.Builder builder) {
+      attributeBuilder.addGlobCriteria(builder);
     }
 
     @Override
@@ -455,11 +458,13 @@ public class AttributeFormatter {
    * An {@link AttributeValueBuilderAdapter} which writes to a {@link SelectorEntry.Builder}.
    *
    * <p>Note that there is no {@code encodeBooleanAndTriStateAsIntegerAndString} parameter needed
-   * here. This is because the clients that expect those alternate encodings of boolean and tristate
-   * attribute values do not support {@link SelectorList} values. When providing output to those
-   * clients, we compute the set of possible attribute values (expanding {@link SelectorList}
+   * here. This is because the clients that expect those alternate encodings of boolean and
+   * tristate attribute values do not support {@link SelectorList} values. When providing output to
+   * those clients, we compute the set of possible attribute values (expanding {@link SelectorList}
    * values, evaluating computed defaults, and flattening collections of collections; see {@link
-   * com.google.devtools.build.lib.packages.AggregatingAttributeMapper#visitAttribute}).
+   * com.google.devtools.build.lib.packages.AggregatingAttributeMapper#getPossibleAttributeValues}
+   * and {@link
+   * com.google.devtools.build.lib.packages.AggregatingAttributeMapper#flattenAttributeValues}).
    */
   private static class SelectorEntryBuilderAdapter implements AttributeValueBuilderAdapter {
     private final SelectorEntry.Builder selectorEntryBuilder;
@@ -476,6 +481,11 @@ public class AttributeFormatter {
     @Override
     public void addFilesetListValue(Build.FilesetEntry.Builder builder) {
       selectorEntryBuilder.addFilesetListValue(builder);
+    }
+
+    @Override
+    public void addGlobCriteria(Build.GlobCriteria.Builder builder) {
+      selectorEntryBuilder.addGlobCriteria(builder);
     }
 
     @Override
@@ -534,3 +544,4 @@ public class AttributeFormatter {
     }
   }
 }
+

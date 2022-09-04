@@ -1002,8 +1002,7 @@ public final class Runfiles implements RunfilesApi {
      * Collects runfiles from data dependencies of a target.
      */
     public Builder addDataDeps(RuleContext ruleContext) {
-      addTargets(getPrerequisites(ruleContext, "data", Mode.DONT_CHECK),
-          RunfilesProvider.DATA_RUNFILES);
+      addTargets(getPrerequisites(ruleContext, "data", Mode.DATA), RunfilesProvider.DATA_RUNFILES);
       return this;
     }
 

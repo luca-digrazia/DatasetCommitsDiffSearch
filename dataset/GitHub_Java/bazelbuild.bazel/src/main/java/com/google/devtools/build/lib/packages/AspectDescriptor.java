@@ -15,77 +15,31 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.collect.ImmutableMultimap;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.protobuf.TextFormat;
 import java.util.Map;
 import java.util.Objects;
-import javax.annotation.Nullable;
 
 /**
- * A wrapper for {@link AspectClass}, {@link AspectParameters}, {@code inheritedRequiredProviders}
- * and {@code inheritedAttributeAspects}
+ * A pair of {@link AspectClass} and {@link AspectParameters}.
  *
  * <p>Used for dependency resolution.
  */
 @Immutable
+@AutoCodec
 public final class AspectDescriptor {
   private final AspectClass aspectClass;
   private final AspectParameters aspectParameters;
 
-  /**
-   * Inherited required providers to enable aspects required by other aspects to be propagated along
-   * with their main aspect until they can be applied. Null if the aspect does not inherit required
-   * providers.
-   */
-  @Nullable private final RequiredProviders inheritedRequiredProviders;
-
-  /**
-   * Inherited required providers to enable aspects required by other aspects to be propagated along
-   * with their main aspect based on its propagation attributes.
-   */
-  @Nullable private final ImmutableSet<String> inheritedAttributeAspects;
-
-  /**
-   * False if the inherited propagation information have no effect, i.e. {@code
-   * inheritedRequiredProviders} accepts None and {@code inheritedAttributeAspects} is empty,
-   * whether these values are actually inherited or not.
-   */
-  private final boolean inheritsPropagationInfo;
-
-  public AspectDescriptor(
-      AspectClass aspectClass,
-      AspectParameters aspectParameters,
-      RequiredProviders inheritedRequiredProviders,
-      ImmutableSet<String> inheritedAttributeAspects) {
+  @AutoCodec.Instantiator
+  public AspectDescriptor(AspectClass aspectClass, AspectParameters aspectParameters) {
     this.aspectClass = aspectClass;
     this.aspectParameters = aspectParameters;
-    if (isEmptyInheritedRequiredProviders(inheritedRequiredProviders)
-        && isEmptyInheritedAttributeAspects(inheritedAttributeAspects)) {
-      this.inheritsPropagationInfo = false;
-      this.inheritedRequiredProviders = null;
-      this.inheritedAttributeAspects = null;
-    } else {
-      this.inheritsPropagationInfo = true;
-      this.inheritedRequiredProviders = inheritedRequiredProviders;
-      this.inheritedAttributeAspects = inheritedAttributeAspects;
-    }
-  }
-
-  public AspectDescriptor(AspectClass aspectClass, AspectParameters aspectParameters) {
-    this(
-        aspectClass,
-        aspectParameters,
-        /*inheritedRequiredProviders=*/ null,
-        /*inheritedAttributeAspects=*/ null);
   }
 
   public AspectDescriptor(AspectClass aspectClass) {
-    this(
-        aspectClass,
-        AspectParameters.EMPTY,
-        /*inheritedRequiredProviders=*/ null,
-        /*inheritedAttributeAspects=*/ null);
+    this(aspectClass, AspectParameters.EMPTY);
   }
 
   public AspectClass getAspectClass() {
@@ -96,42 +50,9 @@ public final class AspectDescriptor {
     return aspectParameters;
   }
 
-  @Nullable
-  public RequiredProviders getInheritedRequiredProviders() {
-    return inheritedRequiredProviders;
-  }
-
-  @Nullable
-  public ImmutableSet<String> getInheritedAttributeAspects() {
-    if (!inheritsPropagationInfo) {
-      return ImmutableSet.of(); // because returnning null means propagate through all attr aspects
-    }
-    return inheritedAttributeAspects;
-  }
-
-  public boolean satisfiesInheritedRequiredProviders(AdvertisedProviderSet advertisedProviders) {
-    if (!inheritsPropagationInfo) {
-      return false;
-    }
-
-    return inheritedRequiredProviders.isSatisfiedBy(advertisedProviders);
-  }
-
-  public boolean inheritedPropagateAlong(String attributeName) {
-    if (!inheritsPropagationInfo) {
-      return false;
-    }
-
-    if (inheritedAttributeAspects != null) {
-      return inheritedAttributeAspects.contains(attributeName);
-    }
-    return true;
-  }
-
   @Override
   public int hashCode() {
-    return Objects.hash(
-        aspectClass, aspectParameters, inheritedRequiredProviders, inheritedAttributeAspects);
+    return Objects.hash(aspectClass, aspectParameters);
   }
 
   @Override
@@ -146,9 +67,7 @@ public final class AspectDescriptor {
 
     AspectDescriptor that = (AspectDescriptor) obj;
     return Objects.equals(aspectClass, that.aspectClass)
-        && Objects.equals(aspectParameters, that.aspectParameters)
-        && Objects.equals(inheritedRequiredProviders, that.inheritedRequiredProviders)
-        && Objects.equals(inheritedAttributeAspects, that.inheritedAttributeAspects);
+        && Objects.equals(aspectParameters, that.aspectParameters);
   }
 
   @Override
@@ -156,54 +75,34 @@ public final class AspectDescriptor {
     return getDescription();
   }
 
-  private static boolean isEmptyInheritedRequiredProviders(
-      RequiredProviders inheritedRequiredProviders) {
-    return (inheritedRequiredProviders == null
-        || inheritedRequiredProviders.equals(RequiredProviders.acceptNoneBuilder().build()));
-  }
-
-  private static boolean isEmptyInheritedAttributeAspects(
-      ImmutableSet<String> inheritedAttributeAspects) {
-    return (inheritedAttributeAspects == null || inheritedAttributeAspects.isEmpty());
-  }
-
   /**
-   * Creates a presentable description of this aspect, available to Starlark via "Target.aspects".
+   * Creates a presentable description of this aspect, avaliable
+   * to Skylark via "Target.aspects".
    *
-   * <p>The description is designed to be unique for each aspect descriptor, but not to be
-   * parseable.
+   * The description is designed to be unique for each aspect descriptor,
+   * but not to be parseable.
    */
   public String getDescription() {
+    if (aspectParameters.isEmpty()) {
+      return aspectClass.getName();
+    }
+
     StringBuilder builder = new StringBuilder(aspectClass.getName());
-    if (!aspectParameters.isEmpty()) {
-      builder.append('[');
-      ImmutableMultimap<String, String> attributes = aspectParameters.getAttributes();
-      boolean first = true;
-      for (Map.Entry<String, String> attribute : attributes.entries()) {
-        if (!first) {
-          builder.append(',');
-        } else {
-          first = false;
-        }
-        builder.append(attribute.getKey());
-        builder.append("=\"");
-        builder.append(TextFormat.escapeDoubleQuotesAndBackslashes(attribute.getValue()));
-        builder.append("\"");
-      }
-      builder.append(']');
-    }
-
-    if (inheritsPropagationInfo) {
-      if (inheritedAttributeAspects == null) {
-        builder.append("[*]");
+    builder.append('[');
+    ImmutableMultimap<String, String> attributes = aspectParameters.getAttributes();
+    boolean first = true;
+    for (Map.Entry<String, String> attribute : attributes.entries()) {
+      if (!first) {
+        builder.append(',');
       } else {
-        builder.append(inheritedAttributeAspects);
+        first = false;
       }
-
-      builder.append('[');
-      builder.append(inheritedRequiredProviders);
-      builder.append(']');
+      builder.append(attribute.getKey());
+      builder.append("=\"");
+      builder.append(TextFormat.escapeDoubleQuotesAndBackslashes(attribute.getValue()));
+      builder.append("\"");
     }
+    builder.append(']');
     return builder.toString();
   }
 }

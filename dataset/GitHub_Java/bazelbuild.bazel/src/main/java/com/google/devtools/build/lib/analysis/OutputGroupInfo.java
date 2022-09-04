@@ -29,13 +29,12 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
+import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skylarkbuildapi.OutputGroupInfoApi;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkIndexable;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import java.util.HashSet;
@@ -61,10 +60,10 @@ import javax.annotation.Nullable;
 @Immutable
 @AutoCodec
 public final class OutputGroupInfo extends NativeInfo
-    implements SkylarkIndexable, Iterable<String>, OutputGroupInfoApi {
+    implements SkylarkIndexable, Iterable<String> {
   public static final String SKYLARK_NAME = "output_groups";
 
-  public static final OutputGroupInfoProvider SKYLARK_CONSTRUCTOR = new OutputGroupInfoProvider();
+  public static NativeProvider<OutputGroupInfo> SKYLARK_CONSTRUCTOR = new Constructor();
 
   /**
    * Prefix for output groups that are not reported to the user on the terminal output of Blaze when
@@ -259,28 +258,33 @@ public final class OutputGroupInfo extends NativeInfo
     return outputGroups.keySet();
   }
 
-  /**
-   * Provider implementation for {@link OutputGroupInfoApi.OutputGroupInfoApiProvider}.
-   */
-  public static class OutputGroupInfoProvider extends BuiltinProvider<OutputGroupInfo>
-      implements OutputGroupInfoApi.OutputGroupInfoApiProvider {
-    private OutputGroupInfoProvider() {
-      super("OutputGroupInfo", OutputGroupInfo.class);
+  /** A constructor callable from Skylark for OutputGroupInfo. */
+  private static class Constructor extends NativeProvider<OutputGroupInfo> {
+
+    private Constructor() {
+      super(OutputGroupInfo.class, "OutputGroupInfo");
     }
 
     @Override
-    public OutputGroupInfoApi constructor(SkylarkDict<?, ?> kwargs, Location loc)
-        throws EvalException {
-      Map<String, Object> kwargsMap = kwargs.getContents(String.class, Object.class, "kwargs");
+    protected OutputGroupInfo createInstanceFromSkylark(
+        Object[] args, Environment env, Location loc) throws EvalException {
+
+      @SuppressWarnings("unchecked")
+      Map<String, Object> kwargs = (Map<String, Object>) args[0];
 
       ImmutableMap.Builder<String, NestedSet<Artifact>> builder = ImmutableMap.builder();
-      for (Map.Entry<String, Object> entry : kwargsMap.entrySet()) {
+      for (Map.Entry<String, Object> entry : kwargs.entrySet()) {
         builder.put(
             entry.getKey(),
             SkylarkRuleConfiguredTargetUtil.convertToOutputGroupValue(
                 loc, entry.getKey(), entry.getValue()));
       }
       return new OutputGroupInfo(builder.build());
+    }
+
+    @Override
+    public String getErrorMessageFormatForUnknownField() {
+      return "Output group '%s' not present";
     }
   }
 }
