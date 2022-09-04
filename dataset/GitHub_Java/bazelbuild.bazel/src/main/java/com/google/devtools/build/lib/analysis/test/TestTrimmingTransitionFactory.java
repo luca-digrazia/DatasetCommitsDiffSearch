@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.test.TestConfiguration.TestOptions
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.common.options.Options;
 
 /**
@@ -81,11 +80,9 @@ public final class TestTrimmingTransitionFactory implements TransitionFactory<Ru
   public PatchTransition create(Rule rule) {
     RuleClass ruleClass = rule.getRuleClassObject();
     if (ruleClass
-            .getConfigurationFragmentPolicy()
-            .isLegalConfigurationFragment(TestConfiguration.class)
-        || TargetUtils.isAlias(rule)) {
-      // If Test rule, no need to trim here.
-      // If Alias rule, might point to test rule so don't trim yet.
+        .getConfigurationFragmentPolicy()
+        .isLegalConfigurationFragment(TestConfiguration.class)) {
+      // Test rule; no need to trim here.
       return NoTransition.INSTANCE;
     }
 
