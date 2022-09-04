@@ -1,41 +1,62 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.test.producer.disposer;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.InstanceHandle;
 import io.quarkus.arc.test.ArcTestContainer;
 import io.quarkus.arc.test.MyQualifier;
 import java.math.BigDecimal;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.inject.Disposes;
-import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Produces;
 import javax.enterprise.util.TypeLiteral;
 import javax.inject.Singleton;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.RuleChain;
+import org.junit.rules.TestRule;
+import org.junit.runner.Description;
+import org.junit.runners.model.Statement;
 
 public class DisposerTest {
 
-    @RegisterExtension
-    ArcTestContainer container = new ArcTestContainer(StringProducer.class, LongProducer.class, BigDecimalProducer.class,
-            MyQualifier.class, Pong.class);
+    @Rule
+    public RuleChain chain = RuleChain.outerRule(new TestRule() {
+        @Override
+        public Statement apply(final Statement base, Description description) {
+            return new Statement() {
 
-    @AfterAll
-    public static void afterAll() {
-        assertNotNull(BigDecimalProducer.DISPOSED.get());
-        assertEquals(1, BigDecimalProducer.DESTROYED.get());
-    }
+                @Override
+                public void evaluate() throws Throwable {
+                    base.evaluate();
+                    assertNotNull(BigDecimalProducer.DISPOSED.get());
+                    assertEquals(1, BigDecimalProducer.DESTROYED.get());
+                }
+            };
+        }
+    }).around(new ArcTestContainer(StringProducer.class, LongProducer.class, BigDecimalProducer.class, MyQualifier.class));
 
     @Test
     public void testDisposers() {
@@ -45,9 +66,6 @@ public class DisposerTest {
         assertEquals(LongProducer.DISPOSED.get(), longValue);
         // String is only injected in Long disposer
         assertNotNull(StringProducer.DISPOSED.get());
-        // Pong should be destroyed when the disposer invocation completes
-        assertTrue(Pong.DESTROYED.get());
-
         // A new instance is created for produce and dispose
         assertEquals(2, StringProducer.DESTROYED.get());
         // Both producer and produced bean are application scoped
@@ -68,31 +86,9 @@ public class DisposerTest {
             return System.currentTimeMillis();
         }
 
-        void dipose(@Disposes Long value, @MyQualifier String injectedString, Instance<Pong> pongs) {
+        void dipose(@Disposes Long value, @MyQualifier String injectedString) {
             assertNotNull(injectedString);
             DISPOSED.set(value);
-            pongs.forEach(p -> {
-                assertEquals("OK", p.id);
-            });
-        }
-
-    }
-
-    @Dependent
-    static class Pong {
-
-        static final AtomicBoolean DESTROYED = new AtomicBoolean();
-
-        String id;
-
-        @PostConstruct
-        void init() {
-            id = "OK";
-        }
-
-        @PreDestroy
-        void destroy() {
-            DESTROYED.set(true);
         }
 
     }

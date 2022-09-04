@@ -135,20 +135,18 @@ public class BeanGenerator extends AbstractGenerator {
 
     Collection<Resource> generateSyntheticBean(BeanInfo bean, ReflectionRegistration reflectionRegistration) {
 
-        StringBuilder baseNameBuilder = new StringBuilder();
+        String baseName;
         if (bean.getImplClazz().enclosingClass() != null) {
-            baseNameBuilder.append(DotNames.simpleName(bean.getImplClazz().enclosingClass())).append("_")
-                    .append(DotNames.simpleName(bean.getImplClazz()));
+            baseName = DotNames.simpleName(bean.getImplClazz().enclosingClass()) + "_"
+                    + DotNames.simpleName(bean.getImplClazz());
         } else {
-            baseNameBuilder.append(DotNames.simpleName(bean.getImplClazz()));
+            baseName = DotNames.simpleName(bean.getImplClazz());
         }
-        baseNameBuilder.append("_");
-        baseNameBuilder.append(bean.getIdentifier());
-        baseNameBuilder.append(SYNTHETIC_SUFFIX);
-        String baseName = baseNameBuilder.toString();
+        baseName += SYNTHETIC_SUFFIX;
 
         Type providerType = bean.getProviderType();
-        String providerTypeName = providerType.name().toString();
+        ClassInfo providerClass = bean.getDeployment().getIndex().getClassByName(providerType.name());
+        String providerTypeName = providerClass.name().toString();
         String targetPackage = getPackageName(bean);
         String generatedName = generatedNameFromTarget(targetPackage, baseName, BEAN_SUFFIX);
 
@@ -246,7 +244,8 @@ public class BeanGenerator extends AbstractGenerator {
             baseName = DotNames.simpleName(beanClass);
         }
         Type providerType = bean.getProviderType();
-        String providerTypeName = providerType.name().toString();
+        ClassInfo providerClass = bean.getDeployment().getIndex().getClassByName(providerType.name());
+        String providerTypeName = providerClass.name().toString();
         String targetPackage = DotNames.packageName(providerType.name());
         String generatedName = generatedNameFromTarget(targetPackage, baseName, BEAN_SUFFIX);
 
@@ -571,10 +570,8 @@ public class BeanGenerator extends AbstractGenerator {
                 builtinBean.getGenerator().generate(classOutput, bean.getDeployment(), injectionPoint, beanCreator, constructor,
                         injectionPointToProviderField.get(injectionPoint), annotationLiterals);
             } else {
-                if (BuiltinScope.DEPENDENT.is(injectionPoint.getResolvedBean().getScope()) && (injectionPoint.getResolvedBean()
-                        .getAllInjectionPoints().stream()
-                        .anyMatch(ip -> BuiltinBean.INJECTION_POINT.getRawTypeDotName().equals(ip.getRequiredType().name()))
-                        || injectionPoint.getResolvedBean().isSynthetic())) {
+                if (injectionPoint.getResolvedBean().getAllInjectionPoints().stream()
+                        .anyMatch(ip -> BuiltinBean.INJECTION_POINT.getRawTypeDotName().equals(ip.getRequiredType().name()))) {
                     // Injection point resolves to a dependent bean that injects InjectionPoint metadata and so we need to wrap the injectable
                     // reference provider
                     ResultHandle wrapHandle = wrapCurrentInjectionPoint(classOutput, beanCreator, bean, constructor,

@@ -76,13 +76,13 @@ public class DisposerInfo {
         }
     }
 
-    Collection<AnnotationInstance> getDisposedParameterQualifiers() {
+    Collection<AnnotationInstance> getDisposedParameteterQualifiers() {
         return Annotations.getParameterAnnotations(declaringBean.getDeployment(), disposerMethod, disposedParameter.position())
                 .stream().filter(a -> declaringBean.getDeployment().getQualifier(a.name()) != null)
                 .collect(Collectors.toList());
     }
 
-    Type getDisposedParameterType() {
+    Type getDiposedParameterType() {
         return disposerMethod.parameters().get(disposedParameter.position());
     }
 
