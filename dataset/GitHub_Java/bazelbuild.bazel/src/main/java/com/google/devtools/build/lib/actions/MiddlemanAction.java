@@ -17,7 +17,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
@@ -39,14 +38,13 @@ public final class MiddlemanAction extends AbstractAction {
   @AutoCodec.Instantiator
   MiddlemanAction(
       ActionOwner owner,
-      NestedSet<Artifact> inputs,
+      Iterable<Artifact> inputs,
       ImmutableSet<Artifact> outputs,
       String description,
       MiddlemanType middlemanType) {
     super(owner, inputs, outputs);
     Preconditions.checkNotNull(middlemanType);
     Preconditions.checkArgument(Iterables.getOnlyElement(outputs).isMiddlemanArtifact(), outputs);
-    Preconditions.checkNotNull(description);
     this.description = description;
     this.middlemanType = middlemanType;
   }
@@ -91,14 +89,11 @@ public final class MiddlemanAction extends AbstractAction {
     return true;
   }
 
-  /** Creates a new middleman action. */
-  public static Action create(
-      ActionRegistry env,
-      ActionOwner owner,
-      NestedSet<Artifact> inputs,
-      Artifact stampFile,
-      String purpose,
-      MiddlemanType middlemanType) {
+  /**
+   * Creates a new middleman action.
+   */
+  public static Action create(ActionRegistry env, ActionOwner owner,
+      Iterable<Artifact> inputs, Artifact stampFile, String purpose, MiddlemanType middlemanType) {
     MiddlemanAction action =
         new MiddlemanAction(owner, inputs, ImmutableSet.of(stampFile), purpose, middlemanType);
     env.registerAction(action);

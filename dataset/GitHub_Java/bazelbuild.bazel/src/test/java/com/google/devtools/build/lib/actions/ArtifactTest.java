@@ -16,7 +16,9 @@ package com.google.devtools.build.lib.actions;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
@@ -26,8 +28,6 @@ import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictEx
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.LabelArtifactOwner;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.skyframe.serialization.AutoRegistry;
@@ -176,7 +176,7 @@ public class ArtifactTest {
           }
         },
         ActionsTestUtil.NULL_ACTION_OWNER,
-        NestedSetBuilder.create(Order.STABLE_ORDER, aHeader1, aHeader2, aHeader3),
+        ImmutableList.of(aHeader1, aHeader2, aHeader3),
         middleman,
         "desc",
         MiddlemanType.AGGREGATING_MIDDLEMAN);
@@ -204,7 +204,7 @@ public class ArtifactTest {
     for (Artifact artifact : original) {
       ActionAnalysisMetadata action = actionGraph.getGeneratingAction(artifact);
       if (artifact.isMiddlemanArtifact()) {
-        manuallyExpanded.addAll(action.getInputs().toList());
+        Iterables.addAll(manuallyExpanded, action.getInputs());
       } else {
         manuallyExpanded.add(artifact);
       }
@@ -263,8 +263,6 @@ public class ArtifactTest {
     anotherArtifact.setGeneratingActionKey(ActionsTestUtil.NULL_ACTION_LOOKUP_DATA);
     new SerializationTester(artifact, anotherArtifact)
         .addDependency(FileSystem.class, scratch.getFileSystem())
-        .addDependency(
-            Root.RootCodecDependencies.class, new Root.RootCodecDependencies(anotherRoot.getRoot()))
         .runTests();
   }
 
@@ -284,13 +282,9 @@ public class ArtifactTest {
                 .addReferenceConstant(scratch.getFileSystem())
                 .setAllowDefaultCodec(true)
                 .build(),
-            ImmutableMap.<Class<?>, Object>builder()
-                .put(FileSystem.class, scratch.getFileSystem())
-                .put(ArtifactResolverSupplier.class, artifactResolverSupplierForTest)
-                .put(
-                    Root.RootCodecDependencies.class,
-                    new Root.RootCodecDependencies(artifactRoot.getRoot()))
-                .build());
+            ImmutableMap.of(
+                FileSystem.class, scratch.getFileSystem(),
+                ArtifactResolverSupplier.class, artifactResolverSupplierForTest));
 
     PathFragment pathFragment = PathFragment.create("src/foo.cc");
     ArtifactOwner owner = new LabelArtifactOwner(Label.parseAbsoluteUnchecked("//foo:bar"));
