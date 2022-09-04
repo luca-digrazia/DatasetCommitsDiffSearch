@@ -8,22 +8,27 @@ import android.os.Looper;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.DefaultLoadControl;
 import com.google.android.exoplayer2.DefaultRenderersFactory;
-import com.google.android.exoplayer2.ExoPlayerFactory;
 import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.MediaItem;
+import com.google.android.exoplayer2.SimpleExoPlayer;
+import com.google.android.exoplayer2.metadata.Metadata;
 import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.source.MergingMediaSource;
 import com.google.android.exoplayer2.source.SingleSampleMediaSource;
+import com.google.android.exoplayer2.text.Cue;
 import com.google.android.exoplayer2.text.TextOutput;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
-import com.google.android.exoplayer2.upstream.DefaultHttpDataSourceFactory;
+import com.google.android.exoplayer2.upstream.DefaultHttpDataSource;
 import com.google.android.exoplayer2.util.MimeTypes;
-import com.google.android.exoplayer2.util.Util;
-import com.shuyu.gsyvideoplayer.utils.Debuger;
+
+import java.util.List;
 
 import tv.danmaku.ijk.media.exo2.IjkExo2MediaPlayer;
 import tv.danmaku.ijk.media.exo2.demo.EventLogger;
+
+import static com.google.android.exoplayer2.util.Assertions.checkNotNull;
 
 public class GSYExoSubTitlePlayer extends IjkExo2MediaPlayer {
 
@@ -36,13 +41,25 @@ public class GSYExoSubTitlePlayer extends IjkExo2MediaPlayer {
 
 
     @Override
+    public void onCues(List<Cue> cues) {
+        super.onCues(cues);
+        /// 这里
+    }
+
+    @Override
+    public void onMetadata(Metadata metadata) {
+        super.onMetadata(metadata);
+        /// 这里
+    }
+
+    @Override
     protected void prepareAsyncInternal() {
         new Handler(Looper.getMainLooper()).post(
                 new Runnable() {
                     @Override
                     public void run() {
                         if (mTrackSelector == null) {
-                            mTrackSelector = new DefaultTrackSelector();
+                            mTrackSelector = new DefaultTrackSelector(mAppContext);
                         }
                         mEventLogger = new EventLogger(mTrackSelector);
                         boolean preferExtensionDecoders = true;
@@ -58,7 +75,10 @@ public class GSYExoSubTitlePlayer extends IjkExo2MediaPlayer {
                         if (mLoadControl == null) {
                             mLoadControl = new DefaultLoadControl();
                         }
-                        mInternalPlayer = ExoPlayerFactory.newSimpleInstance(mAppContext, mRendererFactory, mTrackSelector, mLoadControl, null, Looper.getMainLooper());
+                        mInternalPlayer = new SimpleExoPlayer.Builder(mAppContext, mRendererFactory)
+                                .setLooper(Looper.getMainLooper())
+                                .setTrackSelector(mTrackSelector)
+                                .setLoadControl(mLoadControl).build();
                         mInternalPlayer.addListener(GSYExoSubTitlePlayer.this);
                         mInternalPlayer.addAnalyticsListener(GSYExoSubTitlePlayer.this);
                         if (mTextOutput != null) {
@@ -75,8 +95,8 @@ public class GSYExoSubTitlePlayer extends IjkExo2MediaPlayer {
                             MediaSource textMediaSource = getTextSource(Uri.parse(mSubTitile));
                             mMediaSource = new MergingMediaSource(mMediaSource, textMediaSource);
                         }
-
-                        mInternalPlayer.prepare(mMediaSource);
+                        mInternalPlayer.setMediaSource(mMediaSource);
+                        mInternalPlayer.prepare();
                         mInternalPlayer.setPlayWhenReady(false);
                     }
                 }
@@ -85,16 +105,28 @@ public class GSYExoSubTitlePlayer extends IjkExo2MediaPlayer {
 
     public MediaSource getTextSource(Uri subTitle) {
         //todo C.SELECTION_FLAG_AUTOSELECT language MimeTypes
-        Format textFormat = Format.createTextSampleFormat(null, MimeTypes.APPLICATION_SUBRIP, C.SELECTION_FLAG_FORCED, "en");
+        Format textFormat = new Format.Builder()
+                /// 其他的比如 text/x-ssa ，text/vtt，application/ttml+xml 等等
+                .setSampleMimeType(MimeTypes.APPLICATION_SUBRIP)
+                .setSelectionFlags(C.SELECTION_FLAG_FORCED)
+                /// 如果出现字幕不显示，可以通过修改这个语音去对应，
+                //  这个问题在内部的 selectTextTrack 时，TextTrackScore 通过 getFormatLanguageScore 方法判断语言获取匹配不上
+                //  就会不出现字幕
+                .setLanguage("en")
+                .build();
 
-        DefaultHttpDataSourceFactory factory = new DefaultHttpDataSourceFactory(Util.getUserAgent(mAppContext,
-                "GSYExoSubTitlePlayer"), new DefaultBandwidthMeter.Builder(mAppContext).build(),
-                50000,
-                50000, true);
+        MediaItem.Subtitle subtitle = new MediaItem.Subtitle(
+                subTitle, checkNotNull(textFormat.sampleMimeType), textFormat.language, textFormat.selectionFlags);
+
+        DefaultHttpDataSource.Factory  factory = new DefaultHttpDataSource.Factory()
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(50000)
+                .setReadTimeoutMs(50000)
+                .setTransferListener( new DefaultBandwidthMeter.Builder(mAppContext).build());
 
         MediaSource textMediaSource = new SingleSampleMediaSource.Factory(new DefaultDataSourceFactory(mAppContext, null,
                 factory))
-                .createMediaSource(subTitle, textFormat, C.TIME_UNSET);
+                .createMediaSource(subtitle, C.TIME_UNSET);
         return textMediaSource;
 
     }
@@ -117,13 +149,13 @@ public class GSYExoSubTitlePlayer extends IjkExo2MediaPlayer {
     }
 
     public void addTextOutputPlaying(TextOutput textOutput) {
-        if(mInternalPlayer != null) {
+        if (mInternalPlayer != null) {
             mInternalPlayer.addTextOutput(textOutput);
         }
     }
 
     public void removeTextOutput(TextOutput textOutput) {
-        if(mInternalPlayer != null) {
+        if (mInternalPlayer != null) {
             mInternalPlayer.removeTextOutput(textOutput);
         }
     }
