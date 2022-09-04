@@ -178,10 +178,11 @@ public class ESTimestampFixup {
         final SearchResponse response = client.search(request).actionGet();
 
         while (true) {
+            LOG.debug("NEXT ITER");
             final SearchResponse r = client.prepareSearchScroll(response.getScrollId()).setScroll(TimeValue.timeValueMinutes(1)).execute().actionGet();
 
             if (r.getHits().getHits().length == 0) {
-                LOG.debug("No more hits, done!");
+                LOG.debug("SCROLL DONE!");
                 break;
             }
 
@@ -249,10 +250,10 @@ public class ESTimestampFixup {
                     LOG.info("Bulk action took {}ms", bulkResponse.getTookInMillis());
                 }
             } else {
-                LOG.debug("No bulk actions to execute!");
+                LOG.info("No bulk actions to execute!");
             }
         } else {
-            LOG.warn("Not executing update because '-F' command line flag not given!");
+            LOG.info("Not executing update because '-F' command line flag not given!");
         }
     }
 
