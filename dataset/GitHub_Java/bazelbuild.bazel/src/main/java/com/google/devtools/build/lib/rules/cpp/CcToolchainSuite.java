@@ -38,7 +38,8 @@ public class CcToolchainSuite implements RuleConfiguredTargetFactory {
       throws InterruptedException, RuleErrorException, ActionConflictException {
     NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
     for (TransitiveInfoCollection dep : ruleContext.getPrerequisiteMap("toolchains").values()) {
-      CcToolchainProvider provider = (CcToolchainProvider) dep.get(ToolchainInfo.PROVIDER);
+      CcToolchainProvider provider =
+          (CcToolchainProvider) dep.get(ToolchainInfo.PROVIDER);
       if (provider != null) {
         filesToBuild.addTransitive(provider.getCrosstool());
       }
