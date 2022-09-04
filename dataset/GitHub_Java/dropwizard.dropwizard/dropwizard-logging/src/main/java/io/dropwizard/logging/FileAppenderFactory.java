@@ -5,7 +5,6 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.FileAppender;
 import ch.qos.logback.core.Layout;
-import ch.qos.logback.core.encoder.LayoutWrappingEncoder;
 import ch.qos.logback.core.rolling.DefaultTimeBasedFileNamingAndTriggeringPolicy;
 import ch.qos.logback.core.rolling.RollingFileAppender;
 import ch.qos.logback.core.rolling.TimeBasedRollingPolicy;
@@ -161,11 +160,7 @@ public class FileAppenderFactory extends AbstractAppenderFactory {
 
         appender.setAppend(true);
         appender.setContext(context);
-
-        LayoutWrappingEncoder<ILoggingEvent> layoutEncoder = new LayoutWrappingEncoder<>();
-        layoutEncoder.setLayout(layout == null ? buildLayout(context, timeZone) : layout);
-        appender.setEncoder(layoutEncoder);
-
+        appender.setLayout(layout == null ? buildLayout(context, timeZone) : layout);
         appender.setFile(currentLogFilename);
         appender.setPrudent(false);
         addThresholdFilter(appender, threshold);
