@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Streams;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
@@ -29,6 +30,7 @@ import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.AnalysisOptions;
 import com.google.devtools.build.lib.analysis.AnalysisResult;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
+import com.google.devtools.build.lib.analysis.AspectCollection;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
@@ -50,6 +52,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollectio
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
+import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.TransitionResolver;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
@@ -128,6 +131,11 @@ public class BuildViewForTesting {
     return skyframeBuildView.getEvaluatedTargetKeys();
   }
 
+  /** The number of targets freshly evaluated in the last analysis run. */
+  public int getTargetsVisited() {
+    return buildView.getTargetsVisited();
+  }
+
   /**
    * Returns whether the given configured target has errors.
    */
@@ -171,8 +179,7 @@ public class BuildViewForTesting {
   @VisibleForTesting
   public void setConfigurationsForTesting(
       EventHandler eventHandler, BuildConfigurationCollection configurations) {
-    skyframeBuildView.setConfigurations(
-        eventHandler, configurations, /* maxDifferencesToShow */ -1);
+    skyframeBuildView.setConfigurations(eventHandler, configurations);
   }
 
   public ArtifactFactory getArtifactFactory() {
@@ -272,7 +279,8 @@ public class BuildViewForTesting {
       final ConfiguredTarget ct,
       BuildConfigurationCollection configurations,
       ImmutableSet<Label> toolchainLabels)
-      throws EvalException, InterruptedException, InconsistentAspectOrderException {
+      throws EvalException, InvalidConfigurationException, InterruptedException,
+      InconsistentAspectOrderException {
 
     Target target = null;
     try {
@@ -329,6 +337,29 @@ public class BuildViewForTesting {
                       }
                     }));
       }
+
+      @Override
+      protected List<BuildConfiguration> getConfigurations(
+          FragmentClassSet fragments,
+          Iterable<BuildOptions> buildOptions,
+          BuildOptions defaultBuildOptions) {
+        Preconditions.checkArgument(
+            fragments.fragmentClasses().equals(ct.getConfigurationKey().getFragments()),
+            "Mismatch: %s %s",
+            ct,
+            fragments);
+        Dependency asDep = Dependency.withTransitionAndAspects(ct.getLabel(),
+            NoTransition.INSTANCE, AspectCollection.EMPTY);
+        ImmutableList.Builder<BuildConfiguration> builder = ImmutableList.builder();
+        for (BuildOptions options : buildOptions) {
+          builder.add(Iterables.getOnlyElement(
+              skyframeExecutor
+                  .getConfigurations(eventHandler, options, ImmutableList.<Dependency>of(asDep))
+                  .values()
+          ));
+        }
+        return builder.build();
+      }
     }
 
     DependencyResolver dependencyResolver = new SilentDependencyResolver();
@@ -341,6 +372,7 @@ public class BuildViewForTesting {
         /*aspect=*/ null,
         getConfigurableAttributeKeysForTesting(eventHandler, ctgNode),
         toolchainLabels,
+        skyframeExecutor.getDefaultBuildOptions(),
         ruleClassProvider.getTrimmingTransitionFactory());
   }
 
