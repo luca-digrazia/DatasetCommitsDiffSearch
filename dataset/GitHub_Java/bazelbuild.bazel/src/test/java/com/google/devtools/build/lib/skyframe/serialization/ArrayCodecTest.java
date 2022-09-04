@@ -15,8 +15,11 @@
 package com.google.devtools.build.lib.skyframe.serialization;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertThrows;
 
+import com.google.common.collect.ImmutableClassToInstanceMap;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
+import com.google.devtools.build.lib.skyframe.serialization.testutils.TestUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -35,6 +38,20 @@ public class ArrayCodecTest {
     new SerializationTester(new Object[0], instance)
         .setVerificationFunction(ArrayCodecTest::verifyDeserialized)
         .runTests();
+  }
+
+  @Test
+  public void stackOverflowTransformedIntoSerializationException() {
+    int depth = 4000;
+    Object[] obj = new Object[1];
+    Object[] cur = obj;
+    for (int i = 0; i < depth; i++) {
+      cur[0] = new Object[1];
+      cur = (Object[]) cur[0];
+    }
+    assertThrows(
+        SerializationException.class,
+        () -> TestUtils.toBytes(new SerializationContext(ImmutableClassToInstanceMap.of()), obj));
   }
 
   private static void verifyDeserialized(Object[] original, Object[] deserialized) {
