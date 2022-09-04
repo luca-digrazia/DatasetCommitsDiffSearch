@@ -16,10 +16,7 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
-import javax.annotation.Nullable;
 
 /**
  * An object representing a subprocess to be invoked, including its command and
@@ -28,12 +25,23 @@ import javax.annotation.Nullable;
  * of files it is expected to read and write.
  */
 public interface Spawn {
+
+  /**
+   * Returns true iff this command may be executed remotely.
+   */
+  boolean isRemotable();
+
+  /**
+   * Returns true iff this command should be executed without a sandbox.
+   */
+  boolean hasNoSandbox();
+
   /**
    * Out-of-band data for this spawn. This can be used to signal hints (hardware requirements,
    * local vs. remote) to the execution subsystem.
    *
    * <p>String tags from {@link
-   * com.google.devtools.build.lib.analysis.test.TestTargetProperties#getExecutionInfo()} can be added
+   * com.google.devtools.build.lib.rules.test.TestTargetProperties#getExecutionInfo()} can be added
    * as keys with arbitrary values to this map too.
    */
   ImmutableMap<String, String> getExecutionInfo();
@@ -42,6 +50,11 @@ public interface Spawn {
    * Returns the {@link RunfilesSupplier} helper encapsulating the runfiles for this spawn.
    */
   RunfilesSupplier getRunfilesSupplier();
+
+  /**
+   * Returns artifacts for filesets, so they can be scheduled on remote execution.
+   */
+  ImmutableList<Artifact> getFilesetManifests();
 
   /**
    * Returns the command (the first element) and its arguments.
@@ -53,12 +66,6 @@ public interface Spawn {
    * If null, the environment is inherited from the parent process.
    */
   ImmutableMap<String, String> getEnvironment();
-
-  /**
-   * Map of the execpath at which we expect the Fileset symlink trees, to a list of
-   * FilesetOutputSymlinks which contains the details of the Symlink trees.
-   */
-  ImmutableMap<PathFragment, ImmutableList<FilesetOutputSymlink>> getFilesetMappings();
 
   /**
    * Returns the list of files that are required to execute this spawn (e.g. the compiler binary),
@@ -111,7 +118,4 @@ public interface Spawn {
    * Returns a mnemonic (string constant) for this kind of spawn.
    */
   String getMnemonic();
-
-  @Nullable
-  PlatformInfo getExecutionPlatform();
 }

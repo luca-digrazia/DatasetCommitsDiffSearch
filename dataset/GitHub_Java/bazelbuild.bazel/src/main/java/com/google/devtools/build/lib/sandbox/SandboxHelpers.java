@@ -16,8 +16,10 @@ package com.google.devtools.build.lib.sandbox;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSet.Builder;
+import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.Spawn;
@@ -74,6 +76,10 @@ public final class SandboxHelpers {
 
     // Network access is allowed by default.
     return true;
+  }
+
+  static void postActionStatusMessage(EventBus eventBus, Spawn spawn) {
+    eventBus.post(ActionStatusMessage.runningStrategy(spawn.getResourceOwner(), "sandbox"));
   }
 
   static Path getSandboxRoot(

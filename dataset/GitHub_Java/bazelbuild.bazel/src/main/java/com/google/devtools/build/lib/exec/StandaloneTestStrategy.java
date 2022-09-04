@@ -118,7 +118,7 @@ public class StandaloneTestStrategy extends TestStrategy {
             ImmutableMap.copyOf(env),
             ImmutableMap.copyOf(info),
             new RunfilesSupplierImpl(
-                runfilesDir.relativeTo(execRoot), action.getExecutionSettings().getRunfiles()),
+                runfilesDir.asFragment(), action.getExecutionSettings().getRunfiles()),
             /*inputs=*/ImmutableList.copyOf(action.getInputs()),
             /*tools=*/ImmutableList.<Artifact>of(),
             /*filesetManifests=*/ImmutableList.<Artifact>of(),
@@ -170,8 +170,7 @@ public class StandaloneTestStrategy extends TestStrategy {
           .getEventBus()
           .post(
               new TestAttempt(
-                  action, attempt, data.getTestPassed(), data.getRunDurationMillis(),
-                  testOutputsBuilder.build(), true));
+                  action, attempt, data.getTestPassed(), testOutputsBuilder.build(), true));
       finalizeTest(actionExecutionContext, action, dataBuilder.build());
     } catch (IOException e) {
       executor.getEventHandler().handle(Event.error("Caught I/O exception: " + e));
@@ -212,10 +211,7 @@ public class StandaloneTestStrategy extends TestStrategy {
     dataBuilder.addAllTestProcessTimes(data.getTestProcessTimesList());
     executor
         .getEventBus()
-        .post(
-            new TestAttempt(
-                action, attempt, data.getTestPassed(), data.getRunDurationMillis(),
-                testOutputsBuilder.build(), false));
+        .post(new TestAttempt(action, attempt, data.getTestPassed(), testOutputsBuilder.build()));
     processTestOutput(executor, outErr, new TestResult(action, data, false), testLog);
   }
 
