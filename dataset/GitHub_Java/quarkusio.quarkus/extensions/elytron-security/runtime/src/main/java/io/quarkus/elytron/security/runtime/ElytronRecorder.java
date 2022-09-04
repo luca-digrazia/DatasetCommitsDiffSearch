@@ -1,6 +1,7 @@
 package io.quarkus.elytron.security.runtime;
 
 import java.security.Permission;
+import java.security.Security;
 
 import javax.enterprise.inject.spi.CDI;
 
@@ -12,6 +13,7 @@ import org.wildfly.security.authz.PermissionMappable;
 import org.wildfly.security.authz.PermissionMapper;
 import org.wildfly.security.authz.RoleDecoder;
 import org.wildfly.security.authz.Roles;
+import org.wildfly.security.password.WildFlyElytronPasswordProvider;
 import org.wildfly.security.permission.PermissionVerifier;
 
 import io.quarkus.arc.runtime.BeanContainer;
@@ -92,5 +94,14 @@ public class ElytronRecorder {
      */
     public RuntimeValue<SecurityDomain> buildDomain(RuntimeValue<SecurityDomain.Builder> builder) {
         return new RuntimeValue<>(builder.getValue().build());
+    }
+
+    /**
+     * As of Graal 19.3.0 this has to be registered at runtime, due to a bug.
+     *
+     * 19.3.1 should fix this, see https://github.com/oracle/graal/issues/1883
+     */
+    public void registerPasswordProvider() {
+        Security.addProvider(new WildFlyElytronPasswordProvider());
     }
 }

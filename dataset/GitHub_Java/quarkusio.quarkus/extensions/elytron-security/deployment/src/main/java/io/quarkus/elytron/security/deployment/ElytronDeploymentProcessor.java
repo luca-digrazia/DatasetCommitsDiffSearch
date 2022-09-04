@@ -75,7 +75,7 @@ class ElytronDeploymentProcessor {
      * @throws Exception
      */
     @BuildStep
-    @Record(ExecutionTime.RUNTIME_INIT)
+    @Record(ExecutionTime.STATIC_INIT)
     SecurityDomainBuildItem build(ElytronRecorder recorder, List<SecurityRealmBuildItem> realms)
             throws Exception {
         if (realms.size() > 0) {
@@ -105,7 +105,7 @@ class ElytronDeploymentProcessor {
     }
 
     @BuildStep
-    @Record(ExecutionTime.RUNTIME_INIT)
+    @Record(ExecutionTime.STATIC_INIT)
     void identityManager(ElytronRecorder recorder, SecurityDomainBuildItem securityDomain, BeanContainerBuildItem bc) {
         if (securityDomain != null) {
             recorder.setDomainForIdentityProvider(bc.getValue(), securityDomain.getSecurityDomain());
