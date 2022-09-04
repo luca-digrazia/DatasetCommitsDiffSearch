@@ -116,10 +116,15 @@ public interface AndroidDataProcessingApi<
         @Param(
             name = "custom_package",
             positional = false,
+            defaultValue = "None",
             type = String.class,
-            noneable = false,
+            noneable = true,
             named = true,
-            doc = "The Android application package to stamp the manifest with."),
+            doc =
+                "The Android application package to stamp the manifest with. If not provided, the"
+                    + " current Java package, derived from the location of this target's BUILD"
+                    + " file, will be used. For example, given a BUILD file in"
+                    + " 'java/com/foo/bar/BUILD', the package would be 'com.foo.bar'."),
       },
       useLocation = true,
       useEnvironment = true,
@@ -135,7 +140,7 @@ public interface AndroidDataProcessingApi<
       SkylarkList<AndroidResourcesInfoT> deps,
       SkylarkList<AndroidAssetsInfoT> assets,
       boolean neverlink,
-      String customPackage,
+      Object customPackage,
       Location location,
       Environment env)
       throws InterruptedException, EvalException;
