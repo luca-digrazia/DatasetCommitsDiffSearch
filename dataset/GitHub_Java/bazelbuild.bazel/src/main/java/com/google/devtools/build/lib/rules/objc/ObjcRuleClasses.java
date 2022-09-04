@@ -58,7 +58,6 @@ import com.google.devtools.build.lib.rules.apple.AppleToolchain.RequiresXcodeCon
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap.UmbrellaHeaderStrategy;
-import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.proto.ProtoSourceFileBlacklist;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
@@ -539,9 +538,6 @@ public class ObjcRuleClasses {
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
           .add(attr(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, LABEL).value(APPLE_TOOLCHAIN))
-          .add(
-              attr(CcToolchain.CC_TOOLCHAIN_TYPE_ATTRIBUTE_NAME, LABEL)
-                  .value(CppRuleClasses.ccToolchainTypeAttribute(env)))
           .add(
               attr(":lipo_context_collector", LABEL)
                   .value(NULL_LIPO_CONTEXT_COLLECTOR)
