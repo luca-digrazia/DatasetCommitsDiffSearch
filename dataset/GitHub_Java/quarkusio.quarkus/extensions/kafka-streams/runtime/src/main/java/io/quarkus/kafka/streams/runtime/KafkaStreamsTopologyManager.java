@@ -160,26 +160,18 @@ public class KafkaStreamsTopologyManager {
     private void waitForTopicsToBeCreated(Collection<String> topicsToAwait)
             throws InterruptedException {
         try (AdminClient adminClient = AdminClient.create(adminClientConfig)) {
-            Set<String> lastMissingTopics = null;
             while (true) {
                 try {
                     ListTopicsResult topics = adminClient.listTopics();
-                    Set<String> existingTopics = topics.names().get(10, TimeUnit.SECONDS);
+                    Set<String> topicNames = topics.names().get(10, TimeUnit.SECONDS);
 
-                    if (existingTopics.containsAll(topicsToAwait)) {
-                        LOGGER.debug("All expected topics created: " + topicsToAwait);
+                    if (topicNames.containsAll(topicsToAwait)) {
+                        LOGGER.debug("All expected topics created");
                         return;
                     } else {
-                        Set<String> missingTopics = new HashSet<>(topicsToAwait);
-                        missingTopics.removeAll(existingTopics);
-
-                        // Do not spam warnings - topics may take time to be created by an operator like Strimzi
-                        if (missingTopics.equals(lastMissingTopics)) {
-                            LOGGER.debug("Waiting for topic(s) to be created: " + missingTopics);
-                        } else {
-                            LOGGER.warn("Waiting for topic(s) to be created: " + missingTopics);
-                            lastMissingTopics = missingTopics;
-                        }
+                        Set<String> missing = new HashSet<>(topicsToAwait);
+                        missing.removeAll(topicNames);
+                        LOGGER.debug("Waiting for topic(s) to be created: " + missing);
                     }
 
                     Thread.sleep(1_000);
