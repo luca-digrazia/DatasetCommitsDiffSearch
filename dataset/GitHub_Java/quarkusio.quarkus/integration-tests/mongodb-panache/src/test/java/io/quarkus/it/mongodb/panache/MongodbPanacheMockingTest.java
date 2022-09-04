@@ -9,8 +9,6 @@ import javax.ws.rs.WebApplicationException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledOnOs;
-import org.junit.jupiter.api.condition.OS;
 import org.mockito.Mockito;
 
 import io.quarkus.it.mongodb.panache.person.MockablePersonRepository;
@@ -21,11 +19,9 @@ import io.quarkus.panache.mock.PanacheMock;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.mockito.InjectMock;
-import io.quarkus.test.mongodb.MongoReplicaSetTestResource;
 
 @QuarkusTest
 @QuarkusTestResource(MongoReplicaSetTestResource.class)
-@DisabledOnOs(OS.WINDOWS)
 public class MongodbPanacheMockingTest {
 
     @Test
