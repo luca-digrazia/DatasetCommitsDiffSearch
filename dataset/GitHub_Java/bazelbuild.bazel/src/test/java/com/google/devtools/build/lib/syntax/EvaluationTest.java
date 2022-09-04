@@ -62,7 +62,7 @@ public class EvaluationTest extends EvaluationTestCase {
         .testStatement("8 % 3", 2)
         .testIfErrorContains("unsupported operand type(s) for %: 'int' and 'string'", "3 % 'foo'")
         .testStatement("-5", -5)
-        .testIfErrorContains("unsupported unary operation: -string", "-'foo'");
+        .testIfErrorContains("unsupported operand type for -: 'string'", "-'foo'");
   }
 
   @Test
@@ -674,9 +674,9 @@ public class EvaluationTest extends EvaluationTestCase {
   public void testArgBothPosKey() throws Exception {
     newTest()
         .testIfErrorContains(
-            "got multiple values for keyword argument 'base', "
-                + "for call to function int(x, base = unbound)",
-            "int('2', 3, base=3)");
+            "got multiple values for keyword argument 'old', for call to method "
+                + "replace(old, new, maxsplit = None) of 'string'",
+            "'banana'.replace('a', 'o', 3, old='a')");
   }
 
   @Test
