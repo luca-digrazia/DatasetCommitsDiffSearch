@@ -21,7 +21,6 @@ package org.graylog2.rest.resources.system.indexer;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
-import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.rest.documentation.annotations.Api;
 import org.graylog2.rest.documentation.annotations.ApiOperation;
 import org.graylog2.rest.resources.RestResource;
@@ -37,7 +36,6 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@RequiresAuthentication
 @Api(value = "Indexer/Cluster", description = "Indexer cluster information")
 @Path("/system/indexer/cluster")
 public class ClusterResource extends RestResource {
@@ -48,7 +46,7 @@ public class ClusterResource extends RestResource {
     @Path("/name")
     @ApiOperation(value = "Get the cluster name")
     @Produces(MediaType.APPLICATION_JSON)
-    public String clusterName() {
+    public String name() {
         Map<String, Object> result = Maps.newHashMap();
         result.put("name", core.getIndexer().cluster().getName());
 
@@ -59,7 +57,7 @@ public class ClusterResource extends RestResource {
     @Path("/health")
     @ApiOperation(value = "Get cluster and shard health overview")
     @Produces(MediaType.APPLICATION_JSON)
-    public String clusterHealth() {
+    public String health() {
         Map<String, Integer> shards = Maps.newHashMap();
         shards.put("active", core.getIndexer().cluster().getActiveShards());
         shards.put("initializing", core.getIndexer().cluster().getInitializingShards());
