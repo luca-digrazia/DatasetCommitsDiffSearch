@@ -10,12 +10,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 /**
  * A {@link ConfigurationException} for errors parsing a configuration file.
@@ -241,7 +236,7 @@ public class ConfigurationParsingException extends ConfigurationException {
         }
 
         ConfigurationParsingException build(String path) {
-            final StringBuilder sb = new StringBuilder(getSummary());
+            StringBuilder sb = new StringBuilder(getSummary());
             if (hasFieldPath()) {
                 sb.append(" at: ").append(buildPath(getFieldPath()));
             } else if (hasLocation()) {
@@ -254,9 +249,9 @@ public class ConfigurationParsingException extends ConfigurationException {
             }
 
             if (hasSuggestions()) {
-                final List<String> suggestions = getSuggestions();
+                List<String> suggestions = getSuggestions();
                 sb.append(NEWLINE).append("    Did you mean?:").append(NEWLINE);
-                final Iterator<String> it = suggestions.iterator();
+                Iterator<String> it = suggestions.iterator();
                 int i = 0;
                 while (it.hasNext() && i < MAX_SUGGESTIONS) {
                     sb.append("      - ").append(it.next());
@@ -266,7 +261,7 @@ public class ConfigurationParsingException extends ConfigurationException {
                     }
                 }
 
-                final int total = suggestions.size();
+                int total = suggestions.size();
                 if (i < total) {
                     sb.append("        [").append(total - i).append(" more]");
                 }
@@ -278,12 +273,12 @@ public class ConfigurationParsingException extends ConfigurationException {
         }
 
         private String buildPath(Iterable<JsonMappingException.Reference> path) {
-            final StringBuilder sb = new StringBuilder();
+            StringBuilder sb = new StringBuilder();
             if (path != null) {
-                final Iterator<JsonMappingException.Reference> it = path.iterator();
+                Iterator<JsonMappingException.Reference> it = path.iterator();
                 while (it.hasNext()) {
-                    final JsonMappingException.Reference reference = it.next();
-                    final String name = reference.getFieldName();
+                    JsonMappingException.Reference reference = it.next();
+                    String name = reference.getFieldName();
 
                     // append either the field name or list index
                     if (name == null) {
@@ -334,8 +329,7 @@ public class ConfigurationParsingException extends ConfigurationException {
                 }
 
                 // determine which of the two is closer to the base and order it first
-                return Integer.compare(StringUtils.getLevenshteinDistance(a, base),
-                        StringUtils.getLevenshteinDistance(b, base));
+                return Integer.compare(StringUtils.getLevenshteinDistance(a, base), StringUtils.getLevenshteinDistance(b, base));
             }
 
             private void writeObject(ObjectOutputStream stream) throws IOException {
