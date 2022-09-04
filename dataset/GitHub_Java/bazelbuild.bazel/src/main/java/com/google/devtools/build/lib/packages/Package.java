@@ -74,7 +74,7 @@ public class Package {
    * Common superclass for all name-conflict exceptions.
    */
   public static class NameConflictException extends Exception {
-    private NameConflictException(String message) {
+    protected NameConflictException(String message) {
       super(message);
     }
   }
@@ -87,7 +87,7 @@ public class Package {
   /**
    * The name of the package, e.g. "foo/bar".
    */
-  private final String name;
+  protected final String name;
 
   /**
    * Like name, but in the form of a PathFragment.
@@ -97,7 +97,7 @@ public class Package {
   /**
    * The filename of this package's BUILD file.
    */
-  private Path filename;
+  protected Path filename;
 
   /**
    * The directory in which this package's BUILD file resides.  All InputFile
@@ -109,7 +109,7 @@ public class Package {
    * The name of the workspace this package is in. Used as a prefix for the runfiles directory.
    * This can be set in the WORKSPACE file. This must be a valid target name.
    */
-  private String workspaceName;
+  protected String workspaceName;
 
   /**
    * The root of the source tree in which this package was found. It is an invariant that {@code
@@ -124,7 +124,7 @@ public class Package {
   private ImmutableMap<String, String> makeEnv;
 
   /** The collection of all targets defined in this package, indexed by name. */
-  private ImmutableSortedKeyMap<String, Target> targets;
+  protected ImmutableSortedKeyMap<String, Target> targets;
 
   /**
    * Default visibility for rules that do not specify it.
@@ -246,16 +246,46 @@ public class Package {
    */
   public ImmutableMap<RepositoryName, RepositoryName> getRepositoryMapping(
       RepositoryName repository) {
-    if (!packageIdentifier.equals(Label.EXTERNAL_PACKAGE_IDENTIFIER)) {
+    if (!isWorkspace()) {
       throw new UnsupportedOperationException("Can only access the external package repository"
           + "mappings from the //external package");
     }
     return externalPackageRepositoryMappings.getOrDefault(repository, ImmutableMap.of());
   }
 
+  /**
+   * Returns the repository mapping for the requested external repository.
+   *
+   * @throws LabelSyntaxException if repository is not a valid {@link RepositoryName}
+   * @throws UnsupportedOperationException if called from any package other than the //external
+   *     package
+   */
+  public ImmutableMap<RepositoryName, RepositoryName> getRepositoryMapping(String repository)
+      throws LabelSyntaxException, UnsupportedOperationException {
+    RepositoryName repositoryName = RepositoryName.create(repository);
+    return getRepositoryMapping(repositoryName);
+  }
+
   /** Get the repository mapping for this package. */
   public ImmutableMap<RepositoryName, RepositoryName> getRepositoryMapping() {
     return repositoryMapping;
+  }
+
+  /**
+   * Gets the global name for a repository within an external repository.
+   *
+   * <p>{@code localName} is a repository name reference found in a BUILD file within a repository
+   * external to the main workspace. This method returns the main workspace's global remapped name
+   * for {@code localName}.
+   */
+  public RepositoryName getGlobalName(RepositoryName localName) {
+    RepositoryName globalname = repositoryMapping.get(localName);
+    return globalname != null ? globalname : localName;
+  }
+
+  /** Returns whether we are in the WORKSPACE file or not. */
+  public boolean isWorkspace() {
+    return getPackageIdentifier().equals(Label.EXTERNAL_PACKAGE_IDENTIFIER);
   }
 
   /**
@@ -266,21 +296,21 @@ public class Package {
    * which accesses {@link #getDefaultHdrsCheck} from the still-under-construction
    * package.
    */
-  private void setDefaultHdrsCheck(String defaultHdrsCheck) {
+  protected void setDefaultHdrsCheck(String defaultHdrsCheck) {
     this.defaultHdrsCheck = defaultHdrsCheck;
   }
 
   /**
    * Set the default 'testonly' value for this package.
    */
-  private void setDefaultTestOnly(boolean testOnly) {
+  protected void setDefaultTestOnly(boolean testOnly) {
     defaultTestOnly = testOnly;
   }
 
   /**
    * Set the default 'deprecation' value for this package.
    */
-  private void setDefaultDeprecation(String deprecation) {
+  protected void setDefaultDeprecation(String deprecation) {
     defaultDeprecation = deprecation;
   }
 
@@ -288,7 +318,7 @@ public class Package {
    * Sets the default value to use for a rule's {@link RuleClass#COMPATIBLE_ENVIRONMENT_ATTR}
    * attribute when not explicitly specified by the rule.
    */
-  private void setDefaultCompatibleWith(Set<Label> environments) {
+  protected void setDefaultCompatibleWith(Set<Label> environments) {
     defaultCompatibleWith = environments;
   }
 
@@ -296,7 +326,7 @@ public class Package {
    * Sets the default value to use for a rule's {@link RuleClass#RESTRICTED_ENVIRONMENT_ATTR}
    * attribute when not explicitly specified by the rule.
    */
-  private void setDefaultRestrictedTo(Set<Label> environments) {
+  protected void setDefaultRestrictedTo(Set<Label> environments) {
     defaultRestrictedTo = environments;
   }
 
@@ -330,7 +360,7 @@ public class Package {
    * <p>Only after this method is called can this package be considered "complete"
    * and be shared publicly.
    */
-  private void finishInit(Builder builder) {
+  protected void finishInit(Builder builder) {
     // If any error occurred during evaluation of this package, consider all
     // rules in the package to be "in error" also (even if they were evaluated
     // prior to the error).  This behaviour is arguably stricter than need be,
@@ -573,7 +603,7 @@ public class Package {
   protected NoSuchTargetException makeNoSuchTargetException(String targetName, String suffix) {
     Label label;
     try {
-      label = Label.create(packageIdentifier, targetName);
+      label = createLabel(targetName);
     } catch (LabelSyntaxException e) {
       throw new IllegalArgumentException(targetName);
     }
@@ -584,6 +614,15 @@ public class Package {
         suffix,
         filename);
     return new NoSuchTargetException(label, msg);
+  }
+
+  /**
+   * Creates a label for a target inside this package.
+   *
+   * @throws LabelSyntaxException if the {@code targetName} is invalid
+   */
+  public Label createLabel(String targetName) throws LabelSyntaxException {
+    return Label.create(packageIdentifier, targetName);
   }
 
   /**
@@ -768,7 +807,7 @@ public class Package {
      * are applied during {@link #build}. See {@link Package#Package}
      * and {@link Package#finishInit} for details.
      */
-    private final Package pkg;
+    protected Package pkg;
 
     // The map from each repository to that repository's remappings map.
     // This is only used in the //external package, it is an empty map for all other packages.
@@ -790,20 +829,20 @@ public class Package {
     private List<String> features = new ArrayList<>();
     private List<Event> events = Lists.newArrayList();
     private List<Postable> posts = Lists.newArrayList();
-    @Nullable private String ioExceptionMessage = null;
+    @Nullable String ioExceptionMessage = null;
     @Nullable private IOException ioException = null;
     private boolean containsErrors = false;
 
     private License defaultLicense = License.NO_LICENSE;
     private Set<License.DistributionType> defaultDistributionSet = License.DEFAULT_DISTRIB;
 
-    private Map<String, Target> targets = new HashMap<>();
-    private final Map<Label, EnvironmentGroup> environmentGroups = new HashMap<>();
+    protected Map<String, Target> targets = new HashMap<>();
+    protected Map<Label, EnvironmentGroup> environmentGroups = new HashMap<>();
 
-    private ImmutableList<Label> skylarkFileDependencies = ImmutableList.of();
+    protected ImmutableList<Label> skylarkFileDependencies = ImmutableList.of();
 
-    private final List<String> registeredExecutionPlatforms = new ArrayList<>();
-    private final List<String> registeredToolchains = new ArrayList<>();
+    protected List<String> registeredExecutionPlatforms = new ArrayList<>();
+    protected List<String> registeredToolchains = new ArrayList<>();
 
     /**
      * True iff the "package" function has already been called in this package.
@@ -830,28 +869,24 @@ public class Package {
       }
     };
 
-    Builder(Package pkg) {
+    protected Builder(Package pkg) {
       this.pkg = pkg;
       if (pkg.getName().startsWith("javatests/")) {
         setDefaultTestonly(true);
       }
     }
 
-    Builder(Helper helper, PackageIdentifier id, String runfilesPrefix) {
+    public Builder(Helper helper, PackageIdentifier id, String runfilesPrefix) {
       this(helper.createFreshPackage(id, runfilesPrefix));
     }
 
-    PackageIdentifier getPackageIdentifier() {
+    protected PackageIdentifier getPackageIdentifier() {
       return pkg.getPackageIdentifier();
     }
 
     /** Determine if we are in the WORKSPACE file or not */
-    boolean isWorkspace() {
+    public boolean isWorkspace() {
       return pkg.getPackageIdentifier().equals(Label.EXTERNAL_PACKAGE_IDENTIFIER);
-    }
-
-    String getPackageWorkspaceName() {
-      return pkg.getWorkspaceName();
     }
 
     /**
@@ -863,7 +898,7 @@ public class Package {
      *    in the {@code repoWithin} repository
      * @param mappedName the RepositoryName by which localName should be referenced
      */
-    Builder addRepositoryMappingEntry(
+    public Builder addRepositoryMappingEntry(
         RepositoryName repoWithin, RepositoryName localName, RepositoryName mappedName) {
       HashMap<RepositoryName, RepositoryName> mapping =
           externalPackageRepositoryMappings
@@ -873,7 +908,7 @@ public class Package {
     }
 
     /** Adds all the mappings from a given {@link Package}. */
-    Builder addRepositoryMappings(Package aPackage) {
+    public Builder addRepositoryMappings(Package aPackage) {
       ImmutableMap<RepositoryName, ImmutableMap<RepositoryName, RepositoryName>>
           repositoryMappings = aPackage.externalPackageRepositoryMappings;
       for (Map.Entry<RepositoryName, ImmutableMap<RepositoryName, RepositoryName>> repositoryName :
@@ -918,7 +953,7 @@ public class Package {
       return this;
     }
 
-    Label getBuildFileLabel() {
+    public Label getBuildFileLabel() {
       return buildFileLabel;
     }
 
@@ -983,11 +1018,11 @@ public class Package {
     /**
      * Returns whether the "package" function has been called yet
      */
-    boolean isPackageFunctionUsed() {
+    public boolean isPackageFunctionUsed() {
       return packageFunctionUsed;
     }
 
-    void setPackageFunctionUsed() {
+    public void setPackageFunctionUsed() {
       packageFunctionUsed = true;
     }
 
@@ -1008,7 +1043,7 @@ public class Package {
       return this;
     }
 
-    Builder addFeatures(Iterable<String> features) {
+    public Builder addFeatures(Iterable<String> features) {
       Iterables.addAll(this.features, features);
       return this;
     }
@@ -1031,14 +1066,19 @@ public class Package {
       return containsErrors;
     }
 
-    Builder addPosts(Iterable<Postable> posts) {
+    public Builder addPosts(Iterable<Postable> posts) {
       for (Postable post : posts) {
-        this.posts.add(post);
+        addPost(post);
       }
       return this;
     }
 
-    Builder addEvents(Iterable<Event> events) {
+    public Builder addPost(Postable post) {
+      this.posts.add(post);
+      return this;
+    }
+
+    public Builder addEvents(Iterable<Event> events) {
       for (Event event : events) {
         addEvent(event);
       }
@@ -1148,19 +1188,8 @@ public class Package {
     }
 
     @Nullable
-    Target getTarget(String name) {
+    public Target getTarget(String name) {
       return targets.get(name);
-    }
-
-    /**
-     * Removes a target from the {@link Package} under construction. Intended to be used only by
-     * {@link com.google.devtools.build.lib.skyframe.PackageFunction} to remove targets whose
-     * labels cross subpackage boundaries.
-     */
-    public void removeTarget(Target target) {
-      if (target.getPackage() == pkg) {
-        this.targets.remove(target.getName());
-      }
     }
 
     public Collection<Target> getTargets() {
@@ -1171,7 +1200,7 @@ public class Package {
      * Returns an (immutable, unordered) view of all the targets belonging to
      * this package which are instances of the specified class.
      */
-    private <T extends Target> Iterable<T> getTargets(Class<T> targetClass) {
+    <T extends Target> Iterable<T> getTargets(Class<T> targetClass) {
       return Package.getTargets(targets, targetClass);
     }
 
@@ -1352,7 +1381,7 @@ public class Package {
       addRuleUnchecked(rule);
     }
 
-    void addRegisteredExecutionPlatforms(List<String> platforms) {
+    public void addRegisteredExecutionPlatforms(List<String> platforms) {
       this.registeredExecutionPlatforms.addAll(platforms);
     }
 
@@ -1360,7 +1389,8 @@ public class Package {
       this.registeredToolchains.addAll(toolchains);
     }
 
-    private Builder beforeBuild(boolean discoverAssumedInputFiles) throws NoSuchPackageException {
+    private Builder beforeBuild(boolean discoverAssumedInputFiles)
+        throws InterruptedException, NoSuchPackageException {
       Preconditions.checkNotNull(pkg);
       Preconditions.checkNotNull(filename);
       Preconditions.checkNotNull(buildFileLabel);
@@ -1411,11 +1441,22 @@ public class Package {
     }
 
     /** Intended for use by {@link com.google.devtools.build.lib.skyframe.PackageFunction} only. */
-    public Builder buildPartial() throws NoSuchPackageException {
+    public Builder buildPartial() throws InterruptedException, NoSuchPackageException {
       if (alreadyBuilt) {
         return this;
       }
       return beforeBuild(/*discoverAssumedInputFiles=*/ true);
+    }
+
+    /**
+     * Removes a target from the {@link Package} under construction. Intended to be used only by
+     * {@link com.google.devtools.build.lib.skyframe.PackageFunction} to remove targets whose
+     * labels cross subpackage boundaries.
+     */
+    public void removeTarget(Target target) {
+      if (target.getPackage() == pkg) {
+        this.targets.remove(target.getName());
+      }
     }
 
     /** Intended for use by {@link com.google.devtools.build.lib.skyframe.PackageFunction} only. */
@@ -1444,7 +1485,7 @@ public class Package {
       return pkg;
     }
 
-    public Package build() throws NoSuchPackageException {
+    public Package build() throws InterruptedException, NoSuchPackageException {
       return build(/*discoverAssumedInputFiles=*/ true);
     }
 
@@ -1452,7 +1493,8 @@ public class Package {
      * Build the package, optionally adding any labels in the package not already associated with a
      * target as an input file.
      */
-    Package build(boolean discoverAssumedInputFiles) throws NoSuchPackageException {
+    public Package build(boolean discoverAssumedInputFiles)
+        throws InterruptedException, NoSuchPackageException {
       if (alreadyBuilt) {
         return pkg;
       }
@@ -1464,7 +1506,7 @@ public class Package {
      * If "label" refers to a non-existent target in the current package, create
      * an InputFile target.
      */
-    private void createInputFileMaybe(Label label, Location location) {
+    void createInputFileMaybe(Label label, Location location) {
       if (label != null && label.getPackageIdentifier().equals(pkg.getPackageIdentifier())) {
         if (!targets.containsKey(label.getName())) {
           addInputFile(label, location);
