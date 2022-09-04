@@ -420,18 +420,6 @@ public class CppOptions extends FragmentOptions {
   }
 
   @Option(
-      name = "cs_fdo_instrument",
-      defaultValue = "null",
-      implicitRequirements = {"--copt=-Wno-error"},
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      help =
-          "Generate binaries with context sensitive FDO instrumentation. With Clang/LLVM compiler, "
-              + "it also accepts the directory name under which the raw profile file(s) will be "
-              + "dumped at runtime.")
-  public String csFdoInstrumentForBuild;
-
-  @Option(
       name = "xbinary_fdo",
       defaultValue = "null",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
@@ -472,18 +460,6 @@ public class CppOptions extends FragmentOptions {
     help = "The fdo_profile representing the profile to be used for optimization."
   )
   public Label fdoProfileLabel;
-
-  @Option(
-      name = "cs_fdo_profile",
-      defaultValue = "null",
-      category = "flags",
-      converter = LabelConverter.class,
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      help =
-          "The cs_fdo_profile representing the context sensitive profile to be used for"
-              + " optimization.")
-  public Label csFdoProfileLabel;
 
   @Option(
       name = "enable_fdo_profile_absolute_path",
@@ -725,6 +701,14 @@ public class CppOptions extends FragmentOptions {
   public boolean useLLVMCoverageMapFormat;
 
   @Option(
+      name = "experimental_disable_cc_context_quote_includes_hook",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
+      metadataTags = {OptionMetadataTag.EXPERIMENTAL})
+  public boolean disableCcContextQuoteIncludesHook;
+
+  @Option(
       name = "incompatible_dont_enable_host_nonhost_crosstool_features",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
@@ -768,7 +752,7 @@ public class CppOptions extends FragmentOptions {
 
   @Option(
       name = "incompatible_remove_cpu_and_compiler_attributes_from_cc_toolchain",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
       metadataTags = {
@@ -872,15 +856,6 @@ public class CppOptions extends FragmentOptions {
       help = "If true, cc rules use toolchain resolution to find the cc_toolchain.")
   public boolean enableCcToolchainResolution;
 
-  @Option(
-      name = "experimental_save_feature_state",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      help = "Save the state of enabled and requested feautres as an output of compilation.")
-  public boolean saveFeatureState;
-
   @Override
   public FragmentOptions getHost() {
     CppOptions host = (CppOptions) getDefault();
@@ -921,7 +896,6 @@ public class CppOptions extends FragmentOptions {
     host.stripBinaries = StripMode.ALWAYS;
     host.fdoOptimizeForBuild = fdoOptimizeForBuild;
     host.fdoProfileLabel = fdoProfileLabel;
-    host.csFdoProfileLabel = csFdoProfileLabel;
     host.xfdoProfileLabel = xfdoProfileLabel;
     host.inmemoryDotdFiles = inmemoryDotdFiles;
 
@@ -944,11 +918,5 @@ public class CppOptions extends FragmentOptions {
    */
   public boolean isFdo() {
     return getFdoOptimize() != null || fdoInstrumentForBuild != null || fdoProfileLabel != null;
-  }
-
-  /** Returns true if targets under this configuration should apply CSFdo. */
-  public boolean isCSFdo() {
-    return ((getFdoOptimize() != null || fdoProfileLabel != null)
-        && (csFdoInstrumentForBuild != null || csFdoProfileLabel != null));
   }
 }

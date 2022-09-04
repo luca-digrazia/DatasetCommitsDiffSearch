@@ -43,7 +43,6 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.SourceCategory;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.CollidingProvidesException;
@@ -700,7 +699,7 @@ public final class CcCommon {
 
   /** Provides support for instrumentation. */
   public InstrumentedFilesInfo getInstrumentedFilesProvider(
-      Iterable<Artifact> files, boolean withBaselineCoverage) throws RuleErrorException {
+      Iterable<Artifact> files, boolean withBaselineCoverage) {
     return getInstrumentedFilesProvider(
         files,
         withBaselineCoverage,
@@ -711,15 +710,14 @@ public final class CcCommon {
   public InstrumentedFilesInfo getInstrumentedFilesProvider(
       Iterable<Artifact> files,
       boolean withBaselineCoverage,
-      NestedSet<Pair<String, String>> virtualToOriginalHeaders)
-      throws RuleErrorException {
+      NestedSet<Pair<String, String>> virtualToOriginalHeaders) {
     return InstrumentedFilesCollector.collect(
         ruleContext,
         CppRuleClasses.INSTRUMENTATION_SPEC,
         CC_METADATA_COLLECTOR,
         files,
         CppHelper.getGcovFilesIfNeeded(ruleContext, ccToolchain),
-        CppHelper.getCoverageEnvironmentIfNeeded(ruleContext, cppConfiguration, ccToolchain),
+        CppHelper.getCoverageEnvironmentIfNeeded(cppConfiguration, ccToolchain),
         withBaselineCoverage,
         virtualToOriginalHeaders);
   }

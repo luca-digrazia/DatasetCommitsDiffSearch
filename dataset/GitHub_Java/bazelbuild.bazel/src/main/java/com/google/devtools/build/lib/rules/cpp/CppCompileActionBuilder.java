@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -82,13 +83,36 @@ public class CppCompileActionBuilder {
   private ImmutableList<PathFragment> builtinIncludeDirectories;
   // New fields need to be added to the copy constructor.
 
+  /**
+   * Creates a builder from a rule. This also uses the configuration and artifact factory from the
+   * rule.
+   */
+  public CppCompileActionBuilder(RuleContext ruleContext, CcToolchainProvider ccToolchain) {
+    this(
+        ruleContext,
+        ruleContext.attributes().has("$grep_includes")
+            ? ruleContext.getPrerequisiteArtifact("$grep_includes", Mode.HOST)
+            : null,
+        ccToolchain,
+        ruleContext.getConfiguration());
+  }
+
   /** Creates a builder from a rule and configuration. */
   public CppCompileActionBuilder(
       ActionConstructionContext actionConstructionContext,
-      @Nullable Artifact grepIncludes,
+      Artifact grepIncludes,
       CcToolchainProvider ccToolchain,
       BuildConfiguration configuration) {
-    this.owner = actionConstructionContext.getActionOwner();
+    this(actionConstructionContext.getActionOwner(), configuration, ccToolchain, grepIncludes);
+  }
+
+  /** Creates a builder from a rule and configuration. */
+  private CppCompileActionBuilder(
+      ActionOwner actionOwner,
+      BuildConfiguration configuration,
+      CcToolchainProvider ccToolchain,
+      @Nullable Artifact grepIncludes) {
+    this.owner = actionOwner;
     this.shareable = false;
     this.configuration = configuration;
     this.cppConfiguration = configuration.getFragment(CppConfiguration.class);

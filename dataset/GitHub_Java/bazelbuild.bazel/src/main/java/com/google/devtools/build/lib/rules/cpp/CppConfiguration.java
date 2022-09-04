@@ -302,10 +302,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.isFdo();
   }
 
-  public boolean isCSFdo() {
-    return cppOptions.isCSFdo();
-  }
-
   /**
    * Returns whether or not to strip the binaries.
    */
@@ -544,10 +540,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return fdoOptimizeLabel;
   }
 
-  public String getCSFdoInstrument() {
-    return cppOptions.csFdoInstrumentForBuild;
-  }
-
   Label getFdoPrefetchHintsLabel() {
     if (isThisHostConfigurationDoNotUseWillBeRemovedFor129045294()) {
       // We don't want FDO in the host configuration
@@ -572,10 +564,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   @Deprecated
   Label getFdoProfileLabelUnsafeSinceItCanReturnValueFromWrongConfiguration() {
     return cppOptions.fdoProfileLabel;
-  }
-
-  public Label getCSFdoProfileLabel() {
-    return cppOptions.csFdoProfileLabel;
   }
 
   /**
@@ -647,6 +635,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.dontEnableHostNonhost;
   }
 
+  public boolean disableCcContextQuoteIncludesHook() {
+    return cppOptions.disableCcContextQuoteIncludesHook;
+  }
+
   public boolean requireCtxInConfigureFeatures() {
     return cppOptions.requireCtxInConfigureFeatures;
   }
@@ -664,9 +656,5 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
 
   public boolean enableCcToolchainResolution() {
     return cppOptions.enableCcToolchainResolution;
-  }
-
-  public boolean saveFeatureState() {
-    return cppOptions.saveFeatureState;
   }
 }

@@ -346,12 +346,12 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     CompilationInfo compilationInfo = compilationHelper.compile();
     CcCompilationContext ccCompilationContext = compilationInfo.getCcCompilationContext();
     CcCompilationOutputs precompiledFileObjects =
-        CcCompilationOutputs.builder()
+        new CcCompilationOutputs.Builder()
             .addObjectFiles(precompiledFiles.getObjectFiles(/* usePic= */ false))
             .addPicObjectFiles(precompiledFiles.getObjectFiles(/* usePic= */ true))
             .build();
     CcCompilationOutputs ccCompilationOutputs =
-        CcCompilationOutputs.builder()
+        new CcCompilationOutputs.Builder()
             .merge(precompiledFileObjects)
             .merge(compilationInfo.getCcCompilationOutputs())
             .build();
@@ -675,7 +675,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       Artifact customDefFile)
       throws InterruptedException, RuleErrorException {
     CcCompilationOutputs.Builder ccCompilationOutputsBuilder =
-        CcCompilationOutputs.builder()
+        new CcCompilationOutputs.Builder()
             .addPicObjectFiles(ccCompilationOutputs.getObjectFiles(/* usePic= */ true))
             .addObjectFiles(ccCompilationOutputs.getObjectFiles(/* usePic= */ false))
             .addLtoCompilationContext(ccCompilationOutputs.getLtoCompilationContext());
@@ -700,7 +700,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
                 .add(ccLinkingOutputs.getLibraryToLink())
                 .build());
       }
-      ccCompilationOutputsWithOnlyObjects = CcCompilationOutputs.builder().build();
+      ccCompilationOutputsWithOnlyObjects = new CcCompilationOutputs.Builder().build();
     }
 
     // Determine the libraries to link in.

@@ -42,7 +42,6 @@ public final class CcToolchainRule implements RuleDefinition {
   public static final String TARGET_LIBC_TOP_ATTR = ":target_libc_top";
   public static final String FDO_OPTIMIZE_ATTR = ":fdo_optimize";
   public static final String FDO_PROFILE_ATTR = ":fdo_profile";
-  public static final String CSFDO_PROFILE_ATTR = ":csfdo_profile";
   public static final String XFDO_PROFILE_ATTR = ":xfdo_profile";
   public static final String TOOLCHAIN_CONFIG_ATTR = "toolchain_config";
 
@@ -101,12 +100,6 @@ public final class CcToolchainRule implements RuleDefinition {
           null,
           (rule, attributes, cppConfig) ->
               cppConfig.getFdoProfileLabelUnsafeSinceItCanReturnValueFromWrongConfiguration());
-
-  private static final LabelLateBoundDefault<?> CSFDO_PROFILE_VALUE =
-      LabelLateBoundDefault.fromTargetConfiguration(
-          CppConfiguration.class,
-          null,
-          (rule, attributes, cppConfig) -> cppConfig.getCSFdoProfileLabel());
 
   private static final LabelLateBoundDefault<?> XFDO_PROFILE_VALUE =
       LabelLateBoundDefault.fromTargetConfiguration(
@@ -331,11 +324,6 @@ public final class CcToolchainRule implements RuleDefinition {
                 .mandatoryProviders(ImmutableList.of(FdoProfileProvider.PROVIDER.id()))
                 .value(FDO_PROFILE_VALUE))
         .add(
-            attr(CSFDO_PROFILE_ATTR, LABEL)
-                .allowedRuleClasses("fdo_profile")
-                .mandatoryProviders(ImmutableList.of(FdoProfileProvider.PROVIDER.id()))
-                .value(CSFDO_PROFILE_VALUE))
-        .add(
             attr(":fdo_prefetch_hints", LABEL)
                 .allowedRuleClasses("fdo_prefetch_hints")
                 .mandatoryProviders(ImmutableList.of(FdoPrefetchHintsProvider.PROVIDER.id()))
@@ -364,13 +352,13 @@ public final class CcToolchainRule implements RuleDefinition {
                 .nonconfigurable("Used in configuration creation")
                 .value(""))
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(toolchain_config) -->
-        The label of the rule providing <code>cc_toolchain_config_info</code>.
+        The label of the rule providing <code>cc_toolchain_config_info</code>. When specified,
+        cc_toolchain will not use the CROSSTOOL file at all.
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(
             attr(TOOLCHAIN_CONFIG_ATTR, LABEL)
                 .allowedFileTypes()
-                .mandatoryProviders(CcToolchainConfigInfo.PROVIDER.id())
-                .mandatory())
+                .mandatoryProviders(CcToolchainConfigInfo.PROVIDER.id()))
         .build();
   }
 
@@ -399,7 +387,7 @@ public final class CcToolchainRule implements RuleDefinition {
       most commonly filegroups globbing all required files.
     </li>
     <li>
-      Generating correct command lines for C++ actions. This is done using
+      Generating correct command lines for C++ actions. This is done using CROSSTOOL, or using
       <code>CcToolchainConfigInfo</code> provider (details below).
     </li>
   </ul>

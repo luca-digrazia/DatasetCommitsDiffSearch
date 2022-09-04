@@ -81,9 +81,7 @@ public class CompileBuildVariablesTest extends BuildViewTestCase {
     ImmutableList<String> userCopts =
         CcToolchainVariables.toStringList(
             variables, CompileBuildVariables.USER_COMPILE_FLAGS.getVariableName());
-    assertThat(userCopts)
-        .containsAtLeastElementsIn(ImmutableList.<String>of("-foo", "-bar"))
-        .inOrder();
+    assertThat(userCopts).containsAllIn(ImmutableList.<String>of("-foo", "-bar")).inOrder();
   }
 
   @Test
