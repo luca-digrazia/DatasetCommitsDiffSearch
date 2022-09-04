@@ -69,6 +69,7 @@ public class CppCompileActionBuilder {
   private DotdFile dotdFile;
   private Artifact gcnoFile;
   private CppCompilationContext context = CppCompilationContext.EMPTY;
+  private final List<String> copts = new ArrayList<>();
   private final List<String> pluginOpts = new ArrayList<>();
   private final List<Pattern> nocopts = new ArrayList<>();
   private ImmutableList<PathFragment> extraSystemIncludePrefixes = ImmutableList.of();
@@ -175,6 +176,7 @@ public class CppCompileActionBuilder {
     this.dotdFile = other.dotdFile;
     this.gcnoFile = other.gcnoFile;
     this.context = other.context;
+    this.copts.addAll(other.copts);
     this.pluginOpts.addAll(other.pluginOpts);
     this.nocopts.addAll(other.nocopts);
     this.extraSystemIncludePrefixes = ImmutableList.copyOf(other.extraSystemIncludePrefixes);
@@ -403,6 +405,7 @@ public class CppCompileActionBuilder {
               cppConfiguration,
               context,
               actionContext,
+              ImmutableList.copyOf(copts),
               getNocoptPredicate(nocopts),
               getLipoScannables(realMandatoryInputs),
               cppSemantics,
@@ -434,6 +437,7 @@ public class CppCompileActionBuilder {
               cppConfiguration,
               context,
               actionContext,
+              ImmutableList.copyOf(copts),
               getNocoptPredicate(nocopts),
               specialInputsHandler,
               getLipoScannables(realMandatoryInputs),
@@ -642,7 +646,7 @@ public class CppCompileActionBuilder {
    * Set the minimized bitcode file emitted by this (ThinLTO) compilation that can be used in place
    * of the full bitcode outputFile in the LTO indexing step.
    */
-  public CppCompileActionBuilder setLtoIndexingFile(Artifact ltoIndexingFile) {
+  public CppCompileActionBuilder setLTOIndexingFile(Artifact ltoIndexingFile) {
     this.ltoIndexingFile = ltoIndexingFile;
     return this;
   }
@@ -671,6 +675,16 @@ public class CppCompileActionBuilder {
 
   public CppCompileActionBuilder setGcnoFile(Artifact gcnoFile) {
     this.gcnoFile = gcnoFile;
+    return this;
+  }
+
+  public CppCompileActionBuilder addCopt(String copt) {
+    copts.add(copt);
+    return this;
+  }
+
+  public CppCompileActionBuilder addCopts(Iterable<? extends String> copts) {
+    Iterables.addAll(this.copts, copts);
     return this;
   }
 
