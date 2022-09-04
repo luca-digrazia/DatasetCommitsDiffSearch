@@ -128,8 +128,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
         .addAllTransitiveSourceJars(common.collectTransitiveSourceJars(srcJar));
     Artifact classJar = ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_CLASS_JAR);
     JavaRuleOutputJarsProvider.Builder ruleOutputJarsProviderBuilder =
-        JavaRuleOutputJarsProvider.builder().addOutputJar(
-            classJar, null /* iJar */, ImmutableList.of(srcJar));
+        JavaRuleOutputJarsProvider.builder().addOutputJar(classJar, null /* iJar */, srcJar);
 
     CppConfiguration cppConfiguration = ruleContext.getConfiguration().getFragment(
         CppConfiguration.class);

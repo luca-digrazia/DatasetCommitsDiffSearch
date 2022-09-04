@@ -46,7 +46,6 @@ public abstract class JavaToolchainProvider implements TransitiveInfoProvider {
       NestedSet<Artifact> extclasspath,
       List<String> defaultJavacFlags,
       Artifact javac,
-      NestedSet<Artifact> tools,
       Artifact javaBuilder,
       @Nullable Artifact headerCompiler,
       boolean forciblyDisableHeaderCompilation,
@@ -66,7 +65,6 @@ public abstract class JavaToolchainProvider implements TransitiveInfoProvider {
         extclasspath,
         data.getEncoding(),
         javac,
-        tools,
         javaBuilder,
         headerCompiler,
         forciblyDisableHeaderCompilation,
@@ -108,9 +106,6 @@ public abstract class JavaToolchainProvider implements TransitiveInfoProvider {
 
   /** Returns the {@link Artifact} of the javac jar */
   public abstract Artifact getJavac();
-
-  /** Returns the {@link Artifact}s of compilation tools. */
-  public abstract NestedSet<Artifact> getTools();
 
   /** Returns the {@link Artifact} of the JavaBuilder deploy jar */
   public abstract Artifact getJavaBuilder();
