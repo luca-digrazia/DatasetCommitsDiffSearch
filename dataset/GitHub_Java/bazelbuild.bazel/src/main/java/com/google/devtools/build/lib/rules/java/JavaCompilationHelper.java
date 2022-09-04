@@ -101,8 +101,7 @@ public final class JavaCompilationHelper {
       ImmutableList<String> javacOpts,
       JavaTargetAttributes.Builder attributes,
       JavaToolchainProvider javaToolchainProvider,
-      JavaRuntimeInfo hostJavabase,
-      ImmutableList<Artifact> additionalJavaBaseInputs) {
+      JavaRuntimeInfo hostJavabase) {
     this(
         ruleContext,
         semantics,
@@ -110,7 +109,7 @@ public final class JavaCompilationHelper {
         attributes,
         javaToolchainProvider,
         hostJavabase,
-        additionalJavaBaseInputs,
+        ImmutableList.<Artifact>of(),
         false);
   }
 
@@ -125,8 +124,7 @@ public final class JavaCompilationHelper {
         javacOpts,
         attributes,
         JavaToolchainProvider.from(ruleContext),
-        JavaRuntimeInfo.forHost(ruleContext),
-        ImmutableList.of());
+        JavaRuntimeInfo.forHost(ruleContext));
   }
 
   public JavaCompilationHelper(
@@ -240,7 +238,6 @@ public final class JavaCompilationHelper {
     builder.setTempDirectory(tempDir(classJar, label));
     builder.setClassDirectory(classDir(classJar, label));
     builder.setPlugins(attributes.plugins().plugins());
-    builder.setBuiltinProcessorNames(javaToolchain.getHeaderCompilerBuiltinProcessors());
     builder.setExtraData(JavaCommon.computePerPackageData(ruleContext, javaToolchain));
     builder.setStrictJavaDeps(attributes.getStrictJavaDeps());
     builder.setFixDepsTool(getJavaConfiguration().getFixDepsTool());
@@ -272,17 +269,13 @@ public final class JavaCompilationHelper {
   }
 
   public boolean addCoverageSupport() {
-    FilesToRunProvider jacocoRunner = javaToolchain.getJacocoRunner();
-    if (jacocoRunner == null) {
-      return false;
+    TransitiveInfoCollection jacocoRunner = javaToolchain.getJacocoRunner();
+    if (jacocoRunner != null
+        && JavaInfo.getProvider(JavaCompilationArgsProvider.class, jacocoRunner) != null) {
+      addLibrariesToAttributes(ImmutableList.of(jacocoRunner));
+      return true;
     }
-    Artifact jacocoRunnerJar = jacocoRunner.getExecutable();
-    if (isStrict()) {
-      attributes.addDirectJar(jacocoRunnerJar);
-    }
-    attributes.addCompileTimeClassPathEntry(jacocoRunnerJar);
-    attributes.addRuntimeClassPathEntry(jacocoRunnerJar);
-    return true;
+    return false;
   }
 
   /**

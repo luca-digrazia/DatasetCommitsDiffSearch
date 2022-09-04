@@ -17,13 +17,12 @@ import static com.google.devtools.build.lib.packages.BuildType.NODEP_LABEL_LIST;
 
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.shell.ShellUtils;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,7 +40,7 @@ public abstract class JavaHelper {
   public static TransitiveInfoCollection launcherForTarget(
       JavaSemantics semantics, RuleContext ruleContext) {
     String launcher = filterLauncherForTarget(ruleContext);
-    return (launcher == null) ? null : ruleContext.getPrerequisite(launcher, TransitionMode.TARGET);
+    return (launcher == null) ? null : ruleContext.getPrerequisite(launcher, Mode.TARGET);
   }
 
   /**
@@ -51,9 +50,7 @@ public abstract class JavaHelper {
   public static Artifact launcherArtifactForTarget(
       JavaSemantics semantics, RuleContext ruleContext) {
     String launcher = filterLauncherForTarget(ruleContext);
-    return (launcher == null)
-        ? null
-        : ruleContext.getPrerequisiteArtifact(launcher, TransitionMode.TARGET);
+    return (launcher == null) ? null : ruleContext.getPrerequisiteArtifact(launcher, Mode.TARGET);
   }
 
   /**
@@ -111,15 +108,11 @@ public abstract class JavaHelper {
   }
 
   public static PathFragment getJavaResourcePath(
-      JavaSemantics semantics, RuleContext ruleContext, Artifact resource)
-      throws InterruptedException {
+      JavaSemantics semantics, RuleContext ruleContext, Artifact resource) {
     PathFragment rootRelativePath = resource.getRootRelativePath();
-    StarlarkSemantics starlarkSemantics =
-        ruleContext.getAnalysisEnvironment().getStarlarkSemantics();
 
-    if (!ruleContext.getLabel().getWorkspaceRoot(starlarkSemantics).isEmpty()) {
-      PathFragment workspace =
-          PathFragment.create(ruleContext.getLabel().getWorkspaceRoot(starlarkSemantics));
+    if (!ruleContext.getLabel().getWorkspaceRoot().isEmpty()) {
+      PathFragment workspace = PathFragment.create(ruleContext.getLabel().getWorkspaceRoot());
       rootRelativePath = rootRelativePath.relativeTo(workspace);
     }
 
