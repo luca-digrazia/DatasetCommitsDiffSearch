@@ -17,6 +17,7 @@ import com.yammer.dropwizard.lifecycle.ServerLifecycleListener;
 import com.yammer.dropwizard.tasks.GarbageCollectionTask;
 import com.yammer.dropwizard.tasks.Task;
 import com.yammer.metrics.core.HealthCheck;
+import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.session.SessionHandler;
 import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletHolder;
@@ -390,6 +391,11 @@ public class Environment extends AbstractLifeCycle {
     }
 
     ImmutableMap<String, ServletHolder> getServlets() {
+        if (jerseyServletContainer != null) {
+            addServlet(jerseyServletContainer,
+                       configuration.getHttpConfiguration()
+                                    .getRootPath()).setInitOrder(Integer.MAX_VALUE);
+        }
         return servlets.build();
     }
 

@@ -46,7 +46,8 @@ public class ServerCommand<T extends Configuration> extends EnvironmentCommand<T
         logBanner(environment.getName(), logger);
         try {
             server.start();
-            for (ServerLifecycleListener listener : environment.getServerListeners()) {
+            final ServerLifecycleListener listener = environment.getServerListener();
+            if (listener != null) {
                 listener.serverStarted(server);
             }
             server.join();
