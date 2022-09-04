@@ -1,6 +1,5 @@
 package com.github.pedrovgs.effectiveandroidui.ui.fragment;
 
-import android.app.Activity;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -55,16 +54,6 @@ import javax.inject.Inject;
     super.onViewCreated(view, savedInstanceState);
     initializeListView();
     bindViewModel();
-  }
-
-  @Override public void onAttach(Activity activity) {
-    super.onAttach(activity);
-    tvShowViewModel.setReady(true);
-  }
-
-  @Override public void onDetach() {
-    super.onDetach();
-    tvShowViewModel.setReady(false);
   }
 
   public void showTvShow(final String tvShowId) {
