@@ -53,7 +53,7 @@ import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Pair;
@@ -211,7 +211,7 @@ public final class CcCommon {
   }
 
   public static void checkLocationWhitelisted(
-      StarlarkSemantics semantics, Location location, String callPath) throws EvalException {
+      SkylarkSemantics semantics, Location location, String callPath) throws EvalException {
     List<String> whitelistedPackagesList = semantics.experimentalCcSkylarkApiEnabledPackages();
     if (whitelistedPackagesList.stream().noneMatch(path -> callPath.startsWith(path))) {
       throwWhiteListError(location, callPath, whitelistedPackagesList);
@@ -800,10 +800,7 @@ public final class CcCommon {
       CcToolchainProvider toolchain) {
     try {
       return configureFeaturesOrThrowEvalException(
-          requestedFeatures,
-          unsupportedFeatures,
-          toolchain,
-          ruleContext.getFragment(CppConfiguration.class));
+          requestedFeatures, unsupportedFeatures, toolchain);
     } catch (EvalException e) {
       ruleContext.ruleError(e.getMessage());
       return FeatureConfiguration.EMPTY;
@@ -813,9 +810,9 @@ public final class CcCommon {
   public static FeatureConfiguration configureFeaturesOrThrowEvalException(
       ImmutableSet<String> requestedFeatures,
       ImmutableSet<String> unsupportedFeatures,
-      CcToolchainProvider toolchain,
-      CppConfiguration cppConfiguration)
+      CcToolchainProvider toolchain)
       throws EvalException {
+    CppConfiguration cppConfiguration = toolchain.getCppConfiguration();
     ImmutableSet.Builder<String> allRequestedFeaturesBuilder = ImmutableSet.builder();
     ImmutableSet.Builder<String> unsupportedFeaturesBuilder = ImmutableSet.builder();
     unsupportedFeaturesBuilder.addAll(unsupportedFeatures);
@@ -843,9 +840,6 @@ public final class CcCommon {
     }
 
     if (cppConfiguration.forcePic()) {
-      if (unsupportedFeatures.contains(CppRuleClasses.SUPPORTS_PIC)) {
-        throw new EvalException(/* location= */ null, PIC_CONFIGURATION_ERROR);
-      }
       allRequestedFeaturesBuilder.add(CppRuleClasses.SUPPORTS_PIC);
     }
 
@@ -1013,25 +1007,8 @@ public final class CcCommon {
 
   private static List<String> computeCcFlagsFromFeatureConfig(
       RuleContext ruleContext, CcToolchainProvider toolchainProvider) {
-    FeatureConfiguration featureConfiguration = null;
-    CppConfiguration cppConfiguration =
-        toolchainProvider.getCppConfigurationEvenThoughItCanBeDifferentThatWhatTargetHas();
-    if (cppConfiguration.requireCtxInConfigureFeatures()) {
-      // When this is flipped, this whole method will go away. But I'm keeping it there
-      // so we can experiment with flags before they are flipped.
-      Preconditions.checkArgument(cppConfiguration.disableGenruleCcToolchainDependency());
-      cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
-    }
-    try {
-      featureConfiguration =
-          configureFeaturesOrThrowEvalException(
-              ruleContext.getFeatures(),
-              ruleContext.getDisabledFeatures(),
-              toolchainProvider,
-              cppConfiguration);
-    } catch (EvalException e) {
-      ruleContext.ruleError(e.getMessage());
-    }
+    FeatureConfiguration featureConfiguration =
+        CcCommon.configureFeaturesOrReportRuleError(ruleContext, toolchainProvider);
     if (featureConfiguration.actionIsConfigured(CppActionNames.CC_FLAGS_MAKE_VARIABLE)) {
       CcToolchainVariables buildVariables = toolchainProvider.getBuildVariables();
       return featureConfiguration.getCommandLine(
