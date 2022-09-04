@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.java.JavaAnnotationProcessingApi;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import javax.annotation.Nullable;
 
 /** The collection of gen jars from the transitive closure. */
@@ -106,29 +105,17 @@ public final class JavaGenJarsProvider
   }
 
   @Override
-  public SkylarkNestedSet /*<Artifact>*/ getTransitiveGenClassJarsForStarlark() {
-    return SkylarkNestedSet.of(Artifact.TYPE, transitiveGenClassJars);
-  }
-
-  NestedSet<Artifact> getTransitiveGenClassJars() {
+  public NestedSet<Artifact> getTransitiveGenClassJars() {
     return transitiveGenClassJars;
   }
 
   @Override
-  public SkylarkNestedSet /*<Artifact>*/ getTransitiveGenSourceJarsForStarlark() {
-    return SkylarkNestedSet.of(Artifact.TYPE, transitiveGenSourceJars);
-  }
-
-  NestedSet<Artifact> getTransitiveGenSourceJars() {
+  public NestedSet<Artifact> getTransitiveGenSourceJars() {
     return transitiveGenSourceJars;
   }
 
   @Override
-  public SkylarkNestedSet /*<Artifact>*/ getProcessorClasspathForStarlark() {
-    return SkylarkNestedSet.of(Artifact.TYPE, processorClasspath);
-  }
-
-  NestedSet<Artifact> getProcessorClasspath() {
+  public NestedSet<Artifact> getProcessorClasspath() {
     return processorClasspath;
   }
 
