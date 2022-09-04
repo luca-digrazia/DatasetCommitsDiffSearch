@@ -239,7 +239,7 @@ public class Retrier {
         return r;
       } catch (Exception e) {
         circuitBreaker.recordFailure();
-        Throwables.throwIfInstanceOf(e, InterruptedException.class);
+        Throwables.propagateIfInstanceOf(e, InterruptedException.class);
         if (State.TRIAL_CALL.equals(circuitState)) {
           throw e;
         }
