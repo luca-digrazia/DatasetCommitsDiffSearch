@@ -45,11 +45,13 @@ import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.extra.CppCompileInfo;
 import com.google.devtools.build.lib.actions.extra.EnvironmentVariable;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
+import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
@@ -87,7 +89,8 @@ public class CppCompileAction extends AbstractAction
 
   private static final PathFragment BUILD_PATH_FRAGMENT = PathFragment.create("BUILD");
 
-  private static final boolean VALIDATION_DEBUG_WARN = false;
+  private static final int VALIDATION_DEBUG = 0;  // 0==none, 1==warns/errors, 2==all
+  private static final boolean VALIDATION_DEBUG_WARN = VALIDATION_DEBUG >= 1;
 
   protected final Artifact outputFile;
   private final Artifact sourceFile;
@@ -386,64 +389,11 @@ public class CppCompileAction extends AbstractAction
         .build();
   }
 
-  /**
-   * Filters discovered headers according to declared rule inputs. This fundamentally mirrors the
-   * behavior of {@link #validateInclusions} and just removes inputs that would be considered
-   * invalid from {@code headers}. That way, the compiler does not get access to them (assuming a
-   * sand-boxed environment) and can diagnose the missing headers.
-   */
-  private Iterable<Artifact> filterDiscoveredHeaders(
-      ActionExecutionContext actionExecutionContext, Iterable<Artifact> headers) {
-    // Get the inputs we know about. Note that this (compared to validateInclusions) does not
-    // take mandatoryInputs into account. The reason is that these by definition get added to the
-    // action input and thus are available anyway. Not having to look at them here saves us from
-    // requiring and ArtifactExpander, which actionExecutionContext doesn't have at this point.
-    // This only works as long as mandatory inputs do not contain headers that are built into a
-    // module.
-    Set<Artifact> allowedIncludes =
-        new HashSet<>(ccCompilationContext.getDeclaredIncludeSrcs().toCollection());
-    allowedIncludes.addAll(additionalPrunableHeaders.toCollection());
-
-    // Whitelisted directories. Lazily initialize, so that compiles that properly declare all
-    // their files profit.
-    Set<PathFragment> declaredIncludeDirs = null;
-    Iterable<PathFragment> ignoreDirs = null;
-
-    // Create a filtered list of headers.
-    ImmutableList.Builder<Artifact> result = ImmutableList.builder();
-    for (Artifact header : headers) {
-      if (allowedIncludes.contains(header)) {
-        result.add(header);
-        continue;
-      }
-      if (ignoreDirs == null) {
-        ignoreDirs =
-            cppConfiguration.isStrictSystemIncludes()
-                ? getBuiltInIncludeDirectories()
-                : getValidationIgnoredDirs();
-      }
-      if (FileSystemUtils.startsWithAny(header.getExecPath(), ignoreDirs)) {
-        result.add(header);
-        continue;
-      }
-      if (declaredIncludeDirs == null) {
-        declaredIncludeDirs = ccCompilationContext.getDeclaredIncludeDirs().toSet();
-      }
-      if (isDeclaredIn(actionExecutionContext, header, declaredIncludeDirs)) {
-        result.add(header);
-      }
-    }
-    return result.build();
-  }
-
   @Nullable
   @Override
   public Iterable<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     additionalInputs = findUsedHeaders(actionExecutionContext);
-    if (!shouldScanDotdFiles()) {
-      additionalInputs = filterDiscoveredHeaders(actionExecutionContext, additionalInputs);
-    }
     if (!shouldPruneModules) {
       return additionalInputs;
     }
@@ -655,18 +605,11 @@ public class CppCompileAction extends AbstractAction
   public ExtraActionInfo.Builder getExtraActionInfo(ActionKeyContext actionKeyContext) {
     CppCompileInfo.Builder info = CppCompileInfo.newBuilder();
     info.setTool(compileCommandLine.getToolPath());
-
-    // For actual extra actions, the shadowed action is fully executed and overwrittenVariables get
-    // computed. However, this function is also used for print_action and there, the action is
-    // retrieved from the cache, the modules are reconstructed via updateInputs and
-    // overwrittenVariables don't get computed.
-    List<String> options =
-        compileCommandLine.getCompilerOptions(
-            overwrittenVariables != null
-                ? overwrittenVariables
-                : getOverwrittenVariables(getInputs()));
-
-    for (String option : options) {
+    // TODO(djasper): We are getting discovered or transitive modules through the action's inputs
+    // here. For shorter command lines, we'd prefer to use topLevelModules here, but they are not
+    // computed in the codepaths leading here.
+    for (String option :
+        compileCommandLine.getCompilerOptions(getOverwrittenVariables(getInputs()))) {
       info.addCompilerOption(option);
     }
     info.setOutputFile(outputFile.getExecPathString());
@@ -731,6 +674,7 @@ public class CppCompileAction extends AbstractAction
       ActionExecutionContext actionExecutionContext, Iterable<Artifact> inputsForValidation)
       throws ActionExecutionException {
     IncludeProblems errors = new IncludeProblems();
+    IncludeProblems warnings = new IncludeProblems();
     Set<Artifact> allowedIncludes = new HashSet<>();
     for (Artifact input :
         Iterables.concat(
@@ -744,20 +688,24 @@ public class CppCompileAction extends AbstractAction
     }
 
     Iterable<PathFragment> ignoreDirs =
-        cppConfiguration.isStrictSystemIncludes()
+    cppConfiguration.isStrictSystemIncludes()
             ? getBuiltInIncludeDirectories()
             : getValidationIgnoredDirs();
 
     // Copy the nested sets to hash sets for fast contains checking, but do so lazily.
     // Avoid immutable sets here to limit memory churn.
     Set<PathFragment> declaredIncludeDirs = null;
+    Set<PathFragment> warnIncludeDirs = null;
     for (Artifact input : inputsForValidation) {
-      // Only declared modules are added to an action and so they are always valid.
+      // Module input validation is already done by the dotd-file discovery.
       if (input.isFileType(CppFileTypes.CPP_MODULE)) {
         continue;
       }
-      if (allowedIncludes.contains(input)) {
-        continue;
+      // The transitive compilation prerequisites contain all declaredIncludeSrcs() and thus we
+      // don't need to check those separately.
+      if (ccCompilationContext.getTransitiveCompilationPrerequisites().contains(input)
+          || allowedIncludes.contains(input)) {
+        continue; // ignore our fixed source in mandatoryInput: we just want includes
       }
       // Ignore headers from built-in include directories.
       if (FileSystemUtils.startsWithAny(input.getExecPath(), ignoreDirs)) {
@@ -767,14 +715,24 @@ public class CppCompileAction extends AbstractAction
         declaredIncludeDirs = Sets.newHashSet(ccCompilationContext.getDeclaredIncludeDirs());
       }
       if (!isDeclaredIn(actionExecutionContext, input, declaredIncludeDirs)) {
-        errors.add(input.getExecPath().toString());
+        if (warnIncludeDirs == null) {
+          warnIncludeDirs = Sets.newHashSet(ccCompilationContext.getDeclaredIncludeWarnDirs());
+        }
+        // This call can never match the declared include sources (they would be matched above).
+        if (isDeclaredIn(actionExecutionContext, input, warnIncludeDirs)) {
+          warnings.add(input.getExecPath().toString());
+        } else {
+          errors.add(input.getExecPath().toString());
+        }
       }
     }
     if (VALIDATION_DEBUG_WARN) {
       synchronized (System.err) {
-        if (errors.hasProblems()) {
+        if (VALIDATION_DEBUG >= 2 || errors.hasProblems() || warnings.hasProblems()) {
           if (errors.hasProblems()) {
             System.err.println("ERROR: Include(s) were not in declared srcs:");
+          } else if (warnings.hasProblems()) {
+            System.err.println("WARN: Include(s) were not in declared srcs:");
           } else {
             System.err.println("INFO: Include(s) were OK for '" + getSourceFile()
                 + "', declared srcs:");
@@ -786,12 +744,25 @@ public class CppCompileAction extends AbstractAction
           for (PathFragment f : Sets.newTreeSet(ccCompilationContext.getDeclaredIncludeDirs())) {
             System.err.println("  '" + f + "'");
           }
+          System.err.println(" or under declared warn dirs:");
+          for (PathFragment f :
+              Sets.newTreeSet(ccCompilationContext.getDeclaredIncludeWarnDirs())) {
+            System.err.println("  '" + f + "'");
+          }
           System.err.println(" with prefixes:");
           for (PathFragment dirpath : ccCompilationContext.getQuoteIncludeDirs()) {
             System.err.println("  '" + dirpath + "'");
           }
         }
       }
+    }
+
+    if (warnings.hasProblems()) {
+      actionExecutionContext
+          .getEventHandler()
+          .handle(
+              Event.warn(getOwner().getLocation(), warnings.getMessage(this, getSourceFile()))
+                  .withTag(Label.print(getOwner().getLabel())));
     }
     errors.assertProblemFree(this, getSourceFile());
   }
@@ -946,6 +917,14 @@ public class CppCompileAction extends AbstractAction
     return ccCompilationContext.getDeclaredIncludeDirs();
   }
 
+  /**
+   * Return the directories in which to look for headers and issue a warning. (pertains to headers
+   * not specifically listed in {@code declaredIncludeSrcs}).
+   */
+  public NestedSet<PathFragment> getDeclaredIncludeWarnDirs() {
+    return ccCompilationContext.getDeclaredIncludeWarnDirs();
+  }
+
   /** Return explicitly listed header files. */
   @Override
   public NestedSet<Artifact> getDeclaredIncludeSrcs() {
@@ -984,13 +963,17 @@ public class CppCompileAction extends AbstractAction
     fp.addInt(0);
     actionKeyContext.addNestedSetToFingerprint(fp, additionalPrunableHeaders);
 
-    /**
-     * getArguments() above captures all changes which affect the compilation command and hence the
-     * contents of the object file. But we need to also make sure that we re-execute the action if
-     * any of the fields that affect whether {@link #validateInclusions} will report an error or
-     * warning have changed, otherwise we might miss some errors.
-     */
-    fp.addPaths(ccCompilationContext.getDeclaredIncludeDirs());
+    fp.addBoolean(shouldScanDotdFiles());
+    if (shouldScanDotdFiles()) {
+      /**
+       * getArguments() above captures all changes which affect the compilation command and hence
+       * the contents of the object file. But we need to also make sure that we re-execute the
+       * action if any of the fields that affect whether {@link #validateInclusions} will report an
+       * error or warning have changed, otherwise we might miss some errors.
+       */
+      fp.addPaths(ccCompilationContext.getDeclaredIncludeDirs());
+      fp.addPaths(ccCompilationContext.getDeclaredIncludeWarnDirs());
+    }
   }
 
   @Override

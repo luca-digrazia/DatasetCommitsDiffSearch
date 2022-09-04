@@ -92,10 +92,9 @@ public interface IncludeScannable {
   NestedSet<Artifact> getDeclaredIncludeSrcs();
 
   /**
-   * Returns an artifact that is the executable for grepping #include lines from a file.
+   * Returns an artifact that is the executable for {@link ExtractInclusionAction}.
    */
   Artifact getGrepIncludes();
 
-  /** Returns modules necessary for building and using the output of this action. */
   ImmutableList<Artifact> getDiscoveredModules();
 }

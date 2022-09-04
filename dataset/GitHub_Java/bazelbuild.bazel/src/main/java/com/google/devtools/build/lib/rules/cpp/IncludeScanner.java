@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.rules.cpp;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
@@ -71,7 +70,6 @@ public interface IncludeScanner {
       IncludeScanningHeaderData includeScanningHeaderData,
       List<String> cmdlineIncludes,
       Set<Artifact> includes,
-      ActionExecutionMetadata actionExecutionMetadata,
       ActionExecutionContext actionExecutionContext,
       Artifact grepIncludes)
       throws IOException, ExecException, InterruptedException;
@@ -106,7 +104,6 @@ public interface IncludeScanner {
         IncludeScannable action,
         IncludeScannerSupplier includeScannerSupplier,
         IncludeScanningHeaderData includeScanningHeaderData,
-        ActionExecutionMetadata actionExecutionMetadata,
         ActionExecutionContext actionExecutionContext,
         String profilerTaskName)
         throws ExecException, InterruptedException {
@@ -123,9 +120,9 @@ public interface IncludeScanner {
         // really mess up #include_next directives.
         Set<PathFragment> includeDirs = new LinkedHashSet<>(action.getIncludeDirs());
         List<PathFragment> quoteIncludeDirs = action.getQuoteIncludeDirs();
-        List<String> cmdlineIncludes = includeScanningHeaderData.getCmdlineIncludes();
+        List<String> cmdlineIncludes = action.getCmdlineIncludes();
 
-        includeDirs.addAll(includeScanningHeaderData.getSystemIncludeDirs());
+        includeDirs.addAll(action.getSystemIncludeDirs());
 
         // Add the system include paths to the list of include paths.
         for (PathFragment pathFragment : action.getBuiltInIncludeDirectories()) {
@@ -147,7 +144,6 @@ public interface IncludeScanner {
             includeScanningHeaderData,
             cmdlineIncludes,
             includes,
-            actionExecutionMetadata,
             actionExecutionContext,
             action.getGrepIncludes());
 
@@ -196,72 +192,31 @@ public interface IncludeScanner {
     private final Set<Artifact> modularHeaders;
 
     /**
-     * The list of "-isystem" include paths that should be used by the IncludeScanner for this
-     * action. The compiler searches these paths ahead of the built-in system include paths, but
-     * after all other paths. "-isystem" paths are treated the same as normal system directories.
+     * Lookup table to find pregrepped .includes files that contain a single line per include. These
+     * are essentially a cache to make it unnecessary for the {@link IncludeScanner} to read large
+     * generated files repeatedly.
      */
-    private final List<PathFragment> systemIncludeDirs;
-
-    /**
-     * A list of "-include" inclusions specified explicitly on the command line of this action. The
-     * compiler will imagine that these files have been quote-included at the beginning of each
-     * source file.
-     */
-    private final List<String> cmdlineIncludes;
+    private final Map<Artifact, Artifact> pregreppedHeaders;
 
     public IncludeScanningHeaderData(
         Map<PathFragment, Artifact> pathToLegalOutputArtifact,
         Set<Artifact> modularHeaders,
-        List<PathFragment> systemIncludeDirs,
-        List<String> cmdlineIncludes) {
+        Map<Artifact, Artifact> pregreppedHeaders) {
       this.pathToLegalOutputArtifact = pathToLegalOutputArtifact;
       this.modularHeaders = modularHeaders;
-      this.systemIncludeDirs = systemIncludeDirs;
-      this.cmdlineIncludes = cmdlineIncludes;
+      this.pregreppedHeaders = pregreppedHeaders;
     }
 
     public Set<Artifact> getModularHeaders() {
       return modularHeaders;
     }
 
+    public Map<Artifact, Artifact> getPregreppedHeaders() {
+      return pregreppedHeaders;
+    }
+
     public Map<PathFragment, Artifact> getPathToLegalOutputArtifact() {
       return pathToLegalOutputArtifact;
-    }
-
-    public List<PathFragment> getSystemIncludeDirs() {
-      return systemIncludeDirs;
-    }
-
-    public List<String> getCmdlineIncludes() {
-      return cmdlineIncludes;
-    }
-
-    public static class Builder {
-      private final Map<PathFragment, Artifact> pathToLegalOutputArtifact;
-      private final Set<Artifact> modularHeaders;
-      private List<PathFragment> systemIncludeDirs = ImmutableList.of();
-      private List<String> cmdlineIncludes = ImmutableList.of();
-
-      public Builder(
-          Map<PathFragment, Artifact> pathToLegalOutputArtifact, Set<Artifact> modularHeaders) {
-        this.pathToLegalOutputArtifact = pathToLegalOutputArtifact;
-        this.modularHeaders = modularHeaders;
-      }
-
-      public Builder setSystemIncludeDirs(List<PathFragment> systemIncludeDirs) {
-        this.systemIncludeDirs = systemIncludeDirs;
-        return this;
-      }
-
-      public Builder setCmdlineIncludes(List<String> cmdlineIncludes) {
-        this.cmdlineIncludes = cmdlineIncludes;
-        return this;
-      }
-
-      public IncludeScanningHeaderData build() {
-        return new IncludeScanningHeaderData(
-            pathToLegalOutputArtifact, modularHeaders, systemIncludeDirs, cmdlineIncludes);
-      }
     }
   }
 }
