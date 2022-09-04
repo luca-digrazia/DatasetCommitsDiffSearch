@@ -12,10 +12,11 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 
 import org.jboss.resteasy.reactive.common.util.EmptyInputStream;
-import org.jboss.resteasy.reactive.server.providers.serialisers.json.AbstractJsonMessageBodyReader;
+import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveResourceInfo;
+import org.jboss.resteasy.reactive.server.spi.ServerMessageBodyReader;
 import org.jboss.resteasy.reactive.server.spi.ServerRequestContext;
 
-public class JsonbMessageBodyReader extends AbstractJsonMessageBodyReader {
+public class JsonbMessageBodyReader implements ServerMessageBodyReader<Object> {
 
     private final Jsonb json;
 
@@ -25,9 +26,19 @@ public class JsonbMessageBodyReader extends AbstractJsonMessageBodyReader {
     }
 
     @Override
+    public boolean isReadable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
+        return true;
+    }
+
+    @Override
     public Object readFrom(Class<Object> type, Type genericType, Annotation[] annotations, MediaType mediaType,
             MultivaluedMap<String, String> httpHeaders, InputStream entityStream) throws IOException, WebApplicationException {
         return doReadFrom(type, genericType, entityStream);
+    }
+
+    @Override
+    public boolean isReadable(Class<?> type, Type genericType, ResteasyReactiveResourceInfo lazyMethod, MediaType mediaType) {
+        return true;
     }
 
     @Override
