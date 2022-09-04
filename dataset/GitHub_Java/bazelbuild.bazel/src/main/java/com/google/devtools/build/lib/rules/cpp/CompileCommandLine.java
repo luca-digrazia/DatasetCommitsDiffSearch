@@ -15,18 +15,14 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.rules.cpp.CcCommon.CoptsFilter;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
-import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.vfs.FileSystemProvider;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,26 +30,21 @@ import java.util.Map;
 import javax.annotation.Nullable;
 
 /** The compile command line for the C++ compile action. */
-@AutoCodec(dependency = FileSystemProvider.class)
 public final class CompileCommandLine {
-  public static final InjectingObjectCodec<CompileCommandLine, FileSystemProvider> CODEC =
-      new CompileCommandLine_AutoCodec();
 
   private final Artifact sourceFile;
   private final Artifact outputFile;
-  private final CoptsFilter coptsFilter;
+  private final Predicate<String> coptsFilter;
   private final FeatureConfiguration featureConfiguration;
   private final PathFragment crosstoolTopPathFragment;
   private final CcToolchainFeatures.Variables variables;
   private final String actionName;
   private final DotdFile dotdFile;
 
-  @AutoCodec.Instantiator
-  @VisibleForSerialization
-  CompileCommandLine(
+  private CompileCommandLine(
       Artifact sourceFile,
       Artifact outputFile,
-      CoptsFilter coptsFilter,
+      Predicate<String> coptsFilter,
       FeatureConfiguration featureConfiguration,
       PathFragment crosstoolTopPathFragment,
       CcToolchainFeatures.Variables variables,
@@ -149,7 +140,7 @@ public final class CompileCommandLine {
         continue;
       }
 
-      pair.getSecond().stream().filter(coptsFilter::passesFilter).forEachOrdered(out::add);
+      pair.getSecond().stream().filter(coptsFilter).forEachOrdered(out::add);
     }
   }
 
@@ -183,7 +174,7 @@ public final class CompileCommandLine {
   public static Builder builder(
       Artifact sourceFile,
       Artifact outputFile,
-      CoptsFilter coptsFilter,
+      Predicate<String> coptsFilter,
       String actionName,
       PathFragment crosstoolTopPathFragment,
       DotdFile dotdFile) {
@@ -195,7 +186,7 @@ public final class CompileCommandLine {
   public static final class Builder {
     private final Artifact sourceFile;
     private final Artifact outputFile;
-    private CoptsFilter coptsFilter;
+    private Predicate<String> coptsFilter;
     private FeatureConfiguration featureConfiguration;
     private CcToolchainFeatures.Variables variables = Variables.EMPTY;
     private final String actionName;
@@ -217,7 +208,7 @@ public final class CompileCommandLine {
     private Builder(
         Artifact sourceFile,
         Artifact outputFile,
-        CoptsFilter coptsFilter,
+        Predicate<String> coptsFilter,
         String actionName,
         PathFragment crosstoolTopPathFragment,
         DotdFile dotdFile) {
@@ -241,7 +232,7 @@ public final class CompileCommandLine {
     }
 
     @VisibleForTesting
-    Builder setCoptsFilter(CoptsFilter filter) {
+    Builder setCoptsFilter(Predicate<String> filter) {
       this.coptsFilter = Preconditions.checkNotNull(filter);
       return this;
     }
