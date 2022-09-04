@@ -13,10 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.profiler;
 
-import com.google.common.base.Preconditions;
-import com.google.devtools.build.lib.clock.BlazeClock;
-import com.google.devtools.build.lib.clock.Clock;
-import java.time.Duration;
+import com.google.devtools.build.lib.util.BlazeClock;
+import com.google.devtools.build.lib.util.Clock;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -345,9 +344,8 @@ public class AutoProfiler implements AutoCloseable {
     @Override
     public void accept(long elapsedTimeNanos) {
       if (elapsedTimeNanos > 0) {
-        Profiler.instance()
-            .logSimpleTaskDuration(
-                startTimeNanos, Duration.ofNanos(elapsedTimeNanos), profilerTaskType, object);
+        Profiler.instance().logSimpleTaskDuration(startTimeNanos, elapsedTimeNanos,
+            profilerTaskType, object);
       }
     }
   }
