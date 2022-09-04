@@ -16,8 +16,6 @@ package com.google.devtools.build.android;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.android.DensitySpecificManifestProcessor.PLAY_STORE_SUPPORTED_DENSITIES;
 import static com.google.devtools.build.android.DensitySpecificManifestProcessor.SCREEN_SIZES;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
@@ -58,7 +56,7 @@ public class DensitySpecificManifestProcessorTest {
         "</manifest>");
     Path modified = new DensitySpecificManifestProcessor(ImmutableList.<String>of(),
         tmp.resolve("manifest-filtered/AndroidManifest.xml")).process(manifest);
-    assertEquals(manifest, modified);
+    assertThat((Object) modified).isEqualTo(manifest);
   }
 
   @Test public void testSingleDensity() throws Exception {
@@ -69,7 +67,7 @@ public class DensitySpecificManifestProcessorTest {
         "</manifest>");
     Path modified = new DensitySpecificManifestProcessor(densities,
         tmp.resolve("manifest-filtered/AndroidManifest.xml")).process(manifest);
-    assertNotNull(modified);
+    assertThat((Object) modified).isNotNull();
     checkModification(modified, densities);
   }
   
@@ -81,7 +79,7 @@ public class DensitySpecificManifestProcessorTest {
         "</manifest>");
     Path modified = new DensitySpecificManifestProcessor(densities,
         tmp.resolve("manifest-filtered/AndroidManifest.xml")).process(manifest);
-    assertNotNull(modified);
+    assertThat((Object) modified).isNotNull();
     checkModification(modified, densities);
   }
 
@@ -93,7 +91,7 @@ public class DensitySpecificManifestProcessorTest {
         "</manifest>");
     Path modified = new DensitySpecificManifestProcessor(densities,
         tmp.resolve("manifest-filtered/AndroidManifest.xml")).process(manifest);
-    assertNotNull(modified);
+    assertThat((Object) modified).isNotNull();
     checkModification(modified, densities);
   }
 
@@ -105,7 +103,7 @@ public class DensitySpecificManifestProcessorTest {
         "</manifest>");
     Path modified = new DensitySpecificManifestProcessor(densities,
         tmp.resolve("manifest-filtered/AndroidManifest.xml")).process(manifest);
-    assertNotNull(modified);
+    assertThat((Object) modified).isNotNull();
     checkCompatibleScreensOmitted(modified);
   }
 
@@ -119,7 +117,7 @@ public class DensitySpecificManifestProcessorTest {
         "</manifest>");
     Path modified = new DensitySpecificManifestProcessor(densities,
         tmp.resolve("manifest-filtered/AndroidManifest.xml")).process(manifest);
-    assertNotNull(modified);
+    assertThat((Object) modified).isNotNull();
     checkModification(modified, densities);
   }
 
@@ -141,7 +139,7 @@ public class DensitySpecificManifestProcessorTest {
         "</manifest>");
     Path modified = new DensitySpecificManifestProcessor(densities,
         tmp.resolve("manifest-filtered/AndroidManifest.xml")).process(manifest);
-    assertNotNull(modified);
+    assertThat((Object) modified).isNotNull();
     checkModification(modified, ImmutableList.<String>of("ldpi", "xxhdpi"));
   }
 
@@ -157,7 +155,7 @@ public class DensitySpecificManifestProcessorTest {
       new DensitySpecificManifestProcessor(ImmutableList.of("xhdpi"),
           tmp.resolve("manifest-filtered/AndroidManifest.xml")).process(manifest);
       fail();
-    } catch (ManifestProcessingException e) {
+    } catch (AndroidManifestProcessor.ManifestProcessingException e) {
       assertThat(e).hasMessageThat().contains("must be well-formed");
     }
   }
@@ -168,7 +166,7 @@ public class DensitySpecificManifestProcessorTest {
       new DensitySpecificManifestProcessor(ImmutableList.of("xhdpi"),
           tmp.resolve("manifest-filtered/AndroidManifest.xml")).process(manifest);
       fail();
-    } catch (ManifestProcessingException e) {
+    } catch (AndroidManifestProcessor.ManifestProcessingException e) {
       assertThat(e).hasMessageThat().contains("Premature end of file.");
     }
   }
@@ -185,7 +183,7 @@ public class DensitySpecificManifestProcessorTest {
       new DensitySpecificManifestProcessor(ImmutableList.of("xhdpi"),
           tmp.resolve("manifest-filtered/AndroidManifest.xml")).process(manifest);
       fail();
-    } catch (ManifestProcessingException e) {
+    } catch (AndroidManifestProcessor.ManifestProcessingException e) {
       assertThat(e).hasMessageThat().contains("does not contain exactly one <manifest>");
     }
   }
@@ -193,8 +191,7 @@ public class DensitySpecificManifestProcessorTest {
   @Before
   public void setUpEnvironment() throws Exception {
     fs = Jimfs.newFileSystem();
-    tmp = fs.getPath("/tmp");
-    Files.createDirectory(tmp);
+    tmp = Files.createTempDirectory(this.getClass().getSimpleName());
   }
 
   @After
@@ -206,9 +203,9 @@ public class DensitySpecificManifestProcessorTest {
     final Path path = tmp.resolve("AndroidManifest.xml");
     Files.createDirectories(path.getParent());
     Files.deleteIfExists(path);
-    BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8);
-    writer.write(Joiner.on("\n").join(lines));
-    writer.close();
+    try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
+      writer.write(Joiner.on("\n").join(lines));
+    }
     return path;
   }
 

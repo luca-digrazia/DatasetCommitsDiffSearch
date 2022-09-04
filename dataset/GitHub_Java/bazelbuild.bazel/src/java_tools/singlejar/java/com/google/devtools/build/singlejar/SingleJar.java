@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.singlejar;
 
+import static com.google.devtools.build.singlejar.ZipCombiner.DOS_EPOCH;
+
 import com.google.devtools.build.singlejar.DefaultJarEntryFilter.PathFilter;
 import com.google.devtools.build.singlejar.ZipCombiner.OutputMode;
 import java.io.ByteArrayInputStream;
@@ -21,6 +23,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -176,9 +179,8 @@ public class SingleJar {
     InputStream buildInfo = createBuildData();
 
     ZipCombiner combiner = null;
-    try {
-      combiner = new ZipCombiner(outputMode, createEntryFilter(normalize, allowedPaths),
-          fileSystem.getOutputStream(outputJar));
+    try (OutputStream out = fileSystem.getOutputStream(outputJar)) {
+      combiner = new ZipCombiner(outputMode, createEntryFilter(normalize, allowedPaths), out);
       if (launcherBin != null) {
         combiner.prependExecutable(fileSystem.getInputStream(launcherBin));
       }
@@ -205,7 +207,8 @@ public class SingleJar {
 
       // Copy the resources into the jar file.
       for (String resource : resources) {
-        String from, to;
+        String from;
+        String to;
         int i = resource.indexOf(':');
         if (i < 0) {
           to = from = resource;
@@ -217,6 +220,17 @@ public class SingleJar {
           System.err.println("File " + from + " at " + to + " clashes with a previous file");
           continue;
         }
+
+        // Add parent directory entries.
+        int idx = to.indexOf('/');
+        while (idx != -1) {
+          String dir = to.substring(0, idx + 1);
+          if (!combiner.containsFile(dir)) {
+            combiner.addDirectory(dir, DOS_EPOCH);
+          }
+          idx = to.indexOf('/', idx + 1);
+        }
+
         combiner.addFile(to, date, fileSystem.getInputStream(from));
       }
 
@@ -411,7 +425,7 @@ public class SingleJar {
     workerClass.getMethod("main", String[].class).invoke(null, (Object) args);
   }
 
-  private static boolean shouldRunInWorker(String[] args) {
+  protected static boolean shouldRunInWorker(String[] args) {
     return Arrays.asList(args).contains("--persistent_worker");
   }
 

@@ -73,7 +73,7 @@ public class Turbine {
   public int compile(TurbineOptions options, PrintWriter out) throws IOException {
     Throwable turbineCrash = null;
     try {
-      if (options.processors().isEmpty() && Main.compile(options)) {
+      if (Main.compile(options)) {
         return 0;
       }
       // fall back to javac for API-generating processors

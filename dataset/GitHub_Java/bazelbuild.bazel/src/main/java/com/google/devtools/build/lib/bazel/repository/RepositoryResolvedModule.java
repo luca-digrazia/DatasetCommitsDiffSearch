@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.Subscribe;
 import com.google.common.io.Files;
-import com.google.devtools.build.lib.events.ExtendedEventHandler.ResolvedEvent;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
@@ -28,8 +27,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.logging.Logger;
 
 /** Module providing the collection of the resolved values for the repository rules executed. */
@@ -37,9 +34,8 @@ public final class RepositoryResolvedModule extends BlazeModule {
   public static final String EXPORTED_NAME = "resolved";
 
   private static final Logger logger = Logger.getLogger(RepositoryResolvedModule.class.getName());
-  private Map<String, Object> resolvedValues;
+  private ImmutableList.Builder<Object> resultBuilder;
   private String resolvedFile;
-  private ImmutableList<String> orderedNames;
 
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
@@ -50,13 +46,12 @@ public final class RepositoryResolvedModule extends BlazeModule {
 
   @Override
   public void beforeCommand(CommandEnvironment env) {
-    orderedNames = ImmutableList.<String>of();
     RepositoryResolvedOptions options =
         env.getOptions().getOptions(RepositoryResolvedOptions.class);
     if (options != null && !Strings.isNullOrEmpty(options.repositoryResolvedFile)) {
       this.resolvedFile = options.repositoryResolvedFile;
       env.getEventBus().register(this);
-      this.resolvedValues = new LinkedHashMap<String, Object>();
+      this.resultBuilder = new ImmutableList.Builder<>();
     } else {
       this.resolvedFile = null;
     }
@@ -65,40 +60,23 @@ public final class RepositoryResolvedModule extends BlazeModule {
   @Override
   public void afterCommand() {
     if (resolvedFile != null) {
-      ImmutableList.Builder<Object> resultBuilder = new ImmutableList.Builder<>();
-      // Fill the result builder; first all known repositories in order, then the
-      // rest in the order we knew about them.
-      for (String name : orderedNames) {
-        if (resolvedValues.containsKey(name)) {
-          resultBuilder.add(resolvedValues.get(name));
-          resolvedValues.remove(name);
-        }
-      }
-      for (Object resolved : resolvedValues.values()) {
-        resultBuilder.add(resolved);
-      }
       try (Writer writer = Files.newWriter(new File(resolvedFile), StandardCharsets.UTF_8)) {
         writer.write(
             EXPORTED_NAME
                 + " = "
-                + Printer.getWorkspacePrettyPrinter().repr(resultBuilder.build()));
+                + Printer.getPrettyPrinter().repr(resultBuilder.build()).toString());
       } catch (IOException e) {
         logger.warning("IO Error writing to file " + resolvedFile + ": " + e);
       }
     }
 
-    this.resolvedValues = null;
+    this.resultBuilder = null;
   }
 
   @Subscribe
-  public void repositoryOrderEvent(RepositoryOrderEvent event) {
-    orderedNames = event.getOrderedNames();
-  }
-
-  @Subscribe
-  public void resolved(ResolvedEvent event) {
-    if (resolvedValues != null) {
-      resolvedValues.put(event.getName(), event.getResolvedInformation());
+  public void repositoryResolved(RepositoryResolvedEvent event) {
+    if (resultBuilder != null) {
+      resultBuilder.add(event.getResolvedInformation());
     }
   }
 }

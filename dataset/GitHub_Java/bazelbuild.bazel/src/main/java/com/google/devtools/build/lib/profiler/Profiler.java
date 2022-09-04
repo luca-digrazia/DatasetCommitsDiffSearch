@@ -990,28 +990,10 @@ public final class Profiler {
   private static class JsonTraceFileWriter extends FileWriter {
     private final OutputStream outStream;
     private final long profileStartTimeNanos;
-    private final ThreadLocal<Boolean> metadataPosted =
-        ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     JsonTraceFileWriter(OutputStream outStream, long profileStartTimeNanos) {
       this.outStream = outStream;
       this.profileStartTimeNanos = profileStartTimeNanos;
-    }
-
-    @Override
-    public void enqueue(TaskData data) {
-      if (!metadataPosted.get().booleanValue()) {
-        metadataPosted.set(Boolean.TRUE);
-        // Create a TaskData object that is special-cased below.
-        queue.add(
-            new TaskData(
-                /* id= */ 0,
-                /* startTimeNanos= */ -1,
-                /* parent= */ null,
-                ProfilerTask.THREAD_NAME,
-                Thread.currentThread().getName()));
-      }
-      queue.add(data);
     }
 
     /**
@@ -1028,27 +1010,17 @@ public final class Profiler {
             // in the future.
             new OutputStreamWriter(
                 new BufferedOutputStream(outStream, 262144), StandardCharsets.UTF_8)) {
-          out.append("[\n");
+          out.append("[");
           boolean first = true;
           TaskData data;
           while ((data = queue.take()) != POISON_PILL) {
-            if (data.duration == 0 && data.type != ProfilerTask.THREAD_NAME) {
+            if (data.duration == 0) {
               continue;
             }
             if (first) {
               first = false;
             } else {
-              out.append(",\n");
-            }
-            if (data.type == ProfilerTask.THREAD_NAME) {
-              out.append("{");
-              out.append("\"name\":\"thread_name\",");
-              out.append("\"ph\":\"M\",");
-              out.append("\"pid\":1,");
-              out.append("\"tid\":").append(Long.toString(data.threadId)).append(",");
-              out.append("\"args\": {\"name\":\"").append(data.description).append("\"}");
-              out.append("}");
-              continue;
+              out.append(",");
             }
             char eventType = data.duration == 0 ? 'i' : 'X';
             out.append("{");
@@ -1067,10 +1039,10 @@ public final class Profiler {
             }
             out.append("\"pid\":1,");
             out.append("\"tid\":").append(Long.toString(data.threadId));
-            out.append("}");
+            out.append("}\n");
           }
           receivedPoisonPill = true;
-          out.append("\n]");
+          out.append("]");
         } catch (IOException e) {
           this.savedException = e;
           if (!receivedPoisonPill) {
