@@ -22,7 +22,6 @@ import com.google.common.base.Throwables;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -85,7 +84,7 @@ import java.util.stream.Collectors;
 import static com.google.common.base.Preconditions.checkArgument;
 
 @RequiresAuthentication
-@Api(value = "Stream/Alerts", description = "Manage stream legacy alerts for a given stream")
+@Api(value = "Stream/Alerts", description = "Manage stream alerts for a given stream")
 @Path("/streams/{streamId}/alerts")
 public class StreamAlertResource extends RestResource {
     private static final int REST_CHECK_CACHE_SECONDS = 30;
@@ -150,23 +149,13 @@ public class StreamAlertResource extends RestResource {
                                           @ApiParam(name = "skip", value = "The number of elements to skip (offset).", required = true)
                                           @QueryParam("skip") @DefaultValue("0") int skip,
                                           @ApiParam(name = "limit", value = "The maximum number of elements to return.", required = true)
-                                          @QueryParam("limit") @DefaultValue("300") int limit,
-                                          @ApiParam(name = "state", value = "Alert state (resolved/unresolved)")
-                                          @QueryParam("state") String state) throws NotFoundException {
+                                          @QueryParam("limit") @DefaultValue("300") int limit) throws NotFoundException {
         checkPermission(RestPermissions.STREAMS_READ, streamId);
 
-        Alert.AlertState alertState;
-        try {
-            alertState = Alert.AlertState.fromString(state);
-        } catch (IllegalArgumentException e) {
-            alertState = Alert.AlertState.ANY;
-        }
-
         final Stream stream = streamService.load(streamId);
-        final List<String> streamIdList = Lists.newArrayList(stream.getId());
-        final List<AlertSummary> conditions = toSummaryList(alertService.listForStreamIds(streamIdList, alertState, skip, limit));
+        final List<AlertSummary> conditions = toSummaryList(alertService.listForStreamId(stream.getId(), skip, limit));
 
-        return AlertListSummary.create(alertService.totalCountForStreams(streamIdList, alertState), conditions);
+        return AlertListSummary.create(alertService.totalCountForStream(streamId), conditions);
     }
 
     @GET
