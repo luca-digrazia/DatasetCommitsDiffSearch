@@ -1,7 +1,6 @@
 package io.quarkus.vertx.http.deployment;
 
 import java.io.IOException;
-import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
@@ -136,7 +135,7 @@ class VertxHttpProcessor {
             CoreVertxBuildItem core, // Injected to be sure that Vert.x has been produced before calling this method.
             ExecutorBuildItem executorBuildItem)
             throws BuildException, IOException {
-
+        HttpRemoteDevClientProvider.liveReloadConfig = lrc;
         Optional<DefaultRouteBuildItem> defaultRoute;
         if (defaultRoutes == null || defaultRoutes.isEmpty()) {
             defaultRoute = Optional.empty();
@@ -149,7 +148,6 @@ class VertxHttpProcessor {
             }
         }
 
-        HttpRemoteDevClientProvider.liveReloadConfig = lrc;
         GracefulShutdownFilter gracefulShutdownFilter = recorder.createGracefulShutdownHandler();
         shutdownListenerBuildItemBuildProducer.produce(new ShutdownListenerBuildItem(gracefulShutdownFilter));
 
@@ -218,8 +216,7 @@ class VertxHttpProcessor {
             logger.debug("Skipping registration of service providers for " + ExchangeAttributeBuilder.class);
             return;
         }
-        try (final FileSystem jarFileSystem = ZipUtils.newFileSystem(
-                new URI("jar", codeSource.getLocation().toURI().toString(), null),
+        try (final FileSystem jarFileSystem = ZipUtils.newFileSystem(codeSource.getLocation().toURI(),
                 Collections.emptyMap())) {
             final Path serviceDescriptorFilePath = jarFileSystem.getPath("META-INF", "services",
                     "io.quarkus.vertx.http.runtime.attribute.ExchangeAttributeBuilder");
