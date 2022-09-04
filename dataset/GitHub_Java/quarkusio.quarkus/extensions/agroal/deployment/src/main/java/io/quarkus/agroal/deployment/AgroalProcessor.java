@@ -23,12 +23,12 @@ import org.jboss.logging.Logger;
 
 import io.agroal.api.AgroalDataSource;
 import io.quarkus.agroal.DataSource;
+import io.quarkus.agroal.TransactionIntegration;
 import io.quarkus.agroal.runtime.AbstractDataSourceProducer;
 import io.quarkus.agroal.runtime.AgroalBuildTimeConfig;
 import io.quarkus.agroal.runtime.AgroalRecorder;
 import io.quarkus.agroal.runtime.AgroalRuntimeConfig;
 import io.quarkus.agroal.runtime.DataSourceBuildTimeConfig;
-import io.quarkus.agroal.runtime.TransactionIntegration;
 import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
@@ -40,8 +40,8 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.SslNativeConfigBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.deployment.util.HashUtil;
 import io.quarkus.gizmo.ClassCreator;
@@ -72,7 +72,7 @@ class AgroalProcessor {
             AgroalRecorder recorder,
             BuildProducer<FeatureBuildItem> feature,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            BuildProducer<NativeImageResourceBuildItem> resource,
+            BuildProducer<SubstrateResourceBuildItem> resource,
             BuildProducer<DataSourceDriverBuildItem> dataSourceDriver,
             SslNativeConfigBuildItem sslNativeConfig, BuildProducer<ExtensionSslNativeSupportBuildItem> sslNativeSupport,
             BuildProducer<GeneratedBeanBuildItem> generatedBean) throws Exception {
@@ -87,7 +87,7 @@ class AgroalProcessor {
         // For now, we can't push the security providers to Agroal so we need to include
         // the service file inside the image. Hopefully, we will get an entry point to
         // resolve them at build time and push them to Agroal soon.
-        resource.produce(new NativeImageResourceBuildItem(
+        resource.produce(new SubstrateResourceBuildItem(
                 "META-INF/services/" + io.agroal.api.security.AgroalSecurityProvider.class.getName()));
 
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false,
