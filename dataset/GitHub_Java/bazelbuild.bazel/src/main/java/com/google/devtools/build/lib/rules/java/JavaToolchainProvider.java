@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.analysis.ProviderCollection;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
@@ -40,17 +39,21 @@ public class JavaToolchainProvider extends ToolchainInfo {
 
   /** Returns the Java Toolchain associated with the rule being analyzed or {@code null}. */
   public static JavaToolchainProvider from(RuleContext ruleContext) {
-    TransitiveInfoCollection prerequisite =
-        ruleContext.getPrerequisite(":java_toolchain", Mode.TARGET);
+    return from(ruleContext, ":java_toolchain");
+  }
+
+  public static JavaToolchainProvider from(
+      RuleContext ruleContext, String attributeName) {
+    TransitiveInfoCollection prerequisite = ruleContext.getPrerequisite(attributeName, Mode.TARGET);
     return from(prerequisite, ruleContext);
   }
 
-  public static JavaToolchainProvider from(ProviderCollection collection) {
+  public static JavaToolchainProvider from(TransitiveInfoCollection collection) {
     return from(collection, null);
   }
 
   private static JavaToolchainProvider from(
-      ProviderCollection collection, @Nullable RuleErrorConsumer errorConsumer) {
+      TransitiveInfoCollection collection, @Nullable RuleErrorConsumer errorConsumer) {
     ToolchainInfo toolchainInfo = collection.get(ToolchainInfo.PROVIDER);
     if (toolchainInfo instanceof JavaToolchainProvider) {
       return (JavaToolchainProvider) toolchainInfo;
