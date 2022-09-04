@@ -628,10 +628,10 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
             final GSYBaseVideoPlayer gsyVideoPlayer;
             if (!hadNewConstructor) {
                 constructor = (Constructor<GSYBaseVideoPlayer>) GSYBaseVideoPlayer.this.getClass().getConstructor(Context.class);
-                gsyVideoPlayer = constructor.newInstance(mContext);
+                gsyVideoPlayer = constructor.newInstance(getActivityContext());
             } else {
                 constructor = (Constructor<GSYBaseVideoPlayer>) GSYBaseVideoPlayer.this.getClass().getConstructor(Context.class, Boolean.class);
-                gsyVideoPlayer = constructor.newInstance(mContext, true);
+                gsyVideoPlayer = constructor.newInstance(getActivityContext(), true);
             }
 
             gsyVideoPlayer.setId(getFullId());
