@@ -19,22 +19,26 @@ package org.graylog2.rest.models.system.indices;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.module.jsonSchema.JsonSchema;
 import com.google.auto.value.AutoValue;
+import org.graylog2.plugin.indexer.retention.RetentionStrategyConfig;
 
-import java.util.Set;
-
-@AutoValue
 @JsonAutoDetect
-public abstract class RetentionStrategies {
-    @JsonProperty
-    public abstract int total();
+@AutoValue
+public abstract class RetentionStrategyDescription {
+    @JsonProperty("type")
+    public abstract String type();
 
-    @JsonProperty
-    public abstract Set<RetentionStrategyDescription> strategies();
+    @JsonProperty("default_config")
+    public abstract RetentionStrategyConfig defaultConfig();
+
+    @JsonProperty("json_schema")
+    public abstract JsonSchema jsonSchema();
 
     @JsonCreator
-    public static RetentionStrategies create(@JsonProperty("total") int total,
-                                             @JsonProperty("strategies") Set<RetentionStrategyDescription> strategies) {
-        return new AutoValue_RetentionStrategies(total, strategies);
+    public static RetentionStrategyDescription create(@JsonProperty("type") String type,
+                                                      @JsonProperty("default_config") RetentionStrategyConfig defaultConfig,
+                                                      @JsonProperty("json_schema") JsonSchema jsonSchema) {
+        return new AutoValue_RetentionStrategyDescription(type, defaultConfig, jsonSchema);
     }
 }

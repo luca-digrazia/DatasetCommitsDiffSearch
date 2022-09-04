@@ -25,16 +25,16 @@ import java.util.Set;
 
 @AutoValue
 @JsonAutoDetect
-public abstract class RetentionStrategies {
+public abstract class RotationStrategies {
     @JsonProperty
     public abstract int total();
 
     @JsonProperty
-    public abstract Set<RetentionStrategyDescription> strategies();
+    public abstract Set<RotationStrategyDescription> strategies();
 
     @JsonCreator
-    public static RetentionStrategies create(@JsonProperty("total") int total,
-                                             @JsonProperty("strategies") Set<RetentionStrategyDescription> strategies) {
-        return new AutoValue_RetentionStrategies(total, strategies);
+    public static RotationStrategies create(@JsonProperty("total") int total,
+                                            @JsonProperty("strategies") Set<RotationStrategyDescription> strategies) {
+        return new AutoValue_RotationStrategies(total, strategies);
     }
 }
