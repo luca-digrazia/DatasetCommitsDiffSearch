@@ -13,8 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CTool
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
 import javax.annotation.Nullable;
 
 /**
@@ -42,18 +41,16 @@ public class CToolchainSelectionUtils {
    * @param cpuOption value of the --cpu option
    * @param compilerOption value of the --compiler option
    * @param proto content of the CROSSTOOL file
-   * @param cpuTransformer because life is hard
    * @return selected CToolchain or throws InvalidConfigurationException when not found. Never
    *     returns null.
    */
-  public static CToolchain selectCToolchain(
+  static CToolchain selectCToolchain(
       @Nullable String identifierAttribute,
       @Nullable String cpuAttribute,
       @Nullable String compilerAttribute,
       String cpuOption,
       @Nullable String compilerOption,
-      CrosstoolRelease proto,
-      Function<String, String> cpuTransformer)
+      CrosstoolRelease proto)
       throws InvalidConfigurationException {
     String identifierAttributeOrNull = StringUtil.emptyToNull(identifierAttribute);
     String cpuAttributeOrNull = StringUtil.emptyToNull(cpuAttribute);
@@ -68,8 +65,7 @@ public class CToolchainSelectionUtils {
         compilerAttributeOrNull,
         cpuOption,
         compilerOptionOrNull,
-        proto,
-        cpuTransformer);
+        proto);
   }
 
   private static CToolchain selectCToolchainNoEmptyStrings(
@@ -78,8 +74,7 @@ public class CToolchainSelectionUtils {
       String compilerAttribute,
       String cpuOption,
       String compilerOption,
-      CrosstoolRelease proto,
-      Function<String, String> cpuTransformer)
+      CrosstoolRelease proto)
       throws InvalidConfigurationException {
     CToolchain cToolchain = null;
     // Use the identifier to find the CToolchain from the CROSSTOOL (this is the way how
@@ -93,9 +88,7 @@ public class CToolchainSelectionUtils {
       try {
         cToolchain =
             selectToolchainUsingCpuAndMaybeCompiler(
-                proto,
-                new CrosstoolConfigurationIdentifier(cpuAttribute, compilerAttribute),
-                cpuTransformer);
+                proto, new CrosstoolConfigurationIdentifier(cpuAttribute, compilerAttribute));
       } catch (InvalidConfigurationException e) {
         // We couldn't find the CToolchain using attributes, let's catch the exception and try
         // with options. It's safe to ignore the exception here, since if it was caused by
@@ -107,9 +100,7 @@ public class CToolchainSelectionUtils {
       // it using --cpu/--compiler options (the legacy way, doesn't work with platforms).
       cToolchain =
           selectToolchainUsingCpuAndMaybeCompiler(
-              proto,
-              new CrosstoolConfigurationIdentifier(cpuOption, compilerOption),
-              cpuTransformer);
+              proto, new CrosstoolConfigurationIdentifier(cpuOption, compilerOption));
     }
     return cToolchain;
   }
@@ -135,7 +126,12 @@ public class CToolchainSelectionUtils {
     }
     if (selectedToolchain == null) {
       throw new InvalidConfigurationException(
-          String.format("Toolchain identifier '%s' was not found", toolchainIdentifier));
+          String.format(
+                  "Toolchain identifier '%s' was not found, valid identifiers are %s",
+                  toolchainIdentifier,
+                  proto.getToolchainList().stream()
+                      .map(CToolchain::getToolchainIdentifier)
+                      .collect(ImmutableList.toImmutableList())));
     }
     return selectedToolchain;
   }
@@ -172,10 +168,8 @@ public class CToolchainSelectionUtils {
    * @throws InvalidConfigurationException if no matching toolchain can be found, or if the input
    *     parameters do not obey the constraints described above
    */
-  public static CToolchain selectToolchainUsingCpuAndMaybeCompiler(
-      CrosstoolRelease release,
-      CrosstoolConfigurationIdentifier config,
-      Function<String, String> cpuTransformer)
+  private static CToolchain selectToolchainUsingCpuAndMaybeCompiler(
+      CrosstoolRelease release, CrosstoolConfigurationIdentifier config)
       throws InvalidConfigurationException {
     if (config.getCompiler() != null) {
       ArrayList<CToolchain> candidateToolchains = new ArrayList<>();
@@ -207,47 +201,14 @@ public class CToolchainSelectionUtils {
           }
       }
     }
-    String selectedIdentifier = null;
-    // We use fake CPU values to allow cross-platform builds for other languages that use the
-    // C++ toolchain. Translate to the actual target architecture.
-    String desiredCpu = cpuTransformer.apply(config.getCpu());
-    for (CrosstoolConfig.DefaultCpuToolchain selector : release.getDefaultToolchainList()) {
-      if (selector.getCpu().equals(desiredCpu)) {
-        selectedIdentifier = selector.getToolchainIdentifier();
-        break;
-      }
-    }
 
-    if (selectedIdentifier == null) {
-      HashSet<String> seenCpus = new HashSet<>();
-      StringBuilder cpuBuilder = new StringBuilder();
-      for (CrosstoolConfig.DefaultCpuToolchain selector : release.getDefaultToolchainList()) {
-        if (seenCpus.add(selector.getCpu())) {
-          cpuBuilder.append("  ").append(selector.getCpu()).append(",\n");
-        }
-      }
-      throw new InvalidConfigurationException(
-          "No default_toolchain found for cpu '"
-              + desiredCpu
-              + "'. Valid cpus are: [\n"
-              + cpuBuilder
-              + "]");
-    }
-    checkToolchain(selectedIdentifier);
-
-    for (CToolchain toolchain : release.getToolchainList()) {
-      if (toolchain.getToolchainIdentifier().equals(selectedIdentifier)) {
-        return toolchain;
-      }
-    }
-
-    throw new InvalidConfigurationException(
-        "Inconsistent crosstool configuration; no toolchain "
-            + "corresponding to '"
-            + selectedIdentifier
-            + "' found for cpu '"
-            + config.getCpu()
-            + "'");
+    StringBuilder errorMessageBuilder = new StringBuilder();
+    errorMessageBuilder
+        .append("No toolchain found for cpu '")
+        .append(config.getCpu())
+        .append("'. Valid toolchains are: ");
+    describeToolchainList(errorMessageBuilder, release.getToolchainList());
+    throw new InvalidConfigurationException(errorMessageBuilder.toString());
   }
 
   /**

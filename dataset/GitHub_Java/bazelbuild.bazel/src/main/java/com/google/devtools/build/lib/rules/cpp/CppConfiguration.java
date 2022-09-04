@@ -190,8 +190,9 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   private final PathFragment fdoPath;
   private final Label fdoOptimizeLabel;
 
+  // TODO(b/113849758): Remove once it's not needed for toolchain selection in CppConfiguration.
+  private final Label ccToolchainLabel;
   private final Label sysrootLabel;
-
   private final ImmutableList<String> conlyopts;
 
   private final ImmutableList<String> copts;
@@ -237,6 +238,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
         Preconditions.checkNotNull(params.commonOptions.cpu),
         params.fdoPath,
         params.fdoOptimizeLabel,
+        params.ccToolchainLabel,
         params.sysrootLabel,
         ImmutableList.copyOf(cppOptions.conlyoptList),
         ImmutableList.copyOf(cppOptions.coptList),
@@ -260,6 +262,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
       String desiredCpu,
       PathFragment fdoPath,
       Label fdoOptimizeLabel,
+      Label ccToolchainLabel,
       Label sysrootLabel,
       ImmutableList<String> conlyopts,
       ImmutableList<String> copts,
@@ -278,6 +281,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     this.desiredCpu = desiredCpu;
     this.fdoPath = fdoPath;
     this.fdoOptimizeLabel = fdoOptimizeLabel;
+    this.ccToolchainLabel = ccToolchainLabel;
     this.sysrootLabel = sysrootLabel;
     this.conlyopts = conlyopts;
     this.copts = copts;
@@ -356,7 +360,11 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
       defaultLabel = "//tools/cpp:crosstool",
       defaultInToolRepository = true)
   public Label getRuleProvidingCcToolchainProvider() {
+    if (provideCcToolchainInfoFromCcToolchainSuite()) {
       return crosstoolTop;
+    } else {
+      return ccToolchainLabel;
+    }
   }
 
   /**
@@ -715,6 +723,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
    */
   public Label getLibcTopLabel() {
     return cppOptions.libcTopLabel;
+  }
+
+  public boolean provideCcToolchainInfoFromCcToolchainSuite() {
+    return cppOptions.provideCcToolchainInfoFromCcToolchainSuite;
   }
 
   public boolean disableSysrootFromConfiguration() {

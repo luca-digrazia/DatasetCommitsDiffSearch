@@ -15,20 +15,15 @@
 package com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.r13;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.NdkPaths;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.StlImpl;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
-import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.DefaultCpuToolchain;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map.Entry;
 
 /** Generates a CrosstoolRelease proto for the Android NDK. */
 final class AndroidNdkCrosstoolsR13 {
-  /** {@code ./ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --version} */
-  static final String CLANG_VERSION = "3.8.256229";
 
   /**
    * Creates a CrosstoolRelease proto for the Android NDK, given the API level to use and the
@@ -40,23 +35,24 @@ final class AndroidNdkCrosstoolsR13 {
    *
    * @return A CrosstoolRelease for the Android NDK.
    */
-  static CrosstoolRelease create(NdkPaths ndkPaths, StlImpl stlImpl, String hostPlatform) {
+  static CrosstoolRelease create(
+      NdkPaths ndkPaths, StlImpl stlImpl, String hostPlatform, String clangVersion) {
     return CrosstoolRelease.newBuilder()
         .setMajorVersion("android")
         .setMinorVersion("")
         .setDefaultTargetCpu("armeabi")
-        .addAllDefaultToolchain(getDefaultCpuToolchains(stlImpl))
-        .addAllToolchain(createToolchains(ndkPaths, stlImpl, hostPlatform))
+        .addAllToolchain(createToolchains(ndkPaths, stlImpl, hostPlatform, clangVersion))
         .build();
   }
 
   private static ImmutableList<CToolchain> createToolchains(
-      NdkPaths ndkPaths, StlImpl stlImpl, String hostPlatform) {
+      NdkPaths ndkPaths, StlImpl stlImpl, String hostPlatform, String clangVersion) {
 
     List<CToolchain.Builder> toolchainBuilders = new ArrayList<>();
-    toolchainBuilders.addAll(new ArmCrosstools(ndkPaths, stlImpl).createCrosstools());
-    toolchainBuilders.addAll(new MipsCrosstools(ndkPaths, stlImpl).createCrosstools());
-    toolchainBuilders.addAll(new X86Crosstools(ndkPaths, stlImpl).createCrosstools());
+    toolchainBuilders.addAll(new ArmCrosstools(ndkPaths, stlImpl, clangVersion).createCrosstools());
+    toolchainBuilders.addAll(
+        new MipsCrosstools(ndkPaths, stlImpl, clangVersion).createCrosstools());
+    toolchainBuilders.addAll(new X86Crosstools(ndkPaths, stlImpl, clangVersion).createCrosstools());
 
     ImmutableList.Builder<CToolchain> toolchains = new ImmutableList.Builder<>();
 
@@ -75,35 +71,5 @@ final class AndroidNdkCrosstoolsR13 {
     }
 
     return toolchains.build();
-  }
-
-  private static ImmutableList<DefaultCpuToolchain> getDefaultCpuToolchains(StlImpl stlImpl) {
-    // TODO(bazel-team): It would be better to auto-generate this somehow.
-
-    ImmutableMap<String, String> defaultCpus =
-        ImmutableMap.<String, String>builder()
-            // arm
-            .put("armeabi", "arm-linux-androideabi-clang3.8")
-            .put("armeabi-v7a", "arm-linux-androideabi-clang3.8-v7a")
-            .put("arm64-v8a", "aarch64-linux-android-clang3.8")
-
-            // mips
-            .put("mips", "mipsel-linux-android-clang3.8")
-            .put("mips64", "mips64el-linux-android-clang3.8")
-
-            // x86
-            .put("x86", "x86-clang3.8")
-            .put("x86_64", "x86_64-clang3.8")
-            .build();
-
-    ImmutableList.Builder<DefaultCpuToolchain> defaultCpuToolchains = ImmutableList.builder();
-    for (Entry<String, String> defaultCpu : defaultCpus.entrySet()) {
-      defaultCpuToolchains.add(
-          DefaultCpuToolchain.newBuilder()
-              .setCpu(defaultCpu.getKey())
-              .setToolchainIdentifier(defaultCpu.getValue() + "-" + stlImpl.getName())
-              .build());
-    }
-    return defaultCpuToolchains.build();
   }
 }
