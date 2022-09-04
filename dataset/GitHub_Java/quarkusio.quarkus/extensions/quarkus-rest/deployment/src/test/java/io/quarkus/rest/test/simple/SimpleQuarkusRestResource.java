@@ -4,9 +4,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 import javax.inject.Inject;
-import javax.json.JsonArray;
-import javax.json.JsonObject;
-import javax.validation.Valid;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.FormParam;
@@ -23,15 +20,12 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.container.AsyncResponse;
-import javax.ws.rs.container.ResourceInfo;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Request;
 import javax.ws.rs.core.Response;
-import javax.ws.rs.ext.Providers;
 
 import io.quarkus.rest.Blocking;
 import io.quarkus.rest.runtime.core.QuarkusRestRequestContext;
@@ -156,89 +150,23 @@ public class SimpleQuarkusRestResource {
         return person;
     }
 
-    @POST
-    @Path("/person-validated")
-    @Produces(MediaType.APPLICATION_JSON)
-    @Consumes(MediaType.APPLICATION_JSON)
-    public Person getValidatedPerson(@Valid Person person) {
-        return person;
-    }
-
-    @POST
-    @Path("/person-invalid-result")
-    @Produces(MediaType.APPLICATION_JSON)
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Valid
-    public Person getInvalidPersonResult(@Valid Person person) {
-        person.setLast(null);
-        return person;
-    }
-
     @GET
     @Path("/blocking")
     @Blocking
     public String blocking() {
-        service.sayHello();
         return String.valueOf(BlockingOperationControl.isBlockingAllowed());
-    }
-
-    @GET
-    @Path("providers")
-    public Response filters(@Context Providers providers) {
-        // TODO: enhance this test
-        return Response.ok().entity(providers.getExceptionMapper(TestException.class).getClass().getName()).build();
     }
 
     @GET
     @Path("filters")
     public Response filters(@Context HttpHeaders headers) {
-        return Response.ok().header("filter-request", headers.getHeaderString("filter-request")).build();
-    }
-
-    @GET
-    @Path("feature-filters")
-    public Response featureFilters(@Context HttpHeaders headers) {
-        return Response.ok().header("feature-filter-request", headers.getHeaderString("feature-filter-request")).build();
-    }
-
-    @GET
-    @Path("dynamic-feature-filters")
-    public Response dynamicFeatureFilters(@Context HttpHeaders headers) {
-        return Response.ok().header("feature-filter-request", headers.getHeaderString("feature-filter-request")).build();
-    }
-
-    @GET
-    @Path("fooFilters")
-    @Foo
-    public Response fooFilters(@Context HttpHeaders headers) {
-        return Response.ok().header("filter-request", headers.getHeaderString("filter-request")).build();
-    }
-
-    @GET
-    @Path("barFilters")
-    @Bar
-    public Response barFilters(@Context HttpHeaders headers) {
-        return Response.ok().header("filter-request", headers.getHeaderString("filter-request")).build();
-    }
-
-    @GET
-    @Path("fooBarFilters")
-    @Foo
-    @Bar
-    public Response fooBarFilters(@Context HttpHeaders headers) {
-        return Response.ok().header("filter-request", headers.getHeaderString("filter-request")).build();
+        return Response.ok().header("filter", headers.getHeaderString("filter")).build();
     }
 
     @GET
     @Path("mapped-exception")
     public String mappedException() {
         throw new TestException();
-    }
-
-    @GET
-    @Path("feature-mapped-exception")
-    public String featureMappedException() {
-        throw new FeatureMappedException();
     }
 
     @GET
@@ -329,50 +257,4 @@ public class SimpleQuarkusRestResource {
         return request.getMethod();
     }
 
-    @GET
-    @Path("resource-info")
-    public Response resourceInfo(@Context ResourceInfo resourceInfo, @Context HttpHeaders headers) {
-        return Response.ok()
-                .header("class-name", resourceInfo.getResourceClass().getSimpleName())
-                .header("method-name", headers.getHeaderString("method-name"))
-                .build();
-    }
-
-    @Path("form-map")
-    @POST
-    @Produces(MediaType.APPLICATION_FORM_URLENCODED)
-    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
-    public MultivaluedMap<String, String> map(MultivaluedMap<String, String> map) {
-        return map;
-    }
-
-    @Path("jsonp-object")
-    @POST
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.TEXT_PLAIN)
-    public String jsonpObject(JsonObject jsonbObject) {
-        return jsonbObject.getString("k");
-    }
-
-    @Path("jsonp-array")
-    @POST
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.TEXT_PLAIN)
-    public Integer jsonpArray(JsonArray jsonArray) {
-        return jsonArray.size();
-    }
-
-    @Path("/bool")
-    @POST
-    @Consumes(MediaType.TEXT_PLAIN)
-    @Produces(MediaType.TEXT_PLAIN)
-    public boolean bool(boolean bool) {
-        return bool;
-    }
-
-    @Path("/trace")
-    @TRACE
-    public Response trace() {
-        return Response.status(Response.Status.OK).build();
-    }
 }
