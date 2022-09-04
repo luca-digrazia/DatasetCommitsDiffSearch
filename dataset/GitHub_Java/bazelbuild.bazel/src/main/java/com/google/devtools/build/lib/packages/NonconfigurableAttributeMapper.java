@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
-import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.util.Preconditions;
 
 /**
  * {@link AttributeMap} implementation that triggers an {@link IllegalStateException} if called
@@ -25,7 +25,8 @@ import com.google.common.base.Preconditions;
  */
 public class NonconfigurableAttributeMapper extends AbstractAttributeMapper {
   private NonconfigurableAttributeMapper(Rule rule) {
-    super(rule);
+    super(rule.getPackage(), rule.getRuleClassObject(), rule.getLabel(),
+        rule.getAttributeContainer());
   }
 
   /**
@@ -40,7 +41,7 @@ public class NonconfigurableAttributeMapper extends AbstractAttributeMapper {
   }
 
   @Override
-  public <T> T get(String attributeName, com.google.devtools.build.lib.packages.Type<T> type) {
+  public <T> T get(String attributeName, com.google.devtools.build.lib.syntax.Type<T> type) {
     T attr = super.get(attributeName, type);
     Preconditions.checkState(!getAttributeDefinition(attributeName).isConfigurable(),
         "Attribute '%s' is potentially configurable - not allowed here", attributeName);
