@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.actions.UserExecException;
+import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.exec.SpawnInputExpander;
@@ -74,8 +75,7 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
   private final RemoteOptions options;
   // TODO(olaola): This will be set on a per-action basis instead.
   private final Platform platform;
-  private final ChannelOptions channelOptions;
-  private final SpawnInputExpander spawnInputExpander = new SpawnInputExpander(/*strict=*/ false);
+  private final SpawnInputExpander spawnInputExpander = new SpawnInputExpander(/*strict=*/false);
 
   RemoteSpawnStrategy(
       Map<String, String> clientEnv,
@@ -87,14 +87,12 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
     this.standaloneStrategy = new StandaloneSpawnStrategy(execRoot, verboseFailures, productName);
     this.verboseFailures = verboseFailures;
     this.options = options;
-    channelOptions = ChannelOptions.create(options);
     if (options.experimentalRemotePlatformOverride != null) {
       Platform.Builder platformBuilder = Platform.newBuilder();
       try {
         TextFormat.getParser().merge(options.experimentalRemotePlatformOverride, platformBuilder);
       } catch (ParseException e) {
-        throw new IllegalArgumentException(
-            "Failed to parse --experimental_remote_platform_override", e);
+        throw new RuntimeException("Failed to parse --experimental_remote_platform_override", e);
       }
       platform = platformBuilder.build();
     } else {
@@ -214,19 +212,20 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
     if (spawn.isRemotable()) {
       // Initialize remote cache and execution handlers. We use separate handlers for every
       // action to enable server-side parallelism (need a different gRPC channel per action).
-      if (SimpleBlobStoreFactory.isRemoteCacheOptions(options)) {
-        actionCache = new SimpleBlobStoreActionCache(SimpleBlobStoreFactory.create(options));
-      } else if (GrpcActionCache.isRemoteCacheOptions(options)) {
-        actionCache = new GrpcActionCache(options, channelOptions);
-      }
-      // Otherwise actionCache remains null and remote caching/execution are disabled.
+      try {
+        if (SimpleBlobStoreFactory.isRemoteCacheOptions(options)) {
+          actionCache = new SimpleBlobStoreActionCache(SimpleBlobStoreFactory.create(options));
+        } else if (GrpcActionCache.isRemoteCacheOptions(options)) {
+          actionCache = new GrpcActionCache(options);
+        }
+        // Otherwise actionCache remains null and remote caching/execution are disabled.
 
-      if (actionCache != null && GrpcRemoteExecutor.isRemoteExecutionOptions(options)) {
-        workExecutor =
-            new GrpcRemoteExecutor(
-                RemoteUtils.createChannel(options.remoteWorker, channelOptions),
-                channelOptions,
-                options);
+        if (actionCache != null && GrpcRemoteExecutor.isRemoteExecutionOptions(options)) {
+          workExecutor = new GrpcRemoteExecutor(
+              RemoteUtils.createChannelLegacy(options.remoteWorker), options);
+        }
+      } catch (InvalidConfigurationException e) {
+        eventHandler.handle(Event.warn(e.toString()));
       }
     }
     if (!spawn.isRemotable() || actionCache == null) {
@@ -269,7 +268,6 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
         // just update the TreeNodeRepository and continue the build.
         try {
           actionCache.downloadAllResults(result, execRoot);
-          passRemoteOutErr(actionCache, result, actionExecutionContext.getFileOutErr());
           return;
         } catch (CacheNotFoundException e) {
           acceptCachedResult = false; // Retry the action remotely and invalidate the results.
