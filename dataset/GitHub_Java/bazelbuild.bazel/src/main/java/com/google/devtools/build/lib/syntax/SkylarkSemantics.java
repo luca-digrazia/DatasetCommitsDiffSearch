@@ -51,7 +51,7 @@ public abstract class SkylarkSemantics {
 
   public abstract boolean incompatibleDisallowDictPlus();
 
-  public abstract boolean incompatibleDisallowOldStyleArgsAdd();
+  public abstract boolean incompatibleDisallowThreeArgVardef();
 
   public abstract boolean incompatibleDisallowToplevelIfStatement();
 
@@ -88,7 +88,7 @@ public abstract class SkylarkSemantics {
           .incompatibleDisableGlobTracking(true)
           .incompatibleDisableObjcProviderResources(false)
           .incompatibleDisallowDictPlus(false)
-          .incompatibleDisallowOldStyleArgsAdd(false)
+          .incompatibleDisallowThreeArgVardef(false)
           .incompatibleDisallowToplevelIfStatement(true)
           .incompatibleNewActionsApi(false)
           .incompatiblePackageNameIsAFunction(false)
@@ -115,7 +115,7 @@ public abstract class SkylarkSemantics {
 
     public abstract Builder incompatibleDisallowDictPlus(boolean value);
 
-    public abstract Builder incompatibleDisallowOldStyleArgsAdd(boolean value);
+    public abstract Builder incompatibleDisallowThreeArgVardef(boolean value);
 
     public abstract Builder incompatibleDisallowToplevelIfStatement(boolean value);
 

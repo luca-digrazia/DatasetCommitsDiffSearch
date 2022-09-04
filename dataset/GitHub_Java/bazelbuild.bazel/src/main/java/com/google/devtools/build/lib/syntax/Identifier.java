@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.syntax;
 
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.SpellChecker;
 import java.io.IOException;
 import java.util.Set;
@@ -33,6 +34,7 @@ import javax.annotation.Nullable;
  * Object#hashCode} (but note that these methods ignore location information). They are needed
  * because {@code Identifier}s are stored in maps when constructing {@link LoadStatement}.
  */
+@AutoCodec
 public final class Identifier extends Expression {
 
   private final String name;
@@ -102,7 +104,7 @@ public final class Identifier extends Expression {
               + "please use the latter ("
               + "https://docs.bazel.build/versions/master/skylark/lib/native.html#package_name). "
               + "You can temporarily allow the old name "
-              + "by using --incompatible_package_name_is_a_function=false");
+              + "by using --incompatiblePackageNameIsAFunction=false");
     }
     if (name.equals("REPOSITORY_NAME")) {
       return new EvalException(
@@ -111,7 +113,7 @@ public final class Identifier extends Expression {
               + "please use the latter ("
               + "https://docs.bazel.build/versions/master/skylark/lib/native.html#repository_name)."
               + " You can temporarily allow the old name "
-              + "by using --incompatible_package_name_is_a_function=false");
+              + "by using --incompatiblePackageNameIsAFunction=false");
     }
 
     String suggestion = SpellChecker.didYouMean(name, symbols);
