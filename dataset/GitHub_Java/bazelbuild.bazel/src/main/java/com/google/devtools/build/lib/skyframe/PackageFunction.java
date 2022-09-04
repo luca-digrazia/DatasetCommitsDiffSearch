@@ -725,6 +725,7 @@ public class PackageFunction implements SkyFunction {
       throws InterruptedException, BzlLoadFailedException, InconsistentFilesystemException {
     List<BzlLoadValue> bzlLoads = Lists.newArrayListWithExpectedSize(keys.size());
     Exception deferredException = null;
+    boolean valuesMissing = false;
     // Compute BzlLoadValue for each key, sharing the same inlining state, i.e. cache of loaded
     // modules. This ensures that each .bzl is loaded only once, regardless of diamond dependencies
     // or cache eviction. (Multiple loads of the same .bzl would screw up identity equality of some
@@ -733,8 +734,7 @@ public class PackageFunction implements SkyFunction {
     for (BzlLoadValue.Key key : keys) {
       SkyValue skyValue;
       try {
-        // Will complete right away if this key has been seen before in inliningState -- regardless
-        // of whether it was evaluated successfully, had missing deps, or was found to be in error.
+        // Will complete right away if it's already cached in inliningState.
         skyValue = bzlLoadFunctionForInlining.computeInline(key, env, inliningState);
       } catch (BzlLoadFailedException | InconsistentFilesystemException e) {
         // For determinism's sake while inlining, preserve the first exception and continue to run
@@ -742,14 +742,15 @@ public class PackageFunction implements SkyFunction {
         deferredException = MoreObjects.firstNonNull(deferredException, e);
         continue;
       }
-      if (skyValue != null) {
+      if (skyValue == null) {
+        checkState(env.valuesMissing(), "no starlark load value for %s", key);
+        // We continue making inline calls even if some requested values are missing, to
+        // maximize the number of dependent (non-inlined) SkyFunctions that are requested, thus
+        // avoiding a quadratic number of restarts.
+        valuesMissing = true;
+      } else {
         bzlLoads.add((BzlLoadValue) skyValue);
       }
-      // A null value for `skyValue` can occur when it (or its transitive loads) has a Skyframe dep
-      // that is missing or in error. It can also occur if there's a transitive load on a bzl that
-      // was already seen by inliningState and which returned null. In both these cases, we want to
-      // continue making our inline calls, so as to maximize the number of dependent (non-inlined)
-      // SkyFunctions that are requested and avoid a quadratic number of restarts.
     }
     if (deferredException != null) {
       Throwables.throwIfInstanceOf(deferredException, BzlLoadFailedException.class);
@@ -757,7 +758,7 @@ public class PackageFunction implements SkyFunction {
       throw new IllegalStateException(
           "caught a checked exception of unexpected type", deferredException);
     }
-    return env.valuesMissing() ? null : bzlLoads;
+    return valuesMissing ? null : bzlLoads;
   }
 
   private static int getOriginalWorkspaceChunk(

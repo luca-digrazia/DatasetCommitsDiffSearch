@@ -50,6 +50,7 @@ import com.google.devtools.build.lib.server.FailureDetails.PackageLoading;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.testutil.ManualClock;
+import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.Pair;
@@ -948,9 +949,11 @@ public class PackageFunctionTest extends BuildViewTestCase {
     invalidatePackages();
 
     SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//pkg"));
-    validPackage(skyKey);
+    Package pkg = validPackage(skyKey);
 
-    assertContainsEvent("expected boolean for argument `allow_empty`, got `5`");
+    String expectedEventString = "expected boolean for argument `allow_empty`, got `5`";
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), expectedEventString);
+    assertContainsEvent(expectedEventString);
   }
 
   @Test
@@ -961,7 +964,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
     SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//pkg"));
     Package pkg = validPackage(skyKey);
     assertThat(pkg.containsErrors()).isFalse();
-    assertNoEvents();
+    assertThat(pkg.getEvents()).isEmpty();
   }
 
   @Test
@@ -977,7 +980,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
     SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//pkg"));
     Package pkg = validPackage(skyKey);
     assertThat(pkg.containsErrors()).isFalse();
-    assertNoEvents();
+    assertThat(pkg.getEvents()).isEmpty();
   }
 
   @Test
@@ -990,7 +993,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
 
     Package pkg = validPackage(skyKey);
     assertThat(pkg.containsErrors()).isFalse();
-    assertNoEvents();
+    assertThat(pkg.getEvents()).isEmpty();
 
     scratch.deleteFile("pkg/blah.foo");
     getSkyframeExecutor()
@@ -1002,9 +1005,11 @@ public class PackageFunctionTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     pkg = validPackage(skyKey);
     assertThat(pkg.containsErrors()).isTrue();
-    assertContainsEvent(
+    String expectedEventString =
         "glob pattern '*.foo' didn't match anything, but allow_empty is set to False (the "
-            + "default value of allow_empty can be set with --incompatible_disallow_empty_glob).");
+            + "default value of allow_empty can be set with --incompatible_disallow_empty_glob).";
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), expectedEventString);
+    assertContainsEvent(expectedEventString);
   }
 
   @Test
@@ -1022,7 +1027,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
 
     Package pkg = validPackage(skyKey);
     assertThat(pkg.containsErrors()).isFalse();
-    assertNoEvents();
+    assertThat(pkg.getEvents()).isEmpty();
 
     scratch.deleteFile("pkg/blah.foo");
     getSkyframeExecutor()
@@ -1034,9 +1039,11 @@ public class PackageFunctionTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     pkg = validPackage(skyKey);
     assertThat(pkg.containsErrors()).isTrue();
-    assertContainsEvent(
+    String expectedEventString =
         "glob pattern '*.foo' didn't match anything, but allow_empty is set to False (the "
-            + "default value of allow_empty can be set with --incompatible_disallow_empty_glob).");
+            + "default value of allow_empty can be set with --incompatible_disallow_empty_glob).";
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), expectedEventString);
+    assertContainsEvent(expectedEventString);
   }
 
   @Test
@@ -1052,6 +1059,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
     String expectedEventString =
         "glob pattern '*.foo' didn't match anything, but allow_empty is set to False (the "
             + "default value of allow_empty can be set with --incompatible_disallow_empty_glob).";
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), expectedEventString);
     assertContainsEvent(expectedEventString);
 
     scratch.overwriteFile("pkg/BUILD", "x = " + "glob(['*.foo'], allow_empty=False) #comment");
@@ -1063,6 +1071,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
 
     pkg = validPackage(skyKey);
     assertThat(pkg.containsErrors()).isTrue();
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), expectedEventString);
     assertContainsEvent(expectedEventString);
   }
 
@@ -1084,6 +1093,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
     String expectedEventString =
         "glob pattern '*.foo' didn't match anything, but allow_empty is set to False (the "
             + "default value of allow_empty can be set with --incompatible_disallow_empty_glob).";
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), expectedEventString);
     assertContainsEvent(expectedEventString);
 
     scratch.overwriteFile("pkg/BUILD", "x = " + "glob(['*.foo']) #comment");
@@ -1095,6 +1105,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
 
     pkg = validPackage(skyKey);
     assertThat(pkg.containsErrors()).isTrue();
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), expectedEventString);
     assertContainsEvent(expectedEventString);
   }
 
@@ -1113,6 +1124,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
     String expectedEventString =
         "all files in the glob have been excluded, but allow_empty is set to False (the "
             + "default value of allow_empty can be set with --incompatible_disallow_empty_glob).";
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), expectedEventString);
     assertContainsEvent(expectedEventString);
 
     scratch.overwriteFile(
@@ -1126,6 +1138,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
 
     pkg = validPackage(skyKey);
     assertThat(pkg.containsErrors()).isTrue();
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), expectedEventString);
     assertContainsEvent(expectedEventString);
   }
 
@@ -1149,6 +1162,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
     String expectedEventString =
         "all files in the glob have been excluded, but allow_empty is set to False (the "
             + "default value of allow_empty can be set with --incompatible_disallow_empty_glob).";
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), expectedEventString);
     assertContainsEvent(expectedEventString);
 
     scratch.overwriteFile("pkg/BUILD", "x = glob(include=['*.foo'], exclude=['blah.*']) # comment");
@@ -1160,6 +1174,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
 
     pkg = validPackage(skyKey);
     assertThat(pkg.containsErrors()).isTrue();
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), expectedEventString);
     assertContainsEvent(expectedEventString);
   }
 
@@ -1173,9 +1188,11 @@ public class PackageFunctionTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     Package pkg = validPackage(skyKey);
     assertThat(pkg.containsErrors()).isTrue();
-    assertContainsEvent(
+    String expectedEventString =
         "glob pattern '*.foo' didn't match anything, but allow_empty is set to False (the "
-            + "default value of allow_empty can be set with --incompatible_disallow_empty_glob).");
+            + "default value of allow_empty can be set with --incompatible_disallow_empty_glob).";
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), expectedEventString);
+    assertContainsEvent(expectedEventString);
 
     scratch.file("pkg/blah.foo");
     getSkyframeExecutor()
@@ -1185,10 +1202,9 @@ public class PackageFunctionTest extends BuildViewTestCase {
             Root.fromPath(rootDirectory));
 
     reporter.addHandler(failFastHandler);
-    eventCollector.clear();
     pkg = validPackage(skyKey);
     assertThat(pkg.containsErrors()).isFalse();
-    assertNoEvents();
+    assertThat(pkg.getEvents()).isEmpty();
   }
 
   @Test
@@ -1206,10 +1222,11 @@ public class PackageFunctionTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     Package pkg = validPackage(skyKey);
     assertThat(pkg.containsErrors()).isTrue();
-
-    assertContainsEvent(
+    String expectedEventString =
         "glob pattern '*.foo' didn't match anything, but allow_empty is set to False (the "
-            + "default value of allow_empty can be set with --incompatible_disallow_empty_glob).");
+            + "default value of allow_empty can be set with --incompatible_disallow_empty_glob).";
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), expectedEventString);
+    assertContainsEvent(expectedEventString);
 
     scratch.file("pkg/blah.foo");
     getSkyframeExecutor()
@@ -1219,10 +1236,9 @@ public class PackageFunctionTest extends BuildViewTestCase {
             Root.fromPath(rootDirectory));
 
     reporter.addHandler(failFastHandler);
-    eventCollector.clear();
     pkg = validPackage(skyKey);
     assertThat(pkg.containsErrors()).isFalse();
-    assertNoEvents();
+    assertThat(pkg.getEvents()).isEmpty();
   }
 
   @Test
