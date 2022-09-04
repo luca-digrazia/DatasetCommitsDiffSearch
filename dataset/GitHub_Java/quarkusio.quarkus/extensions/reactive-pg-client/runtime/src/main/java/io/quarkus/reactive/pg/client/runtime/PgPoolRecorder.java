@@ -78,11 +78,6 @@ public class PgPoolRecorder {
             poolOptions.setMaxSize(dataSourceReactiveRuntimeConfig.maxSize.getAsInt());
         }
 
-        if (dataSourceReactiveRuntimeConfig.idleTimeout.isPresent()) {
-            int idleTimeout = Math.toIntExact(dataSourceReactiveRuntimeConfig.idleTimeout.get().toMillis());
-            poolOptions.setIdleTimeout(idleTimeout).setIdleTimeoutUnit(TimeUnit.MILLISECONDS);
-        }
-
         return poolOptions;
     }
 
@@ -129,8 +124,7 @@ public class PgPoolRecorder {
         if (dataSourceReactivePostgreSQLConfig.cachePreparedStatements.isPresent()) {
             log.warn(
                     "datasource.reactive.postgresql.cache-prepared-statements is deprecated, use datasource.reactive.cache-prepared-statements instead");
-            pgConnectOptions
-                    .setCachePreparedStatements(dataSourceReactivePostgreSQLConfig.cachePreparedStatements.get());
+            pgConnectOptions.setCachePreparedStatements(dataSourceReactivePostgreSQLConfig.cachePreparedStatements.get());
         } else {
             pgConnectOptions.setCachePreparedStatements(dataSourceReactiveRuntimeConfig.cachePreparedStatements);
         }
@@ -157,9 +151,9 @@ public class PgPoolRecorder {
 
         pgConnectOptions.setReconnectInterval(dataSourceReactiveRuntimeConfig.reconnectInterval.toMillis());
 
-        if (dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm.isPresent()) {
-            pgConnectOptions.setHostnameVerificationAlgorithm(
-                    dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm.get());
+        if (dataSourceReactiveRuntimeConfig.idleTimeout.isPresent()) {
+            int idleTimeout = Math.toIntExact(dataSourceReactiveRuntimeConfig.idleTimeout.get().toMillis());
+            pgConnectOptions.setIdleTimeout(idleTimeout).setIdleTimeoutUnit(TimeUnit.MILLISECONDS);
         }
 
         return pgConnectOptions;
