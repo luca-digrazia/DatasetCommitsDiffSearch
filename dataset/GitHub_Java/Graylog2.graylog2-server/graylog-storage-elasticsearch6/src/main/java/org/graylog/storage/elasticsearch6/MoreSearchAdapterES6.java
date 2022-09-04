@@ -12,6 +12,7 @@ import org.graylog.events.event.EventDto;
 import org.graylog.events.processor.EventProcessorException;
 import org.graylog.events.search.MoreSearch;
 import org.graylog.events.search.MoreSearchAdapter;
+import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.indexer.results.ScrollResult;
@@ -44,15 +45,13 @@ public class MoreSearchAdapterES6 implements MoreSearchAdapter {
     private static final Logger LOG = LoggerFactory.getLogger(MoreSearchAdapterES6.class);
     private final MultiSearch multiSearch;
     private final Scroll scroll;
-    private final Boolean allowLeadingWildcard;
-    private final SortOrderMapper sortOrderMapper;
+    private Boolean allowLeadingWildcard;
 
     @Inject
-    public MoreSearchAdapterES6(@Named("allow_leading_wildcard_searches") Boolean allowLeadingWildcard, MultiSearch multiSearch, Scroll scroll, SortOrderMapper sortOrderMapper) {
+    public MoreSearchAdapterES6(@Named("allow_leading_wildcard_searches") Boolean allowLeadingWildcard, MultiSearch multiSearch, Scroll scroll) {
         this.allowLeadingWildcard = allowLeadingWildcard;
         this.multiSearch = multiSearch;
         this.scroll = scroll;
-        this.sortOrderMapper = sortOrderMapper;
     }
 
     @Override
@@ -64,7 +63,7 @@ public class MoreSearchAdapterES6 implements MoreSearchAdapter {
         final BoolQueryBuilder filter = boolQuery()
                 .filter(query)
                 .filter(termsQuery(EventDto.FIELD_STREAMS, eventStreams))
-                .filter(requireNonNull(TimeRangeQueryFactory.create(timerange)));
+                .filter(requireNonNull(IndexHelper.getTimestampRangeFilter(timerange)));
 
         if (!isNullOrEmpty(filterString)) {
             filter.filter(queryStringQuery(filterString));
@@ -80,7 +79,7 @@ public class MoreSearchAdapterES6 implements MoreSearchAdapter {
                 .query(filter)
                 .from((page - 1) * perPage)
                 .size(perPage)
-                .sort(sorting.getField(), sortOrderMapper.fromSorting(sorting));
+                .sort(sorting.getField(), sorting.asElastic());
 
         final Search.Builder searchBuilder = new Search.Builder(searchSourceBuilder.toString())
                 .addType(IndexMapping.TYPE_MESSAGE)
@@ -116,7 +115,7 @@ public class MoreSearchAdapterES6 implements MoreSearchAdapter {
 
         final BoolQueryBuilder filter = boolQuery()
                 .filter(query)
-                .filter(requireNonNull(TimeRangeQueryFactory.create(timeRange)));
+                .filter(requireNonNull(IndexHelper.getTimestampRangeFilter(timeRange)));
 
         // Filtering with an empty streams list doesn't work and would return zero results
         if (!streams.isEmpty()) {
