@@ -44,7 +44,6 @@ import org.jboss.resteasy.microprofile.client.RestClientProxy;
 import org.jboss.resteasy.microprofile.client.async.AsyncInterceptorRxInvokerProvider;
 import org.jboss.resteasy.spi.ResteasyConfiguration;
 
-import io.quarkus.arc.BeanDestroyer;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
 import io.quarkus.arc.deployment.BeanRegistrarBuildItem;
@@ -219,7 +218,6 @@ class RestClientProcessor {
                                 MethodDescriptor.ofMethod(RestClientBase.class, "create", Object.class), baseHandle);
                         m.returnValue(ret);
                     });
-                    configurator.destroyer(BeanDestroyer.CloseableDestroyer.class);
                     configurator.done();
                 }
             }
