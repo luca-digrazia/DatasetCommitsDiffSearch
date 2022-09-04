@@ -25,7 +25,6 @@ import com.google.common.collect.ImmutableMap;
 import org.elasticsearch.action.ActionFuture;
 import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
-import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest;
 import org.elasticsearch.action.admin.indices.alias.get.IndicesGetAliasesRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
@@ -33,8 +32,6 @@ import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsResponse;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
-import org.elasticsearch.action.admin.indices.settings.UpdateSettingsRequest;
-import org.elasticsearch.action.admin.indices.settings.UpdateSettingsResponse;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsRequest;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
@@ -48,8 +45,6 @@ import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.action.support.replication.ReplicationType;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.common.settings.ImmutableSettings;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.search.SearchHit;
@@ -166,12 +161,7 @@ public class Indices {
     }
 
     public boolean aliasExists(String alias) {
-        return c.admin().indices().aliasesExist(new IndicesGetAliasesRequest(alias)).actionGet().exists();
-    }
-
-    public String aliasTarget(String alias) {
-        // The ES return value of this has an awkward format: The first key of the hash is the target index. Thanks.
-        return c.admin().indices().getAliases(new IndicesGetAliasesRequest(alias)).actionGet().getAliases().keySet().iterator().next();
+        return c.admin().indices().existsAliases(new IndicesGetAliasesRequest(alias)).actionGet().exists();
     }
 
     public boolean create(String indexName) {
@@ -208,14 +198,4 @@ public class Indices {
         return b;
     }
 
-    public void setReadOnly(String index) {
-        ImmutableSettings.Builder sb = ImmutableSettings.builder();
-
-        // http://www.elasticsearch.org/guide/reference/api/admin-indices-update-settings/
-        sb.put("index.blocks.write", true); // Block writing.
-        sb.put("index.blocks.read", false); // Allow reading.
-        sb.put("index.blocks.metadata", false); // Allow getting metadata.
-
-        c.admin().indices().updateSettings(new UpdateSettingsRequest(index).settings(sb.build())).actionGet();
-    }
 }

@@ -20,26 +20,36 @@
 package org.graylog2.systemjobs;
 
 import org.graylog2.Core;
+import org.graylog2.plugin.Tools;
+import org.joda.time.DateTime;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public abstract class SystemJob {
 
+    // Known types that can be resolved in the SystemJobFactory.
+    public enum Type {
+        FIX_DEFLECTOR_DELETE_INDEX,
+        FIX_DEFLECTOR_MOVE_INDEX
+    }
+
     public abstract void execute();
     public abstract void requestCancel();
     public abstract int getProgress();
+    public abstract int maxConcurrency();
 
     public abstract boolean providesProgress();
     public abstract boolean isCancelable();
     public abstract String getDescription();
+    public abstract String getClassName();
 
-    protected Core server;
+    protected Core core;
     protected String id;
-
-    public void prepare(Core server) {
-        this.server = server;
-    }
+    protected DateTime startedAt;
 
     public String getId() {
         if (id == null) {
@@ -51,6 +61,27 @@ public abstract class SystemJob {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public void markStarted() {
+        startedAt = DateTime.now();
+    }
+
+    public DateTime getStartedAt() {
+        return startedAt;
+    }
+
+    public Map<String, Object> toMap() {
+        return new HashMap<String, Object>() {{
+            put("id", id);
+            put("name", getClassName()); // getting the concrete class, not this abstract one
+            put("description", getDescription());
+            put("started_at", Tools.getISO8601String(getStartedAt()));
+            put("percent_complete", getProgress());
+            put("provides_progress", providesProgress());
+            put("is_cancelable", isCancelable());
+            put("node_id", core.getServerId());
+        }};
     }
 
 }
