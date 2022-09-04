@@ -587,7 +587,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
 
     @Override
     public String toString() {
-        return "QuarkusClassLoader:" + name + "@" + Integer.toHexString(hashCode());
+        return "QuarkusClassLoader:" + name;
     }
 
     public static class Builder {
