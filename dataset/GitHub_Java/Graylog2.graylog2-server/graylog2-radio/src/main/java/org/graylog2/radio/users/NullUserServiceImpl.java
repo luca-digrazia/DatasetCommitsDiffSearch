@@ -95,7 +95,7 @@ public class NullUserServiceImpl implements UserService {
     }
 
     @Override
-    public long count() {
+    public long userCount() {
         return 0;
     }
 }
