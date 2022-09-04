@@ -14,9 +14,10 @@
 
 package com.google.devtools.build.lib.cmdline;
 
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.base.Throwables;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationConstant;
 import com.google.devtools.build.lib.util.Pair;
@@ -29,20 +30,15 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.ObjectStreamException;
 import java.io.Serializable;
-import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 
 /** A human-readable name for the repository. */
 @AutoCodec
 public final class RepositoryName implements Serializable {
-
   static final String DEFAULT_REPOSITORY = "";
-
-  @SerializationConstant
-  public static final RepositoryName DEFAULT = new RepositoryName(DEFAULT_REPOSITORY);
-
-  @SerializationConstant public static final RepositoryName MAIN = new RepositoryName("@");
-
+  @SerializationConstant public static final RepositoryName DEFAULT;
+  @SerializationConstant public static final RepositoryName MAIN;
   private static final Pattern VALID_REPO_NAME = Pattern.compile("@[\\w\\-.]*");
 
   /** Helper for serializing {@link RepositoryName}. */
@@ -84,21 +80,30 @@ public final class RepositoryName implements Serializable {
   }
 
   private static final LoadingCache<String, RepositoryName> repositoryNameCache =
-      Caffeine.newBuilder()
-          .weakValues()
-          .build(
-              name -> {
+      CacheBuilder.newBuilder()
+        .weakValues()
+        .build(
+            new CacheLoader<String, RepositoryName>() {
+              @Override
+              public RepositoryName load(String name) throws LabelSyntaxException {
                 String errorMessage = validate(name);
                 if (errorMessage != null) {
-                  errorMessage =
-                      "invalid repository name '"
-                          + StringUtilities.sanitizeControlChars(name)
-                          + "': "
-                          + errorMessage;
+                  errorMessage = "invalid repository name '"
+                      + StringUtilities.sanitizeControlChars(name) + "': " + errorMessage;
                   throw new LabelSyntaxException(errorMessage);
                 }
                 return new RepositoryName(StringCanonicalizer.intern(name));
-              });
+              }
+            });
+
+  static {
+    try {
+      DEFAULT = RepositoryName.create(RepositoryName.DEFAULT_REPOSITORY);
+      MAIN = RepositoryName.create("@");
+    } catch (LabelSyntaxException e) {
+      throw new IllegalStateException(e);
+    }
+  }
 
   /**
    * Makes sure that name is a valid repository name and creates a new RepositoryName using it.
@@ -107,17 +112,11 @@ public final class RepositoryName implements Serializable {
    */
   @AutoCodec.Instantiator
   public static RepositoryName create(String name) throws LabelSyntaxException {
-    if (name.isEmpty()) {
-      return DEFAULT;
-    }
-    if (name.equals("@")) {
-      return MAIN;
-    }
     try {
       return repositoryNameCache.get(name);
-    } catch (CompletionException e) {
+    } catch (ExecutionException e) {
       Throwables.propagateIfPossible(e.getCause(), LabelSyntaxException.class);
-      throw e;
+      throw new IllegalStateException("Failed to create RepositoryName from " + name, e);
     }
   }
 
@@ -126,7 +125,11 @@ public final class RepositoryName implements Serializable {
    * directory that has been created via getSourceRoot() or getPathUnderExecRoot().
    */
   public static RepositoryName createFromValidStrippedName(String name) {
-    return repositoryNameCache.get("@" + name);
+    try {
+      return repositoryNameCache.get("@" + name);
+    } catch (ExecutionException e) {
+      throw new IllegalArgumentException(e.getMessage());
+    }
   }
 
   /**
@@ -139,7 +142,7 @@ public final class RepositoryName implements Serializable {
    */
   public static Pair<RepositoryName, PathFragment> fromPathFragment(
       PathFragment path, boolean siblingRepositoryLayout) {
-    if (!path.isMultiSegment()) {
+    if (path.segmentCount() < 2) {
       return null;
     }
 
@@ -166,9 +169,11 @@ public final class RepositoryName implements Serializable {
     this.name = name;
   }
 
-  /** Performs validity checking. Returns null on success, an error message otherwise. */
+  /**
+   * Performs validity checking.  Returns null on success, an error message otherwise.
+   */
   static String validate(String name) {
-    if (name.isEmpty() || name.equals("@")) {
+    if (name.isEmpty()) {
       return null;
     }
 
@@ -236,7 +241,7 @@ public final class RepositoryName implements Serializable {
    * ({@code "@"} becomes the empty string).
    */
   public String getCanonicalForm() {
-    return isMain() ? "" : name;
+    return isMain() ? "" : getName();
   }
 
   /**

@@ -14,7 +14,9 @@
 
 package com.google.devtools.build.lib.query2.query.output;
 
+import com.google.common.hash.HashFunction;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.graph.Node;
 import com.google.devtools.build.lib.packages.Target;
@@ -57,7 +59,7 @@ class MinrankOutputFormatter extends OutputFormatter {
     if (toSave != null) {
       toSave.add(new RankAndLabel(rank, label));
     } else {
-      out.print(rank + " " + label.getDefaultCanonicalForm() + lineTerminator);
+      out.print(rank + " " + label.getCanonicalForm() + lineTerminator);
     }
   }
 
@@ -67,7 +69,8 @@ class MinrankOutputFormatter extends OutputFormatter {
       Digraph<Target> result,
       OutputStream out,
       AspectResolver aspectResolver,
-      ConditionalEdges conditionalEdges)
+      EventHandler eventHandler,
+      HashFunction hashFunction)
       throws IOException {
     PrintStream printStream = new PrintStream(out);
     // getRoots() isn't defined for cyclic graphs, so in order to handle
