@@ -1,20 +1,15 @@
 package org.graylog2;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-
-import junit.framework.Assert;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
 import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.InMemoryRepository;
+import junit.framework.Assert;
+import org.junit.Before;
+import org.junit.Test;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Unit tests for {@link Configuration} class
@@ -24,21 +19,15 @@ import com.github.joschi.jadconfig.repositories.InMemoryRepository;
 public class ConfigurationTest {
 
     Map<String, String> validProperties;
-    private File tempFile;
 
     @Before
     public void setUp() {
 
         validProperties = new HashMap<String, String>();
 
-        try {
-            tempFile = File.createTempFile("graylog", null);
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
         // Required properties
-        validProperties.put("elasticsearch_config_file", tempFile.getAbsolutePath());
+        validProperties.put("elasticsearch_url", "http://localhost:9200/");
+        validProperties.put("elasticsearch_index_name", "graylog2");
         validProperties.put("force_syslog_rdns", "false");
         validProperties.put("syslog_listen_port", "514");
         validProperties.put("syslog_protocol", "udp");
@@ -57,11 +46,6 @@ public class ConfigurationTest {
         validProperties.put("mongodb_threads_allowed_to_block_multiplier", "50");
         validProperties.put("amqp_port", "5672");
         validProperties.put("forwarder_loggly_timeout", "3");
-    }
-
-    @After
-    public void tearDown() {
-        tempFile.delete();
     }
 
     @Test(expected = ValidationException.class)
@@ -90,6 +74,25 @@ public class ConfigurationTest {
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 
         Assert.assertEquals(false, configuration.getForceSyslogRdns());
+    }
+
+    @Test
+    public void testGetElasticSearchUrl() throws RepositoryException, ValidationException {
+
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        Assert.assertEquals("http://localhost:9200/", configuration.getElasticSearchUrl());
+    }
+
+    @Test
+    public void testGetElasticSearchUrlAddsTrailingSlashIfOmittedInConfigFile() throws RepositoryException, ValidationException {
+
+        validProperties.put("elasticsearch_url", "https://example.org:80");
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        Assert.assertEquals("https://example.org:80/", configuration.getElasticSearchUrl());
     }
 
     @Test
@@ -161,7 +164,7 @@ public class ConfigurationTest {
         Assert.assertEquals(3000, configuration.getForwarderLogglyTimeout());
     }
 
-    /*@Test
+    @Test
     public void testGetAMQPSubscribedQueuesEmpty() throws RepositoryException, ValidationException {
         validProperties.put("amqp_subscribed_queues", "");
         Configuration configuration = new Configuration();
@@ -195,7 +198,7 @@ public class ConfigurationTest {
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 
         Assert.assertEquals(2, configuration.getAmqpSubscribedQueues().size());
-    }*/
+    }
 
     @Test
     public void testGetMongoDBReplicaSetServersEmpty() throws RepositoryException, ValidationException {
@@ -226,7 +229,7 @@ public class ConfigurationTest {
 
     @Test
     public void testGetMongoDBReplicaSetServers() throws RepositoryException, ValidationException {
-        validProperties.put("mongodb_replica_set", "127.0.0.1:27017,127.0.0.1:27018");
+        validProperties.put("mongodb_replica_set", "localhost:27017,localhost:27018");
 
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
