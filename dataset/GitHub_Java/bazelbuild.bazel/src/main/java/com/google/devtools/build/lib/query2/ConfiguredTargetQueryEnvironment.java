@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
-import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
 import com.google.devtools.build.lib.query2.engine.Callback;
@@ -47,7 +46,6 @@ import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
-import com.google.devtools.build.lib.query2.engine.QueryExpressionContext;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.MinDepthUniquifierImpl;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.MutableKeyExtractorBackedMapImpl;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.ThreadSafeMutableKeyExtractorBackedSetImpl;
@@ -139,8 +137,6 @@ public class ConfiguredTargetQueryEnvironment
 
   private RecursivePackageProviderBackedTargetPatternResolver resolver;
 
-  private CqueryOptions cqueryOptions;
-
   public ConfiguredTargetQueryEnvironment(
       boolean keepGoing,
       ExtendedEventHandler eventHandler,
@@ -173,21 +169,6 @@ public class ConfiguredTargetQueryEnvironment
         };
   }
 
-  public ConfiguredTargetQueryEnvironment(
-      boolean keepGoing,
-      ExtendedEventHandler eventHandler,
-      Iterable<QueryFunction> extraFunctions,
-      BuildConfiguration defaultTargetConfiguration,
-      BuildConfiguration hostConfiguration,
-      String parserPrefix,
-      PathPackageLocator pkgPath,
-      Supplier<WalkableGraph> walkableGraphSupplier,
-      CqueryOptions cqueryOptions) {
-    this(keepGoing, eventHandler, extraFunctions, defaultTargetConfiguration, hostConfiguration,
-        parserPrefix, pkgPath, walkableGraphSupplier, cqueryOptions.toSettings());
-    this.cqueryOptions = cqueryOptions;
-  }
-
   private static ImmutableList<QueryFunction> populateFunctions() {
     return new ImmutableList.Builder<QueryFunction>()
         .addAll(QueryEnvironment.DEFAULT_QUERY_FUNCTIONS)
@@ -201,22 +182,21 @@ public class ConfiguredTargetQueryEnvironment
 
   public ImmutableList<CqueryThreadsafeCallback> getDefaultOutputFormatters(
       TargetAccessor<ConfiguredTarget> accessor,
+      CqueryOptions options,
       Reporter reporter,
       SkyframeExecutor skyframeExecutor,
       BuildConfiguration hostConfiguration,
       @Nullable RuleTransitionFactory trimmingTransitionFactory,
-      PackageManager packageManager) {
-    AspectResolver aspectResolver =
-        cqueryOptions.aspectDeps.createResolver(packageManager, reporter);
+      AspectResolver resolver) {
     OutputStream out = reporter.getOutErr().getOutputStream();
     return new ImmutableList.Builder<CqueryThreadsafeCallback>()
         .add(
             new LabelAndConfigurationOutputFormatterCallback(
-                reporter, cqueryOptions, out, skyframeExecutor, accessor))
+                reporter, options, out, skyframeExecutor, accessor))
         .add(
             new TransitionsOutputFormatterCallback(
                 reporter,
-                cqueryOptions,
+                options,
                 out,
                 skyframeExecutor,
                 accessor,
@@ -224,12 +204,8 @@ public class ConfiguredTargetQueryEnvironment
                 trimmingTransitionFactory))
         .add(
             new ProtoOutputFormatterCallback(
-                reporter, cqueryOptions, out, skyframeExecutor, accessor, aspectResolver))
+                reporter, options, out, skyframeExecutor, accessor, resolver))
         .build();
-  }
-
-  public String getOutputFormat() {
-    return cqueryOptions.outputFormat;
   }
 
   @Override
@@ -456,8 +432,7 @@ public class ConfiguredTargetQueryEnvironment
   }
 
   @Override
-  public ThreadSafeMutableSet<ConfiguredTarget> getFwdDeps(
-      Iterable<ConfiguredTarget> targets, QueryExpressionContext<ConfiguredTarget> context)
+  public ThreadSafeMutableSet<ConfiguredTarget> getFwdDeps(Iterable<ConfiguredTarget> targets)
       throws InterruptedException {
     Map<SkyKey, ConfiguredTarget> targetsByKey = new HashMap<>(Iterables.size(targets));
     for (ConfiguredTarget target : targets) {
@@ -490,8 +465,7 @@ public class ConfiguredTargetQueryEnvironment
   }
 
   @Override
-  public Collection<ConfiguredTarget> getReverseDeps(
-      Iterable<ConfiguredTarget> targets, QueryExpressionContext<ConfiguredTarget> context)
+  public Collection<ConfiguredTarget> getReverseDeps(Iterable<ConfiguredTarget> targets)
       throws InterruptedException {
     Map<SkyKey, ConfiguredTarget> targetsByKey = new HashMap<>(Iterables.size(targets));
     for (ConfiguredTarget target : targets) {
@@ -607,13 +581,12 @@ public class ConfiguredTargetQueryEnvironment
     return ConfiguredTargetKey.of(target, getConfiguration(target));
   }
 
+
   @Override
   public ThreadSafeMutableSet<ConfiguredTarget> getTransitiveClosure(
-      ThreadSafeMutableSet<ConfiguredTarget> targets,
-      QueryExpressionContext<ConfiguredTarget> context)
-      throws InterruptedException {
+      ThreadSafeMutableSet<ConfiguredTarget> targets) throws InterruptedException {
     return SkyQueryUtils.getTransitiveClosure(
-        targets, targets1 -> getFwdDeps(targets1, context), createThreadSafeMutableSet());
+        targets, this::getFwdDeps, createThreadSafeMutableSet());
   }
 
   @Override
@@ -624,14 +597,10 @@ public class ConfiguredTargetQueryEnvironment
   }
 
   @Override
-  public ImmutableList<ConfiguredTarget> getNodesOnPath(
-      ConfiguredTarget from, ConfiguredTarget to, QueryExpressionContext<ConfiguredTarget> context)
+  public ImmutableList<ConfiguredTarget> getNodesOnPath(ConfiguredTarget from, ConfiguredTarget to)
       throws InterruptedException {
     return SkyQueryUtils.getNodesOnPath(
-        from,
-        to,
-        targets -> getFwdDeps(targets, context),
-        configuredTargetKeyExtractor::extractKey);
+        from, to, this::getFwdDeps, configuredTargetKeyExtractor::extractKey);
   }
 
   @Override
@@ -680,8 +649,7 @@ public class ConfiguredTargetQueryEnvironment
       QueryExpression caller,
       ThreadSafeMutableSet<ConfiguredTarget> nodes,
       boolean buildFiles,
-      boolean loads,
-      QueryExpressionContext<ConfiguredTarget> context)
+      boolean loads)
       throws QueryException, InterruptedException {
     throw new QueryException("buildfiles() doesn't make sense for the configured target graph");
   }
