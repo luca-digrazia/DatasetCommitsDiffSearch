@@ -547,8 +547,10 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
   @Override
   protected synchronized Collection<String> getDirectoryEntries(Path path) throws IOException {
     InMemoryDirectoryInfo dirInfo = getDirectory(path);
-    if (!dirInfo.isReadable()) {
-      throw Errno.EACCES.exception(path);
+    FileStatus status = stat(path, false);
+    Preconditions.checkState(status instanceof InMemoryContentInfo);
+    if (!((InMemoryContentInfo) status).isReadable()) {
+      throw new IOException("Directory is not readable");
     }
 
     Collection<String> allChildren = dirInfo.getAllChildren();
@@ -594,34 +596,32 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
 
   @Override
   protected synchronized InputStream getInputStream(Path path) throws IOException {
-    return statFile(path).getInputStream();
+    InMemoryContentInfo status = inodeStat(path, true);
+    if (status.isDirectory()) {
+      throw Errno.EISDIR.exception(path);
+    }
+    if (!path.isReadable()) {
+      throw Errno.EACCES.exception(path);
+    }
+    Preconditions.checkState(status instanceof FileInfo, status);
+    return ((FileInfo) status).getInputStream();
   }
 
   @Override
   protected synchronized ReadableByteChannel createReadableByteChannel(Path path)
       throws IOException {
-    return statFile(path).createReadableByteChannel();
-  }
-
-  @Override
-  protected synchronized byte[] getFastDigest(Path path) throws IOException {
-    return statFile(path).getFastDigest();
-  }
-
-  private FileInfo statFile(Path path) throws IOException {
-    InMemoryContentInfo status = inodeStat(path, /*followSymlinks=*/ true);
+    InMemoryContentInfo status = inodeStat(path, true);
     if (status.isDirectory()) {
       throw Errno.EISDIR.exception(path);
     }
-    if (!status.isReadable()) {
+    if (!path.isReadable()) {
       throw Errno.EACCES.exception(path);
     }
     Preconditions.checkState(status instanceof FileInfo, status);
-    return (FileInfo) status;
+    return ((FileInfo) status).createReadableByteChannel();
   }
 
   @Override
-  @Nullable
   public synchronized byte[] getxattr(Path path, String name, boolean followSymlinks)
       throws IOException {
     InMemoryContentInfo status = inodeStat(path, followSymlinks);
@@ -631,11 +631,21 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
     if (!path.isReadable()) {
       throw Errno.EACCES.exception(path);
     }
-    if (!followSymlinks && status.isSymbolicLink()) {
-      return null; // xattr on symlinks not supported.
-    }
     Preconditions.checkState(status instanceof FileInfo, status);
     return ((FileInfo) status).getxattr(name);
+  }
+
+  @Override
+  protected synchronized byte[] getFastDigest(Path path) throws IOException {
+    InMemoryContentInfo status = inodeStat(path, true);
+    if (status.isDirectory()) {
+      throw Errno.EISDIR.exception(path);
+    }
+    if (!path.isReadable()) {
+      throw Errno.EACCES.exception(path);
+    }
+    Preconditions.checkState(status instanceof FileInfo, status);
+    return ((FileInfo) status).getFastDigest();
   }
 
   /** Creates a new file at the given path and returns its inode. */

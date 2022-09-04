@@ -13,9 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import com.android.resources.ResourceFolderType;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -23,12 +23,11 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.packages.RuleErrorConsumer;
+import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -45,22 +44,34 @@ import javax.annotation.Nullable;
 public class AndroidResources {
   private static final String DEFAULT_RESOURCES_ATTR = "resource_files";
 
-  public static final String[] RESOURCES_ATTRIBUTES =
-      new String[] {
-        "manifest",
-        DEFAULT_RESOURCES_ATTR,
-        "local_resource_files",
-        "assets",
-        "assets_dir",
-        "inline_constants",
-        "exports_manifest"
-      };
+  public static final ImmutableList<String> RESOURCES_ATTRIBUTES =
+      ImmutableList.of(
+          "manifest",
+          DEFAULT_RESOURCES_ATTR,
+          "local_resource_files",
+          "assets",
+          "assets_dir",
+          "inline_constants",
+          "exports_manifest");
 
   /** Set of allowable android directories prefixes. */
+  // Based on com.android.resources.ResourceFolderType
   public static final ImmutableSet<String> RESOURCE_DIRECTORY_TYPES =
-      Arrays.stream(ResourceFolderType.values())
-          .map(ResourceFolderType::getName)
-          .collect(ImmutableSet.toImmutableSet());
+      ImmutableSet.of(
+          "anim",
+          "animator",
+          "color",
+          "drawable",
+          "font",
+          "interpolator",
+          "layout",
+          "menu",
+          "mipmap",
+          "navigation",
+          "raw",
+          "transition",
+          "values",
+          "xml");
 
   public static final String INCORRECT_RESOURCE_LAYOUT_MESSAGE =
       String.format(
@@ -100,13 +111,13 @@ public class AndroidResources {
   }
 
   /**
-   * Validates that there are no targets with resources in the srcs, as they
-   * should not be used with the Android data logic.
+   * Validates that there are no targets with resources in the srcs, as they should not be used with
+   * the Android data logic.
    */
   private static void validateNoAndroidResourcesInSources(RuleContext ruleContext)
       throws RuleErrorException {
     Iterable<AndroidResourcesInfo> resources =
-        ruleContext.getPrerequisites("srcs", Mode.TARGET, AndroidResourcesInfo.PROVIDER);
+        ruleContext.getPrerequisites("srcs", AndroidResourcesInfo.PROVIDER);
     for (AndroidResourcesInfo info : resources) {
       ruleContext.throwWithAttributeError(
           "srcs",
@@ -115,7 +126,7 @@ public class AndroidResources {
   }
 
   private static void validateManifest(RuleContext ruleContext) throws RuleErrorException {
-    if (ruleContext.getPrerequisiteArtifact("manifest", Mode.TARGET) == null) {
+    if (ruleContext.getPrerequisiteArtifact("manifest") == null) {
       ruleContext.throwWithAttributeError(
           "manifest", "manifest is required when resource_files or assets are defined.");
     }
@@ -123,15 +134,22 @@ public class AndroidResources {
 
   public static AndroidResources from(RuleContext ruleContext, String resourcesAttr)
       throws RuleErrorException {
-    if (!hasLocalResourcesAttributes(ruleContext)) {
+    if (!hasLocalResourcesAttributes(ruleContext.attributes())) {
       return empty();
     }
 
-    ImmutableList<Artifact> resources =
-        getResources(
-            ruleContext.getPrerequisites(resourcesAttr, Mode.TARGET, FileProvider.class));
+    return from(
+        ruleContext,
+        ruleContext.getPrerequisites(resourcesAttr, FileProvider.class),
+        resourcesAttr);
+  }
 
-    return forResources(ruleContext, resources, resourcesAttr);
+  public static AndroidResources from(
+      RuleErrorConsumer errorConsumer,
+      Iterable<FileProvider> resourcesTargets,
+      String resourcesAttr)
+      throws RuleErrorException {
+    return forResources(errorConsumer, getResources(resourcesTargets), resourcesAttr);
   }
 
   /** Returns an {@link AndroidResources} for a list of resource artifacts. */
@@ -148,8 +166,8 @@ public class AndroidResources {
    * target's resource attribute ("resource_files" in general, but local_resource_files for
    * android_test), not any other attributes.
    */
-  private static boolean hasLocalResourcesAttributes(RuleContext ruleContext) {
-    return ruleContext.attributes().has("assets") || ruleContext.attributes().has("resource_files");
+  private static boolean hasLocalResourcesAttributes(AttributeMap attrs) {
+    return attrs.has("assets") || attrs.has("resource_files");
   }
 
   static AndroidResources empty() {
@@ -202,27 +220,24 @@ public class AndroidResources {
       throws RuleErrorException {
     PathFragment resourceDir = findResourceDir(file);
     if (resourceDir == null) {
-      ruleErrorConsumer.attributeError(
+      throw ruleErrorConsumer.throwWithAttributeError(
           resourcesAttr,
           String.format(INCORRECT_RESOURCE_LAYOUT_MESSAGE, file.getRootRelativePath()));
-      throw new RuleErrorException();
     }
 
     if (lastResourceDir != null && !resourceDir.equals(lastResourceDir)) {
-      ruleErrorConsumer.attributeError(
+      throw ruleErrorConsumer.throwWithAttributeError(
           resourcesAttr,
           String.format(
               "'%s' (generated by '%s') is not in the same directory '%s' (derived from %s)."
                   + " All resources must share a common directory.",
               file.getRootRelativePath(),
-              file.getArtifactOwner().getLabel(),
+              file.getOwnerLabel(),
               lastResourceDir,
               lastFile.getRootRelativePath()));
-      throw new RuleErrorException();
     }
 
-    PathFragment packageFragment =
-        file.getArtifactOwner().getLabel().getPackageIdentifier().getSourceRoot();
+    PathFragment packageFragment = file.getOwnerLabel().getPackageIdentifier().getSourceRoot();
     PathFragment packageRelativePath = file.getRootRelativePath().relativeTo(packageFragment);
     try {
       PathFragment path = file.getExecPath();
@@ -231,15 +246,14 @@ public class AndroidResources {
               0,
               path.segmentCount() - segmentCountAfterAncestor(resourceDir, packageRelativePath)));
     } catch (IllegalArgumentException e) {
-      ruleErrorConsumer.attributeError(
+      throw ruleErrorConsumer.throwWithAttributeError(
           resourcesAttr,
           String.format(
               "'%s' (generated by '%s') is not under the directory '%s' (derived from %s).",
               file.getRootRelativePath(),
-              file.getArtifactOwner().getLabel(),
+              file.getOwnerLabel(),
               packageRelativePath,
               file.getRootRelativePath()));
-      throw new RuleErrorException();
     }
     return resourceDir;
   }
@@ -252,7 +266,7 @@ public class AndroidResources {
    * directory.
    */
   public static PathFragment findResourceDir(Artifact artifact) {
-    PathFragment fragment = artifact.getPath().asFragment();
+    PathFragment fragment = artifact.getExecPath();
     int segmentCount = fragment.segmentCount();
     if (segmentCount < 3) {
       return null;
@@ -278,7 +292,7 @@ public class AndroidResources {
   private static int segmentCountAfterAncestor(PathFragment ancestor, PathFragment path) {
     String cutAtSegment = ancestor.getSegment(ancestor.segmentCount() - 1);
     int index = -1;
-    List<String> segments = path.getSegments();
+    List<String> segments = path.splitToListOfSegments();
     for (int i = segments.size() - 1; i >= 0; i--) {
       if (segments.get(i).equals(cutAtSegment)) {
         index = i;
@@ -308,7 +322,7 @@ public class AndroidResources {
   private static ImmutableList<Artifact> getResources(Iterable<FileProvider> targets) {
     ImmutableList.Builder<Artifact> builder = ImmutableList.builder();
     for (FileProvider target : targets) {
-      builder.addAll(target.getFilesToBuild());
+      builder.addAll(target.getFilesToBuild().toList());
     }
 
     return builder.build();
@@ -351,24 +365,28 @@ public class AndroidResources {
    * Filters this object, assuming it contains the resources of the current target.
    *
    * <p>If this object contains the resources from a dependency of this target, use {@link
-   * #maybeFilter(ResourceFilter, boolean)} instead.
+   * #maybeFilter(RuleErrorConsumer, ResourceFilter, boolean)} instead.
    *
    * @return a filtered {@link AndroidResources} object. If no filtering was done, this object will
    *     be returned.
    */
-  public AndroidResources filterLocalResources(ResourceFilter resourceFilter) {
-    return maybeFilter(resourceFilter, /* isDependency = */ false).orElse(this);
+  public AndroidResources filterLocalResources(
+      RuleErrorConsumer errorConsumer, ResourceFilter resourceFilter) throws RuleErrorException {
+    Optional<? extends AndroidResources> filtered =
+        maybeFilter(errorConsumer, resourceFilter, /* isDependency = */ false);
+    return filtered.isPresent() ? filtered.get() : this;
   }
 
   /**
    * Filters this object.
    *
-   * @return an optional wrapping a = new {@link AndroidResources} with resources filtered by the
+   * @return an optional wrapping a new {@link AndroidResources} with resources filtered by the
    *     passed {@link ResourceFilter}, or {@link Optional#empty()} if no resources should be
    *     filtered.
    */
-  public Optional<AndroidResources> maybeFilter(
-      ResourceFilter resourceFilter, boolean isDependency) {
+  public Optional<? extends AndroidResources> maybeFilter(
+      RuleErrorConsumer errorConsumer, ResourceFilter resourceFilter, boolean isDependency)
+      throws RuleErrorException {
     Optional<ImmutableList<Artifact>> filtered =
         resourceFilter.maybeFilter(resources, /* isDependency= */ isDependency);
 
@@ -377,24 +395,48 @@ public class AndroidResources {
       return Optional.empty();
     }
 
-    // If the resources were filtered, also filter the resource roots
-    ImmutableList.Builder<PathFragment> filteredResourcesRootsBuilder = ImmutableList.builder();
-    for (PathFragment resourceRoot : resourceRoots) {
-      for (Artifact resource : filtered.get()) {
-        if (resource.getRootRelativePath().startsWith(resourceRoot)) {
-          filteredResourcesRootsBuilder.add(resourceRoot);
-          break;
-        }
-      }
-    }
-
-    return Optional.of(new AndroidResources(filtered.get(), filteredResourcesRootsBuilder.build()));
+    return Optional.of(
+        new AndroidResources(
+            filtered.get(),
+            getResourceRoots(errorConsumer, filtered.get(), DEFAULT_RESOURCES_ATTR)));
   }
 
+  /** Parses these resources. */
   public ParsedAndroidResources parse(
+      AndroidDataContext dataContext,
+      StampedAndroidManifest manifest,
+      DataBindingContext dataBindingContext)
+      throws InterruptedException {
+    return ParsedAndroidResources.parseFrom(dataContext, this, manifest, dataBindingContext);
+  }
+
+  /**
+   * Performs the complete resource processing pipeline - parsing, merging, and validation - on
+   * these resources.
+   */
+  public ValidatedAndroidResources process(
       RuleContext ruleContext,
-      StampedAndroidManifest manifest) throws InterruptedException, RuleErrorException {
-    return ParsedAndroidResources.parseFrom(ruleContext, this, manifest);
+      AndroidDataContext dataContext,
+      StampedAndroidManifest manifest,
+      DataBindingContext dataBindingContext,
+      boolean neverlink)
+      throws RuleErrorException, InterruptedException {
+    return process(
+        dataContext,
+        manifest,
+        ResourceDependencies.fromRuleDeps(ruleContext, neverlink),
+        dataBindingContext);
+  }
+
+  ValidatedAndroidResources process(
+      AndroidDataContext dataContext,
+      StampedAndroidManifest manifest,
+      ResourceDependencies resourceDeps,
+      DataBindingContext dataBindingContext)
+      throws InterruptedException {
+    return parse(dataContext, manifest, dataBindingContext)
+        .merge(dataContext, resourceDeps)
+        .validate(dataContext);
   }
 
   @Override
@@ -410,5 +452,13 @@ public class AndroidResources {
   @Override
   public int hashCode() {
     return Objects.hash(resources, resourceRoots);
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+        .add("resources", resources)
+        .add("resourceRoots", resourceRoots)
+        .toString();
   }
 }

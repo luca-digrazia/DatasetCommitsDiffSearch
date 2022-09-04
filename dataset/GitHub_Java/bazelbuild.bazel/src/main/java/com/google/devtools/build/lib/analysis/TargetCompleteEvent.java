@@ -20,7 +20,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -114,7 +113,7 @@ public final class TargetCompleteEvent
   private final NestedSet<Cause> rootCauses;
   private final ImmutableList<BuildEventId> postedAfter;
   private final CompletionContext completionContext;
-  private final ImmutableMap<String, ArtifactsInOutputGroup> outputs;
+  private final NestedSet<ArtifactsInOutputGroup> outputs;
   private final NestedSet<Artifact> baselineCoverageArtifacts;
   private final Label aliasLabel;
   private final boolean isTest;
@@ -130,7 +129,7 @@ public final class TargetCompleteEvent
       ConfiguredTargetAndData targetAndData,
       NestedSet<Cause> rootCauses,
       CompletionContext completionContext,
-      ImmutableMap<String, ArtifactsInOutputGroup> outputs,
+      NestedSet<ArtifactsInOutputGroup> outputs,
       boolean isTest) {
     this.rootCauses =
         (rootCauses == null) ? NestedSetBuilder.emptySet(Order.STABLE_ORDER) : rootCauses;
@@ -202,7 +201,7 @@ public final class TargetCompleteEvent
   public static TargetCompleteEvent successfulBuild(
       ConfiguredTargetAndData ct,
       CompletionContext completionContext,
-      ImmutableMap<String, ArtifactsInOutputGroup> outputs) {
+      NestedSet<ArtifactsInOutputGroup> outputs) {
     return new TargetCompleteEvent(ct, null, completionContext, outputs, false);
   }
 
@@ -210,7 +209,7 @@ public final class TargetCompleteEvent
   public static TargetCompleteEvent successfulBuildSchedulingTest(
       ConfiguredTargetAndData ct,
       CompletionContext completionContext,
-      ImmutableMap<String, ArtifactsInOutputGroup> outputs) {
+      NestedSet<ArtifactsInOutputGroup> outputs) {
     return new TargetCompleteEvent(ct, null, completionContext, outputs, true);
   }
 
@@ -221,7 +220,7 @@ public final class TargetCompleteEvent
       ConfiguredTargetAndData ct,
       CompletionContext completionContext,
       NestedSet<Cause> rootCauses,
-      ImmutableMap<String, ArtifactsInOutputGroup> outputs) {
+      NestedSet<ArtifactsInOutputGroup> outputs) {
     Preconditions.checkArgument(!rootCauses.isEmpty());
     return new TargetCompleteEvent(ct, rootCauses, completionContext, outputs, false);
   }
@@ -251,8 +250,8 @@ public final class TargetCompleteEvent
 
   public Iterable<Artifact> getLegacyFilteredImportantArtifacts() {
     // TODO(ulfjack): This duplicates code in ArtifactsToBuild.
-    NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
-    for (ArtifactsInOutputGroup artifactsInOutputGroup : outputs.values()) {
+    NestedSetBuilder<Artifact> builder = new NestedSetBuilder<>(outputs.getOrder());
+    for (ArtifactsInOutputGroup artifactsInOutputGroup : outputs.toList()) {
       if (artifactsInOutputGroup.areImportant()) {
         builder.addTransitive(artifactsInOutputGroup.getArtifacts());
       }
@@ -362,7 +361,7 @@ public final class TargetCompleteEvent
   @Override
   public ImmutableList<LocalFile> referencedLocalFiles() {
     ImmutableList.Builder<LocalFile> builder = ImmutableList.builder();
-    for (ArtifactsInOutputGroup group : outputs.values()) {
+    for (ArtifactsInOutputGroup group : outputs.toList()) {
       if (group.areImportant()) {
         completionContext.visitArtifacts(
             filterFilesets(group.getArtifacts().toList()),
@@ -447,7 +446,7 @@ public final class TargetCompleteEvent
   @Override
   public ReportedArtifacts reportedArtifacts() {
     ImmutableSet.Builder<NestedSet<Artifact>> builder = ImmutableSet.builder();
-    for (ArtifactsInOutputGroup artifactsInGroup : outputs.values()) {
+    for (ArtifactsInOutputGroup artifactsInGroup : outputs.toList()) {
       if (artifactsInGroup.areImportant()) {
         builder.add(artifactsInGroup.getArtifacts());
       }
@@ -469,17 +468,15 @@ public final class TargetCompleteEvent
 
   private Iterable<OutputGroup> getOutputFilesByGroup(ArtifactGroupNamer namer) {
     ImmutableList.Builder<OutputGroup> groups = ImmutableList.builder();
-    outputs.forEach(
-        (outputGroup, artifactsInOutputGroup) -> {
-          if (!artifactsInOutputGroup.areImportant()) {
-            return;
-          }
-          groups.add(
-              OutputGroup.newBuilder()
-                  .setName(outputGroup)
-                  .addFileSets(namer.apply(artifactsInOutputGroup.getArtifacts().toNode()))
-                  .build());
-        });
+    for (ArtifactsInOutputGroup artifactsInOutputGroup : outputs.toList()) {
+      if (!artifactsInOutputGroup.areImportant()) {
+        continue;
+      }
+      OutputGroup.Builder groupBuilder = OutputGroup.newBuilder();
+      groupBuilder.setName(artifactsInOutputGroup.getOutputGroup());
+      groupBuilder.addFileSets(namer.apply(artifactsInOutputGroup.getArtifacts().toNode()));
+      groups.add(groupBuilder.build());
+    }
     if (baselineCoverageArtifacts != null) {
       groups.add(
           OutputGroup.newBuilder()

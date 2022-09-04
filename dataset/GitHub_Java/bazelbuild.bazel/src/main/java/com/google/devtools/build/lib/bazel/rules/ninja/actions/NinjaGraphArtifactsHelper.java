@@ -16,18 +16,17 @@ package com.google.devtools.build.lib.bazel.rules.ninja.actions;
 
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.DerivedArtifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.GenericParsingException;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
-import java.util.List;
-import java.util.SortedMap;
 
 /**
  * Helper class to create artifacts for {@link NinjaAction} to be used from {@link NinjaGraphRule}.
@@ -40,97 +39,111 @@ import java.util.SortedMap;
  */
 class NinjaGraphArtifactsHelper {
   private final RuleContext ruleContext;
-  private final List<PathFragment> pathsToBuild;
-  private final Path outputRootInSources;
   private final PathFragment outputRootPath;
   private final PathFragment workingDirectory;
   private final ArtifactRoot derivedOutputRoot;
+  private final Root sourceRoot;
 
-  private final ImmutableSortedMap<PathFragment, Artifact> depsNameToArtifact;
-  private final ImmutableSortedMap<PathFragment, Artifact> srcsMap;
-  private final SortedMap<PathFragment, Artifact> outputsMap;
+  // Artifacts that should be symlinked directly from the source tree into the execroot.
+  private final ImmutableSortedMap<PathFragment, Artifact> symlinkPathToArtifact;
+
+  // Symlink output artifacts created by Ninja actions during the build.
+  private final ImmutableSet<PathFragment> symlinkOutputs;
 
   /**
    * Constructor
    *
    * @param ruleContext parent NinjaGraphRule rule context
-   * @param sourceRoot the source root, under which the main Ninja file resides.
    * @param outputRootPath name of output directory for Ninja actions under execroot
    * @param workingDirectory relative path under execroot, the root for interpreting all paths in
    *     Ninja file
-   * @param srcsMap mapping between the path fragment and artifact for the files passed in 'srcs'
-   *     attribute
-   * @param depsNameToArtifact mapping between the path fragment in the Ninja file and prebuilt
-   * @param pathsToBuild list of paths to files required in output groups
+   * @param symlinkPathToArtifact mapping of paths to artifacts for input symlinks under output_root
+   * @param symlinkOutputs list of output paths for which symlink artifacts should be created, paths
+   *     are relative to the output_root.
    */
   NinjaGraphArtifactsHelper(
       RuleContext ruleContext,
-      Root sourceRoot,
       PathFragment outputRootPath,
       PathFragment workingDirectory,
-      ImmutableSortedMap<PathFragment, Artifact> srcsMap,
-      ImmutableSortedMap<PathFragment, Artifact> depsNameToArtifact,
-      List<PathFragment> pathsToBuild) {
+      ImmutableSortedMap<PathFragment, Artifact> symlinkPathToArtifact,
+      ImmutableSet<PathFragment> symlinkOutputs) {
     this.ruleContext = ruleContext;
-    this.pathsToBuild = pathsToBuild;
-    this.outputRootInSources =
-        Preconditions.checkNotNull(sourceRoot.asPath()).getRelative(outputRootPath);
     this.outputRootPath = outputRootPath;
     this.workingDirectory = workingDirectory;
-    this.outputsMap = Maps.newTreeMap();
-    this.srcsMap = srcsMap;
-    this.depsNameToArtifact = depsNameToArtifact;
+    this.symlinkPathToArtifact = symlinkPathToArtifact;
+    this.symlinkOutputs = symlinkOutputs;
     Path execRoot =
         Preconditions.checkNotNull(ruleContext.getConfiguration())
             .getDirectories()
             .getExecRoot(ruleContext.getWorkspaceName());
-    this.derivedOutputRoot = ArtifactRoot.asDerivedRoot(execRoot, outputRootPath);
-  }
-
-  PathFragment createAbsolutePathUnderOutputRoot(PathFragment pathUnderOutputRoot) {
-    return outputRootInSources.getRelative(pathUnderOutputRoot).asFragment();
+    this.derivedOutputRoot = ArtifactRoot.asDerivedRoot(execRoot, RootType.Output, outputRootPath);
+    this.sourceRoot = ruleContext.getRule().getPackage().getSourceRoot().get();
   }
 
   DerivedArtifact createOutputArtifact(PathFragment pathRelativeToWorkingDirectory)
       throws GenericParsingException {
-    PathFragment pathRelativeToWorkspaceRoot =
-        workingDirectory.getRelative(pathRelativeToWorkingDirectory);
-    if (!pathRelativeToWorkspaceRoot.startsWith(outputRootPath)) {
+    PathFragment execPath = workingDirectory.getRelative(pathRelativeToWorkingDirectory);
+
+    if (!execPath.startsWith(outputRootPath)) {
       throw new GenericParsingException(
           String.format(
               "Ninja actions are allowed to create outputs only under output_root,"
                   + " path '%s' is not allowed.",
               pathRelativeToWorkingDirectory));
     }
-    DerivedArtifact derivedArtifact =
-        ruleContext.getDerivedArtifact(
-            pathRelativeToWorkspaceRoot.relativeTo(outputRootPath), derivedOutputRoot);
-    if (pathsToBuild.contains(pathRelativeToWorkingDirectory)) {
-      outputsMap.put(pathRelativeToWorkingDirectory, derivedArtifact);
+    // If the path was declared as output symlink, create a symlink artifact.
+    // symlink_outputs are always declared as relative to working directory.
+    if (symlinkOutputs.contains(pathRelativeToWorkingDirectory)) {
+      return ruleContext
+          .getAnalysisEnvironment()
+          .getSymlinkArtifact(execPath.relativeTo(outputRootPath), derivedOutputRoot);
     }
-    return derivedArtifact;
+    return ruleContext.getDerivedArtifact(execPath.relativeTo(outputRootPath), derivedOutputRoot);
+  }
+
+  ArtifactRoot getDerivedOutputRoot() {
+    return derivedOutputRoot;
   }
 
   Artifact getInputArtifact(PathFragment pathRelativeToWorkingDirectory)
       throws GenericParsingException {
-    Preconditions.checkNotNull(srcsMap);
-    PathFragment pathRelativeToWorkspaceRoot =
-        workingDirectory.getRelative(pathRelativeToWorkingDirectory);
-    Artifact asInput = srcsMap.get(pathRelativeToWorkspaceRoot);
-    Artifact depsMappingArtifact = depsNameToArtifact.get(pathRelativeToWorkingDirectory);
-    if (asInput != null && depsMappingArtifact != null) {
+    if (symlinkPathToArtifact.containsKey(pathRelativeToWorkingDirectory)) {
+      return symlinkPathToArtifact.get(pathRelativeToWorkingDirectory);
+    }
+
+    PathFragment execPath = workingDirectory.getRelative(pathRelativeToWorkingDirectory);
+    if (execPath.startsWith(outputRootPath)) {
+      // This is in the output root, so it's an output artifact created from another Ninja action,
+      // not a source artifact. This can be a regular DerivedArtifact or symlink SpecialArtifact,
+      // depending on the set of symlinkOutputs threaded from Ninja.
+      return createOutputArtifact(pathRelativeToWorkingDirectory);
+    }
+
+    if (!execPath.startsWith(ruleContext.getPackageDirectory())) {
       throw new GenericParsingException(
           String.format(
-              "Source file '%s' is passed both in 'srcs' " + "and 'deps_mapping' attributes.",
-              pathRelativeToWorkingDirectory));
+              "Source artifact '%s' is not under the package directory '%s' of ninja_build rule",
+              execPath, ruleContext.getPackageDirectory()));
     }
-    if (asInput != null) {
-      return asInput;
-    }
-    if (depsMappingArtifact != null) {
-      return depsMappingArtifact;
-    }
-    return createOutputArtifact(pathRelativeToWorkingDirectory);
+
+    // Not a derived artifact. Create a corresponding source artifact. This isn't really great
+    // because we have no guarantee that the artifact is not under a different package which
+    // invalidates the guarantee of "bazel query" that the dependencies reported for a target are a
+    // superset of all possible targets that are needed to build it, worse yet, there isn't even a
+    // guarantee that there isn't a package on a different package path in between.
+    //
+    // For example, if the ninja_build rule is in a/BUILD and has a file a/b/c, it's possible that
+    // there is a BUILD file a/b/BUILD and thus the source file a/b/c is created from the package
+    // //a even though package //a/b exists (violating the above "bazel query" invariant) and it can
+    // be that a/b/BUILD is on a different package path entry (is not correct because the other
+    // package path entry can contain a *different* source file whose execpath is a/b/c)
+    //
+    // TODO(lberki): Check whether there is a package in between from another package path entry.
+    // We probably can't prohibit packages in between, though. Schade.
+    return ruleContext
+        .getAnalysisEnvironment()
+        .getSourceArtifactForNinjaBuild(
+            execPath, ruleContext.getRule().getPackage().getSourceRoot().get());
   }
 
   public PathFragment getOutputRootPath() {
@@ -141,7 +154,7 @@ class NinjaGraphArtifactsHelper {
     return workingDirectory;
   }
 
-  public ImmutableSortedMap<PathFragment, Artifact> getOutputsMap() {
-    return ImmutableSortedMap.copyOf(outputsMap);
+  public Root getSourceRoot() {
+    return sourceRoot;
   }
 }

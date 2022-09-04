@@ -88,7 +88,6 @@ import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.lib.vfs.UnixGlob;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.build.skyframe.AbstractSkyFunctionEnvironment;
 import com.google.devtools.build.skyframe.BuildDriver;
@@ -177,8 +176,7 @@ public final class ActionsTestUtil {
             : ActionInputHelper.actionGraphArtifactExpander(actionGraph),
         /*actionFileSystem=*/ null,
         /*skyframeDepsResult=*/ null,
-        NestedSetExpander.DEFAULT,
-        UnixGlob.DEFAULT_SYSCALLS);
+        NestedSetExpander.DEFAULT);
   }
 
   public static ActionExecutionContext createContext(ExtendedEventHandler eventHandler) {
@@ -198,8 +196,7 @@ public final class ActionsTestUtil {
         (artifact, output) -> {},
         /*actionFileSystem=*/ null,
         /*skyframeDepsResult=*/ null,
-        NestedSetExpander.DEFAULT,
-        UnixGlob.DEFAULT_SYSCALLS);
+        NestedSetExpander.DEFAULT);
   }
 
   public static ActionExecutionContext createContextForInputDiscovery(
@@ -224,8 +221,7 @@ public final class ActionsTestUtil {
         ImmutableMap.of(),
         new BlockingSkyFunctionEnvironment(buildDriver, eventHandler),
         /*actionFileSystem=*/ null,
-        nestedSetExpander,
-        UnixGlob.DEFAULT_SYSCALLS);
+        nestedSetExpander);
   }
 
   public static Artifact createArtifact(ArtifactRoot root, Path path) {
