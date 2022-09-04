@@ -17,15 +17,12 @@ package com.google.devtools.build.lib.rules.cpp;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -63,16 +60,10 @@ public class CppLinkstampCompileHelperTest extends BuildViewTestCase {
     CppCompileAction linkstampCompileAction =
         (CppCompileAction) getGeneratingAction(compiledLinkstamp);
 
-    CcToolchainProvider ccToolchainProvider =
-        (CcToolchainProvider)
-            getConfiguredTarget(
-                    ruleClassProvider.getToolsRepository() + "//tools/cpp:current_cc_toolchain")
-                .get(ToolchainInfo.PROVIDER);
-
     List<String> arguments = linkstampCompileAction.getArguments();
     assertThatArgumentsAreValid(
         arguments,
-        ccToolchainProvider.getToolchainIdentifier(),
+        getConfiguration(target).getFragment(CppConfiguration.class).toString(),
         target.getLabel().getCanonicalForm(),
         executable.getFilename());
   }
@@ -123,16 +114,11 @@ public class CppLinkstampCompileHelperTest extends BuildViewTestCase {
 
     CppCompileAction linkstampCompileAction =
         (CppCompileAction) getGeneratingAction(compiledLinkstamp);
-    CcToolchainProvider ccToolchainProvider =
-        (CcToolchainProvider)
-            getConfiguredTarget(
-                    ruleClassProvider.getToolsRepository() + "//tools/cpp:current_cc_toolchain")
-                .get(ToolchainInfo.PROVIDER);
 
     List<String> arguments = linkstampCompileAction.getArguments();
     assertThatArgumentsAreValid(
         arguments,
-        ccToolchainProvider.getToolchainIdentifier(),
+        getConfiguration(target).getFragment(CppConfiguration.class).toString(),
         target.getLabel().getCanonicalForm(),
         executable.getFilename());
   }
@@ -217,12 +203,7 @@ public class CppLinkstampCompileHelperTest extends BuildViewTestCase {
     Artifact executable = getExecutable(target);
     CcToolchainProvider toolchain =
         CppHelper.getToolchainUsingDefaultCcToolchainAttribute(getRuleContext(target));
-    FeatureConfiguration featureConfiguration =
-        CcCommon.configureFeaturesOrThrowEvalException(
-            /* requestedFeatures= */ ImmutableSet.of(),
-            /* unsupportedFeatures= */ ImmutableSet.of(),
-            toolchain);
-    boolean usePic = CppHelper.usePicForBinaries(toolchain, featureConfiguration);
+    boolean usePic = CppHelper.usePicForBinaries(getRuleContext(target), toolchain);
 
     CppLinkAction generatingAction = (CppLinkAction) getGeneratingAction(executable);
 
