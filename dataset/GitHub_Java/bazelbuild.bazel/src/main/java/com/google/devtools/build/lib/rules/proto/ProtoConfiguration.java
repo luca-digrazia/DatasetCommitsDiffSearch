@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.Option;
 import java.util.List;
 
@@ -111,32 +110,6 @@ public class ProtoConfiguration extends Fragment {
     )
     public StrictDepsMode strictProtoDeps;
 
-    @Option(
-        name = "cc_proto_library_header_suffixes",
-        defaultValue = ".pb.h",
-        category = "semantics",
-        help = "Sets the prefixes of header files that a cc_proto_library creates.",
-        converter = Converters.CommaSeparatedOptionListConverter.class
-    )
-    public List<String> ccProtoLibraryHeaderSuffixes;
-
-    @Option(
-        name = "cc_proto_library_source_suffixes",
-        defaultValue = ".pb.cc",
-        category = "semantics",
-        help = "Sets the prefixes of source files that a cc_proto_library creates.",
-        converter = Converters.CommaSeparatedOptionListConverter.class
-    )
-    public List<String> ccProtoLibrarySourceSuffixes;
-
-    @Option(
-      name = "reuseJavaCompileActionsFromProtoLibrary",
-      defaultValue = "true",
-      category = "experimental",
-      help = "ignored"
-    )
-    public boolean reuseJavaCompileActionsFromProtoLibrary;
-
     @Override
     public FragmentOptions getHost(boolean fallback) {
       Options host = (Options) super.getHost(fallback);
@@ -148,8 +121,6 @@ public class ProtoConfiguration extends Fragment {
       host.protoToolchainForJavaLite = protoToolchainForJavaLite;
       host.protoToolchainForCc = protoToolchainForCc;
       host.strictProtoDeps = strictProtoDeps;
-      host.ccProtoLibraryHeaderSuffixes = ccProtoLibraryHeaderSuffixes;
-      host.ccProtoLibrarySourceSuffixes = ccProtoLibrarySourceSuffixes;
       return host;
     }
   }
@@ -175,16 +146,22 @@ public class ProtoConfiguration extends Fragment {
     }
   }
 
+  private final boolean experimentalProtoExtraActions;
   private final ImmutableList<String> protocOpts;
-  private final ImmutableList<String> ccProtoLibraryHeaderSuffixes;
-  private final ImmutableList<String> ccProtoLibrarySourceSuffixes;
-  private final Options options;
+  private final Label protoCompiler;
+  private final Label protoToolchainForJava;
+  private final Label protoToolchainForJavaLite;
+  private final Label protoToolchainForCc;
+  private final StrictDepsMode strictProtoDeps;
 
   public ProtoConfiguration(Options options) {
+    this.experimentalProtoExtraActions = options.experimentalProtoExtraActions;
     this.protocOpts = ImmutableList.copyOf(options.protocOpts);
-    this.ccProtoLibraryHeaderSuffixes = ImmutableList.copyOf(options.ccProtoLibraryHeaderSuffixes);
-    this.ccProtoLibrarySourceSuffixes = ImmutableList.copyOf(options.ccProtoLibrarySourceSuffixes);
-    this.options = options;
+    this.protoCompiler = options.protoCompiler;
+    this.protoToolchainForJava = options.protoToolchainForJava;
+    this.protoToolchainForJavaLite = options.protoToolchainForJavaLite;
+    this.protoToolchainForCc = options.protoToolchainForCc;
+    this.strictProtoDeps = options.strictProtoDeps;
   }
 
   public ImmutableList<String> protocOpts() {
@@ -197,34 +174,26 @@ public class ProtoConfiguration extends Fragment {
    * proto_library target are run.
    */
   public boolean runExperimentalProtoExtraActions() {
-    return options.experimentalProtoExtraActions;
+    return experimentalProtoExtraActions;
   }
 
   public Label protoCompiler() {
-    return options.protoCompiler;
+    return protoCompiler;
   }
 
   public Label protoToolchainForJava() {
-    return options.protoToolchainForJava;
+    return protoToolchainForJava;
   }
 
   public Label protoToolchainForJavaLite() {
-    return options.protoToolchainForJavaLite;
+    return protoToolchainForJavaLite;
   }
 
   public Label protoToolchainForCc() {
-    return options.protoToolchainForCc;
+    return protoToolchainForCc;
   }
 
   public StrictDepsMode strictProtoDeps() {
-    return options.strictProtoDeps;
-  }
-
-  public List<String> ccProtoLibraryHeaderSuffixes() {
-    return ccProtoLibraryHeaderSuffixes;
-  }
-
-  public List<String> ccProtoLibrarySourceSuffixes() {
-    return ccProtoLibrarySourceSuffixes;
+    return strictProtoDeps;
   }
 }
