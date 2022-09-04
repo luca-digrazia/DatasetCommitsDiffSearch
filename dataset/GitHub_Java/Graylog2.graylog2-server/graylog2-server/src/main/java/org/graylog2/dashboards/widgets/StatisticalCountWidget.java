@@ -16,17 +16,14 @@
  */
 package org.graylog2.dashboards.widgets;
 
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.indexer.results.FieldStatsResult;
 import org.graylog2.indexer.searches.Searches;
-import org.graylog2.plugin.dashboards.widgets.ComputationResult;
-import org.graylog2.plugin.dashboards.widgets.WidgetStrategy;
-import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
-import org.graylog2.plugin.indexer.searches.timeranges.RelativeRange;
-import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
+import org.graylog2.indexer.searches.timeranges.AbsoluteRange;
+import org.graylog2.indexer.searches.timeranges.RelativeRange;
+import org.graylog2.indexer.searches.timeranges.TimeRange;
 import org.joda.time.DateTime;
 import org.joda.time.Seconds;
 import org.slf4j.Logger;
@@ -37,11 +34,6 @@ import java.util.Map;
 import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class StatisticalCountWidget extends SearchResultCountWidget {
-    public interface Factory extends WidgetStrategy.Factory<StatisticalCountWidget> {
-        @Override
-        StatisticalCountWidget create(Map<String, Object> config, TimeRange timeRange, String widgetId);
-    }
-
     private static final Logger log = LoggerFactory.getLogger(StatisticalCountWidget.class);
 
     public enum StatisticalFunction {
@@ -81,15 +73,25 @@ public class StatisticalCountWidget extends SearchResultCountWidget {
     private final String field;
     private final String streamId;
 
-    @AssistedInject
-    public StatisticalCountWidget(Searches searches,
-                                  @Assisted Map<String, Object> config,
-                                  @Assisted TimeRange timeRange,
-                                  @Assisted String widgetId) {
-        super(searches,
-                config,
-                timeRange,
-                widgetId);
+    public StatisticalCountWidget(MetricRegistry metricRegistry,
+                                  Searches searches,
+                                  String id,
+                                  String description,
+                                  WidgetCacheTime cacheTime,
+                                  Map<String, Object> config,
+                                  String query,
+                                  TimeRange timeRange,
+                                  String creatorUserId) {
+        super(metricRegistry,
+              Type.STATS_COUNT,
+              searches,
+              id,
+              description,
+              cacheTime,
+              config,
+              query,
+              timeRange,
+              creatorUserId);
         this.field = (String) config.get("field");
         String statsFunction = (String) config.get("stats_function");
         // We accidentally modified the standard deviation function name, we need this to make old widgets work again
@@ -137,7 +139,7 @@ public class StatisticalCountWidget extends SearchResultCountWidget {
     }
 
     @Override
-    public ComputationResult compute() {
+    protected ComputationResult compute() {
         try {
             final String filter;
             if (!isNullOrEmpty(streamId)) {
@@ -146,7 +148,7 @@ public class StatisticalCountWidget extends SearchResultCountWidget {
                 filter = null;
             }
 
-            final TimeRange timeRange = this.timeRange;
+            final TimeRange timeRange = this.getTimeRange();
 
             boolean needsCardinality = statsFunction.equals(StatisticalFunction.CARDINALITY);
             boolean needsCount = statsFunction.equals(StatisticalFunction.COUNT);

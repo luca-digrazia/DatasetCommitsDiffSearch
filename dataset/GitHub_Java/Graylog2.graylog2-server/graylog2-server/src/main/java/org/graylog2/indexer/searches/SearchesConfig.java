@@ -26,7 +26,7 @@ import java.util.List;
 
 @AutoValue
 public abstract class SearchesConfig {
-    public final static int DEFAULT_LIMIT = 150;
+    private final static int LIMIT = 150;
 
     @JsonProperty
     public abstract String query();
@@ -65,14 +65,14 @@ public abstract class SearchesConfig {
                 .filter(filter)
                 .fields(fields)
                 .range(timeRange)
-                .limit(limit)
+                .limit(limit > 0 ? limit : LIMIT)
                 .offset(offset)
                 .sorting(sorting)
                 .build();
     }
 
     public static Builder builder() {
-        return new AutoValue_SearchesConfig.Builder();
+        return new AutoValue_SearchesConfig.Builder().limit(LIMIT);
     }
 
     @AutoValue.Builder
@@ -87,19 +87,10 @@ public abstract class SearchesConfig {
 
         public abstract Builder limit(int limit);
 
-        public abstract int limit();
-
         public abstract Builder offset(int offset);
 
         public abstract Builder sorting(Sorting sorting);
 
-        abstract SearchesConfig autoBuild();
-
-        public SearchesConfig build() {
-            if (limit() == 0) {
-                limit(DEFAULT_LIMIT);
-            }
-            return autoBuild();
-        }
+        public abstract SearchesConfig build();
     }
 }

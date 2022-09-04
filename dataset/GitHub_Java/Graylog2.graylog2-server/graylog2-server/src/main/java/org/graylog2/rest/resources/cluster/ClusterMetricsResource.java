@@ -57,11 +57,16 @@ import static javax.ws.rs.core.Response.Status.BAD_GATEWAY;
 @Path("/cluster/{nodeId}/metrics")
 @Produces(MediaType.APPLICATION_JSON)
 public class ClusterMetricsResource extends ProxiedResource {
+    private final NodeService nodeService;
+    private final RemoteInterfaceProvider remoteInterfaceProvider;
+
     @Inject
     public ClusterMetricsResource(NodeService nodeService,
                                   RemoteInterfaceProvider remoteInterfaceProvider,
                                   @Context HttpHeaders httpHeaders) {
-        super(httpHeaders, nodeService, remoteInterfaceProvider);
+        super(httpHeaders);
+        this.nodeService = nodeService;
+        this.remoteInterfaceProvider = remoteInterfaceProvider;
     }
 
     private RemoteMetricsResource getResourceForNode(String nodeId) throws NodeNotFoundException {

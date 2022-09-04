@@ -39,6 +39,7 @@ import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortParseElement;
 import org.graylog2.Configuration;
+import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeService;
@@ -51,8 +52,8 @@ import org.graylog2.indexer.results.ScrollResult;
 import org.graylog2.indexer.results.SearchResult;
 import org.graylog2.indexer.results.TermsResult;
 import org.graylog2.indexer.results.TermsStatsResult;
+import org.graylog2.indexer.searches.timeranges.TimeRange;
 import org.graylog2.indexer.searches.timeranges.TimeRanges;
-import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 import org.joda.time.Period;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -140,6 +141,7 @@ public class Searches {
 
 
     private final Configuration configuration;
+    private final Deflector deflector;
     private final IndexRangeService indexRangeService;
     private final Client c;
     private final Timer esRequestTimer;
@@ -147,10 +149,12 @@ public class Searches {
 
     @Inject
     public Searches(Configuration configuration,
+                    Deflector deflector,
                     IndexRangeService indexRangeService,
                     Client client,
                     MetricRegistry metricRegistry) {
         this.configuration = checkNotNull(configuration);
+        this.deflector = checkNotNull(deflector);
         this.indexRangeService = checkNotNull(indexRangeService);
         this.c = checkNotNull(client);
 
@@ -163,7 +167,7 @@ public class Searches {
     }
 
     public CountResult count(String query, TimeRange range, String filter) {
-        Set<String> indices = IndexHelper.determineAffectedIndices(indexRangeService, range);
+        Set<String> indices = IndexHelper.determineAffectedIndices(indexRangeService, deflector, range);
 
         final SearchRequestBuilder srb;
         if (filter == null) {
@@ -179,7 +183,7 @@ public class Searches {
     }
 
     public ScrollResult scroll(String query, TimeRange range, int limit, int offset, List<String> fields, String filter) {
-        final Set<String> indices = IndexHelper.determineAffectedIndices(indexRangeService, range);
+        final Set<String> indices = IndexHelper.determineAffectedIndices(indexRangeService, deflector, range);
 
         // only request the fields we asked for otherwise we can't figure out which fields will be in the result set
         // until we've scrolled through the entire set.
@@ -226,7 +230,9 @@ public class Searches {
     }
 
     public SearchResult search(SearchesConfig config) {
-        Set<IndexRange> indices = IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, config.range());
+        Set<IndexRange> indices = IndexHelper.determineAffectedIndicesWithRanges(indexRangeService,
+                deflector,
+                config.range());
 
         Set<String> indexNames = Sets.newHashSet();
         for (IndexRange index : indices) {
@@ -248,9 +254,9 @@ public class Searches {
 
         SearchRequestBuilder srb;
         if (filter == null) {
-            srb = standardSearchRequest(query, IndexHelper.determineAffectedIndices(indexRangeService, range), range);
+            srb = standardSearchRequest(query, IndexHelper.determineAffectedIndices(indexRangeService, deflector, range), range);
         } else {
-            srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexRangeService, range), range);
+            srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexRangeService, deflector, range), range);
         }
 
         FilterAggregationBuilder builder = AggregationBuilders.filter(AGG_FILTER)
@@ -291,9 +297,9 @@ public class Searches {
 
         SearchRequestBuilder srb;
         if (filter == null) {
-            srb = standardSearchRequest(query, IndexHelper.determineAffectedIndices(indexRangeService, range), range);
+            srb = standardSearchRequest(query, IndexHelper.determineAffectedIndices(indexRangeService, deflector, range), range);
         } else {
-            srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexRangeService, range), range);
+            srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexRangeService, deflector, range), range);
         }
 
 
@@ -387,9 +393,9 @@ public class Searches {
         SearchRequestBuilder srb;
 
         if (filter == null) {
-            srb = standardSearchRequest(query, IndexHelper.determineAffectedIndices(indexRangeService, range), range);
+            srb = standardSearchRequest(query, IndexHelper.determineAffectedIndices(indexRangeService, deflector, range), range);
         } else {
-            srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexRangeService, range), range);
+            srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexRangeService, deflector, range), range);
         }
 
         FilterAggregationBuilder builder = AggregationBuilders.filter(AGG_FILTER)
@@ -443,7 +449,7 @@ public class Searches {
         QueryStringQueryBuilder qs = queryStringQuery(query);
         qs.allowLeadingWildcard(configuration.isAllowLeadingWildcardSearches());
 
-        final Set<String> affectedIndices = IndexHelper.determineAffectedIndices(indexRangeService, range);
+        final Set<String> affectedIndices = IndexHelper.determineAffectedIndices(indexRangeService, deflector, range);
         final SearchRequestBuilder srb = c.prepareSearch(affectedIndices.toArray(new String[affectedIndices.size()]))
                 .setIndicesOptions(IndicesOptions.lenientExpandOpen())
                 .setQuery(qs)
@@ -485,7 +491,7 @@ public class Searches {
         qs.allowLeadingWildcard(configuration.isAllowLeadingWildcardSearches());
 
         SearchRequestBuilder srb = c.prepareSearch();
-        final Set<String> affectedIndices = IndexHelper.determineAffectedIndices(indexRangeService, range);
+        final Set<String> affectedIndices = IndexHelper.determineAffectedIndices(indexRangeService, deflector, range);
         srb.setIndices(affectedIndices.toArray(new String[affectedIndices.size()]));
         srb.setQuery(qs);
         srb.addAggregation(builder);

@@ -54,11 +54,16 @@ import static javax.ws.rs.core.Response.Status.BAD_GATEWAY;
 public class ClusterLoadBalancerStatusResource extends ProxiedResource {
     private static final Logger LOG = LoggerFactory.getLogger(ClusterLoadBalancerStatusResource.class);
 
+    private final NodeService nodeService;
+    private final RemoteInterfaceProvider remoteInterfaceProvider;
+
     @Inject
     public ClusterLoadBalancerStatusResource(NodeService nodeService,
                                              RemoteInterfaceProvider remoteInterfaceProvider,
                                              @Context HttpHeaders httpHeaders) throws NodeNotFoundException {
-        super(httpHeaders, nodeService, remoteInterfaceProvider);
+        super(httpHeaders);
+        this.nodeService = nodeService;
+        this.remoteInterfaceProvider = remoteInterfaceProvider;
     }
 
     @PUT
