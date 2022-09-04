@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.system.stats;
 
@@ -73,6 +73,12 @@ public abstract class ClusterStats {
     @JsonProperty
     public abstract long contentPackCount();
 
+    @JsonProperty
+    public abstract LdapStats ldapStats();
+
+    @JsonProperty
+    public abstract AlarmStats alarmStats();
+
     public static ClusterStats create(ElasticsearchStats elasticsearchStats,
                                       MongoStats mongoStats,
                                       long streamCount,
@@ -87,7 +93,9 @@ public abstract class ClusterStats {
                                       Map<String, Long> inputCountByType,
                                       long extractorCount,
                                       Map<Extractor.Type, Long> extractorCountByType,
-                                      long contentPackCount) {
+                                      long contentPackCount,
+                                      LdapStats ldapStats,
+                                      AlarmStats alarmStats) {
         return new AutoValue_ClusterStats(
                 elasticsearchStats,
                 mongoStats,
@@ -103,6 +111,8 @@ public abstract class ClusterStats {
                 inputCountByType,
                 extractorCount,
                 extractorCountByType,
-                contentPackCount);
+                contentPackCount,
+                ldapStats,
+                alarmStats);
     }
 }
