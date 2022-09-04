@@ -18,14 +18,11 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.starlarkbuildapi.cpp.CppModuleMapApi;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.StarlarkThread;
 
 /** Structure for C++ module maps. Stores the name of the module and a .cppmap artifact. */
 @Immutable
 @AutoCodec
-public final class CppModuleMap implements CppModuleMapApi<Artifact> {
+public final class CppModuleMap {
   // NOTE: If you add a field here, you'll likely need to update CppModuleMapAction.computeKey().
   private final Artifact artifact;
   private final String name;
@@ -51,12 +48,6 @@ public final class CppModuleMap implements CppModuleMapApi<Artifact> {
     return artifact;
   }
 
-  @Override
-  public Artifact getArtifactForStarlark(StarlarkThread thread) throws EvalException {
-    CcModule.checkPrivateStarlarkificationAllowlist(thread);
-    return artifact;
-  }
-
   public String getName() {
     return name;
   }
@@ -69,16 +60,6 @@ public final class CppModuleMap implements CppModuleMapApi<Artifact> {
    */
   public Optional<Artifact> getUmbrellaHeader() {
     return umbrellaHeader;
-  }
-
-  @Override
-  public Artifact getUmbrellaHeaderForStarlark(StarlarkThread thread) throws EvalException {
-    CcModule.checkPrivateStarlarkificationAllowlist(thread);
-    if (umbrellaHeader.isPresent()) {
-      return umbrellaHeader.get();
-    } else {
-      return null;
-    }
   }
 
   @Override
