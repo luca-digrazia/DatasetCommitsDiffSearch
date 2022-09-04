@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.arc.Arc;
-import io.quarkus.hibernate.orm.runtime.PersistenceUnitUtil;
 import io.quarkus.test.QuarkusUnitTest;
 
 /**
@@ -57,10 +56,8 @@ public class HibernateMetricsTestCase {
     @Test
     @Transactional
     public void testMetrics() {
-        assertEquals(0L, getCounterValueOrNull("hibernate-orm.queries.executed",
-                new Tag("entityManagerFactory", PersistenceUnitUtil.DEFAULT_PERSISTENCE_UNIT_NAME)));
-        assertEquals(0L, getCounterValueOrNull("hibernate-orm.entities.inserted",
-                new Tag("entityManagerFactory", PersistenceUnitUtil.DEFAULT_PERSISTENCE_UNIT_NAME)));
+        assertEquals(0L, getCounterValueOrNull("hibernate-orm.queries.executed"));
+        assertEquals(0L, getCounterValueOrNull("hibernate-orm.entities.inserted"));
         Arc.container().requestContext().activate();
         try {
             DummyEntity entity = new DummyEntity();
@@ -68,10 +65,8 @@ public class HibernateMetricsTestCase {
             em.persist(entity);
             em.flush();
             em.createQuery("from DummyEntity e").getResultList();
-            assertEquals(1L, getCounterValueOrNull("hibernate-orm.queries.executed",
-                    new Tag("entityManagerFactory", PersistenceUnitUtil.DEFAULT_PERSISTENCE_UNIT_NAME)));
-            assertEquals(1L, getCounterValueOrNull("hibernate-orm.entities.inserted",
-                    new Tag("entityManagerFactory", PersistenceUnitUtil.DEFAULT_PERSISTENCE_UNIT_NAME)));
+            assertEquals(1L, getCounterValueOrNull("hibernate-orm.queries.executed"));
+            assertEquals(1L, getCounterValueOrNull("hibernate-orm.entities.inserted"));
         } finally {
             Arc.container().requestContext().terminate();
         }
