@@ -1,15 +1,17 @@
 package io.quarkus.vertx.core.deployment;
 
-import java.util.function.Supplier;
+import javax.inject.Inject;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
+import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.IOThreadDetectorBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import io.quarkus.netty.deployment.EventLoopSupplierBuildItem;
 import io.quarkus.runtime.RuntimeValue;
@@ -19,6 +21,9 @@ import io.quarkus.vertx.core.runtime.VertxCoreRecorder;
 import io.vertx.core.Vertx;
 
 class VertxCommonProcessor {
+
+    @Inject
+    BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
 
     @BuildStep
     SubstrateConfigBuildItem build() {
@@ -45,11 +50,11 @@ class VertxCommonProcessor {
     }
 
     @BuildStep
-    @Record(value = ExecutionTime.RUNTIME_INIT)
+    @Record(value = ExecutionTime.RUNTIME_INIT, optional = true)
     CoreVertxBuildItem build(VertxCoreRecorder recorder, BeanContainerBuildItem beanContainer,
             LaunchModeBuildItem launchMode, ShutdownContextBuildItem shutdown, VertxConfiguration config) {
 
-        Supplier<Vertx> vertx = recorder.configureVertx(beanContainer.getValue(), config,
+        RuntimeValue<Vertx> vertx = recorder.configureVertx(beanContainer.getValue(), config,
                 launchMode.getLaunchMode(), shutdown);
 
         return new CoreVertxBuildItem(vertx);
