@@ -3,13 +3,14 @@ package org.graylog.plugins.enterprise.search.elasticsearch.searchtypes;
 import com.google.common.collect.ImmutableMap;
 import io.searchbox.core.SearchResult;
 import io.searchbox.core.search.aggregation.DateHistogramAggregation;
+import io.searchbox.core.search.aggregation.MetricAggregation;
 import io.searchbox.core.search.aggregation.TermsAggregation;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
-import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramBuilder;
-import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramAggregationBuilder;
 import org.graylog.plugins.enterprise.search.Query;
 import org.graylog.plugins.enterprise.search.SearchJob;
 import org.graylog.plugins.enterprise.search.SearchType;
+import org.graylog.plugins.enterprise.search.elasticsearch.ESGeneratedQueryContext;
 import org.graylog.plugins.enterprise.search.searchtypes.GroupBy;
 import org.graylog.plugins.enterprise.search.searchtypes.GroupByHistogram;
 import org.graylog2.indexer.searches.Searches;
@@ -34,7 +35,7 @@ public class ESGroupByHistogram implements ESSearchTypeHandler<GroupByHistogram>
     }
 
     @Override
-    public void doGenerateQueryPart(SearchJob job, Query query, GroupByHistogram groupByHistogram, SearchSourceBuilder queryBuilder) {
+    public void doGenerateQueryPart(SearchJob job, Query query, GroupByHistogram groupByHistogram, ESGeneratedQueryContext queryContext) {
         final String mainField = groupByHistogram.fields().get(0);
         final List<String> stackedFields = groupByHistogram.fields().subList(1, groupByHistogram.fields().size());
         final Searches.DateHistogramInterval interval = firstNonNull(groupByHistogram.interval(), createDefaultInterval(query.timerange()));
@@ -42,17 +43,17 @@ public class ESGroupByHistogram implements ESSearchTypeHandler<GroupByHistogram>
         final GroupBy groupBy = createGroupBy(groupByHistogram);
         final ESGroupBy esGroupBy = new ESGroupBy();
 
-        final DateHistogramBuilder histogram = AggregationBuilders.dateHistogram(histogramAggName(groupByHistogram))
+        final DateHistogramAggregationBuilder histogram = AggregationBuilders.dateHistogram(histogramAggName(groupByHistogram))
                 .field(Message.FIELD_TIMESTAMP)
-                .interval(interval.toESInterval())
+                .dateHistogramInterval(interval.toESInterval())
                 .subAggregation(esGroupBy.createTermsBuilder(mainField, stackedFields, groupBy));
 
-        queryBuilder.aggregation(histogram);
+        queryContext.searchSourceBuilder(groupByHistogram.id()).aggregation(histogram);
     }
 
     @Override
-    public SearchType.Result doExtractResult(SearchJob job, Query query, GroupByHistogram groupByHistogram, SearchResult queryResult) {
-        final DateHistogramAggregation aggregation = queryResult.getAggregations().getDateHistogramAggregation(histogramAggName(groupByHistogram));
+    public SearchType.Result doExtractResult(SearchJob job, Query query, GroupByHistogram groupByHistogram, SearchResult queryResult, MetricAggregation aggregations, ESGeneratedQueryContext queryContext) {
+        final DateHistogramAggregation aggregation = aggregations.getDateHistogramAggregation(histogramAggName(groupByHistogram));
         final GroupBy groupBy = createGroupBy(groupByHistogram);
         final ESGroupBy esGroupBy = new ESGroupBy();
         final ImmutableMap.Builder<Long, GroupByHistogram.Bucket> buckets = ImmutableMap.builder();

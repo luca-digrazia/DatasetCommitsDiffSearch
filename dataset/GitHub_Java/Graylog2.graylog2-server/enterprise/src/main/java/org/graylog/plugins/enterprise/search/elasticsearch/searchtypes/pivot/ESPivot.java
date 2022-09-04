@@ -70,13 +70,6 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
                 searchSourceBuilder.aggregation(previousAggregation);
             }
         }
-
-        // add global rollup series if those were requested
-        if (pivot.rollup()) {
-            seriesStream(pivot, queryContext, "global rollup")
-                    .forEach(previousAggregation != null ? previousAggregation::subAggregation : searchSourceBuilder::aggregation);
-        }
-
         final Iterator<BucketSpec> rowBuckets = pivot.rowGroups().iterator();
         while (rowBuckets.hasNext()) {
             final BucketSpec bucketSpec = rowBuckets.next();
@@ -107,7 +100,7 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
             }
         }
         if (previousAggregation == null) {
-            LOG.debug("No row aggregations were generated, cannot generate column groups.");
+            LOG.warn("No row aggregations were generated, cannot generate column groups.");
         } else {
             final Iterator<BucketSpec> colBuckets = pivot.columnGroups().iterator();
             while (colBuckets.hasNext()) {
@@ -134,7 +127,12 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
         }
 
         if (topLevelAggregation == null) {
-            LOG.debug("No aggregations generated for {}", pivot);
+            LOG.warn("No aggregations generated for {}", pivot);
+        }
+        // add global rollup series if those were requested
+        if (pivot.rollup()) {
+            seriesStream(pivot, queryContext, "global rollup")
+                    .forEach(searchSourceBuilder::aggregation);
         }
     }
 

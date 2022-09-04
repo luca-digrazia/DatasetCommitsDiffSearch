@@ -16,7 +16,7 @@ import java.util.Locale;
 public class ESFieldMetric implements ESSearchTypeHandler<FieldMetric> {
     @Override
     public void doGenerateQueryPart(SearchJob job, Query query, FieldMetric fieldMetric, ESGeneratedQueryContext queryContext) {
-        final SearchSourceBuilder queryBuilder = queryContext.searchSourceBuilder();
+        final SearchSourceBuilder queryBuilder = queryContext.searchSourceBuilder(fieldMetric.id());
         switch (fieldMetric.operation()) {
             case AVG:
                 queryBuilder.aggregation(AggregationBuilders.avg(aggName(fieldMetric)).field(fieldMetric.field()));
@@ -42,8 +42,7 @@ public class ESFieldMetric implements ESSearchTypeHandler<FieldMetric> {
     }
 
     @Override
-    public SearchType.Result doExtractResult(SearchJob job, Query query, FieldMetric fieldMetric, SearchResult queryResult, ESGeneratedQueryContext queryContext) {
-        final MetricAggregation aggregations = queryResult.getAggregations();
+    public SearchType.Result doExtractResult(SearchJob job, Query query, FieldMetric fieldMetric, SearchResult queryResult, MetricAggregation aggregations, ESGeneratedQueryContext queryContext) {
         final String id = fieldMetric.id();
         final SearchType.Result result;
 

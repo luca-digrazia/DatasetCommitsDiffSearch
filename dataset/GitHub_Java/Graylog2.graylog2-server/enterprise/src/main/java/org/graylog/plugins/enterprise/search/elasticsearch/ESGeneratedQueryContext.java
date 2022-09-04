@@ -4,14 +4,12 @@ import com.google.common.base.MoreObjects;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import io.searchbox.core.search.aggregation.Aggregation;
-import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
+import org.elasticsearch.search.aggregations.AggregationBuilders;
+import org.elasticsearch.search.aggregations.bucket.filter.FilterAggregationBuilder;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.graylog.plugins.enterprise.search.Filter;
-import org.graylog.plugins.enterprise.search.Query;
-import org.graylog.plugins.enterprise.search.QueryResult;
-import org.graylog.plugins.enterprise.search.SearchJob;
 import org.graylog.plugins.enterprise.search.SearchType;
 import org.graylog.plugins.enterprise.search.engine.GeneratedQueryContext;
 import org.graylog.plugins.enterprise.search.errors.SearchError;
@@ -36,25 +34,16 @@ public class ESGeneratedQueryContext implements GeneratedQueryContext {
     private final UniqueNamer uniqueNamer = new UniqueNamer("agg-");
     private Set<SearchError> errors = Sets.newHashSet();
     private final SearchSourceBuilder ssb;
-    private final SearchJob job;
-    private final Query query;
-    private final Set<QueryResult> results;
 
-    public ESGeneratedQueryContext(ElasticsearchBackend elasticsearchBackend, SearchSourceBuilder ssb, SearchJob job, Query query, Set<QueryResult> results) {
+    public ESGeneratedQueryContext(ElasticsearchBackend elasticsearchBackend, SearchSourceBuilder ssb) {
         this.elasticsearchBackend = elasticsearchBackend;
         this.ssb = ssb;
-        this.job = job;
-        this.query = query;
-        this.results = results;
     }
 
-    public SearchSourceBuilder searchSourceBuilder(SearchType searchType) {
-        return this.searchTypeQueries.computeIfAbsent(searchType.id(), (ignored) -> {
-            final QueryBuilder queryBuilder = generateFilterClause(searchType.filter())
-                    .map(filterClause -> (QueryBuilder)new BoolQueryBuilder().must(ssb.query()).must(filterClause))
-                    .orElse(ssb.query());
-            return ssb.copyWithNewSlice(ssb.slice()).query(queryBuilder);
-        });
+    public SearchSourceBuilder searchSourceBuilder(String searchTypeId) {
+        final SearchSourceBuilder newSearchSourceBuilder = ssb.copyWithNewSlice(ssb.slice());
+        this.searchTypeQueries.put(searchTypeId, newSearchSourceBuilder);
+        return newSearchSourceBuilder;
     }
 
     Map<String, SearchSourceBuilder> searchTypeQueries() {
@@ -85,20 +74,28 @@ public class ESGeneratedQueryContext implements GeneratedQueryContext {
         return uniqueNamer.nextName();
     }
 
-    private Optional<QueryBuilder> generateFilterClause(Filter filter) {
-        return elasticsearchBackend.generateFilterClause(filter, job, query, results);
+    public Optional<QueryBuilder> generateFilterClause(Filter filter) {
+        return elasticsearchBackend.generateFilterClause(filter);
     }
 
-    public String filterName(SearchType searchType) {
-        return "filtered-" + searchType.id();
+    public void addFilteredAggregation(AggregationBuilder builder, SearchType searchType) {
+        final Optional<QueryBuilder> filterClause = generateFilterClause(searchType.filter());
+        if (filterClause.isPresent()) {
+            builder = AggregationBuilders.filter("filtered-" + searchType.id(), filterClause.get())
+                    .subAggregation(builder);
+        }
+        ssb.aggregation(builder);
     }
 
-    public void addAggregation(AggregationBuilder builder, SearchType searchType) {
-        this.searchTypeQueries().get(searchType.id()).aggregation(builder);
-    }
-
-    public void addAggregations(Collection<AggregationBuilder> builders, SearchType searchType) {
-        builders.forEach(builder -> this.searchTypeQueries().get(searchType.id()).aggregation(builder));
+    public void addFilteredAggregations(Collection<AggregationBuilder> builders, SearchType searchType) {
+        final Optional<QueryBuilder> filterClause = generateFilterClause(searchType.filter());
+        if (filterClause.isPresent()) {
+            final FilterAggregationBuilder filter = AggregationBuilders.filter("filtered-" + searchType.id(), filterClause.get());
+            builders.forEach(filter::subAggregation);
+            ssb.aggregation(filter);
+        } else {
+            builders.forEach(ssb::aggregation);
+        }
     }
 
     @Override
