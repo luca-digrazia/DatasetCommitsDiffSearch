@@ -28,7 +28,6 @@ import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
@@ -95,14 +94,12 @@ public class NestedSetCodec<T> implements ObjectCodec<NestedSet<T>> {
         "Should have at least serialized one nested set, got: %s",
         nestedSetCount);
     Order order = orderCodec.deserialize(context, codedIn);
-    ArrayList<Object> childrenForThisNestedSet = new ArrayList<>(nestedSetCount);
+    Object children = null;
     for (int i = 0; i < nestedSetCount; ++i) {
-      // Maintain pointers to all children in this NestedSet so that their entries in the
-      // digestToChild map are not GCed.
-      childrenForThisNestedSet.add(deserializeOneNestedSet(context, codedIn));
+      // Update var, the last one in the list is the top level nested set
+      children = deserializeOneNestedSet(context, codedIn);
     }
-    // The last element of childrenForThisNestedSet is the top-level NestedSet
-    return createNestedSet(order, childrenForThisNestedSet.get(nestedSetCount - 1));
+    return createNestedSet(order, children);
   }
 
   private void serializeOneNestedSet(
