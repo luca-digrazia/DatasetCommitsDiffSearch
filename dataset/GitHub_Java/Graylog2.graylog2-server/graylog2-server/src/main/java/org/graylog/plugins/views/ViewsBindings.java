@@ -18,6 +18,13 @@ import org.graylog.plugins.views.search.filter.OrFilter;
 import org.graylog.plugins.views.search.filter.QueryStringFilter;
 import org.graylog.plugins.views.search.filter.StreamFilter;
 import org.graylog.plugins.views.search.rest.ViewsRestPermissions;
+import org.graylog.plugins.views.search.rest.FieldTypesResource;
+import org.graylog.plugins.views.search.rest.PivotSeriesFunctionsResource;
+import org.graylog.plugins.views.search.rest.SearchResource;
+import org.graylog.plugins.views.search.views.RequiresParameterSupport;
+import org.graylog.plugins.views.search.views.ViewRequirements;
+import org.graylog.plugins.views.search.rest.ViewSharingResource;
+import org.graylog.plugins.views.search.rest.ViewsResource;
 import org.graylog.plugins.views.search.searchtypes.MessageList;
 import org.graylog.plugins.views.search.searchtypes.pivot.Pivot;
 import org.graylog.plugins.views.search.searchtypes.pivot.PivotSort;
@@ -36,8 +43,6 @@ import org.graylog.plugins.views.search.searchtypes.pivot.series.StdDev;
 import org.graylog.plugins.views.search.searchtypes.pivot.series.Sum;
 import org.graylog.plugins.views.search.searchtypes.pivot.series.SumOfSquares;
 import org.graylog.plugins.views.search.searchtypes.pivot.series.Variance;
-import org.graylog.plugins.views.search.views.RequiresParameterSupport;
-import org.graylog.plugins.views.search.views.ViewRequirements;
 import org.graylog.plugins.views.search.views.sharing.AllUsersOfInstance;
 import org.graylog.plugins.views.search.views.sharing.AllUsersOfInstanceStrategy;
 import org.graylog.plugins.views.search.views.sharing.SpecificRoles;
@@ -53,8 +58,7 @@ import org.graylog.plugins.views.search.views.widgets.aggregation.ValueConfigDTO
 import org.graylog.plugins.views.search.views.widgets.aggregation.WorldMapVisualizationConfigDTO;
 import org.graylog.plugins.views.search.views.widgets.aggregation.sort.PivotSortConfig;
 import org.graylog.plugins.views.search.views.widgets.aggregation.sort.SeriesSortConfig;
-import org.graylog.plugins.views.search.views.widgets.messagelist.MessageListConfigDTO;
-import org.graylog2.plugin.PluginConfigBean;
+import org.graylog.plugins.views.search.views.widgets.messagelist.MessageListConfigDTO;import org.graylog2.plugin.PluginConfigBean;
 
 import java.util.Set;
 
@@ -66,7 +70,11 @@ public class ViewsBindings extends ViewsModule {
 
     @Override
     protected void configure() {
-        registerRestControllerPackage(getClass().getPackage().getName());
+        addRestResource(SearchResource.class);
+        addRestResource(ViewsResource.class);
+        addRestResource(FieldTypesResource.class);
+        addRestResource(PivotSeriesFunctionsResource.class);
+        addRestResource(ViewSharingResource.class);
 
         addPermissions(ViewsRestPermissions.class);
 
