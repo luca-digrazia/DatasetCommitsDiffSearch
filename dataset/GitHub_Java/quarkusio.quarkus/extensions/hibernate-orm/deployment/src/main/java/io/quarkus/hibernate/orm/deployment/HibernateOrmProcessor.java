@@ -299,7 +299,7 @@ public final class HibernateOrmProcessor {
             IndexingUtil.indexClass(jpaModel.getClassName(), indexer, index.getIndex(), additionalIndex,
                     HibernateOrmProcessor.class.getClassLoader());
         }
-        CompositeIndex compositeIndex = CompositeIndex.create(index.getIndex(), indexer.complete());
+        CompositeIndex compositeIndex = CompositeIndex.create(index.getComputingIndex(), indexer.complete());
         return new JpaModelIndexBuildItem(compositeIndex);
     }
 
@@ -661,30 +661,6 @@ public final class HibernateOrmProcessor {
                     .toArray(String[]::new);
 
             reflective.produce(new ReflectiveClassBuildItem(false, false, true, metamodel));
-        }
-    }
-
-    /*
-     * Enable reflection for methods annotated with @InjectService,
-     * such as org.hibernate.engine.jdbc.cursor.internal.StandardRefCursorSupport.injectJdbcServices.
-     */
-    @BuildStep(onlyIf = NativeOrNativeSourcesBuild.class)
-    public void registerInjectServiceMethodsForReflection(CombinedIndexBuildItem index,
-            BuildProducer<ReflectiveClassBuildItem> reflective) {
-        Set<String> classes = new HashSet<>();
-
-        // Built-in service classes; can't rely on Jandex as Hibernate ORM is not indexed by default.
-        HibernateOrmAnnotations.ANNOTATED_WITH_INJECT_SERVICE.stream()
-                .map(DotName::toString)
-                .forEach(classes::add);
-
-        // Integrators relying on @InjectService.
-        index.getIndex().getAnnotations(ClassNames.INJECT_SERVICE).stream()
-                .map(a -> a.target().asMethod().declaringClass().name().toString())
-                .forEach(classes::add);
-
-        if (!classes.isEmpty()) {
-            reflective.produce(new ReflectiveClassBuildItem(false, true, false, classes.toArray(new String[0])));
         }
     }
 
