@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -31,11 +31,9 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.annotations.EFragment;
-import org.androidannotations.annotations.Receiver.RegisterAt;
 import org.androidannotations.helper.ActionBarSherlockHelper;
 import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.helper.OrmLiteHelper;
-import org.androidannotations.holder.ReceiverRegistrationHolder.IntentFilterData;
 import org.androidannotations.process.ProcessHolder;
 
 import com.sun.codemodel.JBlock;
@@ -51,7 +49,7 @@ import com.sun.codemodel.JMod;
 import com.sun.codemodel.JTypeVar;
 import com.sun.codemodel.JVar;
 
-public class EFragmentHolder extends EComponentWithViewSupportHolder implements HasInstanceState, HasOptionsMenu, HasOnActivityResult, HasReceiverRegistration, HasPreferences {
+public class EFragmentHolder extends EComponentWithViewSupportHolder implements HasInstanceState, HasOptionsMenu, HasOnActivityResult, HasReceiverRegistration {
 
 	private JFieldVar contentView;
 	private JBlock setContentViewBlock;
@@ -65,7 +63,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	private JVar injectBundleArgs;
 	private InstanceStateHolder instanceStateHolder;
 	private OnActivityResultHolder onActivityResultHolder;
-	private ReceiverRegistrationHolder<EFragmentHolder> receiverRegistrationHolder;
+	private ReceiverRegistrationHolder receiverRegistrationHolder;
 	private JBlock onCreateOptionsMenuMethodBody;
 	private JVar onCreateOptionsMenuMenuInflaterVar;
 	private JVar onCreateOptionsMenuMenuParam;
@@ -85,7 +83,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 		super(processHolder, annotatedElement);
 		instanceStateHolder = new InstanceStateHolder(this);
 		onActivityResultHolder = new OnActivityResultHolder(this);
-		receiverRegistrationHolder = new ReceiverRegistrationHolder<EFragmentHolder>(this);
+		receiverRegistrationHolder = new ReceiverRegistrationHolder(this);
 		setOnCreate();
 		setOnViewCreated();
 		setFragmentBuilder();
@@ -477,8 +475,8 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	@Override
-	public JFieldVar getIntentFilterField(IntentFilterData intentFilterData) {
-		return receiverRegistrationHolder.getIntentFilterField(intentFilterData);
+	public JFieldVar getIntentFilterField(String[] actions, String[] dataSchemes) {
+		return receiverRegistrationHolder.getIntentFilterField(actions, dataSchemes);
 	}
 
 	@Override
@@ -546,23 +544,10 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	@Override
-	public JBlock getIntentFilterInitializationBlock(IntentFilterData intentFilterData) {
-		if (RegisterAt.OnAttachOnDetach.equals(intentFilterData.getRegisterAt())) {
-			return getOnAttachAfterSuperBlock();
-		}
-		return getInitBody();
-	}
-
-	@Override
 	protected JFieldVar setDatabaseHelperRef(TypeMirror databaseHelperTypeMirror) {
 		JFieldVar databaseHelperRef = super.setDatabaseHelperRef(databaseHelperTypeMirror);
 		OrmLiteHelper.injectReleaseInDestroy(databaseHelperRef, this, classes());
 
 		return databaseHelperRef;
-	}
-
-	@Override
-	public JBlock getPreferenceScreenInitializationBlock() {
-		return getOnCreateAfterSuperBlock();
 	}
 }
