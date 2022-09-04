@@ -63,11 +63,11 @@ public class DevModeTestUtils {
                 .pollDelay(1, TimeUnit.SECONDS)
                 //Allow for a long maximum time as the first hit to a build might require to download dependencies from Maven repositories;
                 //some, such as org.jetbrains.kotlin:kotlin-compiler, are huge and will take more than a minute.
-                .atMost(3, TimeUnit.MINUTES).until(() -> {
+                .atMost(20, TimeUnit.MINUTES).until(() -> {
                     try {
                         String broken = brokenReason.get();
                         if (broken != null) {
-                            //try and avoid waiting 3m
+                            //try and avoid waiting 20m
                             resp.set("BROKEN: " + broken);
                             return true;
                         }
@@ -121,15 +121,10 @@ public class DevModeTestUtils {
     }
 
     public static String getHttpResponse(String path, boolean allowError, Supplier<String> brokenReason) {
-        return getHttpResponse(path, allowError, brokenReason, 1, TimeUnit.MINUTES);
-    }
-
-    public static String getHttpResponse(String path, boolean allowError, Supplier<String> brokenReason, long timeout,
-            TimeUnit tu) {
         AtomicReference<String> resp = new AtomicReference<>();
         await()
                 .pollDelay(1, TimeUnit.SECONDS)
-                .atMost(timeout, tu).until(() -> {
+                .atMost(1, TimeUnit.MINUTES).until(() -> {
                     String broken = brokenReason.get();
                     if (broken != null) {
                         resp.set("BROKEN: " + broken);
@@ -160,14 +155,10 @@ public class DevModeTestUtils {
     }
 
     public static boolean getHttpResponse(String path, int expectedStatus) {
-        return getHttpResponse(path, expectedStatus, 5, TimeUnit.MINUTES);
-    }
-
-    public static boolean getHttpResponse(String path, int expectedStatus, long timeout, TimeUnit tu) {
         AtomicBoolean code = new AtomicBoolean();
         await()
                 .pollDelay(1, TimeUnit.SECONDS)
-                .atMost(timeout, tu).until(() -> {
+                .atMost(5, TimeUnit.MINUTES).until(() -> {
                     try {
                         URL url = new URL("http://localhost:8080" + ((path.startsWith("/") ? path : "/" + path)));
                         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -207,23 +198,7 @@ public class DevModeTestUtils {
     }
 
     public static String get() throws IOException {
-        return get("http://localhost:8080");
-    }
-
-    public static String get(String urlStr) throws IOException {
-        return IOUtils.toString(new URL(urlStr), StandardCharsets.UTF_8);
-    }
-
-    public static boolean isCode(String path, int code) {
-        try {
-            URL url = new URL("http://localhost:8080" + ((path.startsWith("/") ? path : "/" + path)));
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            // the default Accept header used by HttpURLConnection is not compatible with
-            // RESTEasy negotiation as it uses q=.2
-            connection.setRequestProperty("Accept", "text/html, *; q=0.2, */*; q=0.2");
-            return connection.getResponseCode() == code;
-        } catch (Exception e) {
-            return false;
-        }
+        URL url = new URL("http://localhost:8080");
+        return IOUtils.toString(url, StandardCharsets.UTF_8);
     }
 }
