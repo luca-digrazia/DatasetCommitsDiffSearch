@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.bazel.rules.ninja.actions;
 
-import static java.util.stream.Collectors.joining;
-
 import com.google.common.base.Ascii;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -48,7 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
-import javax.annotation.Nullable;
+import java.util.stream.Collectors;
 
 /**
  * Helper class for creating {@link NinjaAction} for each {@link NinjaTarget}, and linking the file
@@ -152,7 +150,7 @@ public class NinjaActionsHelper {
         }
       } else {
         PhonyTarget phonyTarget = phonyTargets.get(fragment);
-        // Phony target can be null, if the path in neither usual or phony target,
+        // Phony target can be null, if the path in neither regular or phony target,
         // but the source file.
         if (phonyTarget != null) {
           phonyTarget.visitUsualInputs(phonyTargets, enqueuer::accept);
@@ -170,79 +168,30 @@ public class NinjaActionsHelper {
     NinjaScope targetScope = createTargetScope(target);
     long targetOffset = target.getOffset();
 
-    ImmutableSortedMap<String, List<Pair<Long, String>>> resolvedMap =
+    ImmutableSortedMap<String, List<Pair<Long, String>>> map =
         resolveRuleVariables(targetScope, targetOffset, rule);
-    String command = resolvedMap.get(NinjaRuleVariable.COMMAND.lowerCaseName()).get(0).getSecond();
-    maybeCreateRspFile(rule, inputsBuilder, resolvedMap);
+    String command = map.get(NinjaRuleVariable.COMMAND.lowerCaseName()).get(0).getSecond();
+    maybeCreateRspFile(rule, inputsBuilder, map);
+
     if (!artifactsHelper.getWorkingDirectory().isEmpty()) {
       command = String.format("cd %s && ", artifactsHelper.getWorkingDirectory()) + command;
     }
     CommandLines commandLines =
         CommandLines.of(ImmutableList.of(shellExecutable.getPathString(), "-c", command));
-    Artifact depFile = getDepfile(resolvedMap);
-    if (depFile != null) {
-      outputsBuilder.add(depFile);
-    }
-
-    List<Artifact> outputs = outputsBuilder.build();
-
     ruleContext.registerAction(
         new NinjaAction(
             ruleContext.getActionOwner(),
-            artifactsHelper.getSourceRoot(),
             NestedSetBuilder.emptySet(Order.STABLE_ORDER),
             inputsBuilder.build(),
-            outputs,
+            outputsBuilder.build(),
             commandLines,
             Preconditions.checkNotNull(ruleContext.getConfiguration()).getActionEnvironment(),
             executionInfo,
-            createProgressMessage(rule, target, resolvedMap, outputs),
             EmptyRunfilesSupplier.INSTANCE,
-            isAlwaysDirty,
-            depFile,
-            artifactsHelper.getDerivedOutputRoot()));
+            isAlwaysDirty));
   }
 
-  /**
-   * Create a progress message for the ninja action.
-   *
-   * <ul>
-   *   <li>If the target has a "description" variable, use that. It has been expanded at parse time
-   *       with file variables.
-   *   <li>If the rule for the target has a description, use that. It has been expanded with rule,
-   *       build and file variables.
-   *   <li>Else, generate a pretty-printed progress message at runtime, using the rule name and
-   *       output filenames for a general idea on what the action is doing, without printing the
-   *       full command line (which can be surfaced with --subcommands, anyway).
-   */
-  private static String createProgressMessage(
-      NinjaRule rule,
-      NinjaTarget target,
-      ImmutableSortedMap<String, List<Pair<Long, String>>> resolvedMap,
-      List<Artifact> outputs) {
-    String targetDescription = target.getVariables().get("description");
-    if (targetDescription != null) {
-      return targetDescription;
-    }
-
-    if (!rule.getDescription().isEmpty()) {
-      List<Pair<Long, String>> resolvedDescription =
-          resolvedMap.get(NinjaRuleVariable.DESCRIPTION.lowerCaseName());
-      Preconditions.checkNotNull(resolvedDescription);
-      Preconditions.checkArgument(resolvedDescription.size() == 1);
-      return resolvedDescription.get(0).getSecond();
-    }
-
-    StringBuilder messageBuilder = new StringBuilder();
-    if (!rule.getName().isEmpty()) {
-      messageBuilder.append("[rule ").append(rule.getName()).append("] ");
-    }
-    messageBuilder.append("Outputs: ");
-    messageBuilder.append(outputs.stream().map(Artifact::getFilename).collect(joining(", ")));
-    return messageBuilder.toString();
-  }
-
-  /** Returns true if the action should be marked as always dirty. */
+  /** Returns true is the action shpould be marked as always dirty. */
   private boolean fillArtifacts(
       NinjaTarget target,
       NestedSetBuilder<Artifact> inputsBuilder,
@@ -264,20 +213,6 @@ public class NinjaActionsHelper {
       outputsBuilder.add(artifactsHelper.createOutputArtifact(output));
     }
     return isAlwaysDirty;
-  }
-
-  @Nullable
-  private Artifact getDepfile(ImmutableSortedMap<String, List<Pair<Long, String>>> ruleVariables)
-      throws GenericParsingException {
-    List<Pair<Long, String>> depfilePair =
-        ruleVariables.get(NinjaRuleVariable.DEPFILE.lowerCaseName());
-    if (depfilePair != null) {
-      String depfileName = depfilePair.get(0).getSecond();
-      if (!depfileName.trim().isEmpty()) {
-        return artifactsHelper.createOutputArtifact(PathFragment.create(depfileName));
-      }
-    }
-    return null;
   }
 
   private void maybeCreateRspFile(
@@ -324,23 +259,19 @@ public class NinjaActionsHelper {
    *
    * <p>See {@link NinjaRuleVariable} for the list.
    */
-  // TODO(cparsons): Refactor rule variables so that they are encapsulated by NinjaRule.
   private static ImmutableSortedMap<String, List<Pair<Long, String>>> resolveRuleVariables(
       NinjaScope targetScope, long targetOffset, NinjaRule rule) {
     ImmutableSortedMap.Builder<String, List<Pair<Long, String>>> builder =
         ImmutableSortedMap.naturalOrder();
     for (Map.Entry<NinjaRuleVariable, NinjaVariableValue> entry : rule.getVariables().entrySet()) {
       NinjaRuleVariable type = entry.getKey();
-      if (NinjaRuleVariable.COMMAND.equals(type)) {
-        // Skip the command variable for now, since its scope expansion semantics allow referencing
-        // other rule variables.
+      // Skip command for now, and description because we do not use it.
+      if (NinjaRuleVariable.COMMAND.equals(type) || NinjaRuleVariable.DESCRIPTION.equals(type)) {
         continue;
       }
       String expandedValue = targetScope.getExpandedValue(targetOffset, entry.getValue());
       builder.put(Ascii.toLowerCase(type.name()), ImmutableList.of(Pair.of(0L, expandedValue)));
     }
-
-    // Expand the command variable value with the rule's complete scope.
     NinjaScope expandedRuleScope = targetScope.createScopeFromExpandedValues(builder.build());
     String command =
         expandedRuleScope.getExpandedValue(
@@ -349,16 +280,20 @@ public class NinjaActionsHelper {
     return builder.build();
   }
 
-  private static NinjaScope createTargetScope(NinjaTarget target) {
+  private NinjaScope createTargetScope(NinjaTarget target) {
     ImmutableSortedMap.Builder<String, List<Pair<Long, String>>> builder =
         ImmutableSortedMap.naturalOrder();
     target
         .getVariables()
         .forEach((key, value) -> builder.put(key, ImmutableList.of(Pair.of(0L, value))));
     String inNewline =
-        target.getUsualInputs().stream().map(PathFragment::getPathString).collect(joining("\n"));
+        target.getUsualInputs().stream()
+            .map(PathFragment::getPathString)
+            .collect(Collectors.joining("\n"));
     String out =
-        target.getOutputs().stream().map(PathFragment::getPathString).collect(joining(" "));
+        target.getOutputs().stream()
+            .map(PathFragment::getPathString)
+            .collect(Collectors.joining(" "));
     builder.put("in", ImmutableList.of(Pair.of(0L, inNewline.replace('\n', ' '))));
     builder.put("in_newline", ImmutableList.of(Pair.of(0L, inNewline)));
     builder.put("out", ImmutableList.of(Pair.of(0L, out)));
@@ -385,5 +320,4 @@ public class NinjaActionsHelper {
         .modifyExecutionInfo(map, "NinjaRule");
     return map;
   }
-
 }
