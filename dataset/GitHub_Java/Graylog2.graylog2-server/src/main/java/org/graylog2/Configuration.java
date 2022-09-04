@@ -97,12 +97,6 @@ public class Configuration {
     @Parameter(value = "elasticsearch_max_docs_per_index", validator = PositiveIntegerValidator.class, required = true)
     private int elasticsearchMaxDocsPerIndex = 80000000;
 
-    @Parameter(value = "message_ttl_days", required = true, validator = PositiveIntegerValidator.class)
-    private int messageTTLDays = 30;
-    
-    @Parameter(value = "message_ttl_freq", required = true, validator = PositiveIntegerValidator.class)
-    private int messageTTLFreq = 30;
-    
     @Parameter(value = "mongodb_user")
     private String mongoUser;
 
@@ -198,6 +192,12 @@ public class Configuration {
 
     @Parameter(value = "libratometrics_prefix", required = false)
     private String libratometricsPrefix = "gl2";
+
+    @Parameter(value = "enable_healthcheck_http_api", required = false)
+    private boolean enableHealthCheckHttpApi = false;
+    
+    @Parameter(value = "healthcheck_http_api_port", validator = InetPortValidator.class, required = false)
+    private int healthcheckHttpApiPort = 8010;
     
     @Parameter(value = "enable_cm_twilio", required = false)
     private boolean enableCommunicationMethodTwilio = false;
@@ -286,14 +286,7 @@ public class Configuration {
     public int getElasticSearchMaxDocsPerIndex() {
         return this.elasticsearchMaxDocsPerIndex;
     }
-   
-    public int getMessageTTLDays() {
-        return this.messageTTLDays;
-    }
-    
-    public int getMessageTTLFreq() {
-        return this.messageTTLFreq;
-    }
+
     public boolean isMongoUseAuth() {
         return mongoUseAuth;
     }
@@ -450,6 +443,14 @@ public class Configuration {
 
     public String getLibratoMetricsPrefix() {
         return libratometricsPrefix;
+    }
+    
+    public boolean isEnableHealthCheckHttpApi() {
+        return enableHealthCheckHttpApi;
+    }
+
+    public int getHealthCheckHttpApiPort() {
+        return healthcheckHttpApiPort;
     }
     
     public boolean isEnableCommunicationMethodTwilio() {

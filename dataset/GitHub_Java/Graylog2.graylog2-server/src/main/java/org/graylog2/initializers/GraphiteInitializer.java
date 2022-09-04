@@ -26,8 +26,6 @@ import org.graylog2.GraylogServer;
 import org.graylog2.periodical.GraphiteWriterThread;
 
 /**
- * GraphiteInitializer.java: 08.05.2012 16:11:23
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GraphiteInitializer extends SimpleFixedRateScheduleInitializer implements Initializer {
@@ -40,11 +38,11 @@ public class GraphiteInitializer extends SimpleFixedRateScheduleInitializer impl
     public void initialize() {
         // Enable graphite metrics reporter.
         GraphiteReporter.enable(
-                30,
+                5,
                 TimeUnit.SECONDS,
                 this.graylogServer.getConfiguration().getGraphiteCarbonHost(),
                 this.graylogServer.getConfiguration().getGraphiteCarbonTcpPort(),
-                "graylog2-server"
+                this.graylogServer.getConfiguration().getGraphitePrefix()
         );
 
         configureScheduler(
@@ -52,6 +50,11 @@ public class GraphiteInitializer extends SimpleFixedRateScheduleInitializer impl
                 GraphiteWriterThread.INITIAL_DELAY,
                 GraphiteWriterThread.PERIOD
         );
+    }
+    
+    @Override
+    public boolean masterOnly() {
+        return false;
     }
 
 }
