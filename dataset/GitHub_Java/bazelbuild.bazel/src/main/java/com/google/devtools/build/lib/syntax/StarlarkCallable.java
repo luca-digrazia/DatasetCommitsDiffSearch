@@ -35,9 +35,7 @@ public interface StarlarkCallable extends StarlarkValue {
    * as it handles necessary book-keeping such as maintenance of the call stack, exception handling,
    * and so on.
    *
-   * <p>The default implementation throws an EvalException.
-   *
-   * <p>See {@link Starlark#fastcall} for basic information about function calls.
+   * <p>The default implementation throws an exception.
    *
    * @param thread the StarlarkThread in which the function is called
    * @param args a tuple of the arguments passed by position
@@ -62,13 +60,11 @@ public interface StarlarkCallable extends StarlarkValue {
    *
    * <p>This method defines the low-level or "fast" calling convention. A more convenient interface
    * is provided by the {@link #call} method, which provides a signature analogous to {@code def
-   * f(*args, **kwargs)}, or possibly the "self-call" feature of the {@link StarlarkMethod#selfCall}
-   * annotation mechanism.
+   * f(*args, **kwargs)}, or possibly the "self-call" feature of the {@link
+   * SkylarkCallable#selfCall} annotation mechanism.
    *
    * <p>The default implementation forwards the call to {@code call}, after rejecting any duplicate
    * named arguments. Other implementations of this method should similarly reject duplicates.
-   *
-   * <p>See {@link Starlark#fastcall} for basic information about function calls.
    *
    * @param thread the StarlarkThread in which the function is called
    * @param positional a list of positional arguments
