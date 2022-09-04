@@ -582,11 +582,8 @@ public final class PackageFactory {
       Globber.Token globToken = context.globber.runAsync(includes, excludes, excludeDirs);
       matches = context.globber.fetch(globToken);
     } catch (IOException e) {
-      String errorMessage = String.format(
-          "error globbing [%s]%s: %s",
-          Joiner.on(", ").join(includes),
-          excludes.isEmpty() ? "" : " - [" + Joiner.on(", ").join(excludes) + "]",
-          e.getMessage());
+      String errorMessage =
+          "error globbing [" + Joiner.on(", ").join(includes) + "]: " + e.getMessage();
       context.eventHandler.handle(Event.error(ast.getLocation(), errorMessage));
       context.pkgBuilder.setIOExceptionAndMessage(e, errorMessage);
       matches = ImmutableList.of();
