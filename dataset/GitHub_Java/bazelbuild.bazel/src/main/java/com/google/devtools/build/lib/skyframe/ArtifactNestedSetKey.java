@@ -46,6 +46,10 @@ public class ArtifactNestedSetKey implements SkyKey {
 
   @Override
   public int hashCode() {
+    if (rawChildren instanceof Object[]) {
+      // Warning: Ignoring Order
+      return Arrays.hashCode((Object[]) rawChildren);
+    }
     return rawChildren.hashCode();
   }
 
@@ -64,11 +68,10 @@ public class ArtifactNestedSetKey implements SkyKey {
       return true;
     }
 
-    if (rawChildren instanceof Artifact && theirRawChildren instanceof Artifact) {
-      return rawChildren.equals(theirRawChildren);
+    if (rawChildren instanceof Object[] && theirRawChildren instanceof Object[]) {
+      return Arrays.equals((Object[]) rawChildren, (Object[]) theirRawChildren);
     }
-
-    return false;
+    return rawChildren.equals(theirRawChildren);
   }
 
   @Override
