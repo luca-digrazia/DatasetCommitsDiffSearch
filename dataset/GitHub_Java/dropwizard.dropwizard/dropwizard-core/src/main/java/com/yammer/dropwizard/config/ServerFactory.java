@@ -176,8 +176,8 @@ public class ServerFactory {
     private Handler createHandler(Environment env) {
         final HandlerCollection collection = new HandlerCollection();
 
-        collection.addHandler(createInternalServlet(env));
         collection.addHandler(createExternalServlet(env.getServlets(), env.getFilters(), env.getServletListeners()));
+        collection.addHandler(createInternalServlet(env));
 
         if (requestLogHandlerFactory.isEnabled()) {
             collection.addHandler(requestLogHandlerFactory.build());
