@@ -78,6 +78,7 @@ public class QuartzScheduler implements Scheduler {
 
     private final Map<String, Runnable> timers = new ConcurrentHashMap<>();
 
+    @Override
     public void pause() {
         if (running.get()) {
             try {
@@ -88,6 +89,7 @@ public class QuartzScheduler implements Scheduler {
         }
     }
 
+    @Override
     public void resume() {
         if (running.get()) {
             try {
@@ -241,7 +243,14 @@ public class QuartzScheduler implements Scheduler {
 
                 @Override
                 public Instant getNextFireTime() {
-                    return context.getTrigger().getNextFireTime().toInstant();
+                    Date nextFireTime = context.getTrigger().getNextFireTime();
+                    return nextFireTime != null ? nextFireTime.toInstant() : null;
+                }
+
+                @Override
+                public Instant getPreviousFireTime() {
+                    Date previousFireTime = context.getTrigger().getPreviousFireTime();
+                    return previousFireTime != null ? previousFireTime.toInstant() : null;
                 }
             };
             String invokerClass = context.getJobDetail().getJobDataMap().getString(SchedulerDeploymentTemplate.INVOKER_KEY);

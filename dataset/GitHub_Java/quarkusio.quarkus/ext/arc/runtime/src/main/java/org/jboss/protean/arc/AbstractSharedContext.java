@@ -1,10 +1,29 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.protean.arc;
 
-import javax.enterprise.context.spi.AlterableContext;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
 import javax.enterprise.context.spi.Contextual;
 import javax.enterprise.context.spi.CreationalContext;
 
-abstract class AbstractSharedContext implements AlterableContext {
+abstract class AbstractSharedContext implements InjectableContext {
 
     private final ComputingCache<Key<?>, InstanceHandleImpl<?>> instances;
 
@@ -19,9 +38,18 @@ abstract class AbstractSharedContext implements AlterableContext {
         return (T) instances.getValue(new Key<>(contextual, creationalContext)).get();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <T> T get(Contextual<T> contextual) {
-        return get(contextual, null);
+        InstanceHandleImpl<?> handle = instances.getValueIfPresent(new Key<>(contextual, null));
+        return handle != null ? (T) handle.get() : null;
+    }
+
+    @Override
+    public Collection<InstanceHandle<?>> getAll() {
+        List<InstanceHandle<?>> all = new ArrayList<>();
+        instances.forEachValue(all::add);
+        return all;
     }
 
     @Override
@@ -33,15 +61,14 @@ abstract class AbstractSharedContext implements AlterableContext {
     public void destroy(Contextual<?> contextual) {
         InstanceHandleImpl<?> handle = instances.remove(new Key<>(contextual, null));
         if (handle != null) {
-            handle.destroy();
+            handle.destroyInternal();
         }
     }
 
-    public void destroy() {
-        synchronized (this) {
-            instances.forEachValue(instance -> instance.destroy());
-            instances.clear();
-        }
+    @Override
+    public synchronized void destroy() {
+        instances.forEachExistingValue(InstanceHandleImpl::destroyInternal);
+        instances.clear();
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.protean.arc.processor;
 
 import java.util.Collections;
@@ -40,13 +56,28 @@ class InterceptorInfo extends BeanInfo implements Comparable<InterceptorInfo> {
      */
     InterceptorInfo(AnnotationTarget target, BeanDeployment beanDeployment, Set<AnnotationInstance> bindings, List<Injection> injections, int priority) {
         super(target, beanDeployment, ScopeInfo.DEPENDENT, Collections.singleton(Type.create(target.asClass().name(), Kind.CLASS)), new HashSet<>(), injections,
-                null, null);
+                null, null, null, Collections.emptyList(), null);
         this.bindings = bindings;
         this.priority = priority;
-        this.aroundInvoke = target.asClass().methods().stream().filter(m -> m.hasAnnotation(DotNames.AROUND_INVOKE)).findAny().orElse(null);
-        this.aroundConstruct = target.asClass().methods().stream().filter(m -> m.hasAnnotation(DotNames.AROUND_CONSTRUCT)).findAny().orElse(null);
-        this.postConstruct = target.asClass().methods().stream().filter(m -> m.hasAnnotation(DotNames.POST_CONSTRUCT)).findAny().orElse(null);
-        this.preDestroy = target.asClass().methods().stream().filter(m -> m.hasAnnotation(DotNames.PRE_DESTROY)).findAny().orElse(null);
+        MethodInfo aroundInvoke = null;
+        MethodInfo aroundConstruct = null;
+        MethodInfo postConstruct = null;
+        MethodInfo preDestroy = null;
+        for (MethodInfo method : target.asClass().methods()) {
+            if (aroundInvoke == null && method.hasAnnotation(DotNames.AROUND_INVOKE)) {
+                aroundInvoke = method;
+            } else if (aroundConstruct == null && method.hasAnnotation(DotNames.AROUND_CONSTRUCT)) {
+                aroundConstruct = method;
+            } else if (postConstruct == null && method.hasAnnotation(DotNames.POST_CONSTRUCT)) {
+                postConstruct = method;
+            } else if (preDestroy == null && method.hasAnnotation(DotNames.PRE_DESTROY)) {
+                preDestroy = method;
+            }
+        }
+        this.aroundInvoke = aroundInvoke;
+        this.aroundConstruct = aroundConstruct;
+        this.postConstruct = postConstruct;
+        this.preDestroy = preDestroy;
     }
 
     Set<AnnotationInstance> getBindings() {
@@ -88,7 +119,8 @@ class InterceptorInfo extends BeanInfo implements Comparable<InterceptorInfo> {
         }
     }
 
-    boolean isInterceptor() {
+    @Override
+    public boolean isInterceptor() {
         return true;
     }
 

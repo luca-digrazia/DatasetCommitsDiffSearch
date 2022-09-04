@@ -18,7 +18,6 @@ package org.jboss.shamrock.scheduler.deployment;
 import static org.jboss.shamrock.annotations.ExecutionTime.STATIC_INIT;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -28,7 +27,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.inject.Singleton;
 
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.MethodInfo;
@@ -37,6 +35,7 @@ import org.jboss.jandex.Type.Kind;
 import org.jboss.logging.Logger;
 import org.jboss.protean.arc.Arc;
 import org.jboss.protean.arc.ArcContainer;
+import org.jboss.protean.arc.InjectableBean;
 import org.jboss.protean.arc.InstanceHandle;
 import org.jboss.protean.arc.processor.AnnotationStore;
 import org.jboss.protean.arc.processor.AnnotationsTransformer;
@@ -44,7 +43,6 @@ import org.jboss.protean.arc.processor.BeanDeploymentValidator;
 import org.jboss.protean.arc.processor.BeanInfo;
 import org.jboss.protean.arc.processor.DotNames;
 import org.jboss.protean.arc.processor.ScopeInfo;
-import org.jboss.protean.arc.processor.Transformation;
 import org.jboss.protean.gizmo.ClassCreator;
 import org.jboss.protean.gizmo.ClassOutput;
 import org.jboss.protean.gizmo.MethodCreator;
@@ -53,7 +51,7 @@ import org.jboss.protean.gizmo.ResultHandle;
 import org.jboss.shamrock.annotations.BuildProducer;
 import org.jboss.shamrock.annotations.BuildStep;
 import org.jboss.shamrock.annotations.Record;
-import org.jboss.shamrock.arc.deployment.AnnotationTransformerBuildItem;
+import org.jboss.shamrock.arc.deployment.AnnotationsTransformerBuildItem;
 import org.jboss.shamrock.arc.deployment.BeanDeploymentValidatorBuildItem;
 import org.jboss.shamrock.deployment.builditem.AdditionalBeanBuildItem;
 import org.jboss.shamrock.deployment.builditem.BeanContainerBuildItem;
@@ -96,8 +94,8 @@ public class SchedulerProcessor {
     }
 
     @BuildStep
-    AnnotationTransformerBuildItem annotationTransformer() {
-        return new AnnotationTransformerBuildItem(new AnnotationsTransformer() {
+    AnnotationsTransformerBuildItem annotationTransformer() {
+        return new AnnotationsTransformerBuildItem(new AnnotationsTransformer() {
 
             @Override
             public boolean appliesTo(org.jboss.jandex.AnnotationTarget.Kind kind) {
@@ -105,14 +103,14 @@ public class SchedulerProcessor {
             }
 
             @Override
-            public Collection<AnnotationInstance> transform(AnnotationTarget target, Collection<AnnotationInstance> annotations) {
-                if (annotations.isEmpty()) {
-                    if (target.asClass().annotations().containsKey(SCHEDULED_NAME) || target.asClass().annotations().containsKey(SCHEDULEDS_NAME)) {
-                        LOGGER.infof("Found scheduled business methods on a class %s with no annotations - adding @Singleton", target.asClass().name());
-                        return Transformation.with(target, annotations).add(Singleton.class).done();
+            public void transform(TransformationContext context) {
+                if (context.getAnnotations().isEmpty()) {
+                    // Class with no annotations but with @Scheduled method
+                    if (context.getTarget().asClass().annotations().containsKey(SCHEDULED_NAME) || context.getTarget().asClass().annotations().containsKey(SCHEDULEDS_NAME)) {
+                        LOGGER.infof("Found scheduled business methods on a class %s with no annotations - adding @Singleton", context.getTarget());
+                        context.transform().add(Singleton.class).done();
                     }
                 }
-                return annotations;
             }
         });
     }
@@ -128,23 +126,16 @@ public class SchedulerProcessor {
 
     @BuildStep
     BeanDeploymentValidatorBuildItem beanDeploymentValidator(BuildProducer<ScheduledBusinessMethodItem> scheduledBusinessMethods) {
-        // We need to collect all business methods annotated with @Scheduled first
+        
         return new BeanDeploymentValidatorBuildItem(new BeanDeploymentValidator() {
 
-            private BuildContext buildContext;
-
             @Override
-            public boolean initialize(BuildContext buildContext) {
-                this.buildContext = buildContext;
-                return true;
-            }
+            public void validate(ValidationContext validationContext) {
 
-            @Override
-            public void validate() {
+                AnnotationStore annotationStore = validationContext.get(Key.ANNOTATION_STORE);
 
-                AnnotationStore annotationStore = buildContext.get(Key.ANNOTATION_STORE);
-
-                for (BeanInfo bean : buildContext.get(Key.BEANS)) {
+                // We need to collect all business methods annotated with @Scheduled first
+                for (BeanInfo bean : validationContext.get(Key.BEANS)) {
                     if (bean.isClassBean()) {
                         // TODO: inherited business methods?
                         for (MethodInfo method : bean.getTarget().get().asClass().methods()) {
@@ -170,13 +161,11 @@ public class SchedulerProcessor {
                             if (schedules != null) {
                                 // Validate method params and return type
                                 List<Type> params = method.parameters();
-                                if (!params.isEmpty() && !params.get(0).equals(SCHEDULED_EXECUTION_TYPE)) {
-                                    LOGGER.warnf("Invalid scheduled business method parameters %s [method: %s, bean:%s", params, method, bean);
-                                    continue;
+                                if (params.size() > 1 || (params.size() == 1 && !params.get(0).equals(SCHEDULED_EXECUTION_TYPE))) {
+                                    throw new IllegalStateException(String.format("Invalid scheduled business method parameters %s [method: %s, bean:%s", params, method, bean));
                                 }
                                 if (!method.returnType().kind().equals(Type.Kind.VOID)) {
-                                    LOGGER.warnf("Invalid scheduled business return type %s [method: %s, bean:%s", method.returnType(), method, bean);
-                                    continue;
+                                    throw new IllegalStateException(String.format("Scheduled business method must return void [method: %s, bean:%s", method.returnType(), method, bean));
                                 }
                                 scheduledBusinessMethods.produce(new ScheduledBusinessMethodItem(bean, method, schedules));
                                 // TODO: validate cron and period expressions
@@ -233,18 +222,20 @@ public class SchedulerProcessor {
                 .build();
 
         MethodCreator invoke = invokerCreator.getMethodCreator("invoke", void.class, ScheduledExecution.class);
-        // InstanceHandle<Foo> handle = Arc.container().instance("1");
+        // InjectableBean<Foo: bean = Arc.container().bean("1");
+        // InstanceHandle<Foo> handle = Arc.container().instance(bean);
         // handle.get().ping();
         ResultHandle containerHandle = invoke.invokeStaticMethod(MethodDescriptor.ofMethod(Arc.class, "container", ArcContainer.class));
+        ResultHandle beanHandle = invoke.invokeInterfaceMethod(MethodDescriptor.ofMethod(ArcContainer.class, "bean", InjectableBean.class, String.class),
+                containerHandle, invoke.load(bean.getIdentifier()));
         ResultHandle instanceHandle = invoke.invokeInterfaceMethod(
-                MethodDescriptor.ofMethod(ArcContainer.class, "instance", InstanceHandle.class, String.class), containerHandle,
-                invoke.load(bean.getIdentifier()));
-        ResultHandle beanHandle = invoke.invokeInterfaceMethod(MethodDescriptor.ofMethod(InstanceHandle.class, "get", Object.class), instanceHandle);
+                MethodDescriptor.ofMethod(ArcContainer.class, "instance", InstanceHandle.class, InjectableBean.class), containerHandle, beanHandle);
+        ResultHandle beanInstanceHandle = invoke.invokeInterfaceMethod(MethodDescriptor.ofMethod(InstanceHandle.class, "get", Object.class), instanceHandle);
         if (method.parameters().isEmpty()) {
-            invoke.invokeVirtualMethod(MethodDescriptor.ofMethod(bean.getImplClazz().name().toString(), method.name(), void.class), beanHandle);
+            invoke.invokeVirtualMethod(MethodDescriptor.ofMethod(bean.getImplClazz().name().toString(), method.name(), void.class), beanInstanceHandle);
         } else {
             invoke.invokeVirtualMethod(MethodDescriptor.ofMethod(bean.getImplClazz().name().toString(), method.name(), void.class, ScheduledExecution.class),
-                    beanHandle, invoke.getMethodParam(0));
+                    beanInstanceHandle, invoke.getMethodParam(0));
         }
         // handle.destroy() - destroy dependent instance afterwards
         if (bean.getScope() == ScopeInfo.DEPENDENT) {
@@ -276,6 +267,7 @@ public class SchedulerProcessor {
             this.producer = producer;
         }
 
+        @Override
         public void write(final String name, final byte[] data) {
             producer.produce(new GeneratedClassBuildItem(true, name, data));
         }

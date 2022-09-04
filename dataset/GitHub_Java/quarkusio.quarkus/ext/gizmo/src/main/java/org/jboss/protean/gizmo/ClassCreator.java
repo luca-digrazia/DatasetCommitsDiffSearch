@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.protean.gizmo;
 
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
@@ -8,13 +24,13 @@ import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
 import static org.objectweb.asm.Opcodes.RETURN;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationValue;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
@@ -26,6 +42,7 @@ public class ClassCreator implements AutoCloseable, AnnotatedElement {
         return new Builder();
     }
 
+    private final BytecodeCreatorImpl enclosing;
     private final ClassOutput classOutput;
     private final String superClass;
     private final String[] interfaces;
@@ -34,23 +51,30 @@ public class ClassCreator implements AutoCloseable, AnnotatedElement {
     private final List<AnnotationCreatorImpl> annotations = new ArrayList<>();
     private final String className;
     private final String signature;
+    private final Map<MethodDescriptor, MethodDescriptor> superclassAccessors = new HashMap<>();
+    private static final AtomicInteger accessorCount = new AtomicInteger();
 
-    public ClassCreator(ClassOutput classOutput, String name, String signature, String superClass, String... interfaces) {
+    ClassCreator(BytecodeCreatorImpl enclosing, ClassOutput classOutput, String name, String signature, String superClass, String... interfaces) {
+        this.enclosing = enclosing;
         this.classOutput = classOutput;
-        this.superClass = superClass.replace(".", "/");
+        this.superClass = superClass.replace('.', '/');
         this.interfaces = new String[interfaces.length];
         for (int i = 0; i < interfaces.length; ++i) {
-            this.interfaces[i] = interfaces[i].replace(".", "/");
+            this.interfaces[i] = interfaces[i].replace('.', '/');
         }
-        this.className = name.replace(".", "/");
+        this.className = name.replace('.', '/');
         this.signature = signature;
+    }
+
+    public ClassCreator(ClassOutput classOutput, String name, String signature, String superClass, String... interfaces) {
+        this(null, classOutput, name, signature, superClass, interfaces);
     }
 
     public MethodCreator getMethodCreator(MethodDescriptor methodDescriptor) {
         if (methods.containsKey(methodDescriptor)) {
             return methods.get(methodDescriptor);
         }
-        MethodCreatorImpl creator = new MethodCreatorImpl(methodDescriptor, className, classOutput, this);
+        MethodCreatorImpl creator = new MethodCreatorImpl(enclosing, methodDescriptor, className, classOutput, this);
         methods.put(methodDescriptor, creator);
         return creator;
     }
@@ -96,6 +120,23 @@ public class ClassCreator implements AutoCloseable, AnnotatedElement {
         return className;
     }
 
+    MethodDescriptor getSuperclassAccessor(MethodDescriptor descriptor) {
+        if (superclassAccessors.containsKey(descriptor)) {
+            return superclassAccessors.get(descriptor);
+        }
+        String name = descriptor.getName() + "$$superaccessor" + accessorCount.incrementAndGet();
+        MethodCreator ctor = getMethodCreator(name, descriptor.getReturnType(), descriptor.getParameterTypes());
+        ResultHandle[] params = new ResultHandle[descriptor.getParameterTypes().length];
+        for (int i = 0; i < params.length; ++i) {
+            params[i] = ctor.getMethodParam(i);
+        }
+        ResultHandle ret = ctor.invokeSpecialMethod(MethodDescriptor.ofMethod(getSuperClass(), descriptor.getName(), descriptor.getReturnType(), descriptor.getParameterTypes()), ctor.getThis(), params);
+        ctor.returnValue(ret);
+        superclassAccessors.put(descriptor, ctor.getMethodDescriptor());
+        return ctor.getMethodDescriptor();
+    }
+
+    @Override
     public void close() {
         ClassWriter file = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
         String[] interfaces = new String[this.interfaces.length];
@@ -162,9 +203,16 @@ public class ClassCreator implements AutoCloseable, AnnotatedElement {
 
         private final List<String> interfaces;
 
+        private BytecodeCreatorImpl enclosing;
+
         Builder() {
             superClass(Object.class);
             this.interfaces = new ArrayList<>();
+        }
+
+        Builder enclosing(BytecodeCreatorImpl enclosing) {
+            this.enclosing = enclosing;
+            return this;
         }
 
         public Builder classOutput(ClassOutput classOutput) {
@@ -192,9 +240,7 @@ public class ClassCreator implements AutoCloseable, AnnotatedElement {
         }
 
         public Builder interfaces(String... interfaces) {
-            for (String val : interfaces) {
-                this.interfaces.add(val);
-            }
+            Collections.addAll(this.interfaces, interfaces);
             return this;
         }
 
@@ -209,7 +255,7 @@ public class ClassCreator implements AutoCloseable, AnnotatedElement {
             Objects.requireNonNull(className);
             Objects.requireNonNull(classOutput);
             Objects.requireNonNull(superClass);
-            return new ClassCreator(classOutput, className, signature, superClass, interfaces.toArray(new String[0]));
+            return new ClassCreator(enclosing, classOutput, className, signature, superClass, interfaces.toArray(new String[0]));
         }
 
     }

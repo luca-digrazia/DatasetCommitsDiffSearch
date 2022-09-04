@@ -1,10 +1,26 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.shamrock.jpa;
 
-import java.util.Objects;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
 import org.hibernate.bytecode.enhance.spi.DefaultEnhancementContext;
 import org.hibernate.bytecode.enhance.spi.Enhancer;
+import org.hibernate.bytecode.enhance.spi.UnloadedClass;
 import org.hibernate.bytecode.spi.BytecodeProvider;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -22,48 +38,29 @@ import org.objectweb.asm.Opcodes;
  *
  * @author Sanne Grinovero  <sanne@hibernate.org>
  */
-public final class HibernateEntityEnhancer implements Function<String, Function<ClassVisitor, ClassVisitor>> {
+public final class HibernateEntityEnhancer implements BiFunction<String, ClassVisitor, ClassVisitor> {
 
     private final Enhancer enhancer;
-    private final KnownDomainObjects classnameWhitelist;
 
-    public HibernateEntityEnhancer(KnownDomainObjects classnameWhitelist) {
-        Objects.requireNonNull(classnameWhitelist);
-        this.classnameWhitelist = classnameWhitelist;
+    public HibernateEntityEnhancer() {
         BytecodeProvider provider = new org.hibernate.bytecode.internal.bytebuddy.BytecodeProviderImpl();
         DefaultEnhancementContext enhancementContext = new DefaultEnhancementContext() {
             @Override
             public ClassLoader getLoadingClassLoader() {
                 return Thread.currentThread().getContextClassLoader();
             }
+
+            @Override
+            public boolean doExtendedEnhancement(UnloadedClass classDescriptor) {
+                return true;
+            }
         };
         this.enhancer = provider.getEnhancer(enhancementContext);
     }
 
     @Override
-    public Function<ClassVisitor, ClassVisitor> apply(String classname) {
-        if (classnameWhitelist.contains(classname))
-            return new HibernateTransformingVisitorFunction(classname);
-        else
-            return null;
-    }
-
-    /**
-     * Having to convert a ClassVisitor into another, this allows visitor chaining: the returned ClassVisitor needs to
-     * refer to the previous ClassVisitor in the chain to forward input events (optionally transformed).
-     */
-    private class HibernateTransformingVisitorFunction implements Function<ClassVisitor, ClassVisitor> {
-
-        private final String className;
-
-        public HibernateTransformingVisitorFunction(String className) {
-            this.className = className;
-        }
-
-        @Override
-        public ClassVisitor apply(ClassVisitor outputClassVisitor) {
-            return new HibernateEnhancingClassVisitor(className, outputClassVisitor);
-        }
+    public ClassVisitor apply(String className, ClassVisitor outputClassVisitor) {
+        return new HibernateEnhancingClassVisitor(className, outputClassVisitor);
     }
 
     private class HibernateEnhancingClassVisitor extends ClassVisitor {
@@ -77,6 +74,7 @@ public final class HibernateEntityEnhancer implements Function<String, Function<
             this.outputClassVisitor = outputClassVisitor;
         }
 
+        @Override
         public void visitEnd() {
             super.visitEnd();
             final ClassWriter writer = (ClassWriter) this.cv; //safe cast: cv is the the ClassWriter instance we passed to the super constructor

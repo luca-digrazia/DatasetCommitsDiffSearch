@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.shamrock.runtime;
 
 import java.util.Optional;
@@ -26,7 +42,7 @@ public class ExecutorTemplate {
     public ExecutorTemplate() {
     }
 
-    public Executor setupRunTime(int defaultCoreSize, int defaultMaxSize, int defaultQueueSize, float defaultGrowthResistance, int defaultKeepAliveMillis) {
+    public Executor setupRunTime(ShutdownContext shutdownContext, int defaultCoreSize, int defaultMaxSize, int defaultQueueSize, float defaultGrowthResistance, int defaultKeepAliveMillis) {
         final JBossThreadFactory threadFactory = new JBossThreadFactory(new ThreadGroup("executor"), Boolean.TRUE, null, "executor-thread-%t", JBossExecutors.loggingExceptionHandler("org.jboss.executor.uncaught"), null);
         final EnhancedQueueExecutor.Builder builder = new EnhancedQueueExecutor.Builder()
             .setRegisterMBean(false)
@@ -39,7 +55,19 @@ public class ExecutorTemplate {
         builder.setMaximumQueueSize(getIntConfigVal(QUEUE_SIZE, defaultQueueSize));
         builder.setGrowthResistance(getFloatConfigVal(GROWTH_RESISTANCE, defaultGrowthResistance));
         builder.setKeepAliveTime(getIntConfigVal("executor.keep-alive-millis", defaultKeepAliveMillis), TimeUnit.MILLISECONDS);
-        return builder.build();
+        final EnhancedQueueExecutor executor = builder.build();
+        shutdownContext.addShutdownTask(new Runnable() {
+            @Override
+            public void run() {
+                executor.shutdown();
+                for (;;) try {
+                    executor.awaitTermination(Long.MAX_VALUE, TimeUnit.HOURS);
+                    return;
+                } catch (InterruptedException ignored) {
+                }
+            }
+        });
+        return executor;
     }
 
     public static float getFloatConfigVal(final String key, final float defVal) {

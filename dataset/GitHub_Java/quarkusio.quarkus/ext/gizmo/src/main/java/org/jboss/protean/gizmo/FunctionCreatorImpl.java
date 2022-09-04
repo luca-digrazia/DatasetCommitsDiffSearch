@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.protean.gizmo;
 
 import java.util.LinkedHashMap;
@@ -12,7 +28,6 @@ class FunctionCreatorImpl implements FunctionCreator {
     static final String FIELD_NAME = "f";
     private final ResultHandle instance;
     private final ClassCreator classCreator;
-    private final MethodCreatorImpl methodCreator;
     private final Map<ResultHandle, CapturedResultHandle> capturedResultHandles = new LinkedHashMap<>();
     private final BytecodeCreatorImpl owner;
     private final FunctionBytecodeCreator fbc;
@@ -22,9 +37,8 @@ class FunctionCreatorImpl implements FunctionCreator {
     FunctionCreatorImpl(ResultHandle instance, ClassCreator classCreator, MethodCreatorImpl methodCreator, BytecodeCreatorImpl owner) {
         this.instance = instance;
         this.classCreator = classCreator;
-        this.methodCreator = methodCreator;
         this.owner = owner;
-        fbc = new FunctionBytecodeCreator(this, methodCreator, owner);
+        fbc = new FunctionBytecodeCreator(this, methodCreator);
     }
 
     @Override
@@ -74,8 +88,8 @@ class FunctionCreatorImpl implements FunctionCreator {
         private final FunctionCreatorImpl functionCreator;
         private final MethodCreatorImpl method;
 
-        FunctionBytecodeCreator(FunctionCreatorImpl functionCreator, MethodCreatorImpl method, BytecodeCreatorImpl owner) {
-            super(owner);
+        FunctionBytecodeCreator(FunctionCreatorImpl functionCreator, MethodCreatorImpl method) {
+            super(method);
             this.functionCreator = functionCreator;
             this.method = method;
         }
@@ -88,11 +102,18 @@ class FunctionCreatorImpl implements FunctionCreator {
          * @param handle The handle that may be a parent handle
          * @return The substituted handler
          */
+        @Override
         ResultHandle resolve(ResultHandle handle) {
             // resolve any captures of captures.
             if (handle == null || handle.getResultType() == ResultHandle.ResultType.CONSTANT) return handle;
-            handle = getOwner().resolve(handle);
-            if (handle.getOwner().getMethod() == getOwner().getMethod()) {
+            final BytecodeCreatorImpl ourOwner = method.getOwner();
+            handle = ourOwner.resolve(handle);
+            final BytecodeCreatorImpl newOwner = handle.getOwner();
+            if (newOwner.isScopedWithin(method)) {
+                // already local
+                return handle;
+            }
+            if (newOwner.getMethod() == ourOwner.getMethod()) {
                 CapturedResultHandle capture = functionCreator.capturedResultHandles.get(handle);
                 if (capture != null) {
                     return capture.substitute;
@@ -110,7 +131,8 @@ class FunctionCreatorImpl implements FunctionCreator {
             }
         }
 
-        ResultHandle[] resolve(ResultHandle[] handle) {
+        @Override
+        ResultHandle[] resolve(ResultHandle... handle) {
             ResultHandle[] ret = new ResultHandle[handle.length];
             for (int i = 0; i < handle.length; ++i) {
                 ret[i] = resolve(handle[i]);
@@ -118,14 +140,17 @@ class FunctionCreatorImpl implements FunctionCreator {
             return ret;
         }
 
+        @Override
         MethodCreatorImpl getMethod() {
             return method;
         }
 
+        @Override
         public ResultHandle invokeSpecialMethod(MethodDescriptor descriptor, ResultHandle object, ResultHandle... args) {
-            if (descriptor.getDeclaringClass().equals(getOwner().getMethod().getClassCreator().getSuperClass())) {
+            final ClassCreator ownersCreator = getMethod().getOwner().getMethod().getClassCreator();
+            if (descriptor.getDeclaringClass().equals(ownersCreator.getSuperClass())) {
                 //this is an invokespecial on the owners superclass, we can't do this directly
-                MethodDescriptor newMethod = getOwner().getMethod().getClassCreator().getSuperclassAccessor(descriptor);
+                MethodDescriptor newMethod = ownersCreator.getSuperclassAccessor(descriptor);
                 return super.invokeVirtualMethod(newMethod, object, args);
             } else {
                 return super.invokeSpecialMethod(descriptor, object, args);

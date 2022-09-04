@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.protean.gizmo;
 
 import java.lang.reflect.Method;
@@ -7,51 +23,87 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
-public class BytecodeCreatorImpl implements BytecodeCreator {
+class BytecodeCreatorImpl implements BytecodeCreator {
+
+    public static final String DEBUG_HELPERS_PROPERTY = "org.jboss.protean.gizmo.DEBUG_HELPERS_ON";
 
     private static final AtomicInteger functionCount = new AtomicInteger();
-    private static final AtomicInteger accessorCount = new AtomicInteger();
 
     private static final String FUNCTION = "$$function$$";
 
-    protected final MethodDescriptor methodDescriptor;
-    protected final String declaringClassName;
     protected final List<Operation> operations = new ArrayList<>();
 
-    private final ClassOutput classOutput;
-    private final ClassCreator classCreator;
-    private final Map<MethodDescriptor, MethodDescriptor> superclassAccessors = new HashMap<>();
+    private final MethodCreatorImpl method;
 
     private final BytecodeCreatorImpl owner;
 
-    public BytecodeCreatorImpl(MethodDescriptor methodDescriptor, String declaringClassName, ClassOutput classOutput, ClassCreator classCreator) {
-        this(methodDescriptor, declaringClassName, classOutput, classCreator, null);
+    private final Label top = new Label();
+    private final Label bottom = new Label();
+
+    private static final Map<String, String> boxingMap;
+    private static final Map<String, String> boxingMethodMap;
+
+    static {
+        Map<String, String> b = new HashMap<>();
+        b.put("Z", Type.getInternalName(Boolean.class));
+        b.put("B", Type.getInternalName(Byte.class));
+        b.put("C", Type.getInternalName(Character.class));
+        b.put("S", Type.getInternalName(Short.class));
+        b.put("I", Type.getInternalName(Integer.class));
+        b.put("J", Type.getInternalName(Long.class));
+        b.put("F", Type.getInternalName(Float.class));
+        b.put("D", Type.getInternalName(Double.class));
+        boxingMap = Collections.unmodifiableMap(b);
+
+        b = new HashMap<>();
+        b.put("Z", "booleanValue");
+        b.put("B", "byteValue");
+        b.put("C", "charValue");
+        b.put("S", "shortValue");
+        b.put("I", "intValue");
+        b.put("J", "longValue");
+        b.put("F", "floatValue");
+        b.put("D", "doubleValue");
+        boxingMethodMap = Collections.unmodifiableMap(b);
     }
 
-    public BytecodeCreatorImpl(MethodDescriptor methodDescriptor, String declaringClassName, ClassOutput classOutput, ClassCreator classCreator, BytecodeCreatorImpl owner) {
-        this.methodDescriptor = methodDescriptor;
-        this.declaringClassName = declaringClassName;
-        this.classOutput = classOutput;
-        this.classCreator = classCreator;
-        this.owner = owner;
+    Label getTop() {
+        return top;
+    }
+
+    Label getBottom() {
+        return bottom;
+    }
+
+    BytecodeCreatorImpl(BytecodeCreatorImpl enclosing, MethodCreatorImpl methodCreator) {
+        this.method = methodCreator;
+        this.owner = enclosing;
+    }
+
+    BytecodeCreatorImpl(BytecodeCreatorImpl enclosing, boolean useThisMethod) {
+        this.method = useThisMethod ? (MethodCreatorImpl) this : enclosing.getMethod();
+        this.owner = enclosing;
+    }
+
+    BytecodeCreatorImpl(BytecodeCreatorImpl enclosing) {
+        this(enclosing, enclosing.getMethod());
     }
 
     @Override
     public ResultHandle getThis() {
-        ResultHandle resultHandle = new ResultHandle("L" + declaringClassName.replace(".", "/") + ";", this);
+        ResultHandle resultHandle = new ResultHandle("L" + getMethod().getDeclaringClassName().replace('.', '/') + ";", this);
         resultHandle.setNo(0);
         return resultHandle;
     }
@@ -59,21 +111,21 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
     @Override
     public ResultHandle invokeVirtualMethod(MethodDescriptor descriptor, ResultHandle object, ResultHandle... args) {
         ResultHandle ret = allocateResult(descriptor.getReturnType());
-        operations.add(new InvokeOperation(ret, descriptor, object, args, false, false));
+        operations.add(new InvokeOperation(ret, descriptor, resolve(checkScope(object)), resolve(checkScope(args)), false, false));
         return ret;
     }
 
     @Override
     public ResultHandle invokeInterfaceMethod(MethodDescriptor descriptor, ResultHandle object, ResultHandle... args) {
         ResultHandle ret = allocateResult(descriptor.getReturnType());
-        operations.add(new InvokeOperation(ret, descriptor, object, args, true, false));
+        operations.add(new InvokeOperation(ret, descriptor, resolve(checkScope(object)), resolve(checkScope(args)), true, false));
         return ret;
     }
 
     @Override
     public ResultHandle invokeStaticMethod(MethodDescriptor descriptor, ResultHandle... args) {
         ResultHandle ret = allocateResult(descriptor.getReturnType());
-        operations.add(new InvokeOperation(ret, descriptor, args));
+        operations.add(new InvokeOperation(ret, descriptor, resolve(checkScope(args))));
         return ret;
     }
 
@@ -81,7 +133,7 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
     @Override
     public ResultHandle invokeSpecialMethod(MethodDescriptor descriptor, ResultHandle object, ResultHandle... args) {
         ResultHandle ret = allocateResult(descriptor.getReturnType());
-        operations.add(new InvokeOperation(ret, descriptor, object, args, false, true));
+        operations.add(new InvokeOperation(ret, descriptor, resolve(checkScope(object)), resolve(checkScope(args)), false, true));
         return ret;
     }
 
@@ -89,7 +141,7 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
     @Override
     public ResultHandle newInstance(MethodDescriptor descriptor, ResultHandle... args) {
         ResultHandle ret = allocateResult("L" + descriptor.getDeclaringClass() + ";");
-        operations.add(new NewInstanceOperation(ret, descriptor, args));
+        operations.add(new NewInstanceOperation(ret, descriptor, resolve(checkScope(args))));
         return ret;
     }
 
@@ -105,6 +157,7 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
         if (resultType.startsWith("[[")) {
             throw new RuntimeException("Multidimensional arrays not supported yet");
         }
+        final ResultHandle resolvedLength = resolve(checkScope(length));
         char typeChar = resultType.charAt(1);
         if (typeChar != 'L') {
             //primitive arrays
@@ -141,19 +194,19 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
             operations.add(new Operation() {
                 @Override
                 public void writeBytecode(MethodVisitor methodVisitor) {
-                    loadResultHandle(methodVisitor, length, BytecodeCreatorImpl.this, "I");
+                    loadResultHandle(methodVisitor, resolvedLength, BytecodeCreatorImpl.this, "I");
                     methodVisitor.visitIntInsn(Opcodes.NEWARRAY, opcode);
                     storeResultHandle(methodVisitor, ret);
                 }
 
                 @Override
                 Set<ResultHandle> getInputResultHandles() {
-                    return Collections.singleton(length);
+                    return Collections.singleton(resolvedLength);
                 }
 
                 @Override
                 ResultHandle getTopResultHandle() {
-                    return length;
+                    return resolvedLength;
                 }
 
                 @Override
@@ -169,19 +222,19 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
             operations.add(new Operation() {
                 @Override
                 public void writeBytecode(MethodVisitor methodVisitor) {
-                    loadResultHandle(methodVisitor, length, BytecodeCreatorImpl.this, "I");
+                    loadResultHandle(methodVisitor, resolvedLength, BytecodeCreatorImpl.this, "I");
                     methodVisitor.visitTypeInsn(Opcodes.ANEWARRAY, arrayType);
                     storeResultHandle(methodVisitor, ret);
                 }
 
                 @Override
                 Set<ResultHandle> getInputResultHandles() {
-                    return Collections.singleton(length);
+                    return Collections.singleton(resolvedLength);
                 }
 
                 @Override
                 ResultHandle getTopResultHandle() {
-                    return length;
+                    return resolvedLength;
                 }
 
                 @Override
@@ -241,7 +294,53 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
 
     @Override
     public ResultHandle loadClass(String className) {
-        return new ResultHandle("Ljava/lang/Class;", this, Type.getObjectType(className.replace(".", "/")));
+        Class primtiveType = null;
+        if (className.equals("boolean")) {
+            primtiveType = Boolean.class;
+        } else if (className.equals("byte")) {
+            primtiveType = Byte.class;
+        } else if (className.equals("char")) {
+            primtiveType = Character.class;
+        } else if (className.equals("short")) {
+            primtiveType = Short.class;
+        } else if (className.equals("int")) {
+            primtiveType = Integer.class;
+        } else if (className.equals("long")) {
+            primtiveType = Long.class;
+        } else if (className.equals("float")) {
+            primtiveType = Float.class;
+        } else if (className.equals("double")) {
+            primtiveType = Double.class;
+        }
+        if (primtiveType == null) {
+            return new ResultHandle("Ljava/lang/Class;", this, Type.getObjectType(className.replace('.', '/')));
+        } else {
+            Class pt = primtiveType;
+            ResultHandle ret = new ResultHandle("Ljava/lang/Class;", this);
+            operations.add(new Operation() {
+                @Override
+                void writeBytecode(MethodVisitor methodVisitor) {
+                    methodVisitor.visitFieldInsn(Opcodes.GETSTATIC, Type.getInternalName(pt), "TYPE", "Ljava/lang/Class;");
+                    storeResultHandle(methodVisitor, ret);
+                }
+
+                @Override
+                Set<ResultHandle> getInputResultHandles() {
+                    return Collections.emptySet();
+                }
+
+                @Override
+                ResultHandle getTopResultHandle() {
+                    return null;
+                }
+
+                @Override
+                ResultHandle getOutgoingResultHandle() {
+                    return ret;
+                }
+            });
+            return ret;
+        }
     }
 
     @Override
@@ -251,22 +350,24 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
 
     @Override
     public void writeInstanceField(FieldDescriptor fieldDescriptor, ResultHandle instance, ResultHandle value) {
+        final ResultHandle resolvedInstance = resolve(checkScope(instance));
+        final ResultHandle resolvedValue = resolve(checkScope(value));
         operations.add(new Operation() {
             @Override
             void writeBytecode(MethodVisitor methodVisitor) {
-                loadResultHandle(methodVisitor, instance, BytecodeCreatorImpl.this, "L" + fieldDescriptor.getDeclaringClass() + ";");
-                loadResultHandle(methodVisitor, value, BytecodeCreatorImpl.this, fieldDescriptor.getType());
+                loadResultHandle(methodVisitor, resolvedInstance, BytecodeCreatorImpl.this, "L" + fieldDescriptor.getDeclaringClass() + ";");
+                loadResultHandle(methodVisitor, resolvedValue, BytecodeCreatorImpl.this, fieldDescriptor.getType());
                 methodVisitor.visitFieldInsn(Opcodes.PUTFIELD, fieldDescriptor.getDeclaringClass(), fieldDescriptor.getName(), fieldDescriptor.getType());
             }
 
             @Override
             Set<ResultHandle> getInputResultHandles() {
-                return new HashSet<>(Arrays.asList(instance, value));
+                return new HashSet<>(Arrays.asList(resolvedInstance, resolvedValue));
             }
 
             @Override
             ResultHandle getTopResultHandle() {
-                return instance;
+                return resolvedInstance;
             }
 
             @Override
@@ -279,22 +380,23 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
     @Override
     public ResultHandle readInstanceField(FieldDescriptor fieldDescriptor, ResultHandle instance) {
         ResultHandle resultHandle = allocateResult(fieldDescriptor.getType());
+        ResultHandle resolvedInstance = resolve(checkScope(instance));
         operations.add(new Operation() {
             @Override
             void writeBytecode(MethodVisitor methodVisitor) {
-                loadResultHandle(methodVisitor, instance, BytecodeCreatorImpl.this, "L" + fieldDescriptor.getDeclaringClass() + ";");
+                loadResultHandle(methodVisitor, resolvedInstance, BytecodeCreatorImpl.this, "L" + fieldDescriptor.getDeclaringClass() + ";");
                 methodVisitor.visitFieldInsn(Opcodes.GETFIELD, fieldDescriptor.getDeclaringClass(), fieldDescriptor.getName(), fieldDescriptor.getType());
                 storeResultHandle(methodVisitor, resultHandle);
             }
 
             @Override
             Set<ResultHandle> getInputResultHandles() {
-                return Collections.singleton(instance);
+                return Collections.singleton(resolvedInstance);
             }
 
             @Override
             ResultHandle getTopResultHandle() {
-                return instance;
+                return resolvedInstance;
             }
 
             @Override
@@ -307,21 +409,22 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
 
     @Override
     public void writeStaticField(FieldDescriptor fieldDescriptor, ResultHandle value) {
+        ResultHandle resolvedValue = resolve(checkScope(value));
         operations.add(new Operation() {
             @Override
             public void writeBytecode(MethodVisitor methodVisitor) {
-                loadResultHandle(methodVisitor, value, BytecodeCreatorImpl.this, fieldDescriptor.getType());
+                loadResultHandle(methodVisitor, resolvedValue, BytecodeCreatorImpl.this, fieldDescriptor.getType());
                 methodVisitor.visitFieldInsn(Opcodes.PUTSTATIC, fieldDescriptor.getDeclaringClass(), fieldDescriptor.getName(), fieldDescriptor.getType());
             }
 
             @Override
             Set<ResultHandle> getInputResultHandles() {
-                return Collections.singleton(value);
+                return Collections.singleton(resolvedValue);
             }
 
             @Override
             ResultHandle getTopResultHandle() {
-                return value;
+                return resolvedValue;
             }
 
             @Override
@@ -362,23 +465,25 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
     @Override
     public ResultHandle readArrayValue(ResultHandle array, ResultHandle index) {
         ResultHandle result = allocateResult(array.getType().substring(1));
+        ResultHandle resolvedArray = resolve(checkScope(array));
+        ResultHandle resolvedIndex = resolve(checkScope(index));
         operations.add(new Operation() {
             @Override
             public void writeBytecode(MethodVisitor methodVisitor) {
-                loadResultHandle(methodVisitor, array, BytecodeCreatorImpl.this, array.getType());
-                loadResultHandle(methodVisitor, index, BytecodeCreatorImpl.this, "I");
+                loadResultHandle(methodVisitor, resolvedArray, BytecodeCreatorImpl.this, resolvedArray.getType());
+                loadResultHandle(methodVisitor, resolvedIndex, BytecodeCreatorImpl.this, "I");
                 methodVisitor.visitInsn(Opcodes.AALOAD);
                 storeResultHandle(methodVisitor, result);
             }
 
             @Override
             Set<ResultHandle> getInputResultHandles() {
-                return new HashSet<>(Arrays.asList(array, index));
+                return new HashSet<>(Arrays.asList(resolvedArray, resolvedIndex));
             }
 
             @Override
             ResultHandle getTopResultHandle() {
-                return array;
+                return resolvedArray;
             }
 
             @Override
@@ -391,13 +496,16 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
 
     @Override
     public void writeArrayValue(ResultHandle array, ResultHandle index, ResultHandle value) {
+        ResultHandle resolvedArray = resolve(checkScope(array));
+        ResultHandle resolvedIndex = resolve(checkScope(index));
+        ResultHandle resolvedValue = resolve(checkScope(value));
         operations.add(new Operation() {
             @Override
             public void writeBytecode(MethodVisitor methodVisitor) {
-                loadResultHandle(methodVisitor, array, BytecodeCreatorImpl.this, array.getType());
-                loadResultHandle(methodVisitor, index, BytecodeCreatorImpl.this, "I");
-                String arrayType = array.getType().substring(1);
-                loadResultHandle(methodVisitor, value, BytecodeCreatorImpl.this, arrayType);
+                loadResultHandle(methodVisitor, resolvedArray, BytecodeCreatorImpl.this, resolvedArray.getType());
+                loadResultHandle(methodVisitor, resolvedIndex, BytecodeCreatorImpl.this, "I");
+                String arrayType = resolvedArray.getType().substring(1);
+                loadResultHandle(methodVisitor, resolvedValue, BytecodeCreatorImpl.this, arrayType);
                 if (arrayType.equals("Z") || arrayType.equals("B")) {
                     methodVisitor.visitInsn(Opcodes.BASTORE);
                 } else if (arrayType.equals("S")) {
@@ -419,12 +527,12 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
 
             @Override
             Set<ResultHandle> getInputResultHandles() {
-                return new HashSet<>(Arrays.asList(array, index, value));
+                return new HashSet<>(Arrays.asList(resolvedArray, resolvedIndex, resolvedValue));
             }
 
             @Override
             ResultHandle getTopResultHandle() {
-                return array;
+                return resolvedArray;
             }
 
             @Override
@@ -432,6 +540,85 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
                 return null;
             }
         });
+    }
+
+    @Override
+    public AssignableResultHandle createVariable(final String typeDescr) {
+        Objects.requireNonNull(typeDescr);
+        return new AssignableResultHandle(typeDescr, this);
+    }
+
+    @Override
+    public void assign(final AssignableResultHandle target, final ResultHandle value) {
+        Objects.requireNonNull(target);
+        Objects.requireNonNull(value);
+        ResultHandle resolvedTarget = resolve(checkScope(target));
+        ResultHandle resolvedValue = resolve(checkScope(value));
+        if (resolvedTarget instanceof AssignableResultHandle) {
+            operations.add(new AssignOperation(resolvedValue, resolvedTarget));
+        } else {
+            throw new IllegalArgumentException("Cannot assign to captured variables");
+        }
+    }
+
+    @Override
+    public ResultHandle checkCast(final ResultHandle resultHandle, final String castTarget) {
+        final String intName = castTarget.replace('.', '/');
+        // seems like a waste of local vars but it's the safest approach since result type can't be mutated
+        final ResultHandle result = allocateResult("L" + intName + ";");
+        final ResultHandle resolvedResultHandle = resolve(checkScope(resultHandle));
+        assert result != null;
+        operations.add(new Operation() {
+            @Override
+            void writeBytecode(final MethodVisitor methodVisitor) {
+                loadResultHandle(methodVisitor, resolvedResultHandle, BytecodeCreatorImpl.this, result.getType());
+                storeResultHandle(methodVisitor, result);
+            }
+
+            @Override
+            Set<ResultHandle> getInputResultHandles() {
+                return Collections.singleton(resolvedResultHandle);
+            }
+
+            @Override
+            ResultHandle getTopResultHandle() {
+                return resolvedResultHandle;
+            }
+
+            @Override
+            ResultHandle getOutgoingResultHandle() {
+                return result;
+            }
+        });
+        return result;
+    }
+
+    @Override
+    public boolean isScopedWithin(final BytecodeCreator other) {
+        return other == this || owner != null && owner.isScopedWithin(other);
+    }
+
+    @Override
+    public void continueScope(final BytecodeCreator scope) {
+        if (! isScopedWithin(scope)) {
+            throw new IllegalArgumentException("Cannot continue non-enclosing scope");
+        }
+        operations.add(new JumpOperation(((BytecodeCreatorImpl) scope).top));
+    }
+
+    @Override
+    public void breakScope(final BytecodeCreator scope) {
+        if (! isScopedWithin(scope)) {
+            throw new IllegalArgumentException("Cannot break non-enclosing scope");
+        }
+        operations.add(new JumpOperation(((BytecodeCreatorImpl) scope).bottom));
+    }
+
+    @Override
+    public BytecodeCreator createScope() {
+        final BytecodeCreatorImpl enclosed = new BytecodeCreatorImpl(this);
+        operations.add(new BlockOperation(enclosed));
+        return enclosed;
     }
 
     static void storeResultHandle(MethodVisitor methodVisitor, ResultHandle handle) {
@@ -469,265 +656,84 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
             }
             return;
         }
-        if (handle.getOwner() != bc && (bc.owner == null || handle.getOwner() != bc.owner)) {
-            //throw new IllegalArgumentException("Wrong owner for ResultHandle " + handle);
+        if (! isScopedWithin(handle.getOwner())) {
+//            throw new IllegalStateException("Wrong owner for ResultHandle " + handle);
         }
-        if (handle.getResultType() == ResultHandle.ResultType.SINGLE_USE) {
-            //already on the stack
-            if (expectedType.length() > 1 && !handle.getType().equals(expectedType)) {
-                if (!dontCast) {
-                    if (!expectedType.equals("Ljava/lang/Object;")) {
-                        methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, DescriptorUtils.getTypeStringFromDescriptorFormat(expectedType));
-                    }
-                }
+        if (handle.getResultType() != ResultHandle.ResultType.SINGLE_USE) {
+            if (handle.getType().equals("S") || handle.getType().equals("Z") || handle.getType().equals("I") || handle.getType().equals("B") || handle.getType().equals("C")) {
+                methodVisitor.visitVarInsn(Opcodes.ILOAD, handle.getNo());
+            } else if (handle.getType().equals("J")) {
+                methodVisitor.visitVarInsn(Opcodes.LLOAD, handle.getNo());
+            } else if (handle.getType().equals("F")) {
+                methodVisitor.visitVarInsn(Opcodes.FLOAD, handle.getNo());
+            } else if (handle.getType().equals("D")) {
+                methodVisitor.visitVarInsn(Opcodes.DLOAD, handle.getNo());
+            } else {
+                methodVisitor.visitVarInsn(Opcodes.ALOAD, handle.getNo());
             }
-            return;
         }
-        if (handle.getType().equals("S") || handle.getType().equals("Z") || handle.getType().equals("I") || handle.getType().equals("B") || handle.getType().equals("B")) {
-            methodVisitor.visitVarInsn(Opcodes.ILOAD, handle.getNo());
-        } else if (handle.getType().equals("J")) {
-            methodVisitor.visitVarInsn(Opcodes.LLOAD, handle.getNo());
-        } else if (handle.getType().equals("F")) {
-            methodVisitor.visitVarInsn(Opcodes.FLOAD, handle.getNo());
-        } else if (handle.getType().equals("D")) {
-            methodVisitor.visitVarInsn(Opcodes.DLOAD, handle.getNo());
-        } else {
-            methodVisitor.visitVarInsn(Opcodes.ALOAD, handle.getNo());
-            if (!handle.getType().equals(expectedType)) {
-                //TODO: this will break constructors for non-superclass
-                if (!dontCast) {
-                    if (!expectedType.equals("Ljava/lang/Object;")) {
-                        methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, DescriptorUtils.getTypeStringFromDescriptorFormat(expectedType));
-                    }
+        if (!dontCast && !expectedType.equals(handle.getType())) {
+            //both objects, we just do a checkcast
+            if (expectedType.length() > 1 && handle.getType().length() > 1) {
+                if (!expectedType.equals("Ljava/lang/Object;")) {
+                    methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, DescriptorUtils.getTypeStringFromDescriptorFormat(expectedType));
                 }
+            } else if (expectedType.length() == 1 && handle.getType().length() == 1) {
+                //ignore
+            } else if (expectedType.length() == 1) {
+                //autounboxing support
+                String type = boxingMap.get(expectedType);
+                if (type == null) {
+                    throw new RuntimeException("Unknown primitive type " + expectedType);
+                }
+                methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, type);
+                methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, type, boxingMethodMap.get(expectedType), "()" + expectedType, false);
+            } else {
+                //autoboxing support
+                String type = boxingMap.get(handle.getType());
+                methodVisitor.visitMethodInsn(Opcodes.INVOKESTATIC, type, "valueOf", "(" + handle.getType() + ")L" + type + ";", false);
             }
         }
     }
 
     @Override
-    public ExceptionTable addTryCatch() {
-        Map<String, CatchBlockCreatorImpl> catchBlocks = new LinkedHashMap<>();
-        Map<String, Label> startLabels = new LinkedHashMap<>();
-        Map<String, Label> endLabels = new LinkedHashMap<>();
-        final AtomicReference<IllegalStateException> exception = new AtomicReference<>(new IllegalStateException("Complete was not called for catch block created at this point")); //we create an exception so if complete is not called we can report where
-        operations.add(new Operation() {
-            @Override
-            public void writeBytecode(MethodVisitor methodVisitor) {
-                if (exception.get() != null) {
-                    throw new IllegalStateException("Complete was not called", exception.get());
-                }
-                for (String key : catchBlocks.keySet()) {
-                    Label l = new Label();
-                    methodVisitor.visitLabel(l);
-                    startLabels.put(key, l);
-                }
-            }
-
-            @Override
-            Set<ResultHandle> getInputResultHandles() {
-                return Collections.emptySet();
-            }
-
-            @Override
-            ResultHandle getTopResultHandle() {
-                return null;
-            }
-
-            @Override
-            ResultHandle getOutgoingResultHandle() {
-                return null;
-            }
-
-            @Override
-            public void findResultHandles(Set<ResultHandle> vc) {
-                for (Map.Entry<String, CatchBlockCreatorImpl> e : catchBlocks.entrySet()) {
-                    e.getValue().findActiveResultHandles(vc);
-                }
-            }
-        });
-
-        return new ExceptionTable() {
-            @Override
-            public CatchBlockCreator addCatchClause(String exception) {
-                String name = exception.replace(".", "/");
-                if (catchBlocks.containsKey(name)) {
-                    throw new IllegalStateException("Catch block for " + exception + " already exists");
-                }
-                CatchBlockCreatorImpl impl = new CatchBlockCreatorImpl(methodDescriptor, declaringClassName, name, classOutput, classCreator);
-                catchBlocks.put(name, impl);
-                return impl;
-            }
-
-            @Override
-            public void complete() {
-                exception.set(null);
-                operations.add(new Operation() {
-
-                    @Override
-                    public void findResultHandles(Set<ResultHandle> vc) {
-                        Set<ResultHandle> exceptions = new HashSet<>();
-                        for (String key : catchBlocks.keySet()) {
-                            exceptions.add(catchBlocks.get(key).getCaughtException());
-                        }
-                        operations.add(new Operation() {
-                            @Override
-                            public void writeBytecode(MethodVisitor methodVisitor) {
-                                for (Map.Entry<String, CatchBlockCreatorImpl> handler : catchBlocks.entrySet()) {
-                                    Label label = new Label();
-                                    methodVisitor.visitLabel(label);
-                                    Label start = startLabels.get(handler.getKey());
-                                    Label end = endLabels.get(handler.getKey());
-                                    methodVisitor.visitTryCatchBlock(start, end, label, handler.getKey());
-                                    handler.getValue().writeOperations(methodVisitor);
-                                    methodVisitor.visitJumpInsn(Opcodes.GOTO, end);
-                                }
-                            }
-
-                            @Override
-                            Set<ResultHandle> getInputResultHandles() {
-                                return exceptions;
-                            }
-
-                            @Override
-                            ResultHandle getTopResultHandle() {
-                                return null;
-                            }
-
-                            @Override
-                            ResultHandle getOutgoingResultHandle() {
-                                return null;
-                            }
-                        });
-                    }
-
-                    @Override
-                    public void writeBytecode(MethodVisitor methodVisitor) {
-                        Set<ResultHandle> exceptions = new HashSet<>();
-                        for (String key : catchBlocks.keySet()) {
-                            Label l = new Label();
-                            methodVisitor.visitLabel(l);
-                            endLabels.put(key, l);
-                            exceptions.add(catchBlocks.get(key).getCaughtException());
-                        }
-                    }
-
-                    @Override
-                    Set<ResultHandle> getInputResultHandles() {
-                        return Collections.emptySet();
-                    }
-
-                    @Override
-                    ResultHandle getTopResultHandle() {
-                        return null;
-                    }
-
-                    @Override
-                    ResultHandle getOutgoingResultHandle() {
-                        return null;
-                    }
-                });
-            }
-        };
+    public TryBlock tryBlock() {
+        final TryBlockImpl tryBlock = new TryBlockImpl(this);
+        operations.add(new BlockOperation(tryBlock));
+        return tryBlock;
     }
 
     @Override
     public BranchResult ifNonZero(ResultHandle resultHandle) {
-        BytecodeCreatorImpl trueBranch = new BytecodeCreatorImpl(methodDescriptor, declaringClassName, classOutput, classCreator, this);
-        BytecodeCreatorImpl falseBranch = new BytecodeCreatorImpl(methodDescriptor, declaringClassName, classOutput, classCreator, this);
-        operations.add(new Operation() {
-            @Override
-            public void writeBytecode(MethodVisitor methodVisitor) {
-                loadResultHandle(methodVisitor, resultHandle, BytecodeCreatorImpl.this, "I");
-                Label label = new Label();
-                methodVisitor.visitJumpInsn(Opcodes.IFEQ, label);
-                trueBranch.writeOperations(methodVisitor);
-                Label end = new Label();
-                methodVisitor.visitJumpInsn(Opcodes.GOTO, end);
-                methodVisitor.visitLabel(label);
-                falseBranch.writeOperations(methodVisitor);
-                methodVisitor.visitLabel(end);
-            }
-
-            @Override
-            Set<ResultHandle> getInputResultHandles() {
-                return Collections.singleton(resultHandle);
-            }
-
-            @Override
-            ResultHandle getTopResultHandle() {
-                return resultHandle;
-            }
-
-            @Override
-            ResultHandle getOutgoingResultHandle() {
-                return null;
-            }
-
-            @Override
-            public void findResultHandles(Set<ResultHandle> vc) {
-                trueBranch.findActiveResultHandles(vc);
-                falseBranch.findActiveResultHandles(vc);
-            }
-        });
-        return new BranchResultImpl(owner == null ? this : owner, trueBranch, falseBranch, trueBranch, falseBranch);
+        ResultHandle resolvedResultHandle = resolve(checkScope(resultHandle));
+        BytecodeCreatorImpl trueBranch = new BytecodeCreatorImpl(this);
+        BytecodeCreatorImpl falseBranch = new BytecodeCreatorImpl(this);
+        operations.add(new IfOperation(Opcodes.IFNE, "I", resolvedResultHandle, trueBranch, falseBranch));
+        return new BranchResultImpl(trueBranch, falseBranch);
     }
 
     @Override
     public BranchResult ifNull(ResultHandle resultHandle) {
-        BytecodeCreatorImpl trueBranch = new BytecodeCreatorImpl(methodDescriptor, declaringClassName, classOutput, classCreator, this);
-        BytecodeCreatorImpl falseBranch = new BytecodeCreatorImpl(methodDescriptor, declaringClassName, classOutput, classCreator, this);
-        operations.add(new Operation() {
-            @Override
-            public void writeBytecode(MethodVisitor methodVisitor) {
-                loadResultHandle(methodVisitor, resultHandle, BytecodeCreatorImpl.this, "Ljava/lang/Object;");
-                Label label = new Label();
-                methodVisitor.visitJumpInsn(Opcodes.IFNULL, label);
-                trueBranch.writeOperations(methodVisitor);
-                Label end = new Label();
-                methodVisitor.visitJumpInsn(Opcodes.GOTO, end);
-                methodVisitor.visitLabel(label);
-                falseBranch.writeOperations(methodVisitor);
-                methodVisitor.visitLabel(end);
-            }
-
-            @Override
-            Set<ResultHandle> getInputResultHandles() {
-                return Collections.singleton(resultHandle);
-            }
-
-            @Override
-            ResultHandle getTopResultHandle() {
-                return resultHandle;
-            }
-
-            @Override
-            ResultHandle getOutgoingResultHandle() {
-                return null;
-            }
-
-            @Override
-            public void findResultHandles(Set<ResultHandle> vc) {
-                trueBranch.findActiveResultHandles(vc);
-                falseBranch.findActiveResultHandles(vc);
-            }
-        });
-
-        return new BranchResultImpl(owner == null ? this : owner, trueBranch, falseBranch, trueBranch, falseBranch);
+        ResultHandle resolvedResultHandle = resolve(checkScope(resultHandle));
+        BytecodeCreatorImpl trueBranch = new BytecodeCreatorImpl(this);
+        BytecodeCreatorImpl falseBranch = new BytecodeCreatorImpl(this);
+        operations.add(new IfOperation(Opcodes.IFNULL, "Ljava/lang/Object;", resolvedResultHandle, trueBranch, falseBranch));
+        return new BranchResultImpl(trueBranch, falseBranch);
     }
 
 
     @Override
     public ResultHandle getMethodParam(int methodNo) {
-        int count = 1;
+        int count = (method.getModifiers() & Modifier.STATIC) != 0 ? 0 : 1;
         for (int i = 0; i < methodNo; ++i) {
-            String s = methodDescriptor.getParameterTypes()[i];
+            String s = getMethod().getMethodDescriptor().getParameterTypes()[i];
             if (s.equals("J") || s.equals("D")) {
                 count += 2;
             } else {
                 count++;
             }
         }
-        ResultHandle resultHandle = new ResultHandle(methodDescriptor.getParameterTypes()[methodNo], this);
+        ResultHandle resultHandle = new ResultHandle(getMethod().getMethodDescriptor().getParameterTypes()[methodNo], this);
         resultHandle.setNo(count);
         return resultHandle;
     }
@@ -751,14 +757,12 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
         if (functionMethod == null) {
             throw new IllegalArgumentException("Could not find function method " + functionalInterface);
         }
-        String type = Type.getDescriptor(functionMethod.getReturnType());
-
-
-        final String functionName = declaringClassName + FUNCTION + functionCount.incrementAndGet();
-        ResultHandle ret = new ResultHandle(type, this);
-        ClassCreator cc = ClassCreator.builder().classOutput(classOutput).className(functionName).interfaces(functionalInterface).build();
+        final String functionName = getMethod().getDeclaringClassName() + FUNCTION + functionCount.incrementAndGet();
+        ResultHandle ret = new ResultHandle("L" + functionName.replace('.', '/') + ";", this);
+        ClassCreator cc = ClassCreator.builder().enclosing(this).classOutput(getMethod().getClassOutput()).className(functionName).interfaces(functionalInterface).build();
         MethodCreatorImpl mc = (MethodCreatorImpl) cc.getMethodCreator(functionMethod.getName(), functionMethod.getReturnType(), functionMethod.getParameterTypes());
-        FunctionCreatorImpl fc = new FunctionCreatorImpl(ret, functionName, cc, mc, this);
+
+        FunctionCreatorImpl fc = mc.addFunctionBody(ret, cc, mc, this);
         operations.add(new Operation() {
             @Override
             public void writeBytecode(MethodVisitor methodVisitor) {
@@ -791,21 +795,23 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
 
     @Override
     public void returnValue(ResultHandle returnValue) {
+        ResultHandle resolvedReturnValue = resolve(checkScope(returnValue));
+        final MethodDescriptor methodDescriptor = getMethod().getMethodDescriptor();
         operations.add(new Operation() {
             @Override
             public void writeBytecode(MethodVisitor methodVisitor) {
-                if (returnValue == null
+                if (resolvedReturnValue == null
                         || methodDescriptor.getReturnType().equals("V")) { //ignore value for void methods, makes client code simpler
                     methodVisitor.visitInsn(Opcodes.RETURN);
                 } else {
-                    loadResultHandle(methodVisitor, returnValue, BytecodeCreatorImpl.this, methodDescriptor.getReturnType());
-                    if (returnValue.getType().equals("S") || returnValue.getType().equals("Z") || returnValue.getType().equals("I") || returnValue.getType().equals("B")) {
+                    loadResultHandle(methodVisitor, resolvedReturnValue, BytecodeCreatorImpl.this, methodDescriptor.getReturnType());
+                    if (methodDescriptor.getReturnType().equals("S") || methodDescriptor.getReturnType().equals("Z") || methodDescriptor.getReturnType().equals("I") || methodDescriptor.getReturnType().equals("B")) {
                         methodVisitor.visitInsn(Opcodes.IRETURN);
-                    } else if (returnValue.getType().equals("J")) {
+                    } else if (methodDescriptor.getReturnType().equals("J")) {
                         methodVisitor.visitInsn(Opcodes.LRETURN);
-                    } else if (returnValue.getType().equals("F")) {
+                    } else if (methodDescriptor.getReturnType().equals("F")) {
                         methodVisitor.visitInsn(Opcodes.FRETURN);
-                    } else if (returnValue.getType().equals("D")) {
+                    } else if (methodDescriptor.getReturnType().equals("D")) {
                         methodVisitor.visitInsn(Opcodes.DRETURN);
                     } else {
                         methodVisitor.visitInsn(Opcodes.ARETURN);
@@ -815,15 +821,15 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
 
             @Override
             Set<ResultHandle> getInputResultHandles() {
-                if (returnValue == null) {
+                if (resolvedReturnValue == null) {
                     return Collections.emptySet();
                 }
-                return Collections.singleton(returnValue);
+                return Collections.singleton(resolvedReturnValue);
             }
 
             @Override
             ResultHandle getTopResultHandle() {
-                return returnValue;
+                return resolvedReturnValue;
             }
 
             @Override
@@ -835,21 +841,22 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
 
     @Override
     public void throwException(ResultHandle exception) {
+        ResultHandle resolvedException = resolve(checkScope(exception));
         operations.add(new Operation() {
             @Override
             public void writeBytecode(MethodVisitor methodVisitor) {
-                loadResultHandle(methodVisitor, exception, BytecodeCreatorImpl.this, "Ljava/lang/Throwable;");
+                loadResultHandle(methodVisitor, resolvedException, BytecodeCreatorImpl.this, "Ljava/lang/Throwable;");
                 methodVisitor.visitInsn(Opcodes.ATHROW);
             }
 
             @Override
             Set<ResultHandle> getInputResultHandles() {
-                return Collections.singleton(exception);
+                return Collections.singleton(resolvedException);
             }
 
             @Override
             ResultHandle getTopResultHandle() {
-                return exception;
+                return resolvedException;
             }
 
             @Override
@@ -905,70 +912,82 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
     }
 
     protected void writeOperations(MethodVisitor visitor) {
+        visitor.visitLabel(top);
+        writeInteriorOperations(visitor);
+        visitor.visitLabel(bottom);
+    }
+
+    protected void writeInteriorOperations(MethodVisitor visitor) {
         for (Operation op : operations) {
             op.doProcess(visitor);
         }
     }
 
-
-    /**
-     * Assigns the value in the second result handle to the first result handle. The first result handle must not be a constant.
-     * <p>
-     * This is used to merge the results of if statements back into a single result.
-     *
-     * @param target The target result handle
-     * @param value  The value
-     */
-    void assign(ResultHandle target, ResultHandle value) {
-        operations.add(new Operation() {
-            @Override
-            void writeBytecode(MethodVisitor methodVisitor) {
-                loadResultHandle(methodVisitor, value, BytecodeCreatorImpl.this, value.getType());
-                storeResultHandle(methodVisitor, target);
+    <R extends ResultHandle> R checkScope(R handle) {
+        if (handle != null) {
+            final BytecodeCreatorImpl handleOwner = handle.getOwner();
+            if (handleOwner != null && ! isScopedWithin(handleOwner)) {
+                final StringBuilder trace = new StringBuilder();
+                trace.append("Result handle ").append(handle).append(" used outside of its scope\n");
+                trace.append("The handle's scope is:\n");
+                handleOwner.dumpScope(trace);
+                trace.append("The usage scope is:\n");
+                dumpScope(trace);
+                throw new IllegalArgumentException(trace.toString());
             }
-
-            @Override
-            Set<ResultHandle> getInputResultHandles() {
-                return Collections.singleton(value);
-            }
-
-            @Override
-            ResultHandle getTopResultHandle() {
-                return value;
-            }
-
-            @Override
-            ResultHandle getOutgoingResultHandle() {
-                return target;
-            }
-        });
+        }
+        return handle;
     }
 
-    public MethodDescriptor getSuperclassAccessor(MethodDescriptor descriptor) {
-        if (superclassAccessors.containsKey(descriptor)) {
-            return superclassAccessors.get(descriptor);
+    private void dumpScope(final StringBuilder builder) {
+        builder.append("\tat ").append(this).append('\n');
+        if (owner != null) owner.dumpScope(builder);
+    }
+
+    ResultHandle[] checkScope(ResultHandle[] handles) {
+        for (ResultHandle resultHandle : handles) {
+            checkScope(resultHandle);
         }
-        String name = descriptor.getName() + "$$aupseraccessor" + accessorCount.incrementAndGet();
-        MethodCreator ctor = classCreator.getMethodCreator(name, descriptor.getReturnType(), descriptor.getParameterTypes());
-        ResultHandle[] params = new ResultHandle[descriptor.getParameterTypes().length];
-        for (int i = 0; i < params.length; ++i) {
-            params[i] = ctor.getMethodParam(i);
-        }
-        ResultHandle ret = ctor.invokeSpecialMethod(MethodDescriptor.ofMethod(classCreator.getSuperClass(), descriptor.getName(), descriptor.getReturnType(), descriptor.getParameterTypes()), ctor.getThis(), params);
-        ctor.returnValue(ret);
-        superclassAccessors.put(descriptor, ctor.getMethodDescriptor());
-        return ctor.getMethodDescriptor();
+        return handles;
+    }
+
+    ResultHandle resolve(ResultHandle handle) {
+        return owner.resolve(handle);
+    }
+
+    ResultHandle[] resolve(ResultHandle... handles) {
+        return owner.resolve(handles);
+    }
+
+    MethodCreatorImpl getMethod() {
+        return method;
+    }
+
+    BytecodeCreatorImpl getOwner() {
+        return owner;
     }
 
     static abstract class Operation {
 
 
-        private final Throwable errorPoint = new RuntimeException("Error location");
+        private final Throwable errorPoint;
+
+        Operation() {
+            if(Boolean.getBoolean("arc.debug")) {
+                errorPoint= new RuntimeException("Error location");
+            } else {
+                errorPoint = null;
+            }
+        }
+
 
         public void doProcess(MethodVisitor visitor) {
             try {
                 writeBytecode(visitor);
             } catch (Throwable e) {
+                if(errorPoint == null) {
+                    throw new RuntimeException(e);
+                }
                 RuntimeException ex = new RuntimeException("Exception generating bytecode", errorPoint);
                 ex.addSuppressed(e);
                 throw ex;
@@ -998,19 +1017,16 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
         }
     }
 
-    private static class LoadOperation extends Operation {
-        private final Object val;
-        private final ResultHandle ret;
+    static class JumpOperation extends Operation {
+        private final Label target;
 
-        public LoadOperation(Object val, ResultHandle ret) {
-            this.val = val;
-            this.ret = ret;
+        JumpOperation(final Label target) {
+            this.target = target;
         }
 
         @Override
-        public void writeBytecode(MethodVisitor methodVisitor) {
-            methodVisitor.visitLdcInsn(val);
-            storeResultHandle(methodVisitor, ret);
+        void writeBytecode(final MethodVisitor methodVisitor) {
+            methodVisitor.visitJumpInsn(Opcodes.GOTO, target);
         }
 
         @Override
@@ -1025,7 +1041,7 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
 
         @Override
         ResultHandle getOutgoingResultHandle() {
-            return ret;
+            return null;
         }
     }
 
@@ -1045,10 +1061,9 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
             this.resultHandle = resultHandle;
             this.descriptor = descriptor;
             this.object = object;
-            this.args = new ResultHandle[args.length];
+            this.args = args.clone();
             this.interfaceMethod = interfaceMethod;
             this.specialMethod = specialMethod;
-            System.arraycopy(args, 0, this.args, 0, args.length);
             this.staticMethod = false;
         }
 
@@ -1059,8 +1074,7 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
             this.resultHandle = resultHandle;
             this.descriptor = descriptor;
             this.object = null;
-            this.args = new ResultHandle[args.length];
-            System.arraycopy(args, 0, this.args, 0, args.length);
+            this.args = args.clone();
             this.staticMethod = true;
             this.interfaceMethod = false;
             this.specialMethod = false;
@@ -1120,10 +1134,6 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
         return new NewInstanceOperation(handle, descriptor, args);
     }
 
-    ClassCreator getClassCreator() {
-        return classCreator;
-    }
-
     class NewInstanceOperation extends Operation {
         final ResultHandle resultHandle;
         final MethodDescriptor descriptor;
@@ -1165,6 +1175,116 @@ public class BytecodeCreatorImpl implements BytecodeCreator {
         @Override
         ResultHandle getOutgoingResultHandle() {
             return resultHandle;
+        }
+    }
+
+    class IfOperation extends Operation {
+        private final int opcode;
+        private final String opType;
+        private final ResultHandle resultHandle;
+        private final BytecodeCreatorImpl trueBranch;
+        private final BytecodeCreatorImpl falseBranch;
+
+        IfOperation(final int opcode, final String opType, final ResultHandle resultHandle, final BytecodeCreatorImpl trueBranch, final BytecodeCreatorImpl falseBranch) {
+            this.opcode = opcode;
+            this.opType = opType;
+            this.resultHandle = resultHandle;
+            this.trueBranch = trueBranch;
+            this.falseBranch = falseBranch;
+        }
+
+        @Override
+        public void writeBytecode(MethodVisitor methodVisitor) {
+            loadResultHandle(methodVisitor, resultHandle, BytecodeCreatorImpl.this, opType);
+            methodVisitor.visitJumpInsn(opcode, trueBranch.getTop());
+            falseBranch.writeOperations(methodVisitor);
+            methodVisitor.visitJumpInsn(Opcodes.GOTO, trueBranch.getBottom());
+            trueBranch.writeOperations(methodVisitor);
+        }
+
+        @Override
+        Set<ResultHandle> getInputResultHandles() {
+            return Collections.singleton(resultHandle);
+        }
+
+        @Override
+        ResultHandle getTopResultHandle() {
+            return resultHandle;
+        }
+
+        @Override
+        ResultHandle getOutgoingResultHandle() {
+            return null;
+        }
+
+        @Override
+        public void findResultHandles(Set<ResultHandle> vc) {
+            trueBranch.findActiveResultHandles(vc);
+            falseBranch.findActiveResultHandles(vc);
+        }
+    }
+
+    static class BlockOperation extends Operation {
+        private final BytecodeCreatorImpl block;
+
+        BlockOperation(final BytecodeCreatorImpl block) {
+            this.block = block;
+        }
+
+        @Override
+        void writeBytecode(final MethodVisitor methodVisitor) {
+            block.writeOperations(methodVisitor);
+        }
+
+        @Override
+        Set<ResultHandle> getInputResultHandles() {
+            return Collections.emptySet();
+        }
+
+        @Override
+        ResultHandle getTopResultHandle() {
+            return null;
+        }
+
+        @Override
+        ResultHandle getOutgoingResultHandle() {
+            return null;
+        }
+
+        @Override
+        public void findResultHandles(final Set<ResultHandle> vc) {
+            block.findActiveResultHandles(vc);
+        }
+    }
+
+    class AssignOperation extends Operation {
+        private final ResultHandle resolvedValue;
+        private final ResultHandle resolvedTarget;
+
+        public AssignOperation(final ResultHandle resolvedValue, final ResultHandle resolvedTarget) {
+            this.resolvedValue = resolvedValue;
+            this.resolvedTarget = resolvedTarget;
+        }
+
+        @Override
+        void writeBytecode(MethodVisitor methodVisitor) {
+            loadResultHandle(methodVisitor, resolvedValue, BytecodeCreatorImpl.this, resolvedTarget.getType());
+            storeResultHandle(methodVisitor, resolvedTarget);
+        }
+
+        @Override
+        Set<ResultHandle> getInputResultHandles() {
+            return Collections.singleton(resolvedValue);
+        }
+
+        @Override
+        ResultHandle getTopResultHandle() {
+            return resolvedValue;
+        }
+
+        @Override
+        ResultHandle getOutgoingResultHandle() {
+            return resolvedTarget;
         }
     }
 }

@@ -1,4 +1,22 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.protean.gizmo;
+
+import java.util.Objects;
 
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.MethodInfo;
@@ -9,7 +27,7 @@ import org.jboss.jandex.MethodInfo;
  * This does not expose the full extent of Java bytecode, rather just the most common operations that generated
  * classes are likely to use.
  */
-public interface BytecodeCreator {
+public interface BytecodeCreator extends AutoCloseable {
 
     /**
      * @return A {@link ResultHandle} that represents the current object
@@ -207,12 +225,22 @@ public interface BytecodeCreator {
     ResultHandle load(boolean val);
 
     /**
+     * Returns a {@link ResultHandle} representing the specified value
+     *
+     * @param val The value
+     * @return A {@link ResultHandle} representing the specified value
+     */
+    default ResultHandle load(Enum<?> val) {
+        return readStaticField(FieldDescriptor.of(val.getDeclaringClass(), val.name(), val.getDeclaringClass()));
+    }
+
+    /**
      * Returns a {@link ResultHandle} representing the specified class
      *
      * @param val The class to load
      * @return A {@link ResultHandle} representing the specified class
      */
-    default ResultHandle loadClass(Class val) {
+    default ResultHandle loadClass(Class<?> val) {
         return loadClass(val.getName());
     }
 
@@ -315,13 +343,47 @@ public interface BytecodeCreator {
 
     void writeArrayValue(ResultHandle array, ResultHandle index, ResultHandle value);
 
+    default ResultHandle readArrayValue(ResultHandle array, int index) {
+        return readArrayValue(array, load(index));
+    }
+
+    default void writeArrayValue(ResultHandle array, int index, ResultHandle value) {
+        writeArrayValue(array, load(index), value);
+    }
 
     /**
-     * Adds a try catch block
+     * Create a local variable which can be assigned within this scope.
      *
-     * @return An {@link ExceptionTable} that is used to construct the try catch block
+     * @param typeDescr the type descriptor of the variable's type (must not be {@code null})
+     * @return the assignable local variable (not {@code null})
      */
-    ExceptionTable addTryCatch();
+    AssignableResultHandle createVariable(final String typeDescr);
+
+    /**
+     * Create a local variable which can be assigned within this scope.
+     *
+     * @param type the type of the variable's type (must not be {@code null})
+     * @return the assignable local variable (not {@code null})
+     */
+    default AssignableResultHandle createVariable(final Class<?> type) {
+        Objects.requireNonNull(type);
+        return createVariable(DescriptorUtils.classToStringRepresentation(type));
+    }
+
+    /**
+     * Assign the given value to the given assignable target.
+     *
+     * @param target the assignment target (must not be {@code null})
+     * @param value the value to assign (must not be {@code null})
+     */
+    void assign(AssignableResultHandle target, ResultHandle value);
+
+    /**
+     * Add a {@code try} block.
+     *
+     * @return the {@code try} block
+     */
+    TryBlock tryBlock();
 
     /**
      * An if statement.
@@ -335,6 +397,13 @@ public interface BytecodeCreator {
      */
     BranchResult ifNonZero(ResultHandle resultHandle);
 
+    /**
+     * An if statement. If the value is {@code null} the {@link BranchResult#trueBranch} code will be executed, otherwise the {@link BranchResult#falseBranch} will be
+     * run.
+     *
+     * @param resultHandle
+     * @return The branch result that is used to build the if statement
+     */
     BranchResult ifNull(ResultHandle resultHandle);
 
     /**
@@ -368,6 +437,26 @@ public interface BytecodeCreator {
      * @param exception A result handle representing the exception to throw
      */
     void throwException(ResultHandle exception);
+
+    /**
+     * Perform a check cast operation which transforms the type of the given result handle.
+     *
+     * @param resultHandle the result handle
+     * @param castTarget the cast target type descriptor
+     * @return a new result handle with updated type
+     */
+    ResultHandle checkCast(ResultHandle resultHandle, String castTarget);
+
+    /**
+     * Perform a check cast operation which transforms the type of the given result handle.
+     *
+     * @param resultHandle the result handle
+     * @param castTarget the cast target class
+     * @return a new result handle with updated type
+     */
+    default ResultHandle checkCast(ResultHandle resultHandle, Class<?> castTarget) {
+        return checkCast(resultHandle, castTarget.getName());
+    }
 
     /**
      * Throws an exception. The exception must have a constructor that takes a single String argument
@@ -409,4 +498,55 @@ public interface BytecodeCreator {
         }
         return array;
     }
+
+    /**
+     * Determine if this bytecode creator is scoped within the given bytecode creator.
+     *
+     * @param other the other bytecode creator
+     * @return {@code true} if this bytecode creator is scoped within the given creator, {@code false} otherwise
+     */
+    boolean isScopedWithin(BytecodeCreator other);
+
+    /**
+     * Go to the top of the given scope.
+     *
+     * @param scope the scope to continue
+     */
+    void continueScope(BytecodeCreator scope);
+
+    /**
+     * Go to the top of this scope.
+     */
+    default void continueScope() {
+        continueScope(this);
+    }
+
+    /**
+     * Go to the end of the given scope.
+     *
+     * @param scope the scope to break out of
+     */
+    void breakScope(BytecodeCreator scope);
+
+    /**
+     * Go to the end of this scope.
+     */
+    default void breakScope() {
+        breakScope(this);
+    }
+
+    /**
+     * Create a nested scope.  Bytecode added to the nested scope will be inserted at this point of the
+     * enclosing scope.
+     *
+     * @return the nested scope
+     */
+    BytecodeCreator createScope();
+
+    /**
+     * Indicate that the scope is no longer in use.  The scope may refuse additional instructions after this method
+     * is called.
+     */
+    @Override
+    default void close() {}
 }
