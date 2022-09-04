@@ -11,12 +11,16 @@ public class JettyManaged extends AbstractLifeCycle implements Managed {
     private final Managed managed;
 
     /**
-     * Creates a new {@link JettyManaged} wrapping {@code managed}.
+     * Creates a new JettyManaged wrapping {@code managed}.
      *
      * @param managed a {@link Managed} instance to be wrapped
      */
     public JettyManaged(Managed managed) {
         this.managed = managed;
+    }
+
+    public Managed getManaged() {
+        return managed;
     }
 
     @Override
@@ -27,5 +31,11 @@ public class JettyManaged extends AbstractLifeCycle implements Managed {
     @Override
     protected void doStop() throws Exception {
         managed.stop();
+    }
+
+    @Override
+    public String toString() {
+        //Delegate to the wrapped instance
+        return managed.toString();
     }
 }
