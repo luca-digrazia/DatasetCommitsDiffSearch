@@ -106,6 +106,8 @@ public class FastCamelRuntime implements CamelRuntime {
     }
 
     public void doStart() throws Exception {
+        log.info("Apache Camel {} (CamelContext: {}) is starting", context.getVersion(), context.getName());
+
         fireEvent(StartingEvent.class, new StartingEvent());
         context.start();
         fireEvent(StartedEvent.class, new StartedEvent());
@@ -133,7 +135,7 @@ public class FastCamelRuntime implements CamelRuntime {
                 .filter(ObjectHelper::isNotEmpty)
                 .collect(Collectors.toList());
         if (ObjectHelper.isNotEmpty(routesUris)) {
-            log.debug("Loading xml routes from {}", routesUris);
+            log.info("Loading xml routes from {}", routesUris);
             ModelCamelContext mcc = context.adapt(ModelCamelContext.class);
             for (String routesUri : routesUris) {
                 // TODO: if pointing to a directory, we should load all xmls in it
@@ -143,7 +145,7 @@ public class FastCamelRuntime implements CamelRuntime {
                 }
             }
         } else {
-            log.debug("No xml routes configured");
+            log.info("No xml routes configured");
         }
 
         context.adapt(FastCamelContext.class).reifyRoutes();
