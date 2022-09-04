@@ -125,12 +125,15 @@ public class SerializedApplication {
                 int numDirs = in.readUnsignedShort();
                 for (int i = 0; i < numDirs; ++i) {
                     String dir = in.readUTF();
-                    int j = dir.indexOf('/');
-                    while (j >= 0) {
-                        addResourceDir(dir.substring(0, j), resource, resourceDirectoryMap);
-                        j = dir.indexOf('/', j + 1);
+                    ClassLoadingResource[] existing = resourceDirectoryMap.get(dir);
+                    if (existing == null) {
+                        resourceDirectoryMap.put(dir, new ClassLoadingResource[] { resource });
+                    } else {
+                        ClassLoadingResource[] newResources = new ClassLoadingResource[existing.length + 1];
+                        System.arraycopy(existing, 0, newResources, 0, existing.length);
+                        newResources[existing.length] = resource;
+                        resourceDirectoryMap.put(dir, newResources);
                     }
-                    addResourceDir(dir, resource, resourceDirectoryMap);
                 }
             }
             int packages = in.readUnsignedShort();
@@ -162,19 +165,6 @@ public class SerializedApplication {
                 classLoadingResource.init(runnerClassLoader);
             }
             return new SerializedApplication(runnerClassLoader, mainClass);
-        }
-    }
-
-    private static void addResourceDir(String dir, JarResource resource,
-            Map<String, ClassLoadingResource[]> resourceDirectoryMap) {
-        ClassLoadingResource[] existing = resourceDirectoryMap.get(dir);
-        if (existing == null) {
-            resourceDirectoryMap.put(dir, new ClassLoadingResource[] { resource });
-        } else {
-            ClassLoadingResource[] newResources = new ClassLoadingResource[existing.length + 1];
-            System.arraycopy(existing, 0, newResources, 0, existing.length);
-            newResources[existing.length] = resource;
-            resourceDirectoryMap.put(dir, newResources);
         }
     }
 

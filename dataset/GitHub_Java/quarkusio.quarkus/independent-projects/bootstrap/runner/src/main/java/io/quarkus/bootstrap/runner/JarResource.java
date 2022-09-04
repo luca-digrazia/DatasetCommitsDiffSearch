@@ -108,14 +108,9 @@ public class JarResource implements ClassLoadingResource {
                 if (realName.endsWith("/")) {
                     realName = realName.substring(0, realName.length() - 1);
                 }
-                final URI jarUri = jarPath.toUri();
-                // first create a URI which includes both the jar file path and the relative resource name
-                // and then invoke a toURL on it. The URI reconstruction allows for any encoding to be done
-                // for the "path" which includes the "realName"
-                final URL resUrl = new URI(jarUri.getScheme(), jarUri.getPath() + "!/" + realName, null).toURL();
-                // wrap it up into a "jar" protocol URL
-                return new URL("jar", null, resUrl.getProtocol() + ':' + resUrl.getPath());
-            } catch (MalformedURLException | URISyntaxException e) {
+                URI jarUri = jarPath.toUri();
+                return new URL("jar", null, jarUri.getScheme() + ':' + jarUri.getPath() + "!/" + resource);
+            } catch (MalformedURLException e) {
                 throw new RuntimeException(e);
             }
         } finally {
