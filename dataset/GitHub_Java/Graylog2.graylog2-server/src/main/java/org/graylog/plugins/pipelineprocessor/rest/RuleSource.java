@@ -42,6 +42,7 @@ public abstract class RuleSource {
     public abstract String id();
 
     @JsonProperty
+    @Nullable
     public abstract String title();
 
     @JsonProperty
@@ -70,7 +71,7 @@ public abstract class RuleSource {
     public abstract Builder toBuilder();
 
     @JsonCreator
-    public static RuleSource create(@Id @ObjectId @JsonProperty("_id") @Nullable String id,
+    public static RuleSource create(@JsonProperty("id") @Id @ObjectId @Nullable String id,
                                     @JsonProperty("title")  String title,
                                     @JsonProperty("description") @Nullable String description,
                                     @JsonProperty("source") String source,
@@ -89,7 +90,7 @@ public abstract class RuleSource {
     public static RuleSource fromDao(PipelineRuleParser parser, RuleDao dao) {
         Set<ParseError> errors = null;
         try {
-            parser.parseRule(dao.source());
+            parser.parseRule(dao.source(), false);
 
         } catch (ParseException e) {
             errors = e.getErrors();
