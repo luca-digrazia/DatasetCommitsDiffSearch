@@ -25,7 +25,6 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.ActionOwner;
@@ -266,7 +265,6 @@ public class CppCompileAction extends AbstractAction
       boolean usePic,
       boolean useHeaderModules,
       NestedSet<Artifact> mandatoryInputs,
-      ImmutableList<Artifact> builtinIncludeFiles,
       NestedSet<Artifact> prunableInputs,
       Artifact outputFile,
       DotdFile dotdFile,
@@ -335,7 +333,7 @@ public class CppCompileAction extends AbstractAction
     // artifact and will definitely exist prior to this action execution.
     this.mandatoryInputs = mandatoryInputs;
     this.prunableInputs = prunableInputs;
-    this.builtinIncludeFiles = builtinIncludeFiles;
+    this.builtinIncludeFiles = ImmutableList.copyOf(cppProvider.getBuiltinIncludeFiles());
     this.cppSemantics = cppSemantics;
     this.additionalIncludeScannables = ImmutableList.copyOf(additionalIncludeScannables);
     this.builtInIncludeDirectories =
@@ -706,7 +704,7 @@ public class CppCompileAction extends AbstractAction
   }
 
   @Override
-  public ExtraActionInfo.Builder getExtraActionInfo(ActionKeyContext actionKeyContext) {
+  public ExtraActionInfo.Builder getExtraActionInfo() {
     CppCompileInfo.Builder info = CppCompileInfo.newBuilder();
     info.setTool(gccToolPath.getPathString());
     for (String option : getCompilerOptions()) {
@@ -730,8 +728,7 @@ public class CppCompileAction extends AbstractAction
     }
 
     try {
-      return super.getExtraActionInfo(actionKeyContext)
-          .setExtension(CppCompileInfo.cppCompileInfo, info.build());
+      return super.getExtraActionInfo().setExtension(CppCompileInfo.cppCompileInfo, info.build());
     } catch (CommandLineExpansionException e) {
       throw new AssertionError("CppCompileAction command line expansion cannot fail.");
     }
@@ -1054,7 +1051,7 @@ public class CppCompileAction extends AbstractAction
   }
 
   @Override
-  public String computeKey(ActionKeyContext actionKeyContext) {
+  public String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addUUID(actionClassId);
     f.addStringMap(getEnvironment());
@@ -1078,11 +1075,17 @@ public class CppCompileAction extends AbstractAction
      */
     f.addPaths(context.getDeclaredIncludeDirs());
     f.addPaths(context.getDeclaredIncludeWarnDirs());
-    actionKeyContext.addArtifactsToFingerprint(f, context.getDeclaredIncludeSrcs());
+    for (Artifact declaredIncludeSrc : context.getDeclaredIncludeSrcs()) {
+      f.addPath(declaredIncludeSrc.getExecPath());
+    }
     f.addInt(0);  // mark the boundary between input types
-    actionKeyContext.addArtifactsToFingerprint(f, getMandatoryInputs());
+    for (Artifact input : getMandatoryInputs()) {
+      f.addPath(input.getExecPath());
+    }
     f.addInt(0);
-    actionKeyContext.addArtifactsToFingerprint(f, prunableInputs);
+    for (Artifact input : prunableInputs) {
+      f.addPath(input.getExecPath());
+    }
     return f.hexDigestAndReset();
   }
 

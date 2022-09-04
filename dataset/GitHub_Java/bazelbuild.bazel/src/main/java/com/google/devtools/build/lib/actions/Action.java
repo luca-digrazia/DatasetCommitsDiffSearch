@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ConditionallyThreadCompatible;
+import com.google.devtools.build.lib.profiler.Describable;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -35,7 +36,6 @@ import javax.annotation.Nullable;
  * a new custom subclass.
  *
  * <p>These are the most important requirements for subclasses:
- *
  * <ul>
  *   <li>Actions must be generally immutable; we currently make an exception for C++, and that has
  *       been a constant source of correctness issues; there are still ongoing incremental
@@ -75,7 +75,8 @@ import javax.annotation.Nullable;
  * known set of fields is covered, not that all fields are covered), so carefully check all changes
  * to action subclasses.
  */
-public interface Action extends ActionExecutionMetadata {
+public interface Action extends ActionExecutionMetadata, Describable {
+
   /**
    * Prepares for executing this action; called by the Builder prior to executing the Action itself.
    * This method should prepare the file system, so that the execution of the Action can write the
@@ -191,6 +192,5 @@ public interface Action extends ActionExecutionMetadata {
    * <p>As this method is called from the ExtraAction, make sure it is ok to call this method from a
    * different thread than the one this action is executed on.
    */
-  ExtraActionInfo.Builder getExtraActionInfo(ActionKeyContext actionKeyContext)
-      throws CommandLineExpansionException;
+  ExtraActionInfo.Builder getExtraActionInfo() throws CommandLineExpansionException;
 }

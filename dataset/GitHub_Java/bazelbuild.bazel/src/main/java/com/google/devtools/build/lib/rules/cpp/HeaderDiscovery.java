@@ -14,9 +14,8 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -31,26 +30,21 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
- * HeaderDiscovery checks whether all header files that a compile action uses are actually declared
- * as inputs.
- *
- * <p>Tree artifacts: a tree artifact with path P causes any header file prefixed by P to be
- * accepted. Testing whether a used header file is prefixed by any tree artifact is linear search,
- * but the result is cached. If all files in a tree artifact are at the root of the artifact, the
- * entire check is performed by hash lookups.
+ * Manages the process of obtaining inputs used in a compilation from a dependency set parsed from
+ * either .d files or /showIncludes output.
  */
 public class HeaderDiscovery {
 
   /** Indicates if a compile should perform dotd pruning. */
-  public enum DotdPruningMode {
+  public static enum DotdPruningMode {
     USE,
     DO_NOT_USE
   }
-
+  
   private final Action action;
   private final Artifact sourceFile;
 
@@ -58,58 +52,28 @@ public class HeaderDiscovery {
 
   private final Collection<Path> dependencies;
   private final List<Path> permittedSystemIncludePrefixes;
-
-  /**
-   * allowedDerivedInputsMap maps paths of derived artifacts to the artifacts. These only include
-   * file artifacts.
-   */
-  private final ImmutableMap<PathFragment, Artifact> allowedDerivedInputsMap;
-
-  /**
-   * treeArtifactPaths contains the paths of tree artifacts given as input to the action.
-   *
-   * <p>Header files whose prefix is in this set are considered as included, and will not trigger a
-   * header inclusion error.
-   */
-  private final ImmutableSet<PathFragment> treeArtifactPaths;
-
-  /**
-   * allowedDirs caches answers to "does a fragment have a prefix in treeArtifactPaths".
-   *
-   * <p>It is initialized to (p, true) for each p in treeArtifactPaths, in order to speed up the
-   * typical case of headers coming from a flat tree artifact.
-   */
-  private final HashMap<PathFragment, Boolean> allowedDirs;
-
+  private final Map<PathFragment, Artifact> allowedDerivedInputsMap;
+  
   /**
    * Creates a HeaderDiscover instance
    *
    * @param action the action instance requiring header discovery
    * @param sourceFile the source file for the compile
    * @param shouldValidateInclusions true if include validation should be performed
-   * @param allowedDerivedInputsMap see javadoc for field
-   * @param treeArtifactPaths see javadoc for field
    */
-  private HeaderDiscovery(
+  public HeaderDiscovery(
       Action action,
       Artifact sourceFile,
       boolean shouldValidateInclusions,
       Collection<Path> dependencies,
       List<Path> permittedSystemIncludePrefixes,
-      ImmutableMap<PathFragment, Artifact> allowedDerivedInputsMap,
-      ImmutableSet<PathFragment> treeArtifactPaths) {
+      Map<PathFragment, Artifact> allowedDerivedInputsMap) {
     this.action = Preconditions.checkNotNull(action);
     this.sourceFile = Preconditions.checkNotNull(sourceFile);
     this.shouldValidateInclusions = shouldValidateInclusions;
     this.dependencies = dependencies;
     this.permittedSystemIncludePrefixes = permittedSystemIncludePrefixes;
     this.allowedDerivedInputsMap = allowedDerivedInputsMap;
-    this.treeArtifactPaths = treeArtifactPaths;
-
-    this.allowedDirs = new HashMap<>();
-    for (PathFragment p : treeArtifactPaths) {
-      allowedDirs.put(p, true);
-    }
   }
 
   /**
@@ -122,13 +86,15 @@ public class HeaderDiscovery {
    * @throws ActionExecutionException iff the .d is missing (when required), malformed, or has
    *     unresolvable included artifacts.
    */
+  @VisibleForTesting
   @ThreadCompatible
-  NestedSet<Artifact> discoverInputsFromDependencies(
+  public NestedSet<Artifact> discoverInputsFromDependencies(
       Path execRoot, ArtifactResolver artifactResolver) throws ActionExecutionException {
     NestedSetBuilder<Artifact> inputs = NestedSetBuilder.stableOrder();
     if (dependencies == null) {
       return inputs.build();
     }
+    List<Path> systemIncludePrefixes = permittedSystemIncludePrefixes;
 
     // Check inclusions.
     IncludeProblems problems = new IncludeProblems();
@@ -136,7 +102,7 @@ public class HeaderDiscovery {
       PathFragment execPathFragment = execPath.asFragment();
       if (execPathFragment.isAbsolute()) {
         // Absolute includes from system paths are ignored.
-        if (FileSystemUtils.startsWithAny(execPath, permittedSystemIncludePrefixes)) {
+        if (FileSystemUtils.startsWithAny(execPath, systemIncludePrefixes)) {
           continue;
         }
         // Since gcc is given only relative paths on the command line,
@@ -159,39 +125,21 @@ public class HeaderDiscovery {
         } catch (LabelSyntaxException e) {
           throw new ActionExecutionException(
               String.format("Could not find the external repository for %s", execPathFragment),
-              e,
-              action,
-              false);
+              e, action, false);
         }
       }
       if (artifact != null) {
         inputs.add(artifact);
-        continue;
+      } else {
+        // Abort if we see files that we can't resolve, likely caused by
+        // undeclared includes or illegal include constructs.
+        problems.add(execPathFragment.getPathString());
       }
-
-      if (inTreeArtifact(execPathFragment)) {
-        continue;
-      }
-
-      // Abort if we see files that we can't resolve, likely caused by
-      // undeclared includes or illegal include constructs.
-      problems.add(execPathFragment.getPathString());
     }
     if (shouldValidateInclusions) {
       problems.assertProblemFree(action, sourceFile);
     }
     return inputs.build();
-  }
-
-  private boolean inTreeArtifact(PathFragment execPathFragment) {
-    PathFragment dir = execPathFragment.getParentDirectory();
-    Boolean allowed = allowedDirs.get(dir);
-    if (allowed != null) {
-      return allowed;
-    }
-    allowed = treeArtifactPaths.stream().anyMatch(p -> dir.startsWith(p));
-    allowedDirs.put(execPathFragment, allowed);
-    return allowed;
   }
 
   /** A Builder for HeaderDiscovery */
@@ -202,7 +150,7 @@ public class HeaderDiscovery {
 
     private Collection<Path> dependencies;
     private List<Path> permittedSystemIncludePrefixes;
-    private Iterable<Artifact> allowedDerivedInputs;
+    private Map<PathFragment, Artifact> allowedDerivedInputsMap;
 
     /** Sets the action for which to discover inputs. */
     public Builder setAction(Action action) {
@@ -235,30 +183,20 @@ public class HeaderDiscovery {
     }
 
     /** Sets permitted inputs to the build */
-    public Builder setAllowedDerivedinputs(Iterable<Artifact> allowedDerivedInputs) {
-      this.allowedDerivedInputs = allowedDerivedInputs;
+    public Builder setAllowedDerivedinputsMap(Map<PathFragment, Artifact> allowedDerivedInputsMap) {
+      this.allowedDerivedInputsMap = allowedDerivedInputsMap;
       return this;
     }
 
     /** Creates a CppHeaderDiscovery instance. */
     public HeaderDiscovery build() {
-      ImmutableMap.Builder<PathFragment, Artifact> allowedDerivedInputsMap = ImmutableMap.builder();
-      ImmutableSet.Builder<PathFragment> treeArtifactPrefixes = ImmutableSet.builder();
-      for (Artifact a : allowedDerivedInputs) {
-        if (a.isTreeArtifact()) {
-          treeArtifactPrefixes.add(a.getExecPath());
-        }
-        allowedDerivedInputsMap.put(a.getExecPath(), a);
-      }
-
       return new HeaderDiscovery(
           action,
           sourceFile,
           shouldValidateInclusions,
           dependencies,
           permittedSystemIncludePrefixes,
-          allowedDerivedInputsMap.build(),
-          treeArtifactPrefixes.build());
+          allowedDerivedInputsMap);
     }
   }
 }

@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
-import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -46,7 +45,6 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Map.Entry;
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -297,17 +295,16 @@ public abstract class AbstractAction implements Action, SkylarkValue {
 
   /**
    * See the javadoc for {@link com.google.devtools.build.lib.actions.Action} and {@link
-   * ActionExecutionMetadata#getKey(ActionKeyContext)} for the contract for {@link
-   * #computeKey(ActionKeyContext)}.
+   * com.google.devtools.build.lib.actions.ActionExecutionMetadata#getKey()} for the contract for
+   * {@link #computeKey()}.
    */
-  protected abstract String computeKey(ActionKeyContext actionKeyContext)
-      throws CommandLineExpansionException;
+  protected abstract String computeKey() throws CommandLineExpansionException;
 
   @Override
-  public final synchronized String getKey(ActionKeyContext actionKeyContext) {
+  public final synchronized String getKey() {
     if (cachedKey == null) {
       try {
-        cachedKey = computeKey(actionKeyContext);
+        cachedKey = computeKey();
       } catch (CommandLineExpansionException e) {
         cachedKey = KEY_ERROR;
       }
@@ -428,13 +425,10 @@ public abstract class AbstractAction implements Action, SkylarkValue {
     for (Artifact input : getMandatoryInputs()) {
       // Assume that if the file did not exist, we would not have gotten here.
       try {
-        if (input.isSourceArtifact()
-            && metadataProvider.getMetadata(input).getType().isDirectory()) {
-          // TODO(ulfjack): What about dependency checking of special files?
-          eventHandler.handle(Event.warn(getOwner().getLocation(),
-              String.format(
-                  "input '%s' to %s is a directory; dependency checking of directories is unsound",
-                  input.prettyPrint(), getOwner().getLabel())));
+        if (input.isSourceArtifact() && !metadataProvider.getMetadata(input).isFile()) {
+          eventHandler.handle(Event.warn(getOwner().getLocation(), "input '"
+              + input.prettyPrint() + "' to " + getOwner().getLabel()
+              + " is a directory; dependency checking of directories is unsound"));
         }
       } catch (IOException e) {
         throw new UserExecException(e);
@@ -487,13 +481,12 @@ public abstract class AbstractAction implements Action, SkylarkValue {
   }
 
   @Override
-  public ExtraActionInfo.Builder getExtraActionInfo(ActionKeyContext actionKeyContext)
-      throws CommandLineExpansionException {
+  public ExtraActionInfo.Builder getExtraActionInfo() throws CommandLineExpansionException {
     ActionOwner owner = getOwner();
     ExtraActionInfo.Builder result =
         ExtraActionInfo.newBuilder()
             .setOwner(owner.getLabel().toString())
-            .setId(getKey(actionKeyContext))
+            .setId(getKey())
             .setMnemonic(getMnemonic());
     Iterable<AspectDescriptor> aspectDescriptors = owner.getAspectDescriptors();
     AspectDescriptor lastAspect = null;
@@ -603,12 +596,6 @@ public abstract class AbstractAction implements Action, SkylarkValue {
       structField = true,
       allowReturnNones = true)
   public SkylarkDict<String, String> getSkylarkSubstitutions() {
-    return null;
-  }
-
-  @Nullable
-  @Override
-  public PlatformInfo getExecutionPlatform() {
     return null;
   }
 }
