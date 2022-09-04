@@ -27,7 +27,7 @@ package org.graylog2;
 import org.graylog2.plugin.Tools;
 import com.google.common.collect.Lists;
 import org.joda.time.DateTime;
-import org.testng.annotations.Test;
+import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
@@ -38,8 +38,8 @@ import java.util.List;
 import java.util.zip.Deflater;
 import java.util.zip.GZIPOutputStream;
 
-import static org.testng.AssertJUnit.*;
-import static org.testng.AssertJUnit.assertEquals;
+import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 /**
  * @author lennart
@@ -125,7 +125,7 @@ public class ToolsTest {
         assertEquals(testString, Tools.decompressGzip(buffer));
     }
 
-    @Test(expectedExceptions = EOFException.class)
+    @Test(expected = EOFException.class)
     public void testDecompressGzipEmptyInput() throws IOException {
 
         Tools.decompressGzip(new byte[0]);
@@ -230,11 +230,6 @@ public class ToolsTest {
         assertTrue(DateTime.parse("2013-09-15 02:21:02.123", Tools.timeFormatterWithOptionalMilliseconds()).toString().startsWith("2013-09-15T02:21:02.123"));
         assertTrue(DateTime.parse("2013-09-15 02:21:02.12", Tools.timeFormatterWithOptionalMilliseconds()).toString().startsWith("2013-09-15T02:21:02.120"));
         assertTrue(DateTime.parse("2013-09-15 02:21:02.1", Tools.timeFormatterWithOptionalMilliseconds()).toString().startsWith("2013-09-15T02:21:02.100"));
-    }
-
-    @Test
-    public void testElasticSearchTimeFormatToISO8601() {
-        assertTrue(Tools.elasticSearchTimeFormatToISO8601("2014-07-31 14:21:02.000").equals("2014-07-31T14:21:02.000Z"));
     }
 
     @Test
