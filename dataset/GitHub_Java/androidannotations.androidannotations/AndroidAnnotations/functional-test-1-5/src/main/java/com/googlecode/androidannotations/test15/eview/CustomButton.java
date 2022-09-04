@@ -22,6 +22,7 @@ import android.widget.Button;
 
 import com.googlecode.androidannotations.annotations.AfterViews;
 import com.googlecode.androidannotations.annotations.Background;
+import com.googlecode.androidannotations.annotations.Click;
 import com.googlecode.androidannotations.annotations.EView;
 import com.googlecode.androidannotations.annotations.Trace;
 import com.googlecode.androidannotations.annotations.UiThread;
@@ -33,40 +34,30 @@ import com.googlecode.androidannotations.test15.R;
 public class CustomButton extends Button {
 
 	@StringRes(R.string.app_name)
-	String res;
-
+	protected String res;
+	
 	@AnimationRes(R.anim.fadein)
-	Animation anim;
+	protected Animation anim;
 
-	public boolean afterViewsCalled = false;
-
-	public int constructorParameter;
-
-	public CustomButton(Context context) {
+	public CustomButton(Context context, int i) {
 		super(context);
 	}
-
-	public CustomButton(Context context, int constructorParameter) {
-		super(context);
-		this.constructorParameter = constructorParameter;
-	}
-
+	
 	public CustomButton(Context context, AttributeSet attrs) {
 		super(context, attrs);
 	}
 
 	@Trace
 	@AfterViews
-	void afterViews() {
-		afterViewsCalled = true;
+	protected void afterViews(){
 	}
-
+	
 	@Background
-	void someBackgroundTask() {
+	protected void someBackgroundTask(){
 	}
-
+	
 	@UiThread
-	void someUIThreadTask() {
+	protected void someUIThreadTask(){
 	}
 
 }
