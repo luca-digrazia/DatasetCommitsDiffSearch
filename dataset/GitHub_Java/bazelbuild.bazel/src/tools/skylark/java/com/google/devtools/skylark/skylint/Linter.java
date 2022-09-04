@@ -38,7 +38,6 @@ public class Linter {
       ImmutableMap.<String, Check>builder()
           .put("control-flow", ControlFlowChecker::check)
           .put("docstring", DocstringChecker::check)
-          .put("load", LoadStatementChecker::check)
           .put("naming", NamingConventionsChecker::check)
           .put("no-effect", StatementWithoutEffectChecker::check)
           .put("usage", UsageChecker::check)
