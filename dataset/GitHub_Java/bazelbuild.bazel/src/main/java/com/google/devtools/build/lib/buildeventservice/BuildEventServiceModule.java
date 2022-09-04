@@ -25,7 +25,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
 import com.google.devtools.build.lib.buildeventservice.client.BuildEventServiceClient;
-import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.buildeventstream.transports.BuildEventStreamOptions;
@@ -64,11 +63,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
 
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommonCommandOptions() {
-    return ImmutableList.of(
-        optionsClass(),
-        AuthAndTLSOptions.class,
-        BuildEventStreamOptions.class,
-        BuildEventProtocolOptions.class);
+    return ImmutableList.of(optionsClass(), AuthAndTLSOptions.class, BuildEventStreamOptions.class);
   }
 
   @Override
@@ -156,9 +151,6 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
       BuildEventStreamOptions bepOptions =
           checkNotNull(optionsProvider.getOptions(BuildEventStreamOptions.class),
           "Could not get BuildEventStreamOptions.");
-      BuildEventProtocolOptions protocolOptions =
-          checkNotNull(optionsProvider.getOptions(BuildEventProtocolOptions.class),
-          "Could not get BuildEventProtocolOptions.");
 
       BuildEventTransport besTransport = null;
       try {
@@ -171,19 +163,22 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
                 commandName,
                 moduleEnvironment,
                 clock,
-                protocolOptions,
                 pathConverter,
                 commandLineReporter,
                 startupOptionsProvider);
       } catch (Exception e) {
-        commandLineReporter.handle(Event.error(format(UPLOAD_FAILED_MESSAGE, e.getMessage())));
-        moduleEnvironment.exit(new AbruptExitException(
-            "Failed while creating BuildEventTransport", ExitCode.PUBLISH_ERROR));
-        return null;
+        if (besOptions.besBestEffort) {
+          commandLineReporter.handle(Event.warn(format(UPLOAD_FAILED_MESSAGE, e.getMessage())));
+        } else {
+          commandLineReporter.handle(Event.error(format(UPLOAD_FAILED_MESSAGE, e.getMessage())));
+          moduleEnvironment.exit(new AbruptExitException(
+              "Failed while creating BuildEventTransport", ExitCode.PUBLISH_ERROR));
+          return null;
+        }
       }
 
       ImmutableSet<BuildEventTransport> bepTransports =
-          BuildEventTransportFactory.createFromOptions(bepOptions, protocolOptions, pathConverter);
+          BuildEventTransportFactory.createFromOptions(bepOptions, pathConverter);
 
       ImmutableSet.Builder<BuildEventTransport> transportsBuilder =
           ImmutableSet.<BuildEventTransport>builder().addAll(bepTransports);
@@ -212,7 +207,6 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
       String commandName,
       ModuleEnvironment moduleEnvironment,
       Clock clock,
-      BuildEventProtocolOptions protocolOptions,
       PathConverter pathConverter,
       EventHandler commandLineReporter,
       OptionsProvider startupOptionsProvider)
@@ -243,13 +237,13 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
           new BuildEventServiceTransport(
               createBesClient(besOptions, authTlsOptions),
               besOptions.besTimeout,
+              besOptions.besBestEffort,
               besOptions.besLifecycleEvents,
               buildRequestId,
               invocationId,
               commandName,
               moduleEnvironment,
               clock,
-              protocolOptions,
               pathConverter,
               commandLineReporter,
               besOptions.projectId,
