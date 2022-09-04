@@ -67,7 +67,6 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import com.google.devtools.build.skyframe.ValueOrException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -221,42 +220,30 @@ public final class AspectFunction implements SkyFunction {
           new BuildFileContainsErrorsException(key.getLabel().getPackageIdentifier()));
     }
 
-    boolean aspectHasConfiguration = key.getAspectConfigurationKey() != null;
 
-    ImmutableSet<SkyKey> keys =
-        aspectHasConfiguration
-            ? ImmutableSet.of(key.getBaseConfiguredTargetKey(), key.getAspectConfigurationKey())
-            : ImmutableSet.of(key.getBaseConfiguredTargetKey());
-
-    Map<SkyKey, ValueOrException<ConfiguredValueCreationException>> baseAndAspectValues =
-        env.getValuesOrThrow(keys, ConfiguredValueCreationException.class);
-    if (env.valuesMissing()) {
-      return null;
-    }
-
-    ConfiguredTargetValue baseConfiguredTargetValue;
-    BuildConfiguration aspectConfiguration = null;
-
+    ConfiguredTargetValue configuredTargetValue;
     try {
-      baseConfiguredTargetValue =
-          (ConfiguredTargetValue) baseAndAspectValues.get(key.getBaseConfiguredTargetKey()).get();
+      configuredTargetValue =
+          (ConfiguredTargetValue)
+              env.getValueOrThrow(
+                  key.getConfiguredTargetKey(), ConfiguredValueCreationException.class);
     } catch (ConfiguredValueCreationException e) {
       throw new AspectFunctionException(new AspectCreationException(e.getRootCauses()));
     }
-
-    if (aspectHasConfiguration) {
-      try {
-        aspectConfiguration =
-            ((BuildConfigurationValue)
-                    baseAndAspectValues.get(key.getAspectConfigurationKey()).get())
-                .getConfiguration();
-      } catch (ConfiguredValueCreationException e) {
-        throw new IllegalStateException("Unexpected exception from BuildConfigurationFunction when "
-            + "computing " + key.getAspectConfigurationKey(), e);
-      }
+    if (configuredTargetValue == null) {
+      // TODO(bazel-team): remove this check when top-level targets also use dynamic configurations.
+      // Right now the key configuration may be dynamic while the original target's configuration
+      // is static, resulting in a Skyframe cache miss even though the original target is, in fact,
+      // precomputed.
+      return null;
     }
 
-    ConfiguredTarget associatedTarget = baseConfiguredTargetValue.getConfiguredTarget();
+
+    if (configuredTargetValue.getConfiguredTarget() == null) {
+      return null;
+    }
+
+    ConfiguredTarget associatedTarget = configuredTargetValue.getConfiguredTarget();
 
     ConfiguredTargetAndTarget associatedConfiguredTargetAndTarget;
     Package targetPkg =
@@ -271,14 +258,14 @@ public final class AspectFunction implements SkyFunction {
       throw new IllegalStateException("Name already verified", e);
     }
 
-    if (baseConfiguredTargetValue.getConfiguredTarget().getProvider(AliasProvider.class) != null) {
+    if (configuredTargetValue.getConfiguredTarget().getProvider(AliasProvider.class) != null) {
       return createAliasAspect(
           env,
           view.getActionKeyContext(),
           associatedConfiguredTargetAndTarget.getTarget(),
           aspect,
           key,
-          baseConfiguredTargetValue.getConfiguredTarget());
+          configuredTargetValue.getConfiguredTarget());
     }
 
 
@@ -328,7 +315,7 @@ public final class AspectFunction implements SkyFunction {
     // will be present this way.
     TargetAndConfiguration originalTargetAndAspectConfiguration =
         new TargetAndConfiguration(
-            associatedConfiguredTargetAndTarget.getTarget(), aspectConfiguration);
+            associatedConfiguredTargetAndTarget.getTarget(), key.getAspectConfiguration());
     ImmutableList<Aspect> aspectPath = aspectPathBuilder.build();
     try {
       // Get the configuration targets that trigger this rule's configurable attributes.
@@ -357,8 +344,7 @@ public final class AspectFunction implements SkyFunction {
                     aspect.getDescriptor().getDescription(),
                     associatedConfiguredTargetAndTarget.getTarget().toString()),
                 requiredToolchains,
-                aspectConfiguration,
-                key.getAspectConfigurationKey());
+                key.getAspectConfiguration());
       } catch (ToolchainContextException e) {
         // TODO(katre): better error handling
         throw new AspectCreationException(e.getMessage());
@@ -400,7 +386,7 @@ public final class AspectFunction implements SkyFunction {
           aspect,
           aspectFactory,
           associatedConfiguredTargetAndTarget,
-          aspectConfiguration,
+          key.getAspectConfiguration(),
           configConditions,
           toolchainContext,
           depValueMap,
