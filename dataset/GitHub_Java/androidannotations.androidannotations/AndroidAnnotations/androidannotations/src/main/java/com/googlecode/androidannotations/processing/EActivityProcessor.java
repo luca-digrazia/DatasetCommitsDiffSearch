@@ -33,7 +33,6 @@ import com.googlecode.androidannotations.helper.AnnotationHelper;
 import com.googlecode.androidannotations.rclass.IRClass;
 import com.googlecode.androidannotations.rclass.IRClass.Res;
 import com.googlecode.androidannotations.rclass.IRInnerClass;
-import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
@@ -71,7 +70,7 @@ public class EActivityProcessor extends AnnotationHelper implements ElementProce
         String annotatedActivityQualifiedName = typeElement.getQualifiedName().toString();
 
         String subActivityQualifiedName = annotatedActivityQualifiedName + NEW_CLASS_SUFFIX;
-        holder.activity = codeModel._class(JMod.PUBLIC | JMod.FINAL, subActivityQualifiedName, ClassType.CLASS);
+        holder.activity = codeModel._class(subActivityQualifiedName);
 
         JClass annotatedActivity = codeModel.directClass(annotatedActivityQualifiedName);
 
