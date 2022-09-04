@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.starlarkbuildapi;
 
 import com.google.devtools.build.docgen.annot.DocCategory;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import net.starlark.java.annot.Param;
 import net.starlark.java.annot.ParamType;
 import net.starlark.java.annot.StarlarkBuiltin;
@@ -53,7 +52,7 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
               + "need to be (and cannot be) declared using this function. You can obtain their "
               + "<code>File</code> objects from "
               + "<a href=\"ctx.html#outputs\"><code>ctx.outputs</code></a> instead. "
-              + "<a href=\"https://github.com/bazelbuild/examples/tree/master/rules/"
+              + "<a href=\"https://github.com/bazelbuild/examples/tree/main/rules/"
               + "computed_dependencies/hash.bzl\">See example of use</a>.",
       parameters = {
         @Param(
@@ -94,7 +93,9 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
                     + "('sibling' defines a directory)."),
         @Param(
             name = "sibling",
-            doc = "A file that lives in the same directory as the newly declared directory.",
+            doc =
+                "A file that lives in the same directory as the newly declared directory. "
+                    + "The file must be in the current package.",
             allowedTypes = {
               @ParamType(type = FileApi.class),
               @ParamType(type = NoneType.class),
@@ -267,7 +268,7 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
       name = "run",
       doc =
           "Creates an action that runs an executable. "
-              + "<a href=\"https://github.com/bazelbuild/examples/tree/master/rules/"
+              + "<a href=\"https://github.com/bazelbuild/examples/tree/main/rules/"
               + "actions_run/execute.bzl\">See example of use</a>.",
       parameters = {
         @Param(
@@ -329,9 +330,9 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
                     + "runfiles that are automatically made available to the action."),
         @Param(
             name = "arguments",
-            allowedTypes = {
-              @ParamType(type = Sequence.class, generic1 = String.class),
-            },
+            // TODO(#13365): improve the @ParamType annotation once it can support multiple
+            // contained types.
+            allowedTypes = {@ParamType(type = Sequence.class)},
             defaultValue = "[]",
             named = true,
             positional = false,
@@ -359,8 +360,12 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
             named = true,
             positional = false,
             doc =
-                "Progress message to show to the user during the build, "
-                    + "for example, \"Compiling foo.cc to create foo.o\"."),
+                "Progress message to show to the user during the build, for example, \"Compiling"
+                    + " foo.cc to create foo.o\". The message may contain <code>%{label}</code>,"
+                    + " <code>%{input}</code>, or <code>%{output}</code> patterns, which are"
+                    + " substituted with label string, first input, or output's path,"
+                    + " respectively. Prefer to use patterns instead of static strings, because"
+                    + " the former are more efficient."),
         @Param(
             name = "use_default_shell_env",
             defaultValue = "False",
@@ -414,12 +419,22 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
             defaultValue = "None",
             named = true,
             positional = false,
-            enableOnlyWithFlag = BuildLanguageOptions.EXPERIMENTAL_EXEC_GROUPS,
-            valueWhenDisabled = "None",
-            // TODO(b/151742236) update this doc when this becomes non-experimental.
             doc =
-                "(Experimental) runs the action on the given exec group's execution platform. If"
+                "Runs the action on the given exec group's execution platform. If"
                     + " none, uses the target's default execution platform."),
+        @Param(
+            name = "shadowed_action",
+            allowedTypes = {
+              @ParamType(type = ActionApi.class),
+            },
+            defaultValue = "None",
+            named = true,
+            positional = false,
+            doc =
+                "Runs the action using the given shadowed action's inputs and"
+                    + " environment added to the action's inputs list and environment. The action"
+                    + " environment can overwrite any of the shadowed action's environment"
+                    + " variables. If none, uses only the action's inputs and given environment."),
       })
   void run(
       Sequence<?> outputs,
@@ -427,21 +442,22 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
       Object unusedInputsList,
       Object executableUnchecked,
       Object toolsUnchecked,
-      Object arguments,
+      Sequence<?> arguments,
       Object mnemonicUnchecked,
       Object progressMessage,
       Boolean useDefaultShellEnv,
       Object envUnchecked,
       Object executionRequirementsUnchecked,
       Object inputManifestsUnchecked,
-      Object execGroupUnchecked)
+      Object execGroupUnchecked,
+      Object shadowedAction)
       throws EvalException;
 
   @StarlarkMethod(
       name = "run_shell",
       doc =
           "Creates an action that runs a shell command. "
-              + "<a href=\"https://github.com/bazelbuild/examples/tree/master/rules/"
+              + "<a href=\"https://github.com/bazelbuild/examples/tree/main/rules/"
               + "shell_command/rules.bzl\">See example of use</a>.",
       parameters = {
         @Param(
@@ -475,6 +491,9 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
                     + "The list can contain Files or FilesToRunProvider instances."),
         @Param(
             name = "arguments",
+            // TODO(#13365): improve the @ParamType annotation once it can support multiple
+            // contained types.
+            allowedTypes = {@ParamType(type = Sequence.class)},
             defaultValue = "[]",
             named = true,
             positional = false,
@@ -546,8 +565,12 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
             named = true,
             positional = false,
             doc =
-                "Progress message to show to the user during the build, "
-                    + "for example, \"Compiling foo.cc to create foo.o\"."),
+                "Progress message to show to the user during the build, for example, \"Compiling"
+                    + " foo.cc to create foo.o\". The message may contain <code>%{label}</code>,"
+                    + " <code>%{input}</code>, or <code>%{output}</code> patterns, which are"
+                    + " substituted with label string, first input, or output's path,"
+                    + " respectively. Prefer to use patterns instead of static strings, because"
+                    + " the former are more efficient."),
         @Param(
             name = "use_default_shell_env",
             defaultValue = "False",
@@ -601,19 +624,27 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
             defaultValue = "None",
             named = true,
             positional = false,
-            enableOnlyWithFlag = BuildLanguageOptions.EXPERIMENTAL_EXEC_GROUPS,
-            valueWhenDisabled = "None",
-            // TODO(b/151742236) update this doc when this becomes non-experimental.
             doc =
-                "(Experimental) runs the action on the given exec group's execution platform. If"
+                "Runs the action on the given exec group's execution platform. If"
                     + " none, uses the target's default execution platform."),
-      },
-      useStarlarkThread = true)
+        @Param(
+            name = "shadowed_action",
+            allowedTypes = {
+              @ParamType(type = ActionApi.class),
+            },
+            defaultValue = "None",
+            named = true,
+            positional = false,
+            doc =
+                "Runs the action using the given shadowed action's discovered inputs"
+                    + " added to the action's inputs list. If none, uses only the action's"
+                    + " inputs."),
+      })
   void runShell(
       Sequence<?> outputs,
       Object inputs,
       Object toolsUnchecked,
-      Object arguments,
+      Sequence<?> arguments,
       Object mnemonicUnchecked,
       Object commandUnchecked,
       Object progressMessage,
@@ -622,7 +653,7 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
       Object executionRequirementsUnchecked,
       Object inputManifestsUnchecked,
       Object execGroupUnchecked,
-      StarlarkThread thread)
+      Object shadowedAction)
       throws EvalException;
 
   @StarlarkMethod(
@@ -635,7 +666,7 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
               + "result of a previous substitution), it is replaced with the associated value. "
               + "There is no special syntax for the keys. You may, for example, use curly braces "
               + "to avoid conflicts (for example, <code>{KEY}</code>). "
-              + "<a href=\"https://github.com/bazelbuild/examples/blob/master/rules/"
+              + "<a href=\"https://github.com/bazelbuild/examples/blob/main/rules/"
               + "expand_template/hello.bzl\">"
               + "See example of use</a>.",
       parameters = {

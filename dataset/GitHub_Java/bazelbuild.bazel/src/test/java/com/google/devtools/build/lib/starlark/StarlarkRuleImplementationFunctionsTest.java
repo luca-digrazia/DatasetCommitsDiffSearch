@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionLookupKey;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpanderImpl;
 import com.google.devtools.build.lib.actions.Artifact.DerivedArtifact;
 import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
@@ -52,18 +51,13 @@ import com.google.devtools.build.lib.analysis.starlark.Args;
 import com.google.devtools.build.lib.analysis.starlark.StarlarkRuleContext;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.StarlarkProvider;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.starlark.util.BazelEvaluationTestCase;
-import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkList;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.OsUtils;
@@ -76,8 +70,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import net.starlark.java.annot.Param;
-import net.starlark.java.annot.StarlarkGlobalLibrary;
 import net.starlark.java.annot.StarlarkMethod;
+import net.starlark.java.eval.EvalException;
+import net.starlark.java.eval.Printer;
+import net.starlark.java.eval.Sequence;
+import net.starlark.java.eval.Starlark;
+import net.starlark.java.eval.StarlarkInt;
+import net.starlark.java.eval.StarlarkList;
+import net.starlark.java.eval.StarlarkThread;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -87,14 +87,12 @@ import org.junit.runners.JUnit4;
 
 /** Tests for Starlark functions relating to rule implementation. */
 @RunWith(JUnit4.class)
-@StarlarkGlobalLibrary // needed for CallUtils.getBuiltinCallable, sadly
 public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
 
   private final BazelEvaluationTestCase ev = new BazelEvaluationTestCase();
 
   private StarlarkRuleContext createRuleContext(String label) throws Exception {
-    return new StarlarkRuleContext(
-        getRuleContextForStarlark(getConfiguredTarget(label)), null, getStarlarkSemantics());
+    return new StarlarkRuleContext(getRuleContextForStarlark(getConfiguredTarget(label)), null);
   }
 
   @Rule public ExpectedException thrown = ExpectedException.none();
@@ -105,7 +103,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
       documented = false,
       parameters = {
         @Param(name = "mandatory", doc = "", named = true),
-        @Param(name = "optional", doc = "", defaultValue = "None", noneable = true, named = true),
+        @Param(name = "optional", doc = "", defaultValue = "None", named = true),
         @Param(name = "mandatory_key", doc = "", positional = false, named = true),
         @Param(
             name = "optional_key",
@@ -205,7 +203,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     assertThat(e).hasMessageThat().contains(errorSubstring);
   }
 
-  // TODO(adonovan): move these tests of the interpreter core into lib.syntax.
+  // TODO(adonovan): move these tests of Starlark interpreter core into net/starlark/java.
 
   @Test
   public void testStarlarkFunctionPosArgs() throws Exception {
@@ -313,6 +311,26 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
   }
 
   @Test
+  public void createSpawnAction_progressMessageWithSubstitutions() throws Exception {
+    StarlarkRuleContext ruleContext = createRuleContext("//foo:foo");
+    setRuleContext(ruleContext);
+    ev.exec(
+        "ruleContext.actions.run(",
+        "  inputs = ruleContext.files.srcs,",
+        "  outputs = ruleContext.files.srcs[1:],",
+        "  executable = ruleContext.files.tools[0],",
+        "  mnemonic = 'DummyMnemonic',",
+        "  progress_message = 'message %{label} %{input} %{output}')");
+
+    SpawnAction action =
+        (SpawnAction)
+            Iterables.getOnlyElement(
+                ruleContext.getRuleContext().getAnalysisEnvironment().getRegisteredActions());
+
+    assertThat(action.getProgressMessage()).isEqualTo("message //foo:foo foo/a.txt foo/b.img");
+  }
+
+  @Test
   public void testCreateActionWithDepsetInput() throws Exception {
     // Same test as above, with depset as inputs.
     StarlarkRuleContext ruleContext = createRuleContext("//foo:foo");
@@ -336,7 +354,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
   public void testCreateSpawnActionArgumentsBadExecutable() throws Exception {
     setRuleContext(createRuleContext("//foo:foo"));
     ev.checkEvalErrorContains(
-        "got value of type 'int', want 'File or string or FilesToRunProvider'",
+        "got value of type 'int', want 'File, string, or FilesToRunProvider'",
         "ruleContext.actions.run(",
         "  inputs = ruleContext.files.srcs,",
         "  outputs = ruleContext.files.srcs,",
@@ -346,6 +364,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
 
   @Test
   public void testCreateSpawnActionShellCommandList() throws Exception {
+    setBuildLanguageOptions("--incompatible_run_shell_command_string=false");
     StarlarkRuleContext ruleContext = createRuleContext("//foo:foo");
     setRuleContext(ruleContext);
     ev.exec(
@@ -445,6 +464,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
 
   @Test
   public void testRunShellArgumentsWithCommandSequence() throws Exception {
+    setBuildLanguageOptions("--incompatible_run_shell_command_string=false");
     setRuleContext(createRuleContext("//foo:foo"));
     ev.checkEvalErrorContains(
         "'arguments' must be empty if 'command' is a sequence of strings",
@@ -482,23 +502,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testCreateSpawnActionWithToolInInputsLegacy() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=false");
-    setupToolInInputsTest(
-        "output = ctx.actions.declare_file('bar.out')",
-        "ctx.actions.run_shell(",
-        "  inputs = ctx.attr.exe.files,",
-        "  outputs = [output],",
-        "  command = 'boo bar baz',",
-        ")");
-    RuleConfiguredTarget target = (RuleConfiguredTarget) getConfiguredTarget("//bar:my_rule");
-    SpawnAction action = (SpawnAction) Iterables.getOnlyElement(target.getActions());
-    assertThat(action.getTools().toList()).isNotEmpty();
-  }
-
-  @Test
   public void testCreateSpawnActionWithToolAttribute() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=true");
     setupToolInInputsTest(
         "output = ctx.actions.declare_file('bar.out')",
         "ctx.actions.run_shell(",
@@ -514,7 +518,6 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
 
   @Test
   public void testCreateSpawnActionWithToolAttributeIgnoresToolsInInputs() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=true");
     setupToolInInputsTest(
         "output = ctx.actions.declare_file('bar.out')",
         "ctx.actions.run_shell(",
@@ -526,26 +529,6 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     RuleConfiguredTarget target = (RuleConfiguredTarget) getConfiguredTarget("//bar:my_rule");
     SpawnAction action = (SpawnAction) Iterables.getOnlyElement(target.getActions());
     assertThat(action.getTools().toList()).isNotEmpty();
-  }
-
-  @Test
-  public void testCreateSpawnActionWithToolInInputsFailAtAnalysisTime() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=true");
-    setupToolInInputsTest(
-        "output = ctx.actions.declare_file('bar.out')",
-        "ctx.actions.run_shell(",
-        "  inputs = ctx.attr.exe.files,",
-        "  outputs = [output],",
-        "  command = 'boo bar baz',",
-        ")");
-    try {
-      getConfiguredTarget("//bar:my_rule");
-    } catch (Throwable t) {
-      // Expected
-    }
-    assertThat(eventCollector).hasSize(1);
-    assertThat(eventCollector.iterator().next().getMessage())
-        .containsMatch("Found tool\\(s\\) '.*' in inputs");
   }
 
   @Test
@@ -840,8 +823,8 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
    * parameter of the template_action function contains a hack that assumes its input is a UTF-8
    * encoded string which has been ingested as Latin 1. The hack converts the string to its
    * "correct" UTF-8 value. Once Blaze starts calling {@link
-   * com.google.devtools.build.lib.syntax.ParserInput#fromUTF8} instead of {@code fromLatin1} and
-   * the hack for the substituations parameter is removed, this test will fail.
+   * net.starlark.java.syntax.ParserInput#fromUTF8} instead of {@code fromLatin1} and the hack for
+   * the substituations parameter is removed, this test will fail.
    */
   @Test
   public void testCreateTemplateActionWithWrongEncoding() throws Exception {
@@ -1187,7 +1170,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
 
   @Test
   public void testDefaultProviderInvalidConfiguration() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
+    setBuildLanguageOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file(
         "test/foo.bzl",
         "foo_provider = provider()",
@@ -1464,7 +1447,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testLacksAdvertisedNativeProvider() throws Exception {
+  public void testLacksAdvertisedBuiltinProvider() throws Exception {
     scratch.file(
         "test/foo.bzl",
         "FooInfo = provider()",
@@ -1551,7 +1534,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
         .isEqualTo(
             new StarlarkProvider.Key(
                 Label.parseAbsolute("//test:foo.bzl", ImmutableMap.of()), "foo_provider"));
-    assertThat(((StructImpl) provider).getValue("a")).isEqualTo(123);
+    assertThat(((StructImpl) provider).getValue("a")).isEqualTo(StarlarkInt.of(123));
   }
 
   @Test
@@ -1814,12 +1797,12 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
         ")");
     scratch.file("test/BUILD", "load(':my_rule.bzl', 'my_rule')", "my_rule(name = 'my_rule')");
 
-    AssertionError expected =
+    AssertionError ex =
         assertThrows(AssertionError.class, () -> getConfiguredTarget("//test:my_rule"));
-    assertThat(expected)
-        .hasMessageThat()
-        .contains(
-            "cannot return a non-exported provider instance from a rule implementation function.");
+    String msg = ex.getMessage();
+    assertThat(msg)
+        .contains("rule implementation function returned an instance of an unnamed provider");
+    assertThat(msg).contains("Provider defined at /workspace/test/my_rule.bzl:2:28");
   }
 
   @Test
@@ -1828,6 +1811,13 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     Object result = ev.eval("ruleContext.attr.srcs[0].files");
     assertThat(ActionsTestUtil.baseNamesOf(((Depset) result).getSet(Artifact.class)))
         .isEqualTo("libjl.jar");
+  }
+
+  @Test
+  public void testKindForConfiguredTarget() throws Exception {
+    setRuleContext(createRuleContext("//foo:bar"));
+    Object result = ev.eval("ruleContext.attr.srcs[0].kind");
+    assertThat((String) result).isEqualTo("java_library");
   }
 
   @Test
@@ -1845,7 +1835,8 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     StarlarkRuleContext ctx = createRuleContext("//foo:bar");
     setRuleContext(ctx);
     Object result = ev.eval("ruleContext.bin_dir.path");
-    assertThat(result).isEqualTo(ctx.getConfiguration().getBinFragment().getPathString());
+    assertThat(result)
+        .isEqualTo(ctx.getConfiguration().getBinFragment(RepositoryName.MAIN).getPathString());
   }
 
   @Test
@@ -1909,28 +1900,6 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     } finally {
       eventCollector.clear();
     }
-  }
-
-  @StarlarkMethod(name = "throw1", documented = false)
-  public Object throw1() throws Exception {
-    class ThereIsNoMessageException extends EvalException {
-      ThereIsNoMessageException() {
-        super(null, "This is not the message you are looking for."); // Unused dummy message
-      }
-
-      @Override
-      public String getMessage() {
-        return "";
-      }
-    }
-    throw new ThereIsNoMessageException();
-  }
-
-  @Test
-  public void testStackTraceWithoutOriginalMessage() throws Exception {
-    defineTestMethods();
-    ev.checkEvalErrorContains(
-        "There Is No Message: StarlarkRuleImplementationFunctionsTest", "throw1()");
   }
 
   @StarlarkMethod(name = "throw2", documented = false)
@@ -2033,11 +2002,9 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
         "silly_rule(name = 'silly')");
     thrown.handleAssertionErrors(); // Compatibility with JUnit 4.11
     thrown.expect(AssertionError.class);
-    // This confusing message shows why we should distinguish
-    // built-ins and Starlark functions in their repr strings.
     thrown.expectMessage(
-        "in call to rule(), parameter 'implementation' got value of type 'function', want"
-            + " 'function'");
+        "in call to rule(), parameter 'implementation' got value of type"
+            + " 'builtin_function_or_method', want 'function'");
     getConfiguredTarget("//test:silly");
   }
 
@@ -2373,15 +2340,15 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
   public void testArgsAddInvalidTypesForArgAndValues() throws Exception {
     setRuleContext(createRuleContext("//foo:foo"));
     ev.checkEvalErrorContains(
-        "expected value of type 'string' for arg name, got 'Integer'",
+        "expected value of type 'string' for arg name, got 'int'",
         "args = ruleContext.actions.args()",
         "args.add(1, 'value')");
     ev.checkEvalErrorContains(
-        "expected value of type 'string' for arg name, got 'Integer'",
+        "expected value of type 'string' for arg name, got 'int'",
         "args = ruleContext.actions.args()",
         "args.add_all(1, [1, 2])");
     ev.checkEvalErrorContains(
-        "expected value of type 'sequence or depset' for values, got 'Integer'",
+        "expected value of type 'sequence or depset' for values, got 'int'",
         "args = ruleContext.actions.args()",
         "args.add_all(1)");
     ev.checkEvalErrorContains(
@@ -2479,7 +2446,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     CommandLineExpansionException e =
         assertThrows(CommandLineExpansionException.class, () -> action.getArguments());
     assertThat(e.getMessage())
-        .contains("Expected map_each to return string, None, or list of strings, found Integer");
+        .contains("Expected map_each to return string, None, or list of strings, found int");
   }
 
   @Test
@@ -2538,8 +2505,8 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testConfigurationField_StarlarkSplitTransitionProhibited() throws Exception {
-    scratch.file(
+  public void testConfigurationField_starlarkSplitTransitionProhibited() throws Exception {
+    scratch.overwriteFile(
         "tools/allowlists/function_transition_allowlist/BUILD",
         "package_group(",
         "    name = 'function_transition_allowlist',",
@@ -2568,15 +2535,13 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
 
     scratch.file("test/BUILD", "load('//test:rule.bzl', 'foo')", "foo(name='foo')");
 
-    setStarlarkSemanticsOptions("--experimental_starlark_config_transitions=true");
-
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:foo");
     assertContainsEvent("late-bound attributes must not have a split configuration transition");
   }
 
   @Test
-  public void testConfigurationField_NativeSplitTransitionProviderProhibited() throws Exception {
+  public void testConfigurationField_nativeSplitTransitionProviderProhibited() throws Exception {
     scratch.file(
         "test/rule.bzl",
         "def _foo_impl(ctx):",
@@ -2597,7 +2562,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testConfigurationField_NativeSplitTransitionProhibited() throws Exception {
+  public void testConfigurationField_nativeSplitTransitionProhibited() throws Exception {
     scratch.file(
         "test/rule.bzl",
         "def _foo_impl(ctx):",
@@ -2609,7 +2574,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
         "    '_attr': attr.label(",
         "        cfg = android_common.multi_cpu_configuration,",
         "        default = configuration_field(fragment='cpp', name = 'cc_toolchain'))})");
-    setStarlarkSemanticsOptions("--experimental_google_legacy_api");
+    setBuildLanguageOptions("--experimental_google_legacy_api");
 
     scratch.file("test/BUILD", "load('//test:rule.bzl', 'foo')", "foo(name='foo')");
 
@@ -3108,8 +3073,8 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
             "def _path(f): return f.path",
             "args.add_all([directory], map_each=_path)");
 
-    ev.setSemantics("--incompatible_run_shell_command_string");
-    // setStarlarkSemanticsOptions reinitializes the thread -- set the ruleContext on the new one.
+    ev.setSemantics("--incompatible_run_shell_command_string=false");
+    // setBuildLanguageOptions reinitializes the thread -- set the ruleContext on the new one.
     setRuleContext(createRuleContext("//foo:foo"));
 
     CommandLine commandLine2 =
@@ -3136,12 +3101,22 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     };
   }
 
-  private String getDigest(CommandLine commandLine) throws CommandLineExpansionException {
+  private static ArtifactExpander createArtifactExpander(
+      Artifact directory, ImmutableList<Artifact> files) {
+    return (artifact, output) -> {
+      if (artifact.equals(directory)) {
+        output.addAll(files);
+      }
+    };
+  }
+
+  private String getDigest(CommandLine commandLine)
+      throws CommandLineExpansionException, InterruptedException {
     return getDigest(commandLine, /*artifactExpander=*/ null);
   }
 
   private String getDigest(CommandLine commandLine, ArtifactExpander artifactExpander)
-      throws CommandLineExpansionException {
+      throws CommandLineExpansionException, InterruptedException {
     Fingerprint fingerprint = new Fingerprint();
     commandLine.addToFingerprint(actionKeyContext, artifactExpander, fingerprint);
     return fingerprint.hexDigestAndReset();
@@ -3157,7 +3132,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     setRuleContext(createRuleContext("//foo:foo"));
     ev.exec("args = ruleContext.actions.args()", "args.add_all(['--foo', '--bar'])");
     Args args = (Args) ev.eval("args");
-    assertThat(Printer.getPrinter().debugPrint(args).toString()).isEqualTo("--foo --bar");
+    assertThat(new Printer().debugPrint(args).toString()).isEqualTo("--foo --bar");
   }
 
   @Test
@@ -3179,9 +3154,8 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     // Now ask for one with an expanded directory
     Artifact file1 = getBinArtifactWithNoOwner("foo/dir/file1");
     Artifact file2 = getBinArtifactWithNoOwner("foo/dir/file2");
-    ArtifactExpanderImpl artifactExpander =
-        new ArtifactExpanderImpl(
-            ImmutableMap.of(directory, ImmutableList.of(file1, file2)), ImmutableMap.of());
+    ArtifactExpander artifactExpander =
+        createArtifactExpander(directory, ImmutableList.of(file1, file2));
     assertThat(commandLine.arguments(artifactExpander))
         .containsExactly("foo/dir/file1", "foo/dir/file2");
   }
@@ -3202,9 +3176,8 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
 
     Artifact file1 = getBinArtifactWithNoOwner("foo/dir/file1");
     Artifact file2 = getBinArtifactWithNoOwner("foo/dir/file2");
-    ArtifactExpanderImpl artifactExpander =
-        new ArtifactExpanderImpl(
-            ImmutableMap.of(directory, ImmutableList.of(file1, file2)), ImmutableMap.of());
+    ArtifactExpander artifactExpander =
+        createArtifactExpander(directory, ImmutableList.of(file1, file2));
     // First expanded, then not expanded (two separate calls)
     assertThat(commandLine.arguments(artifactExpander))
         .containsExactly("foo/dir/file1", "foo/dir/file2", "foo/dir");
@@ -3254,10 +3227,23 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
 
     Artifact file1 = getBinArtifactWithNoOwner("foo/dir/file1");
     Artifact file2 = getBinArtifactWithNoOwner("foo/dir/file2");
-    ArtifactExpanderImpl artifactExpander =
-        new ArtifactExpanderImpl(
-            ImmutableMap.of(directory, ImmutableList.of(file1, file2)), ImmutableMap.of());
+    ArtifactExpander artifactExpander =
+        createArtifactExpander(directory, ImmutableList.of(file1, file2));
     assertThat(commandLine.arguments(artifactExpander))
         .containsExactly("foo/dir/file1", "foo/dir/file2", "foo/file3");
+  }
+
+  @Test
+  public void testCallDirectoryExpanderWithWrongType() throws Exception {
+    setRuleContext(createRuleContext("//foo:foo"));
+    ev.exec(
+        "args = ruleContext.actions.args()",
+        "f = ruleContext.actions.declare_file('file')",
+        "def _expand_dirs(artifact, dir_expander):",
+        "  return dir_expander.expand('oh no a string')",
+        "args.add_all([f], map_each=_expand_dirs)");
+    Args args = (Args) ev.eval("args");
+    CommandLine commandLine = args.build();
+    assertThrows(CommandLineExpansionException.class, commandLine::arguments);
   }
 }
