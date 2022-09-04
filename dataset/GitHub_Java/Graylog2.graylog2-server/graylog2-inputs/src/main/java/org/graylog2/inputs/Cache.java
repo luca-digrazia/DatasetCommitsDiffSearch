@@ -26,8 +26,10 @@ import org.graylog2.plugin.Message;
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public interface Cache {
+    
     public void add(Message m);
     public Message pop();
     public int size();
+    public void clear();
     public boolean isEmpty();
 }

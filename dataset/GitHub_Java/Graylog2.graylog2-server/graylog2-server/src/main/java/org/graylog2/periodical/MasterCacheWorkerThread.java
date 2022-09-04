@@ -107,10 +107,8 @@ public class MasterCacheWorkerThread extends Periodical {
                             try {
                                 LOG.debug("Reading message from {}.", cacheName);
                                 Message msg = cache.pop();
-                                if (msg != null) {
-                                    targetBuffer.insertFailFast(msg, msg.getSourceInput());
-                                    writtenMessages.mark();
-                                }
+                                targetBuffer.insertFailFast(msg, msg.getSourceInput());
+                                writtenMessages.mark();
                             } catch (BufferOutOfCapacityException ex) {
                                 outOfCapacity.mark();
                                 LOG.debug("Target buffer out of capacity in {}. Breaking.", cacheName);
