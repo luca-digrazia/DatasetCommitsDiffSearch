@@ -94,15 +94,16 @@ public class TestAction extends AbstractAction {
   }
 
   @Override
-  public NestedSet<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext) {
+  public Iterable<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext) {
     Preconditions.checkState(discoversInputs(), this);
-    NestedSet<Artifact> discoveredInputs =
-        NestedSetBuilder.wrap(
-            Order.STABLE_ORDER, Iterables.filter(optionalInputs, i -> i.getPath().exists()));
+    ImmutableList<Artifact> discoveredInputs =
+        optionalInputs.stream()
+            .filter(i -> i.getPath().exists())
+            .collect(ImmutableList.toImmutableList());
     updateInputs(
         NestedSetBuilder.<Artifact>stableOrder()
             .addTransitive(mandatoryInputs)
-            .addTransitive(discoveredInputs)
+            .addAll(discoveredInputs)
             .build());
     return discoveredInputs;
   }
