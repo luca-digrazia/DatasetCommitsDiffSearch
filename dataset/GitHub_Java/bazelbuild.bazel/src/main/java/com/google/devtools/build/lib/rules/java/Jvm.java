@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,106 +15,35 @@
 package com.google.devtools.build.lib.rules.java;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap.Builder;
-import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.syntax.Label;
-import com.google.devtools.build.lib.syntax.SkylarkCallable;
-import com.google.devtools.build.lib.syntax.SkylarkModule;
-import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 
 /**
- * This class represents a Java virtual machine with a host system and a path.
- * If the JVM comes from the client, it can optionally also contain a label
- * pointing to a target that contains all the necessary files.
+ * This class represents a Java virtual machine with a path.
  */
-@SkylarkModule(name = "jvm",
-    doc = "A configuration fragment representing the Java virtual machine.")
+@AutoCodec
 @Immutable
 public final class Jvm extends BuildConfiguration.Fragment {
-  private final PathFragment javaHome;
+  public static final ObjectCodec<Jvm> CODEC = new Jvm_AutoCodec();
+
   private final Label jvmLabel;
 
   /**
-   * Creates a Jvm instance. Either the {@code javaHome} parameter is absolute,
-   * or the {@code jvmLabel} parameter must be non-null. This restriction might
-   * be lifted in the future. Only the {@code jvmLabel} is optional.
+   * Creates a {@link  Jvm} instance. {@code jvmLabel} must be non-null.
    */
-  public Jvm(PathFragment javaHome, Label jvmLabel) {
-    Preconditions.checkArgument(javaHome.isAbsolute() ^ (jvmLabel != null));
-    this.javaHome = javaHome;
-    this.jvmLabel = jvmLabel;
-  }
-
-  @Override
-  public String getName() {
-    return "Jvm";
-  }
-
-  @Override
-  public void addImplicitLabels(Multimap<String, Label> implicitLabels) {
-    if (jvmLabel != null) {
-      implicitLabels.put(getName(), jvmLabel);
-    }
+  @AutoCodec.Constructor
+  public Jvm(Label jvmLabel) {
+    this.jvmLabel = Preconditions.checkNotNull(jvmLabel);
   }
 
   /**
-   * Returns a path fragment that determines the path to the installation
-   * directory. It is either absolute or relative to the execution root.
-   */
-  public PathFragment getJavaHome() {
-    return javaHome;
-  }
-
-  /**
-   * Returns the path to the javac binary.
-   */
-  public PathFragment getJavacExecutable() {
-    return getJavaHome().getRelative("bin/javac");
-  }
-
-  /**
-   * Returns the path to the jar binary.
-   */
-  public PathFragment getJarExecutable() {
-    return getJavaHome().getRelative("bin/jar");
-  }
-
-  /**
-   * Returns the path to the java binary.
-   */
-  @SkylarkCallable(name = "java_executable", structField = true,
-      doc = "The the java executable, i.e. bin/java relative to the Java home.")
-  public PathFragment getJavaExecutable() {
-    return getJavaHome().getRelative("bin/java");
-  }
-
-  /**
-   * Returns a label. Adding this label to the dependencies of an action that
-   * depends on this JVM is sufficient to ensure that all the required files are
-   * present. Can be <code>null</code>, in which case nothing needs to be added
-   * to the dependencies of an action. We rely on convention to make sure that
-   * this case works, since we can't know which JVMs are installed on the build host.
+   * Returns a label that points to the current {@code java_runtime_suite} or
+   * {@code java_runtime} rule in use.
    */
   public Label getJvmLabel() {
     return jvmLabel;
-  }
-
-  /**
-   * Returns a string that uniquely identifies the JVM for the life time of this
-   * Blaze instance. This value is intended for analysis caching, so it need not
-   * reflect changes in the individual files making up the JVM.
-   */
-  @Override
-  public String cacheKey() {
-    return javaHome.getSafePathString();
-  }
-
-  @Override
-  public void addGlobalMakeVariables(Builder<String, String> globalMakeEnvBuilder) {
-    globalMakeEnvBuilder.put("JAVABASE", getJavaHome().getPathString());
-    globalMakeEnvBuilder.put("JAVA", getJavaExecutable().getPathString());
-    globalMakeEnvBuilder.put("JAVAC", getJavacExecutable().getPathString());
   }
 }
