@@ -17,10 +17,8 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.query2.ParallelVisitorUtils.ParallelQueryVisitor;
 import com.google.devtools.build.lib.query2.engine.Callback;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpressionContext;
@@ -33,7 +31,7 @@ import java.util.Collection;
 import java.util.Set;
 
 /** A helper class that computes 'rbuildfiles(<blah>)' via BFS. */
-public class RBuildFilesVisitor extends ParallelQueryVisitor<SkyKey, PackageIdentifier, Target> {
+public class RBuildFilesVisitor extends AbstractSkyKeyParallelVisitor<Target> {
 
   // Each target in the full output of 'rbuildfiles' corresponds to BUILD file InputFile of a
   // unique package. So the processResultsBatchSize we choose to pass to the ParallelVisitor ctor
@@ -58,7 +56,6 @@ public class RBuildFilesVisitor extends ParallelQueryVisitor<SkyKey, PackageIden
       PackageValue.key(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER);
   private final SkyQueryEnvironment env;
   private final QueryExpressionContext<Target> context;
-  private final Uniquifier<SkyKey> visitUniquifier;
   protected final Uniquifier<SkyKey> resultUniquifier;
 
   public RBuildFilesVisitor(
@@ -68,12 +65,11 @@ public class RBuildFilesVisitor extends ParallelQueryVisitor<SkyKey, PackageIden
       QueryExpressionContext<Target> context,
       Callback<Target> callback) {
     super(
+        visitUniquifier,
         callback,
-        env.getVisitBatchSizeForParallelVisitation(),
-        PROCESS_RESULTS_BATCH_SIZE,
-        env.getVisitTaskStatusCallback());
+        ParallelSkyQueryUtils.VISIT_BATCH_SIZE,
+        PROCESS_RESULTS_BATCH_SIZE);
     this.env = env;
-    this.visitUniquifier = visitUniquifier;
     this.resultUniquifier = resultUniquifier;
     this.context = context;
   }
@@ -82,12 +78,12 @@ public class RBuildFilesVisitor extends ParallelQueryVisitor<SkyKey, PackageIden
   protected Visit getVisitResult(Iterable<SkyKey> values)
       throws QueryException, InterruptedException {
     Collection<Iterable<SkyKey>> reverseDeps = env.graph.getReverseDeps(values).values();
-    Set<PackageIdentifier> keysToUseForResult = CompactHashSet.create();
+    Set<SkyKey> keysToUseForResult = CompactHashSet.create();
     Set<SkyKey> keysToVisitNext = CompactHashSet.create();
     for (SkyKey rdep : Iterables.concat(reverseDeps)) {
       if (rdep.functionName().equals(SkyFunctions.PACKAGE)) {
         if (resultUniquifier.unique(rdep)) {
-          keysToUseForResult.add((PackageIdentifier) rdep.argument());
+          keysToUseForResult.add(rdep);
         }
         // Every package has a dep on the external package, so we need to include those edges too.
         if (rdep.equals(EXTERNAL_PACKAGE_KEY)) {
@@ -101,12 +97,20 @@ public class RBuildFilesVisitor extends ParallelQueryVisitor<SkyKey, PackageIden
   }
 
   @Override
-  protected Iterable<SkyKey> preprocessInitialVisit(Iterable<SkyKey> visitationKeys) {
-    return visitationKeys;
+  protected void processPartialResults(
+      Iterable<SkyKey> keysToUseForResult, Callback<Target> callback)
+      throws QueryException, InterruptedException {
+    env.getBuildFileTargetsForPackageKeysAndProcessViaCallback(
+        keysToUseForResult, context, callback);
+  }
+
+  @Override
+  protected Iterable<SkyKey> preprocessInitialVisit(Iterable<SkyKey> keys) {
+    return keys;
   }
 
   protected void processNonPackageRdepAndDetermineVisitations(
-      SkyKey rdep, Set<SkyKey> keysToVisitNext, Set<PackageIdentifier> keysToUseForResult)
+      SkyKey rdep, Set<SkyKey> keysToVisitNext, Set<SkyKey> keysToUseForResult)
       throws QueryException {
     // Packages may depend on the existence of subpackages, but these edges aren't
     // relevant to rbuildfiles. They may also depend on files transitively through
@@ -116,17 +120,5 @@ public class RBuildFilesVisitor extends ParallelQueryVisitor<SkyKey, PackageIden
         && !rdep.functionName().equals(SkyFunctions.GLOB)) {
       keysToVisitNext.add(rdep);
     }
-  }
-
-  @Override
-  protected Iterable<Target> outputKeysToOutputValues(Iterable<PackageIdentifier> targetKeys)
-      throws QueryException, InterruptedException {
-    return env.getBuildFileTargetsForPackageKeys(ImmutableSet.copyOf(targetKeys), context);
-  }
-
-  @Override
-  protected Iterable<SkyKey> noteAndReturnUniqueVisitationKeys(
-      Iterable<SkyKey> prospectiveVisitationKeys) throws QueryException {
-    return visitUniquifier.unique(prospectiveVisitationKeys);
   }
 }
