@@ -919,19 +919,34 @@ public class QuarkusTestExtension
     private Object runExtensionMethod(ReflectiveInvocationContext<Method> invocationContext, ExtensionContext extensionContext)
             throws Throwable {
         resetHangTimeout();
+        Method newMethod = null;
 
         ClassLoader old = setCCL(runningQuarkusApplication.getClassLoader());
         try {
-            Class<?> testClassFromTCCL = Class.forName(extensionContext.getRequiredTestClass().getName(), true,
+            Class<?> c = Class.forName(extensionContext.getRequiredTestClass().getName(), true,
                     Thread.currentThread().getContextClassLoader());
-            Method newMethod = determineTCCLExtensionMethod(invocationContext, testClassFromTCCL);
-            boolean methodFromEnclosing = false;
-            // this is needed to support before*** and after*** methods that are part of class that encloses the test class
-            // (the test class is in this case a @Nested test)
-            if ((newMethod == null) && (testClassFromTCCL.getEnclosingClass() != null)) {
-                testClassFromTCCL = testClassFromTCCL.getEnclosingClass();
-                newMethod = determineTCCLExtensionMethod(invocationContext, testClassFromTCCL);
-                methodFromEnclosing = true;
+            while (c != Object.class) {
+                if (c.getName().equals(invocationContext.getExecutable().getDeclaringClass().getName())) {
+                    try {
+                        Class<?>[] originalParameterTypes = invocationContext.getExecutable().getParameterTypes();
+                        List<Class<?>> parameterTypesFromTccl = new ArrayList<>(originalParameterTypes.length);
+                        for (Class<?> type : originalParameterTypes) {
+                            if (type.isPrimitive()) {
+                                parameterTypesFromTccl.add(type);
+                            } else {
+                                parameterTypesFromTccl
+                                        .add(Class.forName(type.getName(), true,
+                                                Thread.currentThread().getContextClassLoader()));
+                            }
+                        }
+                        newMethod = c.getDeclaredMethod(invocationContext.getExecutable().getName(),
+                                parameterTypesFromTccl.toArray(new Class[0]));
+                        break;
+                    } catch (NoSuchMethodException ignored) {
+
+                    }
+                }
+                c = c.getSuperclass();
             }
             if (newMethod == null) {
                 throw new RuntimeException("Could not find method " + invocationContext.getExecutable() + " on test class");
@@ -975,13 +990,7 @@ public class QuarkusTestExtension
                 }
             }
 
-            Object effectiveTestInstance = actualTestInstance;
-            if (methodFromEnclosing) {
-                // TODO: this is a little dodgy, ideally we would need to use the same constructor that was used for the original object
-                // but it's unlikely(?) we will run into this combo
-                effectiveTestInstance = testClassFromTCCL.getConstructor().newInstance();
-            }
-            return newMethod.invoke(effectiveTestInstance, argumentsFromTccl.toArray(new Object[0]));
+            return newMethod.invoke(actualTestInstance, argumentsFromTccl.toArray(new Object[0]));
         } catch (InvocationTargetException e) {
             throw e.getCause();
         } catch (IllegalAccessException | ClassNotFoundException e) {
@@ -989,35 +998,6 @@ public class QuarkusTestExtension
         } finally {
             setCCL(old);
         }
-    }
-
-    private Method determineTCCLExtensionMethod(ReflectiveInvocationContext<Method> invocationContext, Class<?> c)
-            throws ClassNotFoundException {
-        Method newMethod = null;
-        while (c != Object.class) {
-            if (c.getName().equals(invocationContext.getExecutable().getDeclaringClass().getName())) {
-                try {
-                    Class<?>[] originalParameterTypes = invocationContext.getExecutable().getParameterTypes();
-                    List<Class<?>> parameterTypesFromTccl = new ArrayList<>(originalParameterTypes.length);
-                    for (Class<?> type : originalParameterTypes) {
-                        if (type.isPrimitive()) {
-                            parameterTypesFromTccl.add(type);
-                        } else {
-                            parameterTypesFromTccl
-                                    .add(Class.forName(type.getName(), true,
-                                            Thread.currentThread().getContextClassLoader()));
-                        }
-                    }
-                    newMethod = c.getDeclaredMethod(invocationContext.getExecutable().getName(),
-                            parameterTypesFromTccl.toArray(new Class[0]));
-                    break;
-                } catch (NoSuchMethodException ignored) {
-
-                }
-            }
-            c = c.getSuperclass();
-        }
-        return newMethod;
     }
 
     @Override
@@ -1182,12 +1162,6 @@ public class QuarkusTestExtension
             List<Consumer<BuildChainBuilder>> allCustomizers = new ArrayList<>(1);
             Consumer<BuildChainBuilder> defaultCustomizer = new Consumer<BuildChainBuilder>() {
 
-                private static final int ANNOTATION = 0x00002000;
-
-                boolean isAnnotation(final int mod) {
-                    return (mod & ANNOTATION) != 0;
-                }
-
                 @Override
                 public void accept(BuildChainBuilder buildChainBuilder) {
                     buildChainBuilder.addBuildStep(new BuildStep() {
@@ -1237,7 +1211,7 @@ public class QuarkusTestExtension
                             continue;
                         }
                         ClassInfo classInfo = annotationInstance.target().asClass();
-                        if (isAnnotation(classInfo.flags())) {
+                        if (classInfo.isAnnotation()) {
                             continue;
                         }
                         Type[] extendsWithTypes = annotationInstance.value().asClassArray();
