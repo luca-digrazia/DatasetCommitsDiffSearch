@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.server;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.flogger.GoogleLogger;
 import com.google.common.net.InetAddresses;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.common.util.concurrent.Uninterruptibles;
@@ -37,16 +36,7 @@ import com.google.devtools.build.lib.server.CommandProtos.RunRequest;
 import com.google.devtools.build.lib.server.CommandProtos.RunResponse;
 import com.google.devtools.build.lib.server.CommandProtos.ServerInfo;
 import com.google.devtools.build.lib.server.CommandProtos.StartupOption;
-import com.google.devtools.build.lib.server.FailureDetails.Command;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Filesystem;
-import com.google.devtools.build.lib.server.FailureDetails.Filesystem.Code;
-import com.google.devtools.build.lib.server.FailureDetails.GrpcServer;
-import com.google.devtools.build.lib.server.FailureDetails.Interrupted;
-import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
-import com.google.devtools.build.lib.util.InterruptedFailureDetails;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -60,8 +50,6 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
-import io.netty.channel.epoll.Epoll;
-import io.netty.channel.unix.Socket;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
@@ -76,6 +64,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Logger;
 
 /**
  * gRPC server class.
@@ -108,7 +97,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * which results in the main thread of the command being interrupted.
  */
 public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase implements RPCServer {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger = Logger.getLogger(GrpcServerImpl.class.getName());
   private final boolean shutdownOnLowSysMem;
 
   /**
@@ -126,7 +115,7 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
         int maxIdleSeconds,
         boolean shutdownOnLowSysMem,
         boolean idleServerTasks)
-        throws AbruptExitException {
+        throws IOException {
       SecureRandom random = new SecureRandom();
       return new GrpcServerImpl(
           dispatcher,
@@ -301,23 +290,21 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
           String pidFileContents = new String(FileSystemUtils.readContentAsLatin1(pidFile));
           ok = pidFileContents.equals(pidInFile);
         } catch (IOException e) {
-          logger.atInfo().log("Cannot read PID file: %s", e.getMessage());
+          logger.info("Cannot read PID file: " + e.getMessage());
           // Handled by virtue of ok not being set to true
         }
 
         if (!ok) {
           synchronized (PidFileWatcherThread.this) {
             if (shuttingDown) {
-              logger.atWarning().log(
-                  "PID file deleted or overwritten but shutdown is already in progress");
+              logger.warning("PID file deleted or overwritten but shutdown is already in progress");
               break;
             }
 
             shuttingDown = true;
             // Someone overwrote the PID file. Maybe it's another server, so shut down as quickly
             // as possible without even running the shutdown hooks (that would delete it)
-            logger.atSevere().log(
-                "PID file deleted or overwritten, exiting as quickly as possible");
+            logger.severe("PID file deleted or overwritten, exiting as quickly as possible");
             Runtime.getRuntime().halt(ExitCode.BLAZE_INTERNAL_ERROR.getNumericExitCode());
           }
         }
@@ -361,21 +348,14 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
       int maxIdleSeconds,
       boolean shutdownOnLowSysMem,
       boolean doIdleServerTasks)
-      throws AbruptExitException {
+      throws IOException {
     Runtime.getRuntime().addShutdownHook(new Thread(() -> shutdownHook()));
 
-    // server.pid was written in the C++ launcher after fork() but before exec().
+    // server.pid was written in the C++ launcher after fork() but before exec() .
     // The client only accesses the pid file after connecting to the socket
     // which ensures that it gets the correct pid value.
     pidFile = serverDirectory.getRelative("server.pid.txt");
-    try {
-      pidInFile = new String(FileSystemUtils.readContentAsLatin1(pidFile));
-    } catch (IOException e) {
-      throw createFilesystemFailureException(
-          "Server pid file read failed: " + e.getMessage(),
-          Code.SERVER_PID_TXT_FILE_READ_FAILURE,
-          e);
-    }
+    pidInFile = new String(FileSystemUtils.readContentAsLatin1(pidFile));
     deleteAtExit(pidFile);
 
     this.dispatcher = dispatcher;
@@ -444,7 +424,7 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
   }
 
   @Override
-  public void serve() throws AbruptExitException {
+  public void serve() throws IOException {
     Preconditions.checkState(!serving);
 
     // For reasons only Apple knows, you cannot bind to IPv4-localhost when you run in a sandbox
@@ -453,34 +433,12 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
     // and if that fails, try again with IPv4.
     InetSocketAddress address = new InetSocketAddress("[::1]", port);
     try {
-      // TODO(bazel-team): Remove the following check after upgrading netty to a version with a fix
-      //   for https://github.com/netty/netty/issues/10402
-      if (Epoll.isAvailable() && !Socket.isIPv6Preferred()) {
-        throw new IOException("ipv6 is not preferred on the system.");
-      }
       server =
           NettyServerBuilder.forAddress(address).addService(this).directExecutor().build().start();
-    } catch (IOException ipv6Exception) {
+    } catch (IOException e) {
       address = new InetSocketAddress("127.0.0.1", port);
-      try {
-        server =
-            NettyServerBuilder.forAddress(address)
-                .addService(this)
-                .directExecutor()
-                .build()
-                .start();
-      } catch (IOException ipv4Exception) {
-        throw new AbruptExitException(
-            DetailedExitCode.of(
-                ExitCode.BUILD_FAILURE,
-                createFailureDetail(
-                    String.format(
-                        "gRPC server failed to bind to IPv4 and IPv6 localhosts on port %d: [IPv4] "
-                            + "%s\n[IPv6] %s",
-                        port, ipv4Exception.getMessage(), ipv6Exception.getMessage()),
-                    GrpcServer.Code.SERVER_BIND_FAILURE)),
-            ipv4Exception);
-      }
+      server =
+          NettyServerBuilder.forAddress(address).addService(this).directExecutor().build().start();
     }
 
     if (maxIdleSeconds > 0) {
@@ -504,7 +462,7 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
     }
   }
 
-  private void writeServerStatusFiles(InetSocketAddress address) throws AbruptExitException {
+  private void writeServerStatusFiles(InetSocketAddress address) throws IOException {
     String addressString = InetAddresses.toUriString(address.getAddress()) + ":" + server.getPort();
     writeServerFile(PORT_FILE, addressString);
     writeServerFile(REQUEST_COOKIE_FILE, requestCookie);
@@ -520,29 +478,17 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
 
     // Write then mv so the user never sees incomplete contents.
     Path serverInfoTmpFile = serverDirectory.getChild(SERVER_INFO_FILE + ".tmp");
-    try {
-      try (OutputStream out = serverInfoTmpFile.getOutputStream()) {
-        info.writeTo(out);
-      }
-      Path serverInfoFile = serverDirectory.getChild(SERVER_INFO_FILE);
-      serverInfoTmpFile.renameTo(serverInfoFile);
-      deleteAtExit(serverInfoFile);
-    } catch (IOException e) {
-      throw createFilesystemFailureException(
-          "Failed to write server info file: " + e.getMessage(), Code.SERVER_FILE_WRITE_FAILURE, e);
+    try (OutputStream out = serverInfoTmpFile.getOutputStream()) {
+      info.writeTo(out);
     }
+    Path serverInfoFile = serverDirectory.getChild(SERVER_INFO_FILE);
+    serverInfoTmpFile.renameTo(serverInfoFile);
+    deleteAtExit(serverInfoFile);
   }
 
-  private void writeServerFile(String name, String contents) throws AbruptExitException {
+  private void writeServerFile(String name, String contents) throws IOException {
     Path file = serverDirectory.getChild(name);
-    try {
-      FileSystemUtils.writeContentAsLatin1(file, contents);
-    } catch (IOException e) {
-      throw createFilesystemFailureException(
-          "Server file (" + file + ") write failed: " + e.getMessage(),
-          Code.SERVER_FILE_WRITE_FAILURE,
-          e);
-    }
+    FileSystemUtils.writeContentAsLatin1(file, contents);
     deleteAtExit(file);
   }
 
@@ -587,28 +533,19 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
     printErr.println("=======[BAZEL SERVER: ENCOUNTERED IO EXCEPTION]=======");
     e.printStackTrace(printErr);
     printErr.println("=====================================================");
-    logger.atSevere().log(err.toString());
+    logger.severe(err.toString());
   }
 
   private void executeCommand(RunRequest request, BlockingStreamObserver<RunResponse> observer) {
-    boolean badCookie = !request.getCookie().equals(requestCookie);
-    if (badCookie || request.getClientDescription().isEmpty()) {
+    if (!request.getCookie().equals(requestCookie) || request.getClientDescription().isEmpty()) {
       try {
-        FailureDetail failureDetail =
-            badCookie
-                ? createFailureDetail("Invalid RunRequest: bad cookie", GrpcServer.Code.BAD_COOKIE)
-                : createFailureDetail(
-                    "Invalid RunRequest: no client description",
-                    GrpcServer.Code.NO_CLIENT_DESCRIPTION);
         observer.onNext(
             RunResponse.newBuilder()
-                .setFinished(true)
                 .setExitCode(ExitCode.LOCAL_ENVIRONMENTAL_ERROR.getNumericExitCode())
-                .setFailureDetail(failureDetail)
                 .build());
         observer.onCompleted();
       } catch (StatusRuntimeException e) {
-        logger.atInfo().withCause(e).log("Client cancelled command while rejecting it");
+        logger.info("Client cancelled command while rejecting it: " + e.getMessage());
       }
       return;
     }
@@ -636,10 +573,13 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
       try {
         // Send the client the command id as soon as we know it.
         observer.onNext(
-            RunResponse.newBuilder().setCookie(responseCookie).setCommandId(commandId).build());
+            RunResponse.newBuilder()
+                .setCookie(responseCookie)
+                .setCommandId(commandId)
+                .build());
       } catch (StatusRuntimeException e) {
-        logger.atInfo().withCause(e).log(
-            "The client cancelled the command before receiving the command id");
+        logger.info(
+            "The client cancelled the command before receiving the command id: " + e.getMessage());
       }
 
       OutErr rpcOutErr =
@@ -656,7 +596,7 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
             .collect(ImmutableList.toImmutableList());
 
         InvocationPolicy policy = InvocationPolicyParser.parsePolicy(request.getInvocationPolicy());
-        logger.atInfo().log(BlazeRuntime.getRequestLogString(args));
+        logger.info(BlazeRuntime.getRequestLogString(args));
         result =
             dispatcher.exec(
                 policy,
@@ -668,24 +608,13 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
                 Optional.of(startupOptions.build()));
       } catch (OptionsParsingException e) {
         rpcOutErr.printErrLn(e.getMessage());
-        result =
-            BlazeCommandResult.detailedExitCode(
-                DetailedExitCode.of(
-                    ExitCode.COMMAND_LINE_ERROR,
-                    FailureDetail.newBuilder()
-                        .setMessage("Invocation policy parsing failed: " + e.getMessage())
-                        .setCommand(
-                            Command.newBuilder()
-                                .setCode(Command.Code.INVOCATION_POLICY_PARSE_FAILURE))
-                        .build()));
+        result = BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
       }
     } catch (InterruptedException e) {
-      result =
-          BlazeCommandResult.detailedExitCode(
-              InterruptedFailureDetails.detailedExitCode(
-                  "Command dispatch interrupted", Interrupted.Code.COMMAND_DISPATCH));
+      result = BlazeCommandResult.exitCode(ExitCode.INTERRUPTED);
       commandId = ""; // The default value, the client will ignore it
     }
+
     RunResponse.Builder response = RunResponse.newBuilder()
         .setCookie(responseCookie)
         .setCommandId(commandId)
@@ -697,17 +626,14 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
       response.setExecRequest(result.getExecRequest());
     } else {
       response.setExitCode(result.getExitCode().getNumericExitCode());
-      if (result.getFailureDetail() != null) {
-        response.setFailureDetail(result.getFailureDetail());
-      }
     }
 
     try {
       observer.onNext(response.build());
       observer.onCompleted();
     } catch (StatusRuntimeException e) {
-      logger.atInfo().withCause(e).log(
-          "The client cancelled the command before receiving the command id");
+      logger.info(
+          "The client cancelled the command before receiving the command id: " + e.getMessage());
     }
 
     if (result.shutdown()) {
@@ -742,7 +668,7 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
   @Override
   public void cancel(
       final CancelRequest request, final StreamObserver<CancelResponse> streamObserver) {
-    logger.atInfo().log("Got CancelRequest for command id %s", request.getCommandId());
+    logger.info(String.format("Got CancelRequest for command id %s", request.getCommandId()));
     if (!request.getCookie().equals(requestCookie)) {
       streamObserver.onCompleted();
       return;
@@ -760,27 +686,7 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
       streamObserver.onCompleted();
     } catch (StatusRuntimeException e) {
       // There is no one to report the failure to
-      logger.atInfo().log(
-          "Client cancelled RPC of cancellation request for %s", request.getCommandId());
+      logger.info("Client cancelled RPC of cancellation request for " + request.getCommandId());
     }
-  }
-
-  private static AbruptExitException createFilesystemFailureException(
-      String message, Code detailedCode, IOException e) {
-    return new AbruptExitException(
-        DetailedExitCode.of(
-            ExitCode.BUILD_FAILURE,
-            FailureDetail.newBuilder()
-                .setMessage(message)
-                .setFilesystem(Filesystem.newBuilder().setCode(detailedCode))
-                .build()),
-        e);
-  }
-
-  private static FailureDetail createFailureDetail(String message, GrpcServer.Code detailedCode) {
-    return FailureDetail.newBuilder()
-        .setMessage(message)
-        .setGrpcServer(GrpcServer.newBuilder().setCode(detailedCode))
-        .build();
   }
 }
