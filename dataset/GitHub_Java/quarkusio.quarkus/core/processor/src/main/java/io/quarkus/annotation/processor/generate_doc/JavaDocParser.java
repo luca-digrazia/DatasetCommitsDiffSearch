@@ -20,8 +20,6 @@ import io.quarkus.annotation.processor.Constants;
 final class JavaDocParser {
 
     private static final Pattern REMOVE_LEADING_SPACE = Pattern.compile("^ ", Pattern.MULTILINE);
-    private static final Pattern REPLACE_WINDOWS_EOL = Pattern.compile("\r\n");
-    private static final Pattern REPLACE_MACOS_EOL = Pattern.compile("\r");
 
     private static final String HASH = "#";
     private static final String STAR = "*";
@@ -69,12 +67,7 @@ final class JavaDocParser {
         if (isAsciidoc(javadoc)) {
             // it's Asciidoc so we just pass through
             // unfortunately, the Javadoc parser keeps the leading spaces so let's remove them
-            // it also uses platform specific EOL so we need to convert them back to \n
-            String asciidoc = javadoc.getDescription().toText();
-            asciidoc = REMOVE_LEADING_SPACE.matcher(asciidoc).replaceAll("");
-            asciidoc = REPLACE_WINDOWS_EOL.matcher(asciidoc).replaceAll("\n");
-            asciidoc = REPLACE_MACOS_EOL.matcher(asciidoc).replaceAll("\n");
-            return asciidoc;
+            return REMOVE_LEADING_SPACE.matcher(javadoc.getDescription().toText()).replaceAll("");
         }
 
         return htmlJavadocToAsciidoc(javadoc.getDescription());
