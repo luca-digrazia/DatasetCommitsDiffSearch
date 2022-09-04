@@ -275,7 +275,6 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
             mapper = getMapper(true);
             jsonOrYaml = yaml;
         } else {
-            mapper = getMapper(false);
             Path json = metaInfDir.resolve(BootstrapConstants.EXTENSION_PROPS_JSON_FILE_NAME);
             if (!Files.exists(json)) {
                 final Path props = metaInfDir.resolve(BootstrapConstants.DESCRIPTOR_FILE_NAME);
@@ -290,6 +289,7 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
                 }
             } else {
                 jsonOrYaml = json;
+                mapper = getMapper(false);
             }
         }
         return processPlatformArtifact(artifact, jsonOrYaml, mapper);
