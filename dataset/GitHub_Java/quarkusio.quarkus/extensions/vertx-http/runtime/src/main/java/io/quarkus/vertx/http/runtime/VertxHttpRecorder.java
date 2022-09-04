@@ -779,8 +779,7 @@ public class VertxHttpRecorder {
             public void handle(RoutingContext context) {
                 String absoluteURI = context.request().absoluteURI();
                 int pathStart = absoluteURI.indexOf(context.request().path());
-                if (rootPath.length() > 1 && absoluteURI.contains(rootPath)) {
-                    // Only do this when rootPath is not '/'
+                if (absoluteURI.contains(rootPath)) {
                     pathStart = pathStart + rootPath.length();
                 }
                 String redirectTo = absoluteURI.substring(0, pathStart) + nonApplicationPath
