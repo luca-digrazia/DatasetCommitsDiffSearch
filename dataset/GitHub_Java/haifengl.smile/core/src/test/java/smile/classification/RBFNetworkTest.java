@@ -68,13 +68,13 @@ public class RBFNetworkTest {
                 (x, y) -> RBFNetwork.fit(x, y, RBF.fit(x, 10)));
 
         System.out.println("RBF Network: " + metrics);
-        assertEquals(0.9667, metrics.accuracy, 1E-4);
+        assertEquals(5, metrics.accuracy);
 
         metrics = LOOCV.classification(Iris.x, Iris.y,
                 (x, y) -> RBFNetwork.fit(x, y, RBF.fit(x, 10), true));
 
         System.out.println("Normalized RBF Network: " + metrics);
-        assertEquals(0.9733, metrics.accuracy, 1E-4);
+        assertEquals(4, metrics.accuracy);
     }
 
     @Test
@@ -82,17 +82,17 @@ public class RBFNetworkTest {
         System.out.println("Pen Digits");
 
         MathEx.setSeed(19650218); // to get repeatable results.
-        ClassificationValidations<RBFNetwork<double[]>> result = CrossValidation.classification(10, PenDigits.x, PenDigits.y,
+        ClassificationValidations<RBFNetwork> result = CrossValidation.classification(10, PenDigits.x, PenDigits.y,
                 (x, y) -> RBFNetwork.fit(x, y, RBF.fit(x, 50)));
 
         System.out.println("RBF Network: " + result);
-        assertEquals(0.9162, result.avg.accuracy, 1E-4);
+        assertEquals(628, result.avg.accuracy);
 
         result = CrossValidation.classification(10, PenDigits.x, PenDigits.y,
                 (x, y) -> RBFNetwork.fit(x, y, RBF.fit(x, 50), true));
 
         System.out.println("Normalized RBF Network: " + result);
-        assertEquals(0.9190, result.avg.accuracy, 1E-4);
+        assertEquals(607, result.avg.accuracy);
     }
 
     @Test
@@ -100,17 +100,17 @@ public class RBFNetworkTest {
         System.out.println("Breast Cancer");
 
         MathEx.setSeed(19650218); // to get repeatable results.
-        ClassificationValidations<RBFNetwork<double[]>> result = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y,
+        ClassificationValidations<RBFNetwork> result = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y,
                 (x, y) -> RBFNetwork.fit(x, y, RBF.fit(x, 30)));
 
         System.out.println("RBF Network: " + result);
-        assertEquals(0.9438, result.avg.accuracy, 1E-4);
+        assertEquals(32, result.avg.accuracy);
 
         result = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y,
                 (x, y) -> RBFNetwork.fit(x, y, RBF.fit(x, 30), true));
 
         System.out.println("Normalized RBF Network: " + result);
-        assertEquals(0.9333, result.avg.accuracy, 1E-4);
+        assertEquals(38, result.avg.accuracy);
     }
 
     @Test

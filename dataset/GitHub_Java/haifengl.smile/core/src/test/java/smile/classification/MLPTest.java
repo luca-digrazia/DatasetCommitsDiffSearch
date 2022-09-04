@@ -94,7 +94,7 @@ public class MLPTest {
         });
 
         System.out.println(result);
-        assertEquals(0.9867, result.avg.accuracy, 1E-4);
+        assertEquals(100, result.avg.accuracy);
     }
 
     @Test
@@ -127,7 +127,7 @@ public class MLPTest {
         });
 
         System.out.println(result);
-        assertEquals(0.9773, result.avg.accuracy, 1E-4);
+        assertEquals(11, result.avg.accuracy);
     }
 
     @Test
