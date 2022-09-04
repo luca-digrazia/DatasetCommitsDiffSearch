@@ -29,7 +29,6 @@ import org.graylog.plugins.sidecar.audit.SidecarAuditEventTypes;
 import org.graylog.plugins.sidecar.filter.ActiveSidecarFilter;
 import org.graylog.plugins.sidecar.filter.AdministrationFilter;
 import org.graylog.plugins.sidecar.filter.AdministrationFiltersFactory;
-import org.graylog.plugins.sidecar.mapper.SidecarStatusMapper;
 import org.graylog.plugins.sidecar.permissions.SidecarRestPermissions;
 import org.graylog.plugins.sidecar.rest.models.Collector;
 import org.graylog.plugins.sidecar.rest.models.CollectorAction;
@@ -58,7 +57,6 @@ import org.graylog2.shared.rest.resources.RestResource;
 import javax.inject.Inject;
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
-import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
@@ -87,7 +85,7 @@ public class AdministrationResource extends RestResource implements PluginRestRe
     private final SearchQueryParser searchQueryParser;
     private final AdministrationFiltersFactory administrationFiltersFactory;
     private final ActiveSidecarFilter activeSidecarFilter;
-    private final SidecarStatusMapper sidecarStatusMapper;
+    private final SidecarConfiguration sidecarConfiguration;
 
     @Inject
     public AdministrationResource(SidecarService sidecarService,
@@ -95,15 +93,13 @@ public class AdministrationResource extends RestResource implements PluginRestRe
                                   CollectorService collectorService,
                                   ActionService actionService,
                                   AdministrationFiltersFactory administrationFiltersFactory,
-                                  ClusterConfigService clusterConfigService,
-                                  SidecarStatusMapper sidecarStatusMapper) {
-        final SidecarConfiguration sidecarConfiguration = clusterConfigService.getOrDefault(SidecarConfiguration.class, SidecarConfiguration.defaultConfiguration());
+                                  ClusterConfigService clusterConfigService) {
         this.sidecarService = sidecarService;
+        this.sidecarConfiguration = clusterConfigService.getOrDefault(SidecarConfiguration.class, SidecarConfiguration.defaultConfiguration());
         this.configurationService = configurationService;
         this.collectorService = collectorService;
         this.actionService = actionService;
         this.administrationFiltersFactory = administrationFiltersFactory;
-        this.sidecarStatusMapper = sidecarStatusMapper;
         this.activeSidecarFilter = new ActiveSidecarFilter(sidecarConfiguration.sidecarInactiveThreshold());
         this.searchQueryParser = new SearchQueryParser(Sidecar.FIELD_NODE_NAME, SidecarResource.SEARCH_FIELD_MAPPING);
     }
@@ -111,19 +107,13 @@ public class AdministrationResource extends RestResource implements PluginRestRe
     @POST
     @Timed
     @ApiOperation(value = "Lists existing Sidecar registrations including compatible sidecars using pagination")
-    @RequiresPermissions({SidecarRestPermissions.SIDECARS_READ, SidecarRestPermissions.COLLECTORS_READ, SidecarRestPermissions.CONFIGURATIONS_READ})
+    @RequiresPermissions(SidecarRestPermissions.SIDECARS_READ)
     @NoAuditEvent("this is not changing any data")
     public SidecarListResponse administration(@ApiParam(name = "JSON body", required = true)
                                                 @Valid @NotNull AdministrationRequest request) {
         final String sort = Sidecar.FIELD_NODE_NAME;
         final String order = "asc";
-        final String mappedQuery = sidecarStatusMapper.replaceStringStatusSearchQuery(request.query());
-        SearchQuery searchQuery;
-        try {
-             searchQuery = searchQueryParser.parse(mappedQuery);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException("Invalid argument in search query: " + e.getMessage());
-        }
+        final SearchQuery searchQuery = searchQueryParser.parse(request.query());
         final long total = sidecarService.count();
 
         final Optional<Predicate<Sidecar>> filters = administrationFiltersFactory.getFilters(request.filters());
@@ -152,7 +142,7 @@ public class AdministrationResource extends RestResource implements PluginRestRe
     @PUT
     @Timed
     @Path("/action")
-    @RequiresPermissions(SidecarRestPermissions.SIDECARS_UPDATE)
+    @RequiresPermissions(SidecarRestPermissions.COLLECTORS_UPDATE)
     @ApiOperation(value = "Set collector actions in bulk")
     @ApiResponses(value = {@ApiResponse(code = 400, message = "The supplied action is not valid.")})
     @AuditEvent(type = SidecarAuditEventTypes.ACTION_UPDATE)
