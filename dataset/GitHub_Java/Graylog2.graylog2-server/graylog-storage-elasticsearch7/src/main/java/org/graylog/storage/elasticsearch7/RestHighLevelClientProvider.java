@@ -18,6 +18,7 @@ import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Provider;
 import javax.inject.Singleton;
+import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 import java.util.Locale;
@@ -60,6 +61,8 @@ public class RestHighLevelClientProvider implements Provider<RestHighLevelClient
         sniffer = discoveryEnabled
                 ? createNodeDiscoverySniffer(client.getLowLevelClient(), discoveryFrequency, defaultSchemeForDiscoveredNodes, discoveryFilter)
                 : null;
+
+        registerShutdownHook(shutdownService);
 
         if (discoveryEnabled) {
             registerSnifferShutdownHook(shutdownService);
@@ -116,6 +119,16 @@ public class RestHighLevelClientProvider implements Provider<RestHighLevelClient
                 );
 
         return new RestHighLevelClient(restClientBuilder);
+    }
+
+    private void registerShutdownHook(GracefulShutdownService shutdownService) {
+        shutdownService.register(() -> {
+            try {
+                client.close();
+            } catch (IOException e) {
+                LOG.warn("Failed to close Elasticsearch RestHighLevelClient", e);
+            }
+        });
     }
 
     private void registerSnifferShutdownHook(GracefulShutdownService shutdownService) {
