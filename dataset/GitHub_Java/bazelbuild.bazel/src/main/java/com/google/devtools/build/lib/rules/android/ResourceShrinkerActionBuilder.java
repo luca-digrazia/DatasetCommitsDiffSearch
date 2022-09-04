@@ -51,14 +51,14 @@ public class ResourceShrinkerActionBuilder {
   private final AndroidSdkProvider sdk;
 
   private List<String> uncompressedExtensions = Collections.emptyList();
-  private ResourceFilterFactory resourceFilterFactory;
+  private ResourceFilter resourceFilter;
 
   /** @param ruleContext The RuleContext of the owning rule. */
   public ResourceShrinkerActionBuilder(RuleContext ruleContext) throws RuleErrorException {
     this.ruleContext = ruleContext;
     this.spawnActionBuilder = new SpawnAction.Builder();
     this.sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
-    this.resourceFilterFactory = ResourceFilterFactory.empty();
+    this.resourceFilter = ResourceFilter.empty(ruleContext);
   }
 
   public ResourceShrinkerActionBuilder setUncompressedExtensions(
@@ -67,10 +67,9 @@ public class ResourceShrinkerActionBuilder {
     return this;
   }
 
-  /** @param resourceFilterFactory The filters to apply to the resources. */
-  public ResourceShrinkerActionBuilder setResourceFilterFactory(
-      ResourceFilterFactory resourceFilterFactory) {
-    this.resourceFilterFactory = resourceFilterFactory;
+  /** @param resourceFilter The filters to apply to the resources. */
+  public ResourceShrinkerActionBuilder setResourceFilter(ResourceFilter resourceFilter) {
+    this.resourceFilter = resourceFilter;
     return this;
   }
 
@@ -182,8 +181,8 @@ public class ResourceShrinkerActionBuilder {
     if (ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT) {
       commandLine.add("--debug");
     }
-    if (resourceFilterFactory.hasConfigurationFilters()) {
-      commandLine.add("--resourceConfigs", resourceFilterFactory.getConfigurationFilterString());
+    if (resourceFilter.hasConfigurationFilters()) {
+      commandLine.add("--resourceConfigs", resourceFilter.getConfigurationFilterString());
     }
 
     checkNotNull(resourceFilesZip);
