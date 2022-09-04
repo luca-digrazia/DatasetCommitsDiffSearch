@@ -890,7 +890,8 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   /** Configuration loader for the Android fragment. */
   public static class Loader implements ConfigurationFragmentFactory {
     @Override
-    public Fragment create(BuildOptions buildOptions) throws InvalidConfigurationException {
+    public Fragment create(BuildOptions buildOptions)
+        throws InvalidConfigurationException, InterruptedException {
       return new AndroidConfiguration(buildOptions.get(Options.class));
     }
 
