@@ -60,6 +60,7 @@ import com.google.devtools.build.lib.runtime.CountingArtifactGroupNamer;
 import com.google.devtools.build.lib.runtime.SynchronizedOutputStream;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
+import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -78,6 +79,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
@@ -393,6 +395,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       Uninterruptibles.getUninterruptibly(Futures.allAsList(closeFuturesWithTimeoutsMap.values()));
     } catch (ExecutionException e) {
       googleLogger.atSevere().withCause(e).log("Failed to close a build event transport");
+      LoggingUtil.logToRemote(Level.SEVERE, "Failed to close a build event transport", e);
     } finally {
       cancelAndResetPendingUploads();
     }
