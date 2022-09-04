@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.buildeventservice.client.BuildEventServiceC
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
 import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.Aborted.AbortReason;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.LargeBuildEventSerializedEvent;
 import com.google.devtools.build.lib.buildeventstream.transports.BuildEventStreamOptions;
@@ -62,8 +61,8 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
   private static final Logger logger = Logger.getLogger(BuildEventServiceModule.class.getName());
 
   private OutErr outErr;
-  private BuildEventStreamer streamer;
-  private boolean keepClient;
+
+  private Set<BuildEventTransport> transports = ImmutableSet.of();
 
   /** Whether an error in the Build Event Service upload causes the build to fail. */
   protected boolean errorsShouldFailTheBuild() {
@@ -96,7 +95,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
       return;
     }
 
-    streamer = tryCreateStreamer(commandEnvironment);
+    BuildEventStreamer streamer = tryCreateStreamer(commandEnvironment);
     if (streamer != null) {
       commandEnvironment.getReporter().addHandler(streamer);
       commandEnvironment.getEventBus().register(streamer);
@@ -130,37 +129,15 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
   }
 
   @Override
-  public void blazeShutdownOnCrash() {
-    if (streamer != null) {
-      logger.warning("Attempting to close BES streamer on crash");
-      streamer.close(AbortReason.INTERNAL);
-    }
-  }
-
-  @Override
   public void afterCommand() {
-    if (streamer != null) {
-      // This should not occur, but close with an internal error if a {@link BuildEventStreamer} bug
-      // manifests as an unclosed streamer.
-      logger.warning("Attempting to close BES streamer after command");
-      streamer.close(AbortReason.INTERNAL);
-      this.streamer = null;
-    }
-
-    if (!keepClient) {
-      clearBesClient();
-    }
     this.outErr = null;
+    this.transports = ImmutableSet.of();
   }
 
   /** Returns {@code null} if no stream could be created. */
   @Nullable
   @VisibleForTesting
   BuildEventStreamer tryCreateStreamer(CommandEnvironment env) {
-    BuildEventStreamOptions buildEventStreamOptions =
-        env.getOptions().getOptions(BuildEventStreamOptions.class);
-    this.keepClient = buildEventStreamOptions.keepBackendConnections;
-
     try {
       BuildEventTransport besTransport = null;
       try {
@@ -172,7 +149,6 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
             env.getReporter(),
             env.getBlazeModuleEnvironment(),
             new AbruptExitException(message, ExitCode.PUBLISH_ERROR, e));
-        clearBesClient();
         return null;
       }
 
@@ -185,8 +161,10 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
         transportsBuilder.add(besTransport);
       }
 
-      ImmutableSet<BuildEventTransport> transports = transportsBuilder.build();
+      transports = transportsBuilder.build();
       if (!transports.isEmpty()) {
+        BuildEventStreamOptions buildEventStreamOptions =
+            env.getOptions().getOptions(BuildEventStreamOptions.class);
         return new BuildEventStreamer(transports, env.getReporter(), buildEventStreamOptions);
       }
     } catch (Exception e) {
@@ -216,7 +194,6 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
 
     if (isNullOrEmpty(besOptions.besBackend)) {
       logger.fine("BuildEventServiceTransport is disabled.");
-      clearBesClient();
       return null;
     } else {
       logger.fine(
@@ -242,7 +219,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
                         besOptions.besBackend, env.getBuildRequestId(), invocationId)));
       }
 
-      BuildEventServiceClient client = getBesClient(besOptions, authTlsOptions);
+      BuildEventServiceClient client = createBesClient(besOptions, authTlsOptions);
       BuildEventArtifactUploader artifactUploader =
           env.getRuntime()
               .getBuildEventArtifactUploaderFactoryMap()
@@ -286,13 +263,18 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
     }
   }
 
+  @Override
+  public void blazeShutdown() {
+    for (BuildEventTransport transport : transports) {
+      transport.closeNow();
+    }
+  }
+
   protected abstract Class<T> optionsClass();
 
-  protected abstract BuildEventServiceClient getBesClient(
+  protected abstract BuildEventServiceClient createBesClient(
       T besOptions, AuthAndTLSOptions authAndTLSOptions)
       throws IOException, OptionsParsingException;
-
-  protected abstract void clearBesClient();
 
   protected abstract Set<String> whitelistedCommands();
 
