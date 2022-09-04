@@ -20,11 +20,6 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
-import org.graylog.plugins.pipelineprocessor.ast.Pipeline;
-import org.graylog.plugins.pipelineprocessor.db.PipelineDao;
-import org.graylog.plugins.pipelineprocessor.parser.ParseException;
-import org.graylog.plugins.pipelineprocessor.parser.PipelineRuleParser;
-import org.graylog.plugins.pipelineprocessor.parser.errors.ParseError;
 import org.joda.time.DateTime;
 import org.mongojack.Id;
 import org.mongojack.ObjectId;
@@ -32,8 +27,6 @@ import org.mongojack.ObjectId;
 import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @AutoValue
 @JsonAutoDetect
@@ -64,11 +57,8 @@ public abstract class PipelineSource {
     public abstract DateTime modifiedAt();
 
     @JsonProperty
-    public abstract List<StageSource> stages();
-
-    @JsonProperty
     @Nullable
-    public abstract Set<ParseError> errors();
+    public abstract List<Integer> stages();
 
     public static Builder builder() {
         return new AutoValue_PipelineSource.Builder();
@@ -78,7 +68,7 @@ public abstract class PipelineSource {
 
     @JsonCreator
     public static PipelineSource create(@Id @ObjectId @JsonProperty("_id") @Nullable String id,
-                                        @JsonProperty("title") String title,
+                                        @JsonProperty("title")  String title,
                                         @JsonProperty("description") @Nullable String description,
                                         @JsonProperty("source") String source,
                                         @Nullable @JsonProperty("created_at") DateTime createdAt,
@@ -91,35 +81,6 @@ public abstract class PipelineSource {
                 .createdAt(createdAt)
                 .modifiedAt(modifiedAt)
                 .stages(Collections.emptyList())
-                .build();
-    }
-
-    public static PipelineSource fromDao(PipelineRuleParser parser, PipelineDao dao) {
-        Set<ParseError> errors = null;
-        Pipeline pipeline = null;
-        try {
-            pipeline = parser.parsePipeline(dao.id(), dao.source());
-        } catch (ParseException e) {
-            errors = e.getErrors();
-        }
-        final List<StageSource> stageSources = (pipeline == null) ? Collections.emptyList() :
-                pipeline.stages().stream()
-                        .map(stage -> StageSource.builder()
-                                .matchAll(stage.matchAll())
-                                .rules(stage.ruleReferences())
-                                .stage(stage.stage())
-                                .build())
-                        .collect(Collectors.toList());
-
-        return builder()
-                .id(dao.id())
-                .title(dao.title())
-                .description(dao.description())
-                .source(dao.source())
-                .createdAt(dao.createdAt())
-                .modifiedAt(dao.modifiedAt())
-                .stages(stageSources)
-                .errors(errors)
                 .build();
     }
 
@@ -139,8 +100,6 @@ public abstract class PipelineSource {
 
         public abstract Builder modifiedAt(DateTime modifiedAt);
 
-        public abstract Builder stages(List<StageSource> stages);
-
-        public abstract Builder errors(Set<ParseError> errors);
+        public abstract Builder stages(List<Integer> stages);
     }
 }

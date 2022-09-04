@@ -26,7 +26,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog.plugins.pipelineprocessor.ast.functions.Function;
 import org.graylog.plugins.pipelineprocessor.db.PipelineDao;
 import org.graylog.plugins.pipelineprocessor.db.PipelineService;
-import org.graylog.plugins.pipelineprocessor.db.PipelineStreamConnectionsService;
+import org.graylog.plugins.pipelineprocessor.db.PipelineStreamAssignmentService;
 import org.graylog.plugins.pipelineprocessor.db.RuleDao;
 import org.graylog.plugins.pipelineprocessor.db.RuleService;
 import org.graylog.plugins.pipelineprocessor.functions.conversion.StringConversion;
@@ -34,7 +34,7 @@ import org.graylog.plugins.pipelineprocessor.functions.messages.SetField;
 import org.graylog.plugins.pipelineprocessor.parser.FunctionRegistry;
 import org.graylog.plugins.pipelineprocessor.parser.PipelineRuleParser;
 import org.graylog.plugins.pipelineprocessor.processors.PipelineInterpreter;
-import org.graylog.plugins.pipelineprocessor.rest.PipelineStreamConnection;
+import org.graylog.plugins.pipelineprocessor.rest.PipelineStreamAssignment;
 import org.graylog2.Configuration;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.filters.ExtractorFilter;
@@ -53,6 +53,7 @@ import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.filters.MessageFilter;
 import org.graylog2.rules.DroolsEngine;
 import org.graylog2.shared.journal.Journal;
+import org.graylog2.shared.stats.ThroughputStats;
 import org.graylog2.streams.StreamFaultManager;
 import org.graylog2.streams.StreamMetrics;
 import org.graylog2.streams.StreamRouter;
@@ -117,12 +118,12 @@ public class PipelineBenchmark {
                                        null)
             ));
 
-            final PipelineStreamConnectionsService pipelineStreamConnectionsService = mock(PipelineStreamConnectionsService.class);
-            final PipelineStreamConnection pipelineStreamConnection = PipelineStreamConnection.create(null,
+            final PipelineStreamAssignmentService pipelineStreamAssignmentService = mock(PipelineStreamAssignmentService.class);
+            final PipelineStreamAssignment pipelineStreamAssignment = PipelineStreamAssignment.create(null,
                                                                                                       "default",
                                                                                                       newHashSet("cde"));
-            when(pipelineStreamConnectionsService.loadAll()).thenReturn(
-                    newHashSet(pipelineStreamConnection)
+            when(pipelineStreamAssignmentService.loadAll()).thenReturn(
+                    newHashSet(pipelineStreamAssignment)
             );
 
             final Map<String, Function<?>> functions = Maps.newHashMap();
@@ -134,7 +135,7 @@ public class PipelineBenchmark {
             interpreter = new PipelineInterpreter(
                     ruleService,
                     pipelineService,
-                    pipelineStreamConnectionsService,
+                    pipelineStreamAssignmentService,
                     parser,
                     mock(Journal.class),
                     mock(MetricRegistry.class),
@@ -216,7 +217,7 @@ public class PipelineBenchmark {
 
                 filters.add(new ExtractorFilter(inputService));
                 filters.add(new StaticFieldFilter(inputService));
-                filters.add(new StreamMatcherFilter(streamRouter));
+                filters.add(new StreamMatcherFilter(streamRouter, mock(ThroughputStats.class)));
                 if (!noDrools) {
                     filters.add(new RulesFilter(droolsEngine, filterService));
                 }
