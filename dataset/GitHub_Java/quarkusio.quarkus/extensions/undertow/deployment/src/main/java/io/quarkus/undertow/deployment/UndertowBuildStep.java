@@ -81,8 +81,6 @@ import io.quarkus.arc.deployment.ContextRegistrarBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.arc.processor.ContextRegistrar;
 import io.quarkus.deployment.Capabilities;
-import io.quarkus.deployment.Capability;
-import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
@@ -142,12 +140,12 @@ public class UndertowBuildStep {
 
     @BuildStep
     CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.SERVLET);
+        return new CapabilityBuildItem(Capabilities.SERVLET);
     }
 
     @BuildStep
     public FeatureBuildItem setupCapability() {
-        return new FeatureBuildItem(Feature.SERVLET);
+        return new FeatureBuildItem(FeatureBuildItem.SERVLET);
     }
 
     @BuildStep
@@ -163,7 +161,7 @@ public class UndertowBuildStep {
             ServletContextPathBuildItem servletContextPathBuildItem,
             Capabilities capabilities) throws Exception {
 
-        if (capabilities.isPresent(Capability.SECURITY)) {
+        if (capabilities.isCapabilityPresent(Capabilities.SECURITY)) {
             recorder.setupSecurity(servletDeploymentManagerBuildItem.getDeploymentManager());
         }
         Handler<RoutingContext> ut = recorder.startUndertow(shutdown, executorBuildItem.getExecutorProxy(),
@@ -186,7 +184,7 @@ public class UndertowBuildStep {
             BuildProducer<ListenerBuildItem> listeners,
             Capabilities capabilities) {
         additionalBeans.produce(new AdditionalBeanBuildItem(ServletProducer.class));
-        if (capabilities.isPresent(Capability.SECURITY)) {
+        if (capabilities.isCapabilityPresent(Capabilities.SECURITY)) {
             additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(ServletHttpSecurityPolicy.class));
         }
         contextRegistrars.produce(new ContextRegistrarBuildItem(new ContextRegistrar() {
@@ -417,29 +415,14 @@ public class UndertowBuildStep {
         }
         if (webMetaData.getFilterMappings() != null) {
             for (FilterMappingMetaData mapping : webMetaData.getFilterMappings()) {
-                List<String> urlPatterns = mapping.getUrlPatterns();
-                List<String> servletNames = mapping.getServletNames();
-                if (urlPatterns != null && !urlPatterns.isEmpty()) {
-                    for (String m : urlPatterns) {
-                        if (mapping.getDispatchers() == null || mapping.getDispatchers().isEmpty()) {
-                            recorder.addFilterURLMapping(deployment, mapping.getFilterName(), m, REQUEST);
-                        } else {
-                            for (DispatcherType dispatcher : mapping.getDispatchers()) {
-                                recorder.addFilterURLMapping(deployment, mapping.getFilterName(), m,
-                                        javax.servlet.DispatcherType.valueOf(dispatcher.name()));
-                            }
-                        }
-                    }
-                } else if (servletNames != null && !servletNames.isEmpty()) {
-                    // No URL Patterns found, map to servlet name instead
-                    for (String name : servletNames) {
-                        if (mapping.getDispatchers() == null || mapping.getDispatchers().isEmpty()) {
-                            recorder.addFilterServletNameMapping(deployment, mapping.getFilterName(), name, REQUEST);
-                        } else {
-                            for (DispatcherType dispatcher : mapping.getDispatchers()) {
-                                recorder.addFilterServletNameMapping(deployment, mapping.getFilterName(), name,
-                                        javax.servlet.DispatcherType.valueOf(dispatcher.name()));
-                            }
+                for (String m : mapping.getUrlPatterns()) {
+                    if (mapping.getDispatchers() == null || mapping.getDispatchers().isEmpty()) {
+                        recorder.addFilterURLMapping(deployment, mapping.getFilterName(), m, REQUEST);
+                    } else {
+
+                        for (DispatcherType dispatcher : mapping.getDispatchers()) {
+                            recorder.addFilterURLMapping(deployment, mapping.getFilterName(), m,
+                                    javax.servlet.DispatcherType.valueOf(dispatcher.name()));
                         }
                     }
                 }
@@ -1006,17 +989,14 @@ public class UndertowBuildStep {
         if (description.length() > 0 || displayName.length() > 0 || smallIcon.length() > 0 || largeIcon.length() > 0) {
             dg = new DescriptionGroupMetaData();
             Descriptions descriptions = getDescription(description);
-            if (descriptions != null) {
+            if (descriptions != null)
                 dg.setDescriptions(descriptions);
-            }
             DisplayNames displayNames = getDisplayName(displayName);
-            if (displayNames != null) {
+            if (displayNames != null)
                 dg.setDisplayNames(displayNames);
-            }
             Icons icons = getIcons(smallIcon, largeIcon);
-            if (icons != null) {
+            if (icons != null)
                 dg.setIcons(icons);
-            }
         }
         return dg;
     }
