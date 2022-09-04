@@ -110,14 +110,12 @@ public final class PanacheResourceProcessor {
         for (String modelClass : modelClasses) {
             transformers.produce(new BytecodeTransformerBuildItem(modelClass, modelEnhancer));
         }
-
-        if (!modelEnhancer.entities.isEmpty()) {
-            PanacheFieldAccessEnhancer panacheFieldAccessEnhancer = new PanacheFieldAccessEnhancer(modelEnhancer.entities);
-            for (ClassInfo classInfo : applicationIndex.getIndex().getKnownClasses()) {
-                String className = classInfo.name().toString();
-                if(!modelClasses.contains(className)) {
-                    transformers.produce(new BytecodeTransformerBuildItem(className, panacheFieldAccessEnhancer));
-                }
+        
+        PanacheFieldAccessEnhancer panacheFieldAccessEnhancer = new PanacheFieldAccessEnhancer(modelEnhancer.entities);
+        for (ClassInfo classInfo : applicationIndex.getIndex().getKnownClasses()) {
+            String className = classInfo.name().toString();
+            if(!modelClasses.contains(className)) {
+                transformers.produce(new BytecodeTransformerBuildItem(className, panacheFieldAccessEnhancer));
             }
         }
     }
