@@ -300,16 +300,21 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         if ((pkgName != null) && getPackage(pkgName) == null) {
             synchronized (getClassLoadingLock(pkgName)) {
                 if (getPackage(pkgName) == null) {
-                    Manifest mf = classPathElement.getManifest();
+                    ClassPathResource mf = classPathElement.getResource("META-INF/MANIFEST.MF");
                     if (mf != null) {
-                        Attributes ma = mf.getMainAttributes();
-                        definePackage(pkgName, ma.getValue(Attributes.Name.SPECIFICATION_TITLE),
-                                ma.getValue(Attributes.Name.SPECIFICATION_VERSION),
-                                ma.getValue(Attributes.Name.SPECIFICATION_VENDOR),
-                                ma.getValue(Attributes.Name.IMPLEMENTATION_TITLE),
-                                ma.getValue(Attributes.Name.IMPLEMENTATION_VERSION),
-                                ma.getValue(Attributes.Name.IMPLEMENTATION_VENDOR), null);
-                        return;
+                        try {
+                            Manifest manifest = new Manifest(new ByteArrayInputStream(mf.getData()));
+                            Attributes ma = manifest.getMainAttributes();
+                            definePackage(pkgName, ma.getValue(Attributes.Name.SPECIFICATION_TITLE),
+                                    ma.getValue(Attributes.Name.SPECIFICATION_VERSION),
+                                    ma.getValue(Attributes.Name.SPECIFICATION_VENDOR),
+                                    ma.getValue(Attributes.Name.IMPLEMENTATION_TITLE),
+                                    ma.getValue(Attributes.Name.IMPLEMENTATION_VERSION),
+                                    ma.getValue(Attributes.Name.IMPLEMENTATION_VENDOR), null);
+                            return;
+                        } catch (IOException e) {
+                            log.warnf("Failed to parse manifest for %s", name);
+                        }
                     }
 
                     // this could certainly be improved to use the actual manifest
