@@ -59,7 +59,6 @@ public class CriticalPathComputer {
 
   /** Number of top actions to record. */
   static final int SLOWEST_COMPONENTS_SIZE = 30;
-
   private static final int LARGEST_MEMORY_COMPONENTS_SIZE = 20;
   private static final int LARGEST_INPUT_SIZE_COMPONENTS_SIZE = 20;
 
@@ -78,7 +77,6 @@ public class CriticalPathComputer {
 
   /** Maximum critical path found. */
   private final AtomicReference<CriticalPathComponent> maxCriticalPath;
-
   private final Clock clock;
   private final boolean checkCriticalPathInconsistencies;
 
@@ -132,7 +130,7 @@ public class CriticalPathComputer {
 
     return new AggregatedCriticalPath(
         criticalPath.getAggregatedElapsedTime(),
-        SpawnMetrics.sumAllMetrics(metrics.build()),
+        SpawnMetrics.aggregateMetrics(metrics.build(), false),
         components.build());
   }
 
