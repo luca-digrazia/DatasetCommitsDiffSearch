@@ -23,24 +23,20 @@ public abstract class ScanningHibernateBundle<T extends Configuration> extends H
     }
 
     protected ScanningHibernateBundle(String pckg, SessionFactoryFactory sessionFactoryFactory) {
-        this(new String[] { pckg }, sessionFactoryFactory);
-    }
-
-    protected ScanningHibernateBundle(String[] pckgs, SessionFactoryFactory sessionFactoryFactory) {
-        super(findEntityClassesFromDirectory(pckgs), sessionFactoryFactory);
+        super(findEntityClassesFromDirectory(pckg), sessionFactoryFactory);
     }
 
     /**
      * Method scanning given directory for classes containing Hibernate @Entity annotation
      *
-     * @param pckgs string array with packages containing Hibernate entities (classes annotated with @Entity annotation)
+     * @param pckg string with package containing Hibernate entities (classes annotated with @Entity annotation)
      *             e.g. com.codahale.fake.db.directory.entities
      * @return ImmutableList with classes from given directory annotated with Hibernate @Entity annotation
      */
-    public static ImmutableList<Class<?>> findEntityClassesFromDirectory(String[] pckgs) {
+    public static ImmutableList<Class<?>> findEntityClassesFromDirectory(String pckg) {
         @SuppressWarnings("unchecked")
         final AnnotationAcceptingListener asl = new AnnotationAcceptingListener(Entity.class);
-        final PackageNamesScanner scanner = new PackageNamesScanner(pckgs, true);
+        final PackageNamesScanner scanner = new PackageNamesScanner(new String[]{pckg}, true);
 
         while (scanner.hasNext()) {
             final String next = scanner.next();

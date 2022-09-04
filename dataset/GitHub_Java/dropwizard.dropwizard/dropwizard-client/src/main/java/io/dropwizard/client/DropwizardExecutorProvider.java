@@ -1,23 +1,22 @@
 package io.dropwizard.client;
 
-import org.glassfish.jersey.spi.ExecutorServiceProvider;
+import org.glassfish.jersey.spi.RequestExecutorProvider;
 
 import java.util.concurrent.ExecutorService;
 
-class DropwizardExecutorProvider implements ExecutorServiceProvider {
+class DropwizardExecutorProvider implements RequestExecutorProvider {
+    private ExecutorService threadPool;
 
-    private final ExecutorService threadPool;
-
-    DropwizardExecutorProvider(ExecutorService threadPool) {
+    public DropwizardExecutorProvider(ExecutorService threadPool) {
         this.threadPool = threadPool;
     }
 
     @Override
-    public ExecutorService getExecutorService() {
+    public ExecutorService getRequestingExecutor() {
         return this.threadPool;
     }
 
     @Override
-    public void dispose(ExecutorService executorService) {
+    public void releaseRequestingExecutor(ExecutorService executor) {
     }
 }
