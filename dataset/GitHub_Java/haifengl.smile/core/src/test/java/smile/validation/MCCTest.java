@@ -46,12 +46,9 @@ public class MCCTest {
     public void tearDown() {
     }
 
-    /**
-     * Test of measure method, of class MCCMeasure.
-     */
     @Test
-    public void testMeasure() {
-        System.out.println("measure");
+    public void test() {
+        System.out.println("MCC");
         int[] truth = {
             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -62,30 +59,21 @@ public class MCCTest {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         };
-        MCCMeasure instance = new MCCMeasure();
+
         double expResult = 0.83068;
-        double result = instance.measure(truth, prediction);
+        double result = MCC.of(truth, prediction);
         assertEquals(expResult, result, 1E-5);
     }
 
-    /**
-     * Test of measure method, of class MCCMeasure in case of the mcc numerator is 0.
-     */
     @Test
-    public void testMeasureRandom(){
-        System.out.println("measure random");
-        int[] truth = {
-                0, 0, 0, 0,
-                1, 1, 1, 1,  };
-        int[] prediction = {
-                0, 1, 0, 1,
-                0, 1, 0, 1,  };
-        MCCMeasure instance = new MCCMeasure();
+    public void test0(){
+        System.out.println("numerator = 0");
+        int[] truth = {0, 0, 0, 0, 1, 1, 1, 1};
+        int[] prediction = {0, 1, 0, 1, 0, 1, 0, 1};
+
         double expResult = 0;
-        double result = instance.measure(truth, prediction);
+        double result = MCC.of(truth, prediction);
         assertEquals(expResult, result, 1E-5);
-
-
     }
 
 }

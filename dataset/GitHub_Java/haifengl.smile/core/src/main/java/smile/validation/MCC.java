@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,12 +13,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.validation;
 
 /**
- * Matthews correlation coefficient. The MCC is in essence a correlation
+ * Matthews correlation coefficient.The MCC is in essence a correlation
  * coefficient between the observed and predicted binary classifications
  * It is considered as a balanced measure for binary classification,
  * even in unbalanced data sets. It  varies between -1 (perfect
@@ -28,8 +28,6 @@ package smile.validation;
  * @author digital-thinking
  */
 public class MCC implements ClassificationMeasure {
-    private static final long serialVersionUID = 2L;
-    /** Default instance. */
     public final static MCC instance = new MCC();
 
     @Override
