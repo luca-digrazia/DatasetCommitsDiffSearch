@@ -21,11 +21,15 @@ import com.tencent.angel.ml.math.vector.DenseDoubleVector;
 import com.tencent.angel.ml.matrix.psf.aggr.primitive.Pull;
 import com.tencent.angel.ml.matrix.psf.get.single.GetRowResult;
 import com.tencent.angel.ml.matrix.psf.update.*;
+import com.tencent.angel.ml.matrix.psf.update.enhance.CompressUpdateFunc;
 import com.tencent.angel.ml.matrix.psf.update.enhance.UpdateFunc;
 import com.tencent.angel.ml.matrix.psf.update.primitive.Increment;
 import com.tencent.angel.ml.matrix.psf.update.primitive.Push;
 import com.tencent.angel.psagent.matrix.MatrixClient;
 import com.tencent.angel.psagent.matrix.MatrixClientFactory;
+import org.apache.commons.logging.LogFactory;
+import org.apache.log4j.PropertyConfigurator;
+import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -33,16 +37,23 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 
-public class UpdateFuncTest extends SharedAngelTest {
+public class UpdateFuncTest {
+
+  private static final org.apache.commons.logging.Log LOG = LogFactory.getLog(UpdateFuncTest.class);
+
   private static MatrixClient w2Client = null;
   private static double[] localArray0 = null;
   private static double[] localArray1 = null;
   private static double delta = 1e-6;
   private static int dim = -1;
 
+  static {
+    PropertyConfigurator.configure("../conf/log4j.properties");
+  }
+
   @BeforeClass
   public static void setup() throws Exception {
-    SharedAngelTest.setup();
+    LocalClusterHelper.setup();
     w2Client = MatrixClientFactory.get("w2", 0);
     // row 0 is a random uniform
     w2Client.update(new RandomUniform(w2Client.getMatrixId(), 0, 0.0, 1.0)).get();
@@ -93,7 +104,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testAxpy() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testAxpy() throws Exception {
     w2Client.update(new Fill(w2Client.getMatrixId(), 3, 1.0)).get();
     UpdateFunc func = new Axpy(w2Client.getMatrixId(), 0, 3, -2.0);
     w2Client.update(func).get();
@@ -106,7 +117,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testCeil() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testCeil() throws Exception {
     UpdateFunc func = new Ceil(w2Client.getMatrixId(), 0, 3);
     w2Client.update(func).get();
 
@@ -118,7 +129,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testCopy() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testCopy() throws Exception {
     UpdateFunc func = new Copy(w2Client.getMatrixId(), 0, 3);
     w2Client.update(func).get();
 
@@ -130,7 +141,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testDiv() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testDiv() throws Exception {
     UpdateFunc func = new Div(w2Client.getMatrixId(), 1, 0, 3);
     w2Client.update(func).get();
 
@@ -142,7 +153,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testDivS() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testDivS() throws Exception {
     UpdateFunc func = new DivS(w2Client.getMatrixId(), 0, 3, -1.0);
     w2Client.update(func).get();
 
@@ -154,7 +165,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testExp() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testExp() throws Exception {
     UpdateFunc func = new Exp(w2Client.getMatrixId(), 0, 3);
     w2Client.update(func).get();
 
@@ -166,7 +177,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testExpm1() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testExpm1() throws Exception {
     UpdateFunc func = new Expm1(w2Client.getMatrixId(), 0, 3);
     w2Client.update(func).get();
 
@@ -178,7 +189,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testFill() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testFill() throws Exception {
     UpdateFunc func = new Fill(w2Client.getMatrixId(), 3, -1.0);
     w2Client.update(func).get();
 
@@ -190,7 +201,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testFloor() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testFloor() throws Exception {
     UpdateFunc func = new Floor(w2Client.getMatrixId(), 0, 3);
     w2Client.update(func).get();
 
@@ -202,7 +213,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testIncrement() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testIncrement() throws Exception {
     UpdateFunc func = new Increment(w2Client.getMatrixId(), 3, localArray1);
     w2Client.update(func).get();
 
@@ -214,7 +225,26 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testLog() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testCompress() throws Exception {
+
+    UpdateFunc func = new CompressUpdateFunc(w2Client.getMatrixId(), 5, localArray1, 8);
+    w2Client.update(func).get();
+
+    int maxPoint = (int) Math.pow(2, 8 - 1) - 1;
+    double maxMaxAbs = 0.0;
+    for (int i = 0; i < localArray1.length; i++) {
+      maxMaxAbs = Math.abs(localArray1[i]) > maxMaxAbs ? Math.abs(localArray1[i]): maxMaxAbs;
+    }
+
+    double[] result = pull(w2Client, 5);
+    assert(result.length == dim);
+    for (int i = 0; i < result.length; i++) {
+      Assert.assertEquals(localArray1[i], 0.0 + result[i], 2 * maxMaxAbs / maxPoint);
+    }
+  }
+
+  @Test
+  public void testLog() throws Exception {
     UpdateFunc func = new Log(w2Client.getMatrixId(), 0, 3);
     w2Client.update(func).get();
 
@@ -226,7 +256,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testLog1p() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testLog1p() throws Exception {
     UpdateFunc func = new Log1p(w2Client.getMatrixId(), 0, 3);
     w2Client.update(func).get();
 
@@ -238,7 +268,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testLog10() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testLog10() throws Exception {
     UpdateFunc func = new Log10(w2Client.getMatrixId(), 0, 3);
     w2Client.update(func).get();
 
@@ -250,7 +280,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testMaxA() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testMaxA() throws Exception {
     w2Client.update(new Fill(w2Client.getMatrixId(), 3, 0.0)).get();
     UpdateFunc func = new MaxA(w2Client.getMatrixId(), 3, localArray1);
     w2Client.update(func).get();
@@ -263,7 +293,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testMaxV() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testMaxV() throws Exception {
     UpdateFunc func = new MaxV(w2Client.getMatrixId(), 0, 1, 3);
     w2Client.update(func).get();
 
@@ -275,7 +305,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testMinA() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testMinA() throws Exception {
     w2Client.update(new Fill(w2Client.getMatrixId(), 3, 0.0)).get();
     UpdateFunc func = new MinA(w2Client.getMatrixId(), 3, localArray1);
     w2Client.update(func).get();
@@ -288,7 +318,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testMinV() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testMinV() throws Exception {
     UpdateFunc func = new MinV(w2Client.getMatrixId(), 0, 1, 3);
     w2Client.update(func).get();
 
@@ -300,7 +330,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testMul() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testMul() throws Exception {
     UpdateFunc func = new Mul(w2Client.getMatrixId(), 0, 1, 3);
     w2Client.update(func).get();
 
@@ -312,7 +342,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testMulS() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testMulS() throws Exception {
     UpdateFunc func = new MulS(w2Client.getMatrixId(), 0, 3, -1.0);
     w2Client.update(func).get();
 
@@ -324,7 +354,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testPow() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testPow() throws Exception {
     UpdateFunc func = new Pow(w2Client.getMatrixId(), 0, 3, 3.0);
     w2Client.update(func).get();
 
@@ -336,7 +366,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testPut() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testPut() throws Exception {
     UpdateFunc func = new Push(w2Client.getMatrixId(), 3, localArray0);
     w2Client.update(func).get();
 
@@ -348,7 +378,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testRound() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testRound() throws Exception {
     UpdateFunc func = new Round(w2Client.getMatrixId(), 0, 3);
     w2Client.update(func).get();
 
@@ -360,7 +390,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testScale() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testScale() throws Exception {
     w2Client.update(new Push(w2Client.getMatrixId(), 3, localArray0)).get();
     UpdateFunc func = new Scale(w2Client.getMatrixId(), 3, 2.0);
     w2Client.update(func).get();
@@ -373,7 +403,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testSignum() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testSignum() throws Exception {
     UpdateFunc func = new Signum(w2Client.getMatrixId(), 1, 3);
     w2Client.update(func).get();
 
@@ -385,7 +415,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testSqrt() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testSqrt() throws Exception {
     UpdateFunc func = new Sqrt(w2Client.getMatrixId(), 0, 3);
     w2Client.update(func).get();
 
@@ -397,7 +427,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testSub() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testSub() throws Exception {
     UpdateFunc func = new Sub(w2Client.getMatrixId(), 0, 1, 3);
     w2Client.update(func).get();
 
@@ -409,7 +439,7 @@ public class UpdateFuncTest extends SharedAngelTest {
   }
 
   @Test
-  public void testSubS() throws InvalidParameterException, InterruptedException, ExecutionException {
+  public void testSubS() throws Exception {
     UpdateFunc func = new SubS(w2Client.getMatrixId(), 0, 3, -1.1);
     w2Client.update(func).get();
 
@@ -417,6 +447,16 @@ public class UpdateFuncTest extends SharedAngelTest {
     assert(result.length == dim);
     for (int i = 0; i < result.length; i++) {
       Assert.assertEquals(result[i], localArray0[i] - (-1.1), delta);
+    }
+  }
+
+  public void testBeyondPart() throws Exception {
+    // in different part
+    UpdateFunc func = new AddS(w2Client.getMatrixId(), 0, 9, 2.0);
+    try {
+      w2Client.update(func).get();
+    } catch (Exception e) {
+      System.out.println("test exception" + e.getMessage());
     }
   }
 
@@ -429,5 +469,10 @@ public class UpdateFuncTest extends SharedAngelTest {
   private static double[] pull(MatrixClient client, int rowId) {
     GetRowResult rowResult = (GetRowResult) client.get(new Pull(client.getMatrixId(), rowId));
     return ((DenseDoubleVector)rowResult.getRow()).getValues();
+  }
+
+  @AfterClass
+  public static void stop() throws Exception{
+    LocalClusterHelper.cleanup();
   }
 }

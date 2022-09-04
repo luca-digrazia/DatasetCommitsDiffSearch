@@ -17,7 +17,6 @@
 
 package com.tencent.angel.ml.matrix.psf.update.enhance;
 
-
 import com.tencent.angel.ml.matrix.psf.common.Utils;
 import com.tencent.angel.ps.impl.PSContext;
 import com.tencent.angel.ps.impl.matrix.ServerDenseDoubleRow;
@@ -25,21 +24,19 @@ import com.tencent.angel.ps.impl.matrix.ServerPartition;
 import com.tencent.angel.ps.impl.matrix.ServerRow;
 
 /**
- * `MMUpdateFunc` is a POF updater for a row in matrix with multi double parameter.
- *
- * Constructor's Parameters include int[] `rowIds` and double[] `scalars`, which correspond to
- * ServerDenseDoubleRow[] `rows` and double[] `scalars` in `doUpdate` interface respectively.
+ * `MUpdateFunc` is a POF updater for multi rows in matrix.
+ * Constructor's Parameters include int[] `rowIds`, which correspond to
+ * ServerDenseDoubleRow[] `rows` in `doUpdate` interface.
  *
  * That is the length of `rowIds` and `rows` is exactly the same, rows[i] is the content of
  * rowIds[i] row in matrix.
  */
-public abstract class MMUpdateFunc extends UpdateFunc {
-
-  public MMUpdateFunc(int matrixId, int[] rowIds, double[] scalars) {
-    super(new MMUpdateParam(matrixId, rowIds, scalars));
+public abstract class MUpdateFunc extends UpdateFunc {
+  protected MUpdateFunc(int matrixId, int[] rowIds) {
+    super(new MUpdateParam(matrixId, rowIds));
   }
 
-  public MMUpdateFunc() {
+  protected MUpdateFunc() {
     super(null);
   }
 
@@ -49,33 +46,31 @@ public abstract class MMUpdateFunc extends UpdateFunc {
         .getPartition(partParam.getMatrixId(), partParam.getPartKey().getPartitionId());
 
     if (part != null) {
-      MMUpdateParam.MMPartitionUpdateParam vs2 =
-          (MMUpdateParam.MMPartitionUpdateParam) partParam;
-      int[] rowIds = vs2.getRowIds();
+      MUpdateParam.MPartitionUpdateParam m = (MUpdateParam.MPartitionUpdateParam) partParam;
+      int[] rowIds = m.getRowIds();
       if (Utils.withinPart(partParam.getPartKey(), rowIds)) {
         ServerRow[] rows = new ServerRow[rowIds.length];
         for (int i = 0; i < rowIds.length; i++) {
           rows[i] = part.getRow(rowIds[i]);
         }
-        update(rows, vs2.getScalars());
+        update(rows);
       }
     }
   }
 
-  private void update(ServerRow[] rows, double[] scalars) {
+  private void update(ServerRow[] rows) {
     switch (rows[0].getRowType()) {
       case T_DOUBLE_DENSE:
         ServerDenseDoubleRow[] denseRows = new ServerDenseDoubleRow[rows.length];
         for (int i = 0; i < rows.length; i++) {
           denseRows[i] = (ServerDenseDoubleRow) rows[i];
         }
-        doUpdate(denseRows, scalars);
+        doUpdate(denseRows);
         return;
       default:
         throw new RuntimeException("currently only supports Double Dense Row");
     }
   }
 
-  protected abstract void doUpdate(ServerDenseDoubleRow[] rows, double[] scalars);
-
+  protected abstract void doUpdate(ServerDenseDoubleRow[] rows);
 }

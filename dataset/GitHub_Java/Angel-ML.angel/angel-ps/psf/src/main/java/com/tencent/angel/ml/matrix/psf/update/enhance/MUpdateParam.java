@@ -15,32 +15,31 @@
  *
  */
 
-package com.tencent.angel.ml.matrix.psf.aggr.enhance;
+package com.tencent.angel.ml.matrix.psf.update.enhance;
 
 import com.tencent.angel.PartitionKey;
-import com.tencent.angel.ml.matrix.psf.get.base.GetParam;
-import com.tencent.angel.ml.matrix.psf.get.base.PartitionGetParam;
 import com.tencent.angel.psagent.PSAgentContext;
-
 import io.netty.buffer.ByteBuf;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
- * `MultiAggrParam` is the parameter of `MultiAggrFunc`
+ * `MUpdateParam` a parameter class for `MUpdateFunc`
  */
-public class MultiAggrParam extends GetParam {
+public class MUpdateParam extends UpdateParam {
 
-  public static class MultiPartitionAggrParam extends PartitionGetParam {
+  public static class MPartitionUpdateParam extends PartitionUpdateParam {
     private int[] rowIds;
 
-    public MultiPartitionAggrParam(int matrixId, PartitionKey partKey, int[] rowIds) {
-      super(matrixId, partKey);
+    public MPartitionUpdateParam(
+        int matrixId, PartitionKey partKey, int[] rowIds) {
+      super(matrixId, partKey, false);
       this.rowIds = rowIds;
     }
 
-    public MultiPartitionAggrParam() {
+    public MPartitionUpdateParam() {
       super();
     }
 
@@ -48,49 +47,53 @@ public class MultiAggrParam extends GetParam {
     public void serialize(ByteBuf buf) {
       super.serialize(buf);
       buf.writeInt(rowIds.length);
-      for (int i = 0; i < rowIds.length; i++) {
-        buf.writeInt(rowIds[i]);
+      for (int rowId: rowIds){
+        buf.writeInt(rowId);
       }
     }
 
     @Override
     public void deserialize(ByteBuf buf) {
       super.deserialize(buf);
-      int rowLen = buf.readInt();
-      rowIds = new int[rowLen];
-      for (int i = 0; i < rowLen; i++) {
+      int rowLength = buf.readInt();
+      rowIds = new int[rowLength];
+      for (int i = 0; i < rowLength; i++){
         rowIds[i] = buf.readInt();
       }
     }
 
     @Override
     public int bufferLen() {
-      return super.bufferLen() + 8 * rowIds.length;
+      return super.bufferLen() + 4 + 4 * rowIds.length;
     }
 
     public int[] getRowIds() {
       return rowIds;
     }
 
+    @Override
+    public String toString() {
+      return "MPartitionUpdateParam [rowIds=" + Arrays.toString(rowIds) + ", toString()=" + super.toString() + "]";
+    }
   }
 
   private final int[] rowIds;
 
-  public MultiAggrParam(int matrixId, int[] rowIds) {
-    super(matrixId);
+  public MUpdateParam(int matrixId, int[] rowIds) {
+    super(matrixId, false);
     this.rowIds = rowIds;
   }
 
   @Override
-  public List<PartitionGetParam> split() {
-    List<PartitionKey> parts =
-        PSAgentContext.get().getMatrixPartitionRouter().getPartitionKeyList(matrixId);
-    int size = parts.size();
+  public List<PartitionUpdateParam> split() {
+    List<PartitionKey> partList = PSAgentContext.get()
+        .getMatrixPartitionRouter()
+        .getPartitionKeyList(matrixId);
 
-    List<PartitionGetParam> partParams = new ArrayList<PartitionGetParam>(size);
-
-    for (PartitionKey part : parts) {
-      partParams.add(new MultiPartitionAggrParam(matrixId, part, rowIds));
+    int size = partList.size();
+    List<PartitionUpdateParam> partParams = new ArrayList<PartitionUpdateParam>(size);
+    for (PartitionKey part : partList) {
+      partParams.add(new MPartitionUpdateParam(matrixId, part, rowIds));
     }
 
     return partParams;
