@@ -1,5 +1,6 @@
 package org.litepal.crud;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -193,6 +194,11 @@ public class DeleteHandler extends DataHandler {
 	 * 
 	 * @param baseObj
 	 *            The record to delete.
+	 * @throws SecurityException
+	 * @throws IllegalArgumentException
+	 * @throws NoSuchMethodException
+	 * @throws IllegalAccessException
+	 * @throws InvocationTargetException
 	 */
 	private void analyzeAssociations(DataSupport baseObj) {
 		try {
