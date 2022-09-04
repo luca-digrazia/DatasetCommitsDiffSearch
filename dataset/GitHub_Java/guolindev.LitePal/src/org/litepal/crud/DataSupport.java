@@ -220,11 +220,11 @@ public abstract class DataSupport {
 	 * 
 	 * @param modelClass
 	 *            Which table to update by class.
+	 * @param id
+	 *            Which record to update.
 	 * @param values
 	 *            A map from column names to new column values. null is a valid
 	 *            value that will be translated to NULL.
-	 * @param id
-	 *            Which record to update.
 	 * @return The number of rows affected.
 	 */
 	public static synchronized int update(Class<?> modelClass, ContentValues values, long id) {
@@ -239,9 +239,6 @@ public abstract class DataSupport {
 	 * 
 	 * @param modelClass
 	 *            Which table to update by class.
-	 * @param values
-	 *            A map from column names to new column values. null is a valid
-	 *            value that will be translated to NULL.
 	 * @param conditions
 	 *            A string array representing the WHERE part of an SQL
 	 *            statement. First parameter is the WHERE clause to apply when
@@ -250,6 +247,9 @@ public abstract class DataSupport {
 	 *            replaced by the second element of the array, the next question
 	 *            mark by the third, and so on. Passing empty string will update
 	 *            all rows.
+	 * @param values
+	 *            A map from column names to new column values. null is a valid
+	 *            value that will be translated to NULL.
 	 * @return The number of rows affected.
 	 */
 	public static synchronized int updateAll(Class<?> modelClass, ContentValues values,
@@ -265,9 +265,6 @@ public abstract class DataSupport {
 	 * 
 	 * @param tableName
 	 *            Which table to update.
-	 * @param values
-	 *            A map from column names to new column values. null is a valid
-	 *            value that will be translated to NULL.
 	 * @param conditions
 	 *            A string array representing the WHERE part of an SQL
 	 *            statement. First parameter is the WHERE clause to apply when
@@ -276,6 +273,9 @@ public abstract class DataSupport {
 	 *            replaced by the second element of the array, the next question
 	 *            mark by the third, and so on. Passing empty string will update
 	 *            all rows.
+	 * @param values
+	 *            A map from column names to new column values. null is a valid
+	 *            value that will be translated to NULL.
 	 * @return The number of rows affected.
 	 */
 	public static synchronized int updateAll(String tableName, ContentValues values,
