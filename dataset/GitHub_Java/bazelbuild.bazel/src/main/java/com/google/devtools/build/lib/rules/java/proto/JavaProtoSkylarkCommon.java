@@ -57,13 +57,6 @@ public class JavaProtoSkylarkCommon {
               positional = false,
               named = true,
               type = String.class
-          ),
-          @Param(
-              name = "flavour",
-              positional = false,
-              named = true,
-              type = String.class,
-              defaultValue = "java"
           )
       }
   )
@@ -71,15 +64,14 @@ public class JavaProtoSkylarkCommon {
       SkylarkRuleContext skylarkRuleContext,
       ConfiguredTarget target,
       Artifact sourceJar,
-      String protoToolchainAttr,
-      String flavour) {
+      String protoToolchainAttr) {
     SupportData supportData =
         checkNotNull(target.getProvider(ProtoSupportDataProvider.class).getSupportData());
     ProtoCompileActionBuilder.registerActions(
         skylarkRuleContext.getRuleContext(),
         ImmutableList.of(
             new ProtoCompileActionBuilder.ToolchainInvocation(
-                flavour,
+                "javalite",
                 getProtoToolchainProvider(skylarkRuleContext, protoToolchainAttr),
                 sourceJar.getExecPathString())),
         supportData.getDirectProtoSources(),
