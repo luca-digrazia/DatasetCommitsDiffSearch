@@ -23,6 +23,7 @@ public enum NinjaToken {
   ERROR("error"),
   BUILD("build"),
   RULE("rule"),
+  ESCAPED_TEXT("escaped text symbol"),
   TEXT("text"),
   IDENTIFIER("identifier"),
   VARIABLE("variable"),
@@ -35,6 +36,7 @@ public enum NinjaToken {
   EQUALS("="),
   PIPE("|"),
   PIPE2("||"),
+  PIPE_AT("|@"),
 
   INDENT("indent"),
   NEWLINE("newline"),
