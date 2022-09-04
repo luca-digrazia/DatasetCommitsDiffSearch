@@ -266,9 +266,6 @@ public class TestResourceManager implements Closeable {
             for (Annotation annotationAnnotation : reflAnnotation.annotationType().getAnnotations()) {
                 if (annotationAnnotation.annotationType() == QuarkusTestResource.class) {
                     QuarkusTestResource testResource = (QuarkusTestResource) annotationAnnotation;
-
-                    // NOTE: we don't need to check restrictToAnnotatedTest because by design config-based annotations
-                    // are not discovered outside the test class, so they're restricted
                     Class<? extends QuarkusTestResourceLifecycleManager> testResourceClass = testResource.value();
 
                     ResourceArg[] argsAnnotationValue = testResource.initArgs();
@@ -290,7 +287,7 @@ public class TestResourceManager implements Closeable {
                 }
             }
         }
-        for (AnnotationInstance annotation : findQuarkusTestResourceInstances(testClass, index)) {
+        for (AnnotationInstance annotation : findQuarkusTestResourceInstances(index)) {
             try {
                 Class<? extends QuarkusTestResourceLifecycleManager> testResourceClass = loadTestResourceClassFromTCCL(
                         annotation.value().asString());
@@ -333,32 +330,14 @@ public class TestResourceManager implements Closeable {
         }
     }
 
-    private Collection<AnnotationInstance> findQuarkusTestResourceInstances(Class<?> testClass, IndexView index) {
-        Set<AnnotationInstance> testResourceAnnotations = new HashSet<>();
-        for (AnnotationInstance annotation : index.getAnnotations(DotName.createSimple(QuarkusTestResource.class.getName()))) {
-            if (keepTestResourceAnnotation(annotation, annotation.target().asClass(), testClass)) {
-                testResourceAnnotations.add(annotation);
-            }
-        }
-
+    private Collection<AnnotationInstance> findQuarkusTestResourceInstances(IndexView index) {
+        Set<AnnotationInstance> testResourceAnnotations = new HashSet<>(
+                index.getAnnotations(DotName.createSimple(QuarkusTestResource.class.getName())));
         for (AnnotationInstance annotation : index
                 .getAnnotations(DotName.createSimple(QuarkusTestResource.List.class.getName()))) {
-            for (AnnotationInstance nestedAnnotation : annotation.value().asNestedArray()) {
-                // keep the list target
-                if (keepTestResourceAnnotation(nestedAnnotation, annotation.target().asClass(), testClass)) {
-                    testResourceAnnotations.add(nestedAnnotation);
-                }
-            }
+            Collections.addAll(testResourceAnnotations, annotation.value().asNestedArray());
         }
         return testResourceAnnotations;
-    }
-
-    private boolean keepTestResourceAnnotation(AnnotationInstance annotation, ClassInfo targetClass, Class<?> testClass) {
-        AnnotationValue restrict = annotation.value("restrictToAnnotatedTest");
-        if (restrict != null && restrict.asBoolean()) {
-            return testClass.getName().equals(targetClass.name().toString('.'));
-        }
-        return true;
     }
 
     public static class TestResourceClassEntry {
