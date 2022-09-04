@@ -13,13 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.testutil;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.testutil.TestConstants.GENRULE_SETUP;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.fail;
 
+import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -175,11 +175,16 @@ public abstract class AbstractQueryTest<T> {
   }
 
   protected ImmutableList<String> resultSetToListOfStrings(Set<T> results) {
-    return results.stream()
-        .map(node -> helper.getLabel(node))
-        .distinct()
-        .sorted(Ordering.natural())
-        .collect(toImmutableList());
+    return Ordering.natural()
+        .immutableSortedCopy(
+            Iterables.transform(
+                results,
+                new Function<T, String>() {
+                  @Override
+                  public String apply(T node) {
+                    return helper.getLabel(node);
+                  }
+                }));
   }
 
   protected void assertContains(Set<T> x, Set<T> y) throws Exception {
@@ -348,40 +353,19 @@ public abstract class AbstractQueryTest<T> {
     assertThat(evalToString("attr(deprecation, ' ', c:*)")).isEmpty();
   }
 
-  @Test
-  public void testAttrOperatorOnBooleans() throws Exception {
+  private void writeBooleanBuildFiles() throws Exception {
     writeFile(
         "t/BUILD",
         "cc_library(name='t', srcs=['t.cc'], data=['r'], testonly=0)",
         "cc_library(name='t_test', srcs=['t.cc'], data=['r'], testonly=1)");
+  }
 
+  @Test
+  public void testAttrOperatorOnBooleans() throws Exception {
+    writeBooleanBuildFiles();
     // Assure that integers query correctly for BOOLEAN values.
     assertThat(evalToString("attr(testonly, 0, t:*)")).isEqualTo("//t:t");
     assertThat(evalToString("attr(testonly, 1, t:*)")).isEqualTo("//t:t_test");
-  }
-
-  @Test
-  public void testAttrOnPackageDefaultVisibility() throws Exception {
-    writeFile(
-        "t/BUILD",
-        "package(default_visibility=['//visibility:public'])",
-        "cc_library(name='t', srcs=['t.cc'])");
-
-    assertThat(evalToString("attr(visibility, public, t:*)")).isEqualTo("//t:t");
-  }
-
-  @Test
-  public void testAttrOnPackageDefaultLicenses() throws Exception {
-    writeFile("t/BUILD", "package(licenses=['notice'])", "cc_library(name='t', srcs=['t.cc'])");
-
-    assertThat(evalToString("attr(licenses, notice, t:*)")).isEqualTo("//t:t");
-  }
-
-  @Test
-  public void testAttrOnPackageDefaultDistribs() throws Exception {
-    writeFile("t/BUILD", "package(distribs=['embedded'])", "cc_library(name='t', srcs=['t.cc'])");
-
-    assertThat(evalToString("attr(distribs, EMBEDDED, t:*)")).isEqualTo("//t:t");
   }
 
   @Test
