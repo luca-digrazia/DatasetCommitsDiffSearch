@@ -14,15 +14,12 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.common.collect.Iterables;
-
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-
 import javax.annotation.Nullable;
 
 /**
@@ -30,7 +27,7 @@ import javax.annotation.Nullable;
  * batch requests ordered alphabetically by sky key string representation.
  */
 public class DeterministicHelper extends NotifyingHelper {
-  static final MemoizingEvaluator.GraphTransformerForTesting MAKE_DETERMINISTIC =
+  public static final MemoizingEvaluator.GraphTransformerForTesting MAKE_DETERMINISTIC =
       makeTransformer(Listener.NULL_LISTENER, /*deterministic=*/ true);
 
   public static MemoizingEvaluator.GraphTransformerForTesting makeTransformer(
@@ -43,8 +40,8 @@ public class DeterministicHelper extends NotifyingHelper {
         }
 
         @Override
-        public InvalidatableGraph transform(InvalidatableGraph graph) {
-          return new DeterministicInvalidatableGraph(graph, listener);
+        public QueryableGraph transform(QueryableGraph graph) {
+          return new DeterministicQueryableGraph(graph, listener);
         }
 
         @Override
@@ -57,13 +54,10 @@ public class DeterministicHelper extends NotifyingHelper {
     }
   }
 
+  /** Compare using SkyKey argument first, so that tests can easily order keys. */
   private static final Comparator<SkyKey> ALPHABETICAL_SKYKEY_COMPARATOR =
-      new Comparator<SkyKey>() {
-        @Override
-        public int compare(SkyKey o1, SkyKey o2) {
-          return o1.toString().compareTo(o2.toString());
-        }
-      };
+      Comparator.<SkyKey, String>comparing(key -> key.argument().toString())
+          .thenComparing(key -> key.functionName().toString());
 
   DeterministicHelper(Listener listener) {
     super(listener);
@@ -75,24 +69,27 @@ public class DeterministicHelper extends NotifyingHelper {
 
   @Nullable
   @Override
-  protected DeterministicValueEntry wrapEntry(SkyKey key, @Nullable ThinNodeEntry entry) {
-    return entry == null ? null : new DeterministicValueEntry(key, entry);
+  protected DeterministicNodeEntry wrapEntry(SkyKey key, @Nullable ThinNodeEntry entry) {
+    return entry == null ? null : new DeterministicNodeEntry(key, entry);
   }
 
-  private static Map<SkyKey, NodeEntry> makeDeterministic(Map<SkyKey, NodeEntry> map) {
+  private static Map<SkyKey, ? extends NodeEntry> makeDeterministic(
+      Map<SkyKey, ? extends NodeEntry> map) {
     Map<SkyKey, NodeEntry> result = new TreeMap<>(ALPHABETICAL_SKYKEY_COMPARATOR);
     result.putAll(map);
     return result;
   }
 
-  private static class DeterministicInvalidatableGraph extends NotifyingInvalidatableGraph {
-    DeterministicInvalidatableGraph(InvalidatableGraph delegate, Listener graphListener) {
+  private static class DeterministicQueryableGraph extends NotifyingQueryableGraph {
+    DeterministicQueryableGraph(QueryableGraph delegate, Listener graphListener) {
       super(delegate, new DeterministicHelper(graphListener));
     }
 
     @Override
-    public Map<SkyKey, NodeEntry> getBatch(Iterable<SkyKey> keys) {
-      return makeDeterministic(super.getBatch(keys));
+    public Map<SkyKey, ? extends NodeEntry> getBatch(
+        @Nullable SkyKey requestor, Reason reason, Iterable<? extends SkyKey> keys)
+            throws InterruptedException {
+      return makeDeterministic(super.getBatch(requestor, reason, keys));
     }
   }
 
@@ -111,14 +108,17 @@ public class DeterministicHelper extends NotifyingHelper {
     }
 
     @Override
-    public Map<SkyKey, NodeEntry> createIfAbsentBatch(Iterable<SkyKey> keys) {
-      return makeDeterministic(super.createIfAbsentBatch(keys));
+    public Map<SkyKey, ? extends NodeEntry> createIfAbsentBatch(
+        @Nullable SkyKey requestor, Reason reason, Iterable<SkyKey> keys)
+        throws InterruptedException {
+      return makeDeterministic(super.createIfAbsentBatch(requestor, reason, keys));
     }
 
     @Override
-    public Map<SkyKey, NodeEntry> getBatchWithFieldHints(
-        Iterable<SkyKey> keys, EnumSet<NodeEntryField> fields) {
-      return makeDeterministic(super.getBatchWithFieldHints(keys, fields));
+    public Map<SkyKey, ? extends NodeEntry> getBatch(
+        @Nullable SkyKey requestor, Reason reason, Iterable<? extends SkyKey> keys)
+            throws InterruptedException {
+      return makeDeterministic(super.getBatch(requestor, reason, keys));
     }
   }
 
@@ -126,15 +126,16 @@ public class DeterministicHelper extends NotifyingHelper {
    * This class uses TreeSet to store reverse dependencies of NodeEntry. As a result all values are
    * lexicographically sorted.
    */
-  private class DeterministicValueEntry extends NotifyingNodeEntry {
-    private DeterministicValueEntry(SkyKey myKey, ThinNodeEntry delegate) {
+  private class DeterministicNodeEntry extends NotifyingNodeEntry {
+    private DeterministicNodeEntry(SkyKey myKey, ThinNodeEntry delegate) {
       super(myKey, delegate);
     }
 
     @Override
-    public synchronized Collection<SkyKey> getReverseDeps() {
+    public synchronized Collection<SkyKey> getReverseDepsForDoneEntry()
+        throws InterruptedException {
       TreeSet<SkyKey> result = new TreeSet<>(ALPHABETICAL_SKYKEY_COMPARATOR);
-      Iterables.addAll(result, super.getReverseDeps());
+      Iterables.addAll(result, super.getReverseDepsForDoneEntry());
       return result;
     }
 
@@ -142,6 +143,22 @@ public class DeterministicHelper extends NotifyingHelper {
     public synchronized Set<SkyKey> getInProgressReverseDeps() {
       TreeSet<SkyKey> result = new TreeSet<>(ALPHABETICAL_SKYKEY_COMPARATOR);
       result.addAll(super.getInProgressReverseDeps());
+      return result;
+    }
+
+    @Override
+    public Set<SkyKey> setValue(
+        SkyValue value, Version version, DepFingerprintList depFingerprintList)
+        throws InterruptedException {
+      TreeSet<SkyKey> result = new TreeSet<>(ALPHABETICAL_SKYKEY_COMPARATOR);
+      result.addAll(super.setValue(value, version, depFingerprintList));
+      return result;
+    }
+
+    @Override
+    public Set<SkyKey> markClean() throws InterruptedException {
+      TreeSet<SkyKey> result = new TreeSet<>(ALPHABETICAL_SKYKEY_COMPARATOR);
+      result.addAll(super.markClean());
       return result;
     }
   }
