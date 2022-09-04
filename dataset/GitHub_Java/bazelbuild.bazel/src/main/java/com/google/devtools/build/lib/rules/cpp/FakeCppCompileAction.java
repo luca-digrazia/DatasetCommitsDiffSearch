@@ -20,7 +20,6 @@ import static java.util.stream.Collectors.joining;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
@@ -74,7 +73,7 @@ public class FakeCppCompileAction extends CppCompileAction {
       NestedSet<Artifact> prunableHeaders,
       Artifact outputFile,
       PathFragment tempOutputFile,
-      Artifact dotdFile,
+      DotdFile dotdFile,
       ActionEnvironment env,
       CcCompilationContext ccCompilationContext,
       CoptsFilter nocopts,
@@ -193,15 +192,7 @@ public class FakeCppCompileAction extends CppCompileAction {
                   e.getMessage() + ";\n  this warning may eventually become an error"));
     }
 
-    if (discoversInputs()) {
-      updateActionInputs(discoveredInputs);
-    } else {
-      Preconditions.checkState(
-          discoveredInputs.isEmpty(),
-          "Discovered inputs without discovering inputs? %s %s",
-          discoveredInputs,
-          this);
-    }
+    updateActionInputs(discoveredInputs);
 
     // Generate a fake ".o" file containing the command line needed to generate
     // the real object file.
@@ -216,7 +207,8 @@ public class FakeCppCompileAction extends CppCompileAction {
     // line to write to $TEST_TMPDIR instead.
     final String outputPrefix = "$TEST_TMPDIR/";
     String argv =
-        getArguments().stream()
+        getArguments()
+            .stream()
             .map(
                 input -> {
                   String result = ShellEscaper.escapeString(input);
@@ -227,7 +219,7 @@ public class FakeCppCompileAction extends CppCompileAction {
                   }
                   if (input.equals(outputFile.getExecPathString())
                       || (getDotdFile() != null
-                          && input.equals(getDotdFile().getExecPathString()))) {
+                          && input.equals(getDotdFile().getSafeExecPath().getPathString()))) {
                     result = outputPrefix + ShellEscaper.escapeString(input);
                   }
                   return result;
@@ -245,7 +237,7 @@ public class FakeCppCompileAction extends CppCompileAction {
               || outputFile
                   .getExecPath()
                   .getParentDirectory()
-                  .equals(getDotdFile().getExecPath().getParentDirectory()));
+                  .equals(getDotdFile().getSafeExecPath().getParentDirectory()));
       FileSystemUtils.writeContent(
           actionExecutionContext.getInputPath(outputFile),
           ISO_8859_1,
@@ -273,6 +265,6 @@ public class FakeCppCompileAction extends CppCompileAction {
 
   @Override
   public ResourceSet estimateResourceConsumptionLocal() {
-    return AbstractAction.DEFAULT_RESOURCE_SET;
+    return ResourceSet.createWithRamCpuIo(/*memoryMb=*/1, /*cpuUsage=*/0.1, /*ioUsage=*/0.0);
   }
 }
