@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.TOP_LEVEL_MODULE_MAP;
+
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -27,8 +29,10 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.CcCommon;
+import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.List;
 
 /**
  * Provides a way to access attributes that are common to all compilation rules.
@@ -44,6 +48,8 @@ final class CompilationAttributes {
     private final ImmutableList.Builder<String> copts = ImmutableList.builder();
     private final ImmutableList.Builder<String> linkopts = ImmutableList.builder();
     private final ImmutableList.Builder<String> defines = ImmutableList.builder();
+    private final NestedSetBuilder<CppModuleMap> moduleMapsForDirectDeps =
+        NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<SdkFramework> sdkFrameworks = NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<SdkFramework> weakSdkFrameworks = NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<String> sdkDylibs = NestedSetBuilder.stableOrder();
@@ -120,6 +126,15 @@ final class CompilationAttributes {
     }
 
     /**
+     * Adds clang module maps for direct dependencies of the rule. These are needed to generate
+     * module maps.
+     */
+    public Builder addModuleMapsForDirectDeps(NestedSet<CppModuleMap> moduleMapsForDirectDeps) {
+      this.moduleMapsForDirectDeps.addTransitive(moduleMapsForDirectDeps);
+      return this;
+    }
+
+    /**
      * Adds SDK frameworks to link against.
      */
     public Builder addSdkFrameworks(NestedSet<SdkFramework> sdkFrameworks) {
@@ -179,6 +194,7 @@ final class CompilationAttributes {
           this.copts.build(),
           this.linkopts.build(),
           this.defines.build(),
+          this.moduleMapsForDirectDeps.build(),
           this.enableModules);
     }
 
@@ -255,6 +271,22 @@ final class CompilationAttributes {
     }
 
     private static void addModuleOptionsFromRuleContext(Builder builder, RuleContext ruleContext) {
+      NestedSetBuilder<CppModuleMap> moduleMaps = NestedSetBuilder.stableOrder();
+      ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
+      if (objcConfiguration.moduleMapsEnabled()) {
+        // Make sure all dependencies that have headers are included here. If a module map is
+        // missing, its private headers will be treated as public!
+        if (ruleContext.attributes().has("deps", BuildType.LABEL_LIST)) {
+          List<ObjcProvider> providers =
+              ruleContext.getPrerequisites("deps", ObjcProvider.STARLARK_CONSTRUCTOR);
+          for (ObjcProvider provider : providers) {
+            moduleMaps.addTransitive(provider.get(TOP_LEVEL_MODULE_MAP));
+          }
+        }
+      }
+
+      builder.addModuleMapsForDirectDeps(moduleMaps.build());
+
       PathFragment packageFragment = ruleContext.getPackageDirectory();
       if (packageFragment != null) {
         builder.setPackageFragment(packageFragment);
@@ -278,6 +310,7 @@ final class CompilationAttributes {
   private final ImmutableList<String> copts;
   private final ImmutableList<String> linkopts;
   private final ImmutableList<String> defines;
+  private final NestedSet<CppModuleMap> moduleMapsForDirectDeps;
   private final boolean enableModules;
 
   private CompilationAttributes(
@@ -292,6 +325,7 @@ final class CompilationAttributes {
       ImmutableList<String> copts,
       ImmutableList<String> linkopts,
       ImmutableList<String> defines,
+      NestedSet<CppModuleMap> moduleMapsForDirectDeps,
       boolean enableModules) {
     this.hdrs = hdrs;
     this.textualHdrs = textualHdrs;
@@ -304,6 +338,7 @@ final class CompilationAttributes {
     this.copts = copts;
     this.linkopts = linkopts;
     this.defines = defines;
+    this.moduleMapsForDirectDeps = moduleMapsForDirectDeps;
     this.enableModules = enableModules;
   }
 
@@ -392,6 +427,14 @@ final class CompilationAttributes {
   /** Returns the defines. */
   public ImmutableList<String> defines() {
     return this.defines;
+  }
+
+  /**
+   * Returns the clang module maps of direct dependencies of this rule. These are needed to generate
+   * this rule's module map.
+   */
+  public NestedSet<CppModuleMap> moduleMapsForDirectDeps() {
+    return this.moduleMapsForDirectDeps;
   }
 
   /**

@@ -178,16 +178,11 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
   }
 
   /**
-   * Returns the package path fragment to derived artifacts for this package. Returns pkgName if
-   * this is in the main repository or siblingRepositoryLayout is true. Otherwise, returns
-   * external/[repository name]/[pkgName].
+   * Returns the package path to the source code for this package. Returns pkgName if this is in the
+   * main repository or external/[repository name]/[pkgName] if not.
    */
   public PathFragment getPackagePath(boolean siblingRepositoryLayout) {
-    return repository.isDefault() || repository.isMain() || siblingRepositoryLayout
-        ? pkgName
-        : LabelConstants.EXTERNAL_PACKAGE_NAME
-            .getRelative(repository.strippedName())
-            .getRelative(pkgName);
+    return repository.getPackagePath().getRelative(pkgName);
   }
 
   public PathFragment getExecPath(boolean siblingRepositoryLayout) {

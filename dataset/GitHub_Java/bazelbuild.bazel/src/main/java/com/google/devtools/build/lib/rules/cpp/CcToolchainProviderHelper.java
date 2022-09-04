@@ -397,7 +397,6 @@ public class CcToolchainProviderHelper {
         .put("ar_executable", getStarlarkValueForTool(Tool.AR, toolPaths))
         .put("strip_executable", getStarlarkValueForTool(Tool.STRIP, toolPaths))
         .put("ld_executable", getStarlarkValueForTool(Tool.LD, toolPaths))
-        .put("gcov_executable", getStarlarkValueForTool(Tool.GCOV, toolPaths))
         .build();
   }
 
