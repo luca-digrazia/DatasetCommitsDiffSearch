@@ -86,7 +86,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.Stack;
 
 import static java.util.stream.Collectors.toList;
 
@@ -182,8 +181,7 @@ public class PipelineRuleParser {
     }
 
     public static String unquote(String string, char quoteChar) {
-        if (string.length() >= 2 &&
-                string.charAt(0) == quoteChar && string.charAt(string.length() - 1) == quoteChar) {
+        if (string.charAt(0) == quoteChar && string.charAt(string.length() - 1) == quoteChar) {
             return string.substring(1, string.length() - 1);
         }
         return string;
@@ -218,26 +216,25 @@ public class PipelineRuleParser {
         private final Set<String> definedVars = Sets.newHashSet();
 
         // this is true for nested field accesses
-        private Stack<Boolean> isIdIsFieldAccess = new Stack<>();
+        private boolean idIsFieldAccess = false;
 
         public RuleAstBuilder(ParseContext parseContext) {
             this.parseContext = parseContext;
             args = parseContext.arguments();
             argsList = parseContext.argumentLists();
             exprs = parseContext.expressions();
-            isIdIsFieldAccess.push(false); // top of stack
         }
 
         @Override
         public void exitRuleDeclaration(RuleLangParser.RuleDeclarationContext ctx) {
             final Rule.Builder ruleBuilder = Rule.builder();
-            ruleBuilder.name(unquote(ctx.name == null ? "" : ctx.name.getText(), '"'));
+            ruleBuilder.name(unquote(ctx.name.getText(), '"'));
             final Expression expr = exprs.get(ctx.condition);
 
             LogicalExpression condition;
             if (expr instanceof LogicalExpression) {
                 condition = (LogicalExpression) expr;
-            } else if (expr != null && expr.getType().equals(Boolean.class)) {
+            } else if (expr.getType().equals(Boolean.class)) {
                 condition = new BooleanValuedFunctionWrapper(expr);
             } else {
                 condition = new BooleanExpression(false);
@@ -376,12 +373,12 @@ public class PipelineRuleParser {
         @Override
         public void enterNested(RuleLangParser.NestedContext ctx) {
             // nested field access is ok, these are not rule variables
-            isIdIsFieldAccess.push(true);
+            idIsFieldAccess = true;
         }
 
         @Override
         public void exitNested(RuleLangParser.NestedContext ctx) {
-            isIdIsFieldAccess.pop(); // reset for error checks
+            idIsFieldAccess = false; // reset for error checks
             final Expression object = exprs.get(ctx.fieldSet);
             final Expression field = exprs.get(ctx.field);
             final FieldAccessExpression expr = new FieldAccessExpression(object, field);
@@ -391,7 +388,7 @@ public class PipelineRuleParser {
 
         @Override
         public void exitNot(RuleLangParser.NotContext ctx) {
-            final LogicalExpression expression = upgradeBoolFunctionExpression(ctx.expression());
+            final LogicalExpression expression = (LogicalExpression) exprs.get(ctx.expression());
             final NotExpression expr = new NotExpression(expression);
             log.info("NOT: ctx {} => {}", ctx, expr);
             exprs.put(ctx, expr);
@@ -399,28 +396,17 @@ public class PipelineRuleParser {
 
         @Override
         public void exitAnd(RuleLangParser.AndContext ctx) {
-            // if the expressions are function calls but boolean valued, upgrade them,
-            // we allow testing boolean valued functions without explicit comparison operator
-            final LogicalExpression left = upgradeBoolFunctionExpression(ctx.left);
-            final LogicalExpression right = upgradeBoolFunctionExpression(ctx.right);
-
+            final LogicalExpression left = (LogicalExpression) exprs.get(ctx.left);
+            final LogicalExpression right = (LogicalExpression) exprs.get(ctx.right);
             final AndExpression expr = new AndExpression(left, right);
             log.info("AND: ctx {} => {}", ctx, expr);
             exprs.put(ctx, expr);
         }
 
-        private LogicalExpression upgradeBoolFunctionExpression(RuleLangParser.ExpressionContext leftExprContext) {
-            Expression leftExpr = exprs.get(leftExprContext);
-            if (leftExpr instanceof FunctionExpression && leftExpr.getType().equals(Boolean.class)) {
-                leftExpr = new BooleanValuedFunctionWrapper(leftExpr);
-            }
-            return (LogicalExpression) leftExpr;
-        }
-
         @Override
         public void exitOr(RuleLangParser.OrContext ctx) {
-            final LogicalExpression left = upgradeBoolFunctionExpression(ctx.left);
-            final LogicalExpression right = upgradeBoolFunctionExpression(ctx.right);
+            final LogicalExpression left = (LogicalExpression) exprs.get(ctx.left);
+            final LogicalExpression right = (LogicalExpression) exprs.get(ctx.right);
             final OrExpression expr = new OrExpression(left, right);
             log.info("OR: ctx {} => {}", ctx, expr);
             exprs.put(ctx, expr);
@@ -516,12 +502,12 @@ public class PipelineRuleParser {
         @Override
         public void enterMessageRef(RuleLangParser.MessageRefContext ctx) {
             // nested field access is ok, these are not rule variables
-            isIdIsFieldAccess.push(true);
+            idIsFieldAccess = true;
         }
 
         @Override
         public void exitMessageRef(RuleLangParser.MessageRefContext ctx) {
-            isIdIsFieldAccess.pop(); // reset for error checks
+            idIsFieldAccess = false; // reset for error checks
             final Expression fieldExpr = exprs.get(ctx.field);
             final MessageRefExpression expr = new MessageRefExpression(fieldExpr);
             log.info("$MSG: ctx {} => {}", ctx, expr);
@@ -533,13 +519,13 @@ public class PipelineRuleParser {
             // unquote identifier if necessary
             final String identifierName = unquote(ctx.Identifier().getText(), '`');
 
-            if (!isIdIsFieldAccess.peek() && !definedVars.contains(identifierName)) {
+            if (!idIsFieldAccess && !definedVars.contains(identifierName)) {
                 parseContext.addError(new UndeclaredVariable(ctx));
             }
             final Expression expr;
             String type;
             // if the identifier is also a declared variable name prefer the variable
-            if (isIdIsFieldAccess.peek() && !definedVars.contains(identifierName)) {
+            if (idIsFieldAccess && !definedVars.contains(identifierName)) {
                 expr = new FieldRefExpression(identifierName);
                 type = "FIELDREF";
             } else {
@@ -664,8 +650,7 @@ public class PipelineRuleParser {
                 sb.append(" ( ");
                 sb.append(expression.getClass().getSimpleName());
                 sb.append(":").append(ctx.getClass().getSimpleName()).append(" ");
-                sb.append(" <").append(expression.getType().getSimpleName()).append("> ");
-                sb.append(ctx.getText());
+                sb.append(" <").append(expression.getType().getSimpleName()).append(">");
             }
         }
 
