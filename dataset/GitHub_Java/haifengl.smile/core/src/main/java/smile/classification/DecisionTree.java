@@ -272,7 +272,7 @@ public class DecisionTree extends CART implements SoftClassifier<Tuple>, DataFra
         LeafNode node = new DecisionNode(count);
         this.root = node;
 
-        Optional<Split> split = findBestSplit(node, 0, index.length, new boolean[x.ncol()]);
+        Optional<Split> split = findBestSplit(node, 0, index.length, new boolean[x.ncols()]);
 
         if (maxNodes == Integer.MAX_VALUE) {
             // deep-first split
@@ -344,25 +344,6 @@ public class DecisionTree extends CART implements SoftClassifier<Tuple>, DataFra
         tree.formula = formula;
         tree.labels = codec.labels;
         return tree;
-    }
-
-    @Override
-    public int numClasses() {
-        return labels.size();
-    }
-
-    @Override
-    public int[] labels() {
-        return labels.values;
-    }
-
-    @Override
-    public NominalScale scale() {
-        String[] values = new String[labels.size()];
-        for (int i = 0; i < labels.size(); i++) {
-            values[i] = String.valueOf(labels.valueOf(i));
-        }
-        return new NominalScale(values);
     }
 
     @Override

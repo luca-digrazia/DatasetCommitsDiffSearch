@@ -1,18 +1,20 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.math;
 
 /**
@@ -23,67 +25,39 @@ package smile.math;
 public class Root {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Root.class);
 
-    /** The instance with default settings. */
-    private static Root instance = new Root();
-
-    /**
-     * The accuracy tolerance.
-     */
-    private double tol = 1E-7;
-    /**
-     * The maximum number of allowed iterations.
-     */
-    private int maxIter = 500;
-
-    /**
-     * Constructor with tol = 1E-7 and maxIter = 500.
-     */
-    public Root() {
+    /** Private constructor to prevent instance creation. */
+    private Root() {
 
     }
 
-    /** Returns the instance with default settings. */
-    public static Root getInstance() {
-        return instance;
-    }
-
     /**
-     * Sets the accuracy tolerance.
-     * @return return this object.
+     * Brent's method for root-finding. It combines the bisection method,
+     * the secant method and inverse quadratic interpolation. It has the
+     * reliability of bisection but it can be as quick as some of the
+     * less-reliable methods. The algorithm tries to use the potentially
+     * fast-converging secant method or inverse quadratic interpolation
+     * if possible, but it falls back to the more robust bisection method
+     * if necessary.
+     * <p>
+     * The method is guaranteed to converge as long as the function can be
+     * evaluated within the initial interval known to contain a root.
+     *
+     * @param func the function to be evaluated.
+     * @param x1 the left end of search interval.
+     * @param x2 the right end of search interval.
+     * @param tol the desired accuracy (convergence tolerance).
+     * @param maxIter the maximum number of iterations.
+     * @return the root.
      */
-    public Root setTolerance(double tol) {
+    public static double find(Function func, double x1, double x2, double tol, int maxIter) {
         if (tol <= 0.0) {
             throw new IllegalArgumentException("Invalid tolerance: " + tol);
         }
 
-        this.tol = tol;
-        return this;
-    }
-
-    /**
-     * Sets the maximum number of allowed iterations.
-     * @return return this object.
-     */
-    public Root setMaxIter(int maxIter) {
         if (maxIter <= 0) {
             throw new IllegalArgumentException("Invalid maximum number of iterations: " + maxIter);
         }
 
-        this.maxIter = maxIter;
-        return this;
-    }
-
-    /**
-     * Returns the root of a function known to lie between x1 and x2 by
-     * Brent's method. The root will be refined until its accuracy is tol.
-     * The method is guaranteed to converge as long as the function can be
-     * evaluated within the initial interval known to contain a root.
-     * @param func the function to be evaluated.
-     * @param x1 the left end of search interval.
-     * @param x2 the right end of search interval.
-     * @return the root.
-     */
-    public double find(Function func, double x1, double x2) {
         double a = x1, b = x2, c = x2, d = 0, e = 0, fa = func.apply(a), fb = func.apply(b), fc, p, q, r, s, xm;
         if ((fa > 0.0 && fb > 0.0) || (fa < 0.0 && fb < 0.0)) {
             throw new IllegalArgumentException("Root must be bracketed.");
@@ -114,7 +88,7 @@ public class Root {
             }
 
             if (Math.abs(xm) <= tol || fb == 0.0) {
-                logger.info(String.format("Brent finds the root after %3d iterations: %.5g, error = %.5g", iter, b, xm));
+                logger.info(String.format("Brent finds the root after %d iterations: %.5g, error = %.5g", iter, b, xm));
                 return b;
             }
 
@@ -137,7 +111,7 @@ public class Root {
                 p = Math.abs(p);
                 double min1 = 3.0 * xm * q - Math.abs(tol * q);
                 double min2 = Math.abs(e * q);
-                if (2.0 * p < (min1 < min2 ? min1 : min2)) {
+                if (2.0 * p < Math.min(min1, min2)) {
                     e = d;
                     d = p / q;
                 } else {
@@ -159,20 +133,29 @@ public class Root {
             fb = func.apply(b);
         }
 
-        logger.error("Brent's method exceeded the maximum number of iterations.");
+        logger.error("Brent exceeded the maximum number of iterations.");
         return b;
     }
 
     /**
-     * Returns the root of a function whose derivative is available known
-     * to lie between x1 and x2 by Newton-Raphson method. The root will be
-     * refined until its accuracy is within xacc.
+     * Newton's method (also known as the Newton–Raphson method). This method
+     * finds successively better approximations to the roots of a real-valued
+     * function. Newton's method assumes the function to have a continuous
+     * derivative. Newton's method may not converge if started too far away
+     * from a root. However, when it does converge, it is faster than the
+     * bisection method, and is usually quadratic. Newton's method is also
+     * important because it readily generalizes to higher-dimensional problems.
+     * Newton-like methods with higher orders of convergence are the
+     * Householder's methods.
+     *
      * @param func the function to be evaluated.
      * @param x1 the left end of search interval.
      * @param x2 the right end of search interval.
+     * @param tol the desired accuracy (convergence tolerance).
+     * @param maxIter the maximum number of iterations.
      * @return the root.
      */
-    public double find(DifferentiableFunction func, double x1, double x2) {
+    public static double find(DifferentiableFunction func, double x1, double x2, double tol, int maxIter) {
         if (tol <= 0.0) {
             throw new IllegalArgumentException("Invalid tolerance: " + tol);
         }
@@ -213,7 +196,7 @@ public class Root {
                 dx = 0.5 * (xh - xl);
                 rts = xl + dx;
                 if (xl == rts) {
-                    logger.info(String.format("Newton-Raphson finds the root after %3d iterations: %.5g, error = %.5g", iter, rts, dx));
+                    logger.info(String.format("Newton-Raphson finds the root after %d iterations: %.5g, error = %.5g", iter, rts, dx));
                     return rts;
                 }
             } else {
@@ -222,7 +205,7 @@ public class Root {
                 double temp = rts;
                 rts -= dx;
                 if (temp == rts) {
-                    logger.info(String.format("Newton-Raphson finds the root after %3d iterations: %.5g, error = %.5g", iter, rts, dx));
+                    logger.info(String.format("Newton-Raphson finds the root after %d iterations: %.5g, error = %.5g", iter, rts, dx));
                     return rts;
                 }
             }
@@ -232,7 +215,7 @@ public class Root {
             }
 
             if (Math.abs(dx) < tol) {
-                logger.info(String.format("Newton-Raphson finds the root after %3d iterations: %.5g, error = %.5g", iter, rts, dx));
+                logger.info(String.format("Newton-Raphson finds the root after %d iterations: %.5g, error = %.5g", iter, rts, dx));
                 return rts;
             }
 
@@ -245,7 +228,7 @@ public class Root {
             }
         }
 
-        logger.error("Newton-Raphson method exceeded the maximum number of iterations.");
+        logger.error("Newton-Raphson exceeded the maximum number of iterations.");
         return rts;
     }
 }
