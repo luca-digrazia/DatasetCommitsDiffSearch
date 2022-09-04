@@ -25,6 +25,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -78,7 +79,7 @@ public class RClassGenerator {
 
   private void writeClasses(
       String packageName,
-      Iterable<Map.Entry<ResourceType, Map<String, FieldInitializer>>> initializersToWrite)
+      Iterable<Entry<ResourceType, Map<String, FieldInitializer>>> initializersToWrite)
       throws IOException {
 
     Iterable<String> folders = PACKAGE_SPLITTER.split(packageName);
@@ -109,7 +110,7 @@ public class RClassGenerator {
     classWriter.visitSource(SdkConstants.FN_RESOURCE_CLASS, null);
     writeConstructor(classWriter);
     // Build the R.class w/ the inner classes, then later build the individual R$inner.class.
-    for (Map.Entry<ResourceType, Map<String, FieldInitializer>> entry : initializersToWrite) {
+    for (Entry<ResourceType, Map<String, FieldInitializer>> entry : initializersToWrite) {
       String innerClassName = rClassName + "$" + entry.getKey().toString();
       classWriter.visitInnerClass(
           innerClassName,
@@ -140,7 +141,7 @@ public class RClassGenerator {
     if (finalFields) {
       fieldAccessLevel |= Opcodes.ACC_FINAL;
     }
-    for (Map.Entry<String, FieldInitializer> entry : initializers.entrySet()) {
+    for (Entry<String, FieldInitializer> entry : initializers.entrySet()) {
       FieldInitializer init = entry.getValue();
       Preconditions.checkArgument(
           !entry.getKey().contains(":"),
@@ -204,7 +205,7 @@ public class RClassGenerator {
     visitor.visitCode();
     int stackSlotsNeeded = 0;
     InstructionAdapter insts = new InstructionAdapter(visitor);
-    for (Map.Entry<String, FieldInitializer> fieldEntry : deferredInitializers.entrySet()) {
+    for (Entry<String, FieldInitializer> fieldEntry : deferredInitializers.entrySet()) {
       final FieldInitializer fieldInit = fieldEntry.getValue();
       stackSlotsNeeded =
           Math.max(stackSlotsNeeded, fieldInit.writeCLInit(fieldEntry.getKey(), insts, className));
