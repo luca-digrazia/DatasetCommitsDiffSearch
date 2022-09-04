@@ -19,7 +19,6 @@ import static com.google.devtools.build.lib.events.Event.of;
 import static com.google.devtools.build.lib.events.EventKind.PROGRESS;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Strings;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
@@ -515,10 +514,6 @@ public class BuildEventStreamer implements EventHandler {
       if (outErrProvider != null) {
         out = outErrProvider.getOut();
         err = outErrProvider.getErr();
-      }
-      if (Strings.isNullOrEmpty(out) && Strings.isNullOrEmpty(err)) {
-        // Nothing to flush; avoid generating an unneeded progress event.
-        return;
       }
       if (announcedEvents != null) {
         updateEvent = flushStdoutStderrEvent(out, err);
