@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.extra.SpawnInfo;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -91,14 +90,10 @@ public class ObjcCompileAction extends SpawnAction {
 
     @Override
     public Iterable<? extends ActionInput> getInputFiles() {
-      ImmutableList.Builder<ActionInput> listBuilder =
-          ImmutableList.<ActionInput>builder().addAll(super.getInputFiles());
-      // Normally discoveredInputs should not be null when this is called, however that may occur if
-      // the extra action feature is used
-      if (discoveredInputs != null) {
-        listBuilder.addAll(discoveredInputs);
-      }
-      return listBuilder.build();
+      return ImmutableList.<ActionInput>builder()
+          .addAll(super.getInputFiles())
+          .addAll(discoveredInputs)
+          .build();
     }
   }
 
@@ -140,7 +135,7 @@ public class ObjcCompileAction extends SpawnAction {
     super(
         owner,
         tools,
-        headersListFile == null ? inputs : mandatoryInputs,
+        inputs,
         outputs,
         resourceSet,
         argv,
@@ -166,11 +161,9 @@ public class ObjcCompileAction extends SpawnAction {
     ImmutableList.Builder<Artifact> inputs = ImmutableList.<Artifact>builder();
 
     for (Artifact headerArtifact : headers) {
-      if (CppFileTypes.OBJC_HEADER.matches(headerArtifact.getFilename())
-          // C++ headers can be extensionless
-          || (!headerArtifact.isFileset() && headerArtifact.getExtension().isEmpty())) {
+      if (CppFileTypes.OBJC_HEADER.matches(headerArtifact.getFilename())) {
           inputs.add(headerArtifact);
-      }
+        }
     }
     return inputs.build();
   }
@@ -384,20 +377,6 @@ public class ObjcCompileAction extends SpawnAction {
       Profiler.instance().completeTask(ProfilerTask.ACTION_UPDATE);
       setInputs(inputs);
     }
-  }
-
-  @Override
-  protected SpawnInfo getExtraActionSpawnInfo() {
-    SpawnInfo.Builder info = SpawnInfo.newBuilder(super.getExtraActionSpawnInfo());
-    if (!inputsKnown()) {
-      for (Artifact headerArtifact : filterHeaderFiles()) {
-        // As in SpawnAction#getExtraActionSpawnInfo explicitly ignore middleman artifacts here.
-        if (!headerArtifact.isMiddlemanArtifact()) {
-          info.addInputFile(headerArtifact.getExecPathString());
-        }
-      }
-    }
-    return info.build();
   }
 
   @Override
