@@ -29,7 +29,7 @@ import smile.data.Instance;
 import smile.data.Segment;
 import smile.data.USPS;
 import smile.feature.Standardizer;
-import smile.io.Read;
+import smile.io.DatasetReader;
 import smile.math.MathEx;
 import smile.math.kernel.GaussianKernel;
 import smile.math.kernel.BinarySparseGaussianKernel;
@@ -68,8 +68,9 @@ public class SVMTest {
 
         MathEx.setSeed(19650218); // to get repeatable results.
 
-        Dataset<Instance<SparseArray>> train = Read.libsvm(smile.util.Paths.getTestData("libsvm/svmguide1"));
-        Dataset<Instance<SparseArray>> test  = Read.libsvm(smile.util.Paths.getTestData("libsvm/svmguide1.t"));
+        DatasetReader reader = new DatasetReader();
+        Dataset<Instance<SparseArray>> train = reader.libsvm(smile.util.Paths.getTestData("libsvm/svmguide1"));
+        Dataset<Instance<SparseArray>> test  = reader.libsvm(smile.util.Paths.getTestData("libsvm/svmguide1.t"));
 
         int n = train.size();
         double[][] x = new double[n][4];
@@ -97,7 +98,7 @@ public class SVMTest {
         SVM<double[]> model = SVM.fit(x, y, kernel, 100, 1E-3);
 
         int[] prediction = Validation.test(model, testx);
-        int error = Error.of(testy, prediction);
+        int error = Error.apply(testy, prediction);
         System.out.format("Test Error = %d, Accuracy = %.2f%%%n", error, 100.0 - 100.0 * error / testx.length);
         assertEquals(131, error);
     }
@@ -108,8 +109,9 @@ public class SVMTest {
 
         MathEx.setSeed(19650218); // to get repeatable results.
 
-        Dataset<Instance<SparseArray>> train = Read.libsvm(smile.util.Paths.getTestData("libsvm/data_lasvm_adult_adult.trn"));
-        Dataset<Instance<SparseArray>> test  = Read.libsvm(smile.util.Paths.getTestData("libsvm/data_lasvm_adult_adult.tst"));
+        DatasetReader reader = new DatasetReader();
+        Dataset<Instance<SparseArray>> train = reader.libsvm(smile.util.Paths.getTestData("libsvm/data_lasvm_adult_adult.trn"));
+        Dataset<Instance<SparseArray>> test  = reader.libsvm(smile.util.Paths.getTestData("libsvm/data_lasvm_adult_adult.tst"));
 
         int n = train.size();
         int[][] x = new int[n][];
@@ -141,7 +143,7 @@ public class SVMTest {
         Classifier<int[]> model = SVM.fit(x, y, kernel, 100, 1E-3);
 
         int[] prediction = Validation.test(model, testx);
-        int error = Error.of(testy, prediction);
+        int error = Error.apply(testy, prediction);
         System.out.format("Test Error = %d, Accuracy = %.2f%%%n", error, 100.0 - 100.0 * error / testx.length);
         assertEquals(2451, error);
     }
@@ -160,13 +162,13 @@ public class SVMTest {
         OneVersusOne<double[]> model = OneVersusOne.fit(x, Segment.y, (xi, y) -> SVM.fit(xi, y, kernel, 100, 1E-3));
 
         int[] prediction = Validation.test(model, testx);
-        int error = Error.of(Segment.testy, prediction);
+        int error = Error.apply(Segment.testy, prediction);
         System.out.format("Test Error = %d, Accuracy = %.2f%%%n", error, 100.0 - 100.0 * error / Segment.testx.length);
         assertEquals(33, error);
     }
 
-    @Test(expected = Test.None.class)
-    public void testUSPS() throws Exception {
+    @Test
+    public void testUSPS() {
         System.out.println("USPS");
 
         MathEx.setSeed(19650218); // to get repeatable results.
@@ -175,11 +177,8 @@ public class SVMTest {
         OneVersusRest<double[]> model = OneVersusRest.fit(USPS.x, USPS.y, (x, y) -> SVM.fit(x, y, kernel, 5, 1E-3));
 
         int[] prediction = Validation.test(model, USPS.testx);
-        int error = Error.of(USPS.testy, prediction);
+        int error = Error.apply(USPS.testy, prediction);
         System.out.format("Test Error = %d, Accuracy = %.2f%%%n", error, 100.0 - 100.0 * error / USPS.testx.length);
         assertEquals(87, error);
-
-        java.nio.file.Path temp = smile.data.Serialize.write(model);
-        smile.data.Serialize.read(temp);
     }
 }

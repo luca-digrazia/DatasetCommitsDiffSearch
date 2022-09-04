@@ -65,7 +65,7 @@ public class RegressionTreeTest {
     public void testLongley() {
         System.out.println("longley");
 
-        RegressionTree model = RegressionTree.fit(Longley.formula, Longley.data, 100, 20, 2);
+        RegressionTree model = RegressionTree.fit(Longley.formula, Longley.data, 100, 2);
         System.out.println("----- dot -----");
         System.out.println(model);
 
@@ -75,8 +75,8 @@ public class RegressionTreeTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        double[] prediction = LOOCV.regression(Longley.formula, Longley.data, (formula, x) -> RegressionTree.fit(formula, x, 100, 20, 2));
-        double rmse = RMSE.of(Longley.y, prediction);
+        double[] prediction = LOOCV.regression(Longley.data, x -> RegressionTree.fit(Longley.formula, x, 100, 2));
+        double rmse = RMSE.apply(Longley.y, prediction);
 
         System.out.println("LOOCV MSE = " + rmse);
         assertEquals(3.0848729264302333, rmse, 1E-4);
@@ -97,8 +97,8 @@ public class RegressionTreeTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        double[] prediction = CrossValidation.regression(10, formula, data, (f, x) -> RegressionTree.fit(f, x));
-        double rmse = RMSE.of(formula.y(data).toDoubleArray(), prediction);
+        double[] prediction = CrossValidation.regression(10, data, x -> RegressionTree.fit(formula, x));
+        double rmse = RMSE.apply(formula.y(data).toDoubleArray(), prediction);
         System.out.format("10-CV RMSE = %.4f%n", rmse);
         assertEquals(expected, rmse, 1E-4);
     }
@@ -108,14 +108,14 @@ public class RegressionTreeTest {
      */
     @Test
     public void testAll() {
-        test("CPU", CPU.formula, CPU.data, 84.5224);
-        test("2dplanes", Planes.formula, Planes.data, 1.1164);
-        test("abalone", Abalone.formula, Abalone.train, 2.5891);
+        test("CPU", CPU.formula, CPU.data, 88.6985);
+        test("2dplanes", Planes.formula, Planes.data, 2.0976630570457164);
+        test("abalone", Abalone.formula, Abalone.train, 2.5596429888189594);
         test("ailerons", Ailerons.formula, Ailerons.data, 0.0003);
-        test("bank32nh", Bank32nh.formula, Bank32nh.data, 0.1093);
-        test("autoMPG", AutoMPG.formula, AutoMPG.data, 3.2882);
-        test("cal_housing", CalHousing.formula, CalHousing.data, 59979.0575);
-        test("puma8nh", Puma8NH.formula, Puma8NH.data, 3.9136);
-        test("kin8nm", Kin8nm.formula, Kin8nm.data, 0.1936);
+        test("bank32nh", Bank32nh.formula, Bank32nh.data, 0.09799630724747005);
+        test("autoMPG", AutoMPG.formula, AutoMPG.data, 3.6601134209470363);
+        test("cal_housing", CalHousing.formula, CalHousing.data, 83789.70080922866);
+        test("puma8nh", Puma8NH.formula, Puma8NH.data, 4.046871978193681);
+        test("kin8nm", Kin8nm.formula, Kin8nm.data, 0.2189);
     }
 }
