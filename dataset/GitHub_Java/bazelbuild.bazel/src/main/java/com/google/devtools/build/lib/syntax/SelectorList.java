@@ -149,7 +149,9 @@ public final class SelectorList implements SkylarkValue {
   }
 
   private static boolean isListType(Class<?> type) {
-    return NATIVE_LIST_TYPE.isAssignableFrom(type);
+    return NATIVE_LIST_TYPE.isAssignableFrom(type)
+        || type.getSuperclass() == SkylarkList.class
+        || type == GlobList.class;
   }
 
   private static boolean canConcatenate(Class<?> type1, Class<?> type2) {
@@ -164,7 +166,7 @@ public final class SelectorList implements SkylarkValue {
 
   @Override
   public String toString() {
-    return Starlark.repr(this);
+    return Printer.repr(this);
   }
 
   @Override

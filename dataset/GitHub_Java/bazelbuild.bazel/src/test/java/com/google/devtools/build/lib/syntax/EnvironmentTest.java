@@ -46,8 +46,14 @@ public class EnvironmentTest extends EvaluationTestCase {
   }
 
   @Test
+  public void testHasVariable() throws Exception {
+    assertThat(getEnvironment().hasVariable("VERSION")).isFalse();
+    update("VERSION", 42);
+    assertThat(getEnvironment().hasVariable("VERSION")).isTrue();
+  }
+
+  @Test
   public void testDoubleUpdateSucceeds() throws Exception {
-    assertThat(lookup("VERSION")).isNull();
     update("VERSION", 42);
     assertThat(lookup("VERSION")).isEqualTo(42);
     update("VERSION", 43);
@@ -133,7 +139,6 @@ public class EnvironmentTest extends EvaluationTestCase {
                 "all",
                 "any",
                 "bool",
-                "depset",
                 "dict",
                 "dir",
                 "enumerate",
@@ -150,11 +155,9 @@ public class EnvironmentTest extends EvaluationTestCase {
                 "range",
                 "repr",
                 "reversed",
-                "select",
                 "sorted",
                 "str",
                 "tuple",
-                "type",
                 "zip"));
     assertThat(innerEnv.getVariableNames())
         .isEqualTo(
@@ -168,7 +171,6 @@ public class EnvironmentTest extends EvaluationTestCase {
                 "all",
                 "any",
                 "bool",
-                "depset",
                 "dict",
                 "dir",
                 "enumerate",
@@ -185,11 +187,9 @@ public class EnvironmentTest extends EvaluationTestCase {
                 "range",
                 "repr",
                 "reversed",
-                "select",
                 "sorted",
                 "str",
                 "tuple",
-                "type",
                 "zip"));
   }
 
