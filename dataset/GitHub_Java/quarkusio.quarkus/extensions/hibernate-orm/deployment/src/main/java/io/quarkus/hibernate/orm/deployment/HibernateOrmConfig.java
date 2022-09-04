@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 
-import io.quarkus.runtime.annotations.ConfigDocSection;
 import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigRoot;
@@ -53,7 +52,7 @@ public class HibernateOrmConfig {
      *   Pass an explicit value to force Hibernate ORM to execute the SQL import file.
      *
      * If you need different SQL statements between dev mode, test (`@QuarkusTest`) and in production, use Quarkus
-     * https://quarkus.io/guides/config#configuration-profiles[configuration profiles facility].
+     * https://quarkus.io/guides/application-configuration-guide#configuration-profiles[configuration profiles facility].
      *
      * [source,property]
      * .application.properties
@@ -72,7 +71,7 @@ public class HibernateOrmConfig {
      * @asciidoclet
      */
     // @formatter:on
-    @ConfigItem(defaultValueDocumentation = "import.sql in DEV, TEST ; no-file otherwise")
+    @ConfigItem
     public Optional<String> sqlLoadScript;
 
     /**
@@ -86,47 +85,32 @@ public class HibernateOrmConfig {
     public int batchFetchSize;
 
     /**
-     * Pluggable strategy contract for applying physical naming rules for database object names.
-     *
-     * Class name of the Hibernate PhysicalNamingStrategy implementation
-     *
-     * @asciidoclet
-     */
-    @ConfigItem
-    Optional<String> physicalNamingStrategy;
-
-    /**
      * Query related configuration.
      */
     @ConfigItem
-    @ConfigDocSection
     public HibernateOrmConfigQuery query;
 
     /**
      * Database related configuration.
      */
     @ConfigItem
-    @ConfigDocSection
     public HibernateOrmConfigDatabase database;
 
     /**
      * JDBC related configuration.
      */
     @ConfigItem
-    @ConfigDocSection
     public HibernateOrmConfigJdbc jdbc;
 
     /**
      * Logging configuration.
      */
     @ConfigItem
-    @ConfigDocSection
     public HibernateOrmConfigLog log;
 
     /**
      * Caching configuration
      */
-    @ConfigDocSection
     public Map<String, HibernateOrmConfigCache> cache;
 
     /**
@@ -255,8 +239,10 @@ public class HibernateOrmConfig {
 
         /**
          * Whether JDBC warnings should be collected and logged.
+         * <p>
+         * Default value depends on the dialect.
          */
-        @ConfigItem(defaultValueDocumentation = "depends on dialect")
+        @ConfigItem
         public Optional<Boolean> jdbcWarnings;
 
         public boolean isAnyPropertySet() {
