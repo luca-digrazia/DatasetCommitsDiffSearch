@@ -82,29 +82,21 @@ public class TvShowPresenter extends Presenter {
       }
 
       @Override public void onTvShowNotFound() {
-        showTvShowNotFound();
+        if (view.isReady()) {
+          currentTvShow = null;
+          view.hideLoading();
+          view.showTvShowNotFoundMessage();
+        }
       }
 
       @Override public void onConnectionError() {
-        showConnectionError();
+        if (view.isReady() && !view.isAlreadyLoaded()) {
+          currentTvShow = null;
+          view.hideLoading();
+          view.showConnectionErrorMessage();
+        }
       }
     });
-  }
-
-  private void showConnectionError() {
-    if (view.isReady() && !view.isAlreadyLoaded()) {
-      currentTvShow = null;
-      view.hideLoading();
-      view.showConnectionErrorMessage();
-    }
-  }
-
-  private void showTvShowNotFound() {
-    if (view.isReady()) {
-      currentTvShow = null;
-      view.hideLoading();
-      view.showTvShowNotFoundMessage();
-    }
   }
 
   private void showTvShow(TvShow tvShow) {

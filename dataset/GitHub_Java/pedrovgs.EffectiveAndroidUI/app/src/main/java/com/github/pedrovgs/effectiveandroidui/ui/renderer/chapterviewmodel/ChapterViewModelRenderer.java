@@ -31,11 +31,7 @@ import javax.inject.Inject;
  * Renderer implementation for ChapterViewModel objects.
  *
  * If you want to lear more about how to use Renderers take a look to this project:
- * https://github.com/pedrovgs/Renderers.
- *
- * Review how this renderer register and unregister a view model listener while the recycle process
- * in order to update the UI without use an adapter.notifyDataSetChanged(). This is a nice
- * implementation not really common in Android applications. It has a little bug...can you find it?
+ * https://github.com/pedrovgs/Renderers
  *
  * @author Pedro Vicente Gómez Sánchez
  */
@@ -106,10 +102,6 @@ public class ChapterViewModelRenderer extends Renderer<ChapterViewModel>
     tv_chapter_publish_date.setText(chapter.getPublishDate());
   }
 
-  /**
-   * This method is going to be called some seconds after the onCreate onRecycle and will update the
-   * view without use a notifyDataSetChanged().
-   */
   @Override public void onRateChanged(int rate) {
     ChapterViewModel chapter = getContent();
     String rateMessage = context.getString(R.string.tv_show_rate, rate);

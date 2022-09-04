@@ -25,7 +25,7 @@ import java.util.Collection;
  */
 public interface GetTvShows {
 
-  interface Callback {
+  public interface Callback {
     void onTvShowsLoaded(final Collection<TvShow> tvShows);
 
     void onConnectionError();

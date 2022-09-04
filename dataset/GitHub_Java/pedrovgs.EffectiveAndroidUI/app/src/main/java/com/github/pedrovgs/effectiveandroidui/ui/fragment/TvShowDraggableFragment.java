@@ -1,14 +1,29 @@
+/*
+ * Copyright (C) 2014 Pedro Vicente Gómez Sánchez.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.github.pedrovgs.effectiveandroidui.ui.fragment;
 
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import butterknife.InjectView;
+import com.github.pedrovgs.DraggableListener;
 import com.github.pedrovgs.DraggableView;
 import com.github.pedrovgs.effectiveandroidui.R;
 import com.github.pedrovgs.effectiveandroidui.domain.tvshow.ChapterCollection;
@@ -31,24 +46,22 @@ import javax.inject.Inject;
  */
 public class TvShowDraggableFragment extends BaseFragment implements TvShowPresenter.View {
 
+  private static final String EXTRA_TV_SHOW = "extra_tv_show";
+
   @Inject TvShowPresenter tvShowPresenter;
   @Inject ChapterRendererAdapterFactory chapterRendererAdapterFactory;
 
   private ChapterRendererAdapter adapter;
   private ChapterAdapteeCollection chapterAdapteeCollection = new ChapterAdapteeCollection();
 
+  private boolean useSaveInstanceState = true;
+
   @InjectView(R.id.draggable_view) DraggableView draggable_view;
   @InjectView(R.id.iv_fan_art) ImageView iv_fan_art;
   @InjectView(R.id.lv_chapters) ListView lv_chapters;
   @InjectView(R.id.pb_loading) ProgressBar pb_loading;
-  @InjectView(R.id.v_empty_case) View v_empty_case;
 
-  private TextView headr_tv_show_chapters;
-
-  @Override public View onCreateView(LayoutInflater inflater, ViewGroup container,
-      Bundle savedInstanceState) {
-    return inflater.inflate(R.layout.fragment_draggable_tv_show, container, false);
-  }
+  private TextView header_tv_show_chapters;
 
   @Override public void onViewCreated(View view, Bundle savedInstanceState) {
     super.onViewCreated(view, savedInstanceState);
@@ -57,21 +70,23 @@ public class TvShowDraggableFragment extends BaseFragment implements TvShowPrese
     initializeListView();
   }
 
+  public void disableSaveInstanceState() {
+    useSaveInstanceState = false;
+  }
+
   private void initializeListView() {
-    headr_tv_show_chapters = (TextView) LayoutInflater.from(getActivity())
+    header_tv_show_chapters = (TextView) LayoutInflater.from(getActivity())
         .inflate(R.layout.header_tv_show_chapters, null);
-    lv_chapters.addHeaderView(headr_tv_show_chapters);
+    lv_chapters.addHeaderView(header_tv_show_chapters);
     adapter = (ChapterRendererAdapter) chapterRendererAdapterFactory.getChapterRendererAdapter(
         chapterAdapteeCollection);
     lv_chapters.setAdapter(adapter);
   }
 
-  public void showTvShow(final TvShow tvShow) {
-    tvShowPresenter.loadTvShow(tvShow.getTitle());
-  }
-
-  @Override public void hideEmptyCase() {
-    v_empty_case.setVisibility(View.GONE);
+  public void showTvShow(final String tvShowId) {
+    if (isAdded()) {
+      tvShowPresenter.loadTvShow(tvShowId);
+    }
   }
 
   @Override public void showLoading() {
@@ -80,12 +95,23 @@ public class TvShowDraggableFragment extends BaseFragment implements TvShowPrese
 
   @Override public void showFanArt(final String tvShowFanArtUrl) {
     iv_fan_art.setVisibility(View.VISIBLE);
-    Picasso.with(getActivity()).load(tvShowFanArtUrl).into(iv_fan_art);
+    Picasso.with(getActivity())
+        .load(tvShowFanArtUrl)
+        .placeholder(R.color.main_color)
+        .into(iv_fan_art);
   }
 
   @Override public void showTvShowTitle(final String tvShowTitle) {
     String tvShowHeaderTitle = getString(R.string.tv_show_title, tvShowTitle);
-    headr_tv_show_chapters.setText(tvShowHeaderTitle);
+    header_tv_show_chapters.setText(tvShowHeaderTitle);
+  }
+
+  @Override public boolean isReady() {
+    return isAdded();
+  }
+
+  @Override public boolean isAlreadyLoaded() {
+    return adapter.getCount() > 0;
   }
 
   @Override public void showChapters(ChapterCollection chapters) {
@@ -96,10 +122,6 @@ public class TvShowDraggableFragment extends BaseFragment implements TvShowPrese
 
   @Override public void hideLoading() {
     pb_loading.setVisibility(View.GONE);
-  }
-
-  @Override public void showEmptyCase() {
-    v_empty_case.setVisibility(View.VISIBLE);
   }
 
   @Override public void showTvShowNotFoundMessage() {
@@ -117,11 +139,57 @@ public class TvShowDraggableFragment extends BaseFragment implements TvShowPrese
     draggable_view.maximize();
   }
 
+  @Override public void onSaveInstanceState(Bundle outState) {
+    super.onSaveInstanceState(outState);
+    if (useSaveInstanceState) {
+      outState.putSerializable(EXTRA_TV_SHOW, tvShowPresenter.getCurrentTvShow());
+    }
+  }
+
+  @Override public void onViewStateRestored(Bundle savedInstanceState) {
+    super.onViewStateRestored(savedInstanceState);
+    if (savedInstanceState != null) {
+      final TvShow tvShow = (TvShow) savedInstanceState.getSerializable(EXTRA_TV_SHOW);
+      updatePresenterWithSavedTvShow(tvShow);
+    }
+  }
+
+  private void updatePresenterWithSavedTvShow(final TvShow tvShow) {
+    if (tvShow != null) {
+      draggable_view.post(new Runnable() {
+        @Override public void run() {
+          tvShowPresenter.loadTvShow(tvShow);
+        }
+      });
+    }
+  }
+
+  @Override protected int getFragmentLayout() {
+    return R.layout.fragment_draggable_tv_show;
+  }
+
   private void initializeDraggableView() {
     draggable_view.post(new Runnable() {
       @Override
       public void run() {
         draggable_view.closeToRight();
+      }
+    });
+    draggable_view.setDraggableListener(new DraggableListener() {
+      @Override public void onMaximized() {
+        //Empty
+      }
+
+      @Override public void onMinimized() {
+        //Empty
+      }
+
+      @Override public void onClosedToLeft() {
+        tvShowPresenter.tvShowClosed();
+      }
+
+      @Override public void onClosedToRight() {
+        tvShowPresenter.tvShowClosed();
       }
     });
   }

@@ -23,10 +23,7 @@ import com.pedrogomez.renderers.RendererAdapter;
 import com.pedrogomez.renderers.RendererBuilder;
 
 /**
- * RendererAdapter extension created to provide position information to every Renderer<Chapter>
- *
- * If you want to lear more about how to use Renderers take a look to this project:
- * https://github.com/pedrovgs/Renderers.
+ * RendererAdapter extension created to provide position information to each Renderer<Chapter>
  *
  * @author Pedro Vicente Gómez Sánchez
  */

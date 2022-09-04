@@ -30,7 +30,7 @@ import java.util.List;
 public class TvShowCollection implements AdapteeCollection<TvShow>, Serializable {
   private static final long serialVersionUID = 8799677673292716638L;
 
-  private final List<TvShow> tvShows;
+  private final LinkedList<TvShow> tvShows;
 
   public TvShowCollection() {
     this(new LinkedList<TvShow>());
@@ -70,6 +70,6 @@ public class TvShowCollection implements AdapteeCollection<TvShow>, Serializable
   }
 
   public List<TvShow> getAsList() {
-    return (List<TvShow>) ((LinkedList<TvShow>) tvShows).clone();
+    return (List<TvShow>) tvShows.clone();
   }
 }

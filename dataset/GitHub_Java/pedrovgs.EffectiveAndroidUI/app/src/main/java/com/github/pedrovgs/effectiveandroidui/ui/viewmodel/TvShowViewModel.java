@@ -58,21 +58,47 @@ public class TvShowViewModel {
     listener.onEmptyCaseVisibilityChanged(false);
     getTvShowById.execute(tvShowId, new GetTvShowById.Callback() {
       @Override public void onTvShowLoaded(TvShow tvShow) {
-        notifyTvShowLoaded(tvShow);
+        showTvShowOnBrowserActionCommand.setTvShowUrl(tvShow.getPoster());
+        if (isReady) {
+          listener.onFanArtLoaded(tvShow.getFanArt());
+          listener.onTvShowTitleLoaded(tvShow.getTitle());
+          listener.onChaptersLoaded(getChaptersViewModel(tvShow.getChapters()));
+          listener.onVisibilityChanged(true);
+          listener.onLoadVisibilityChanged(false);
+          listener.onEmptyCaseVisibilityChanged(false);
+        }
       }
 
       @Override public void onTvShowNotFound() {
-        notifyTvShowNotFound();
+        if (isReady) {
+          listener.onLoadVisibilityChanged(false);
+          listener.onVisibilityChanged(false);
+          listener.onEmptyCaseVisibilityChanged(true);
+          listener.onTvShowMessageNotFound();
+        }
       }
 
       @Override public void onConnectionError() {
-        notifyConnectionError();
+        if (isReady) {
+          listener.onLoadVisibilityChanged(false);
+          listener.onVisibilityChanged(false);
+          listener.onEmptyCaseVisibilityChanged(true);
+          listener.onConnectionErrorMessageNotFound();
+        }
       }
     });
   }
 
   public ActionCommand getTvShowClickedCommand() {
     return showTvShowOnBrowserActionCommand;
+  }
+
+  private List<ChapterViewModel> getChaptersViewModel(ChapterCollection chapterCollection) {
+    List<ChapterViewModel> chapterViewModels = new LinkedList<ChapterViewModel>();
+    for (Chapter chapter : chapterCollection) {
+      chapterViewModels.add(new ChapterViewModel(chapter));
+    }
+    return chapterViewModels;
   }
 
   public void setListener(TvShowFragment listener) {
@@ -85,44 +111,6 @@ public class TvShowViewModel {
 
   public void setReady(boolean isReady) {
     this.isReady = isReady;
-  }
-
-  private void notifyConnectionError() {
-    if (isReady) {
-      listener.onLoadVisibilityChanged(false);
-      listener.onVisibilityChanged(false);
-      listener.onEmptyCaseVisibilityChanged(true);
-      listener.onConnectionErrorMessageNotFound();
-    }
-  }
-
-  private void notifyTvShowNotFound() {
-    if (isReady) {
-      listener.onLoadVisibilityChanged(false);
-      listener.onVisibilityChanged(false);
-      listener.onEmptyCaseVisibilityChanged(true);
-      listener.onTvShowMessageNotFound();
-    }
-  }
-
-  private void notifyTvShowLoaded(TvShow tvShow) {
-    showTvShowOnBrowserActionCommand.setTvShowUrl(tvShow.getPoster());
-    if (isReady) {
-      listener.onFanArtLoaded(tvShow.getFanArt());
-      listener.onTvShowTitleLoaded(tvShow.getTitle());
-      listener.onChaptersLoaded(getChaptersViewModel(tvShow.getChapters()));
-      listener.onVisibilityChanged(true);
-      listener.onLoadVisibilityChanged(false);
-      listener.onEmptyCaseVisibilityChanged(false);
-    }
-  }
-
-  private List<ChapterViewModel> getChaptersViewModel(ChapterCollection chapterCollection) {
-    List<ChapterViewModel> chapterViewModels = new LinkedList<ChapterViewModel>();
-    for (Chapter chapter : chapterCollection) {
-      chapterViewModels.add(new ChapterViewModel(chapter));
-    }
-    return chapterViewModels;
   }
 
   public interface Listener {

@@ -1,5 +1,21 @@
+/*
+ * Copyright (C) 2014 Pedro Vicente Gómez Sánchez.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.github.pedrovgs.effectiveandroidui.ui.fragment;
 
+import android.app.Activity;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -8,12 +24,14 @@ import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import butterknife.InjectView;
+import butterknife.OnClick;
 import com.github.pedrovgs.effectiveandroidui.R;
-import com.github.pedrovgs.effectiveandroidui.ui.renderer.chapter.ChapterAdapteeCollection;
-import com.github.pedrovgs.effectiveandroidui.ui.renderer.chapter.ChapterRendererAdapter;
-import com.github.pedrovgs.effectiveandroidui.ui.renderer.chapter.ChapterRendererAdapterFactory;
+import com.github.pedrovgs.effectiveandroidui.ui.renderer.chapterviewmodel.ChapterViewModelCollection;
+import com.github.pedrovgs.effectiveandroidui.ui.renderer.chapterviewmodel.ChapterViewModelRendererAdapter;
+import com.github.pedrovgs.effectiveandroidui.ui.renderer.chapterviewmodel.ChapterViewModelRendererAdapterFactory;
 import com.github.pedrovgs.effectiveandroidui.ui.viewmodel.ChapterViewModel;
 import com.github.pedrovgs.effectiveandroidui.ui.viewmodel.TvShowViewModel;
+import com.github.pedrovgs.effectiveandroidui.ui.viewmodel.action.ActionCommand;
 import com.github.pedrovgs.effectiveandroidui.util.ToastUtils;
 import com.squareup.picasso.Picasso;
 import java.util.List;
@@ -32,20 +50,21 @@ import javax.inject.Inject;
  *
  * @author Pedro Vicente Gómez Sánchez
  */
-public class TvShowFragment extends BaseFragment implements TvShowViewModel.Listener {
+@SuppressWarnings("ALL") public class TvShowFragment extends BaseFragment
+    implements TvShowViewModel.Listener {
 
   @Inject TvShowViewModel tvShowViewModel;
-  @Inject ChapterRendererAdapterFactory chapterRendererAdapterFactory;
+  @Inject ChapterViewModelRendererAdapterFactory chapterRendererAdapterFactory;
 
-  private ChapterRendererAdapter adapter;
-  private ChapterAdapteeCollection chapterAdapteeCollection = new ChapterAdapteeCollection();
+  private ChapterViewModelRendererAdapter adapter;
+  private ChapterViewModelCollection chapterAdapteeCollection = new ChapterViewModelCollection();
 
   @InjectView(R.id.iv_fan_art) ImageView iv_fan_art;
   @InjectView(R.id.lv_chapters) ListView lv_chapters;
   @InjectView(R.id.pb_loading) ProgressBar pb_loading;
   @InjectView(R.id.v_empty_case) View v_empty_case;
 
-  private TextView headr_tv_show_chapters;
+  private TextView header_tv_show_chapters;
 
   @Override public void onViewCreated(View view, Bundle savedInstanceState) {
     super.onViewCreated(view, savedInstanceState);
@@ -53,20 +72,39 @@ public class TvShowFragment extends BaseFragment implements TvShowViewModel.List
     bindViewModel();
   }
 
+  @Override public void onAttach(Activity activity) {
+    super.onAttach(activity);
+    tvShowViewModel.setReady(true);
+  }
+
+  @Override public void onDetach() {
+    super.onDetach();
+    tvShowViewModel.setReady(false);
+  }
+
   public void showTvShow(final String tvShowId) {
-    tvShowViewModel.loadTvShow(tvShowId);
+    if (isAdded()) {
+      tvShowViewModel.loadTvShow(tvShowId);
+    }
   }
 
   @Override protected int getFragmentLayout() {
     return R.layout.fragment_tv_show;
   }
 
-  @Override public void onFanArtLoaded(String fanArt) {
-    Picasso.with(getActivity()).load(fanArt).into(iv_fan_art);
+  @Override public void onFanArtLoaded(final String fanArt) {
+    Picasso.with(getActivity()).load(fanArt).placeholder(R.color.main_color).into(iv_fan_art);
+  }
+
+  @Override public void onTvShowTitleLoaded(final String tvShowTitle) {
+    String tvShowHeaderTitle = getString(R.string.tv_show_title, tvShowTitle);
+    header_tv_show_chapters.setText(tvShowHeaderTitle);
   }
 
   @Override public void onChaptersLoaded(List<ChapterViewModel> chapters) {
-    //Empty for now
+    chapterAdapteeCollection.clear();
+    chapterAdapteeCollection.addAll(chapters);
+    adapter.notifyDataSetChanged();
   }
 
   @Override public void onVisibilityChanged(final boolean visible) {
@@ -91,17 +129,24 @@ public class TvShowFragment extends BaseFragment implements TvShowViewModel.List
     ToastUtils.showError(getString(R.string.connection_error_message), getActivity());
   }
 
+  @OnClick(R.id.iv_fan_art) void onFanArtClicked() {
+    ActionCommand fanArtClickActionCommand = tvShowViewModel.getTvShowClickedCommand();
+    fanArtClickActionCommand.execute();
+  }
+
   private void initializeListView() {
-    headr_tv_show_chapters = (TextView) LayoutInflater.from(getActivity())
+    header_tv_show_chapters = (TextView) LayoutInflater.from(getActivity())
         .inflate(R.layout.header_tv_show_chapters, null);
-    lv_chapters.addHeaderView(headr_tv_show_chapters);
-    adapter = (ChapterRendererAdapter) chapterRendererAdapterFactory.getChapterRendererAdapter(
-        chapterAdapteeCollection);
+    lv_chapters.addHeaderView(header_tv_show_chapters);
+    adapter =
+        (ChapterViewModelRendererAdapter) chapterRendererAdapterFactory.getChapterRendererAdapter(
+            chapterAdapteeCollection);
     lv_chapters.setAdapter(adapter);
   }
 
   private void bindViewModel() {
     tvShowViewModel.setListener(this);
+    tvShowViewModel.initialize();
   }
 
   private int getVisibility(final boolean visible) {

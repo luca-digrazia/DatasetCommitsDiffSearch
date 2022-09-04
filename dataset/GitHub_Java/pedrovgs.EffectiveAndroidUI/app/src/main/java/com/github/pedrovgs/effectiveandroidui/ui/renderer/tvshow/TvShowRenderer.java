@@ -91,7 +91,7 @@ public class TvShowRenderer extends Renderer<TvShow> {
   }
 
   private void renderSeasonCounter(TvShow tvShow) {
-    String seasons = context.getString(R.string.seasons_counter, tvShow.getNumberOfSeasons());
-    seasonsCounterTextView.setText(seasons);
+    String seassons = context.getString(R.string.seasons_counter, tvShow.getNumberOfSeasons());
+    seasonsCounterTextView.setText(seassons);
   }
 }

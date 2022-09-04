@@ -22,11 +22,10 @@ import javax.inject.Inject;
 
 /**
  * Class created to handle all the navigation between activities. This class knows how to open
- * every activity in the application and provides to the client code different methods to start
- * activities with the information needed.
- *
- * You can use other approach based on ActionCommands if you wish. To do that review MVVM
- * pattern and ActionCommand interface.
+ * every
+ * activity in the application and provides to the client code different methods to start
+ * activities
+ * with the information needed.
  *
  * @author Pedro Vicente Gómez Sánchez
  */
