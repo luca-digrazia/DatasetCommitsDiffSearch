@@ -9,7 +9,6 @@ import io.quarkus.bootstrap.model.AppModel;
 import io.quarkus.bootstrap.model.CapabilityContract;
 import io.quarkus.bootstrap.model.PathsCollection;
 import io.quarkus.bootstrap.resolver.AppModelResolverException;
-import io.quarkus.bootstrap.util.BootstrapUtils;
 import io.quarkus.bootstrap.util.DependencyNodeUtils;
 import io.quarkus.bootstrap.util.ZipUtils;
 import java.io.BufferedReader;
@@ -439,7 +438,7 @@ public class DeploymentInjectingDependencyVisitor {
 
             value = props.getProperty(BootstrapConstants.CONDITIONAL_DEPENDENCIES);
             if (value != null) {
-                final String[] deps = BootstrapUtils.splitByWhitespace(value);
+                final String[] deps = value.split("\\s+");
                 conditionalDeps = new Artifact[deps.length];
                 for (int i = 0; i < deps.length; ++i) {
                     try {
@@ -453,8 +452,17 @@ public class DeploymentInjectingDependencyVisitor {
                 conditionalDeps = NO_ARTIFACTS;
             }
 
-            dependencyCondition = BootstrapUtils
-                    .parseDependencyCondition(props.getProperty(BootstrapConstants.DEPENDENCY_CONDITION));
+            value = props.getProperty(BootstrapConstants.DEPENDENCY_CONDITION);
+            if (value != null) {
+                final String[] split = value.split("\\s+");
+                dependencyCondition = new AppArtifactKey[split.length];
+                for (int i = 0; i < split.length; ++i) {
+                    final String trigger = split[i];
+                    dependencyCondition[i] = AppArtifactKey.fromString(trigger);
+                }
+            } else {
+                dependencyCondition = null;
+            }
         }
 
         void ensureActivated() {
