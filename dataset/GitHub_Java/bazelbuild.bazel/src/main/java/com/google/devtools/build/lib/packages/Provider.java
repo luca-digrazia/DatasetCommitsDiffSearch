@@ -17,7 +17,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.BaseFunction;
-import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
@@ -94,22 +93,22 @@ public abstract class Provider extends BaseFunction {
   public abstract String getPrintableName();
 
   /**
-   * Returns an error message format string for instances to use for their {@link
-   * ClassObject#getErrorMessageForUnknownField(String)}.
+   * Returns an error message format for instances.
    *
-   * <p>The format string must contain one {@code '%s'} placeholder for the field name.
+   * <p>Must contain one {@code '%s'} placeholder for field name.
    */
-  public abstract String getErrorMessageFormatForUnknownField();
+  // TODO(bazel-team): Rename to getErrorMessageFormatForUnknownField().
+  public abstract String getErrorMessageFormatForInstances();
 
   public SkylarkProviderIdentifier id() {
     return SkylarkProviderIdentifier.forKey(getKey());
   }
 
   @Override
-  protected Object call(Object[] args, @Nullable FuncallExpression ast, Environment env)
+  protected Object call(Object[] args, @Nullable FuncallExpression ast, @Nullable Environment env)
       throws EvalException, InterruptedException {
     Location loc = ast != null ? ast.getLocation() : Location.BUILTIN;
-    return createInstanceFromSkylark(args, env, loc);
+    return createInstanceFromSkylark(args, loc);
   }
 
   /**
@@ -121,7 +120,7 @@ public abstract class Provider extends BaseFunction {
    *
    * @param args an array of argument values sorted as per the signature ({@see BaseFunction#call})
    */
-  protected abstract Info createInstanceFromSkylark(Object[] args, Environment env, Location loc)
+  protected abstract Info createInstanceFromSkylark(Object[] args, Location loc)
       throws EvalException;
 
   /** A serializable representation of {@link Provider}. */

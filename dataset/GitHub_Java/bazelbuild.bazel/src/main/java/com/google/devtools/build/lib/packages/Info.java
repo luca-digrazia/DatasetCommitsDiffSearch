@@ -70,14 +70,14 @@ public abstract class Info implements ClassObject, SkylarkValue, Serializable {
   public Info(Provider provider, @Nullable Location location) {
     this.provider = provider;
     this.creationLoc = location == null ? Location.BUILTIN : location;
-    this.errorMessageFormatForUnknownField = provider.getErrorMessageFormatForUnknownField();
+    this.errorMessageFormatForUnknownField = provider.getErrorMessageFormatForInstances();
   }
 
   /** Creates a built-in struct (i.e. without a Skylark creation location). */
   public Info(Provider provider) {
     this.provider = provider;
     this.creationLoc = Location.BUILTIN;
-    this.errorMessageFormatForUnknownField = provider.getErrorMessageFormatForUnknownField();
+    this.errorMessageFormatForUnknownField = provider.getErrorMessageFormatForInstances();
   }
 
   /**
@@ -99,8 +99,6 @@ public abstract class Info implements ClassObject, SkylarkValue, Serializable {
   /**
    * Preprocesses a map of field values to convert the field names and field values to
    * Skylark-acceptable names and types.
-   *
-   * <p>This preserves the order of the map entries.
    */
   protected static ImmutableMap<String, Object> copyValues(Map<String, Object> values) {
     ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
@@ -110,6 +108,24 @@ public abstract class Info implements ClassObject, SkylarkValue, Serializable {
           SkylarkType.convertToSkylark(e.getValue(), /*env=*/ null));
     }
     return builder.build();
+  }
+
+  /**
+   * Returns whether the given field name exists.
+   *
+   * <p>The "key" nomenclature is historic and for consistency with {@link ClassObject}.
+   */
+  // TODO(bazel-team): Rename to hasField(), and likewise in ClassObject.
+  public abstract boolean hasKey(String name);
+
+  /** Returns a value and try to cast it into specified type */
+  public <T> T getValue(String key, Class<T> type) throws EvalException {
+    Object obj = getValue(key);
+    if (obj == null) {
+      return null;
+    }
+    SkylarkType.checkType(obj, type, key);
+    return type.cast(obj);
   }
 
   /**
@@ -126,48 +142,30 @@ public abstract class Info implements ClassObject, SkylarkValue, Serializable {
   }
 
   /**
-   * Returns whether the given field name exists.
+   * Returns the fields of this struct.
    *
-   * <p>This conceptually extends the API for {@link ClassObject}.
+   * Overrides {@link ClassObject#getKeys()}, but does not allow {@link EvalException} to
+   * be thrown.
    */
-  public abstract boolean hasField(String name);
+  @Override
+  public abstract ImmutableCollection<String> getKeys();
 
   /**
-   * {@inheritDoc}
+   * Returns the value associated with the name field in this struct,
+   * or null if the field does not exist.
    *
-   * <p>Overrides {@link ClassObject#getValue(String)}, but does not allow {@link EvalException} to
+   * Overrides {@link ClassObject#getValue(String)}, but does not allow {@link EvalException} to
    * be thrown.
    */
   @Nullable
   @Override
   public abstract Object getValue(String name);
 
-  /**
-   * Returns the result of {@link #getValue(String)}, cast as the given type, throwing {@link
-   * EvalException} if the cast fails.
-   */
-  public <T> T getValue(String key, Class<T> type) throws EvalException {
-    Object obj = getValue(key);
-    if (obj == null) {
-      return null;
-    }
-    SkylarkType.checkType(obj, type, key);
-    return type.cast(obj);
-  }
-
-  /**
-   * {@inheritDoc}
-   *
-   * <p>Overrides {@link ClassObject#getFieldNames()}, but does not allow {@link EvalException} to
-   * be thrown.
-   */
+  // TODO(bazel-team): Rename to getErrorMessageForUnknownField.
   @Override
-  public abstract ImmutableCollection<String> getFieldNames();
-
-  @Override
-  public String getErrorMessageForUnknownField(String name) {
-    String suffix = "Available attributes: "
-        + Joiner.on(", ").join(Ordering.natural().sortedCopy(getFieldNames()));
+  public String errorMessage(String name) {
+    String suffix =
+        "Available attributes: " + Joiner.on(", ").join(Ordering.natural().sortedCopy(getKeys()));
     return String.format(errorMessageFormatForUnknownField, name) + "\n" + suffix;
   }
 
@@ -183,12 +181,12 @@ public abstract class Info implements ClassObject, SkylarkValue, Serializable {
     if (!this.provider.equals(other.provider)) {
       return false;
     }
-    // Compare objects' fields and their values
-    if (!this.getFieldNames().equals(other.getFieldNames())) {
+    // Compare objects' keys and values
+    if (!this.getKeys().equals(other.getKeys())) {
       return false;
     }
-    for (String field : getFieldNames()) {
-      if (!this.getValue(field).equals(other.getValue(field))) {
+    for (String key : getKeys()) {
+      if (!this.getValue(key).equals(other.getValue(key))) {
         return false;
       }
     }
@@ -197,13 +195,13 @@ public abstract class Info implements ClassObject, SkylarkValue, Serializable {
 
   @Override
   public int hashCode() {
-    List<String> fields = new ArrayList<>(getFieldNames());
-    Collections.sort(fields);
+    List<String> keys = new ArrayList<>(getKeys());
+    Collections.sort(keys);
     List<Object> objectsToHash = new ArrayList<>();
     objectsToHash.add(provider);
-    for (String field : fields) {
-      objectsToHash.add(field);
-      objectsToHash.add(getValue(field));
+    for (String key : keys) {
+      objectsToHash.add(key);
+      objectsToHash.add(getValue(key));
     }
     return Objects.hashCode(objectsToHash.toArray());
   }
@@ -217,14 +215,14 @@ public abstract class Info implements ClassObject, SkylarkValue, Serializable {
     boolean first = true;
     printer.append("struct(");
     // Sort by key to ensure deterministic output.
-    for (String fieldName : Ordering.natural().sortedCopy(getFieldNames())) {
+    for (String key : Ordering.natural().sortedCopy(getKeys())) {
       if (!first) {
         printer.append(", ");
       }
       first = false;
-      printer.append(fieldName);
+      printer.append(key);
       printer.append(" = ");
-      printer.repr(getValue(fieldName));
+      printer.repr(getValue(key));
     }
     printer.append(")");
   }
