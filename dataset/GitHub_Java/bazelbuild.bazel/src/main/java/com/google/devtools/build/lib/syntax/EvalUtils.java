@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -25,6 +24,7 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
 import java.util.List;
@@ -70,8 +70,8 @@ public final class EvalUtils {
         @Override
         @SuppressWarnings("unchecked")
         public int compare(Object o1, Object o2) {
-          o1 = SkylarkType.convertToSkylark(o1, (Environment) null);
-          o2 = SkylarkType.convertToSkylark(o2, (Environment) null);
+          o1 = SkylarkType.convertToSkylark(o1, /*env=*/ null);
+          o2 = SkylarkType.convertToSkylark(o2, /*env=*/ null);
 
           if (o1 instanceof SkylarkList
               && o2 instanceof SkylarkList

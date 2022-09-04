@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -27,6 +26,7 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
@@ -726,21 +726,14 @@ public abstract class SkylarkType implements Serializable {
    * Converts an object to a Skylark-compatible type if possible.
    */
   public static Object convertToSkylark(Object object, @Nullable Environment env) {
-    return convertToSkylark(object, env == null ? null : env.mutability());
-  }
-
-  /**
-   * Converts an object to a Skylark-compatible type if possible.
-   */
-  public static Object convertToSkylark(Object object, @Nullable Mutability mutability) {
     if (object instanceof List && !(object instanceof SkylarkList)) {
-      return MutableList.copyOf(mutability, (List<?>) object);
+      return MutableList.copyOf(env, (List<?>) object);
     }
     if (object instanceof SkylarkValue) {
       return object;
     }
     if (object instanceof Map) {
-      return SkylarkDict.<Object, Object>copyOf(mutability, (Map<?, ?>) object);
+      return SkylarkDict.<Object, Object>copyOf(env, (Map<?, ?>) object);
     }
     // TODO(bazel-team): ensure everything is a SkylarkValue at all times.
     // Preconditions.checkArgument(EvalUtils.isSkylarkAcceptable(
