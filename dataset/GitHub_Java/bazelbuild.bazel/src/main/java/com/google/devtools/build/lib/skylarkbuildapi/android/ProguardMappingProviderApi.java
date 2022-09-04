@@ -51,7 +51,7 @@ public interface ProguardMappingProviderApi<FileT extends FileApi> extends Struc
               type = FileApi.class),
         },
         selfCall = true)
-    @SkylarkConstructor(objectType = ProguardMappingProviderApi.class, receiverNameForDoc = NAME)
+    @SkylarkConstructor(objectType = ProguardMappingProviderApi.class)
     public ProguardMappingProviderApi<FileT> createInfo(FileT proguardMapping) throws EvalException;
   }
 }

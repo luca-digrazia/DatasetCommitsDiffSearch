@@ -14,28 +14,43 @@
 package com.google.devtools.build.lib.rules.android;
 
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.packages.BuiltinProvider;
+import com.google.devtools.build.lib.packages.NativeInfo;
+import com.google.devtools.build.lib.skylarkbuildapi.android.ProguardMappingProviderApi;
+import com.google.devtools.build.lib.syntax.EvalException;
 
-/**
- * A target that can provide a proguard obfuscation mapping to Android binaries or tests.
- */
+/** A target that can provide a proguard obfuscation mapping to Android binaries or tests. */
 @Immutable
-public final class ProguardMappingProvider implements TransitiveInfoProvider {
+public final class ProguardMappingProvider extends NativeInfo
+    implements ProguardMappingProviderApi<Artifact> {
+
+  public static final String PROVIDER_NAME = "ProguardMappingInfo";
+  public static final Provider PROVIDER = new Provider();
 
   private final Artifact proguardMapping;
-  private final Artifact proguardProtoMapping;
 
-  public ProguardMappingProvider(Artifact proguardMapping, Artifact proguardProtoMapping) {
+  public ProguardMappingProvider(Artifact proguardMapping) {
+    super(PROVIDER);
     this.proguardMapping = proguardMapping;
-    this.proguardProtoMapping = proguardProtoMapping;
   }
 
+  @Override
   public Artifact getProguardMapping() {
     return proguardMapping;
   }
 
-  public Artifact getProguardProtoMapping() {
-    return proguardProtoMapping;
+  /** The provider can construct the ProguardMappingProvider provider. */
+  public static class Provider extends BuiltinProvider<ProguardMappingProvider>
+      implements ProguardMappingProviderApi.Provider<Artifact> {
+
+    private Provider() {
+      super(PROVIDER_NAME, ProguardMappingProvider.class);
+    }
+
+    @Override
+    public ProguardMappingProvider createInfo(Artifact proguardMapping) throws EvalException {
+      return new ProguardMappingProvider(proguardMapping);
+    }
   }
 }
