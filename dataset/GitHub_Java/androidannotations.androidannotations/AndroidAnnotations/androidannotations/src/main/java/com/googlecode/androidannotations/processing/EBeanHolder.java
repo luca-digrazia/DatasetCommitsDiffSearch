@@ -15,6 +15,7 @@
  */
 package com.googlecode.androidannotations.processing;
 
+import java.lang.reflect.Constructor;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -80,7 +81,7 @@ public class EBeanHolder {
 			try {
 				refClass = codeModel.ref(fullyQualifiedClassName);
 			} catch (Exception e) {
-				refClass = codeModel.directClass(fullyQualifiedClassName);
+				refClass = newJDirectClass(codeModel, fullyQualifiedClassName);
 			}
 			loadedClasses.put(fullyQualifiedClassName, refClass);
 		}
@@ -92,4 +93,18 @@ public class EBeanHolder {
 		return eBean.owner().ref(clazz);
 	}
 
+	/**
+	 * Only works if the "com.sun.codemodel.JDirectClass" exists and has a
+	 * "public JDirectClass(JCodeModel _owner,String fullName)" constructor
+	 */
+	private JClass newJDirectClass(JCodeModel owner, String fullName) {
+		try {
+			Class<?> jDirectClass = Class.forName("com.sun.codemodel.JDirectClass");
+			Constructor<?> constructor = jDirectClass.getConstructors()[0];
+			constructor.setAccessible(true);
+			return (JClass) constructor.newInstance(owner, fullName);
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+	}
 }
