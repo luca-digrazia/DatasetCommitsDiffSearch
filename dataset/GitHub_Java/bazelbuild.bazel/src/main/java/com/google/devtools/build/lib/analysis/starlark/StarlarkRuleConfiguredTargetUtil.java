@@ -34,7 +34,9 @@ import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.AdvertisedProviderSet;
+import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.FunctionSplitTransitionAllowlist;
 import com.google.devtools.build.lib.packages.Info;
@@ -50,15 +52,19 @@ import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
+import net.starlark.java.eval.Mutability;
 import net.starlark.java.eval.Sequence;
 import net.starlark.java.eval.Starlark;
+import net.starlark.java.eval.StarlarkCallable;
 import net.starlark.java.eval.StarlarkSemantics;
+import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.eval.StarlarkValue;
 import net.starlark.java.syntax.Location;
 
@@ -81,14 +87,28 @@ public final class StarlarkRuleConfiguredTargetUtil {
   public static ConfiguredTarget buildRule(
       RuleContext ruleContext,
       AdvertisedProviderSet advertisedProviders,
+      StarlarkCallable ruleImplementation, // TODO(adonovan): unused; delete
       Location location,
       StarlarkSemantics starlarkSemantics,
       String toolsRepository)
       throws InterruptedException, RuleErrorException, ActionConflictException {
     String expectFailure = ruleContext.attributes().get("expect_failure", Type.STRING);
     StarlarkRuleContext starlarkRuleContext = null;
-    try {
+    try (Mutability mu = Mutability.create("configured target")) {
       starlarkRuleContext = new StarlarkRuleContext(ruleContext, null, starlarkSemantics);
+      StarlarkThread thread = new StarlarkThread(mu, starlarkSemantics);
+      thread.setPrintHandler(
+          Event.makeDebugPrintHandler(ruleContext.getAnalysisEnvironment().getEventHandler()));
+
+      new BazelStarlarkContext(
+              BazelStarlarkContext.Phase.ANALYSIS,
+              toolsRepository,
+              /*fragmentNameToClass=*/ null,
+              ruleContext.getTarget().getPackage().getRepositoryMapping(),
+              /*convertedLabelsInPackage=*/ new HashMap<>(),
+              ruleContext.getSymbolGenerator(),
+              ruleContext.getLabel())
+          .storeInThread(thread);
 
       RuleClass ruleClass = ruleContext.getRule().getRuleClassObject();
       if (ruleClass.getRuleClassType().equals(RuleClass.Builder.RuleClassType.WORKSPACE)) {
@@ -110,7 +130,7 @@ public final class StarlarkRuleConfiguredTargetUtil {
       // call rule.implementation(ctx)
       Object target =
           Starlark.fastcall(
-              ruleContext.getStarlarkThread(),
+              thread,
               ruleClass.getConfiguredTargetFunction(),
               /*positional=*/ new Object[] {starlarkRuleContext},
               /*named=*/ new Object[0]);

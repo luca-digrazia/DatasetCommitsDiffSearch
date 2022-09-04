@@ -14,11 +14,9 @@
 
 package com.google.devtools.build.lib.packages;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
-
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.analysis.RuleDefinitionContext;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import java.util.HashMap;
@@ -29,10 +27,7 @@ import net.starlark.java.eval.StarlarkThread;
 
 /** Contextual information associated with each Starlark thread created by Bazel. */
 // TODO(adonovan): rename BazelThreadContext, for symmetry with BazelModuleContext.
-public final class BazelStarlarkContext
-    implements RuleDefinitionEnvironment,
-        Label.HasRepoMapping,
-        StarlarkThread.UncheckedExceptionContext {
+public final class BazelStarlarkContext implements RuleDefinitionContext, Label.HasRepoMapping {
 
   /** The phase to which this Starlark thread belongs. */
   public enum Phase {
@@ -50,13 +45,10 @@ public final class BazelStarlarkContext
   public void storeInThread(StarlarkThread thread) {
     thread.setThreadLocal(BazelStarlarkContext.class, this);
     thread.setThreadLocal(Label.HasRepoMapping.class, this);
-    thread.setUncheckedExceptionContext(this);
   }
 
   private final Phase phase;
-  // Only necessary for loading phase threads.
-  @Nullable private final String toolsRepository;
-  // Only necessary for loading phase threads to construct configuration_field.
+  private final String toolsRepository;
   @Nullable private final ImmutableMap<String, Class<?>> fragmentNameToClass;
   private final ImmutableMap<RepositoryName, RepositoryName> repoMapping;
   private final HashMap<String, Label> convertedLabelsInPackage;
@@ -65,11 +57,9 @@ public final class BazelStarlarkContext
 
   /**
    * @param phase the phase to which this Starlark thread belongs
-   * @param toolsRepository the name of the tools repository, such as "@bazel_tools" for loading
-   *     phase threads, null for other threads.
+   * @param toolsRepository the name of the tools repository, such as "@bazel_tools"
    * @param fragmentNameToClass a map from configuration fragment name to configuration fragment
-   *     class, such as "apple" to AppleConfiguration.class for loading phase threads, null for
-   *     other threads.
+   *     class, such as "apple" to AppleConfiguration.class
    * @param repoMapping a map from RepositoryName to RepositoryName to be used for external
    * @param convertedLabelsInPackage a mutable map from String to Label, used during package loading
    *     of a single package.
@@ -88,13 +78,13 @@ public final class BazelStarlarkContext
   // analysis threads?
   public BazelStarlarkContext(
       Phase phase,
-      @Nullable String toolsRepository,
+      String toolsRepository,
       @Nullable ImmutableMap<String, Class<?>> fragmentNameToClass,
       ImmutableMap<RepositoryName, RepositoryName> repoMapping,
       HashMap<String, Label> convertedLabelsInPackage,
       SymbolGenerator<?> symbolGenerator,
       @Nullable Label analysisRuleLabel) {
-    this.phase = Preconditions.checkNotNull(phase);
+    this.phase = phase;
     this.toolsRepository = toolsRepository;
     this.fragmentNameToClass = fragmentNameToClass;
     this.repoMapping = repoMapping;
@@ -103,8 +93,12 @@ public final class BazelStarlarkContext
     this.analysisRuleLabel = analysisRuleLabel;
   }
 
+  /** Returns the phase to which this Starlark thread belongs. */
+  public Phase getPhase() {
+    return phase;
+  }
+
   /** Returns the name of the tools repository, such as "@bazel_tools". */
-  @Nullable
   @Override
   public String getToolsRepository() {
     return toolsRepository;
@@ -146,11 +140,6 @@ public final class BazelStarlarkContext
   @Nullable
   public Label getAnalysisRuleLabel() {
     return analysisRuleLabel;
-  }
-
-  @Override
-  public String getContextForUncheckedException() {
-    return firstNonNull(analysisRuleLabel, phase).toString();
   }
 
   /**
