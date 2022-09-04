@@ -17,7 +17,6 @@
 package org.graylog2.rest.resources.system.radio;
 
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.wordnik.swagger.annotations.Api;
@@ -41,8 +40,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.validation.Valid;
-import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -52,13 +49,19 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
-import java.net.URI;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+import static javax.ws.rs.core.Response.ok;
+
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
+// @RequiresAuthentication unauthenticated because radios do not have any authentication support yet
 @Api(value = "System/Radios", description = "Management of graylog2-radio nodes.")
 @Path("/system/radios")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -73,24 +76,24 @@ public class RadiosResource extends RestResource {
     @Inject
     private InputService inputService;
 
-    @GET
-    @Timed
+    @GET @Timed
     @ApiOperation(value = "List all active radios in this cluster.")
-    public Map<String, Object> radios() {
-        final List<Map<String, Object>> radioList = Lists.newArrayList();
+    public String radios() {
+        List<Map<String, Object>> radioList = Lists.newArrayList();
+        Map<String, Node> radios = nodeService.allActive(Node.Type.RADIO);
 
-        final Map<String, Node> radios = nodeService.allActive(Node.Type.RADIO);
-        for (Map.Entry<String, Node> radio : radios.entrySet()) {
+        for(Map.Entry<String, Node> radio : radios.entrySet()) {
             radioList.add(radioSummary(radio.getValue()));
         }
 
-        return ImmutableMap.of(
-                "total", radios.size(),
-                "radios", radioList);
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("total", radios.size());
+        result.put("radios", radioList);
+
+        return json(result);
     }
 
-    @GET
-    @Timed
+    @GET @Timed
     @ApiOperation(value = "Information about a radio.",
             notes = "This is returning information of a radio in context to its state in the cluster. " +
                     "Use the system API of the node itself to get system information.")
@@ -98,27 +101,25 @@ public class RadiosResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "Radio not found.")
     })
-    public Map<String, Object> radio(@ApiParam(name = "radioId", required = true)
-                                     @PathParam("radioId") String radioId) {
-        final Node radio;
+    public String radio(@ApiParam(name = "radioId", required = true) @PathParam("radioId") String radioId) {
+        Node radio = null;
         try {
             radio = nodeService.byNodeId(radioId);
         } catch (NodeNotFoundException e) {
             LOG.error("Radio <{}> not found.", radioId);
-            throw new NotFoundException(e);
+            throw new WebApplicationException(404);
         }
 
         if (radio == null) {
             LOG.error("Radio <{}> not found.", radioId);
-            throw new NotFoundException();
+            throw new WebApplicationException(404);
         }
 
-        return radioSummary(radio);
+        return json(radioSummary(radio));
     }
 
 
-    @POST
-    @Timed
+    @POST @Timed
     @ApiOperation(value = "Register input of a radio.",
             notes = "Radio inputs register their own inputs here for persistence after they successfully launched it.")
     @Path("/{radioId}/inputs")
@@ -126,61 +127,67 @@ public class RadiosResource extends RestResource {
             @ApiResponse(code = 404, message = "Radio not found."),
             @ApiResponse(code = 400, message = "Missing or invalid configuration")
     })
-    public Response registerInput(@ApiParam(name = "radioId", required = true)
-                                  @PathParam("radioId") String radioId,
-                                  @ApiParam(name = "JSON body", required = true)
-                                  @Valid @NotNull RegisterInputRequest rir) throws ValidationException {
-        final Node radio;
+    public Response registerInput(@ApiParam(name = "JSON body", required = true) String body,
+                                @ApiParam(name = "radioId", required = true) @PathParam("radioId") String radioId) {
+        Node radio = null;
         try {
             radio = nodeService.byNodeId(radioId);
         } catch (NodeNotFoundException e) {
             LOG.error("Radio <{}> not found.", radioId);
-            throw new NotFoundException(e);
+            throw new WebApplicationException(404);
         }
 
         if (radio == null) {
             LOG.error("Radio <{}> not found.", radioId);
-            throw new NotFoundException();
+            throw new WebApplicationException(404);
         }
 
-        final Map<String, Object> inputData = Maps.newHashMap();
-        if (rir.inputId != null) {
+        RegisterInputRequest rir;
+        try {
+            rir = objectMapper.readValue(body, RegisterInputRequest.class);
+        } catch(IOException e) {
+            LOG.error("Error while parsing JSON", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
+
+        Map<String, Object> inputData = Maps.newHashMap();
+        if (rir.inputId != null)
             inputData.put("input_id", rir.inputId);
-        } else {
+        else
             inputData.put("input_id", new ObjectId().toHexString());
-            inputData.put("title", rir.title);
-            inputData.put("type", rir.type);
-            inputData.put("creator_user_id", rir.creatorUserId);
-            inputData.put("configuration", rir.configuration);
-            inputData.put("created_at", Tools.iso8601());
-            inputData.put("radio_id", rir.radioId);
-        }
+        inputData.put("title", rir.title);
+        inputData.put("type", rir.type);
+        inputData.put("creator_user_id", rir.creatorUserId);
+        inputData.put("configuration", rir.configuration);
+        inputData.put("created_at", Tools.iso8601());
+        inputData.put("radio_id", rir.radioId);
 
-        final Input mongoInput = new InputImpl(inputData);
+        Input mongoInput = new InputImpl(inputData);
 
         // Write to database.
-        final String id = inputService.save(mongoInput);
+        String id;
+        try {
+            id = inputService.save(mongoInput);
+        } catch (ValidationException e) {
+            LOG.error("Validation error.", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
 
-        final Map<String, String> result = ImmutableMap.of("persist_id", id);
-        final URI radioUri = UriBuilder.fromResource(RadiosResource.class)
-                .path("{radioId}")
-                .build(id);
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("persist_id", id);
 
-        return Response.created(radioUri).entity(result).build();
+        return Response.status(Response.Status.CREATED).entity(json(result)).build();
     }
 
-    @DELETE
-    @Timed
+    @DELETE @Timed
     @ApiOperation(value = "Unregister input of a radio.",
             notes = "Radios unregister their inputs when they are stopped/terminated on the radio.")
     @Path("/{radioId}/inputs/{inputId}")
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "Radio not found.")
     })
-    public void unregisterInput(@ApiParam(name = "radioId", required = true)
-                                @PathParam("radioId") String radioId,
-                                @ApiParam(name = "inputId", required = true)
-                                @PathParam("inputId") String inputId) throws org.graylog2.database.NotFoundException {
+    public Response unregisterInput(@ApiParam(name = "radioId", required = true) @PathParam("radioId") String radioId,
+                                    @ApiParam(name = "inputId", required = true) @PathParam("inputId") String inputId) {
         final Node radio;
         try {
             radio = nodeService.byNodeId(radioId);
@@ -194,14 +201,18 @@ public class RadiosResource extends RestResource {
             throw new NotFoundException("Radio <" + radioId + "> not found.");
         }
 
-        final Input input = inputService.findForThisRadioOrGlobal(radioId, inputId);
-        if (!input.isGlobal()) {
-            inputService.destroy(input);
+        try {
+            final Input input = inputService.findForThisRadioOrGlobal(radioId, inputId);
+            if (!input.isGlobal())
+                inputService.destroy(input);
+        } catch (org.graylog2.database.NotFoundException e) {
+            throw new NotFoundException(e);
         }
+
+        return Response.status(Response.Status.NO_CONTENT).build();
     }
 
-    @GET
-    @Timed
+    @GET @Timed
     @ApiOperation(value = "Persisted inputs of a radio.",
             notes = "This is returning the configured persisted inputs of a radio node. This is *not* returning the actually " +
                     "running inputs on a radio node. Radio nodes use this resource to get their configured inputs on startup.")
@@ -209,16 +220,16 @@ public class RadiosResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "Radio not found.")
     })
-    public Map<String, Object> persistedInputs(@ApiParam(name = "radioId", required = true)
-                                               @PathParam("radioId") String radioId) {
+    public String persistedInputs(@ApiParam(name = "radioId", required = true) @PathParam("radioId") String radioId) {
         Node radio = null;
+        Map<String, Object> result = Maps.newHashMap();
+        List<Map<String, Object>> inputs = Lists.newArrayList();
         try {
             radio = nodeService.byNodeId(radioId);
         } catch (NodeNotFoundException e) {
             LOG.debug("Radio <{}> not found.", radioId);
         }
 
-        final List<Map<String, Object>> inputs = Lists.newArrayList();
         if (radio != null) {
             for (Input input : inputService.allOfRadio(radio)) {
                 Map<String, Object> inputSummary = Maps.newHashMap();
@@ -235,21 +246,28 @@ public class RadiosResource extends RestResource {
             }
         }
 
-        return ImmutableMap.of(
-                "inputs", inputs,
-                "total", inputs.size());
+        result.put("inputs", inputs);
+        result.put("total", inputs.size());
+
+        return json(result);
     }
 
 
-    @PUT
-    @Timed
+    @PUT @Timed
     @ApiOperation(value = "Ping - Accepts pings of graylog2-radio nodes.",
             notes = "Every graylog2-radio node is regularly pinging to announce that it is active.")
     @Path("/{radioId}/ping")
-    public void ping(@ApiParam(name = "radioId", required = true)
-                     @PathParam("radioId") String radioId,
-                     @ApiParam(name = "JSON body", required = true)
-                     @Valid @NotNull PingRequest pr) {
+    public Response ping(@ApiParam(name = "JSON body", required = true) String body,
+                         @ApiParam(name = "radioId", required = true) @PathParam("radioId") String radioId) {
+        PingRequest pr;
+
+        try {
+            pr = objectMapper.readValue(body, PingRequest.class);
+        } catch(IOException e) {
+            LOG.error("Error while parsing JSON", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
+
         LOG.debug("Ping from graylog2-radio node [{}].", radioId);
 
         Node node = null;
@@ -265,10 +283,12 @@ public class RadiosResource extends RestResource {
         } else {
             nodeService.registerRadio(radioId, pr.restTransportAddress);
         }
+
+        return ok().build();
     }
 
     private Map<String, Object> radioSummary(Node node) {
-        final Map<String, Object> m = Maps.newHashMap();
+        Map<String, Object> m  = Maps.newHashMap();
 
         // TODO: Remove "id" in future versions
         m.put("id", node.getNodeId());
@@ -282,4 +302,5 @@ public class RadiosResource extends RestResource {
 
         return m;
     }
+
 }

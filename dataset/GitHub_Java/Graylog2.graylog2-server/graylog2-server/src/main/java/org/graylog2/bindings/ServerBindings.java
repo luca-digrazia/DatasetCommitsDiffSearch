@@ -22,7 +22,6 @@ import com.google.inject.Scopes;
 import com.google.inject.TypeLiteral;
 import com.google.inject.assistedinject.FactoryModuleBuilder;
 import com.google.inject.multibindings.Multibinder;
-import com.google.inject.name.Names;
 import com.ning.http.client.AsyncHttpClient;
 import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.elasticsearch.node.Node;
@@ -31,7 +30,21 @@ import org.graylog2.alerts.AlertSender;
 import org.graylog2.alerts.FormattedEmailAlertSender;
 import org.graylog2.alerts.types.FieldValueAlertCondition;
 import org.graylog2.alerts.types.MessageCountAlertCondition;
-import org.graylog2.bindings.providers.*;
+import org.graylog2.bindings.providers.BundleExporterProvider;
+import org.graylog2.bindings.providers.BundleImporterProvider;
+import org.graylog2.bindings.providers.DefaultSecurityManagerProvider;
+import org.graylog2.bindings.providers.EsNodeProvider;
+import org.graylog2.bindings.providers.InputCacheProvider;
+import org.graylog2.bindings.providers.LdapConnectorProvider;
+import org.graylog2.bindings.providers.LdapUserAuthenticatorProvider;
+import org.graylog2.bindings.providers.MongoConnectionProvider;
+import org.graylog2.bindings.providers.OutputCacheProvider;
+import org.graylog2.bindings.providers.RotationStrategyProvider;
+import org.graylog2.bindings.providers.RulesEngineProvider;
+import org.graylog2.bindings.providers.ServerInputRegistryProvider;
+import org.graylog2.bindings.providers.ServerObjectMapperProvider;
+import org.graylog2.bindings.providers.SystemJobFactoryProvider;
+import org.graylog2.bindings.providers.SystemJobManagerProvider;
 import org.graylog2.buffers.processors.OutputBufferProcessor;
 import org.graylog2.buffers.processors.ServerProcessBufferProcessor;
 import org.graylog2.bundles.BundleService;
@@ -43,7 +56,9 @@ import org.graylog2.indexer.healing.FixDeflectorByMoveJob;
 import org.graylog2.indexer.indices.jobs.OptimizeIndexJob;
 import org.graylog2.indexer.ranges.CreateNewSingleIndexRangeJob;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
-import org.graylog2.inputs.converters.InputStateListener;
+import org.graylog2.inputs.BasicCache;
+import org.graylog2.inputs.InputCache;
+import org.graylog2.inputs.OutputCache;
 import org.graylog2.jersey.container.netty.SecurityContextFactory;
 import org.graylog2.plugin.BaseConfiguration;
 import org.graylog2.plugin.PluginMetaData;
@@ -63,12 +78,10 @@ import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.metrics.jersey2.MetricsDynamicBinding;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.graylog2.streams.StreamRouter;
-import org.graylog2.streams.StreamRouterEngine;
 import org.graylog2.system.activities.SystemMessageActivityWriter;
 import org.graylog2.system.jobs.SystemJobFactory;
 import org.graylog2.system.jobs.SystemJobManager;
 import org.graylog2.system.shutdown.GracefulShutdown;
-import org.joda.time.Duration;
 
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.container.DynamicFeature;
@@ -91,7 +104,6 @@ public class ServerBindings extends AbstractModule {
         bindContainerResponseFilters();
         bindExceptionMappers();
         bindPluginMetaData();
-        bindEventBusListeners();
     }
 
     private void bindProviders() {
@@ -139,22 +151,19 @@ public class ServerBindings extends AbstractModule {
         bind(BundleImporterProvider.class).in(Scopes.SINGLETON);
         bind(BundleExporterProvider.class).in(Scopes.SINGLETON);
 
-        bind(String.class).annotatedWith(Names.named("journalDirectory")).toInstance(configuration.getMessageJournalDir());
-        bind(Integer.class).annotatedWith(Names.named("journalSegmentSize")).toInstance(configuration.getMessageJournalSegmentSize());
-        bind(Long.class).annotatedWith(Names.named("journalMaxRetentionSize")).toInstance(configuration.getMessageJournalMaxSize());
-        bind(Duration.class).annotatedWith(Names.named("journalMaxRetentionAge")).toInstance(configuration.getMessageJournalMaxAge());
-
-        bind(String[].class).annotatedWith(Names.named("RestControllerPackages")).toInstance(new String[]{
-                "org.graylog2.rest.resources",
-                "org.graylog2.shared.rest.resources"
-        });
+        if (configuration.isMessageCacheOffHeap()) {
+            bind(InputCache.class).toProvider(InputCacheProvider.class).asEagerSingleton();
+            bind(OutputCache.class).toProvider(OutputCacheProvider.class).asEagerSingleton();
+        } else {
+            bind(InputCache.class).to(BasicCache.class).in(Scopes.SINGLETON);
+            bind(OutputCache.class).to(BasicCache.class).in(Scopes.SINGLETON);
+        }
     }
 
     private void bindInterfaces() {
         bind(SecurityContextFactory.class).to(ShiroSecurityContextFactory.class);
         bind(AlertSender.class).to(FormattedEmailAlertSender.class);
         bind(StreamRouter.class);
-        install(new FactoryModuleBuilder().implement(StreamRouterEngine.class, StreamRouterEngine.class).build(StreamRouterEngine.Factory.class));
         bind(FilterService.class).to(FilterServiceImpl.class).in(Scopes.SINGLETON);
         bind(ActivityWriter.class).to(SystemMessageActivityWriter.class);
     }
@@ -181,9 +190,5 @@ public class ServerBindings extends AbstractModule {
 
     private void bindPluginMetaData() {
         Multibinder<PluginMetaData> setBinder = Multibinder.newSetBinder(binder(), PluginMetaData.class);
-    }
-
-    private void bindEventBusListeners() {
-        bind(InputStateListener.class).asEagerSingleton();
     }
 }
