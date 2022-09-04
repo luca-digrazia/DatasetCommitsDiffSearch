@@ -214,7 +214,7 @@ public class GSYVideoGLViewCustomRender extends GSYVideoGLViewSimpleRender {
         }
     }
 
-    public float[] getCurrentMVPMatrix() {
+    public float[] getMVPMatrix() {
         return mMVPMatrix;
     }
 
