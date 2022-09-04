@@ -541,9 +541,7 @@ public class QuarkusProdModeTest
         }
 
         try {
-            if (curatedApplication != null) {
-                curatedApplication.close();
-            }
+            curatedApplication.close();
         } finally {
             timeoutTask.cancel();
             timeoutTask = null;

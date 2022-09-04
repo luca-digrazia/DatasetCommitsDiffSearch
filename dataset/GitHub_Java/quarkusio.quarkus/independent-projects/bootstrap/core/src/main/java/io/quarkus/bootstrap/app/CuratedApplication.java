@@ -147,9 +147,7 @@ public class CuratedApplication implements Serializable, Closeable {
         }
         artifact.getPaths().forEach(path -> {
             final ClassPathElement element = ClassPathElement.fromPath(path);
-            if (artifact.getPaths().isSinglePath()) {
-                augmentationElements.put(artifact, element);
-            }
+            augmentationElements.put(artifact, element);
             consumer.accept(element);
         });
     }
@@ -177,6 +175,8 @@ public class CuratedApplication implements Serializable, Closeable {
             for (AppDependency i : appModel.getFullDeploymentDeps()) {
                 processCpElement(i.getArtifact(), element -> addCpElement(builder, i.getArtifact(), element));
             }
+
+            processCpElement(appModel.getAppArtifact(), element -> addCpElement(builder, appModel.getAppArtifact(), element));
 
             for (Path i : quarkusBootstrap.getAdditionalDeploymentArchives()) {
                 builder.addElement(ClassPathElement.fromPath(i));
@@ -212,9 +212,6 @@ public class CuratedApplication implements Serializable, Closeable {
 
                 if (quarkusBootstrap.getApplicationRoot() != null) {
                     builder.addElement(ClassPathElement.fromPath(quarkusBootstrap.getApplicationRoot()));
-                } else {
-                    processCpElement(appModel.getAppArtifact(),
-                            element -> addCpElement(builder, appModel.getAppArtifact(), element));
                 }
             }
             //additional user class path elements first
@@ -236,6 +233,8 @@ public class CuratedApplication implements Serializable, Closeable {
                 }
                 processCpElement(dependency.getArtifact(), element -> addCpElement(builder, dependency.getArtifact(), element));
             }
+
+            processCpElement(appModel.getAppArtifact(), element -> addCpElement(builder, appModel.getAppArtifact(), element));
 
             baseRuntimeClassLoader = builder.build();
         }
@@ -265,8 +264,6 @@ public class CuratedApplication implements Serializable, Closeable {
 
         if (quarkusBootstrap.getApplicationRoot() != null) {
             builder.addElement(ClassPathElement.fromPath(quarkusBootstrap.getApplicationRoot()));
-        } else {
-            processCpElement(appModel.getAppArtifact(), element -> addCpElement(builder, appModel.getAppArtifact(), element));
         }
 
         //additional user class path elements first
@@ -287,8 +284,6 @@ public class CuratedApplication implements Serializable, Closeable {
         builder.setTransformerClassLoader(deploymentClassLoader);
         if (quarkusBootstrap.getApplicationRoot() != null) {
             builder.addElement(ClassPathElement.fromPath(quarkusBootstrap.getApplicationRoot()));
-        } else {
-            processCpElement(appModel.getAppArtifact(), element -> addCpElement(builder, appModel.getAppArtifact(), element));
         }
         builder.addElement(new MemoryClassPathElement(resources));
 

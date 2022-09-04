@@ -1,36 +1,21 @@
-/*
- * Copyright 2019 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.bootstrap.resolver.maven.workspace;
 
+import io.quarkus.bootstrap.model.AppArtifactCoords;
+import io.quarkus.bootstrap.model.AppArtifactKey;
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
+import java.util.Objects;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.resolution.UnresolvableModelException;
 import org.apache.maven.model.resolution.WorkspaceModelResolver;
 import org.eclipse.aether.artifact.Artifact;
 import org.eclipse.aether.repository.WorkspaceReader;
 import org.eclipse.aether.repository.WorkspaceRepository;
-
-import io.quarkus.bootstrap.model.AppArtifactCoords;
-import io.quarkus.bootstrap.model.AppArtifactKey;
 
 /**
  *
@@ -44,12 +29,17 @@ public class LocalWorkspace implements WorkspaceModelResolver, WorkspaceReader {
     private AppArtifactKey lastFindVersionsKey;
     private List<String> lastFindVersions;
     private long lastModified;
+    private int id = 1;
+
+    // value of the resolved version in case the raw version contains a property like ${revision} (see "Maven CI Friendly Versions")
+    private String resolvedVersion;
 
     protected void addProject(LocalProject project, long lastModified) {
         projects.put(project.getKey(), project);
-        if(lastModified > this.lastModified) {
+        if (lastModified > this.lastModified) {
             this.lastModified = lastModified;
         }
+        id = 31 * id + (int) (lastModified ^ (lastModified >>> 32));
     }
 
     public LocalProject getProject(String groupId, String artifactId) {
@@ -64,11 +54,15 @@ public class LocalWorkspace implements WorkspaceModelResolver, WorkspaceReader {
         return lastModified;
     }
 
+    public int getId() {
+        return id;
+    }
+
     @Override
     public Model resolveRawModel(String groupId, String artifactId, String versionConstraint)
             throws UnresolvableModelException {
         final LocalProject project = getProject(groupId, artifactId);
-        if(project == null || !project.getVersion().equals(versionConstraint)) {
+        if (project == null || !project.getVersion().equals(versionConstraint)) {
             return null;
         }
         return project.getRawModel();
@@ -80,6 +74,10 @@ public class LocalWorkspace implements WorkspaceModelResolver, WorkspaceReader {
         return null;
     }
 
+    public Map<AppArtifactKey, LocalProject> getProjects() {
+        return projects;
+    }
+
     @Override
     public WorkspaceRepository getRepository() {
         return wsRepo;
@@ -88,19 +86,39 @@ public class LocalWorkspace implements WorkspaceModelResolver, WorkspaceReader {
     @Override
     public File findArtifact(Artifact artifact) {
         final LocalProject lp = getProject(artifact.getGroupId(), artifact.getArtifactId());
-        if (lp == null || !lp.getVersion().equals(artifact.getVersion())) {
+        if (lp == null
+                || !lp.getVersion().equals(artifact.getVersion())
+                        && !(LocalProject.isUnresolvedVersion(artifact.getVersion())
+                                && lp.getVersion().equals(resolvedVersion))) {
+            return null;
+        }
+        if (!Objects.equals(artifact.getClassifier(), lp.getAppArtifact().getClassifier())) {
+            if ("tests".equals(artifact.getClassifier())) {
+                //special classifier used for test jars
+                final Path path = lp.getTestClassesDir();
+                if (Files.exists(path)) {
+                    return path.toFile();
+                }
+            }
             return null;
         }
         final String type = artifact.getExtension();
         if (type.equals(AppArtifactCoords.TYPE_JAR)) {
-            final File file = lp.getClassesDir().toFile();
-            if (file.exists()) {
-                return file;
+            Path path = lp.getClassesDir();
+            if (Files.exists(path)) {
+                return path.toFile();
+            }
+
+            // it could be a project with no sources/resources, in which case Maven will create an empty JAR
+            // if it has previously been packaged we can return it
+            path = lp.getOutputDir().resolve(lp.getArtifactId() + "-" + lp.getVersion() + ".jar");
+            if (Files.exists(path)) {
+                return path.toFile();
             }
         } else if (type.equals(AppArtifactCoords.TYPE_POM)) {
-            final File file = lp.getDir().resolve("pom.xml").toFile();
-            if (file.exists()) {
-                return file;
+            final Path path = lp.getDir().resolve("pom.xml");
+            if (Files.exists(path)) {
+                return path.toFile();
             }
         }
         return null;
@@ -120,5 +138,13 @@ public class LocalWorkspace implements WorkspaceModelResolver, WorkspaceReader {
             return Collections.emptyList();
         }
         return lastFindVersions = Collections.singletonList(artifact.getVersion());
+    }
+
+    public String getResolvedVersion() {
+        return resolvedVersion;
+    }
+
+    void setResolvedVersion(String resolvedVersion) {
+        this.resolvedVersion = resolvedVersion;
     }
 }
