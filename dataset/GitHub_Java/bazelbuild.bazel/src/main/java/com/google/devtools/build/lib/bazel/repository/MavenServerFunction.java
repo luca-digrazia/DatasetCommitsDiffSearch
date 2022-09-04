@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.rules.ExternalPackageUtil;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
 import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
 import com.google.devtools.build.lib.skyframe.FileValue;
+import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -55,10 +56,7 @@ public class MavenServerFunction implements SkyFunction {
   private static final String USER_KEY = "user";
   private static final String SYSTEM_KEY = "system";
 
-  private final BlazeDirectories directories;
-
-  public MavenServerFunction(BlazeDirectories directories) {
-    this.directories = directories;
+  public MavenServerFunction() {
   }
 
   @Nullable
@@ -69,10 +67,11 @@ public class MavenServerFunction implements SkyFunction {
     String repository = (String) skyKey.argument();
     Rule repositoryRule = null;
     try {
-      repositoryRule = ExternalPackageUtil.getRuleByName(repository, env);
+      repositoryRule = ExternalPackageUtil.getRule(repository, env);
     } catch (ExternalPackageUtil.ExternalRuleNotFoundException ex) {
       // Ignored. We throw a new one below.
     }
+    BlazeDirectories directories = PrecomputedValue.BLAZE_DIRECTORIES.get(env);
     if (env.valuesMissing()) {
       return null;
     }
