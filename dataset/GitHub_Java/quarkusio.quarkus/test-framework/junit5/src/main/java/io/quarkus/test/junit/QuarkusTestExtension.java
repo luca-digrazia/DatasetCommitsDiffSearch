@@ -325,8 +325,7 @@ public class QuarkusTestExtension
         invocation.skip();
     }
 
-    private void runExtensionMethod(ReflectiveInvocationContext<Method> invocationContext, ExtensionContext extensionContext)
-            throws Throwable {
+    private void runExtensionMethod(ReflectiveInvocationContext<Method> invocationContext, ExtensionContext extensionContext) {
         Method newMethod = null;
 
         try {
@@ -351,7 +350,10 @@ public class QuarkusTestExtension
             newMethod.setAccessible(true);
             newMethod.invoke(actualTestInstance, invocationContext.getArguments().toArray());
         } catch (InvocationTargetException e) {
-            throw e.getCause();
+            if (e.getCause() instanceof RuntimeException) {
+                throw (RuntimeException) e.getCause();
+            }
+            throw new RuntimeException(e.getCause());
         } catch (IllegalAccessException | ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
@@ -365,12 +367,12 @@ public class QuarkusTestExtension
     }
 
     /**
-     * Return true if we need a parameter for constructor injection
+     * By returning true, we allow a QuarkusTest to use constructor injection
      */
     @Override
     public boolean supportsParameter(ParameterContext parameterContext, ExtensionContext extensionContext)
             throws ParameterResolutionException {
-        return parameterContext.getDeclaringExecutable() instanceof Constructor;
+        return true;
     }
 
     /**
