@@ -383,7 +383,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE, PLATFORM_RULES);
+          return ImmutableList.of(CoreRules.INSTANCE);
         }
       };
 
