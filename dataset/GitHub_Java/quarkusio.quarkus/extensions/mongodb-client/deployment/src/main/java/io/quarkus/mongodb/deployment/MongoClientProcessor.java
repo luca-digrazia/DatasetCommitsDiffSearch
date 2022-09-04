@@ -12,7 +12,6 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.inject.Default;
 import javax.inject.Singleton;
 
@@ -268,7 +267,7 @@ public class MongoClientProcessor {
 
         SyntheticBeanBuildItem.ExtendedBeanConfigurator configurator = SyntheticBeanBuildItem
                 .configure(MongoClient.class)
-                .scope(ApplicationScoped.class)
+                .scope(Singleton.class)
                 // pass the runtime config into the recorder to ensure that the DataSource related beans
                 // are created after runtime configuration has been setup
                 .supplier(recorder.mongoClientSupplier(clientName, mongodbConfig))
@@ -282,7 +281,7 @@ public class MongoClientProcessor {
 
         SyntheticBeanBuildItem.ExtendedBeanConfigurator configurator = SyntheticBeanBuildItem
                 .configure(ReactiveMongoClient.class)
-                .scope(ApplicationScoped.class)
+                .scope(Singleton.class)
                 // pass the runtime config into the recorder to ensure that the DataSource related beans
                 // are created after runtime configuration has been setup
                 .supplier(recorder.reactiveMongoClientSupplier(clientName, mongodbConfig))

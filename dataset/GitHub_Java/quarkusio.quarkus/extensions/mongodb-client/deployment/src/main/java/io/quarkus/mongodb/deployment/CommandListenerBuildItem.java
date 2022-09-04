@@ -2,13 +2,8 @@ package io.quarkus.mongodb.deployment;
 
 import java.util.List;
 
-import com.mongodb.event.CommandListener;
-
 import io.quarkus.builder.item.SimpleBuildItem;
 
-/**
- * Register additional {@link CommandListener}s for the MongoDB clients.
- */
 public final class CommandListenerBuildItem extends SimpleBuildItem {
 
     private List<String> commandListenerClassNames;
