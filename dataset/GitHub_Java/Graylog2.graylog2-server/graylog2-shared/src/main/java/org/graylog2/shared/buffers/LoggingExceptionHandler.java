@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -28,11 +30,7 @@ public class LoggingExceptionHandler implements ExceptionHandler {
 
     @Override
     public void handleEventException(Throwable ex, long sequence, Object event) {
-        String eventStr = "<invalid>";
-        try {
-            eventStr = event.toString();
-        } catch (Exception ignored) {}
-        logger.warn("Unable to process event " + eventStr + "sequence " + sequence, ex);
+        logger.warn("Unable to process event " + event.toString() + "sequence " + sequence, ex);
     }
 
     @Override

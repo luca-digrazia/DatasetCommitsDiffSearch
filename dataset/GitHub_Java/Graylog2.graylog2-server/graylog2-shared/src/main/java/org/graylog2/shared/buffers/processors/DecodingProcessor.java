@@ -86,7 +86,6 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
                 .build(new CacheLoader<String, MessageInput>() {
                     @Override
                     public MessageInput load(String inputId) throws Exception {
-                        // TODO this creates a completely new MessageInput instance every time.
                         return persistedInputs.get(inputId);
                     }
                 });

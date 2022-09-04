@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -114,14 +116,6 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
     }
 
     private void flush(List<Message> messages) {
-        if (!cluster.isConnectedAndHealthy()) {
-            try {
-                cluster.waitForConnectedAndHealthy();
-            } catch (InterruptedException e) {
-                log.warn("Error while waiting for healthy Elasticsearch cluster. Not flushing.", e);
-                return;
-            }
-        }
         // never try to flush an empty buffer
         if (messages.size() == 0) {
             return;
@@ -143,12 +137,6 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
     }
 
     public void forceFlushIfTimedout() {
-        if (!cluster.isConnectedAndHealthy()) {
-            // do not actually try to flush, because that will block until the cluster comes back.
-            // simply check and return.
-            log.debug("Cluster unavailable, but not blocking for periodic flush attempt. This will try again.");
-            return;
-        }
         // if we shouldn't flush at all based on the last flush time, no need to synchronize on this.
         if (lastFlushTime.get() != 0 &&
                 outputFlushInterval > NANOSECONDS.toSeconds(System.nanoTime() - lastFlushTime.get())) {

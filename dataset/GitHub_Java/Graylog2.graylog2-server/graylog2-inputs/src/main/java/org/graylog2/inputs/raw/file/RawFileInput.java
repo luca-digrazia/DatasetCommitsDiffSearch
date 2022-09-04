@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -17,7 +19,7 @@
 package org.graylog2.inputs.raw.file;
 
 import com.codahale.metrics.MetricRegistry;
-import javax.inject.Inject;
+import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.inputs.codecs.RawCodec;

@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -17,7 +19,6 @@
 package org.graylog2.inputs.transports;
 
 import com.google.common.base.Charsets;
-import com.google.common.eventbus.EventBus;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.apache.commons.io.IOUtils;
@@ -45,8 +46,7 @@ public class FileSlurpTransport extends GeneratorTransport {
     private final BufferedReader reader;
 
     @AssistedInject
-    public FileSlurpTransport(EventBus eventBus, @Assisted Configuration configuration) {
-        super(eventBus, configuration);
+    public FileSlurpTransport(@Assisted Configuration configuration) {
         final File file = new File(configuration.getString("file_path"));
         try {
             reader = new BufferedReader(new FileReader(file));

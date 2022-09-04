@@ -210,10 +210,10 @@ public class SyslogCodec extends AbstractCodec {
     }
 
     @ConfigClass
-    public static class Config extends AbstractCodec.Config {
+    public static class Config implements AbstractCodec.Config {
         @Override
         public ConfigurationRequest getRequestedConfiguration() {
-            final ConfigurationRequest r = super.getRequestedConfiguration();
+            final ConfigurationRequest r = new ConfigurationRequest();
 
             r.addField(
                     new BooleanField(
