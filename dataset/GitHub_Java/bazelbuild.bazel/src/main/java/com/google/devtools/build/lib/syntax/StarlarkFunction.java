@@ -99,7 +99,11 @@ public final class StarlarkFunction extends BaseFunction {
     StarlarkThread.CallFrame fr = thread.frame(0);
     ImmutableList<String> names = getSignature().getParameterNames();
     for (int i = 0; i < names.size(); ++i) {
-      fr.locals.put(names.get(i), arguments[i]);
+      try {
+        fr.locals.put(names.get(i), arguments[i]);
+      } catch (Mutability.MutabilityException ex) {
+        throw new AssertionError(ex);
+      }
     }
 
     return Eval.execFunctionBody(fr, statements);

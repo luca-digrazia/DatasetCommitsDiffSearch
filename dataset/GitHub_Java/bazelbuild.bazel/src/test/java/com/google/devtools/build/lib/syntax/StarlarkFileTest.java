@@ -50,8 +50,7 @@ public class StarlarkFileTest {
             "",
             "x = [1,2,'foo',4] + [1,2, \"%s%d\" % ('foo', 1)]");
     StarlarkThread thread = newThread();
-    Module module = thread.getGlobals();
-    EvalUtils.exec(file, module, thread);
+    EvalUtils.exec(file, thread);
 
     // Test final environment is correctly modified:
     //
@@ -66,9 +65,8 @@ public class StarlarkFileTest {
     StarlarkFile file = parseFile("x = 1", "y = [2,3]", "", "z = x + y");
 
     StarlarkThread thread = newThread();
-    Module module = thread.getGlobals();
     try {
-      EvalUtils.exec(file, module, thread);
+      EvalUtils.exec(file, thread);
       throw new AssertionError("execution succeeded unexpectedly");
     } catch (EvalException ex) {
       assertThat(ex.getMessage()).contains("unsupported binary operation: int + list");
