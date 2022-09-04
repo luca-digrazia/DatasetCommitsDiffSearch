@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.actions.extra.SpawnInfo;
 import com.google.devtools.build.lib.analysis.BashCommandConstructor;
 import com.google.devtools.build.lib.analysis.CommandHelper;
+import com.google.devtools.build.lib.analysis.ExecGroupCollection;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.PseudoAction;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -94,8 +95,8 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
     return new ActionRegistry() {
 
       @Override
-      public void registerAction(ActionAnalysisMetadata action) {
-        getRuleContext().registerAction(action);
+      public void registerAction(ActionAnalysisMetadata... actions) {
+        getRuleContext().registerAction(actions);
       }
 
       @Override
@@ -386,19 +387,19 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
   }
 
   /**
-   * Registers action in the context of this {@link StarlarkActionFactory}.
+   * Registers actions in the context of this {@link StarlarkActionFactory}.
    *
-   * <p>Use {@link #getActionConstructionContext()} to obtain the context required to create this
-   * action.
+   * <p>Use {@link #getActionConstructionContext()} to obtain the context required to create those
+   * actions.
    */
-  public void registerAction(ActionAnalysisMetadata action) throws EvalException {
+  public void registerAction(ActionAnalysisMetadata... actions) throws EvalException {
     validateActionCreation();
-    getRuleContext().registerAction(action);
+    getRuleContext().registerAction(actions);
   }
 
   /**
    * Returns information needed to construct actions that can be registered with {@link
-   * #registerAction}.
+   * #registerAction(ActionAnalysisMetadata...)}.
    */
   public ActionConstructionContext getActionConstructionContext() {
     return context.getRuleContext();
@@ -629,7 +630,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
 
     if (execGroupUnchecked != Starlark.NONE) {
       String execGroup = (String) execGroupUnchecked;
-      if (!StarlarkExecGroupCollection.isValidGroupName(execGroup)
+      if (!ExecGroupCollection.isValidGroupName(execGroup)
           || !ruleContext.hasToolchainContext(execGroup)) {
         throw Starlark.errorf("Action declared for non-existent exec group '%s'.", execGroup);
       }
