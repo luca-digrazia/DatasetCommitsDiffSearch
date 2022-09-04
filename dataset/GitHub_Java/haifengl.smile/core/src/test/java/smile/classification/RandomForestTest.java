@@ -22,13 +22,12 @@ import smile.base.cart.SplitRule;
 import smile.data.*;
 import smile.math.MathEx;
 import smile.validation.*;
-import smile.validation.metric.Accuracy;
-import smile.validation.metric.Error;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import smile.validation.Error;
 
 import static org.junit.Assert.*;
 
@@ -104,11 +103,11 @@ public class RandomForestTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        ClassificationMetrics metrics = LOOCV.classification(WeatherNominal.formula, WeatherNominal.data,
-                (f, x) -> RandomForest.fit(f, x, 20, 2, SplitRule.GINI, 8, 10, 1, 1.0, null, Arrays.stream(seeds)));
+        int[] prediction = LOOCV.classification(WeatherNominal.formula, WeatherNominal.data, (f, x) -> RandomForest.fit(f, x, 20, 2, SplitRule.GINI, 8, 10, 1, 1.0, null, Arrays.stream(seeds)));
+        int error = Error.of(WeatherNominal.y, prediction);
 
-        System.out.println(metrics);
-        assertEquals(6, metrics.accuracy);
+        System.out.println("Error = " + error);
+        assertEquals(6, error);
 
         java.nio.file.Path temp = smile.data.Serialize.write(model);
         smile.data.Serialize.read(temp);
@@ -126,10 +125,10 @@ public class RandomForestTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        ClassificationMetrics metrics = LOOCV.classification(Iris.formula, Iris.data, (f, x) -> RandomForest.fit(f, x, 100, 3, SplitRule.GINI, 20, 100, 5, 1.0, null, Arrays.stream(seeds)));
-
-        System.out.println(metrics);
-        assertEquals(8, metrics.accuracy);
+        int[] prediction = LOOCV.classification(Iris.formula, Iris.data, (f, x) -> RandomForest.fit(f, x, 100, 3, SplitRule.GINI, 20, 100, 5, 1.0, null, Arrays.stream(seeds)));
+        int error = Error.of(Iris.y, prediction);
+        System.out.println("Error = " + error);
+        assertEquals(8, error);
     }
 
     @Test
@@ -137,11 +136,11 @@ public class RandomForestTest {
         System.out.println("Pen Digits");
 
         MathEx.setSeed(19650218); // to get repeatable results for cross validation.
-        ClassificationValidations<RandomForest> result = CrossValidation.classification(10, PenDigits.formula, PenDigits.data,
-                (f, x) -> RandomForest.fit(f, x, 100, 4, SplitRule.GINI, 20, 100, 5, 1.0, null, Arrays.stream(seeds)));
+        int[] prediction = CrossValidation.classification(10, PenDigits.formula, PenDigits.data, (f, x) -> RandomForest.fit(f, x, 100, 4, SplitRule.GINI, 20, 100, 5, 1.0, null, Arrays.stream(seeds)));
+        int error = Error.of(PenDigits.y, prediction);
 
-        System.out.println(result);
-        assertEquals(195, result.avg.accuracy);
+        System.out.println("Error = " + error);
+        assertEquals(195, error);
     }
 
     @Test
@@ -149,11 +148,11 @@ public class RandomForestTest {
         System.out.println("Breast Cancer");
 
         MathEx.setSeed(19650218); // to get repeatable results for cross validation.
-        ClassificationValidations<RandomForest> result = CrossValidation.classification(10, BreastCancer.formula, BreastCancer.data,
-                (f, x) -> RandomForest.fit(f, x, 100, 5, SplitRule.GINI, 20, 100, 5, 1.0, null, Arrays.stream(seeds)));
+        int[] prediction = CrossValidation.classification(10, BreastCancer.formula, BreastCancer.data, (f, x) -> RandomForest.fit(f, x, 100, 5, SplitRule.GINI, 20, 100, 5, 1.0, null, Arrays.stream(seeds)));
+        int error = Error.of(BreastCancer.y, prediction);
 
-        System.out.println(result);
-        assertEquals(27, result.avg.accuracy);
+        System.out.println("Error = " + error);
+        assertEquals(27, error);
     }
 
     @Test

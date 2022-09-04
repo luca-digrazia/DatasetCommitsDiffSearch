@@ -27,9 +27,7 @@ import smile.data.formula.Formula;
 import smile.math.MathEx;
 import smile.validation.CrossValidation;
 import smile.validation.LOOCV;
-import smile.validation.RegressionMetrics;
-import smile.validation.RegressionValidations;
-import smile.validation.metric.RMSE;
+import smile.validation.RMSE;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -73,10 +71,11 @@ public class RegressionTreeTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        RegressionMetrics metrics = LOOCV.regression(Longley.formula, Longley.data, (formula, x) -> RegressionTree.fit(formula, x, 100, 20, 2));
+        double[] prediction = LOOCV.regression(Longley.formula, Longley.data, (formula, x) -> RegressionTree.fit(formula, x, 100, 20, 2));
+        double rmse = RMSE.of(Longley.y, prediction);
 
-        System.out.println(metrics);
-        assertEquals(3.0848729264302333, metrics.rmse, 1E-4);
+        System.out.println("LOOCV MSE = " + rmse);
+        assertEquals(3.0848729264302333, rmse, 1E-4);
 
         java.nio.file.Path temp = smile.data.Serialize.write(model);
         smile.data.Serialize.read(temp);
@@ -97,10 +96,10 @@ public class RegressionTreeTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        RegressionValidations<RegressionTree> result = CrossValidation.regression(10, formula, data, (f, x) -> RegressionTree.fit(f, x));
-
-        System.out.println(result);
-        assertEquals(expected, result.avg.rmse, 1E-4);
+        double[] prediction = CrossValidation.regression(10, formula, data, (f, x) -> RegressionTree.fit(f, x));
+        double rmse = RMSE.of(formula.y(data).toDoubleArray(), prediction);
+        System.out.format("10-CV RMSE = %.4f%n", rmse);
+        assertEquals(expected, rmse, 1E-4);
     }
 
     @Test
