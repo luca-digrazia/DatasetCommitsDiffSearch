@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.Type;
-import java.util.Collection;
 import javax.annotation.Nullable;
 
 /**
@@ -80,8 +79,8 @@ public class DelegatingAttributeMapper implements AttributeMap {
   }
 
   @Override
-  public Collection<DepEdge> visitLabels() throws InterruptedException {
-    return delegate.visitLabels();
+  public void visitLabels(AcceptsLabelAttribute observer) throws InterruptedException {
+    delegate.visitLabels(observer);
   }
 
   @Override
