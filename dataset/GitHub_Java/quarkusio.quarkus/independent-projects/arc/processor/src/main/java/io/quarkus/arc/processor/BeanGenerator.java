@@ -96,35 +96,28 @@ public class BeanGenerator extends AbstractGenerator {
     /**
      *
      * @param bean
-     * @param existingClasses
-     * @param beanToGeneratedName
      * @return a collection of resources
      */
-    Collection<Resource> generate(BeanInfo bean, ReflectionRegistration reflectionRegistration, Set<String> existingClasses,
-            Map<BeanInfo, String> beanToGeneratedName) {
+    Collection<Resource> generate(BeanInfo bean, ReflectionRegistration reflectionRegistration) {
         if (bean.getTarget().isPresent()) {
             AnnotationTarget target = bean.getTarget().get();
             switch (target.kind()) {
                 case CLASS:
-                    return generateClassBean(bean, target.asClass(), reflectionRegistration, existingClasses,
-                            beanToGeneratedName);
+                    return generateClassBean(bean, target.asClass(), reflectionRegistration);
                 case METHOD:
-                    return generateProducerMethodBean(bean, target.asMethod(), reflectionRegistration, existingClasses,
-                            beanToGeneratedName);
+                    return generateProducerMethodBean(bean, target.asMethod(), reflectionRegistration);
                 case FIELD:
-                    return generateProducerFieldBean(bean, target.asField(), reflectionRegistration, existingClasses,
-                            beanToGeneratedName);
+                    return generateProducerFieldBean(bean, target.asField(), reflectionRegistration);
                 default:
                     throw new IllegalArgumentException("Unsupported bean type");
             }
         } else {
             // Synthetic beans
-            return generateSyntheticBean(bean, reflectionRegistration, existingClasses, beanToGeneratedName);
+            return generateSyntheticBean(bean, reflectionRegistration);
         }
     }
 
-    Collection<Resource> generateSyntheticBean(BeanInfo bean, ReflectionRegistration reflectionRegistration,
-            Set<String> existingClasses, Map<BeanInfo, String> beanToGeneratedName) {
+    Collection<Resource> generateSyntheticBean(BeanInfo bean, ReflectionRegistration reflectionRegistration) {
 
         StringBuilder baseNameBuilder = new StringBuilder();
         if (bean.getImplClazz().enclosingClass() != null) {
@@ -143,10 +136,6 @@ public class BeanGenerator extends AbstractGenerator {
         String providerTypeName = providerType.name().toString();
         String targetPackage = getPackageName(bean);
         String generatedName = generatedNameFromTarget(targetPackage, baseName, BEAN_SUFFIX);
-        beanToGeneratedName.put(bean, generatedName);
-        if (existingClasses.contains(generatedName)) {
-            return Collections.emptyList();
-        }
 
         boolean isApplicationClass = applicationClassPredicate.test(bean.getImplClazz().name());
         ResourceClassOutput classOutput = new ResourceClassOutput(isApplicationClass,
@@ -245,8 +234,7 @@ public class BeanGenerator extends AbstractGenerator {
         return classOutput.getResources();
     }
 
-    Collection<Resource> generateClassBean(BeanInfo bean, ClassInfo beanClass, ReflectionRegistration reflectionRegistration,
-            Set<String> existingClasses, Map<BeanInfo, String> beanToGeneratedName) {
+    Collection<Resource> generateClassBean(BeanInfo bean, ClassInfo beanClass, ReflectionRegistration reflectionRegistration) {
 
         String baseName;
         if (beanClass.enclosingClass() != null) {
@@ -258,10 +246,6 @@ public class BeanGenerator extends AbstractGenerator {
         String providerTypeName = providerType.name().toString();
         String targetPackage = DotNames.packageName(providerType.name());
         String generatedName = generatedNameFromTarget(targetPackage, baseName, BEAN_SUFFIX);
-        beanToGeneratedName.put(bean, generatedName);
-        if (existingClasses.contains(generatedName)) {
-            return Collections.emptyList();
-        }
 
         boolean isApplicationClass = applicationClassPredicate.test(beanClass.name());
         ResourceClassOutput classOutput = new ResourceClassOutput(isApplicationClass,
@@ -331,8 +315,7 @@ public class BeanGenerator extends AbstractGenerator {
     }
 
     Collection<Resource> generateProducerMethodBean(BeanInfo bean, MethodInfo producerMethod,
-            ReflectionRegistration reflectionRegistration, Set<String> existingClasses,
-            Map<BeanInfo, String> beanToGeneratedName) {
+            ReflectionRegistration reflectionRegistration) {
 
         ClassInfo declaringClass = producerMethod.declaringClass();
         String declaringClassBase;
@@ -358,10 +341,6 @@ public class BeanGenerator extends AbstractGenerator {
         String providerTypeName = providerType.name().toString();
         String targetPackage = DotNames.packageName(declaringClass.name());
         String generatedName = generatedNameFromTarget(targetPackage, baseName, BEAN_SUFFIX);
-        beanToGeneratedName.put(bean, generatedName);
-        if (existingClasses.contains(generatedName)) {
-            return Collections.emptyList();
-        }
 
         boolean isApplicationClass = applicationClassPredicate.test(declaringClass.name());
         ResourceClassOutput classOutput = new ResourceClassOutput(isApplicationClass,
@@ -431,8 +410,7 @@ public class BeanGenerator extends AbstractGenerator {
     }
 
     Collection<Resource> generateProducerFieldBean(BeanInfo bean, FieldInfo producerField,
-            ReflectionRegistration reflectionRegistration, Set<String> existingClasses,
-            Map<BeanInfo, String> beanToGeneratedName) {
+            ReflectionRegistration reflectionRegistration) {
 
         ClassInfo declaringClass = producerField.declaringClass();
         String declaringClassBase;
@@ -448,10 +426,6 @@ public class BeanGenerator extends AbstractGenerator {
         String providerTypeName = providerType.name().toString();
         String targetPackage = DotNames.packageName(declaringClass.name());
         String generatedName = generatedNameFromTarget(targetPackage, baseName, BEAN_SUFFIX);
-        beanToGeneratedName.put(bean, generatedName);
-        if (existingClasses.contains(generatedName)) {
-            return Collections.emptyList();
-        }
 
         boolean isApplicationClass = applicationClassPredicate.test(declaringClass.name());
         ResourceClassOutput classOutput = new ResourceClassOutput(isApplicationClass,
@@ -590,7 +564,7 @@ public class BeanGenerator extends AbstractGenerator {
         // Invoke super()
         constructor.invokeSpecialMethod(MethodDescriptors.OBJECT_CONSTRUCTOR, constructor.getThis());
 
-        // Get the TCCL - we will use it later
+        // Get the TCCL - we will use it later 
         ResultHandle currentThread = constructor
                 .invokeStaticMethod(MethodDescriptors.THREAD_CURRENT_THREAD);
         ResultHandle tccl = constructor.invokeVirtualMethod(MethodDescriptors.THREAD_GET_TCCL, currentThread);
@@ -1444,12 +1418,10 @@ public class BeanGenerator extends AbstractGenerator {
                     DotNames.POST_CONSTRUCT,
                     bean.getDeployment().getIndex());
             for (MethodInfo callback : postConstructCallbacks) {
-                if (isReflectionFallbackNeeded(callback, targetPackage)) {
-                    if (Modifier.isPrivate(callback.flags())) {
-                        privateMembers.add(isApplicationClass,
-                                String.format("@PostConstruct callback %s#%s()", callback.declaringClass().name(),
-                                        callback.name()));
-                    }
+                if (Modifier.isPrivate(callback.flags())) {
+                    privateMembers.add(isApplicationClass,
+                            String.format("@PostConstruct callback %s#%s()", callback.declaringClass().name(),
+                                    callback.name()));
                     reflectionRegistration.registerMethod(callback);
                     create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD,
                             create.loadClass(callback.declaringClass().name().toString()),
