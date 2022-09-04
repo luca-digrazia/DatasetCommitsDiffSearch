@@ -17,7 +17,6 @@ import io.quarkus.deployment.ClassOutput;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationClassNameBuildItem;
-import io.quarkus.deployment.builditem.ApplicationInfoBuildItem;
 import io.quarkus.deployment.builditem.BytecodeRecorderObjectLoaderBuildItem;
 import io.quarkus.deployment.builditem.ClassOutputBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
@@ -42,7 +41,6 @@ import io.quarkus.runtime.Application;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.StartupContext;
 import io.quarkus.runtime.StartupTask;
-import io.quarkus.runtime.SubstrateRuntimePropertiesRecorder;
 import io.quarkus.runtime.Timing;
 import io.quarkus.runtime.configuration.ProfileManager;
 
@@ -67,8 +65,7 @@ class MainClassBuildStep {
             BuildProducer<ApplicationClassNameBuildItem> appClassNameProducer,
             List<BytecodeRecorderObjectLoaderBuildItem> loaders,
             ClassOutputBuildItem classOutput,
-            LaunchModeBuildItem launchMode,
-            ApplicationInfoBuildItem applicationInfo) {
+            LaunchModeBuildItem launchMode) {
 
         String appClassName = APP_CLASS + COUNT.incrementAndGet();
         appClassNameProducer.produce(new ApplicationClassNameBuildItem(appClassName));
@@ -130,7 +127,6 @@ class MainClassBuildStep {
             mv.invokeStaticMethod(ofMethod(System.class, "setProperty", String.class, String.class, String.class),
                     mv.load(i.getKey()), mv.load(i.getValue()));
         }
-        mv.invokeStaticMethod(ofMethod(SubstrateRuntimePropertiesRecorder.class, "doRuntime", void.class));
 
         // Set the SSL system properties
         if (!javaLibraryPathAdditionalPaths.isEmpty()) {
@@ -199,10 +195,7 @@ class MainClassBuildStep {
                 .sorted()
                 .collect(Collectors.joining(", ")));
         tryBlock.invokeStaticMethod(
-                ofMethod(Timing.class, "printStartupTime", void.class, String.class, String.class, String.class, String.class,
-                        String.class, boolean.class),
-                tryBlock.load(applicationInfo.getName()),
-                tryBlock.load(applicationInfo.getVersion()),
+                ofMethod(Timing.class, "printStartupTime", void.class, String.class, String.class, String.class, boolean.class),
                 tryBlock.load(Version.getVersion()),
                 featuresHandle,
                 tryBlock.load(ProfileManager.getActiveProfile()),
@@ -234,11 +227,6 @@ class MainClassBuildStep {
         mv.setModifiers(Modifier.PUBLIC | Modifier.STATIC);
 
         final ResultHandle appClassInstance = mv.newInstance(ofConstructor(appClassName));
-
-        // Set the application name
-        mv.invokeVirtualMethod(ofMethod(Application.class, "setName", void.class, String.class), appClassInstance,
-                mv.load(applicationInfo.getName()));
-
         // run the app
         mv.invokeVirtualMethod(ofMethod(Application.class, "run", void.class, String[].class), appClassInstance,
                 mv.getMethodParam(0));
