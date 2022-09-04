@@ -1,23 +1,25 @@
 package io.dropwizard.testing.junit;
 
-import io.dropwizard.*;
+import com.codahale.metrics.health.HealthCheck;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.dropwizard.Application;
+import io.dropwizard.Configuration;
 import io.dropwizard.jetty.HttpConnectorFactory;
 import io.dropwizard.server.SimpleServerFactory;
-import io.dropwizard.setup.*;
+import io.dropwizard.setup.Environment;
+import io.dropwizard.testing.DropwizardTestSupport;
+import org.junit.rules.ExternalResource;
 
-import java.net.*;
-
-import org.junit.rules.TestRule;
-import org.junit.runner.Description;
-import org.junit.runners.model.Statement;
-
-import com.codahale.metrics.health.HealthCheck;
+import java.net.URI;
+import java.net.URL;
 
 /**
- * Test your http client code by writing a JAX-RS test double class and let this rule start and stop a Dropwizard application containing your double(s).
- * <p/>
+ * Test your HTTP client code by writing a JAX-RS test double class and let this rule start and stop a
+ * Dropwizard application containing your doubles.
+ * <p>
  * Example:
- * <pre><code>    @Path("/ping")
+ * <pre><code>
+    {@literal @}Path("/ping")
     public static class PingResource {
         {@literal @}GET
         public String ping() {
@@ -36,21 +38,55 @@ import com.codahale.metrics.health.HealthCheck;
     }
 </code></pre>
  * Of course, you'd use your http client, not {@link URL#openStream()}.
- * <p/>
+ * </p>
+ * <p>
  * The {@link DropwizardClientRule} takes care of:
  * <ul>
- * <li>Crating a simple default configuration.</li>
- * <li>Crating a simplistic application.</li>
- * <li>Adding a dummy health check to the application (so the warning goes away... it's of no use in this case).</li>
+ * <li>Creating a simple default configuration.</li>
+ * <li>Creating a simplistic application.</li>
+ * <li>Adding a dummy health check to the application to suppress the startup warning.</li>
  * <li>Adding your resources to the application.</li>
- * <li>Choosing a free port number.</li>
+ * <li>Choosing a free random port number.</li>
  * <li>Starting the application.</li>
  * <li>Stopping the application.</li>
  * </ul>
+ * </p>
  */
-public class DropwizardClientRule implements TestRule {
+public class DropwizardClientRule extends ExternalResource {
     private final Object[] resources;
-    private final DropwizardAppRule<Configuration> appRule;
+    private final DropwizardTestSupport<Configuration> testSupport;
+
+    public DropwizardClientRule(Object... resources) {
+        testSupport = new DropwizardTestSupport<Configuration>(FakeApplication.class, "") {
+            @Override
+            public Application<Configuration> newApplication() {
+                return new FakeApplication();
+            }
+        };
+        this.resources = resources;
+    }
+
+    public URI baseUri() {
+        return URI.create("http://localhost:" + testSupport.getLocalPort() + "/application");
+    }
+
+    public ObjectMapper getObjectMapper() {
+        return testSupport.getObjectMapper();
+    }
+
+    public Environment getEnvironment() {
+        return testSupport.getEnvironment();
+    }
+
+    @Override
+    protected void before() throws Throwable {
+        testSupport.before();
+    }
+
+    @Override
+    protected void after() {
+        testSupport.after();
+    }
 
     private static class DummyHealthCheck extends HealthCheck {
         @Override
@@ -61,39 +97,21 @@ public class DropwizardClientRule implements TestRule {
 
     private class FakeApplication extends Application<Configuration> {
         @Override
-        public void initialize(Bootstrap<Configuration> bootstrap) {}
-
-        @Override
         public void run(Configuration configuration, Environment environment) {
-            SimpleServerFactory serverConfig = new SimpleServerFactory();
+            final SimpleServerFactory serverConfig = new SimpleServerFactory();
             configuration.setServerFactory(serverConfig);
-            HttpConnectorFactory connectorConfig = (HttpConnectorFactory) serverConfig.getConnector();
+            final HttpConnectorFactory connectorConfig = (HttpConnectorFactory) serverConfig.getConnector();
             connectorConfig.setPort(0);
 
             environment.healthChecks().register("dummy", new DummyHealthCheck());
 
             for (Object resource : resources) {
-                environment.jersey().register(resource);
+                if (resource instanceof Class<?>) {
+                    environment.jersey().register((Class<?>) resource);
+                } else {
+                    environment.jersey().register(resource);
+                }
             }
         }
-    }
-
-    public DropwizardClientRule(Object... resources) {
-        appRule = new DropwizardAppRule<Configuration>(null, null) {
-            @Override
-            public Application<Configuration> newApplication() {
-                return new FakeApplication();
-            }
-        };
-        this.resources = resources;
-    }
-
-    public URI baseUri() {
-        return URI.create("http://localhost:" + appRule.getLocalPort() + "/application");
-    }
-
-    @Override
-    public Statement apply(Statement base, Description description) {
-        return appRule.apply(base, description);
     }
 }
