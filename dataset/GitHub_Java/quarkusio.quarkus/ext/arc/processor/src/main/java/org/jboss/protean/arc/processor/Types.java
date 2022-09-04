@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.protean.arc.processor;
 
 import java.util.Collections;
@@ -47,8 +31,6 @@ import org.jboss.protean.gizmo.ResultHandle;
  * @author Martin Kouba
  */
 final class Types {
-
-    private static final Type OBJECT_TYPE = Type.create(DotNames.OBJECT, Kind.CLASS);
 
     private Types() {
     }
@@ -104,27 +86,6 @@ final class Types {
                         MethodDescriptor.ofMethod(WildcardTypeImpl.class, "withLowerBound", java.lang.reflect.WildcardType.class, java.lang.reflect.Type.class),
                         getTypeHandle(creator, wildcardType.superBound()));
             }
-        } else if (Kind.PRIMITIVE.equals(type.kind())) {
-            switch (type.asPrimitiveType().primitive()) {
-                case INT:
-                    return creator.loadClass(int.class);
-                case LONG:
-                    return creator.loadClass(long.class);
-                case BOOLEAN:
-                    return creator.loadClass(boolean.class);
-                case BYTE:
-                    return creator.loadClass(byte.class);
-                case CHAR:
-                    return creator.loadClass(char.class);
-                case DOUBLE:
-                    return creator.loadClass(double.class);
-                case FLOAT:
-                    return creator.loadClass(float.class);
-                case SHORT:
-                    return creator.loadClass(short.class);
-                default:
-                    throw new IllegalArgumentException("Unsupported primitive type: " + type);
-            }
         } else {
             throw new IllegalArgumentException("Unsupported bean type: " + type.kind() + ", " + type);
         }
@@ -141,17 +102,11 @@ final class Types {
     }
 
     static Set<Type> getTypeClosure(MethodInfo producerMethod, BeanDeployment beanDeployment) {
-        Type returnType = producerMethod.returnType();
-        if (returnType.kind() == Kind.PRIMITIVE) {
-            Set<Type> types = new HashSet<>();
-            types.add(returnType);
-            types.add(OBJECT_TYPE);
-            return types;
-        }
-        ClassInfo returnTypeClassInfo = beanDeployment.getIndex().getClassByName(returnType.name());
+        ClassInfo returnTypeClassInfo = beanDeployment.getIndex().getClassByName(producerMethod.returnType().name());
         if (returnTypeClassInfo == null) {
             throw new IllegalArgumentException("Producer method return type not found in index: " + producerMethod.returnType().name());
         }
+        Type returnType = producerMethod.returnType();
         if (Kind.CLASS.equals(returnType.kind())) {
             return getTypeClosure(returnTypeClassInfo, Collections.emptyMap(), beanDeployment);
         } else if (Kind.PARAMETERIZED_TYPE.equals(returnType.kind())) {
@@ -164,17 +119,11 @@ final class Types {
     }
 
     static Set<Type> getTypeClosure(FieldInfo producerField, BeanDeployment beanDeployment) {
-        Type fieldType = producerField.type();
-        if (fieldType.kind() == Kind.PRIMITIVE) {
-            Set<Type> types = new HashSet<>();
-            types.add(fieldType);
-            types.add(OBJECT_TYPE);
-            return types;
-        }
         ClassInfo fieldClassInfo = beanDeployment.getIndex().getClassByName(producerField.type().name());
         if (fieldClassInfo == null) {
             throw new IllegalArgumentException("Producer field type not found in index: " + producerField.type().name());
         }
+        Type fieldType = producerField.type();
         if (Kind.CLASS.equals(fieldType.kind())) {
             return getTypeClosure(fieldClassInfo, Collections.emptyMap(), beanDeployment);
         } else if (Kind.PARAMETERIZED_TYPE.equals(fieldType.kind())) {
