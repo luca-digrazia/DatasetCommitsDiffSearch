@@ -17,7 +17,9 @@
 
 package smile.base.svm;
 
+import java.util.ArrayList;
 import java.util.stream.IntStream;
+
 import smile.math.MathEx;
 import smile.math.kernel.MercerKernel;
 
@@ -81,8 +83,8 @@ public class OCSVM<T> {
      */
     private int svmin = -1;
     private int svmax = -1;
-    private double omin = Double.MAX_VALUE;
-    private double omax = -Double.MAX_VALUE;
+    private double gmin = Double.MAX_VALUE;
+    private double gmax = -Double.MAX_VALUE;
 
     /** Returns true if the support vector violates KKT conditions. */
     private boolean violateKKT(int i) {
@@ -122,8 +124,8 @@ public class OCSVM<T> {
      * @return the model.
      */
     public KernelMachine<T> fit(T[] x) {
-        this.x = x;
         int n = x.length;
+        this.x = x;
         K = new double[n][n];
         IntStream.range(0, n).parallel().forEach(i -> {
             T xi = x[i];
@@ -144,17 +146,14 @@ public class OCSVM<T> {
         }
 
         O = new double[n];
-        rho = Double.NEGATIVE_INFINITY;
         for (int i = 0; i < n; i++) {
             double[] Ki = K[i];
             for (int j = 0; j < n; j++) {
                 O[i] += Ki[j] * alpha[j];
             }
-
-            if (alpha[i] > 0 && rho < O[i]) {
-                rho = O[i];
-            }
         }
+
+        rho = MathEx.max(O);
 
         minmax();
         int phase = Math.min(n, 1000);
@@ -168,7 +167,7 @@ public class OCSVM<T> {
         int bsv = 0;
 
         for (int i = 0; i < n; i++) {
-            if (alpha[i] > 0.0) {
+            if (alpha[i] != 0.0) {
                 nsv++;
                 if (alpha[i] == C) {
                     bsv++;
@@ -176,66 +175,42 @@ public class OCSVM<T> {
             }
         }
 
+        double[] alpha = new double[nsv];
         @SuppressWarnings("unchecked")
         T[] vectors = (T[]) java.lang.reflect.Array.newInstance(x.getClass().getComponentType(), nsv);
-        double[] weight = new double[nsv];
-        double b = -(rho - tol);
 
-        for (int i = 0, j = 0; i < n; i++) {
-            if (alpha[i] > 0.0) {
-                vectors[j] = x[i];
-                weight[j++] = alpha[i];
+        for (int i = 0; i < n; i++) {
+            if (alpha[i] != 0.0) {
+                vectors[i] = this.x[i];
+                alpha[i++] = this.alpha[i];
             }
         }
 
         logger.info("{} samples, {} support vectors, {} bounded", n, nsv, bsv);
 
-        return new KernelMachine<>(kernel, vectors, weight, b);
+        return new KernelMachine<>(kernel, vectors, alpha, -rho);
     }
 
     /**
      * Find support vectors with smallest (of I_up) and largest (of I_down) gradients.
      */
     private void minmax() {
-        svmin = -1;
-        svmax = -1;
-        omin = Double.MAX_VALUE;
-        omax = -Double.MAX_VALUE;
+        gmin = Double.MAX_VALUE;
+        gmax = -Double.MAX_VALUE;
 
         int n = x.length;
         for (int i = 0; i < n; i++) {
-            if (violateKKT(i)) {
-                double o = O[i];
-                if (o < omin) {
-                    svmin = i;
-                    omin = o;
-                }
+            double g = O[i];
+            double a = alpha[i];
+            if (g < gmin && a > 0.0) {
+                svmin = i;
+                gmin = g;
+            }
+            if (g > gmax && a < C) {
+                svmax = i;
+                gmax = g;
             }
         }
-
-        System.out.println("svmin = " + svmin);
-        if (svmin < 0) return;
-
-        for (int i = 0; i < n; i++) {
-            if (unbounded(i)) {
-                double o = O[i];
-                if (o > omax) {
-                    svmax = i;
-                    omax = o;
-                }
-            }
-        }
-/*
-        if (svmax < 0) {
-            for (int i = 0; i < n; i++) {
-                double o = O[i];
-                if (o > omax) {
-                    svmax = i;
-                    omax = o;
-                }
-            }
-        }*/
-        System.out.println("svmax = " + svmax);
     }
 
     /**
@@ -245,10 +220,8 @@ public class OCSVM<T> {
         int v1 = svmax;
         int v2 = svmin;
 
-        if (v1 < 0 || v2 < 0) return false;
-
-        double old_alpha1 = alpha[v1];
-        double old_alpha2 = alpha[v2];
+        double old_alpha_i = alpha[v1];
+        double old_alpha_j = alpha[v2];
         double[] k1 = K[v1];
         double[] k2 = K[v2];
 
@@ -257,50 +230,51 @@ public class OCSVM<T> {
         if (curv <= 0.0) curv = TAU;
 
         double delta = (O[v1] - O[v2]) / curv;
-        double sum = alpha[v1] + alpha[v2];
         alpha[v2] += delta;
-        alpha[v1] -= delta;
 
-        if (sum > C) {
+        double diff = alpha[v1] - alpha[v2];
+        alpha[v1] += delta;
+        alpha[v2] += delta;
+
+        if (diff > 0.0) {
+            // Region III
+            if (alpha[v2] < 0.0) {
+                alpha[v2] = 0.0;
+                alpha[v1] = diff;
+            }
+        } else {
+            // Region IV
+            if (alpha[v1] < 0.0) {
+                alpha[v1] = 0.0;
+                alpha[v2] = -diff;
+            }
+        }
+
+        if (diff > 0) {
+            // Region I
             if (alpha[v1] > C) {
                 alpha[v1] = C;
-                alpha[v2] = sum - C;
+                alpha[v2] = C - diff;
             }
         } else {
-            if (alpha[v2] < 0) {
-                alpha[v2] = 0;
-                alpha[v1] = sum;
-            }
-        }
-
-        if (sum > C) {
+            // Region II
             if (alpha[v2] > C) {
                 alpha[v2] = C;
-                alpha[v1] = sum - C;
-            }
-        } else {
-            if (alpha[v1] < 0) {
-                alpha[v1] = 0.0;
-                alpha[v2] = sum;
+                alpha[v1] = C + diff;
             }
         }
 
-        double delta_alpha1 = alpha[v1] - old_alpha1;
-        double delta_alpha2 = alpha[v2] - old_alpha2;
+        double delta_alpha_i = alpha[v1] - old_alpha_i;
+        double delta_alpha_j = alpha[v2] - old_alpha_j;
 
         int n = x.length;
-        rho = Double.NEGATIVE_INFINITY;
         for (int i = 0; i < n; i++) {
-            O[i] += k1[i] * delta_alpha1 + k2[i] * delta_alpha2;
-
-            if (alpha[i] > 0 && rho < O[i]) {
-                rho = O[i];
-            }
+            alpha[i] -= k1[i] * delta_alpha_i + k2[i] * delta_alpha_j;
         }
 
-        rho = (O[v1] + O[v2]) / 2;
         // optimality test
         minmax();
-        return omax - omin > epsgr;
+        rho = -(gmax + gmin) / 2;
+        return gmax - gmin > epsgr;
     }
 }

@@ -36,18 +36,7 @@ import smile.math.kernel.MercerKernel;
  *
  * @author Haifeng Li
  */
-public class SVM<T> extends KernelMachine<T>  {
-    /**
-     * Constructor.
-     * @param kernel Kernel function.
-     * @param vectors The support vectors.
-     * @param weight The weights of instances.
-     * @param b The intercept;
-     */
-    public SVM(MercerKernel<T> kernel, T[] vectors, double[] weight, double b) {
-        super(kernel, vectors, weight, b);
-    }
-
+public class SVM {
     /**
      * Fits an one-class SVM.
      * @param x training samples.
@@ -55,7 +44,7 @@ public class SVM<T> extends KernelMachine<T>  {
      * @param <T> the data type.
      * @return the model.
      */
-    public static <T> SVM<T> fit(T[] x, MercerKernel<T> kernel) {
+    public static <T> KernelMachine<T> fit(T[] x, MercerKernel<T> kernel) {
         return fit(x, kernel, 0.5, 1E-3);
     }
 
@@ -70,7 +59,7 @@ public class SVM<T> extends KernelMachine<T>  {
      * @param <T> the data type.
      * @return the model.
      */
-    public static <T> SVM<T> fit(T[] x, MercerKernel<T> kernel, double nu, double tol) {
+    public static <T> KernelMachine<T> fit(T[] x, MercerKernel<T> kernel, double nu, double tol) {
         if (nu <= 0 || nu > 1) {
             throw new IllegalArgumentException("Invalid nu: " + nu);
         }
@@ -80,7 +69,6 @@ public class SVM<T> extends KernelMachine<T>  {
         }
 
         OCSVM<T> svm = new OCSVM<>(kernel, nu, tol);
-        KernelMachine<T> model = svm.fit(x);
-        return new SVM<>(model.kernel(), model.vectors(), model.weights(), model.intercept());
+        return svm.fit(x);
     }
 }
