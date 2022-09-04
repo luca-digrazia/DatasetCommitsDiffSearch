@@ -100,7 +100,7 @@ public class GelfChunkAggregator implements CodecAggregator {
                     if (aggregatedBuffer == null) {
                         return VALID_EMPTY_RESULT;
                     }
-                } catch (IllegalArgumentException | IllegalStateException | IndexOutOfBoundsException e) {
+                } catch (IllegalArgumentException | IllegalStateException e) {
                     log.debug("Invalid gelf message chunk, dropping message.", e);
                     return INVALID_RESULT;
                 }
