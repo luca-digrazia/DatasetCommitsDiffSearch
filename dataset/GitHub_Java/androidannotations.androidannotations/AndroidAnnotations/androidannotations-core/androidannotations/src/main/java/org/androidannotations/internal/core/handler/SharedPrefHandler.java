@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -24,7 +23,6 @@ import static com.helger.jcodemodel.JMod.STATIC;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -145,15 +143,6 @@ public class SharedPrefHandler extends CoreBaseGeneratingAnnotationHandler<Share
 				}
 			}
 		}
-
-		SharedPref sharedPrefAnnotation = element.getAnnotation(SharedPref.class);
-		SharedPref.Scope scope = sharedPrefAnnotation.value();
-		String name = sharedPrefAnnotation.name();
-		boolean hasCustomName = !name.trim().isEmpty();
-		EnumSet<SharedPref.Scope> allowedScopes = EnumSet.of(SharedPref.Scope.ACTIVITY, SharedPref.Scope.UNIQUE);
-		if (hasCustomName && !allowedScopes.contains(scope)) {
-			validation.addError("SharedPref#name() is only supported for Scope.ACTIVITY and Scope.UNIQUE.");
-		}
 	}
 
 	@Override
@@ -165,12 +154,9 @@ public class SharedPrefHandler extends CoreBaseGeneratingAnnotationHandler<Share
 	private void generateConstructor(Element element, SharedPrefHolder holder) {
 		SharedPref sharedPrefAnnotation = element.getAnnotation(SharedPref.class);
 		SharedPref.Scope scope = sharedPrefAnnotation.value();
-		String name = sharedPrefAnnotation.name();
 		int mode = sharedPrefAnnotation.mode();
 
-		if (name.trim().isEmpty()) {
-			name = element.getSimpleName().toString();
-		}
+		String interfaceSimpleName = element.getSimpleName().toString();
 		JBlock constructorSuperBlock = holder.getConstructorSuperBlock();
 		JVar contextParam = holder.getConstructorContextParam();
 
@@ -188,14 +174,14 @@ public class SharedPrefHandler extends CoreBaseGeneratingAnnotationHandler<Share
 			constructorSuperBlock.invoke("super") //
 					.arg(contextParam.invoke("getSharedPreferences") //
 							.arg(invoke(getLocalClassName).arg(contextParam) //
-									.plus(lit("_" + name))) //
+									.plus(lit("_" + interfaceSimpleName))) //
 							.arg(lit(mode)));
 			break;
 		}
 		case UNIQUE: {
 			constructorSuperBlock.invoke("super") //
 					.arg(contextParam.invoke("getSharedPreferences") //
-							.arg(lit(name)) //
+							.arg(lit(interfaceSimpleName)) //
 							.arg(lit(mode)));
 			break;
 		}
