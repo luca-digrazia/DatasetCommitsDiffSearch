@@ -1,7 +1,5 @@
 package io.quarkus.qrs.runtime.mapping;
 
-import java.lang.reflect.Type;
-
 import javax.ws.rs.core.MediaType;
 
 import io.quarkus.qrs.runtime.handlers.RestHandler;
@@ -20,12 +18,12 @@ public class RuntimeResource {
     private final RestHandler[] handlerChain;
     private final String method;
     private final Class<?>[] parameterTypes;
-    private final Type returnType;
+    private final Class<?> returnType;
     private final ResourceWriter<Object> buildTimeWriter;
 
     public RuntimeResource(String httpMethod, URITemplate path, MediaType produces, MediaType consumes, EndpointInvoker invoker,
             BeanFactory<Object> endpointFactory, RestHandler[] handlerChain, String method, Class<?>[] parameterTypes,
-            Type returnType, ResourceWriter<Object> buildTimeWriter) {
+            Class<?> returnType, ResourceWriter<Object> buildTimeWriter) {
         this.httpMethod = httpMethod;
         this.path = path;
         this.produces = produces;
@@ -51,7 +49,7 @@ public class RuntimeResource {
         return parameterTypes;
     }
 
-    public Type getReturnType() {
+    public Class<?> getReturnType() {
         return returnType;
     }
 

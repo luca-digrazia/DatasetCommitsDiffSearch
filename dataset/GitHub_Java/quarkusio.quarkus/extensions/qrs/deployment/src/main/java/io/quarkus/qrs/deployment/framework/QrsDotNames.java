@@ -18,7 +18,6 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.container.DynamicFeature;
-import javax.ws.rs.container.PreMatching;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.ext.ExceptionMapper;
 import javax.ws.rs.ext.MessageBodyReader;
@@ -30,6 +29,7 @@ import org.jboss.jandex.DotName;
 
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
 import io.quarkus.qrs.Blocking;
+import io.quarkus.qrs.DoesNotChangeWriter;
 
 public final class QrsDotNames {
 
@@ -62,7 +62,7 @@ public final class QrsDotNames {
     public static final DotName MESSAGE_BODY_READER = DotName.createSimple(MessageBodyReader.class.getName());
 
     public static final DotName BLOCKING = DotName.createSimple(Blocking.class.getName());
-    public static final DotName PRE_MATCHING = DotName.createSimple(PreMatching.class.getName());
+    public static final DotName DOES_NOT_CHANGE_WRITER = DotName.createSimple(DoesNotChangeWriter.class.getName());
 
     public static final List<DotName> JAXRS_METHOD_ANNOTATIONS = Collections
             .unmodifiableList(Arrays.asList(GET, POST, HEAD, DELETE, PUT, PATCH, OPTIONS));

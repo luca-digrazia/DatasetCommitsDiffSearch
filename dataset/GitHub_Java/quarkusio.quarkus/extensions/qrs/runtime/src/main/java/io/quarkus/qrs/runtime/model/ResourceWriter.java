@@ -1,73 +1,27 @@
 package io.quarkus.qrs.runtime.model;
 
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
-import javax.ws.rs.core.MediaType;
 import javax.ws.rs.ext.MessageBodyWriter;
 
 import io.quarkus.qrs.runtime.spi.BeanFactory;
-import io.quarkus.qrs.runtime.util.ServerMediaType;
 
-public class ResourceWriter {
+public class ResourceWriter<T> {
 
-    private BeanFactory<MessageBodyWriter<?>> factory;
-    private List<String> mediaTypeStrings = new ArrayList<>();
-    private volatile List<MediaType> mediaTypes;
-    private volatile ServerMediaType serverMediaType;
-    private volatile MessageBodyWriter<?> instance;
+    private BeanFactory<MessageBodyWriter<T>> factory;
+    private boolean buildTimeSelectable;
 
-    public void setFactory(BeanFactory<MessageBodyWriter<?>> factory) {
+    public void setFactory(BeanFactory<MessageBodyWriter<T>> factory) {
         this.factory = factory;
     }
 
-    public BeanFactory<MessageBodyWriter<?>> getFactory() {
+    public BeanFactory<MessageBodyWriter<T>> getFactory() {
         return factory;
     }
 
-    public List<String> getMediaTypeStrings() {
-        return mediaTypeStrings;
+    public boolean isBuildTimeSelectable() {
+        return buildTimeSelectable;
     }
 
-    public ResourceWriter setMediaTypeStrings(List<String> mediaTypeStrings) {
-        this.mediaTypeStrings = mediaTypeStrings;
-        return this;
-    }
-
-    public MessageBodyWriter<?> getInstance() {
-        if (instance == null) {
-            synchronized (this) {
-                if (instance == null) {
-                    //todo: manage lifecycle of bean
-                    instance = factory.createInstance().getInstance();
-                }
-            }
-        }
-        return instance;
-    }
-
-    public List<MediaType> mediaTypes() {
-        if (mediaTypes == null) {
-            //todo: does this actually need to be threadsafe?
-            synchronized (this) {
-                List<MediaType> ret = new ArrayList<>();
-                for (String i : mediaTypeStrings) {
-                    ret.add(MediaType.valueOf(i));
-                }
-                mediaTypes = Collections.unmodifiableList(ret);
-            }
-        }
-        return mediaTypes;
-    }
-
-    public ServerMediaType serverMediaType() {
-        if (serverMediaType == null) {
-            synchronized (this) {
-                serverMediaType = new ServerMediaType(mediaTypes(), StandardCharsets.UTF_8.name());
-            }
-        }
-        return serverMediaType;
+    public void setBuildTimeSelectable(boolean buildTimeSelectable) {
+        this.buildTimeSelectable = buildTimeSelectable;
     }
 }
