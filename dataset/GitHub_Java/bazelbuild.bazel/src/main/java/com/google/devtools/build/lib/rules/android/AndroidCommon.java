@@ -286,6 +286,8 @@ public class AndroidCommon {
           .setManifest(ruleContext.getPrerequisiteArtifact("manifest", Mode.TARGET))
           .setJavaPackage(getJavaPackage(ruleContext))
           .setResourceApk(resourceApk.getArtifact());
+    } else {
+      semantics.addNonLocalResources(ruleContext, resourceApk, ideInfoProviderBuilder);
     }
 
     return ideInfoProviderBuilder.build();

@@ -14,40 +14,21 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
-import com.google.devtools.build.lib.buildeventstream.BuildEventId;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
-import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
-import com.google.devtools.build.lib.buildeventstream.NullConfiguration;
-import com.google.devtools.build.lib.causes.LabelCause;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
-import java.util.Collection;
 
 /**
- * This event is fired during the build, when it becomes known that the analysis of a target cannot
- * be completed because of an error in one of its dependencies.
+ * This event is fired during the build, when it becomes known that the analysis
+ * of a target cannot be completed because of an error in one of its
+ * dependencies.
  */
-public class AnalysisFailureEvent implements BuildEvent {
+public class AnalysisFailureEvent {
   private final ConfiguredTargetKey failedTarget;
   private final Label failureReason;
-  private final BuildEventId configuration;
-
-  public AnalysisFailureEvent(
-      ConfiguredTargetKey failedTarget, BuildEventId configuration, Label failureReason) {
-    this.failedTarget = failedTarget;
-    this.failureReason = failureReason;
-    if (configuration != null) {
-      this.configuration = configuration;
-    } else {
-      this.configuration = (new NullConfiguration()).getEventId();
-    }
-  }
 
   public AnalysisFailureEvent(ConfiguredTargetKey failedTarget, Label failureReason) {
-    this(failedTarget, null, failureReason);
+    this.failedTarget = failedTarget;
+    this.failureReason = failureReason;
   }
 
   public ConfiguredTargetKey getFailedTarget() {
@@ -56,27 +37,5 @@ public class AnalysisFailureEvent implements BuildEvent {
 
   public Label getFailureReason() {
     return failureReason;
-  }
-
-  @Override
-  public BuildEventId getEventId() {
-    return BuildEventId.targetCompleted(failedTarget.getLabel(), configuration);
-  }
-
-  @Override
-  public Collection<BuildEventId> getChildrenEvents() {
-    // TODO(aehlig): the root cause is not necessarily a label; e.g., it could
-    // also be a configured label.
-    return ImmutableList.of(BuildEventId.fromCause(new LabelCause(failureReason)));
-  }
-
-  @Override
-  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventContext converters) {
-    return GenericBuildEvent.protoChaining(this)
-        .setAborted(
-            BuildEventStreamProtos.Aborted.newBuilder()
-                .setReason(BuildEventStreamProtos.Aborted.AbortReason.ANALYSIS_FAILURE)
-                .build())
-        .build();
   }
 }

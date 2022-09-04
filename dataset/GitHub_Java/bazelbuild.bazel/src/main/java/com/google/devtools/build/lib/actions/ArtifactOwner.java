@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 
 /**
  * An interface for {@code ActionLookupKey}, or at least for a {@link Label}. Only tests and
@@ -25,24 +24,17 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 public interface ArtifactOwner {
   Label getLabel();
 
-  /**
-   * An {@link ArtifactOwner} that just returns null for its label. Only for use with resolved
-   * source artifacts and tests.
-   */
-  class NullArtifactOwner implements ArtifactOwner {
-    @AutoCodec @VisibleForTesting
-    public static final NullArtifactOwner INSTANCE = new NullArtifactOwner();
+  @VisibleForTesting
+  ArtifactOwner NULL_OWNER =
+      new ArtifactOwner() {
+        @Override
+        public Label getLabel() {
+          return null;
+        }
 
-    private NullArtifactOwner() {}
-
-    @Override
-    public Label getLabel() {
-      return null;
-    }
-
-    @Override
-    public String toString() {
-      return "NULL_OWNER";
-    }
-  }
+        @Override
+        public String toString() {
+          return "NULL_OWNER";
+        }
+      };
 }
