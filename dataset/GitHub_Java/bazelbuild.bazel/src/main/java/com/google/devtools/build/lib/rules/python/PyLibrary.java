@@ -44,6 +44,7 @@ public abstract class PyLibrary implements RuleConfiguredTargetFactory {
       throws InterruptedException, RuleErrorException, ActionConflictException {
     PythonSemantics semantics = createSemantics();
     PyCommon common = new PyCommon(ruleContext);
+    common.initCommon(common.getDefaultPythonVersion());
     common.validatePackageName();
     semantics.validate(ruleContext, common);
 
