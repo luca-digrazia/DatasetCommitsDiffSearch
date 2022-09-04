@@ -21,12 +21,10 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.Converters.RangeConverter;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDefinition;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
-import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,8 +38,6 @@ import java.util.regex.Pattern;
  * difference between these two sets of options.
  */
 public class BuildRequestOptions extends OptionsBase {
-  public static final OptionDefinition EXPERIMENTAL_MULTI_CPU =
-      OptionsParser.getOptionDefinitionByName(BuildRequestOptions.class, "experimental_multi_cpu");
   private static final Logger logger = Logger.getLogger(BuildRequestOptions.class.getName());
   private static final int JOBS_TOO_HIGH_WARNING = 2500;
   @VisibleForTesting public static final int MAX_JOBS = 5000;
@@ -412,7 +408,7 @@ public class BuildRequestOptions extends OptionsBase {
 
   @Option(
       name = "incompatible_use_per_action_file_cache",
-      defaultValue = "false",
+      defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
       metadataTags = {
