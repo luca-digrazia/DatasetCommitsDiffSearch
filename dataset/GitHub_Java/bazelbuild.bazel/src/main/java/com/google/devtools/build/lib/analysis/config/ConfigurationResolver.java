@@ -131,8 +131,8 @@ public final class ConfigurationResolver {
     // same transition for every dependency edge that requests that transition. This can have
     // real effect on analysis time for commonly triggered transitions.
     //
-    // Split transitions may map to one or multiple values. Patch transitions map to exactly one.
-    Map<FragmentsAndTransition, Map<String, BuildOptions>> transitionsMap = new LinkedHashMap<>();
+    // Split transitions may map to multiple values. All other transitions map to one.
+    Map<FragmentsAndTransition, List<BuildOptions>> transitionsMap = new LinkedHashMap<>();
 
     BuildConfiguration currentConfiguration = ctgValue.getConfiguration();
 
@@ -243,7 +243,7 @@ public final class ConfigurationResolver {
 
       // Apply the transition or use the cached result if it was already applied.
       FragmentsAndTransition transitionKey = new FragmentsAndTransition(depFragments, transition);
-      Map<String, BuildOptions> toOptions = transitionsMap.get(transitionKey);
+      List<BuildOptions> toOptions = transitionsMap.get(transitionKey);
       if (toOptions == null) {
         try {
           HashMap<PackageValue.Key, PackageValue> buildSettingPackages =
@@ -266,8 +266,7 @@ public final class ConfigurationResolver {
       // configuration.
       if (sameFragments
           && toOptions.size() == 1
-          && Iterables.getOnlyElement(toOptions.values())
-              .equals(currentConfiguration.getOptions())) {
+          && Iterables.getOnlyElement(toOptions).equals(currentConfiguration.getOptions())) {
         if (ctgValue.getConfiguration().trimConfigurationsRetroactively()
             && !dep.getAspects().isEmpty()) {
           String message =
@@ -297,7 +296,7 @@ public final class ConfigurationResolver {
       }
 
       try {
-        for (BuildOptions options : toOptions.values()) {
+        for (BuildOptions options : toOptions) {
           if (sameFragments) {
             keysToEntries.put(
                 BuildConfigurationValue.keyWithPlatformMapping(
@@ -529,7 +528,7 @@ public final class ConfigurationResolver {
    * @return the build options for the transitioned configuration.
    */
   @VisibleForTesting
-  public static Map<String, BuildOptions> applyTransition(
+  public static List<BuildOptions> applyTransition(
       BuildOptions fromOptions,
       ConfigurationTransition transition,
       Map<PackageValue.Key, PackageValue> buildSettingPackages,
@@ -543,8 +542,8 @@ public final class ConfigurationResolver {
               StarlarkTransition.getDefaultInputValues(buildSettingPackages, transition));
     }
 
-    // TODO(bazel-team): Add safety-check that this never mutates fromOptions.
-    Map<String, BuildOptions> result = transition.apply(fromOptions);
+    // TODO(bazel-team): safety-check that this never mutates fromOptions.
+    List<BuildOptions> result = transition.apply(fromOptions);
 
     if (doesStarlarkTransition) {
       StarlarkTransition.replayEvents(eventHandler, transition);

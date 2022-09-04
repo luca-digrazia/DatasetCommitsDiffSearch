@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TriState;
+import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -88,8 +89,8 @@ public final class AnalysisUtils {
   }
 
   /**
-   * Returns the list of declared providers (native and Starlark) of the specified Starlark key from
-   * a set of transitive info collections.
+   * Returns the list of declared providers (native and Skylark) of the specified Skylark key from a
+   * set of transitive info collections.
    */
   public static <T extends Info> List<T> getProviders(
       Iterable<? extends TransitiveInfoCollection> prerequisites,
@@ -105,8 +106,8 @@ public final class AnalysisUtils {
   }
 
   /**
-   * Returns the list of declared providers (native and Starlark) of the specified Starlark key from
-   * a set of transitive info collections.
+   * Returns the list of declared providers (native and Skylark) of the specified Skylark key from a
+   * set of transitive info collections.
    */
   public static <T extends Info> List<T> getProviders(
       Iterable<? extends TransitiveInfoCollection> prerequisites,
@@ -188,7 +189,7 @@ public final class AnalysisUtils {
       Collection<Target> targets,
       ExtendedEventHandler eventHandler,
       ConfiguredRuleClassProvider ruleClassProvider,
-      ConfigurationsCollector configurationsCollector)
+      SkyframeExecutor skyframeExecutor)
       throws InvalidConfigurationException {
     // We use a hash set here to remove duplicate nodes; this can happen for input files and package
     // groups.
@@ -199,14 +200,13 @@ public final class AnalysisUtils {
       }
     }
 
-    // We'll get the configs from ConfigurationsCollector#getConfigurations, which gets
-    // configurations
+    // We'll get the configs from SkyframeExecutor#getConfigurations, which gets configurations
     // for deps including transitions. So to satisfy its API we resolve transitions and repackage
     // each target as a Dependency (with a NONE transition if necessary).
     Multimap<BuildConfiguration, Dependency> asDeps = targetsToDeps(nodes, ruleClassProvider);
 
     return ConfigurationResolver.getConfigurationsFromExecutor(
-        nodes, asDeps, eventHandler, configurationsCollector);
+        nodes, asDeps, eventHandler, skyframeExecutor);
   }
 
   @VisibleForTesting
