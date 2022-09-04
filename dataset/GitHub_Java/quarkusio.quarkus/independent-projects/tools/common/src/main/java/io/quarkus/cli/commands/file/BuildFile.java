@@ -3,16 +3,6 @@ package io.quarkus.cli.commands.file;
 import static io.quarkus.maven.utilities.MojoUtils.credentials;
 import static java.util.stream.Collectors.toList;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.TreeMap;
-
-import org.apache.maven.model.Dependency;
-
 import io.quarkus.cli.commands.Printer;
 import io.quarkus.cli.commands.writer.ProjectWriter;
 import io.quarkus.dependencies.Extension;
@@ -20,6 +10,14 @@ import io.quarkus.generators.BuildTool;
 import io.quarkus.maven.utilities.MojoUtils;
 import io.quarkus.maven.utilities.QuarkusDependencyPredicate;
 import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.TreeMap;
+import org.apache.maven.model.Dependency;
 
 public abstract class BuildFile implements Closeable {
 
@@ -42,11 +40,12 @@ public abstract class BuildFile implements Closeable {
         if (!hasDependency(extension)) {
             PRINTER.ok(" Adding extension " + extension.managementKey());
             Dependency dep;
-            if(containsBOM(platform.getBomGroupId(), platform.getBomArtifactId()) && isDefinedInBom(platform.getManagedDependencies(), extension)) {
+            if (containsBOM(platform.getBomGroupId(), platform.getBomArtifactId())
+                    && isDefinedInBom(platform.getManagedDependencies(), extension)) {
                 dep = extension.toDependency(true);
             } else {
                 dep = extension.toDependency(false);
-                if(getProperty(MojoUtils.TEMPLATE_PROPERTY_QUARKUS_VERSION_NAME) != null) {
+                if (getProperty(MojoUtils.TEMPLATE_PROPERTY_QUARKUS_VERSION_NAME) != null) {
                     dep.setVersion(MojoUtils.TEMPLATE_PROPERTY_QUARKUS_VERSION_VALUE);
                 }
             }
@@ -58,7 +57,30 @@ public abstract class BuildFile implements Closeable {
         }
     }
 
+    public boolean removeDependency(QuarkusPlatformDescriptor platform, Extension extension) throws IOException {
+        if (hasDependency(extension)) {
+            PRINTER.ok(" Removing extension " + extension.managementKey());
+            Dependency dep;
+            if (containsBOM(platform.getBomGroupId(), platform.getBomArtifactId())
+                    && isDefinedInBom(platform.getManagedDependencies(), extension)) {
+                dep = extension.toDependency(true);
+            } else {
+                dep = extension.toDependency(false);
+                if (getProperty(MojoUtils.TEMPLATE_PROPERTY_QUARKUS_VERSION_NAME) != null) {
+                    dep.setVersion(MojoUtils.TEMPLATE_PROPERTY_QUARKUS_VERSION_VALUE);
+                }
+            }
+            removeDependencyFromBuildFile(dep);
+            return true;
+        } else {
+            PRINTER.noop(" Skipping extension that does not exists " + extension.managementKey());
+            return false;
+        }
+    }
+
     protected abstract void addDependencyInBuildFile(Dependency dependency) throws IOException;
+
+    protected abstract void removeDependencyFromBuildFile(Dependency dependency) throws IOException;
 
     protected abstract boolean hasDependency(Extension extension) throws IOException;
 
@@ -74,6 +96,13 @@ public abstract class BuildFile implements Closeable {
             PRINTER.noop(" Skipping already present dependency " + parsed.getManagementKey());
             return false;
         }
+    }
+
+    public boolean removeExtensionAsGAV(String query) throws IOException {
+        Dependency parsed = MojoUtils.parse(query.trim());
+        PRINTER.ok(" Removing dependency " + parsed.getManagementKey());
+        removeDependencyFromBuildFile(parsed);
+        return true;
     }
 
     protected boolean isDefinedInBom(List<Dependency> dependencies, Extension extension) {
@@ -126,7 +155,8 @@ public abstract class BuildFile implements Closeable {
 
     protected abstract List<Dependency> getManagedDependencies() throws IOException;
 
-    public abstract void completeFile(String groupId, String artifactId, String version, QuarkusPlatformDescriptor platform, Properties props) throws IOException;
+    public abstract void completeFile(String groupId, String artifactId, String version, QuarkusPlatformDescriptor platform,
+            Properties props) throws IOException;
 
     public BuildTool getBuildTool() {
         return buildTool;
