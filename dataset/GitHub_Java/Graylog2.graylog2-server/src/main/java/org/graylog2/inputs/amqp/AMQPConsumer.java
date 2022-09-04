@@ -41,7 +41,6 @@ import org.graylog2.activities.Activity;
 import org.graylog2.gelf.GELFMessage;
 import org.graylog2.gelf.GELFProcessor;
 import org.graylog2.inputs.syslog.SyslogProcessor;
-import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -93,7 +92,7 @@ public class AMQPConsumer implements Runnable {
             Map<String, Object> arguments = new HashMap<String, Object>();
             boolean isDurable = false;
             boolean isExclusive = false;
-            boolean isAutoDelete = false;
+            boolean isAutoDelete = true;
             arguments.put("x-message-ttl", queueConfig.getTtl()); // 15 minutes.
 
             // Automatically re-connect.
@@ -115,22 +114,6 @@ public class AMQPConsumer implements Runnable {
            
            disconnect();
         }
-    }
-    
-    public void deleteQueueAndDisconnect() {
-        String msg = "Attempting to delete and disconnect from queue [" + queueConfig.getQueueName() + "]";
-        LOG.debug(msg);
-        server.getActivityWriter().write(new Activity(msg, AMQPConsumer.class));
-        
-        try {
-            channel.queueDelete(queueConfig.getQueueName());
-        } catch(IOException e) {
-            String msg2 = "Could not delete queue [" + queueConfig.getQueueName() + "]";
-            LOG.error(msg2);
-            server.getActivityWriter().write(new Activity(msg2, AMQPConsumer.class));
-        }
-        
-        disconnect();
     }
 
     public void disconnect() {
@@ -175,33 +158,11 @@ public class AMQPConsumer implements Runnable {
                      switch (queueConfig.getInputType()) {
                          case GELF:
                              GELFMessage gelf = new GELFMessage(body);
-                             
-                             while (true) {
-                                try {
-                                   gelfProcessor.messageReceived(gelf);
-                                   break;
-                                } catch (BufferOutOfCapacityException e) {
-                                    LOG.debug("Buffer out of capacity. Trying again in 250ms.");
-                                    Thread.sleep(250);
-                                    continue;
-                                }
-                             }
-                             
+                             gelfProcessor.messageReceived(gelf);
                              handledGELFMessages.mark();
                              break;
                          case SYSLOG:
-                             
-                             while (true) {
-                                try {
-                                   syslogProcessor.messageReceived(new String(body), connection.getAddress());
-                                   break;
-                                } catch (BufferOutOfCapacityException e) {
-                                    LOG.debug("Buffer out of capacity. Trying again in 250ms.");
-                                    Thread.sleep(250);
-                                    continue;
-                                }
-                             }
-
+                             syslogProcessor.messageReceived(new String(body), connection.getAddress());
                              handledSyslogMessages.mark();
                              break;
                      }
