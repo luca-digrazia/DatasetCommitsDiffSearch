@@ -140,9 +140,4 @@ public class DropwizardAppRule<C extends Configuration> extends ExternalResource
     public Environment getEnvironment() {
         return environment;
     }
-
-    public ObjectMapper getObjectMapper() {
-        return getEnvironment().getObjectMapper();
-    }
-
 }
