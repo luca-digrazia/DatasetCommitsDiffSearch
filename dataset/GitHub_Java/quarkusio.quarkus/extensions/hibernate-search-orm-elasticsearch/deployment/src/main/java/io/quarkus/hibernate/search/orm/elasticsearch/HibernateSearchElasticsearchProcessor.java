@@ -15,10 +15,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import org.hibernate.search.backend.elasticsearch.ElasticsearchVersion;
-import org.hibernate.search.backend.elasticsearch.analysis.ElasticsearchAnalysisConfigurer;
-import org.hibernate.search.backend.elasticsearch.index.layout.IndexLayoutStrategy;
-import org.hibernate.search.engine.reporting.FailureHandler;
-import org.hibernate.search.mapper.orm.automaticindexing.session.AutomaticIndexingSynchronizationStrategy;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationTarget.Kind;
@@ -35,7 +31,6 @@ import org.jboss.jandex.Type;
 import org.jboss.jandex.UnresolvedTypeVariable;
 import org.jboss.jandex.VoidType;
 
-import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -96,7 +91,7 @@ class HibernateSearchElasticsearchProcessor {
                     indexedAnnotationsForPU.add(indexedAnnotation);
                 }
             }
-            buildForPersistenceUnit(recorder, indexedAnnotationsForPU, puDescriptor.getPersistenceUnitName(),
+            buildForPersistenceUnit(recorder, indexedAnnotationsForPU, puDescriptor.getPersistenceUnitName(), reflectiveClass,
                     configuredPersistenceUnits, integrations);
         }
 
@@ -105,6 +100,7 @@ class HibernateSearchElasticsearchProcessor {
 
     private void buildForPersistenceUnit(HibernateSearchElasticsearchRecorder recorder,
             Collection<AnnotationInstance> indexedAnnotationsForPU, String persistenceUnitName,
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<HibernateSearchElasticsearchPersistenceUnitConfiguredBuildItem> configuredPersistenceUnits,
             BuildProducer<HibernateOrmIntegrationStaticConfiguredBuildItem> integrations) {
         if (indexedAnnotationsForPU.isEmpty()) {
@@ -138,19 +134,8 @@ class HibernateSearchElasticsearchProcessor {
 
         integrations.produce(new HibernateOrmIntegrationStaticConfiguredBuildItem(HIBERNATE_SEARCH_ELASTICSEARCH,
                 persistenceUnitName).setInitListener(recorder.createStaticInitListener(puConfig)));
-    }
 
-    @BuildStep
-    void registerBeans(List<HibernateSearchElasticsearchPersistenceUnitConfiguredBuildItem> searchEnabledPUs,
-            BuildProducer<UnremovableBeanBuildItem> unremovableBean) {
-        if (searchEnabledPUs.isEmpty()) {
-            return;
-        }
-
-        // Some user-injectable beans are retrieved programmatically and shouldn't be removed
-        unremovableBean.produce(UnremovableBeanBuildItem.beanTypes(FailureHandler.class,
-                AutomaticIndexingSynchronizationStrategy.class,
-                ElasticsearchAnalysisConfigurer.class, IndexLayoutStrategy.class));
+        registerReflectionForConfig(puConfig, reflectiveClass);
     }
 
     @BuildStep
@@ -205,6 +190,32 @@ class HibernateSearchElasticsearchProcessor {
         }
         keyBuilder.append("version");
         return keyBuilder.toString();
+    }
+
+    private void registerReflectionForConfig(HibernateSearchElasticsearchBuildTimeConfigPersistenceUnit puConfig,
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
+        if (puConfig.defaultBackend.indexDefaults.analysis.configurer.isPresent()) {
+            reflectiveClass.produce(
+                    new ReflectiveClassBuildItem(true, false,
+                            puConfig.defaultBackend.indexDefaults.analysis.configurer.get()));
+        }
+        for (HibernateSearchElasticsearchBuildTimeConfigPersistenceUnit.ElasticsearchIndexBuildTimeConfig indexConfig : puConfig.defaultBackend.indexes
+                .values()) {
+            if (indexConfig.analysis.configurer.isPresent()) {
+                reflectiveClass.produce(
+                        new ReflectiveClassBuildItem(true, false, indexConfig.analysis.configurer.get()));
+            }
+        }
+
+        if (puConfig.defaultBackend.layout.strategy.isPresent()) {
+            reflectiveClass.produce(
+                    new ReflectiveClassBuildItem(true, false, puConfig.defaultBackend.layout.strategy.get()));
+        }
+
+        if (puConfig.backgroundFailureHandler.isPresent()) {
+            reflectiveClass.produce(
+                    new ReflectiveClassBuildItem(true, false, puConfig.backgroundFailureHandler.get()));
+        }
     }
 
     private void registerReflectionForClasses(IndexView index, BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {

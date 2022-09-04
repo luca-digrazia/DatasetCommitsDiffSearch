@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -74,7 +73,7 @@ public class HibernateOrmRecorder {
     }
 
     public Supplier<DataSourceTenantConnectionResolver> dataSourceTenantConnectionResolver(String persistenceUnitName,
-            Optional<String> dataSourceName,
+            String dataSourceName,
             MultiTenancyStrategy multiTenancyStrategy, String multiTenancySchemaDataSourceName) {
         return new Supplier<DataSourceTenantConnectionResolver>() {
             @Override
