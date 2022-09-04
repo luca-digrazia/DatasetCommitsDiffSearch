@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirstArtifactEndingWith;
@@ -36,7 +37,6 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.OutputFileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.android.deployinfo.AndroidDeployInfoOuterClass.AndroidDeployInfo;
 import com.google.devtools.build.lib.rules.java.JavaCompileAction;
 import com.google.devtools.build.lib.rules.java.JavaCompileActionTestHelper;
@@ -58,7 +58,7 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
 
   protected Iterable<Artifact> getNativeLibrariesInApk(ConfiguredTarget target) {
     return Iterables.filter(
-        getGeneratingAction(getCompressedUnsignedApk(target)).getInputs().toList(),
+        getGeneratingAction(getCompressedUnsignedApk(target)).getInputs(),
         a -> a.getFilename().endsWith(".so"));
   }
 
@@ -135,9 +135,8 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
     Preconditions.checkNotNull(target);
     final AndroidResourcesInfo info = target.get(AndroidResourcesInfo.PROVIDER);
     assertWithMessage("No android resources exported from the target.").that(info).isNotNull();
-    return transitive
-        ? info.getTransitiveAndroidResources().getSingleton()
-        : info.getDirectAndroidResources().getSingleton();
+    return getOnlyElement(
+        transitive ? info.getTransitiveAndroidResources() : info.getDirectAndroidResources());
   }
 
   protected Artifact getResourceClassJar(final ConfiguredTargetAndData target) {
@@ -204,10 +203,6 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
     return actualPaths.build();
   }
 
-  protected String execPathEndingWith(NestedSet<Artifact> inputs, String suffix) {
-    return getFirstArtifactEndingWith(inputs, suffix).getExecPathString();
-  }
-
   protected String execPathEndingWith(Iterable<Artifact> inputs, String suffix) {
     return getFirstArtifactEndingWith(inputs, suffix).getExecPathString();
   }
@@ -236,8 +231,7 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
   // Returns an artifact that will be generated when a rule has resources.
   protected static Artifact getResourceArtifact(ConfiguredTarget target) {
     // the last provider is the provider from the target.
-    return Iterables.getLast(
-            target.get(AndroidResourcesInfo.PROVIDER).getDirectAndroidResources().toList())
+    return Iterables.getLast(target.get(AndroidResourcesInfo.PROVIDER).getDirectAndroidResources())
         .getJavaClassJar();
   }
 
@@ -248,7 +242,7 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
   protected Map<String, String> getLocalTestMergeeManifests(ConfiguredTarget target)
       throws Exception {
     return getMergeeManifests(
-        collectRunfiles(target).toList().stream()
+        ImmutableList.copyOf(collectRunfiles(target)).stream()
             .filter(
                 (artifact) ->
                     artifact.getFilename().equals("AndroidManifest.xml")
@@ -266,7 +260,7 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
     SpawnAction processingAction = getGeneratingSpawnAction(processedManifest);
     Artifact mergedManifest =
         Iterables.find(
-            processingAction.getInputs().toList(),
+            processingAction.getInputs(),
             (artifact) -> artifact.getExecPath().toString().equals(mergedManifestExecPathString));
     List<String> mergeArgs = getGeneratingSpawnActionArgs(mergedManifest);
     assertThat(mergeArgs).contains("--mergeeManifests");
@@ -295,7 +289,8 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
   }
 
   protected static Set<Artifact> getNonToolInputs(Action action) {
-    return Sets.difference(action.getInputs().toSet(), action.getTools().toSet());
+    return Sets.difference(
+        ImmutableSet.copyOf(action.getInputs()), ImmutableSet.copyOf(action.getTools()));
   }
 
   protected void checkDebugKey(String debugKeyFile, boolean hasDebugKeyTarget) throws Exception {
@@ -337,20 +332,8 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
     return getAndroidSdk().getAndroidJar().getRootRelativePathString();
   }
 
-  protected String getAndroidJarFilename() throws Exception {
-    return getAndroidSdk().getAndroidJar().getFilename();
-  }
-
   protected Artifact getProguardBinary() throws Exception {
     return getAndroidSdk().getProguard().getExecutable();
-  }
-
-  protected String getMainDexClassesPath() throws Exception {
-    return getAndroidSdk().getMainDexClasses().getRootRelativePathString();
-  }
-
-  protected String getMainDexClassesFilename() throws Exception {
-    return getAndroidSdk().getMainDexClasses().getFilename();
   }
 
   private AndroidSdkProvider getAndroidSdk() throws Exception {
@@ -459,7 +442,7 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
         actionsTestUtil().getActionForArtifactEndingWith(getFilesToBuild(binary), "_proguard.jar");
     actionsTestUtil();
     assertWithMessage("Generated config not in inputs to proguard action")
-        .that(proguardAction.getInputs().toList())
+        .that(proguardAction.getInputs())
         .contains(
             ActionsTestUtil.getFirstArtifactEndingWith(
                 generateProguardAction.getOutputs(), "_proguard.cfg"));

@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.android;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 
+import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -69,7 +70,7 @@ public class AndroidDeviceTest extends BuildViewTestCase {
         "        'android_21/x86/userdata.img.tar.gz'",
         "    ],",
         ")");
-    setStarlarkSemanticsOptions("--experimental_google_legacy_api");
+    setSkylarkSemanticsOptions("--experimental_google_legacy_api");
   }
 
   private FilesToRunProvider getToolDependency(String label) throws Exception {
@@ -82,7 +83,7 @@ public class AndroidDeviceTest extends BuildViewTestCase {
   }
 
   private String getToolDependencyRunfilesPathString(String label) throws Exception {
-    return getToolDependency(label).getExecutable().getRootRelativePathString();
+    return getToolDependency(label).getExecutable().getRunfilesPathString();
   }
 
   @Test
@@ -103,7 +104,7 @@ public class AndroidDeviceTest extends BuildViewTestCase {
             ")");
 
     Set<String> outputBasenames = new HashSet<>();
-    for (Artifact outArtifact : getFilesToBuild(target).toList()) {
+    for (Artifact outArtifact : getFilesToBuild(target)) {
       outputBasenames.add(outArtifact.getPath().getBaseName());
     }
 
@@ -128,10 +129,13 @@ public class AndroidDeviceTest extends BuildViewTestCase {
 
     Iterable<String> biosFilesExecPathStrings =
         Iterables.transform(
-            getToolDependency("//tools/android/emulator:emulator_x86_bios")
-                .getFilesToRun()
-                .toList(),
-            (artifact) -> artifact.getExecPathString());
+            getToolDependency("//tools/android/emulator:emulator_x86_bios").getFilesToRun(),
+            new Function<Artifact, String>() {
+              @Override
+              public String apply(Artifact artifact) {
+                return artifact.getExecPathString();
+              }
+            });
 
     assertWithMessage("Invalid boot commandline.")
         .that(action.getArguments())
@@ -262,7 +266,7 @@ public class AndroidDeviceTest extends BuildViewTestCase {
             ")");
 
     Set<String> outputBasenames = new HashSet<>();
-    for (Artifact outArtifact : getFilesToBuild(target).toList()) {
+    for (Artifact outArtifact : getFilesToBuild(target)) {
       outputBasenames.add(outArtifact.getPath().getBaseName());
     }
 
@@ -280,9 +284,7 @@ public class AndroidDeviceTest extends BuildViewTestCase {
     String systemImageString = Joiner.on(" ").join(SYSTEM_IMAGE_FILES);
     Iterable<String> biosFilesExecPathStrings =
         Iterables.transform(
-            getToolDependency("//tools/android/emulator:emulator_x86_bios")
-                .getFilesToRun()
-                .toList(),
+            getToolDependency("//tools/android/emulator:emulator_x86_bios").getFilesToRun(),
             Artifact::getExecPathString);
 
     assertWithMessage("Invalid boot commandline.")
@@ -355,8 +357,7 @@ public class AndroidDeviceTest extends BuildViewTestCase {
                 "android_sdk_path=\"${WORKSPACE_DIR}/%s\"",
                 getToolDependencyRunfilesPathString("//tools/android/emulator:sdk_path")));
 
-    assertThat(
-            target.getProvider(RunfilesProvider.class).getDefaultRunfiles().getArtifacts().toList())
+    assertThat(target.getProvider(RunfilesProvider.class).getDefaultRunfiles().getArtifacts())
         .contains(getToolDependency("//tools/android/emulator:unified_launcher").getExecutable());
   }
 

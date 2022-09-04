@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.android;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirstArtifactEndingWith;
 
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -23,8 +24,8 @@ import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
-import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -92,7 +93,7 @@ public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
         "  ],",
         ")");
     setupTargetDevice();
-    setStarlarkSemanticsOptions("--experimental_google_legacy_api");
+    setSkylarkSemanticsOptions("--experimental_google_legacy_api");
   }
 
   // TODO(ajmichael): Share this with AndroidDeviceTest.java
@@ -125,27 +126,24 @@ public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
   public void testTestExecutableRunfiles() throws Exception {
     ConfiguredTargetAndData androidInstrumentationTest =
         getConfiguredTargetAndData("//javatests/com/app/ait");
-    List<Artifact> runfiles =
+    NestedSet<Artifact> runfiles =
         androidInstrumentationTest
             .getConfiguredTarget()
             .getProvider(RunfilesProvider.class)
             .getDefaultRunfiles()
-            .getAllArtifacts()
-            .toList();
+            .getAllArtifacts();
     assertThat(runfiles)
         .containsAtLeastElementsIn(
             getHostConfiguredTarget("//tools/android/emulated_device:nexus_6")
                 .getProvider(RunfilesProvider.class)
                 .getDefaultRunfiles()
-                .getAllArtifacts()
-                .toList());
+                .getAllArtifacts());
     assertThat(runfiles)
         .containsAtLeastElementsIn(
             getHostConfiguredTarget("//java/com/server")
                 .getProvider(RunfilesProvider.class)
                 .getDefaultRunfiles()
-                .getAllArtifacts()
-                .toList());
+                .getAllArtifacts());
     assertThat(runfiles)
         .containsAtLeastElementsIn(
             getHostConfiguredTarget(
@@ -156,17 +154,16 @@ public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
                         .toString())
                 .getProvider(RunfilesProvider.class)
                 .getDefaultRunfiles()
-                .getAllArtifacts()
-                .toList());
+                .getAllArtifacts());
     assertThat(runfiles)
         .containsAtLeast(
             getDeviceFixtureScript(getConfiguredTarget("//javatests/com/app:device_fixture")),
             getInstrumentationApk(getConfiguredTarget("//javatests/com/app:instrumentation_app")),
             getTargetApk(getConfiguredTarget("//javatests/com/app:instrumentation_app")),
-            getConfiguredTarget("//javatests/com/app/ait:foo.txt")
-                .getProvider(FileProvider.class)
-                .getFilesToBuild()
-                .getSingleton());
+            Iterables.getOnlyElement(
+                getConfiguredTarget("//javatests/com/app/ait:foo.txt")
+                    .getProvider(FileProvider.class)
+                    .getFilesToBuild()));
   }
 
   @Test
@@ -233,15 +230,15 @@ public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
   }
 
   @Test
-  public void testAndroidInstrumentationTestWithStarlarkDevice() throws Exception {
+  public void testAndroidInstrumentationTestWithSkylarkDevice() throws Exception {
     scratch.file(
-        "javatests/com/app/starlarkdevice/local_adb_device.bzl",
+        "javatests/com/app/skylarkdevice/local_adb_device.bzl",
         "def _impl(ctx):",
         "  ctx.actions.write(output=ctx.outputs.executable, content='', is_executable=True)",
         "  return [android_common.create_device_broker_info('LOCAL_ADB_SERVER')]",
         "local_adb_device = rule(implementation=_impl, executable=True)");
     scratch.file(
-        "javatests/com/app/starlarkdevice/BUILD",
+        "javatests/com/app/skylarkdevice/BUILD",
         "load(':local_adb_device.bzl', 'local_adb_device')",
         "local_adb_device(name = 'local_adb_device')",
         "android_instrumentation_test(",
@@ -250,7 +247,7 @@ public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
         "  target_device = ':local_adb_device',",
         ")");
     String testExecutableScript =
-        getTestStubContents(getConfiguredTarget("//javatests/com/app/starlarkdevice:ait"));
+        getTestStubContents(getConfiguredTarget("//javatests/com/app/skylarkdevice:ait"));
     assertThat(testExecutableScript).contains("device_broker_type=\"LOCAL_ADB_SERVER\"");
   }
 

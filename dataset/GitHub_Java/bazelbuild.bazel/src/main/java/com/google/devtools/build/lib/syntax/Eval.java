@@ -19,68 +19,61 @@ import com.google.devtools.build.lib.events.Location;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 /**
  * Evaluation code for the Skylark AST. At the moment, it can execute only statements (and defers to
  * Expression.eval for evaluating expressions).
  */
-// TODO(adonovan): make this class the sole locus of tree-based evaluation logic.
-// Make all its methods static, and thread Environment (soon: StarlarkThread) explicitly.
-// The only actual state is the return value, which can be saved in the Environment's call frame.
-// Then move all Expression.eval logic in here too, and simplify.
-final class Eval {
-
-  private static final AtomicReference<Debugger> debugger = new AtomicReference<>();
-
-  private final Environment env;
-  private final Debugger dbg;
+public class Eval {
+  protected final Environment env;
   private Object result = Runtime.NONE;
 
-  // ---- entry points ----
-
-  static void setDebugger(Debugger dbg) {
-    Debugger prev = debugger.getAndSet(dbg);
-    if (prev != null) {
-      prev.close();
-    }
+  public static Eval fromEnvironment(Environment env) {
+    return evalSupplier.apply(env);
   }
 
-  static Object execStatements(Environment env, List<Statement> statements)
-      throws EvalException, InterruptedException {
-    Eval eval = new Eval(env);
-    eval.execStatementsInternal(statements);
-    return eval.result;
+  public static void setEvalSupplier(Function<Environment, Eval> evalSupplier) {
+    Eval.evalSupplier = evalSupplier;
   }
 
-  static void execToplevelStatement(Environment env, Statement stmt)
-      throws EvalException, InterruptedException {
-    // Ignore the returned BREAK/CONTINUE/RETURN/PASS token:
-    // the first three don't exist at top-level, and the last is a no-op.
-    new Eval(env).exec(stmt);
+  /** Reset Eval supplier to the default. */
+  public static void removeCustomEval() {
+    evalSupplier = Eval::new;
   }
 
-  private Eval(Environment env) {
+  // TODO(bazel-team): remove this static state in favor of storing Eval instances in Environment
+  private static Function<Environment, Eval> evalSupplier = Eval::new;
+
+  /**
+   * This constructor should never be called directly. Call {@link #fromEnvironment(Environment)}
+   * instead.
+   */
+  protected Eval(Environment env) {
     this.env = env;
-    this.dbg = debugger.get(); // capture value and use for lifetime of one Eval
   }
 
-  private void execAssignment(AssignmentStatement node) throws EvalException, InterruptedException {
+  /** getResult returns the value returned by executing a ReturnStatement. */
+  Object getResult() {
+    return this.result;
+  }
+
+  void execAssignment(AssignmentStatement node) throws EvalException, InterruptedException {
     Object rvalue = node.getRHS().eval(env);
     assign(node.getLHS(), rvalue, env, node.getLocation());
   }
 
-  private void execAugmentedAssignment(AugmentedAssignmentStatement node)
+  void execAugmentedAssignment(AugmentedAssignmentStatement node)
       throws EvalException, InterruptedException {
     assignAugmented(node.getLHS(), node.getOperator(), node.getRHS(), env, node.getLocation());
   }
 
-  private TokenKind execIfBranch(IfStatement.ConditionalStatements node)
+  TokenKind execIfBranch(IfStatement.ConditionalStatements node)
       throws EvalException, InterruptedException {
-    return execStatementsInternal(node.getStatements());
+    return execStatements(node.getStatements());
   }
 
-  private TokenKind execFor(ForStatement node) throws EvalException, InterruptedException {
+  TokenKind execFor(ForStatement node) throws EvalException, InterruptedException {
     Object o = node.getCollection().eval(env);
     Iterable<?> col = EvalUtils.toIterable(o, node.getLocation(), env);
     EvalUtils.lock(o, node.getLocation());
@@ -88,7 +81,7 @@ final class Eval {
       for (Object it : col) {
         assign(node.getLHS(), it, env, node.getLocation());
 
-        switch (execStatementsInternal(node.getBlock())) {
+        switch (execStatements(node.getBlock())) {
           case PASS:
           case CONTINUE:
             // Stay in loop.
@@ -109,7 +102,7 @@ final class Eval {
     return TokenKind.PASS;
   }
 
-  private void execDef(DefStatement node) throws EvalException, InterruptedException {
+  void execDef(FunctionDefStatement node) throws EvalException, InterruptedException {
     List<Expression> defaultExpressions = node.getSignature().getDefaultValues();
     ArrayList<Object> defaultValues = null;
 
@@ -128,7 +121,7 @@ final class Eval {
 
     env.updateAndExport(
         node.getIdentifier().getName(),
-        new StarlarkFunction(
+        new UserDefinedFunction(
             node.getIdentifier().getName(),
             node.getIdentifier().getLocation(),
             FunctionSignature.WithValues.create(sig, defaultValues, /*types=*/ null),
@@ -136,7 +129,7 @@ final class Eval {
             env.getGlobals()));
   }
 
-  private TokenKind execIf(IfStatement node) throws EvalException, InterruptedException {
+  TokenKind execIf(IfStatement node) throws EvalException, InterruptedException {
     ImmutableList<IfStatement.ConditionalStatements> thenBlocks = node.getThenBlocks();
     // Avoid iterator overhead - most of the time there will be one or few "if"s.
     for (int i = 0; i < thenBlocks.size(); i++) {
@@ -145,10 +138,10 @@ final class Eval {
         return exec(stmt);
       }
     }
-    return execStatementsInternal(node.getElseBlock());
+    return execStatements(node.getElseBlock());
   }
 
-  private void execLoad(LoadStatement node) throws EvalException, InterruptedException {
+  void execLoad(LoadStatement node) throws EvalException, InterruptedException {
     for (LoadStatement.Binding binding : node.getBindings()) {
       try {
         Identifier name = binding.getLocalName();
@@ -168,7 +161,7 @@ final class Eval {
     }
   }
 
-  private TokenKind execReturn(ReturnStatement node) throws EvalException, InterruptedException {
+  TokenKind execReturn(ReturnStatement node) throws EvalException, InterruptedException {
     Expression ret = node.getReturnExpression();
     if (ret != null) {
       this.result = ret.eval(env);
@@ -176,11 +169,13 @@ final class Eval {
     return TokenKind.RETURN;
   }
 
-  private TokenKind exec(Statement st) throws EvalException, InterruptedException {
-    if (dbg != null) {
-      dbg.before(env, st.getLocation());
-    }
-
+  /**
+   * Execute the statement.
+   *
+   * @throws EvalException if execution of the statement could not be completed.
+   * @throws InterruptedException may be thrown in a sub class.
+   */
+  protected TokenKind exec(Statement st) throws EvalException, InterruptedException {
     try {
       return execDispatch(st);
     } catch (EvalException ex) {
@@ -188,7 +183,7 @@ final class Eval {
     }
   }
 
-  private TokenKind execDispatch(Statement st) throws EvalException, InterruptedException {
+  TokenKind execDispatch(Statement st) throws EvalException, InterruptedException {
     switch (st.kind()) {
       case ASSIGNMENT:
         execAssignment((AssignmentStatement) st);
@@ -206,7 +201,7 @@ final class Eval {
       case FOR:
         return execFor((ForStatement) st);
       case FUNCTION_DEF:
-        execDef((DefStatement) st);
+        execDef((FunctionDefStatement) st);
         return TokenKind.PASS;
       case IF:
         return execIf((IfStatement) st);
@@ -219,7 +214,7 @@ final class Eval {
     throw new IllegalArgumentException("unexpected statement: " + st.kind());
   }
 
-  private TokenKind execStatementsInternal(List<Statement> statements)
+  public TokenKind execStatements(ImmutableList<Statement> statements)
       throws EvalException, InterruptedException {
     // Hot code path, good chance of short lists which don't justify the iterator overhead.
     for (int i = 0; i < statements.size(); i++) {
@@ -235,8 +230,7 @@ final class Eval {
    * Updates the environment bindings, and possibly mutates objects, so as to assign the given value
    * to the given expression. The expression must be valid for an {@code LValue}.
    */
-  // TODO(adonovan): make this a private instance method once all Expression.eval methods move here,
-  // in particular, AbstractComprehension.
+  // TODO(adonovan): make this a private instance method once all Expression.eval methods move here.
   static void assign(Expression expr, Object value, Environment env, Location loc)
       throws EvalException, InterruptedException {
     if (expr instanceof Identifier) {
@@ -245,8 +239,8 @@ final class Eval {
       Object object = ((IndexExpression) expr).getObject().eval(env);
       Object key = ((IndexExpression) expr).getKey().eval(env);
       assignItem(object, key, value, env, loc);
-    } else if (expr instanceof ListExpression) {
-      ListExpression list = (ListExpression) expr;
+    } else if (expr instanceof ListLiteral) {
+      ListLiteral list = (ListLiteral) expr;
       assignList(list, value, env, loc);
     } else {
       // Not possible for validated ASTs.
@@ -287,12 +281,12 @@ final class Eval {
   }
 
   /**
-   * Recursively assigns an iterable value to a sequence of assignable expressions.
+   * Recursively assigns an iterable value to a list literal.
    *
    * @throws EvalException if the list literal has length 0, or if the value is not an iterable of
    *     matching length
    */
-  private static void assignList(ListExpression list, Object value, Environment env, Location loc)
+  private static void assignList(ListLiteral list, Object value, Environment env, Location loc)
       throws EvalException, InterruptedException {
     Collection<?> collection = EvalUtils.toCollection(value, loc, env);
     int len = list.getElements().size();
@@ -341,7 +335,7 @@ final class Eval {
       Object rhsValue = rhs.eval(env);
       Object result = BinaryOperatorExpression.evaluateAugmented(op, oldValue, rhsValue, env, loc);
       assignItem(object, key, result, env, loc);
-    } else if (expr instanceof ListExpression) {
+    } else if (expr instanceof ListLiteral) {
       throw new EvalException(loc, "cannot perform augmented assignment on a list literal");
     } else {
       // Not possible for validated ASTs.
