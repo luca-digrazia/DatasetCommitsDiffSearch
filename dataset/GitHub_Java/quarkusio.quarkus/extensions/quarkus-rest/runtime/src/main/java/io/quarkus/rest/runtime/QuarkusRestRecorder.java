@@ -6,6 +6,7 @@ import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -43,6 +44,7 @@ import io.quarkus.rest.runtime.core.GenericTypeMapping;
 import io.quarkus.rest.runtime.core.LazyMethod;
 import io.quarkus.rest.runtime.core.ParamConverterProviders;
 import io.quarkus.rest.runtime.core.QuarkusRestDeployment;
+import io.quarkus.rest.runtime.core.QuarkusRestRequestContext;
 import io.quarkus.rest.runtime.core.Serialisers;
 import io.quarkus.rest.runtime.core.parameters.AsyncResponseExtractor;
 import io.quarkus.rest.runtime.core.parameters.BeanParamExtractor;
@@ -110,6 +112,7 @@ import io.quarkus.rest.runtime.model.ResourceWriter;
 import io.quarkus.rest.runtime.model.ResourceWriterInterceptor;
 import io.quarkus.rest.runtime.spi.BeanFactory;
 import io.quarkus.rest.runtime.spi.EndpointInvoker;
+import io.quarkus.rest.runtime.util.Encode;
 import io.quarkus.rest.runtime.util.ServerMediaType;
 import io.quarkus.runtime.ExecutorRecorder;
 import io.quarkus.runtime.RuntimeValue;
@@ -905,13 +908,33 @@ public class QuarkusRestRecorder {
             case COOKIE:
                 return new CookieParamExtractor(name);
             case FORM:
-                return new FormParamExtractor(name, single, encoded);
+                return new FormParamExtractor(name, single);
             case PATH:
                 Integer index = pathParameterIndexes.get(name);
                 if (index == null) {
                     extractor = new NullParamExtractor();
                 } else {
-                    extractor = new PathParamExtractor(index, encoded);
+                    extractor = new PathParamExtractor(index);
+                }
+                if (encoded) {
+                    return new ParameterExtractor() {
+                        @Override
+                        public Object extractParameter(QuarkusRestRequestContext context) {
+                            Object param = extractor.extractParameter(context);
+                            if (param == null) {
+                                return null;
+                            }
+                            if (param instanceof String) {
+                                return Encode.encodeQueryParam(param.toString());
+                            } else {
+                                List<String> ret = new ArrayList<>();
+                                for (String i : (Collection<String>) param) {
+                                    ret.add(Encode.encodeQueryParam(i));
+                                }
+                                return ret;
+                            }
+                        }
+                    };
                 }
                 return extractor;
             case CONTEXT:
@@ -919,17 +942,57 @@ public class QuarkusRestRecorder {
             case ASYNC_RESPONSE:
                 return new AsyncResponseExtractor();
             case QUERY:
-                extractor = new QueryParamExtractor(name, single, encoded);
+                extractor = new QueryParamExtractor(name, single);
+                if (encoded) {
+                    return new ParameterExtractor() {
+                        @Override
+                        public Object extractParameter(QuarkusRestRequestContext context) {
+                            Object param = extractor.extractParameter(context);
+                            if (param == null) {
+                                return null;
+                            }
+                            if (param instanceof String) {
+                                return Encode.encodeQueryParam(param.toString());
+                            } else {
+                                List<String> ret = new ArrayList<>();
+                                for (String i : (Collection<String>) param) {
+                                    ret.add(Encode.encodeQueryParam(i));
+                                }
+                                return ret;
+                            }
+                        }
+                    };
+                }
                 return extractor;
             case BODY:
                 return new BodyParamExtractor();
             case MATRIX:
-                extractor = new MatrixParamExtractor(name, single, encoded);
+                extractor = new MatrixParamExtractor(name, single);
+                if (encoded) {
+                    return new ParameterExtractor() {
+                        @Override
+                        public Object extractParameter(QuarkusRestRequestContext context) {
+                            Object param = extractor.extractParameter(context);
+                            if (param == null) {
+                                return null;
+                            }
+                            if (param instanceof String) {
+                                return Encode.encodeQueryParam(param.toString());
+                            } else {
+                                List<String> ret = new ArrayList<>();
+                                for (String i : (Collection<String>) param) {
+                                    ret.add(Encode.encodeQueryParam(i));
+                                }
+                                return ret;
+                            }
+                        }
+                    };
+                }
                 return extractor;
             case BEAN:
                 return new BeanParamExtractor(factory(javaType, beanContainer));
             default:
-                return new QueryParamExtractor(name, single, encoded);
+                return new QueryParamExtractor(name, single);
         }
     }
 
