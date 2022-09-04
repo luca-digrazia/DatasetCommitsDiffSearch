@@ -56,13 +56,6 @@ public class ConfiguredTargetKey implements ActionLookupKey {
     return interner.intern(new ConfiguredTargetKey(label, configurationKey));
   }
 
-  public Builder toBuilder() {
-    return builder()
-        .setConfigurationKey(getConfigurationKey())
-        .setLabel(getLabel())
-        .setToolchainContextKey(getToolchainContextKey());
-  }
-
   @Override
   public final Label getLabel() {
     return label;
@@ -74,7 +67,7 @@ public class ConfiguredTargetKey implements ActionLookupKey {
   }
 
   @Nullable
-  public final BuildConfigurationValue.Key getConfigurationKey() {
+  final BuildConfigurationValue.Key getConfigurationKey() {
     return configurationKey;
   }
 
@@ -234,7 +227,7 @@ public class ConfiguredTargetKey implements ActionLookupKey {
      * Sets the {@link ToolchainContextKey} this configured target should use for toolchain
      * resolution. When present, this overrides the normally determined toolchain context.
      */
-    public Builder setToolchainContextKey(@Nullable ToolchainContextKey toolchainContextKey) {
+    public Builder setToolchainContextKey(ToolchainContextKey toolchainContextKey) {
       this.toolchainContextKey = toolchainContextKey;
       return this;
     }
