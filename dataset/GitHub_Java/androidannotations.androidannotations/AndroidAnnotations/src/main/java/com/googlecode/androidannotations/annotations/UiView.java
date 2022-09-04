@@ -23,8 +23,13 @@ import java.lang.annotation.Target;
 /**
  * Should be used on View fields in activity classes
  * 
+ * The field be of a type that extends android.view.View.
+ * 
+ * The annotation value should be one of R.id.* fields. If not set, the field
+ * name will be used as the R.id.* field name.
+ * 
  */
-@Retention(RetentionPolicy.RUNTIME)
+@Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.FIELD)
 public @interface UiView {
 	public static final int DEFAULT_VALUE = -1;

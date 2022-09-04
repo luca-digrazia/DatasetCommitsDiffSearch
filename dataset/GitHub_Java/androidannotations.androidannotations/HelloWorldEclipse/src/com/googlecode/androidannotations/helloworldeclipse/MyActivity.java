@@ -1,43 +1,35 @@
 package com.googlecode.androidannotations.helloworldeclipse;
 
+import java.util.Date;
+
 import android.app.Activity;
-import android.widget.EditText;
+import android.os.Bundle;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.googlecode.androidannotations.annotations.Click;
 import com.googlecode.androidannotations.annotations.Layout;
-import com.googlecode.androidannotations.annotations.Value;
-import com.googlecode.androidannotations.annotations.ViewById;
+import com.googlecode.androidannotations.annotations.UiView;
 
 @Layout(R.layout.main)
 public class MyActivity extends Activity {
 
-	@ViewById
-	EditText myEditText;
+	@UiView(R.id.hello)
+	TextView foo;
 
-	@ViewById(R.id.myTextView)
-	TextView textView;
+	@UiView
+	TextView content;
 
-	@Value(R.string.hello)
-	String helloFormat;
+	/** Called when the activity is first created. */
+	@Override
+	public void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
 
-	@Value
-	String[] bestFoods;
-
-	@Value
-	int androidColor;
+		foo.setText("Bar !");
+	}
 
 	@Click
-	void myButton() {
-		String name = myEditText.getText().toString();
-		String message = String.format(helloFormat, name);
-		textView.setText(message);
-		textView.setTextColor(androidColor);
-		
-		for (String item : bestFoods) {
-			Toast.makeText(this, item, Toast.LENGTH_SHORT).show();
-		}
+	public void myButton() {
+		content.setText("Clicked at " + new Date());
 	}
 
 }

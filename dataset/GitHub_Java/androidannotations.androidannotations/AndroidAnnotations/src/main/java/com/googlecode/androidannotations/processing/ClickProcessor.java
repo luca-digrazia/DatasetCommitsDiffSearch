@@ -17,28 +17,25 @@ package com.googlecode.androidannotations.processing;
 
 import java.lang.annotation.Annotation;
 import java.util.List;
-import java.util.Map;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
 
 import com.googlecode.androidannotations.annotations.Click;
-import com.googlecode.androidannotations.annotations.Id;
 import com.googlecode.androidannotations.generation.ClickInstruction;
 import com.googlecode.androidannotations.model.Instruction;
 import com.googlecode.androidannotations.model.MetaActivity;
 import com.googlecode.androidannotations.model.MetaModel;
-import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRInnerClass;
+import com.googlecode.androidannotations.rclass.RClass;
 import com.googlecode.androidannotations.rclass.RClass.Res;
-import com.sun.codemodel.JCodeModel;
+import com.googlecode.androidannotations.rclass.RInnerClass;
 
 public class ClickProcessor implements ElementProcessor {
 
-	private final IRClass rClass;
+	private final RClass rClass;
 
-	public ClickProcessor(IRClass rClass) {
+	public ClickProcessor(RClass rClass) {
 		this.rClass = rClass;
 	}
 
@@ -52,8 +49,18 @@ public class ClickProcessor implements ElementProcessor {
 
 		String methodName = element.getSimpleName().toString();
 
+		Click annotation = element.getAnnotation(Click.class);
+		int idValue = annotation.value();
 
-		String clickQualifiedId = extractClickQualifiedId(element);
+		RInnerClass rInnerClass = rClass.get(Res.ID);
+		String clickQualifiedId;
+
+		if (idValue == Click.DEFAULT_VALUE) {
+			String fieldName = element.getSimpleName().toString();
+			clickQualifiedId = rInnerClass.getIdQualifiedName(fieldName);
+		} else {
+			clickQualifiedId = rInnerClass.getIdQualifiedName(idValue);
+		}
 
 		Element enclosingElement = element.getEnclosingElement();
 		MetaActivity metaActivity = metaModel.getMetaActivities().get(enclosingElement);
@@ -67,32 +74,6 @@ public class ClickProcessor implements ElementProcessor {
 		Instruction instruction = new ClickInstruction(methodName, clickQualifiedId, viewParameter);
 		onCreateInstructions.add(instruction);
 
-	}
-
-	private String extractClickQualifiedId(Element element) {
-		Click annotation = element.getAnnotation(Click.class);
-		int idValue = annotation.value();
-		IRInnerClass rInnerClass = rClass.get(Res.ID);
-		String clickQualifiedId;
-
-		if (idValue == Id.DEFAULT_VALUE) {
-			String fieldName = element.getSimpleName().toString();
-			int lastIndex = fieldName.lastIndexOf("Clicked");
-			if (lastIndex != -1) {
-				fieldName = fieldName.substring(0, lastIndex);
-			}
-			clickQualifiedId = rInnerClass.getIdQualifiedName(fieldName);
-			
-		} else {
-			clickQualifiedId = rInnerClass.getIdQualifiedName(idValue);
-		}
-		return clickQualifiedId;
-	}
-
-	@Override
-	public void process(Element element, JCodeModel codeModel, Map<Element, ActivityHolder> activityHolders) {
-		// TODO Auto-generated method stub
-		
 	}
 
 }
