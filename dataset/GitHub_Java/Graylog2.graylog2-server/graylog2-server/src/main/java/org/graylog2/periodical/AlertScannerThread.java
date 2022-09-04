@@ -23,7 +23,6 @@ import org.elasticsearch.search.SearchHit;
 import org.graylog2.alerts.Alert;
 import org.graylog2.alerts.AlertCondition;
 import org.graylog2.alerts.AlertSender;
-import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.alarms.transports.TransportConfigurationException;
 import org.graylog2.plugin.streams.Stream;
@@ -73,8 +72,8 @@ public class AlertScannerThread extends Periodical {
                                 if (alertCondition.getBacklog() > 0 && alertCondition.getSearchHits() != null) {
                                     List<Message> backlog = Lists.newArrayList();
 
-                                    for (ResultMessage searchHit : alertCondition.getSearchHits()) {
-                                        backlog.add(new Message(searchHit.message));
+                                    for (SearchHit searchHit : alertCondition.getSearchHits().getHits()) {
+                                        backlog.add(new Message(searchHit.getSource()));
                                     }
 
                                     // Read as many messages as possible (max: backlog size) from backlog.
