@@ -14,12 +14,14 @@
 
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.HashBiMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.util.Preconditions;
-
+import com.google.devtools.build.lib.util.OS;
+import com.google.devtools.common.options.OptionsProvider;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
+import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -39,27 +41,85 @@ import java.util.Set;
  * two consecutive calls. Uses the standard Java WatchService, which uses 'inotify' on Linux.
  */
 public final class WatchServiceDiffAwareness extends LocalDiffAwareness {
-
   /**
    * Bijection from WatchKey to the (absolute) Path being watched. WatchKeys don't have this
    * functionality built-in so we do it ourselves.
    */
   private final HashBiMap<WatchKey, Path> watchKeyToDirBiMap = HashBiMap.create();
 
+  private final boolean isWindows = OS.getCurrent() == OS.WINDOWS;
+
   /** Every directory is registered under this watch service. */
   private WatchService watchService;
 
-  WatchServiceDiffAwareness(String watchRoot, WatchService watchService) {
+  WatchServiceDiffAwareness(String watchRoot) {
     super(watchRoot);
-    this.watchService = watchService;
+  }
+
+  private void init() {
+    Preconditions.checkState(watchService == null);
+    try {
+      watchService = FileSystems.getDefault().newWatchService();
+    } catch (IOException ignored) {
+      // According to the docs, this can never happen with the default file system provider.
+    }
   }
 
   @Override
-  public View getCurrentView() throws BrokenDiffAwarenessException {
+  public View getCurrentView(OptionsProvider options) throws BrokenDiffAwarenessException {
+    // We need to consider 4 cases for watchFs:
+    // previous view    current view
+    //  disabled         disabled  -> EVERYTHING_MODIFIED
+    //  disabled         enabled   -> valid View (1)
+    //  enabled          disabled  -> throw BrokenDiffAwarenessException
+    //  enabled          enabled   -> valid View
+    //
+    // (1) When watchFs gets enabled, we need to consider both the delta from the previous view
+    //     to the current view (1a), and from the current view to the next view (1b).
+    // (1a) If watchFs was previously disabled, then previous view was either EVERYTHING_MODIFIED,
+    //      or we threw a BrokenDiffAwarenessException. The first is safe because comparing it to
+    //      any view results in ModifiedFileSet.EVERYTHING_MODIFIED. The second is safe because
+    //      the previous diff awareness gets closed and we're now in a new instance; comparisons
+    //      between views with different owners always results in
+    //      ModifiedFileSet.EVERYTHING_MODIFIED.
+    // (1b) On the next run, we want to see the files that were modified between the current and the
+    //      next run. For that, the view we return needs to be valid; however, it's ok for it to
+    //      contain files that are modified between init() and poll() below, because those are
+    //      already taken into account for the current build, as we ended up with
+    //      ModifiedFileSet.EVERYTHING_MODIFIED in the current build.
+    boolean watchFs =
+        options.getOptions(Options.class).watchFS
+            &&
+            // Guard WatchFs on Windows behind --experimental_windows_watchfs.
+            (!isWindows || options.getOptions(Options.class).windowsWatchFS);
+    if (watchFs && watchService == null) {
+      init();
+    } else if (!watchFs && (watchService != null)) {
+      close();
+      // The contract is that throwing BrokenDiffAwarenessException prevents reuse of the same
+      // diff awareness object.
+      // Consider this sequence of builds:
+      // 1. build --watchfs    // startup the listener
+      // 2. build --nowatchfs  // shutdown the listener
+      // 3. build --watchfs    // startup the listener
+      //
+      // In the third build, we have to be careful not to reuse information from the first build,
+      // since we don't know what changed between the second and third builds. One way to ensure
+      // that is to carefully ensure that we increment the iteration numbers on every call;
+      // LocalDiffAwareness will only return a Diff if the Views are in sequential order. The other
+      // is to not reuse the DiffAwareness object, but create a new one; the DiffAwarenessManager
+      // always assumes EVERYTHING_MODIFIED for different objects. That seems safer, so we're using
+      // that here.
+      throw new BrokenDiffAwarenessException("Switched off --watchfs again");
+    }
+    // If init() failed, then this if also applies.
+    if (watchService == null) {
+      return EVERYTHING_MODIFIED;
+    }
     Set<Path> modifiedAbsolutePaths;
     if (isFirstCall()) {
       try {
-        registerSubDirectoriesAndReturnContents(watchRootPath);
+        registerSubDirectories(watchRootPath);
       } catch (IOException e) {
         close();
         throw new BrokenDiffAwarenessException(
@@ -86,10 +146,12 @@ public final class WatchServiceDiffAwareness extends LocalDiffAwareness {
 
   @Override
   public void close() {
-    try {
-      watchService.close();
-    } catch (IOException ignored) {
-      // Nothing we can do here.
+    if (watchService != null) {
+      try {
+        watchService.close();
+      } catch (IOException ignored) {
+        // Nothing we can do here.
+      }
     }
   }
 
@@ -193,6 +255,12 @@ public final class WatchServiceDiffAwareness extends LocalDiffAwareness {
     return changedPaths;
   }
 
+  /** Traverses directory tree to register subdirectories. */
+  private void registerSubDirectories(Path rootDir) throws IOException {
+    // Note that this does not follow symlinks.
+    Files.walkFileTree(rootDir, new WatcherFileVisitor());
+  }
+
   /**
    * Traverses directory tree to register subdirectories. Returns all paths traversed (as absolute
    * paths).
@@ -213,6 +281,10 @@ public final class WatchServiceDiffAwareness extends LocalDiffAwareness {
       this.visitedAbsolutePaths = visitedPaths;
     }
 
+    private WatcherFileVisitor() {
+      this.visitedAbsolutePaths = new HashSet<>();
+    }
+
     @Override
     public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) {
       Preconditions.checkState(path.isAbsolute(), path);
@@ -223,19 +295,25 @@ public final class WatchServiceDiffAwareness extends LocalDiffAwareness {
     @Override
     public FileVisitResult preVisitDirectory(Path path, BasicFileAttributes attrs)
         throws IOException {
+      // Do not traverse the bazel-* convenience symlinks. On windows these are created as
+      // junctions.
+      if (isWindows && attrs.isOther()) {
+        return FileVisitResult.SKIP_SUBTREE;
+      }
+
       // It's important that we register the directory before we visit its children. This way we
       // are guaranteed to see new files/directories either on this #getDiff or the next one.
       // Otherwise, e.g., an intra-build creation of a child directory will be forever missed if it
       // happens before the directory is listed as part of the visitation.
+      Preconditions.checkState(path.isAbsolute(), path);
       WatchKey key =
           path.register(
               watchService,
               StandardWatchEventKinds.ENTRY_CREATE,
               StandardWatchEventKinds.ENTRY_MODIFY,
               StandardWatchEventKinds.ENTRY_DELETE);
-      Preconditions.checkState(path.isAbsolute(), path);
-      visitedAbsolutePaths.add(path);
       watchKeyToDirBiMap.put(key, path);
+      visitedAbsolutePaths.add(path);
       return FileVisitResult.CONTINUE;
     }
   }
