@@ -179,8 +179,7 @@ public final class CppModel {
   // compile model
   private CppCompilationContext context;
   private final Set<CppSource> sourceFiles = new LinkedHashSet<>();
-  private final List<Artifact> compilationMandatoryInputs = new ArrayList<>();
-  private final List<Artifact> additionalIncludeScanningRoots = new ArrayList<>();
+  private final List<Artifact> mandatoryInputs = new ArrayList<>();
   private final ImmutableList<String> copts;
   private final Predicate<String> coptsFilter;
   private boolean fake;
@@ -203,7 +202,6 @@ public final class CppModel {
   private final FdoSupportProvider fdoSupport;
   private String linkedArtifactNameSuffix = "";
   private final ImmutableSet<String> features;
-  private boolean generateNoPic = true;
 
   public CppModel(
       RuleContext ruleContext,
@@ -323,16 +321,9 @@ public final class CppModel {
     return this;
   }
 
-  /** Adds compilation mandatory inputs. */
-  public CppModel addCompilationMandatoryInputs(Collection<Artifact> compilationMandatoryInputs) {
-    this.compilationMandatoryInputs.addAll(compilationMandatoryInputs);
-    return this;
-  }
-
-  /** Adds additional includes to be scanned. */
-  public CppModel addAdditionalIncludeScanningRoots(
-      Collection<Artifact> additionalIncludeScanningRoots) {
-    this.additionalIncludeScanningRoots.addAll(additionalIncludeScanningRoots);
+  /** Adds mandatory inputs. */
+  public CppModel addMandatoryInputs(Collection<Artifact> artifacts) {
+    this.mandatoryInputs.addAll(artifacts);
     return this;
   }
 
@@ -424,12 +415,6 @@ public final class CppModel {
     return this;
   }
 
-  /** no-PIC actions won't be generated. */
-  public CppModel setGenerateNoPic(boolean generateNoPic) {
-    this.generateNoPic = generateNoPic;
-    return this;
-  }
-
   /**
    * @returns whether we want to provide header modules for the current target.
    */
@@ -464,9 +449,6 @@ public final class CppModel {
 
   /** @return whether this target needs to generate non-pic actions. */
   private boolean getGenerateNoPicActions() {
-    if (!generateNoPic) {
-      return false;
-    }
     boolean picFeatureEnabled = featureConfiguration.isEnabled(CppRuleClasses.PIC);
     boolean usePicForBinaries = CppHelper.usePic(ruleContext, ccToolchain, true);
     boolean usePicForNonBinaries = CppHelper.usePic(ruleContext, ccToolchain, false);
@@ -757,13 +739,7 @@ public final class CppModel {
           FileSystemUtils.removeExtension(sourceArtifact.getRootRelativePath()).getPathString();
       CppCompileActionBuilder builder = initializeCompileAction(sourceArtifact);
 
-      builder.setSemantics(semantics)
-          .addMandatoryInputs(compilationMandatoryInputs)
-          .addAdditionalIncludeScanningRoots(additionalIncludeScanningRoots);
-
-      boolean bitcodeOutput =
-          featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)
-              && CppFileTypes.LTO_SOURCE.matches(sourceArtifact.getFilename());
+      builder.setSemantics(semantics);
 
       if (!sourceArtifact.isTreeArtifact()) {
         switch (source.getType()) {
@@ -771,7 +747,13 @@ public final class CppModel {
             createHeaderAction(
                 sourceLabel, outputName, result, env, builder, isGenerateDotdFile(sourceArtifact));
             break;
+          case CLIF_INPUT_PROTO:
+            createClifMatchAction(sourceLabel, outputName, result, env, builder);
+            break;
           default:
+            boolean bitcodeOutput =
+                featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)
+                    && CppFileTypes.LTO_SOURCE.matches(sourceArtifact.getFilename());
             createSourceAction(
                 sourceLabel,
                 outputName,
@@ -779,20 +761,14 @@ public final class CppModel {
                 env,
                 sourceArtifact,
                 builder,
-                // TODO(plf): Continue removing CLIF logic from C++. Follow up changes would include
-                // refactoring CppSource.Type and ArtifactCategory to be classes instead of enums
-                // that could be instantiated with arbitrary values.
-                source.getType() == CppSource.Type.CLIF_INPUT_PROTO
-                    ? ArtifactCategory.CLIF_OUTPUT_PROTO
-                    : ArtifactCategory.OBJECT_FILE,
+                ArtifactCategory.OBJECT_FILE,
                 context.getCppModuleMap(),
                 /* addObject= */ true,
                 isCodeCoverageEnabled(),
                 // The source action does not generate dwo when it has bitcode
                 // output (since it isn't generating a native object with debug
                 // info). In that case the LtoBackendAction will generate the dwo.
-                CppHelper.shouldCreatePerObjectDebugInfo(
-                        cppConfiguration, ccToolchain, featureConfiguration)
+                /* generateDwo= */ CppHelper.useFission(cppConfiguration, ccToolchain)
                     && !bitcodeOutput,
                 isGenerateDotdFile(sourceArtifact));
             break;
@@ -899,9 +875,7 @@ public final class CppModel {
             ? CppHelper.getCompileOutputArtifact(ruleContext, gcnoFileName, configuration)
             : null;
 
-    boolean generateDwo =
-        CppHelper.shouldCreatePerObjectDebugInfo(
-            cppConfiguration, ccToolchain, featureConfiguration);
+    boolean generateDwo = CppHelper.useFission(cppConfiguration, ccToolchain);
     Artifact dwoFile = generateDwo ? getDwoFile(builder.getOutputFile()) : null;
     // TODO(tejohnson): Add support for ThinLTO if needed.
     boolean bitcodeOutput =
@@ -959,6 +933,38 @@ public final class CppModel {
         /* enableCoverage= */ false,
         /* generateDwo= */ false,
         isGenerateDotdFile(moduleMapArtifact));
+  }
+
+  private void createClifMatchAction(
+      Label sourceLabel,
+      String outputName,
+      CcCompilationOutputs.Builder result,
+      AnalysisEnvironment env,
+      CppCompileActionBuilder builder)
+      throws RuleErrorException {
+    builder
+        .setOutputs(
+            ruleContext, ArtifactCategory.CLIF_OUTPUT_PROTO, outputName, /* generateDotd= */ true)
+        .setPicMode(false)
+        // The additional headers in a clif action are both mandatory inputs and
+        // need to be include-scanned.
+        .addMandatoryInputs(mandatoryInputs)
+        .addAdditionalIncludes(mandatoryInputs);
+    setupCompileBuildVariables(
+        builder,
+        sourceLabel,
+        /* usePic= */ false,
+        /* ccRelativeName= */ null,
+        /* autoFdoImportPath= */ null,
+        /* gcnoFile= */ null,
+        /* dwoFile= */ null,
+        /* ltoIndexingFile= */ null,
+        builder.getContext().getCppModuleMap());
+    semantics.finalizeCompileActionBuilder(ruleContext, builder);
+    CppCompileAction compileAction = builder.buildOrThrowRuleError(ruleContext);
+    env.registerAction(compileAction);
+    Artifact tokenFile = compileAction.getOutputFile();
+    result.addHeaderTokenFile(tokenFile);
   }
 
   private Collection<Artifact> createSourceAction(

@@ -20,6 +20,7 @@ import static java.util.stream.Collectors.toCollection;
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -48,7 +49,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.rules.cpp.CcCommon.CoptsFilter;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariablesExtension;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
@@ -99,15 +99,14 @@ public final class CcLibraryHelper {
    * Determines what file types CcLibraryHelper considers sources and what action configs are
    * configured in the CROSSTOOL.
    */
-  public enum SourceCategory {
+  public static enum SourceCategory {
     CC(
         FileTypeSet.of(
             CppFileTypes.CPP_SOURCE,
             CppFileTypes.CPP_HEADER,
             CppFileTypes.C_SOURCE,
             CppFileTypes.ASSEMBLER,
-            CppFileTypes.ASSEMBLER_WITH_C_PREPROCESSOR,
-            CppFileTypes.CLIF_INPUT_PROTO)),
+            CppFileTypes.ASSEMBLER_WITH_C_PREPROCESSOR)),
     CC_AND_OBJC(
         FileTypeSet.of(
             CppFileTypes.CPP_SOURCE,
@@ -323,8 +322,6 @@ public final class CcLibraryHelper {
   private final List<Artifact> publicTextualHeaders = new ArrayList<>();
   private final List<Artifact> privateHeaders = new ArrayList<>();
   private final List<Artifact> additionalInputs = new ArrayList<>();
-  private final List<Artifact> compilationMandatoryInputs = new ArrayList<>();
-  private final List<Artifact> additionalIncludeScanningRoots = new ArrayList<>();
   private final List<PathFragment> additionalExportedHeaders = new ArrayList<>();
   private final List<CppModuleMap> additionalCppModuleMaps = new ArrayList<>();
   private final Set<CppSource> compilationUnitSources = new LinkedHashSet<>();
@@ -333,7 +330,7 @@ public final class CcLibraryHelper {
   private final List<Artifact> nonCodeLinkerInputs = new ArrayList<>();
   private ImmutableList<String> copts = ImmutableList.of();
   private final List<String> linkopts = new ArrayList<>();
-  private CoptsFilter coptsFilter = CoptsFilter.alwaysPasses();
+  private Predicate<String> coptsFilter = Predicates.alwaysTrue();
   private final Set<String> defines = new LinkedHashSet<>();
   private final List<TransitiveInfoCollection> deps = new ArrayList<>();
   private final List<CppCompilationContext> depContexts = new ArrayList<>();
@@ -375,7 +372,6 @@ public final class CcLibraryHelper {
   private boolean useDeps = true;
   private boolean generateModuleMap = true;
   private String purpose = null;
-  private boolean generateNoPic = true;
 
   /**
    * Creates a CcLibraryHelper.
@@ -574,7 +570,7 @@ public final class CcLibraryHelper {
    * Adds a source to {@code compilationUnitSources} if it is a compiled file type (including
    * parsed/preprocessed header) and to {@code privateHeaders} if it is a header.
    */
-  private CcLibraryHelper addSource(Artifact source, Label label) {
+  private void addSource(Artifact source, Label label) {
     Preconditions.checkNotNull(featureConfiguration);
     boolean isHeader = CppFileTypes.CPP_HEADER.matches(source.getExecPath());
     boolean isTextualInclude = CppFileTypes.CPP_TEXTUAL_INCLUDE.matches(source.getExecPath());
@@ -586,7 +582,7 @@ public final class CcLibraryHelper {
       privateHeaders.add(source);
     }
     if (isTextualInclude || !isCompiledSource || (isHeader && !shouldProcessHeaders())) {
-      return this;
+      return;
     }
     boolean isClifInputProto = CppFileTypes.CLIF_INPUT_PROTO.matches(source.getExecPathString());
     CppSource.Type type;
@@ -598,7 +594,6 @@ public final class CcLibraryHelper {
       type = CppSource.Type.SOURCE;
     }
     compilationUnitSources.add(CppSource.create(source, label, type));
-    return this;
   }
 
   private boolean shouldProcessHeaders() {
@@ -703,7 +698,7 @@ public final class CcLibraryHelper {
   }
 
   /** Sets a pattern that is used to filter copts; set to {@code null} for no filtering. */
-  public CcLibraryHelper setCoptsFilter(CoptsFilter coptsFilter) {
+  public CcLibraryHelper setCoptsFilter(Predicate<String> coptsFilter) {
     this.coptsFilter = Preconditions.checkNotNull(coptsFilter);
     return this;
   }
@@ -966,7 +961,7 @@ public final class CcLibraryHelper {
   }
 
   /**
-   * Disables checking that the deps actually are C++ rules. By default, the {@link #compile} method
+   * Disables checking that the deps actually are C++ rules. By default, the {@link #build} method
    * uses {@link LanguageDependentFragment.Checker#depSupportsLanguage} to check that all deps
    * provide C++ providers.
    */
@@ -994,26 +989,18 @@ public final class CcLibraryHelper {
     return this;
   }
 
-  /** non-PIC actions won't be generated. */
-  public CcLibraryHelper setGenerateNoPic(boolean generateNoPic) {
-    this.generateNoPic = generateNoPic;
-    return this;
-  }
+  /**
+   * Create the C++ compile and link actions, and the corresponding compilation related providers.
+   *
+   * @throws RuleErrorException
+   */
+  public Info build() throws RuleErrorException, InterruptedException {
+    Info.CompilationInfo compilationInfo = compile();
+    Info.LinkingInfo linkingInfo =
+        link(
+            compilationInfo.getCcCompilationOutputs(), compilationInfo.getCppCompilationContext());
 
-  /** Adds mandatory inputs for the compilation action. */
-  public CcLibraryHelper addCompilationMandatoryInputs(
-      Collection<Artifact> compilationMandatoryInputs) {
-    this.compilationMandatoryInputs.addAll(compilationMandatoryInputs);
-    return this;
-  }
-
-  /** Adds additional includes to be scanned. */
-  // TODO(plf): This is only needed for CLIF. Investigate whether this is strictly necessary or
-  // there is a way to avoid include scanning for CLIF rules.
-  public CcLibraryHelper addAditionalIncludeScanningRoots(
-      Collection<Artifact> additionalIncludeScanningRoots) {
-    this.additionalIncludeScanningRoots.addAll(additionalIncludeScanningRoots);
-    return this;
+    return new Info(compilationInfo, linkingInfo);
   }
 
   /**
@@ -1021,7 +1008,7 @@ public final class CcLibraryHelper {
    *
    * @throws RuleErrorException
    */
-  public Info.CompilationInfo compile() throws RuleErrorException {
+  public Info.CompilationInfo compile() throws RuleErrorException, InterruptedException {
     if (checkDepsGenerateCpp) {
       for (LanguageDependentFragment dep :
           AnalysisUtils.getProviders(deps, LanguageDependentFragment.class)) {
@@ -1287,10 +1274,7 @@ public final class CcLibraryHelper {
         .setLinkTargetType(linkType)
         .setNeverLink(neverlink)
         .addLinkActionInputs(linkActionInputs)
-        .addCompilationMandatoryInputs(compilationMandatoryInputs)
-        .addAdditionalIncludeScanningRoots(additionalIncludeScanningRoots)
         .setFake(fake)
-        .setGenerateNoPic(generateNoPic)
         .setAllowInterfaceSharedObjects(emitInterfaceSharedObjects)
         .setCreateDynamicLibrary(createDynamicLibrary)
         .setCreateStaticLibraries(createStaticLibraries)
@@ -1493,11 +1477,11 @@ public final class CcLibraryHelper {
     contextBuilder.addModularHdrs(publicHeaders.getHeaders());
     contextBuilder.addModularHdrs(privateHeaders);
     contextBuilder.addTextualHdrs(publicTextualHeaders);
-    contextBuilder.addPregreppedHeaders(
+    contextBuilder.addPregreppedHeaderMap(
         CppHelper.createExtractInclusions(ruleContext, semantics, publicHeaders.getHeaders()));
-    contextBuilder.addPregreppedHeaders(
+    contextBuilder.addPregreppedHeaderMap(
         CppHelper.createExtractInclusions(ruleContext, semantics, publicTextualHeaders));
-    contextBuilder.addPregreppedHeaders(
+    contextBuilder.addPregreppedHeaderMap(
         CppHelper.createExtractInclusions(ruleContext, semantics, privateHeaders));
 
     // Add this package's dir to declaredIncludeDirs, & this rule's headers to declaredIncludeSrcs
