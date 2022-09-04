@@ -71,6 +71,7 @@ public class NodesResource extends RestResource {
 
     @GET
     @Timed
+    @Path("/")
     @Produces(MediaType.APPLICATION_JSON)
     public String list(@QueryParam("pretty") boolean prettyPrint) {
         Core core = (Core) rc.getProperty("core");
