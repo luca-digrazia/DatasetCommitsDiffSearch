@@ -150,9 +150,6 @@ public interface CcToolchainProviderApi<
   @StarlarkMethod(name = "ar_files", documented = false, useStarlarkThread = true)
   Depset getArFilesForStarlark(StarlarkThread thread) throws EvalException;
 
-  @StarlarkMethod(name = "strip_files", documented = false, useStarlarkThread = true)
-  Depset getStripFilesForStarlark(StarlarkThread thread) throws EvalException;
-
   @StarlarkMethod(name = "objcopy_files", documented = false, useStarlarkThread = true)
   Depset getObjcopyFilesForStarlark(StarlarkThread thread) throws EvalException;
 

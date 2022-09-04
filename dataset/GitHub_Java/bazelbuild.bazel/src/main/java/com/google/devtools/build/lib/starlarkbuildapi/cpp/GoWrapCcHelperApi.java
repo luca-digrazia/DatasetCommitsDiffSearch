@@ -49,7 +49,7 @@ public interface GoWrapCcHelperApi<
         StarlarkRuleContextT extends StarlarkRuleContextApi<ConstraintValueT>,
         CcInfoT extends CcInfoApi<FileT>,
         FeatureConfigurationT extends FeatureConfigurationApi,
-        CcToolchainProviderT extends CcToolchainProviderApi<FeatureConfigurationT>,
+        CcToolchainProviderT extends CcToolchainProviderApi<FeatureConfigurationT, ?, ?>,
         CcLinkingContextT extends CcLinkingContextApi<FileT>,
         GoConfigurationT extends GoConfigurationApi,
         GoContextInfoT extends GoContextInfoApi,
@@ -151,7 +151,7 @@ public interface GoWrapCcHelperApi<
         @Param(name = "srcs", positional = false, named = true),
         @Param(name = "deps", positional = false, named = true),
       })
-  public Tuple<FileT> createGoCompileActions(
+  public Tuple /* of FileT */ createGoCompileActions(
       StarlarkRuleContextT starlarkRuleContext,
       CcToolchainProviderT ccToolchainProvider,
       Sequence<?> srcs, // <FileT> expected
@@ -168,7 +168,7 @@ public interface GoWrapCcHelperApi<
         @Param(name = "srcs", positional = false, named = true),
         @Param(name = "deps", positional = false, named = true),
       })
-  public Tuple<FileT> createGoCompileActionsGopkg(
+  public Tuple /* of FileT */ createGoCompileActionsGopkg(
       StarlarkRuleContextT starlarkRuleContext,
       CcToolchainProviderT ccToolchainProvider,
       Sequence<?> srcs, // <FileT> expected

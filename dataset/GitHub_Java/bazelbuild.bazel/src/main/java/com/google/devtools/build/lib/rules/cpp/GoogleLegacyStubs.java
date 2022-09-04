@@ -14,33 +14,33 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
-import com.google.devtools.build.lib.skylarkbuildapi.RunfilesApi;
-import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
-import com.google.devtools.build.lib.skylarkbuildapi.TransitiveInfoCollectionApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationContextApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcInfoApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingContextApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainProviderApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.CompilationInfoApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.FeatureConfigurationApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.GoCcLinkParamsInfoApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.GoWrapCcHelperApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.GoWrapCcInfoApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.PyCcLinkParamsProviderApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.PyWrapCcHelperApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.PyWrapCcInfoApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.WrapCcHelperApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.WrapCcIncludeProviderApi;
-import com.google.devtools.build.lib.skylarkbuildapi.go.GoConfigurationApi;
-import com.google.devtools.build.lib.skylarkbuildapi.go.GoContextInfoApi;
-import com.google.devtools.build.lib.skylarkbuildapi.go.GoPackageInfoApi;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
-import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.SkylarkList;
-import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
+import com.google.devtools.build.lib.collect.nestedset.Depset;
+import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
+import com.google.devtools.build.lib.starlarkbuildapi.RunfilesApi;
+import com.google.devtools.build.lib.starlarkbuildapi.StarlarkRuleContextApi;
+import com.google.devtools.build.lib.starlarkbuildapi.core.TransitiveInfoCollectionApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcCompilationContextApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcInfoApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcLinkingContextApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcToolchainProviderApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.CompilationInfoApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.FeatureConfigurationApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.GoCcLinkParamsInfoApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.GoWrapCcHelperApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.GoWrapCcInfoApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.PyCcLinkParamsProviderApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.PyWrapCcHelperApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.PyWrapCcInfoApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.WrapCcHelperApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.WrapCcIncludeProviderApi;
+import com.google.devtools.build.lib.starlarkbuildapi.go.GoConfigurationApi;
+import com.google.devtools.build.lib.starlarkbuildapi.go.GoContextInfoApi;
+import com.google.devtools.build.lib.starlarkbuildapi.go.GoPackageInfoApi;
+import com.google.devtools.build.lib.starlarkbuildapi.platform.ConstraintValueInfoApi;
+import net.starlark.java.eval.EvalException;
+import net.starlark.java.eval.Printer;
+import net.starlark.java.eval.Sequence;
+import net.starlark.java.eval.Tuple;
 
 /**
  * Fake stub implementations for C++-related Starlark API which are unsupported without use of
@@ -53,68 +53,70 @@ public final class GoogleLegacyStubs {
   private static class WrapCcHelper
       implements WrapCcHelperApi<
           FeatureConfigurationApi,
-          SkylarkRuleContextApi,
-          CcToolchainProviderApi<FeatureConfigurationApi>,
-          CompilationInfoApi,
+          ConstraintValueInfoApi,
+          StarlarkRuleContextApi<ConstraintValueInfoApi>,
+          CcToolchainProviderApi<FeatureConfigurationApi, ?, ?>,
+          CompilationInfoApi<FileApi>,
           FileApi,
-          CcCompilationContextApi,
+          CcCompilationContextApi<FileApi>,
           WrapCcIncludeProviderApi> {
 
     @Override
-    public FeatureConfigurationApi skylarkGetFeatureConfiguration(
-        SkylarkRuleContextApi skylarkRuleContext,
-        CcToolchainProviderApi<FeatureConfigurationApi> ccToolchain)
+    public FeatureConfigurationApi starlarkGetFeatureConfiguration(
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
+        CcToolchainProviderApi<FeatureConfigurationApi, ?, ?> ccToolchain)
         throws EvalException, InterruptedException {
       return null;
     }
 
     @Override
-    public SkylarkNestedSet skylarkCollectTransitiveSwigIncludes(
-        SkylarkRuleContextApi skylarkRuleContext) {
+    public Depset starlarkCollectTransitiveSwigIncludes(
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext) {
       return null;
     }
 
     @Override
-    public CompilationInfoApi skylarkCreateCompileActions(
-        SkylarkRuleContextApi skylarkRuleContext,
+    public CompilationInfoApi<FileApi> starlarkCreateCompileActions(
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
         FeatureConfigurationApi featureConfiguration,
-        CcToolchainProviderApi<FeatureConfigurationApi> ccToolchain,
+        CcToolchainProviderApi<FeatureConfigurationApi, ?, ?> ccToolchain,
         FileApi ccFile,
         FileApi headerFile,
-        SkylarkList<CcCompilationContextApi> depCcCompilationContexts,
-        SkylarkList<String> targetCopts)
+        Sequence<?> depCcCompilationContexts, // <CcCompilationContextApi>
+        Sequence<?> targetCopts /* <String> */)
         throws EvalException, InterruptedException {
       return null;
     }
 
     @Override
-    public String skylarkGetMangledTargetName(SkylarkRuleContextApi skylarkRuleContext)
+    public String starlarkGetMangledTargetName(
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext)
         throws EvalException, InterruptedException {
       return null;
     }
 
     @Override
     public WrapCcIncludeProviderApi getWrapCcIncludeProvider(
-        SkylarkRuleContextApi skylarkRuleContext, SkylarkNestedSet swigIncludes)
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext, Depset swigIncludes)
         throws EvalException, InterruptedException {
       return null;
     }
 
     @Override
     public void registerSwigAction(
-        SkylarkRuleContextApi skylarkRuleContext,
-        CcToolchainProviderApi<FeatureConfigurationApi> ccToolchain,
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
+        CcToolchainProviderApi<FeatureConfigurationApi, ?, ?> ccToolchain,
         FeatureConfigurationApi featureConfiguration,
-        CcCompilationContextApi wrapperCcCompilationContext,
-        SkylarkNestedSet swigIncludes,
+        CcCompilationContextApi<FileApi> wrapperCcCompilationContext,
+        Depset swigIncludes,
         FileApi swigSource,
-        SkylarkList<String> subParameters,
+        Sequence<?> subParameters, // <String>
         FileApi ccFile,
         FileApi headerFile,
-        SkylarkList<FileApi> outputFiles,
+        Sequence<?> outputFiles, // <FileApi>
         Object outDir,
         Object javaDir,
-        SkylarkNestedSet auxiliaryInputs,
+        Depset auxiliaryInputs,
         String swigAttributeName,
         Object zipTool)
         throws EvalException, InterruptedException {}
@@ -127,34 +129,37 @@ public final class GoogleLegacyStubs {
   public static class PyWrapCcHelper extends WrapCcHelper
       implements PyWrapCcHelperApi<
           FileApi,
-          SkylarkRuleContextApi,
-          CcInfoApi,
+          ConstraintValueInfoApi,
+          StarlarkRuleContextApi<ConstraintValueInfoApi>,
+          CcInfoApi<FileApi>,
           FeatureConfigurationApi,
-          CcToolchainProviderApi<FeatureConfigurationApi>,
-          CompilationInfoApi,
-          CcCompilationContextApi,
+          CcToolchainProviderApi<FeatureConfigurationApi, ?, ?>,
+          CompilationInfoApi<FileApi>,
+          CcCompilationContextApi<FileApi>,
           WrapCcIncludeProviderApi> {
 
     @Override
-    public SkylarkList<String> getPyExtensionLinkopts(SkylarkRuleContextApi skylarkRuleContext) {
+    public Sequence<String> getPyExtensionLinkopts(
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext) {
       return null;
     }
 
     @Override
-    public SkylarkNestedSet getTransitivePythonSources(
-        SkylarkRuleContextApi skylarkRuleContext, FileApi pyFile) {
+    public Depset getTransitivePythonSources(
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext, FileApi pyFile) {
       return null;
     }
 
     @Override
     public RunfilesApi getPythonRunfiles(
-        SkylarkRuleContextApi skylarkRuleContext, SkylarkNestedSet filesToBuild) {
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext, Depset filesToBuild) {
       return null;
     }
 
     @Override
-    public PyWrapCcInfoApi getPyWrapCcInfo(
-        SkylarkRuleContextApi skylarkRuleContext, CcInfoApi ccInfo) {
+    public PyWrapCcInfoApi<FileApi> getPyWrapCcInfo(
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
+        CcInfoApi<FileApi> ccInfo) {
       return null;
     }
   }
@@ -166,20 +171,22 @@ public final class GoogleLegacyStubs {
   public static class GoWrapCcHelper extends WrapCcHelper
       implements GoWrapCcHelperApi<
           FileApi,
-          SkylarkRuleContextApi,
-          CcInfoApi,
+          ConstraintValueInfoApi,
+          StarlarkRuleContextApi<ConstraintValueInfoApi>,
+          CcInfoApi<FileApi>,
           FeatureConfigurationApi,
-          CcToolchainProviderApi<FeatureConfigurationApi>,
+          CcToolchainProviderApi<FeatureConfigurationApi, ?, ?>,
           CcLinkingContextApi<FileApi>,
           GoConfigurationApi,
           GoContextInfoApi,
           TransitiveInfoCollectionApi,
-          CompilationInfoApi,
-          CcCompilationContextApi,
+          CompilationInfoApi<FileApi>,
+          CcCompilationContextApi<FileApi>,
           WrapCcIncludeProviderApi> {
 
     @Override
-    public RunfilesApi skylarkGetGoRunfiles(SkylarkRuleContextApi skylarkRuleContext) {
+    public RunfilesApi starlarkGetGoRunfiles(
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext) {
       return null;
     }
 
@@ -189,58 +196,60 @@ public final class GoogleLegacyStubs {
     }
 
     @Override
-    public GoContextInfoApi skylarkCollectTransitiveGoContextGopkg(
-        SkylarkRuleContextApi skylarkRuleContext,
+    public GoContextInfoApi starlarkCollectTransitiveGoContextGopkg(
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
         FileApi export,
         FileApi pkg,
         FileApi gopkg,
-        Object skylarkWrapContext,
-        CcInfoApi ccInfo) {
+        Object starlarkWrapContext,
+        CcInfoApi<FileApi> ccInfo) {
       return null;
     }
 
     @Override
-    public GoWrapCcInfoApi getGoWrapCcInfo(
-        SkylarkRuleContextApi skylarkRuleContext, CcInfoApi ccInfo) {
+    public GoWrapCcInfoApi<FileApi> getGoWrapCcInfo(
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
+        CcInfoApi<FileApi> ccInfo) {
       return null;
     }
 
     @Override
     public GoCcLinkParamsInfoApi getGoCcLinkParamsProvider(
-        SkylarkRuleContextApi ruleContext, CcLinkingContextApi<FileApi> ccLinkingContext) {
+        StarlarkRuleContextApi<ConstraintValueInfoApi> ruleContext,
+        CcLinkingContextApi<FileApi> ccLinkingContext) {
       return null;
     }
 
     @Override
-    public Tuple<FileApi> createGoCompileActions(
-        SkylarkRuleContextApi skylarkRuleContext,
-        CcToolchainProviderApi<FeatureConfigurationApi> ccToolchainProvider,
-        SkylarkList<FileApi> srcs,
-        SkylarkList<TransitiveInfoCollectionApi> deps) {
+    public Tuple createGoCompileActions(
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
+        CcToolchainProviderApi<FeatureConfigurationApi, ?, ?> ccToolchainProvider,
+        Sequence<?> srcs, // <FileApi>
+        Sequence<?> deps /* <TransitiveInfoCollectionApi> */) {
       return null;
     }
 
     @Override
-    public Tuple<FileApi> createGoCompileActionsGopkg(
-        SkylarkRuleContextApi skylarkRuleContext,
-        CcToolchainProviderApi<FeatureConfigurationApi> ccToolchainProvider,
-        SkylarkList<FileApi> srcs,
-        SkylarkList<TransitiveInfoCollectionApi> deps) {
+    public Tuple createGoCompileActionsGopkg(
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
+        CcToolchainProviderApi<FeatureConfigurationApi, ?, ?> ccToolchainProvider,
+        Sequence<?> srcs, // <FileApi>
+        Sequence<?> deps /* <TransitiveInfoCollectionApi> */) {
       return null;
     }
 
     @Override
     public GoPackageInfoApi createTransitiveGopackageInfo(
-        SkylarkRuleContextApi skylarkRuleContext,
-        FileApi skylarkGopkg,
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
+        FileApi starlarkGopkg,
         FileApi export,
         FileApi swigOutGo) {
       return null;
     }
 
     @Override
-    public NestedSet<FileApi> getGopackageFiles(
-        SkylarkRuleContextApi skylarkRuleContext, FileApi skylarkGopkg) {
+    public Depset /*<FileApi>*/ getGopackageFilesForStarlark(
+        StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext, FileApi starlarkGopkg) {
       return null;
     }
   }
@@ -252,7 +261,7 @@ public final class GoogleLegacyStubs {
   public static class PyWrapCcInfoProvider implements PyWrapCcInfoApi.Provider {
 
     @Override
-    public void repr(SkylarkPrinter printer) {
+    public void repr(Printer printer) {
       printer.append("<unknown object>");
     }
   }
@@ -264,7 +273,7 @@ public final class GoogleLegacyStubs {
   public static class PyCcLinkParamsProvider implements PyCcLinkParamsProviderApi.Provider {
 
     @Override
-    public void repr(SkylarkPrinter printer) {
+    public void repr(Printer printer) {
       printer.append("<unknown object>");
     }
   }

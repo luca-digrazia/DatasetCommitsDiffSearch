@@ -629,12 +629,6 @@ public interface CcModuleApi<
             positional = false,
             named = true,
             defaultValue = "''"),
-        @Param(
-            name = "must_keep_debug",
-            documented = false,
-            positional = false,
-            named = true,
-            defaultValue = "unbound"),
       })
   LibraryToLinkT createLibraryLinkerInput(
       Object actions,
@@ -649,7 +643,6 @@ public interface CcModuleApi<
       boolean alwayslink,
       String dynamicLibraryPath,
       String interfaceLibraryPath,
-      Object mustKeepDebug,
       StarlarkThread thread)
       throws EvalException, InterruptedException;
 

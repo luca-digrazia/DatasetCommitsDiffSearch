@@ -342,7 +342,10 @@ public final class CcToolchainProvider extends ToolchainInfo
    */
   public boolean shouldProcessHeaders(
       FeatureConfiguration featureConfiguration, CppConfiguration cppConfiguration) {
-    return featureConfiguration.isEnabled(CppRuleClasses.PARSE_HEADERS);
+    // If parse_headers_verifies_modules is switched on, we verify that headers are
+    // self-contained by building the module instead.
+    return !cppConfiguration.getParseHeadersVerifiesModules()
+        && featureConfiguration.isEnabled(CppRuleClasses.PARSE_HEADERS);
   }
 
   @Override
