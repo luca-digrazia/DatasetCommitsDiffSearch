@@ -27,7 +27,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.analysis.AnalysisProtos.ActionGraphContainer;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
@@ -280,10 +279,8 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
           SkyFunctions.TARGET_PATTERN_PHASE);
 
   @Override
-  protected ImmutableMap<Root, ArtifactRoot> createSourceArtifactRootMapOnNewPkgLocator(
-      PathPackageLocator oldLocator, PathPackageLocator pkgLocator) {
+  protected void onNewPackageLocator(PathPackageLocator oldLocator, PathPackageLocator pkgLocator) {
     invalidate(SkyFunctionName.functionIsIn(PACKAGE_LOCATOR_DEPENDENT_VALUES));
-    return super.createSourceArtifactRootMapOnNewPkgLocator(oldLocator, pkgLocator);
   }
 
   @Override
