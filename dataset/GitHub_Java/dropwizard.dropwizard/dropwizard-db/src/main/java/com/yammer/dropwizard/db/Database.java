@@ -1,6 +1,5 @@
 package com.yammer.dropwizard.db;
 
-import com.yammer.dropwizard.db.args.OptionalArgumentFactory;
 import com.yammer.dropwizard.lifecycle.Managed;
 import com.yammer.metrics.Metrics;
 import org.apache.log4j.Level;
@@ -28,11 +27,10 @@ public class Database extends DBI implements Managed {
         super(dataSource);
         this.pool = pool;
         this.ping = onDemand(Ping.class);
-        setSQLLog(new Log4JLog(LOGGER, Level.ERROR));
+        setSQLLog(new Log4JLog(LOGGER, Level.TRACE));
         setTimingCollector(new MetricsTimingCollector(Metrics.defaultRegistry()));
         setStatementRewriter(new NamePrependingStatementRewriter());
         setStatementLocator(new ScopedStatementLocator());
-        registerArgumentFactory(new OptionalArgumentFactory());
     }
 
     @Override
