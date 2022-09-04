@@ -40,6 +40,7 @@ import java.util.Map;
 public class IndexFailure extends Persisted {
 
     public static final String COLLECTION = "index_failures";
+    private static final int PER_PAGE = 50;
 
     public IndexFailure(Map<String, Object> fields, Core core) {
         super(core, fields);
@@ -49,13 +50,13 @@ public class IndexFailure extends Persisted {
         super(core, id, fields);
     }
 
-    public static List<IndexFailure> all(Core core, int limit, int offset) {
+    public static List<IndexFailure> all(Core core, int page) {
         List<IndexFailure> failures = Lists.newArrayList();
 
         DBObject sort = new BasicDBObject();
         sort.put("timestamp", -1);
 
-        List<DBObject> results = query(new BasicDBObject(), sort, limit, offset, core, COLLECTION);
+        List<DBObject> results = query(new BasicDBObject(), sort, PER_PAGE, PER_PAGE*page, core, COLLECTION);
         for (DBObject o : results) {
             failures.add(new IndexFailure((ObjectId) o.get("_id"), o.toMap(), core));
         }
