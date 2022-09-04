@@ -12,12 +12,13 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.elytron.security.runtime.DefaultRoleDecoder;
 import io.quarkus.elytron.security.runtime.ElytronPasswordIdentityProvider;
 import io.quarkus.elytron.security.runtime.ElytronRecorder;
 import io.quarkus.elytron.security.runtime.ElytronSecurityDomainManager;
 import io.quarkus.elytron.security.runtime.ElytronTokenIdentityProvider;
+import io.quarkus.elytron.security.runtime.ElytronTrustedIdentityProvider;
 import io.quarkus.runtime.RuntimeValue;
 
 /**
@@ -51,6 +52,20 @@ class ElytronDeploymentProcessor {
         classes.produce(new ReflectiveClassBuildItem(true, false, allClasses));
     }
 
+    @BuildStep
+    void addBeans(BuildProducer<AdditionalBeanBuildItem> beans, List<ElytronPasswordMarkerBuildItem> pw,
+            List<ElytronTokenMarkerBuildItem> token) {
+        beans.produce(AdditionalBeanBuildItem.unremovableOf(ElytronSecurityDomainManager.class));
+        beans.produce(AdditionalBeanBuildItem.unremovableOf(DefaultRoleDecoder.class));
+        if (!token.isEmpty()) {
+            beans.produce(AdditionalBeanBuildItem.unremovableOf(ElytronTokenIdentityProvider.class));
+        }
+        if (!pw.isEmpty()) {
+            beans.produce(AdditionalBeanBuildItem.unremovableOf(ElytronPasswordIdentityProvider.class));
+            beans.produce(AdditionalBeanBuildItem.unremovableOf(ElytronTrustedIdentityProvider.class));
+        }
+    }
+
     /**
      * Create the deployment SecurityDomain using the SecurityRealm build items that have been created.
      *
@@ -60,17 +75,10 @@ class ElytronDeploymentProcessor {
      * @throws Exception
      */
     @BuildStep
-    @Record(ExecutionTime.STATIC_INIT)
-    SecurityDomainBuildItem build(ElytronRecorder recorder, List<SecurityRealmBuildItem> realms,
-            BuildProducer<AdditionalBeanBuildItem> beans)
+    @Record(ExecutionTime.RUNTIME_INIT)
+    SecurityDomainBuildItem build(ElytronRecorder recorder, List<SecurityRealmBuildItem> realms)
             throws Exception {
         if (realms.size() > 0) {
-
-            beans.produce(AdditionalBeanBuildItem.unremovableOf(ElytronSecurityDomainManager.class));
-            beans.produce(AdditionalBeanBuildItem.unremovableOf(ElytronTokenIdentityProvider.class));
-            beans.produce(AdditionalBeanBuildItem.unremovableOf(ElytronPasswordIdentityProvider.class));
-            beans.produce(AdditionalBeanBuildItem.unremovableOf(DefaultRoleDecoder.class));
-
             // Configure the SecurityDomain.Builder from the main realm
             SecurityRealmBuildItem realmBuildItem = realms.get(0);
             RuntimeValue<SecurityDomain.Builder> securityDomainBuilder = recorder
@@ -91,7 +99,13 @@ class ElytronDeploymentProcessor {
     }
 
     @BuildStep
-    @Record(ExecutionTime.STATIC_INIT)
+    @Record(ExecutionTime.RUNTIME_INIT)
+    public void registerPasswordProvider(ElytronRecorder recorder) {
+        recorder.registerPasswordProvider();
+    }
+
+    @BuildStep
+    @Record(ExecutionTime.RUNTIME_INIT)
     void identityManager(ElytronRecorder recorder, SecurityDomainBuildItem securityDomain, BeanContainerBuildItem bc) {
         if (securityDomain != null) {
             recorder.setDomainForIdentityProvider(bc.getValue(), securityDomain.getSecurityDomain());
