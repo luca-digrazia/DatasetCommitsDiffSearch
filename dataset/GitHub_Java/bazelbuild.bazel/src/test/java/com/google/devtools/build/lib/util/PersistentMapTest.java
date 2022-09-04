@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,23 +13,22 @@
 // limitations under the License.
 package com.google.devtools.build.lib.util;
 
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.util.FsApparatus;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * Unit tests for the {@link PersistentMap}.
@@ -74,16 +73,16 @@ public class PersistentMapTest {
     }
   }
 
-  private FsApparatus scratch = FsApparatus.newInMemory();
+  private Scratch scratch = new Scratch();
 
   private PersistentStringMap map;
   private Path mapFile;
   private Path journalFile;
 
   @Before
-  public void setUp() throws Exception {
-    mapFile = scratch.fs().getPath("/tmp/map.txt");
-    journalFile = scratch.fs().getPath("/tmp/journal.txt");
+  public final void createFiles() throws Exception  {
+    mapFile = scratch.resolve("/tmp/map.txt");
+    journalFile = scratch.resolve("/tmp/journal.txt");
     createMap();
   }
 
@@ -97,19 +96,19 @@ public class PersistentMapTest {
     createMap();
     map.put("foo", "bar");
     map.put("baz", "bang");
-    assertEquals("bar", map.get("foo"));
-    assertEquals("bang", map.get("baz"));
-    assertEquals(2, map.size());
+    assertThat(map).containsEntry("foo", "bar");
+    assertThat(map).containsEntry("baz", "bang");
+    assertThat(map).hasSize(2);
     long size = map.save();
     assertEquals(mapFile.getFileSize(), size);
-    assertEquals("bar", map.get("foo"));
-    assertEquals("bang", map.get("baz"));
-    assertEquals(2, map.size());
+    assertThat(map).containsEntry("foo", "bar");
+    assertThat(map).containsEntry("baz", "bang");
+    assertThat(map).hasSize(2);
 
     createMap(); // create a new map
-    assertEquals("bar", map.get("foo"));
-    assertEquals("bang", map.get("baz"));
-    assertEquals(2, map.size());
+    assertThat(map).containsEntry("foo", "bar");
+    assertThat(map).containsEntry("baz", "bang");
+    assertThat(map).hasSize(2);
   }
 
   @Test
@@ -121,10 +120,10 @@ public class PersistentMapTest {
     assertEquals(mapFile.getFileSize(), size);
     assertFalse(journalFile.exists());
     map.remove("foo");
-    assertEquals(1, map.size());
+    assertThat(map).hasSize(1);
     assertTrue(journalFile.exists());
     createMap(); // create a new map
-    assertEquals(1, map.size());
+    assertThat(map).hasSize(1);
   }
 
   @Test
@@ -136,11 +135,11 @@ public class PersistentMapTest {
     assertTrue(mapFile.exists());
     assertFalse(journalFile.exists());
     map.clear();
-    assertEquals(0, map.size());
+    assertThat(map).isEmpty();
     assertTrue(mapFile.exists());
     assertFalse(journalFile.exists());
     createMap(); // create a new map
-    assertEquals(0, map.size());
+    assertThat(map).isEmpty();
   }
 
   @Test
@@ -154,12 +153,12 @@ public class PersistentMapTest {
     map.updateJournal = false;
     // remove an entry
     map.remove("foo");
-    assertEquals(1, map.size());
+    assertThat(map).hasSize(1);
     // no journal file written
     assertFalse(journalFile.exists());
     createMap(); // create a new map
     // both entries are still in the map on disk
-    assertEquals(2, map.size());
+    assertThat(map).hasSize(2);
   }
 
   @Test
@@ -176,26 +175,46 @@ public class PersistentMapTest {
 
     // remove an entry
     map.remove("foo");
-    assertEquals(1, map.size());
+    assertThat(map).hasSize(1);
     // no journal file written
     assertFalse(journalFile.exists());
 
     long size = map.save();
-    assertEquals(1, map.size());
+    assertThat(map).hasSize(1);
     // The journal must be serialzed on save(), even if !updateJournal.
     assertTrue(journalFile.exists());
     assertEquals(journalFile.getFileSize() + mapFile.getFileSize(), size);
 
     map.load();
-    assertEquals(1, map.size());
+    assertThat(map).hasSize(1);
     assertTrue(journalFile.exists());
 
     createMap(); // create a new map
-    assertEquals(1, map.size());
+    assertThat(map).hasSize(1);
 
     map.keepJournal = false;
     map.save();
-    assertEquals(1, map.size());
+    assertThat(map).hasSize(1);
+    assertFalse(journalFile.exists());
+  }
+
+  @Test
+  public void keepJournalWithMultipleSaves() throws Exception {
+    createMap();
+    map.put("foo", "bar");
+    map.put("baz", "bang");
+    map.save();
+    map.updateJournal = false;
+    map.keepJournal = true;
+    map.remove("foo");
+    assertThat(map).hasSize(1);
+    map.save();
+    map.remove("baz");
+    map.save();
+    assertThat(map).hasSize(0);
+    // Ensure recreating the map loads the correct state.
+    createMap();
+    assertThat(map).hasSize(0);
     assertFalse(journalFile.exists());
   }
 
@@ -207,19 +226,19 @@ public class PersistentMapTest {
     assertFalse(journalFile.exists());
     // add an entry
     map.put("baz", "bang");
-    assertEquals(2, map.size());
+    assertThat(map).hasSize(2);
     // journal file written
     assertTrue(journalFile.exists());
     createMap(); // create a new map
     // both entries are still in the map on disk
-    assertEquals(2, map.size());
+    assertThat(map).hasSize(2);
     // add another entry
     map.put("baz2", "bang2");
-    assertEquals(3, map.size());
+    assertThat(map).hasSize(3);
     // journal file written
     assertTrue(journalFile.exists());
     createMap(); // create a new map
     // all three entries are still in the map on disk
-    assertEquals(3, map.size());
+    assertThat(map).hasSize(3);
   }
 }
