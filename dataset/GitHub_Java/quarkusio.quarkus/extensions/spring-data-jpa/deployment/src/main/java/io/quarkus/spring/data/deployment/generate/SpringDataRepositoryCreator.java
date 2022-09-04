@@ -3,7 +3,6 @@ package io.quarkus.spring.data.deployment.generate;
 import java.lang.reflect.Modifier;
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -12,7 +11,9 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import javax.enterprise.context.ApplicationScoped;
+import javax.inject.Inject;
 
+import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.ClassType;
 import org.jboss.jandex.DotName;
@@ -26,7 +27,8 @@ import io.quarkus.gizmo.FieldCreator;
 import io.quarkus.gizmo.FieldDescriptor;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
-import io.quarkus.gizmo.ResultHandle;
+import io.quarkus.panache.common.deployment.TypeBundle;
+import io.quarkus.runtime.util.HashUtil;
 import io.quarkus.spring.data.deployment.DotNames;
 
 public class SpringDataRepositoryCreator {
@@ -38,18 +40,22 @@ public class SpringDataRepositoryCreator {
     private final DerivedMethodsAdder derivedMethodsAdder;
     private final CustomQueryMethodsAdder customQueryMethodsAdder;
 
-    public SpringDataRepositoryCreator(ClassOutput classOutput, IndexView index,
-            Consumer<String> fragmentImplClassResolvedCallback) {
+    public SpringDataRepositoryCreator(ClassOutput classOutput, ClassOutput otherClassOutput, IndexView index,
+            Consumer<String> fragmentImplClassResolvedCallback,
+            Consumer<String> customClassCreatedCallback, TypeBundle typeBundle) {
         this.classOutput = classOutput;
         this.index = index;
         this.fragmentMethodsAdder = new FragmentMethodsAdder(fragmentImplClassResolvedCallback, index);
-        this.stockMethodsAdder = new StockMethodsAdder(index);
-        this.derivedMethodsAdder = new DerivedMethodsAdder(index);
-        this.customQueryMethodsAdder = new CustomQueryMethodsAdder();
+        this.stockMethodsAdder = new StockMethodsAdder(index, typeBundle);
+        this.derivedMethodsAdder = new DerivedMethodsAdder(index, typeBundle, otherClassOutput, customClassCreatedCallback);
+
+        // custom queries may generate non-bean classes
+        this.customQueryMethodsAdder = new CustomQueryMethodsAdder(index, otherClassOutput, customClassCreatedCallback,
+                typeBundle);
     }
 
-    public void implementCrudRepository(ClassInfo repositoryToImplement) {
-        Map.Entry<DotName, DotName> extraTypesResult = extractIdAndEntityTypes(repositoryToImplement);
+    public void implementCrudRepository(ClassInfo repositoryToImplement, IndexView indexView) {
+        Map.Entry<DotName, DotName> extraTypesResult = extractIdAndEntityTypes(repositoryToImplement, indexView);
 
         String idTypeStr = extraTypesResult.getKey().toString();
         DotName entityDotName = extraTypesResult.getValue();
@@ -68,16 +74,18 @@ public class SpringDataRepositoryCreator {
         List<DotName> interfaceNames = repositoryToImplement.interfaceNames();
         List<DotName> fragmentNamesToImplement = new ArrayList<>(interfaceNames.size());
         for (DotName interfaceName : interfaceNames) {
-            if (!DotNames.SUPPORTED_REPOSITORIES.contains(interfaceName)) {
+            if (!DotNames.SUPPORTED_REPOSITORIES.contains(interfaceName)
+                    && !GenerationUtil.isIntermediateRepository(interfaceName, indexView)) {
                 fragmentNamesToImplement.add(interfaceName);
             }
         }
 
         Map<String, FieldDescriptor> fragmentImplNameToFieldDescriptor = new HashMap<>();
-        String generatedClassName = repositoryToImplement.name().toString() + "Impl";
+        String repositoryToImplementStr = repositoryToImplement.name().toString();
+        String generatedClassName = repositoryToImplementStr + "_" + HashUtil.sha1(repositoryToImplementStr) + "Impl";
         try (ClassCreator classCreator = ClassCreator.builder().classOutput(classOutput)
                 .className(generatedClassName)
-                .interfaces(repositoryToImplement.name().toString())
+                .interfaces(repositoryToImplementStr)
                 .build()) {
             classCreator.addAnnotation(ApplicationScoped.class);
 
@@ -91,20 +99,8 @@ public class SpringDataRepositoryCreator {
             try (MethodCreator ctor = classCreator.getMethodCreator("<init>", "V")) {
                 ctor.invokeSpecialMethod(MethodDescriptor.ofMethod(Object.class, "<init>", void.class), ctor.getThis());
                 // initialize the entityClass field
-                ResultHandle entityClass = ctor.invokeStaticMethod(
-                        MethodDescriptor.ofMethod(Class.class, "forName", Class.class, String.class),
-                        ctor.load(entityTypeStr));
-                ctor.writeInstanceField(entityClassFieldCreator.getFieldDescriptor(), ctor.getThis(), entityClass);
-
-                //initialize the custom impl classes fields
-                for (Map.Entry<String, FieldDescriptor> customClassFieldEntry : fragmentImplNameToFieldDescriptor
-                        .entrySet()) {
-                    ResultHandle customInterfaceImplClass = ctor.invokeStaticMethod(
-                            MethodDescriptor.ofMethod(Class.class, "forName", Class.class, String.class),
-                            ctor.load(customClassFieldEntry.getKey()));
-                    ctor.writeInstanceField(customClassFieldEntry.getValue(), ctor.getThis(), customInterfaceImplClass);
-                }
-
+                ctor.writeInstanceField(entityClassFieldCreator.getFieldDescriptor(), ctor.getThis(),
+                        ctor.loadClass(entityTypeStr));
                 ctor.returnValue(null);
             }
 
@@ -124,14 +120,21 @@ public class SpringDataRepositoryCreator {
         }
     }
 
-    private Map.Entry<DotName, DotName> extractIdAndEntityTypes(ClassInfo repositoryToImplement) {
+    private Map.Entry<DotName, DotName> extractIdAndEntityTypes(ClassInfo repositoryToImplement, IndexView indexView) {
+        AnnotationInstance repositoryDefinitionInstance = repositoryToImplement
+                .classAnnotation(DotNames.SPRING_DATA_REPOSITORY_DEFINITION);
+        if (repositoryDefinitionInstance != null) {
+            return new AbstractMap.SimpleEntry<>(repositoryDefinitionInstance.value("idClass").asClass().name(),
+                    repositoryDefinitionInstance.value("domainClass").asClass().name());
+        }
+
         DotName entityDotName = null;
         DotName idDotName = null;
 
         // we need to pull the entity and ID types for the Spring Data generic types
         // we also need to make sure that the user didn't try to specify multiple different types
         // in the same interface (which is possible if only Repository is used)
-        for (DotName extendedSpringDataRepo : GenerationUtil.extendedSpringDataRepos(repositoryToImplement)) {
+        for (DotName extendedSpringDataRepo : GenerationUtil.extendedSpringDataRepos(repositoryToImplement, indexView)) {
             List<Type> types = JandexUtil.resolveTypeParameters(repositoryToImplement.name(), extendedSpringDataRepo, index);
             if (!(types.get(0) instanceof ClassType)) {
                 throw new IllegalArgumentException(
@@ -160,28 +163,24 @@ public class SpringDataRepositoryCreator {
 
     private void createCustomImplFields(ClassCreator repositoryImpl, List<DotName> customInterfaceNamesToImplement,
             IndexView index, Map<String, FieldDescriptor> customImplNameToFieldDescriptor) {
-        Set<String> customImplNames = new HashSet<>(customInterfaceNamesToImplement.size());
+        Set<String> customImplClassNames = new HashSet<>(customInterfaceNamesToImplement.size());
 
         // go through the interfaces and collect the implementing classes in a Set
         // this is done because it is possible for an implementing class to implement multiple fragments
         for (DotName customInterfaceToImplement : customInterfaceNamesToImplement) {
-            Collection<ClassInfo> knownImplementors = index.getAllKnownImplementors(customInterfaceToImplement);
-            if (knownImplementors.size() != 1) {
-                throw new IllegalArgumentException(
-                        "Interface " + customInterfaceToImplement
-                                + " must contain a single implementation which is a bean");
-            }
-            customImplNames.add(knownImplementors.iterator().next().name().toString());
+            customImplClassNames
+                    .add(FragmentMethodsUtil.getImplementationDotName(customInterfaceToImplement, index).toString());
         }
 
         // do the actual field creation and book-keeping of them in the customImplNameToFieldDescriptor Map
         int i = 0;
-        for (String customImplName : customImplNames) {
+        for (String customImplClassName : customImplClassNames) {
             FieldCreator customClassField = repositoryImpl
-                    .getFieldCreator("customImplClass" + (i + 1), Class.class.getName())
-                    .setModifiers(Modifier.PRIVATE | Modifier.FINAL);
+                    .getFieldCreator("customImplClass" + (i + 1), customImplClassName)
+                    .setModifiers(Modifier.PROTECTED); // done to prevent warning during the build
+            customClassField.addAnnotation(Inject.class);
 
-            customImplNameToFieldDescriptor.put(customImplName,
+            customImplNameToFieldDescriptor.put(customImplClassName,
                     customClassField.getFieldDescriptor());
             i++;
         }

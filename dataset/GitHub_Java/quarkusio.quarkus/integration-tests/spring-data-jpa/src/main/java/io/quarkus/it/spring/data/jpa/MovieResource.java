@@ -5,7 +5,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -61,14 +60,6 @@ public class MovieResource {
         Page<Movie> page = movieRepository.customFind(
                 PageRequest.of(pageNum, pageSize, Sort.Direction.ASC, "title"));
         return page.hasNext() + " / " + page.getNumberOfElements();
-    }
-
-    @GET
-    @Path("/customFind/all")
-    public List<Movie> customFindReturnAll() {
-        Page<Movie> page = movieRepository.customFind(
-                PageRequest.of(0, 100, Sort.Direction.DESC, "id"));
-        return page.stream().collect(Collectors.toList());
     }
 
     @GET
