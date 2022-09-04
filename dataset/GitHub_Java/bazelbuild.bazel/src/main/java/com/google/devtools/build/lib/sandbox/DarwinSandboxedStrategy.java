@@ -16,8 +16,10 @@ package com.google.devtools.build.lib.sandbox;
 
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.exec.AbstractSpawnStrategy;
-import com.google.devtools.build.lib.exec.SpawnRunner;
+import com.google.devtools.build.lib.buildtool.BuildRequest;
+import com.google.devtools.build.lib.runtime.CommandEnvironment;
+import com.google.devtools.build.lib.vfs.Path;
+import java.io.IOException;
 
 /** Strategy that uses sandboxing to execute a process, for Darwin */
 //TODO(ulfjack): This class only exists for this annotation. Find a better way to handle this!
@@ -25,13 +27,18 @@ import com.google.devtools.build.lib.exec.SpawnRunner;
   name = {"sandboxed", "darwin-sandbox"},
   contextType = SpawnActionContext.class
 )
-final class DarwinSandboxedStrategy extends AbstractSpawnStrategy {
-  DarwinSandboxedStrategy(SpawnRunner spawnRunner) {
-    super(spawnRunner);
-  }
-
-  @Override
-  public String toString() {
-    return "sandboxed";
+final class DarwinSandboxedStrategy extends SandboxStrategy {
+  DarwinSandboxedStrategy(
+      CommandEnvironment cmdEnv,
+      BuildRequest buildRequest,
+      Path sandboxBase,
+      boolean verboseFailures,
+      String productName,
+      int timeoutGraceSeconds)
+      throws IOException {
+    super(
+        verboseFailures,
+        new DarwinSandboxedSpawnRunner(
+            cmdEnv, buildRequest, sandboxBase, productName, timeoutGraceSeconds));
   }
 }

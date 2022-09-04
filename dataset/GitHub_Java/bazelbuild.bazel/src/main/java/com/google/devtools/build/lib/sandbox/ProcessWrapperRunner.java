@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -42,10 +41,10 @@ final class ProcessWrapperRunner {
   }
 
   static List<String> getCommandLine(
-      Path processWrapper, List<String> spawnArguments, Duration timeout, int timeoutGraceSeconds) {
+      Path processWrapper, List<String> spawnArguments, int timeout, int timeoutGraceSeconds) {
     List<String> commandLineArgs = new ArrayList<>(5 + spawnArguments.size());
     commandLineArgs.add(processWrapper.getPathString());
-    commandLineArgs.add("--timeout=" + timeout.getSeconds());
+    commandLineArgs.add("--timeout=" + timeout);
     commandLineArgs.add("--kill_delay=" + timeoutGraceSeconds);
     commandLineArgs.addAll(spawnArguments);
     return commandLineArgs;
