@@ -11,14 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package com.google.devtools.build.lib.bazel.rules.android;
 
-import com.google.devtools.build.lib.rules.android.AndroidInstrumentationTestBase;
+import com.google.devtools.build.lib.rules.android.AndroidSdkBase;
 
-/** Implementation of {@code android_instrumentation_test} with Bazel semantics. */
-public class BazelAndroidInstrumentationTest extends AndroidInstrumentationTestBase {
-  public BazelAndroidInstrumentationTest() {
+/** Implementation of {@code AndroidSdk} with Bazel semantics. */
+public class BazelAndroidSdk extends AndroidSdkBase {
+  public BazelAndroidSdk() {
     super(BazelAndroidMigrationSemantics.INSTANCE);
   }
 }

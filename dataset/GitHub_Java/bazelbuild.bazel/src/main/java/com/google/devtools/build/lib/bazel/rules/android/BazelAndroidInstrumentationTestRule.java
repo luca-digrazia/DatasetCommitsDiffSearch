@@ -17,22 +17,33 @@ import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.rules.android.AndroidSdkBaseRule;
+import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
+import com.google.devtools.build.lib.rules.android.AndroidInstrumentationTestBaseRule;
+import com.google.devtools.build.lib.rules.android.AndroidRuleClasses;
 
-/** Rule definition for Bazel android_sdk */
-public class BazelAndroidSdkRule implements RuleDefinition {
+/** Rule definition for Bazel android_instrumentation_test. */
+public final class BazelAndroidInstrumentationTestRule implements RuleDefinition {
 
   @Override
   public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
-    return builder.build();
+    return builder
+        .removeAttribute("deps")
+        .removeAttribute("javacopts")
+        .removeAttribute("plugins")
+        .removeAttribute(":java_plugins")
+        .build();
   }
 
   @Override
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
-        .name("android_sdk")
-        .ancestors(AndroidSdkBaseRule.class, BaseRuleClasses.BaseRule.class)
-        .factoryClass(BazelAndroidSdk.class)
+        .name("android_instrumentation_test")
+        .type(RuleClassType.TEST)
+        .ancestors(
+            AndroidInstrumentationTestBaseRule.class,
+            AndroidRuleClasses.AndroidBaseRule.class,
+            BaseRuleClasses.TestBaseRule.class)
+        .factoryClass(BazelAndroidInstrumentationTest.class)
         .build();
   }
 }

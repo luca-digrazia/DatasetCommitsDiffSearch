@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,15 +15,17 @@ package com.google.devtools.build.lib.runtime;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
+import com.google.devtools.build.lib.util.CustomExitCodePublisher;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.io.OutErr;
-
 import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -37,16 +39,26 @@ public abstract class BugReport {
 
   private BugReport() {}
 
-  private static Logger LOG = Logger.getLogger(BugReport.class.getName());
+  private static final Logger logger = Logger.getLogger(BugReport.class.getName());
 
   private static BlazeVersionInfo versionInfo = BlazeVersionInfo.instance();
 
   private static BlazeRuntime runtime = null;
 
+  private static AtomicBoolean alreadyHandlingCrash = new AtomicBoolean(false);
+
+  private static final boolean IN_TEST =
+      System.getenv("TEST_TMPDIR") != null
+          && System.getenv("ENABLE_BUG_REPORT_LOGGING_IN_TEST") == null;
+
   public static void setRuntime(BlazeRuntime newRuntime) {
     Preconditions.checkNotNull(newRuntime);
     Preconditions.checkState(runtime == null, "runtime already set: %s, %s", runtime, newRuntime);
     runtime = newRuntime;
+  }
+
+  private static String getProductName() {
+    return runtime != null ? runtime.getProductName() : "<unknown>";
   }
 
   /**
@@ -57,42 +69,88 @@ public abstract class BugReport {
    * @param values Additional string values to clarify the exception.
    */
   public static void sendBugReport(Throwable exception, List<String> args, String... values) {
+    if (IN_TEST) {
+      Throwables.throwIfUnchecked(exception);
+      throw new IllegalStateException(
+          "Bug reports in tests should crash: " + args + ", " + Arrays.toString(values), exception);
+    }
     if (!versionInfo.isReleasedBlaze()) {
-      LOG.info("(Not a released binary; not logged.)");
+      logger.info("(Not a released binary; not logged.)");
       return;
     }
 
     logException(exception, filterClientEnv(args), values);
   }
 
-  /**
-   * Print and send a bug report, and exit with the proper Blaze code.
-   */
-  public static void handleCrash(Throwable throwable, String... args) {
+  private static void logCrash(Throwable throwable, String... args) {
+    logger.severe("Crash: " + Throwables.getStackTraceAsString(throwable));
     BugReport.sendBugReport(throwable, Arrays.asList(args));
     BugReport.printBug(OutErr.SYSTEM_OUT_ERR, throwable);
-    System.err.println("Blaze crash in async thread:");
+    System.err.println("ERROR: " + getProductName() + " crash in async thread:");
     throwable.printStackTrace();
-    int exitCode =
-        (throwable instanceof OutOfMemoryError) ? ExitCode.OOM_ERROR.getNumericExitCode()
-            : ExitCode.BLAZE_INTERNAL_ERROR.getNumericExitCode();
-    if (runtime != null) {
-      runtime.notifyCommandComplete(exitCode);
-      // We don't call runtime#shutDown() here because all it does is shut down the modules, and who
-      // knows if they can be trusted.
+  }
+
+  /**
+   * Print and send a bug report, and exit with the proper Blaze code. Does not exit if called a
+   * second time. This method tries hard to catch any throwables thrown during its execution and
+   * halts the runtime in that case.
+   */
+  public static void handleCrash(Throwable throwable, String... args) {
+    int exitCode = getExitCodeForThrowable(throwable).getNumericExitCode();
+    try {
+      if (alreadyHandlingCrash.compareAndSet(false, true)) {
+        try {
+          logCrash(throwable, args);
+          if (runtime != null) {
+            runtime.notifyCommandComplete(exitCode);
+            // We don't call runtime#shutDown() here because all it does is shut down the modules,
+            // and who knows if they can be trusted. Instead, we call runtime#shutdownOnCrash()
+            // which attempts to cleanly shutdown those modules that might have something pending
+            // to do as a best-effort operation.
+            runtime.shutdownOnCrash();
+          }
+          CustomExitCodePublisher.maybeWriteExitStatusFile(exitCode);
+        } finally {
+          // Avoid shutdown deadlock issues: If an application shutdown hook crashes, it will
+          // trigger our Blaze crash handler (this method). Calling System#exit() here, would
+          // therefore induce a deadlock. This call would block on the shutdown sequence completing,
+          // but the shutdown sequence would in turn be blocked on this thread finishing. Instead,
+          // exit fast via halt().
+          Runtime.getRuntime().halt(exitCode);
+        }
+      } else {
+        logCrash(throwable, args);
+      }
+    } catch (Throwable t) {
+      System.err.println(
+          "ERROR: An crash occurred while "
+              + getProductName()
+              + " was trying to handle a crash! Please file a bug against "
+              + getProductName()
+              + " and include the information below.");
+
+      System.err.println("Original uncaught exception:");
+      throwable.printStackTrace(System.err);
+
+      System.err.println("Exception encountered during BugReport#handleCrash:");
+      t.printStackTrace(System.err);
+
+      Runtime.getRuntime().halt(exitCode);
     }
-    // Avoid shutdown deadlock issues: If an application shutdown hook crashes, it will trigger our
-    // Blaze crash handler (this method). Calling System#exit() here, would therefore induce a
-    // deadlock. This call would block on the shutdown sequence completing, but the shutdown
-    // sequence would in turn be blocked on this thread finishing. Instead, exit fast via halt().
-    Runtime.getRuntime().halt(exitCode);
+  }
+
+  /** Get exit code corresponding to throwable. */
+  public static ExitCode getExitCodeForThrowable(Throwable throwable) {
+    return (Throwables.getRootCause(throwable) instanceof OutOfMemoryError)
+        ? ExitCode.OOM_ERROR
+        : ExitCode.BLAZE_INTERNAL_ERROR;
   }
 
   private static void printThrowableTo(OutErr outErr, Throwable e) {
     PrintStream err = new PrintStream(outErr.getErrorStream());
     e.printStackTrace(err);
     err.flush();
-    LOG.log(Level.SEVERE, "Blaze crashed", e);
+    logger.log(Level.SEVERE, getProductName() + " crashed", e);
   }
 
   /**
@@ -103,8 +161,8 @@ public abstract class BugReport {
    */
   public static void printBug(OutErr outErr, Throwable e) {
     if (e instanceof OutOfMemoryError) {
-      outErr.printErr(e.getMessage() + "\n\n" +
-          "Blaze ran out of memory and crashed.\n");
+      outErr.printErr(
+          e.getMessage() + "\n\nERROR: " + getProductName() + " ran out of memory and crashed.\n");
     } else {
       printThrowableTo(outErr, e);
     }
@@ -133,11 +191,11 @@ public abstract class BugReport {
   // Log the exception.  Because this method is only called in a blaze release,
   // this will result in a report being sent to a remote logging service.
   private static void logException(Throwable exception, List<String> args, String... values) {
+    logger.severe("Exception: " + Throwables.getStackTraceAsString(exception));
     // The preamble is used in the crash watcher, so don't change it
     // unless you know what you're doing.
-    String preamble = exception instanceof OutOfMemoryError
-        ? "Blaze OOMError: "
-        : "Blaze crashed with args: ";
+    String preamble = getProductName()
+        + (exception instanceof OutOfMemoryError ? " OOMError: " : " crashed with args: ");
 
     LoggingUtil.logToRemote(Level.SEVERE, preamble + Joiner.on(' ').join(args), exception,
         values);

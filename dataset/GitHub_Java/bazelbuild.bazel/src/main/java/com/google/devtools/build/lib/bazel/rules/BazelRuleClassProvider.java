@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.ActionEnvironmentProvider;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.bazel.repository.LocalConfigPlatformRule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidSdkRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.BazelAarImportRule;
@@ -58,7 +57,7 @@ import com.google.devtools.build.lib.bazel.rules.workspace.MavenJarRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.MavenServerRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.NewGitRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.NewHttpArchiveRule;
-import com.google.devtools.build.lib.cmdline.LabelConstants;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.rules.android.AarImportBaseRule;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
@@ -89,7 +88,6 @@ import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.platform.PlatformRules;
 import com.google.devtools.build.lib.rules.proto.BazelProtoLibraryRule;
 import com.google.devtools.build.lib.rules.proto.ProtoConfiguration;
-import com.google.devtools.build.lib.rules.proto.ProtoInfo;
 import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainRule;
 import com.google.devtools.build.lib.rules.python.PythonConfigurationLoader;
 import com.google.devtools.build.lib.rules.python.PythonOptions;
@@ -103,7 +101,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
-import com.google.devtools.common.options.OptionMetadataTag;
 import java.io.IOException;
 import java.util.Map;
 import java.util.TreeMap;
@@ -116,20 +113,16 @@ public class BazelRuleClassProvider {
   /** Command-line options. */
   public static class StrictActionEnvOptions extends FragmentOptions {
     @Option(
-        name = "incompatible_strict_action_env",
-        oldName = "experimental_strict_action_env",
-        defaultValue = "true",
+        name = "experimental_strict_action_env",
+        defaultValue = "false",
         documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
         effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-        metadataTags = {
-          OptionMetadataTag.INCOMPATIBLE_CHANGE,
-          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-        },
         help =
             "If true, Bazel uses an environment with a static value for PATH and does not "
                 + "inherit LD_LIBRARY_PATH or TMPDIR. Use --action_env=ENV_VARIABLE if you want to "
                 + "inherit specific environment variables from the client, but note that doing so "
-                + "can prevent cross-user caching if a shared cache is used.")
+                + "can prevent cross-user caching if a shared cache is used."
+    )
     public boolean useStrictActionEnv;
 
     @Override
@@ -209,7 +202,7 @@ public class BazelRuleClassProvider {
         public void init(ConfiguredRuleClassProvider.Builder builder) {
           builder
               .setPrelude("//tools/build_rules:prelude_bazel")
-              .setRunfilesPrefix(LabelConstants.DEFAULT_REPOSITORY_DIRECTORY)
+              .setRunfilesPrefix(Label.DEFAULT_REPOSITORY_DIRECTORY)
               .setPrerequisiteValidator(new BazelPrerequisiteValidator())
               .setActionEnvironmentProvider(SHELL_ACTION_ENV);
 
@@ -238,7 +231,6 @@ public class BazelRuleClassProvider {
           builder.addConfigurationFragment(new ProtoConfiguration.Loader());
           builder.addRuleDefinition(new BazelProtoLibraryRule());
           builder.addRuleDefinition(new ProtoLangToolchainRule());
-          builder.addSkylarkAccessibleTopLevels(ProtoInfo.SKYLARK_NAME, ProtoInfo.PROVIDER);
         }
 
         @Override
@@ -385,7 +377,6 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new NewLocalRepositoryRule());
           builder.addRuleDefinition(new AndroidSdkRepositoryRule());
           builder.addRuleDefinition(new AndroidNdkRepositoryRule());
-          builder.addRuleDefinition(new LocalConfigPlatformRule());
         }
 
         @Override
