@@ -284,14 +284,16 @@ public class SkylarkListTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testWrapTakesOwnershipOfArray() throws EvalException {
-    String[] wrapped = {"hello"};
+  public void testWrapUnsafeTakesOwnershipOfPassedArrayList() throws EvalException {
+    ArrayList<String> wrapped = Lists.newArrayList("hi");
     Mutability mutability = Mutability.create("test");
-    StarlarkList<String> mutableList = StarlarkList.wrap(mutability, wrapped);
+    StarlarkList<String> mutableList = StarlarkList.wrapUnsafe(mutability, wrapped);
 
     // Big no-no, but we're proving a point.
-    wrapped[0] = "goodbye";
-    assertThat(mutableList).containsExactly("goodbye");
+    wrapped.add("added1");
+    mutableList.add("added2", /*loc=*/ null);
+    assertThat(wrapped).containsExactly("hi", "added1", "added2").inOrder();
+    assertThat(mutableList).containsExactly("hi", "added1", "added2").inOrder();
   }
 
   @Test

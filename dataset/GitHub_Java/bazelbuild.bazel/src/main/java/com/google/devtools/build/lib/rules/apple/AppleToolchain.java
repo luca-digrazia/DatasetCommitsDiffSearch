@@ -27,7 +27,7 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.starlarkbuildapi.apple.AppleToolchainApi;
+import com.google.devtools.build.lib.skylarkbuildapi.apple.AppleToolchainApi;
 import java.io.Serializable;
 
 /**
@@ -117,7 +117,6 @@ public class AppleToolchain implements AppleToolchainApi<AppleConfiguration> {
       case WATCHOS_SIMULATOR:
       case TVOS_DEVICE:
       case TVOS_SIMULATOR:
-      case CATALYST:
         relativePath = SYSTEM_FRAMEWORK_PATH;
         break;
       default:
@@ -135,11 +134,6 @@ public class AppleToolchain implements AppleToolchainApi<AppleConfiguration> {
             toolsRepository + AppleCommandLineOptions.DEFAULT_XCODE_VERSION_CONFIG_LABEL),
         (Attribute.LateBoundDefault.Resolver<AppleConfiguration, Label> & Serializable)
             (rule, attributes, appleConfig) -> appleConfig.getXcodeConfigLabel());
-  }
-
-  @Override
-  public boolean isImmutable() {
-    return true; // immutable and Starlark-hashable
   }
 
   /**
