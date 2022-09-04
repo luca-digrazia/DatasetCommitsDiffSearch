@@ -19,7 +19,9 @@ import com.google.common.base.Equivalence.Wrapper;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.SetMultimap;
 import com.google.devtools.build.lib.syntax.ASTNode;
+import com.google.devtools.build.lib.syntax.AugmentedAssignmentStatement;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
+import com.google.devtools.build.lib.syntax.Expression;
 import com.google.devtools.build.lib.syntax.ExpressionStatement;
 import com.google.devtools.build.lib.syntax.FlowStatement;
 import com.google.devtools.build.lib.syntax.ForStatement;
@@ -27,6 +29,7 @@ import com.google.devtools.build.lib.syntax.FunctionDefStatement;
 import com.google.devtools.build.lib.syntax.Identifier;
 import com.google.devtools.build.lib.syntax.IfStatement;
 import com.google.devtools.build.lib.syntax.IfStatement.ConditionalStatements;
+import com.google.devtools.build.lib.syntax.ListLiteral;
 import com.google.devtools.build.lib.syntax.ReturnStatement;
 import com.google.devtools.skylark.skylint.Environment.NameInfo;
 import com.google.devtools.skylark.skylint.Environment.NameInfo.Kind;
@@ -44,8 +47,12 @@ public class UsageChecker extends AstVisitorWithNameResolution {
   private final SetMultimap<Integer, Wrapper<ASTNode>> idToAllDefinitions =
       LinkedHashMultimap.create();
 
+  private UsageChecker(Environment env) {
+    super(env);
+  }
+
   public static List<Issue> check(BuildFileAST ast) {
-    UsageChecker checker = new UsageChecker();
+    UsageChecker checker = new UsageChecker(Environment.defaultBazel());
     checker.visit(ast);
     return checker.issues;
   }
@@ -55,6 +62,25 @@ public class UsageChecker extends AstVisitorWithNameResolution {
     UsageInfo saved = ui.copy();
     super.visit(node);
     ui = UsageInfo.join(Arrays.asList(saved, ui));
+  }
+
+  @Override
+  public void visit(Identifier identifier) {
+    super.visit(identifier);
+    useIdentifier(identifier);
+  }
+
+  @Override
+  protected void visitLvalue(Expression expr) {
+    if (expr instanceof Identifier) {
+      super.visit((Identifier) expr); // don't call this.visit because it doesn't count as usage
+    } else if (expr instanceof ListLiteral) {
+      for (Expression e : ((ListLiteral) expr).getElements()) {
+        visitLvalue(e);
+      }
+    } else {
+      visit(expr);
+    }
   }
 
   @Override
@@ -88,6 +114,14 @@ public class UsageChecker extends AstVisitorWithNameResolution {
   }
 
   @Override
+  public void visit(AugmentedAssignmentStatement node) {
+    for (Identifier ident : node.getLValue().boundIdentifiers()) {
+      useIdentifier(ident);
+    }
+    super.visit(node);
+  }
+
+  @Override
   public void visit(FlowStatement node) {
     ui.reachable = false;
   }
@@ -113,8 +147,7 @@ public class UsageChecker extends AstVisitorWithNameResolution {
     idToAllDefinitions.put(name.id, wrapNode(node));
   }
 
-  @Override
-  protected void use(Identifier identifier) {
+  private void useIdentifier(Identifier identifier) {
     NameInfo info = env.resolveName(identifier.getName());
     // TODO(skylark-team): Don't ignore unresolved symbols in the future but report an error
     if (info != null) {
@@ -130,8 +163,8 @@ public class UsageChecker extends AstVisitorWithNameResolution {
   }
 
   @Override
-  protected void reassign(Identifier ident) {
-    declare(ident.getName(), ident);
+  protected void reassign(String name, Identifier ident) {
+    declare(name, ident);
   }
 
   @Override
@@ -155,7 +188,7 @@ public class UsageChecker extends AstVisitorWithNameResolution {
       // local variables starting with an underscore need not be used
       return;
     }
-    if ((nameInfo.kind == Kind.GLOBAL || nameInfo.kind == Kind.FUNCTION) && !name.startsWith("_")) {
+    if (nameInfo.kind == Kind.GLOBAL && !name.startsWith("_")) {
       // symbol might be loaded in another file
       return;
     }
