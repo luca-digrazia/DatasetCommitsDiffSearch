@@ -104,10 +104,10 @@ public class CompileLibraryResourcesAction {
 
   public static void main(String[] args) throws Exception {
     OptionsParser optionsParser =
-        OptionsParser.builder()
-            .optionsClasses(Options.class, Aapt2ConfigOptions.class)
-            .argsPreProcessor(new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()))
-            .build();
+        OptionsParser.newOptionsParser(
+            new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()),
+            Options.class,
+            Aapt2ConfigOptions.class);
     optionsParser.parseAndExitUponError(args);
 
     Options options = optionsParser.getOptions(Options.class);

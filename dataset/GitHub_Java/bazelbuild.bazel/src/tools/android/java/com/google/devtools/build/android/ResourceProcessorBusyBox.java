@@ -230,11 +230,8 @@ public class ResourceProcessorBusyBox {
 
   private static int processRequest(List<String> args) throws Exception {
     OptionsParser optionsParser =
-        OptionsParser.builder()
-            .optionsClasses(Options.class)
-            .allowResidue(true)
-            .argsPreProcessor(new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()))
-            .build();
+        OptionsParser.newOptionsParser(
+            true, new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()), Options.class);
     Options options;
     try {
       optionsParser.parse(args);

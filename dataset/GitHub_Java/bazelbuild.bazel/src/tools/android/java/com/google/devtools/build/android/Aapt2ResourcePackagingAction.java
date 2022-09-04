@@ -62,10 +62,10 @@ public class Aapt2ResourcePackagingAction {
   public static void main(String[] args) throws Exception {
     Profiler profiler = InMemoryProfiler.createAndStart("setup");
     OptionsParser optionsParser =
-        OptionsParser.builder()
-            .optionsClasses(Options.class, Aapt2ConfigOptions.class)
-            .argsPreProcessor(new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()))
-            .build();
+        OptionsParser.newOptionsParser(
+            new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()),
+            Options.class,
+            Aapt2ConfigOptions.class);
     optionsParser.parseAndExitUponError(args);
     aaptConfigOptions = optionsParser.getOptions(Aapt2ConfigOptions.class);
     options = optionsParser.getOptions(Options.class);
