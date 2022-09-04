@@ -40,7 +40,6 @@ public abstract class AbstractLiquibaseCommand<T extends Configuration> extends 
             run(namespace, managedLiquibase);
         } catch (ValidationFailedException e) {
             e.printDescriptiveError(System.err);
-            System.exit(-1);
         } finally {
             if (managedLiquibase != null) {
                 managedLiquibase.stop();
@@ -48,5 +47,5 @@ public abstract class AbstractLiquibaseCommand<T extends Configuration> extends 
         }
     }
 
-    protected abstract void run(Namespace namespace, Liquibase liquibase) throws Exception;
+    public abstract void run(Namespace namespace, Liquibase liquibase) throws Exception;
 }
