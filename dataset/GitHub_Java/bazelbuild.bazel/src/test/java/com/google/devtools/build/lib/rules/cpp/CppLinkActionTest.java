@@ -288,9 +288,8 @@ public class CppLinkActionTest extends BuildViewTestCase {
     }
     scratch.file(
         "x/BUILD",
-        "cc_test(name='a', srcs=['a.cc'], features=['-static_link_test_srcs'])",
-        "cc_binary(name='b', srcs=['a.cc'])",
-        "cc_test(name='c', srcs=['a.cc'], features=['-static_link_test_srcs'], linkstatic=1)");
+        "cc_test(name = 'a', srcs = ['a.cc'], features = ['-static_link_test_srcs'])",
+        "cc_binary(name = 'b', srcs = ['a.cc'])");
     scratch.file("x/a.cc", "int main() {}");
     useConfiguration("--force_pic");
 
@@ -312,13 +311,6 @@ public class CppLinkActionTest extends BuildViewTestCase {
     runfilesProvider = configuredTarget.getProvider(RunfilesProvider.class);
     assertThat(artifactsToStrings(runfilesProvider.getDefaultRunfiles().getArtifacts()))
         .containsExactly("bin x/b");
-
-    configuredTarget = getConfiguredTarget("//x:c");
-    linkAction = (CppLinkAction) getGeneratingAction(configuredTarget, "x/c");
-    assertThat(artifactsToStrings(linkAction.getInputs())).contains("bin x/_objs/c/a.pic.o");
-    runfilesProvider = configuredTarget.getProvider(RunfilesProvider.class);
-    assertThat(artifactsToStrings(runfilesProvider.getDefaultRunfiles().getArtifacts()))
-        .containsExactly("bin x/c");
   }
 
   @Test
@@ -413,7 +405,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                         ? dynamicOutputFile
                         : staticOutputFile,
                     toolchain,
-                    toolchain.getFdoContext(),
+                    toolchain.getFdoProvider(),
                     featureConfiguration,
                     MockCppSemantics.INSTANCE) {};
             if (attributesToFlip.contains(NonStaticAttributes.OUTPUT_FILE)) {
@@ -471,7 +463,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                         ? staticOutputFile
                         : dynamicOutputFile,
                     toolchain,
-                    toolchain.getFdoContext(),
+                    toolchain.getFdoProvider(),
                     featureConfiguration,
                     MockCppSemantics.INSTANCE) {};
             builder.setLinkType(
@@ -503,7 +495,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
             ruleContext,
             output,
             toolchain,
-            toolchain.getFdoContext(),
+            toolchain.getFdoProvider(),
             FeatureConfiguration.EMPTY,
             MockCppSemantics.INSTANCE);
     builder.setLinkType(LinkTargetType.STATIC_LIBRARY);
@@ -597,7 +589,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                         .getBinDirectory(ruleContext.getRule().getRepository())),
                 ruleContext.getConfiguration(),
                 toolchain,
-                toolchain.getFdoContext(),
+                toolchain.getFdoProvider(),
                 featureConfiguration,
                 MockCppSemantics.INSTANCE)
             .addObjectFiles(nonLibraryInputs)
