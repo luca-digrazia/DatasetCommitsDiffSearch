@@ -36,7 +36,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
+import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.NativeInfo;
@@ -133,24 +133,6 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
    */
   public static AppleBinaryOutput linkMultiArchBinary(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    return linkMultiArchBinary(ruleContext, ImmutableList.of(), ImmutableList.of());
-  }
-
-  /**
-   * Links a (potentially multi-architecture) binary targeting Apple platforms.
-   *
-   * <p>This method comprises a bulk of the logic of the {@code apple_binary} rule, and is
-   * statically available so that it may be referenced by Skylark APIs that replicate its
-   * functionality.
-   *
-   * @param ruleContext the current rule context
-   * @param extraLinkopts extra linkopts to pass to the linker actions
-   * @param extraLinkInputs extra input files to pass to the linker action
-   * @return a tuple containing all necessary information about the linked binary
-   */
-  public static AppleBinaryOutput linkMultiArchBinary(
-      RuleContext ruleContext, Iterable<String> extraLinkopts, Iterable<Artifact> extraLinkInputs)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
     MultiArchSplitTransitionProvider.validateMinimumOs(ruleContext);
     PlatformType platformType = MultiArchSplitTransitionProvider.getPlatformType(ruleContext);
 
@@ -180,17 +162,11 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
             getDylibProviderTargets(ruleContext));
 
     Map<String, NestedSet<Artifact>> outputGroupCollector = new TreeMap<>();
-
-    Iterable<Artifact> allLinkInputs =
-        Iterables.concat(getRequiredLinkInputs(ruleContext), extraLinkInputs);
-    ExtraLinkArgs allLinkopts =
-        new ExtraLinkArgs(Iterables.concat(getRequiredLinkopts(ruleContext), extraLinkopts));
-
     NestedSet<Artifact> binariesToLipo =
         multiArchBinarySupport.registerActions(
-            allLinkopts,
+            getExtraLinkArgs(ruleContext),
             dependencySpecificConfigurations,
-            allLinkInputs,
+            getExtraLinkInputs(ruleContext),
             cpuToDepsCollectionMap,
             outputGroupCollector);
 
@@ -266,8 +242,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     return new AppleBinaryOutput(binaryInfoProvider, builder.build(), outputGroupCollector);
   }
 
-  private static ExtraLinkArgs getRequiredLinkopts(RuleContext ruleContext)
-      throws RuleErrorException {
+  private static ExtraLinkArgs getExtraLinkArgs(RuleContext ruleContext) throws RuleErrorException {
     BinaryType binaryType = getBinaryType(ruleContext);
 
     ImmutableList.Builder<String> extraLinkArgs = new ImmutableList.Builder<>();
@@ -310,7 +285,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
         .build();
   }
 
-  private static Iterable<Artifact> getRequiredLinkInputs(RuleContext ruleContext) {
+  private static Iterable<Artifact> getExtraLinkInputs(RuleContext ruleContext) {
     AppleExecutableBinaryInfo executableProvider =
         ruleContext.getPrerequisite(
             BUNDLE_LOADER_ATTR_NAME, Mode.TARGET,
@@ -369,15 +344,15 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
       targetBuilder.addNativeDeclaredProvider(objcProvider);
     }
 
-    InstrumentedFilesInfo instrumentedFilesProvider =
+    InstrumentedFilesProvider instrumentedFilesProvider =
         InstrumentedFilesCollector.forward(ruleContext, "deps", "bundle_loader");
 
-    return targetBuilder
-        .addNativeDeclaredProvider(instrumentedFilesProvider)
+    return targetBuilder.addProvider(InstrumentedFilesProvider.class, instrumentedFilesProvider)
         .addNativeDeclaredProvider(nativeInfo)
         .addNativeDeclaredProvider(appleBinaryOutput.getDebugOutputsProvider())
         .addOutputGroups(appleBinaryOutput.getOutputGroups())
         .build();
+
   }
 
   /**
