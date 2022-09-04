@@ -1,67 +1,55 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.dev;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Deque;
+import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
+import java.util.regex.Pattern;
 
-import javax.tools.Diagnostic;
-import javax.tools.DiagnosticCollector;
-import javax.tools.JavaCompiler;
-import javax.tools.JavaFileObject;
-import javax.tools.StandardJavaFileManager;
-import javax.tools.StandardLocation;
-import javax.tools.ToolProvider;
+import org.jboss.logging.Logger;
 
 /**
  * Class that handles compilation of source files
- *
+ * 
  * @author Stuart Douglas
  */
 public class ClassLoaderCompiler {
 
-    public static final String DEV_MODE_CLASS_PATH = "META-INF/dev-mode-class-path.txt";
-    private final File outputDirectory;
-    private final Set<File> classPath;
+    private static final Logger log = Logger.getLogger(ClassLoaderCompiler.class);
+    private static final Pattern WHITESPACE_PATTERN = Pattern.compile(" ");
 
-    public ClassLoaderCompiler(ClassLoader classLoader, File outputDirectory) throws IOException {
-        this.outputDirectory = outputDirectory;
+    private final List<CompilationProvider> compilationProviders;
+    /**
+     * map of compilation contexts to source directories
+     */
+    private final Map<String, CompilationProvider.Context> compilationContexts = new HashMap<>();
+    private final Set<String> allHandledExtensions;
 
-        List<URL> urls = new ArrayList<>();
+    public ClassLoaderCompiler(ClassLoader classLoader,
+            List<CompilationProvider> compilationProviders,
+            DevModeContext context)
+            throws IOException {
+        this.compilationProviders = compilationProviders;
+
+        Set<URL> urls = new HashSet<>();
         ClassLoader c = classLoader;
         while (c != null) {
             if (c instanceof URLClassLoader) {
@@ -69,46 +57,84 @@ public class ClassLoaderCompiler {
             }
             c = c.getParent();
         }
-
-        try (InputStream devModeCp = classLoader.getResourceAsStream(DEV_MODE_CLASS_PATH)){
-            BufferedReader r = new BufferedReader(new InputStreamReader(devModeCp, StandardCharsets.UTF_8));
-            String cp = r.readLine();
-            for(String i : cp.split(" ")) {
-                urls.add(new URI(i).toURL());
+        //this is pretty yuck, but under JDK11 the URLClassLoader trick does not work
+        Enumeration<URL> manifests = classLoader.getResources("META-INF/MANIFEST.MF");
+        while (manifests.hasMoreElements()) {
+            URL url = manifests.nextElement();
+            if (url.getProtocol().equals("jar")) {
+                String path = url.getPath();
+                if (path.startsWith("file:")) {
+                    path = path.substring(5, path.lastIndexOf('!'));
+                    urls.add(new File(URLDecoder.decode(path, StandardCharsets.UTF_8.name())).toURI().toURL());
+                }
             }
-        } catch (URISyntaxException e) {
-            throw new RuntimeException(e);
         }
+
+        urls.addAll(context.getClassPath());
 
         Set<String> parsedFiles = new HashSet<>();
         Deque<String> toParse = new ArrayDeque<>();
         for (URL url : urls) {
-            toParse.add(new File(url.getPath()).getAbsolutePath());
+            toParse.add(new File(URLDecoder.decode(url.getPath(), StandardCharsets.UTF_8.name())).getAbsolutePath());
         }
         Set<File> classPathElements = new HashSet<>();
-        classPathElements.add(outputDirectory);
+        for (DevModeContext.ModuleInfo i : context.getModules()) {
+            if (i.getClassesPath() != null) {
+                classPathElements.add(new File(i.getClassesPath()));
+            }
+        }
+        final String devModeRunnerJarCanonicalPath = context.getDevModeRunnerJarFile() == null
+                ? null
+                : context.getDevModeRunnerJarFile().getCanonicalPath();
         while (!toParse.isEmpty()) {
             String s = toParse.poll();
             if (!parsedFiles.contains(s)) {
                 parsedFiles.add(s);
                 File file = new File(s);
-                if (file.exists() && file.getName().endsWith(".jar")) {
+                if (!file.exists()) {
+                    continue;
+                }
+                if (file.isDirectory()) {
                     classPathElements.add(file);
-                    if(!file.isDirectory() && file.getName().endsWith(".jar")) {
+                } else if (file.getName().endsWith(".jar")) {
+                    // skip adding the dev mode runner jar to the classpath to prevent
+                    // hitting a bug in JDK - https://bugs.openjdk.java.net/browse/JDK-8232170
+                    // which causes the programmatic java file compilation to fail.
+                    // see details in https://github.com/quarkusio/quarkus/issues/3592.
+                    // we anyway don't need to add that jar to the hot deployment classpath since the
+                    // current running JVM is already launched using that jar, plus it doesn't
+                    // have any application resources/classes. The Class-Path jar(s) contained
+                    // in the MANIFEST.MF of that dev mode runner jar are anyway added explicitly
+                    // in various different ways in this very own ClassLoaderCompiler class, so
+                    // not passing this jar to the JDK's compiler won't prevent its Class-Path
+                    // references from being part of the hot deployment compile classpath.
+                    if (devModeRunnerJarCanonicalPath != null
+                            && file.getCanonicalPath().equals(devModeRunnerJarCanonicalPath)) {
+                        log.debug("Dev mode runner jar " + file + " won't be added to compilation classpath of hot deployment");
+                    } else {
+                        classPathElements.add(file);
+                    }
+                    if (!file.isDirectory() && file.getName().endsWith(".jar")) {
                         try (JarFile jar = new JarFile(file)) {
                             Manifest mf = jar.getManifest();
-                            if(mf == null || mf.getMainAttributes() == null) {
+                            if (mf == null || mf.getMainAttributes() == null) {
                                 continue;
                             }
                             Object classPath = mf.getMainAttributes().get(Attributes.Name.CLASS_PATH);
                             if (classPath != null) {
-                                for (String i : classPath.toString().split(" ")) {
+                                for (String classPathEntry : WHITESPACE_PATTERN.split(classPath.toString())) {
+                                    final URI cpEntryURI = new URI(classPathEntry);
                                     File f;
-                                    try {
-                                        URL u = new URL(i);
-                                        f = new File(u.getPath());
-                                    } catch (MalformedURLException e) {
-                                        f = new File(file.getParentFile(), i);
+                                    // if it's a "file" scheme URI, then use the path as a file system path
+                                    // without the need to resolve it
+                                    if (cpEntryURI.isAbsolute() && cpEntryURI.getScheme().equals("file")) {
+                                        f = new File(cpEntryURI.getPath());
+                                    } else {
+                                        try {
+                                            f = Paths.get(new URI("file", null, "/", null).resolve(cpEntryURI)).toFile();
+                                        } catch (URISyntaxException e) {
+                                            f = new File(file.getParentFile(), classPathEntry);
+                                        }
                                     }
                                     if (f.exists()) {
                                         toParse.add(f.getAbsolutePath());
@@ -122,34 +148,58 @@ public class ClassLoaderCompiler {
                 }
             }
         }
-        this.classPath = classPathElements;
+        for (DevModeContext.ModuleInfo i : context.getModules()) {
+            if (!i.getSourcePaths().isEmpty()) {
+                if (i.getClassesPath() == null) {
+                    log.warn("No classes directory found for module '" + i.getName()
+                            + "'. It is advised that this module be compiled before launching dev mode");
+                    continue;
+                }
+                i.getSourcePaths().forEach(sourcePath -> {
+                    this.compilationContexts.put(sourcePath,
+                            new CompilationProvider.Context(
+                                    i.getName(),
+                                    classPathElements,
+                                    new File(i.getProjectDirectory()),
+                                    new File(sourcePath),
+                                    new File(i.getClassesPath()),
+                                    context.getSourceEncoding(),
+                                    context.getCompilerOptions(),
+                                    context.getSourceJavaVersion(),
+                                    context.getTargetJvmVersion()));
+                });
+            }
+        }
+        this.allHandledExtensions = new HashSet<>();
+        for (CompilationProvider compilationProvider : compilationProviders) {
+            allHandledExtensions.addAll(compilationProvider.handledExtensions());
+        }
     }
 
-    public void compile(Set<File> filesToCompile) {
+    public Set<String> allHandledExtensions() {
+        return allHandledExtensions;
+    }
 
-        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
-        if (compiler == null) {
-            throw new RuntimeException("No system java compiler provided");
-        }
-        DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
-        try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(diagnostics, null, null);) {
-
-
-            fileManager.setLocation(StandardLocation.CLASS_PATH, classPath);
-            fileManager.setLocation(StandardLocation.CLASS_OUTPUT, Collections.singleton(outputDirectory));
-
-            Iterable<? extends JavaFileObject> sources = fileManager.getJavaFileObjectsFromFiles(filesToCompile);
-            JavaCompiler.CompilationTask task = compiler.getTask(null, fileManager, diagnostics, null, null, sources);
-
-            if (!task.call()) {
-                throw new RuntimeException("Compilation failed" + diagnostics.getDiagnostics());
+    public void compile(String sourceDir, Map<String, Set<File>> extensionToChangedFiles) {
+        CompilationProvider.Context compilationContext = compilationContexts.get(sourceDir);
+        for (String extension : extensionToChangedFiles.keySet()) {
+            for (CompilationProvider compilationProvider : compilationProviders) {
+                if (compilationProvider.handledExtensions().contains(extension)) {
+                    compilationProvider.compile(extensionToChangedFiles.get(extension), compilationContext);
+                    break;
+                }
             }
-
-            for (Diagnostic<? extends JavaFileObject> diagnostic : diagnostics.getDiagnostics()) {
-                System.out.format("%s, line %d in %s", diagnostic.getMessage(null), diagnostic.getLineNumber(), diagnostic.getSource().getName());
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("Cannot close file manager", e);
         }
+    }
+
+    public Path findSourcePath(Path classFilePath, Set<String> sourcePaths, String classesPath) {
+        for (CompilationProvider compilationProvider : compilationProviders) {
+            Path sourcePath = compilationProvider.getSourcePath(classFilePath, sourcePaths, classesPath);
+
+            if (sourcePath != null) {
+                return sourcePath;
+            }
+        }
+        return null;
     }
 }

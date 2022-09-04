@@ -1,7 +1,5 @@
 package io.quarkus.maven;
 
-import static java.util.stream.Collectors.joining;
-
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -71,30 +69,6 @@ import io.quarkus.utilities.JavaBinFinder;
  */
 @Mojo(name = "dev", defaultPhase = LifecyclePhase.PREPARE_PACKAGE, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
 public class DevMojo extends AbstractMojo {
-
-    /**
-     * running any one of these phases means the compile phase will have been run, if these have
-     * not been run we manually run compile
-     */
-    private static final Set<String> POST_COMPILE_PHASES = new HashSet<>(Arrays.asList(
-            "compile",
-            "process-classes",
-            "generate-test-sources",
-            "process-test-sources",
-            "generate-test-resources",
-            "process-test-resources",
-            "test-compile",
-            "process-test-classes",
-            "test",
-            "prepare-package",
-            "package",
-            "pre-integration-test",
-            "integration-test",
-            "post-integration-test",
-            "verify",
-            "install",
-            "deploy"));
-
     /**
      * The directory for compiled classes.
      */
@@ -248,20 +222,8 @@ public class DevMojo extends AbstractMojo {
         if (!sourceDir.isDirectory()) {
             getLog().warn("The project's sources directory does not exist " + sourceDir);
         }
-        //we check to see if there was a compile (or later) goal before this plugin
-        boolean compileNeeded = true;
-        for (String goal : session.getGoals()) {
-            if (POST_COMPILE_PHASES.contains(goal)) {
-                compileNeeded = false;
-                break;
-            }
-            if (goal.endsWith("quarkus:dev")) {
-                break;
-            }
-        }
 
-        //if the user did not compile we run it for them
-        if (compileNeeded) {
+        if (!buildDir.isDirectory() || !new File(buildDir, "classes").isDirectory()) {
             try {
                 InvocationRequest request = new DefaultInvocationRequest();
                 request.setBatchMode(true);
@@ -644,11 +606,14 @@ public class DevMojo extends AbstractMojo {
 
         public void run() throws Exception {
             // Display the launch command line in dev mode
-            getLog().info("Launching JVM with command line: " + args.stream().collect(joining(" ")));
-            process = new ProcessBuilder(args)
-                    .inheritIO()
-                    .directory(workingDir)
-                    .start();
+            getLog().info("Launching JVM with command line: " + args.toString());
+            ProcessBuilder pb = new ProcessBuilder(args.toArray(new String[0]));
+            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+            pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+            pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
+            pb.directory(workingDir);
+            process = pb.start();
+
             //https://github.com/quarkusio/quarkus/issues/232
             Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
                 @Override
