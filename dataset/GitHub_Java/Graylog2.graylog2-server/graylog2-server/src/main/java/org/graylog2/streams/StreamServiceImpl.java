@@ -23,7 +23,6 @@ import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
-import com.mongodb.QueryBuilder;
 import org.bson.types.ObjectId;
 import org.graylog2.alerts.AbstractAlertCondition;
 import org.graylog2.alerts.AlertService;
@@ -73,7 +72,8 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
 
         List<StreamRule> streamRules = streamRuleService.loadForStreamId(id.toStringMongod());
 
-        Set<Output> outputs = loadOutputsForRawStream(o);
+        List<ObjectId> outputIds = (List<ObjectId>)o.get("outputs");
+        Set<Output> outputs = loadOutputsForStreamId(outputIds);
 
         return new StreamImpl((ObjectId) o.get("_id"), o.toMap(), streamRules, outputs);
     }
@@ -127,7 +127,7 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
                 LOG.info("Exception while loading stream rules: " + e);
             }
 
-            final Set<Output> outputs = loadOutputsForRawStream(o);
+            final Set<Output> outputs = loadOutputsForStreamId((List<ObjectId>)o.get("outputs"));
 
             streams.add(new StreamImpl((ObjectId) o.get("_id"), o.toMap(), streamRules, outputs));
         }
@@ -144,16 +144,14 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
         return loadAll(queryOpts);
     }
 
-    protected Set<Output> loadOutputsForRawStream(DBObject stream) {
-        List<ObjectId> outputIds = (List<ObjectId>)stream.get("outputs");
-
+    protected Set<Output> loadOutputsForStreamId(List<ObjectId> outputIds) {
         Set<Output> result = new HashSet<>();
         if (outputIds != null)
             for (ObjectId outputId : outputIds)
                 try {
                     result.add(outputService.load(outputId.toStringMongod()));
                 } catch (NotFoundException e) {
-                    LOG.warn("Nonexisting output <{}> referenced from stream <{}>!", outputId.toStringMongod(), stream.get("_id"));
+                    LOG.warn("Nonexisting output <{}> referenced from stream <{}>!", outputId.toStringMongod());
                 }
 
         return result;
@@ -297,13 +295,9 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
     }
 
     public void removeOutputFromAllStreams(Output output) {
-        ObjectId outputId = new ObjectId(output.getId());
-        DBObject match = new BasicDBObject("outputs", outputId);
-        DBObject modify = new BasicDBObject("$pull", new BasicDBObject("outputs", outputId));
-
         collection(StreamImpl.class).update(
-                match,
-                modify
+                new BasicDBObject(),
+                new BasicDBObject("$pull", new BasicDBObject("outputs", new ObjectId(output.getId())))
         );
     }
 }

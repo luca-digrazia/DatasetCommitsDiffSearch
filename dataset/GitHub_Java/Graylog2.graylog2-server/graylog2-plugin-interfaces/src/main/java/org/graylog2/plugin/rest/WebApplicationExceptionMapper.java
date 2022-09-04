@@ -21,7 +21,6 @@ package org.graylog2.plugin.rest;
 
 import org.glassfish.jersey.spi.ExtendedExceptionMapper;
 
-import javax.ws.rs.NotAuthorizedException;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 
@@ -31,8 +30,6 @@ import javax.ws.rs.core.Response;
 public class WebApplicationExceptionMapper implements ExtendedExceptionMapper<WebApplicationException> {
     @Override
     public boolean isMappable(WebApplicationException e) {
-        if (e instanceof NotAuthorizedException)
-            return false;
         return true;
     }
 

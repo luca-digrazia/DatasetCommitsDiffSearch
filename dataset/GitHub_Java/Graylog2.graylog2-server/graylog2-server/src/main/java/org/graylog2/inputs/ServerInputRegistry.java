@@ -20,25 +20,21 @@
 package org.graylog2.inputs;
 
 import com.google.common.collect.Lists;
-import org.graylog2.database.NotFoundException;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.inputs.InputState;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.plugin.ServerStatus;
+import org.graylog2.shared.ServerStatus;
 import org.graylog2.shared.buffers.ProcessBuffer;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.inputs.MessageInputFactory;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
 import org.graylog2.system.activities.Activity;
 import org.graylog2.system.activities.ActivityWriter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
 public class ServerInputRegistry extends InputRegistry {
-    private static final Logger LOG = LoggerFactory.getLogger(ServerInputRegistry.class);
     protected final InputService inputService;
     protected final NotificationService notificationService;
     private final ServerStatus serverStatus;
@@ -74,12 +70,8 @@ public class ServerInputRegistry extends InputRegistry {
     }
 
     public void cleanInput(MessageInput messageInput) {
-        try {
-            final Input input = inputService.find(messageInput.getPersistId());
-            inputService.destroy(input);
-        } catch (NotFoundException e) {
-            LOG.error("Unable to clean input <" + messageInput.getPersistId() + ">: ", e);
-        }
+        Input input = inputService.find(messageInput.getPersistId());
+        inputService.destroy(input);
     }
 
     @Override
