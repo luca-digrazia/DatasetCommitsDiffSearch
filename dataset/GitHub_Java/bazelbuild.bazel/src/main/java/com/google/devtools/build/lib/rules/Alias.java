@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.analysis.VisibilityProvider;
 import com.google.devtools.build.lib.analysis.VisibilityProviderImpl;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
 /**
@@ -63,7 +64,6 @@ public class Alias implements RuleConfiguredTargetFactory {
               .allowedFileTypes(FileTypeSet.ANY_FILE)
               .allowedRuleClasses(ANY_RULE)
               .mandatory())
-          .canHaveAnyProvider()
           .build();
     }
 
