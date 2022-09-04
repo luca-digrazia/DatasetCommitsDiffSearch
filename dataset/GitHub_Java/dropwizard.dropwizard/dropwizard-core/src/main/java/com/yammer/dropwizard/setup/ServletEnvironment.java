@@ -31,9 +31,9 @@ public class ServletEnvironment {
     public ServletBuilder addServlet(Servlet servlet,
                                      String urlPattern) {
         final ServletHolder holder = new NonblockingServletHolder(checkNotNull(servlet));
-        final ServletBuilder builder = new ServletBuilder(holder, handler);
-        builder.addUrlPattern(checkNotNull(urlPattern));
-        return builder;
+        final ServletBuilder servletConfig = new ServletBuilder(holder, handler);
+        servletConfig.addUrlPattern(checkNotNull(urlPattern));
+        return servletConfig;
     }
 
     /**
@@ -47,9 +47,9 @@ public class ServletEnvironment {
     public ServletBuilder addServlet(Class<? extends Servlet> klass,
                                      String urlPattern) {
         final ServletHolder holder = new ServletHolder(checkNotNull(klass));
-        final ServletBuilder builder = new ServletBuilder(holder, handler);
-        builder.addUrlPattern(checkNotNull(urlPattern));
-        return builder;
+        final ServletBuilder servletConfig = new ServletBuilder(holder, handler);
+        servletConfig.addUrlPattern(checkNotNull(urlPattern));
+        return servletConfig;
     }
 
     /**
@@ -63,9 +63,9 @@ public class ServletEnvironment {
     public FilterBuilder addFilter(Filter filter,
                                    String urlPattern) {
         final FilterHolder holder = new FilterHolder(checkNotNull(filter));
-        final FilterBuilder builder = new FilterBuilder(holder, handler);
-        builder.addUrlPattern(checkNotNull(urlPattern));
-        return builder;
+        final FilterBuilder filterConfig = new FilterBuilder(holder, handler);
+        filterConfig.addUrlPattern(checkNotNull(urlPattern));
+        return filterConfig;
     }
 
     /**
@@ -98,7 +98,12 @@ public class ServletEnvironment {
         }
     }
 
-    public void setProtectedTargets(String... targets) {
+    /**
+     * Adds protected target URLs (ie targets that 404)
+     *
+     * @param targets protected targets
+     */
+    public void addProtectedTargets(String... targets) {
         handler.setProtectedTargets(Arrays.copyOf(targets, targets.length));
     }
 
