@@ -165,8 +165,7 @@ public abstract class ParallelVisitor<T, V> {
       throws QueryException, InterruptedException;
 
   /** Gets the {@link Visit} representing the local visitation of the given {@code values}. */
-  protected abstract Visit getVisitResult(Iterable<T> values)
-      throws QueryException, InterruptedException;
+  protected abstract Visit getVisitResult(Iterable<T> values) throws InterruptedException;
 
   /** Gets the equivalent of {@link Visit#keysToVisit} for the entry-level SkyKeys. */
   protected abstract Iterable<T> preprocessInitialVisit(Iterable<SkyKey> keys);
@@ -176,7 +175,7 @@ public abstract class ParallelVisitor<T, V> {
    *
    * <p>Used to dedupe visitations before adding them to {@link #processingQueue}.
    */
-  protected abstract ImmutableList<T> getUniqueValues(Iterable<T> values) throws QueryException;
+  protected abstract ImmutableList<T> getUniqueValues(Iterable<T> values);
 
   /** Gets tasks to visit pending keys. */
   protected Iterable<Task> getVisitTasks(Collection<T> pendingKeysToVisit) {
@@ -213,7 +212,7 @@ public abstract class ParallelVisitor<T, V> {
     }
 
     @Override
-    void process() throws QueryException, InterruptedException {
+    void process() throws InterruptedException {
       Visit visit = getVisitResult(keysToVisit);
       for (Iterable<SkyKey> keysToUseForResultBatch :
           Iterables.partition(visit.keysToUseForResult, processResultsBatchSize)) {
