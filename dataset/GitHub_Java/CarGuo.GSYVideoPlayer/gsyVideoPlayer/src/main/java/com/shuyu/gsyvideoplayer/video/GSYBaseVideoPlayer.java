@@ -133,10 +133,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
     protected OrientationUtils mOrientationUtils; //旋转工具类
 
-    protected boolean mIsTouchWiget = true; //是否支持非全屏滑动触摸有效
-
-    protected boolean mIsTouchWigetFull = true; //是否支持全屏滑动触摸有效
-
     private Handler mHandler = new Handler();
 
     /**
@@ -330,7 +326,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
             gsyVideoPlayer.setVideoAllCallBack(mVideoAllCallBack);
             gsyVideoPlayer.setLooping(isLooping());
             gsyVideoPlayer.setSpeed(getSpeed());
-            gsyVideoPlayer.setIsTouchWigetFull(mIsTouchWigetFull);
             final FrameLayout.LayoutParams lpParent = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
             final FrameLayout frameLayout = new FrameLayout(context);
             frameLayout.setBackgroundColor(Color.BLACK);
@@ -361,7 +356,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
             gsyVideoPlayer.mNeedShowWifiTip = mNeedShowWifiTip;
             gsyVideoPlayer.mShrinkImageRes = mShrinkImageRes;
             gsyVideoPlayer.mEnlargeImageRes = mEnlargeImageRes;
-            gsyVideoPlayer.mRotate = mRotate;
             gsyVideoPlayer.setUp(mOriginUrl, mCache, mCachePath, mMapHeadData, mObjects);
             gsyVideoPlayer.setStateAndUi(mCurrentState);
             gsyVideoPlayer.addTextureView();
@@ -735,32 +729,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
         return mNeedShowWifiTip;
     }
 
-
-    public boolean isTouchWiget() {
-        return mIsTouchWiget;
-    }
-
-    /**
-     * 是否可以滑动界面改变进度，声音等
-     * 默认true
-     */
-    public void setIsTouchWiget(boolean isTouchWiget) {
-        this.mIsTouchWiget = isTouchWiget;
-    }
-
-    public boolean isTouchWigetFull() {
-        return mIsTouchWigetFull;
-    }
-
-    /**
-     * 是否可以全屏滑动界面改变进度，声音等
-     * 默认 true
-     */
-    public void setIsTouchWigetFull(boolean isTouchWigetFull) {
-        this.mIsTouchWigetFull = isTouchWigetFull;
-    }
-
-
     /**
      * 是否需要显示流量提示,默认true
      */
@@ -799,6 +767,4 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
     public void setShrinkImageRes(int mShrinkImageRes) {
         this.mShrinkImageRes = mShrinkImageRes;
     }
-
-
 }
