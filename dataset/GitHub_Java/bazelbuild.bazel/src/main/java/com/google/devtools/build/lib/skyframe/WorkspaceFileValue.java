@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
@@ -103,8 +102,6 @@ public class WorkspaceFileValue implements SkyValue {
   private final ImmutableMap<String, Object> bindings;
   private final ImmutableMap<String, Extension> importMap;
   private final ImmutableMap<String, Integer> importToChunkMap;
-  private final ImmutableMap<RepositoryName, ImmutableMap<RepositoryName, RepositoryName>>
-      repositoryMapping;
 
   /**
    * Create a WorkspaceFileValue containing the various values necessary to compute the split
@@ -138,7 +135,6 @@ public class WorkspaceFileValue implements SkyValue {
     this.bindings = ImmutableMap.copyOf(bindings);
     this.importMap = ImmutableMap.copyOf(importMap);
     this.importToChunkMap = ImmutableMap.copyOf(importToChunkMap);
-    this.repositoryMapping = pkg.getExternalPackageRepositoryMappings();
   }
 
   /**
@@ -214,10 +210,5 @@ public class WorkspaceFileValue implements SkyValue {
 
   public ImmutableMap<String, Integer> getImportToChunkMap() {
     return importToChunkMap;
-  }
-
-  public ImmutableMap<RepositoryName, ImmutableMap<RepositoryName, RepositoryName>>
-      getRepositoryMapping() {
-    return repositoryMapping;
   }
 }

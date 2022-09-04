@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.FileStateValue;
@@ -24,13 +23,11 @@ import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
@@ -186,10 +183,6 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
                 SkyKey key = (SkyKey) invocation.getArguments()[0];
                 if (key.equals(PrecomputedValue.SKYLARK_SEMANTICS.getKeyForTesting())) {
                   return new PrecomputedValue(SkylarkSemantics.DEFAULT_SEMANTICS);
-                } else if (key.equals(
-                    RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE
-                        .getKeyForTesting())) {
-                  return new PrecomputedValue(Optional.<RootedPath>absent());
                 } else {
                   return null;
                 }
@@ -253,35 +246,6 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     WorkspaceFileValue value2 = result2.get(key2);
     assertThat(value2.getImportToChunkMap()).containsEntry("//:a.bzl", 1);
     assertThat(value2.getImportToChunkMap()).doesNotContainEntry("//:a.bzl", 2);
-  }
-
-  @Test
-  public void testRepositoryMappingInChunks() throws Exception {
-    setSkylarkSemanticsOptions("--experimental_enable_repo_mapping");
-    scratch.file("b.bzl", "b = 'b'");
-    scratch.file("BUILD", "");
-    RootedPath workspace =
-        createWorkspaceFile(
-            "WORKSPACE",
-            "workspace(name = 'good')",
-            "local_repository(name = 'a', path = '../a', repo_mapping = {'@x' : '@y'})",
-            "load('//:b.bzl', 'b')",
-            "local_repository(name = 'b', path = '../b', repo_mapping = {'@x' : '@y'})");
-    RepositoryName a = RepositoryName.create("@a");
-    RepositoryName b = RepositoryName.create("@b");
-    RepositoryName x = RepositoryName.create("@x");
-    RepositoryName y = RepositoryName.create("@y");
-
-    SkyKey key0 = WorkspaceFileValue.key(workspace, 0);
-    EvaluationResult<WorkspaceFileValue> result0 = eval(key0);
-    WorkspaceFileValue value0 = result0.get(key0);
-    assertThat(value0.getRepositoryMapping()).containsEntry(a, ImmutableMap.of(x, y));
-
-    SkyKey key1 = WorkspaceFileValue.key(workspace, 1);
-    EvaluationResult<WorkspaceFileValue> result1 = eval(key1);
-    WorkspaceFileValue value1 = result1.get(key1);
-    assertThat(value1.getRepositoryMapping()).containsEntry(a, ImmutableMap.of(x, y));
-    assertThat(value1.getRepositoryMapping()).containsEntry(b, ImmutableMap.of(x, y));
   }
 
   @Test
