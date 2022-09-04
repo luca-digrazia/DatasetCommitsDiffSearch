@@ -9,7 +9,6 @@ import com.google.common.collect.Iterables;
 import io.dropwizard.jersey.gzip.ConfiguredGZipEncoder;
 import io.dropwizard.jersey.gzip.GZipDecoder;
 import io.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
-import io.dropwizard.lifecycle.setup.ExecutorServiceBuilder;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import io.dropwizard.setup.Environment;
 import org.apache.http.client.CredentialsProvider;
@@ -26,7 +25,6 @@ import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 import org.apache.http.impl.conn.SystemDefaultRoutePlanner;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.ArgumentCaptor;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
@@ -52,15 +50,14 @@ import java.net.URI;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class JerseyClientBuilderTest {
@@ -173,28 +170,14 @@ public class JerseyClientBuilderTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void usesAnExecutorServiceFromTheEnvironment() throws Exception {
         final JerseyClientConfiguration configuration = new JerseyClientConfiguration();
         configuration.setMinThreads(7);
         configuration.setMaxThreads(532);
-        configuration.setWorkQueueSize(16);
-
-        final ExecutorServiceBuilder executorServiceBuilderMock = mock(ExecutorServiceBuilder.class);
-        when(lifecycleEnvironment.executorService("jersey-client-test-%d")).thenReturn(executorServiceBuilderMock);
-
-        when(executorServiceBuilderMock.minThreads(7)).thenReturn(executorServiceBuilderMock);
-        when(executorServiceBuilderMock.maxThreads(532)).thenReturn(executorServiceBuilderMock);
-
-        final ArgumentCaptor<ArrayBlockingQueue> arrayBlockingQueueCaptor =
-                ArgumentCaptor.forClass(ArrayBlockingQueue.class);
-        when(executorServiceBuilderMock.workQueue(arrayBlockingQueueCaptor.capture()))
-                .thenReturn(executorServiceBuilderMock);
-        when(executorServiceBuilderMock.build()).thenReturn(mock(ExecutorService.class));
 
         builder.using(configuration).using(environment).build("test");
 
-        assertThat(arrayBlockingQueueCaptor.getValue().remainingCapacity()).isEqualTo(16);
+        verify(lifecycleEnvironment).executorService("jersey-client-test-%d");
     }
 
     @Test
