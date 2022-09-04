@@ -1,5 +1,5 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,18 +15,15 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package controllers;
 
 import com.google.common.collect.Maps;
 import com.google.gson.Gson;
-import com.google.inject.Inject;
-import lib.APIException;
-import lib.ApiClient;
-import lib.BreadcrumbList;
-import lib.ExclusiveInputException;
+import lib.*;
+import models.Input;
 import models.Node;
-import models.NodeService;
 import models.api.responses.system.InputTypeSummaryResponse;
 import models.api.results.MessageResult;
 import play.mvc.Result;
@@ -39,14 +36,11 @@ import java.util.Map;
  */
 public class InputsController extends AuthenticatedController {
 
-    @Inject
-    private NodeService nodeService;
-
-    public Result manage(String nodeId) {
+    public static Result manage(String nodeId) {
         // TODO: account field attributes using JS (greater than, listen_address, ...)
         // TODO: persist inputs
 
-        Node node = nodeService.loadNode(nodeId);
+        Node node = Node.fromId(nodeId);
 
         if (node == null) {
             String message = "Did not find node.";
@@ -64,7 +58,7 @@ public class InputsController extends AuthenticatedController {
                     currentUser(),
                     bc,
                     node,
-                    node.getAllInputTypeInformation()
+                    Input.getAllTypeInformation(node)
             ));
         } catch (IOException e) {
             return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
@@ -74,7 +68,7 @@ public class InputsController extends AuthenticatedController {
         }
     }
 
-    public Result launch(String nodeId) {
+    public static Result launch(String nodeId) {
         Map<String, Object> configuration = Maps.newHashMap();
         Map<String, String[]> form = request().body().asFormUrlEncoded();
 
@@ -82,8 +76,7 @@ public class InputsController extends AuthenticatedController {
         String inputTitle = form.get("title")[0];
 
         try {
-            final Node node = nodeService.loadNode(nodeId);
-            InputTypeSummaryResponse inputInfo = node.getInputTypeInformation(inputType);
+            InputTypeSummaryResponse inputInfo = Input.getTypeInformation(Node.fromId(nodeId), inputType);
 
             for (Map.Entry<String, String[]> f : form.entrySet()) {
                 if (!f.getKey().startsWith("configuration_")) {
@@ -121,9 +114,7 @@ public class InputsController extends AuthenticatedController {
             }
 
             try {
-                if (! node.launchInput(inputTitle, inputType, configuration, currentUser(), inputInfo.isExclusive)) {
-                    return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, new RuntimeException("Could not launch input " + inputTitle), request()));
-                }
+                Input.launch(Node.fromId(nodeId), inputTitle, inputType, configuration, currentUser().getId(), inputInfo.isExclusive);
             } catch (ExclusiveInputException e) {
                 flash("error", "This input is exclusive and already running.");
                 return redirect(routes.InputsController.manage(nodeId));
@@ -138,16 +129,22 @@ public class InputsController extends AuthenticatedController {
         }
     }
 
-    public Result terminate(String nodeId, String inputId) {
-        if (! nodeService.loadNode(nodeId).terminateInput(inputId)) {
-            flash("Could not terminate input " + inputId);
+    public static Result terminate(String nodeId, String inputId) {
+        try {
+            Input.terminate(Node.fromId(nodeId), inputId);
+
+            return redirect(routes.InputsController.manage(nodeId));
+        } catch (IOException e) {
+            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
+        } catch (APIException e) {
+            String message = "Could not send terminate request. We expected HTTP 202, but got a HTTP " + e.getHttpCode() + ".";
+            return status(500, views.html.errors.error.render(message, e, request()));
         }
-        return redirect(routes.InputsController.manage(nodeId));
     }
 
-    public Result recentMessage(String nodeId, String inputId) {
+    public static Result recentMessage(String nodeId, String inputId) {
         try {
-            Node node = nodeService.loadNode(nodeId);
+            Node node = Node.fromId(nodeId);
             MessageResult recentlyReceivedMessage = node.getInput(inputId).getRecentlyReceivedMessage(nodeId);
 
             if (recentlyReceivedMessage == null) {

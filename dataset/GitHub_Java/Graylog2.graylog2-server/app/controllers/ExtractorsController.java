@@ -1,5 +1,5 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,14 +15,16 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package controllers;
 
-import com.google.inject.Inject;
 import lib.APIException;
 import lib.ApiClient;
 import lib.BreadcrumbList;
-import models.*;
+import models.Extractor;
+import models.Input;
+import models.Node;
 import play.Logger;
 import play.mvc.Result;
 
@@ -34,16 +36,9 @@ import java.util.Map;
  */
 public class ExtractorsController extends AuthenticatedController {
 
-    @Inject
-    private NodeService nodeService;
-    @Inject
-    private ExtractorService extractorService;
-    @Inject
-    private Extractor.Factory extractorFactory;
-
-    public Result manage(String nodeId, String inputId) {
+    public static Result manage(String nodeId, String inputId) {
         try {
-            Node node = nodeService.loadNode(nodeId);
+            Node node = Node.fromId(nodeId);
             Input input = node.getInput(inputId);
 
             return ok(views.html.system.inputs.extractors.manage.render(
@@ -51,21 +46,19 @@ public class ExtractorsController extends AuthenticatedController {
                     standardBreadcrumbs(node, input),
                     node,
                     input,
-                    extractorService.all(node, input))
+                    Extractor.all(node, input))
             );
         } catch (IOException e) {
             return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
         } catch (APIException e) {
             String message = "Could not fetch system information. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
             return status(500, views.html.errors.error.render(message, e, request()));
-        } catch (NodeService.NodeNotFoundException e) {
-            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
         }
     }
 
-    public Result newExtractor(String nodeId, String inputId, String extractorType, String field, String example) {
+    public static Result newExtractor(String nodeId, String inputId, String extractorType, String field, String example) {
         try {
-            Node node = nodeService.loadNode(nodeId);
+            Node node = Node.fromId(nodeId);
             Input input = node.getInput(inputId);
 
             return ok(views.html.system.inputs.extractors.new_extractor.render(
@@ -82,21 +75,18 @@ public class ExtractorsController extends AuthenticatedController {
         } catch (APIException e) {
             String message = "Could not fetch system information. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
             return status(500, views.html.errors.error.render(message, e, request()));
-        } catch (NodeService.NodeNotFoundException e) {
-            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
         }
     }
 
-    public Result create(String nodeId, String inputId) {
+    public static Result create(String nodeId, String inputId) {
         Map<String, String[]> form = request().body().asFormUrlEncoded();
         Extractor.Type extractorType = Extractor.Type.valueOf(form.get("extractor_type")[0].toUpperCase());
+        Node node = Node.fromId(nodeId);
 
         Extractor extractor;
         try {
-            Node node = nodeService.loadNode(nodeId);
-
             try {
-                extractor = extractorFactory.forCreate(
+                extractor = new Extractor(
                         Extractor.CursorStrategy.valueOf(form.get("cut_or_copy")[0].toUpperCase()),
                         form.get("title")[0],
                         form.get("source_field")[0],
@@ -119,17 +109,15 @@ public class ExtractorsController extends AuthenticatedController {
         } catch (APIException e) {
             String message = "Could not create extractor! We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
             return status(500, views.html.errors.error.render(message, e, request()));
-        } catch (NodeService.NodeNotFoundException e) {
-            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
         }
 
         return redirect(routes.ExtractorsController.manage(nodeId, inputId));
     }
 
-    public Result delete(String nodeId, String inputId, String extractorId) {
+    public static Result delete(String nodeId, String inputId, String extractorId) {
         try {
-            Node node = nodeService.loadNode(nodeId);
-            extractorService.delete(node, node.getInput(inputId), extractorId);
+            Node node = Node.fromId(nodeId);
+            Extractor.delete(node, node.getInput(inputId), extractorId);
 
             return redirect(routes.ExtractorsController.manage(nodeId, inputId));
         } catch (IOException e) {
@@ -137,8 +125,6 @@ public class ExtractorsController extends AuthenticatedController {
         } catch (APIException e) {
             String message = "Could not delete extractor! We expected HTTP 204, but got a HTTP " + e.getHttpCode() + ".";
             return status(500, views.html.errors.error.render(message, e, request()));
-        } catch (NodeService.NodeNotFoundException e) {
-            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
         }
     }
 

@@ -2,12 +2,11 @@ package controllers;
 
 import com.google.common.collect.Maps;
 import com.google.gson.Gson;
-import com.google.inject.Inject;
 import lib.APIException;
 import lib.ApiClient;
 import models.FieldMapper;
 import models.Input;
-import models.MessageLoader;
+import models.Message;
 import models.Node;
 import models.api.results.MessageAnalyzeResult;
 import models.api.results.MessageResult;
@@ -19,15 +18,9 @@ import java.util.Map;
 
 public class MessagesController extends AuthenticatedController {
 
-    @Inject
-    private Node.Factory nodeFactory;
-
-    @Inject
-    private MessageLoader messageLoader;
-
-    public Result single(String index, String id) {
+    public static Result single(String index, String id) {
         try {
-            MessageResult message = messageLoader.get(index, id);
+            MessageResult message = Message.get(index, id);
 
             Map<String, Object> result = Maps.newHashMap();
             result.put("id", message.getId());
@@ -41,9 +34,9 @@ public class MessagesController extends AuthenticatedController {
         }
     }
 
-	public Result singleAsPartial(String index, String id) {
+	public static Result singleAsPartial(String index, String id) {
 		try {
-            MessageResult message = FieldMapper.run(messageLoader.get(index, id));
+            MessageResult message = FieldMapper.run(Message.get(index, id));
             Node sourceNode = getSourceNode(message);
 
             return ok(views.html.messages.show_as_partial.render(message, getSourceInput(sourceNode, message), sourceNode));
@@ -55,16 +48,16 @@ public class MessagesController extends AuthenticatedController {
 		}
 	}
 	
-	public Result analyze(String index, String id, String field) {
+	public static Result analyze(String index, String id, String field) {
 		try {
-			MessageResult message = messageLoader.get(index, id);
+			MessageResult message = Message.get(index, id);
 			
 			String analyzeField = (String) message.getFields().get(field);
 			if (analyzeField == null || analyzeField.isEmpty()) {
 				throw new APIException(404, "Message does not have requested field.");
 			}
 			
-			MessageAnalyzeResult result = messageLoader.analyze(index, analyzeField);
+			MessageAnalyzeResult result = Message.analyze(index, analyzeField);
 			return ok(new Gson().toJson(result.getTokens())).as("application/json");
 		} catch (IOException e) {
 			return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
@@ -74,9 +67,9 @@ public class MessagesController extends AuthenticatedController {
 		}
 	}
 
-    private Node getSourceNode(MessageResult m) {
+    private static Node getSourceNode(MessageResult m) {
         try {
-            return nodeFactory.fromId(m.getSourceNodeId());
+            return Node.fromId(m.getSourceNodeId());
         } catch(Exception e) {
             Logger.warn("Could not derive source node from message <" + m.getId() + ">.", e);
         }

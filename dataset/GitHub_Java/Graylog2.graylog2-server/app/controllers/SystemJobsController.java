@@ -1,5 +1,5 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,13 +15,12 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package controllers;
 
-import com.google.inject.Inject;
 import lib.APIException;
 import lib.ApiClient;
-import models.ClusterService;
 import models.SystemJob;
 import play.Logger;
 import play.mvc.Http;
@@ -29,15 +28,18 @@ import play.mvc.Result;
 
 import java.io.IOException;
 
+import static controllers.AuthenticatedController.currentUser;
+import static play.mvc.Controller.request;
+import static play.mvc.Results.forbidden;
+import static play.mvc.Results.redirect;
+import static play.mvc.Results.status;
+
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class SystemJobsController extends AuthenticatedController {
+public class SystemJobsController {
 
-    @Inject
-    private ClusterService clusterService;
-
-    public Result trigger() {
+    public static Result trigger() {
         Http.RequestBody body = request().body();
 
         if (body.asFormUrlEncoded().get("job") == null) {
@@ -46,8 +48,7 @@ public class SystemJobsController extends AuthenticatedController {
         }
 
         try {
-            final String jobType = body.asFormUrlEncoded().get("job")[0];
-            clusterService.triggerSystemJob(SystemJob.Type.fromString(jobType), currentUser());
+            SystemJob.trigger(SystemJob.Type.valueOf(body.asFormUrlEncoded().get("job")[0]), currentUser());
             return redirect(routes.SystemController.index(1));
         } catch (IOException e) {
             return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));

@@ -1,34 +1,10 @@
-/*
- * Copyright 2013 TORCH UG
- *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- */
 import com.google.common.collect.Lists;
-import com.google.inject.AbstractModule;
-import com.google.inject.Guice;
-import com.google.inject.Injector;
-import com.google.inject.Module;
-import com.google.inject.name.Names;
 import lib.ApiClient;
-import lib.ServerNodesRefreshService;
+import lib.ServerNodes;
 import lib.security.LocalAdminUserRealm;
 import lib.security.PlayAuthenticationListener;
 import lib.security.RethrowingFirstSuccessfulStrategy;
 import lib.security.ServerRestInterfaceRealm;
-import models.ModelFactoryModule;
 import models.Node;
 import models.User;
 import models.api.responses.NodeSummaryResponse;
@@ -47,7 +23,6 @@ import play.Configuration;
 import play.GlobalSettings;
 
 import java.io.File;
-import java.util.List;
 
 /**
  *
@@ -55,7 +30,6 @@ import java.util.List;
 @SuppressWarnings("unused")
 public class Global extends GlobalSettings {
 	private static final Logger log = LoggerFactory.getLogger(Global.class);
-    private Injector injector;
 
     @Override
     public Configuration onLoadConfig(Configuration configuration, File file, ClassLoader classLoader) {
@@ -65,6 +39,24 @@ public class Global extends GlobalSettings {
 
     @Override
 	public void onStart(Application app) {
+        LocalAdminUserRealm localAdminRealm = new LocalAdminUserRealm("local-accounts");
+		localAdminRealm.setCredentialsMatcher(new HashedCredentialsMatcher("SHA1"));
+		setupLocalUser(localAdminRealm, app);
+
+		Realm serverRestInterfaceRealm = new ServerRestInterfaceRealm();
+		final DefaultSecurityManager securityManager =
+				new DefaultSecurityManager(
+						Lists.newArrayList(localAdminRealm, serverRestInterfaceRealm)
+				);
+		final Authenticator authenticator = securityManager.getAuthenticator();
+		if (authenticator instanceof ModularRealmAuthenticator) {
+            ModularRealmAuthenticator a = (ModularRealmAuthenticator) authenticator;
+            a.setAuthenticationStrategy(new RethrowingFirstSuccessfulStrategy());
+			a.setAuthenticationListeners(
+                Lists.<AuthenticationListener>newArrayList(new PlayAuthenticationListener())
+            );
+		}
+		SecurityUtils.setSecurityManager(securityManager);
 
         final String graylog2ServerUris = app.configuration().getString("graylog2-server.uris", "");
         if (graylog2ServerUris.isEmpty()) {
@@ -81,50 +73,14 @@ public class Global extends GlobalSettings {
         for (String uri : uris) {
             final NodeSummaryResponse r = new NodeSummaryResponse();
             r.transportAddress =  uri;
-            initialNodes[i++] = new Node(null, null, r);  // TODO DI this is wrong, can we use the factory already here?
+            initialNodes[i++] = new Node(r);
         }
 
-        List<Module> modules = Lists.newArrayList();
-        modules.add(new AbstractModule() {
-            @Override
-            protected void configure() {
-                bind(Node[].class).annotatedWith(Names.named("Initial Nodes")).toInstance(initialNodes);
-            }
-        });
-        modules.add(new ModelFactoryModule());
-        injector = Guice.createInjector(modules);
+        ApiClient.initialize();
+        ServerNodes.initialize(initialNodes);
+	}
 
-        // start the services that need starting
-        injector.getInstance(ApiClient.class).start();
-        injector.getInstance(ServerNodesRefreshService.class).start();
-
-        LocalAdminUserRealm localAdminRealm = new LocalAdminUserRealm("local-accounts");
-        localAdminRealm.setCredentialsMatcher(new HashedCredentialsMatcher("SHA1"));
-        setupLocalUser(localAdminRealm, app);
-
-        Realm serverRestInterfaceRealm = injector.getInstance(ServerRestInterfaceRealm.class);
-        final DefaultSecurityManager securityManager =
-                new DefaultSecurityManager(
-                        Lists.newArrayList(localAdminRealm, serverRestInterfaceRealm)
-                );
-        final Authenticator authenticator = securityManager.getAuthenticator();
-        if (authenticator instanceof ModularRealmAuthenticator) {
-            ModularRealmAuthenticator a = (ModularRealmAuthenticator) authenticator;
-            a.setAuthenticationStrategy(new RethrowingFirstSuccessfulStrategy());
-            a.setAuthenticationListeners(
-                    Lists.<AuthenticationListener>newArrayList(new PlayAuthenticationListener())
-            );
-        }
-        SecurityUtils.setSecurityManager(securityManager);
-
-    }
-
-    @Override
-    public <A> A getControllerInstance(Class<A> controllerClass) throws Exception {
-        return injector.getInstance(controllerClass);
-    }
-
-    private void setupLocalUser(SimpleAccountRealm realm, Application app) {
+	private void setupLocalUser(SimpleAccountRealm realm, Application app) {
 		final Configuration config = app.configuration();
         final String username = config.getString("local-user.name", "localadmin");
         final String passwordHash = config.getString("local-user.password-sha1");

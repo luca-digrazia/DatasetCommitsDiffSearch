@@ -21,7 +21,7 @@ package org.graylog2.inputs.converters;
 
 import org.graylog2.ConfigurationException;
 import org.graylog2.plugin.inputs.Converter;
-import org.testng.annotations.Test;
+import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -39,18 +39,12 @@ public class DateConverterTest {
         assert(new DateConverter(config("YYYY MMM dd HH:mm:ss")).convert("2013 Aug 15 23:15:16").toString().startsWith("2013-08-15T23:15:16.000"));
     }
 
-    @Test
-    public void testAnotherBasicConvert() throws Exception {
-        // .startsWith() because of possibly different timezones per test environment.
-        assert(new DateConverter(config("yyyy-MM-dd'T'HH:mm:ss.SSSSSSZZ")).convert("2014-05-19T00:30:43.116847+00:00").toString().startsWith("2014-05-19T02:30:43.116"));
-    }
-
-    @Test(expectedExceptions = ConfigurationException.class)
+    @Test(expected = ConfigurationException.class)
     public void testWithEmptyConfig() throws Exception {
         assertEquals(null, new DateConverter(config("")).convert("foo"));
     }
 
-    @Test(expectedExceptions = ConfigurationException.class)
+    @Test(expected = ConfigurationException.class)
     public void testWithNullConfig() throws Exception {
         assertEquals(null, new DateConverter(config(null)).convert("foo"));
     }

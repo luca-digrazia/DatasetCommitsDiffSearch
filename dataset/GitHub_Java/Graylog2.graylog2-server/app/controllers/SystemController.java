@@ -1,5 +1,5 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,15 +15,14 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package controllers;
 
 import com.google.common.collect.Maps;
-import com.google.inject.Inject;
 import lib.APIException;
 import lib.ApiClient;
 import lib.BreadcrumbList;
-import lib.ServerNodes;
 import models.*;
 import play.mvc.*;
 
@@ -36,20 +35,13 @@ import java.util.Map;
  */
 public class SystemController extends AuthenticatedController {
 
-    @Inject
-    private NodeService nodeService;
-    @Inject
-    private ClusterService clusterService;
-    @Inject
-    private ServerNodes serverNodes;
-
-    public Result index(Integer page) {
+    public static Result index(Integer page) {
         try {
-            List<Notification> notifications = clusterService.allNotifications();
-            List<SystemJob> systemJobs = clusterService.allSystemJobs();
-            int totalSystemMessages = clusterService.getNumberOfSystemMessages();
-            List<SystemMessage> systemMessages = clusterService.getSystemMessages(page - 1);
-            ESClusterHealth clusterHealth = clusterService.getESClusterHealth();
+            List<Notification> notifications = Notification.all();
+            List<SystemJob> systemJobs = SystemJob.all();
+            int totalSystemMessages = SystemMessage.total();
+            List<SystemMessage> systemMessages = SystemMessage.all(Integer.valueOf(page-1));
+            ESClusterHealth clusterHealth = ESClusterHealth.get();
 
             return ok(views.html.system.index.render(
                     currentUser(),
@@ -68,36 +60,38 @@ public class SystemController extends AuthenticatedController {
         }
     }
 
-    public  Result nodes() {
+    public static Result nodes() {
         BreadcrumbList bc = new BreadcrumbList();
         bc.addCrumb("System", routes.SystemController.index(0));
         bc.addCrumb("Nodes", routes.SystemController.nodes());
 
-        List<ServerJVMStats> serverJvmStats = clusterService.getClusterJvmStats();
-        Map<String, Node> nodes = serverNodes.asMap();
-        Map<String, BufferInfo> bufferInfo = Maps.newHashMap();
-
-        // Ask every node for buffer info.
-        for(Node node : nodes.values()) {
-            bufferInfo.put(node.getNodeId(), node.getBufferInfo());
-        }
-
-        return ok(views.html.system.nodes.index.render(currentUser(), bc, serverJvmStats, nodes, bufferInfo));
-    }
-
-    public Result node(String nodeId) {
-        Node node = nodeService.loadNode(nodeId);
-
-        BreadcrumbList bc = new BreadcrumbList();
-        bc.addCrumb("System", routes.SystemController.index(0));
-        bc.addCrumb("Nodes", routes.SystemController.nodes());
-
-        return ok(views.html.system.nodes.show.render(currentUser(), bc, node));
-    }
-
-    public Result threadDump(String nodeId) {
         try {
-            Node node = nodeService.loadNode(nodeId);
+            List<ServerJVMStats> serverJvmStats = ServerJVMStats.get();
+            Map<String, Node> nodes = Node.asMap();
+            Map<String, BufferInfo> bufferInfo = Maps.newHashMap();
+
+            // Ask every node for buffer info.
+            for(Node node : nodes.values()) {
+                bufferInfo.put(node.getNodeId(), BufferInfo.ofNode(node));
+            }
+
+            return ok(views.html.system.nodes.render(currentUser(), bc, serverJvmStats, nodes, bufferInfo));
+        } catch (IOException e) {
+            return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
+        } catch (APIException e) {
+            String message = "Could not fetch system information. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
+            return status(504, views.html.errors.error.render(message, e, request()));
+        }
+    }
+
+    public static Result node(String nodeId) {
+        // TODO
+        return ok("implement me");
+    }
+
+    public static Result threadDump(String nodeId) {
+        try {
+            Node node = Node.fromId(nodeId);
 
             BreadcrumbList bc = new BreadcrumbList();
             bc.addCrumb("System", routes.SystemController.index(0));
