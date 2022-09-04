@@ -6,7 +6,7 @@ import java.util.Map;
 
 import javax.enterprise.inject.Vetoed;
 
-import io.quarkus.qute.Results;
+import io.quarkus.qute.Results.Result;
 import io.quarkus.qute.TemplateExtension;
 
 @Vetoed // Make sure no bean is created from this class
@@ -31,13 +31,13 @@ public class MapTemplateExtensions {
             default:
                 Object val = map.get(name);
                 if (val == null) {
-                    return map.containsKey(name) ? null : Results.NotFound.from(name);
+                    return map.containsKey(name) ? null : Result.NOT_FOUND;
                 }
                 return val;
         }
     }
 
-    static <V> V get(Map<?, V> map, Object key) {
+    static Object get(Map<?, ?> map, Object key) {
         return map.get(key);
     }
 

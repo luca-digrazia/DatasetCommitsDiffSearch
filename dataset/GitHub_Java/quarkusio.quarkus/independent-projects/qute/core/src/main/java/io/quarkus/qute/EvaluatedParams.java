@@ -79,15 +79,15 @@ public final class EvaluatedParams {
         return new EvaluatedParams(CompletableFuture.allOf(results), results);
     }
 
-    public final CompletionStage<?> stage;
+    public final CompletionStage stage;
     private final CompletableFuture<?>[] results;
 
-    EvaluatedParams(CompletionStage<?> stage) {
+    EvaluatedParams(CompletionStage stage) {
         this.stage = stage;
         this.results = new CompletableFuture<?>[] { stage.toCompletableFuture() };
     }
 
-    EvaluatedParams(CompletionStage<?> stage, CompletableFuture[] results) {
+    EvaluatedParams(CompletionStage stage, CompletableFuture[] results) {
         this.stage = stage;
         this.results = results;
     }
@@ -113,13 +113,15 @@ public final class EvaluatedParams {
         } else {
             if (varargs) {
                 int diff = types.length - results.length;
-                if (diff > 1) {
+                if (diff == 1) {
+                    // varargs may be empty
+                    return true;
+                } else if (diff > 1) {
                     return false;
-                } else if (diff < 1) {
-                    Class<?> varargsType = types[types.length - 1];
-                    types[types.length - 1] = varargsType.getComponentType();
                 }
-                // if diff == 1 then vargs may be empty and we need to compare the result types
+                // diff < 1
+                Class<?> varargsType = types[types.length - 1];
+                types[types.length - 1] = varargsType.getComponentType();
             } else {
                 return false;
             }
@@ -132,7 +134,7 @@ public final class EvaluatedParams {
                 return false;
             }
             if (types.length > ++i) {
-                paramType = boxType(types[i]);
+                paramType = types[i];
             }
         }
         return true;

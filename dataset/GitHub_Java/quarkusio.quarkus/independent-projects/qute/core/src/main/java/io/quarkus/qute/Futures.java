@@ -5,25 +5,18 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ExecutionException;
-import java.util.function.Supplier;
 
 public final class Futures {
+
+    static final CompletableFuture<Void> COMPLETED = CompletableFuture.completedFuture(null);
 
     private Futures() {
     }
 
-    static <T> Supplier<T> toSupplier(CompletableFuture<T> fu) {
-        return new Supplier<T>() {
-            @Override
-            public T get() {
-                try {
-                    return fu.get();
-                } catch (InterruptedException | ExecutionException e) {
-                    throw new IllegalStateException(e);
-                }
-            }
-        };
+    public static <T> CompletableFuture<T> failure(Throwable t) {
+        CompletableFuture<T> failure = new CompletableFuture<>();
+        failure.completeExceptionally(t);
+        return failure;
     }
 
     @SuppressWarnings("unchecked")
@@ -56,5 +49,4 @@ public final class Futures {
         });
         return result;
     }
-
 }

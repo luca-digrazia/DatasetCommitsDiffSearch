@@ -129,7 +129,7 @@ class TemplateImpl implements Template {
             if (rootContext != null && rootContext instanceof ResolutionContext) {
                 return ((ResolutionContext) rootContext).evaluate(context.getName());
             }
-            return Results.notFound(context);
+            return Results.NOT_FOUND;
         }
 
         @Override

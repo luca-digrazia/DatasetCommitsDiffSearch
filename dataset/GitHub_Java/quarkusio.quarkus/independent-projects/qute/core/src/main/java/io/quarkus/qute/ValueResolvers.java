@@ -2,6 +2,7 @@ package io.quarkus.qute;
 
 import static io.quarkus.qute.Booleans.isFalsy;
 
+import io.quarkus.qute.Results.Result;
 import java.lang.reflect.Array;
 import java.util.Collection;
 import java.util.Collections;
@@ -95,7 +96,7 @@ public final class ValueResolvers {
 
             @Override
             public CompletionStage<Object> resolve(EvalContext context) {
-                if (context.getBase() == null || Results.isNotFound(context.getBase())) {
+                if (context.getBase() == null || Results.Result.NOT_FOUND.equals(context.getBase())) {
                     return context.evaluate(context.getParams().get(0));
                 }
                 return CompletableFuture.completedFuture(context.getBase());
@@ -117,7 +118,7 @@ public final class ValueResolvers {
 
             @Override
             public CompletionStage<Object> resolve(EvalContext context) {
-                if (context.getBase() == null || Results.isNotFound(context.getBase())) {
+                if (context.getBase() == null || Results.Result.NOT_FOUND.equals(context.getBase())) {
                     return empty;
                 }
                 return CompletableFuture.completedFuture(context.getBase());
@@ -146,7 +147,7 @@ public final class ValueResolvers {
             @Override
             public CompletionStage<Object> resolve(EvalContext context) {
                 if (isFalsy(context.getBase())) {
-                    return Results.notFound(context);
+                    return Results.NOT_FOUND;
                 }
                 return context.evaluate(context.getParams().get(0));
             }
@@ -290,7 +291,7 @@ public final class ValueResolvers {
                             if (literalValue instanceof Integer) {
                                 return CompletableFuture.completedFuture(Array.get(context.getBase(), (Integer) literalValue));
                             }
-                            return Results.notFound(context);
+                            return Results.NOT_FOUND;
                         } catch (InterruptedException | ExecutionException e) {
                             throw new RuntimeException(e);
                         }
@@ -299,7 +300,7 @@ public final class ValueResolvers {
                             if (idx instanceof Integer) {
                                 return CompletableFuture.completedFuture(Array.get(context.getBase(), (Integer) idx));
                             }
-                            return Results.notFound(context);
+                            return Results.NOT_FOUND;
                         });
                     }
                 } else {
@@ -308,7 +309,7 @@ public final class ValueResolvers {
                     try {
                         index = Integer.parseInt(name);
                     } catch (NumberFormatException e) {
-                        return Results.notFound(context);
+                        return Results.NOT_FOUND;
                     }
                     return CompletableFuture.completedFuture(Array.get(context.getBase(), index));
                 }
@@ -333,7 +334,7 @@ public final class ValueResolvers {
                     });
                 }
             default:
-                return Results.notFound(context);
+                return Results.NOT_FOUND;
         }
     }
 
@@ -348,16 +349,16 @@ public final class ValueResolvers {
                                     int idx = r instanceof Integer ? (Integer) r : Integer.valueOf(r.toString());
                                     if (idx >= list.size()) {
                                         // Be consistent with property resolvers
-                                        return Results.NotFound.from(context);
+                                        return Result.NOT_FOUND;
                                     }
                                     return list.get(idx);
                                 } catch (NumberFormatException e) {
-                                    return Results.NotFound.from(context);
+                                    return Result.NOT_FOUND;
                                 }
                             });
                 }
             default:
-                return Results.notFound(context);
+                return Results.NOT_FOUND;
         }
     }
 
@@ -370,7 +371,7 @@ public final class ValueResolvers {
             case "getValue":
                 return entry.getValue();
             default:
-                return Results.NotFound.from(name);
+                return Result.NOT_FOUND;
         }
     }
 
@@ -406,7 +407,7 @@ public final class ValueResolvers {
             default:
                 Object val = map.get(name);
                 if (val == null) {
-                    return map.containsKey(name) ? Results.NULL : Results.notFound(context);
+                    return map.containsKey(name) ? Results.NULL : Results.NOT_FOUND;
                 }
                 return CompletableFuture.completedFuture(val);
         }

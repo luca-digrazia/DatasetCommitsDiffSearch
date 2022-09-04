@@ -19,6 +19,9 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import org.jboss.logging.Logger;
 
+/**
+ * 
+ */
 class EngineImpl implements Engine {
 
     private static final Logger LOGGER = Logger.getLogger(EngineImpl.class);
@@ -40,7 +43,7 @@ class EngineImpl implements Engine {
         this.valueResolvers = sort(builder.valueResolvers);
         this.namespaceResolvers = ImmutableList.<NamespaceResolver> builder()
                 .addAll(builder.namespaceResolvers).add(new TemplateImpl.DataNamespaceResolver()).build();
-        this.evaluator = new EvaluatorImpl(this.valueResolvers, this.namespaceResolvers, builder.strictRendering);
+        this.evaluator = new EvaluatorImpl(this.valueResolvers, this.namespaceResolvers);
         this.templates = new ConcurrentHashMap<>();
         this.locators = sort(builder.locators);
         this.resultMappers = sort(builder.resultMappers);
@@ -91,21 +94,6 @@ class EngineImpl implements Engine {
 
     public List<ResultMapper> getResultMappers() {
         return resultMappers;
-    }
-
-    @Override
-    public String mapResult(Object result, Expression expression) {
-        String val = null;
-        for (ResultMapper mapper : resultMappers) {
-            if (mapper.appliesTo(expression.getOrigin(), result)) {
-                val = mapper.map(result, expression);
-                break;
-            }
-        }
-        if (val == null) {
-            val = result.toString();
-        }
-        return val;
     }
 
     public Template putTemplate(String id, Template template) {
