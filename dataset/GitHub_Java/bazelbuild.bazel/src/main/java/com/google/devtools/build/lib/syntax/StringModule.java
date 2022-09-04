@@ -24,10 +24,11 @@ import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
+import com.google.devtools.build.lib.syntax.Type.ConversionException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -42,38 +43,37 @@ import java.util.regex.Pattern;
  * 'String self' parameter as the first parameter of the method.
  */
 @SkylarkModule(
-    name = "string",
-    category = SkylarkModuleCategory.BUILTIN,
-    doc =
-        "A language built-in type to support strings. "
-            + "Examples of string literals:<br>"
-            + "<pre class=\"language-python\">a = 'abc\\ndef'\n"
-            + "b = \"ab'cd\"\n"
-            + "c = \"\"\"multiline string\"\"\"\n"
-            + "\n"
-            + "# Strings support slicing (negative index starts from the end):\n"
-            + "x = \"hello\"[2:4]  # \"ll\"\n"
-            + "y = \"hello\"[1:-1]  # \"ell\"\n"
-            + "z = \"hello\"[:4]  # \"hell\""
-            + "# Slice steps can be used, too:\n"
-            + "s = \"hello\"[::2] # \"hlo\"\n"
-            + "t = \"hello\"[3:0:-1] # \"lle\"\n</pre>"
-            + "Strings are iterable and support the <code>in</code> operator. Examples:<br>"
-            + "<pre class=\"language-python\">\"bc\" in \"abcd\"   # evaluates to True\n"
-            + "x = [s for s in \"abc\"]  # x == [\"a\", \"b\", \"c\"]</pre>\n"
-            + "Implicit concatenation of strings is not allowed; use the <code>+</code> "
-            + "operator instead. Comparison operators perform a lexicographical comparison; "
-            + "use <code>==</code> to test for equality.")
-final class StringModule implements SkylarkValue {
-
-  static final StringModule INSTANCE = new StringModule();
+  name = "string",
+  category = SkylarkModuleCategory.BUILTIN,
+  doc =
+      "A language built-in type to support strings. "
+          + "Examples of string literals:<br>"
+          + "<pre class=\"language-python\">a = 'abc\\ndef'\n"
+          + "b = \"ab'cd\"\n"
+          + "c = \"\"\"multiline string\"\"\"\n"
+          + "\n"
+          + "# Strings support slicing (negative index starts from the end):\n"
+          + "x = \"hello\"[2:4]  # \"ll\"\n"
+          + "y = \"hello\"[1:-1]  # \"ell\"\n"
+          + "z = \"hello\"[:4]  # \"hell\""
+          + "# Slice steps can be used, too:\n"
+          + "s = \"hello\"[::2] # \"hlo\"\n"
+          + "t = \"hello\"[3:0:-1] # \"lle\"\n</pre>"
+          + "Strings are iterable and support the <code>in</code> operator. Examples:<br>"
+          + "<pre class=\"language-python\">\"bc\" in \"abcd\"   # evaluates to True\n"
+          + "x = [s for s in \"abc\"]  # x == [\"a\", \"b\", \"c\"]</pre>\n"
+          + "Implicit concatenation of strings is not allowed; use the <code>+</code> "
+          + "operator instead. Comparison operators perform a lexicographical comparison; "
+          + "use <code>==</code> to test for equality."
+)
+public final class StringModule {
 
   private StringModule() {}
 
   // Emulate Python substring function
   // It converts out of range indices, and never fails
-  private static String pythonSubstring(String str, int start, Object end, String what)
-      throws EvalException {
+  private static String pythonSubstring(String str, int start, Object end, String msg)
+      throws ConversionException {
     if (start == 0 && EvalUtils.isNullOrNone(end)) {
       return str;
     }
@@ -81,11 +81,8 @@ final class StringModule implements SkylarkValue {
     int stop;
     if (EvalUtils.isNullOrNone(end)) {
       stop = str.length();
-    } else if (end instanceof Integer) {
-      stop = EvalUtils.clampRangeEndpoint((Integer) end, str.length());
     } else {
-      throw new EvalException(
-          null, "expected int for " + what + ", got " + EvalUtils.getDataTypeName(end));
+      stop = EvalUtils.clampRangeEndpoint(Type.INTEGER.convert(end, msg), str.length());
     }
     if (start >= stop) {
       return "";
@@ -106,16 +103,15 @@ final class StringModule implements SkylarkValue {
             name = "elements",
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true,
-            type = Object.class,
+            type = SkylarkList.class,
             doc = "The objects to join.")
       },
       useLocation = true,
-      useStarlarkThread = true)
-  public String join(String self, Object elements, Location loc, StarlarkThread thread)
-      throws EvalException {
-    Collection<?> items = EvalUtils.toCollection(elements, loc, thread);
-    if (thread.getSemantics().incompatibleStringJoinRequiresStrings()) {
-      for (Object item : items) {
+      useEnvironment = true)
+  public String join(String self, SkylarkList<?> elements, Location loc, Environment env)
+      throws ConversionException, EvalException {
+    if (env.getSemantics().incompatibleStringJoinRequiresStrings()) {
+      for (Object item : elements) {
         if (!(item instanceof String)) {
           throw new EvalException(
               loc,
@@ -126,7 +122,7 @@ final class StringModule implements SkylarkValue {
         }
       }
     }
-    return Joiner.on(self).join(items);
+    return Joiner.on(self).join(elements);
   }
 
   @SkylarkCallable(
@@ -202,7 +198,7 @@ final class StringModule implements SkylarkValue {
             defaultValue = "None")
       })
   public String lstrip(String self, Object charsOrNone) {
-    String chars = charsOrNone != Starlark.NONE ? (String) charsOrNone : LATIN1_WHITESPACE;
+    String chars = charsOrNone != Runtime.NONE ? (String) charsOrNone : LATIN1_WHITESPACE;
     return stringLStrip(self, chars);
   }
 
@@ -227,7 +223,7 @@ final class StringModule implements SkylarkValue {
             defaultValue = "None")
       })
   public String rstrip(String self, Object charsOrNone) {
-    String chars = charsOrNone != Starlark.NONE ? (String) charsOrNone : LATIN1_WHITESPACE;
+    String chars = charsOrNone != Runtime.NONE ? (String) charsOrNone : LATIN1_WHITESPACE;
     return stringRStrip(self, chars);
   }
 
@@ -253,7 +249,7 @@ final class StringModule implements SkylarkValue {
             defaultValue = "None")
       })
   public String strip(String self, Object charsOrNone) {
-    String chars = charsOrNone != Starlark.NONE ? (String) charsOrNone : LATIN1_WHITESPACE;
+    String chars = charsOrNone != Runtime.NONE ? (String) charsOrNone : LATIN1_WHITESPACE;
     return stringStrip(self, chars);
   }
 
@@ -285,33 +281,24 @@ final class StringModule implements SkylarkValue {
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true,
             doc = "The maximum number of replacements.")
-      })
-  public String replace(String self, String oldString, String newString, Object maxSplitO)
+      },
+      useLocation = true)
+  public String replace(
+      String self, String oldString, String newString, Object maxSplitO, Location loc)
       throws EvalException {
-    int maxSplit = Integer.MAX_VALUE;
-    if (maxSplitO != Starlark.NONE) {
-      maxSplit = Math.max(0, (Integer) maxSplitO);
-    }
-    StringBuilder sb = new StringBuilder();
-    int start = 0;
-    for (int i = 0; i < maxSplit; i++) {
-      if (oldString.isEmpty()) {
-        sb.append(newString);
-        if (start < self.length()) {
-          sb.append(self.charAt(start++));
-        } else {
-          break;
-        }
-      } else {
-        int end = self.indexOf(oldString, start);
-        if (end < 0) {
-          break;
-        }
-        sb.append(self, start, end).append(newString);
-        start = end + oldString.length();
+    StringBuffer sb = new StringBuffer();
+    Integer maxSplit =
+        Type.INTEGER.convertOptional(
+            maxSplitO, "'maxsplit' argument of 'replace'", /*label*/ null, Integer.MAX_VALUE);
+    try {
+      Matcher m = Pattern.compile(oldString, Pattern.LITERAL).matcher(self);
+      for (int i = 0; i < maxSplit && m.find(); i++) {
+        m.appendReplacement(sb, Matcher.quoteReplacement(newString));
       }
+      m.appendTail(sb);
+    } catch (IllegalStateException e) {
+      throw new EvalException(loc, e.getMessage() + " in call to replace");
     }
-    sb.append(self, start, self.length());
     return sb.toString();
   }
 
@@ -337,30 +324,20 @@ final class StringModule implements SkylarkValue {
             defaultValue = "None",
             doc = "The maximum number of splits.")
       },
-      useStarlarkThread = true,
+      useEnvironment = true,
       useLocation = true)
-  public StarlarkList<String> split(
-      String self, String sep, Object maxSplitO, Location loc, StarlarkThread thread)
+  public MutableList<String> split(
+      String self, String sep, Object maxSplitO, Location loc, Environment env)
       throws EvalException {
     if (sep.isEmpty()) {
       throw new EvalException(loc, "Empty separator");
     }
-    int maxSplit = Integer.MAX_VALUE;
-    if (maxSplitO != Starlark.NONE) {
-      maxSplit = (Integer) maxSplitO;
-    }
-    ArrayList<String> res = new ArrayList<>();
-    int start = 0;
-    while (true) {
-      int end = self.indexOf(sep, start);
-      if (end < 0 || maxSplit-- == 0) {
-        res.add(self.substring(start));
-        break;
-      }
-      res.add(self.substring(start, end));
-      start = end + sep.length();
-    }
-    return StarlarkList.copyOf(thread.mutability(), res);
+    int maxSplit =
+        Type.INTEGER.convertOptional(maxSplitO, "'split' argument of 'split'", /*label*/ null, -2);
+    // + 1 because the last result is the remainder. The default is -2 so that after +1,
+    // it becomes -1.
+    String[] ss = Pattern.compile(sep, Pattern.LITERAL).split(self, maxSplit + 1);
+    return MutableList.of(env, ss);
   }
 
   @SkylarkCallable(
@@ -386,31 +363,63 @@ final class StringModule implements SkylarkValue {
             defaultValue = "None",
             doc = "The maximum number of splits.")
       },
-      useStarlarkThread = true,
+      useEnvironment = true,
       useLocation = true)
-  public StarlarkList<String> rsplit(
-      String self, String sep, Object maxSplitO, Location loc, StarlarkThread thread)
+  public MutableList<String> rsplit(
+      String self, String sep, Object maxSplitO, Location loc, Environment env)
       throws EvalException {
-    if (sep.isEmpty()) {
-      throw new EvalException(loc, "Empty separator");
+    int maxSplit = Type.INTEGER.convertOptional(maxSplitO, "'split' argument of 'split'", null, -1);
+    try {
+      return stringRSplit(self, sep, maxSplit, env);
+    } catch (IllegalArgumentException ex) {
+      throw new EvalException(loc, ex);
     }
-    int maxSplit = Integer.MAX_VALUE;
-    if (maxSplitO != Starlark.NONE) {
-      maxSplit = (Integer) maxSplitO;
+  }
+
+  /**
+   * Splits the given string into a list of words, using {@code separator} as a delimiter.
+   *
+   * <p>At most {@code maxSplits} will be performed, going from right to left.
+   *
+   * @param input The input string.
+   * @param separator The separator string.
+   * @param maxSplits The maximum number of splits. Negative values mean unlimited splits.
+   * @return A list of words
+   * @throws IllegalArgumentException
+   */
+  private static MutableList<String> stringRSplit(
+      String input, String separator, int maxSplits, Environment env) {
+    if (separator.isEmpty()) {
+      throw new IllegalArgumentException("Empty separator");
     }
-    ArrayList<String> res = new ArrayList<>();
-    int end = self.length();
-    while (true) {
-      int start = self.lastIndexOf(sep, end - 1);
-      if (start < 0 || maxSplit-- == 0) {
-        res.add(self.substring(0, end));
-        break;
-      }
-      res.add(self.substring(start + sep.length(), end));
-      end = start;
+
+    if (maxSplits <= 0) {
+      maxSplits = Integer.MAX_VALUE;
     }
-    Collections.reverse(res);
-    return StarlarkList.copyOf(thread.mutability(), res);
+
+    ArrayDeque<String> result = new ArrayDeque<>();
+    String[] parts = input.split(Pattern.quote(separator), -1);
+    int sepLen = separator.length();
+    int remainingLength = input.length();
+    int splitsSoFar = 0;
+
+    // Copies parts from the array into the final list, starting at the end (because
+    // it's rsplit), as long as fewer than maxSplits splits are performed. The
+    // last spot in the list is reserved for the remaining string, whose length
+    // has to be tracked throughout the loop.
+    for (int pos = parts.length - 1; (pos >= 0) && (splitsSoFar < maxSplits); --pos) {
+      String current = parts[pos];
+      result.addFirst(current);
+
+      ++splitsSoFar;
+      remainingLength -= sepLen + current.length();
+    }
+
+    if (splitsSoFar == maxSplits && remainingLength >= 0)   {
+      result.addFirst(input.substring(0, remainingLength));
+    }
+
+    return MutableList.copyOf(env, result);
   }
 
   @SkylarkCallable(
@@ -427,17 +436,24 @@ final class StringModule implements SkylarkValue {
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true,
             defaultValue = "unbound",
-            doc = "The string to split on.")
+            doc =
+                "The string to split on, has a default value, space (\" \"), "
+                    + "if the flag --incompatible_disable_partition_default_parameter is disabled. "
+                    + "Otherwise, a value must be provided.")
       },
-      useStarlarkThread = true,
+      useEnvironment = true,
       useLocation = true)
-  public Tuple<String> partition(String self, Object sep, Location loc, StarlarkThread thread)
+  public Tuple<String> partition(String self, Object sep, Location loc, Environment env)
       throws EvalException {
-    if (sep == Starlark.UNBOUND) {
+    if (sep == Runtime.UNBOUND) {
+      if (env.getSemantics().incompatibleDisablePartitionDefaultParameter()) {
         throw new EvalException(
             loc,
             "parameter 'sep' has no default value, "
                 + "for call to method partition(sep) of 'string'");
+      } else {
+        sep = " ";
+      }
     } else if (!(sep instanceof String)) {
       throw new EvalException(
           loc,
@@ -462,17 +478,24 @@ final class StringModule implements SkylarkValue {
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true,
             defaultValue = "unbound",
-            doc = "The string to split on.")
+            doc =
+                "The string to split on, has a default value, space (\" \"), "
+                    + "if the flag --incompatible_disable_partition_default_parameter is disabled. "
+                    + "Otherwise, a value must be provided.")
       },
-      useStarlarkThread = true,
+      useEnvironment = true,
       useLocation = true)
-  public Tuple<String> rpartition(String self, Object sep, Location loc, StarlarkThread thread)
+  public Tuple<String> rpartition(String self, Object sep, Location loc, Environment env)
       throws EvalException {
-    if (sep == Starlark.UNBOUND) {
+    if (sep == Runtime.UNBOUND) {
+      if (env.getSemantics().incompatibleDisablePartitionDefaultParameter()) {
         throw new EvalException(
             loc,
             "parameter 'sep' has no default value, "
                 + "for call to method partition(sep) of 'string'");
+      } else {
+        sep = " ";
+      }
     } else if (!(sep instanceof String)) {
       throw new EvalException(
           loc,
@@ -504,7 +527,7 @@ final class StringModule implements SkylarkValue {
 
   /**
    * Splits the input string at the {first|last} occurrence of the given separator and returns the
-   * resulting partition as a three-tuple of Strings, contained in a {@code StarlarkList}.
+   * resulting partition as a three-tuple of Strings, contained in a {@code MutableList}.
    *
    * <p>If the input string does not contain the separator, the tuple will consist of the original
    * input string and two empty strings.
@@ -588,12 +611,11 @@ final class StringModule implements SkylarkValue {
 
   /**
    * Common implementation for find, rfind, index, rindex.
-   *
    * @param forward true if we want to return the last matching index.
    */
-  private static int stringFind(
-      boolean forward, String self, String sub, int start, Object end, String msg)
-      throws EvalException {
+  private static int stringFind(boolean forward,
+      String self, String sub, int start, Object end, String msg)
+      throws ConversionException {
     String substr = pythonSubstring(self, start, end, msg);
     int subpos = forward ? substr.indexOf(sub) : substr.lastIndexOf(sub);
     start = EvalUtils.clampRangeEndpoint(start, self.length());
@@ -633,7 +655,8 @@ final class StringModule implements SkylarkValue {
             defaultValue = "None",
             doc = "optional position before which to restrict to search.")
       })
-  public Integer rfind(String self, String sub, Integer start, Object end) throws EvalException {
+  public Integer rfind(String self, String sub, Integer start, Object end)
+      throws ConversionException {
     return stringFind(false, self, sub, start, end, "'end' argument to rfind");
   }
 
@@ -667,7 +690,8 @@ final class StringModule implements SkylarkValue {
             defaultValue = "None",
             doc = "optional position before which to restrict to search.")
       })
-  public Integer invoke(String self, String sub, Integer start, Object end) throws EvalException {
+  public Integer invoke(String self, String sub, Integer start, Object end)
+      throws ConversionException {
     return stringFind(true, self, sub, start, end, "'end' argument to find");
   }
 
@@ -766,7 +790,7 @@ final class StringModule implements SkylarkValue {
             defaultValue = "False",
             doc = "Whether the line breaks should be included in the resulting list.")
       })
-  public Sequence<String> splitLines(String self, Boolean keepEnds) throws EvalException {
+  public SkylarkList<String> splitLines(String self, Boolean keepEnds) throws EvalException {
     List<String> result = new ArrayList<>();
     Matcher matcher = SPLIT_LINES_PATTERN.matcher(self);
     while (matcher.find()) {
@@ -782,7 +806,7 @@ final class StringModule implements SkylarkValue {
         result.add(line);
       }
     }
-    return Sequence.createImmutable(result);
+    return SkylarkList.createImmutable(result);
   }
 
   @SkylarkCallable(
@@ -944,16 +968,17 @@ final class StringModule implements SkylarkValue {
             defaultValue = "None",
             doc = "optional position before which to restrict to search.")
       })
-  public Integer count(String self, String sub, Integer start, Object end) throws EvalException {
+  public Integer count(String self, String sub, Integer start, Object end)
+      throws ConversionException {
     String str = pythonSubstring(self, start, end, "'end' operand of 'find'");
     if (sub.isEmpty()) {
       return str.length() + 1;
     }
     int count = 0;
-    int index = 0;
-    while ((index = str.indexOf(sub, index)) >= 0) {
+    int index = -1;
+    while ((index = str.indexOf(sub)) >= 0) {
       count++;
-      index += sub.length();
+      str = str.substring(index + sub.length());
     }
     return count;
   }
@@ -965,12 +990,12 @@ final class StringModule implements SkylarkValue {
               + "Equivalent to <code>[s[i] for i in range(len(s))]</code>, except that the "
               + "returned value might not be a list.",
       parameters = {@Param(name = "self", type = String.class, doc = "This string.")})
-  public Sequence<String> elems(String self) throws EvalException {
+  public SkylarkList<String> elems(String self) throws ConversionException {
     ImmutableList.Builder<String> builder = new ImmutableList.Builder<>();
     for (char c : self.toCharArray()) {
       builder.add(String.valueOf(c));
     }
-    return Sequence.createImmutable(builder.build());
+    return SkylarkList.createImmutable(builder.build());
   }
 
   @SkylarkCallable(
@@ -1048,17 +1073,17 @@ final class StringModule implements SkylarkValue {
       extraPositionals =
           @Param(
               name = "args",
-              type = Sequence.class,
+              type = SkylarkList.class,
               defaultValue = "()",
               doc = "List of arguments."),
       extraKeywords =
           @Param(
               name = "kwargs",
-              type = Dict.class,
+              type = SkylarkDict.class,
               defaultValue = "{}",
               doc = "Dictionary of arguments."),
       useLocation = true)
-  public String format(String self, Sequence<?> args, Dict<?, ?> kwargs, Location loc)
+  public String format(String self, SkylarkList<?> args, SkylarkDict<?, ?> kwargs, Location loc)
       throws EvalException {
     @SuppressWarnings("unchecked")
     List<Object> argObjects = (List<Object>) args.getImmutableList();
@@ -1115,4 +1140,6 @@ final class StringModule implements SkylarkValue {
     }
     return false;
   }
+
+  public static final StringModule INSTANCE = new StringModule();
 }

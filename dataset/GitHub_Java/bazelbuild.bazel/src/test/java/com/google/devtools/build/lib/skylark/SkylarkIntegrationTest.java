@@ -3078,10 +3078,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
           ((InMemoryMemoizingEvaluator) getSkyframeExecutor().getEvaluatorForTesting())
               .getSkyFunctionsForTesting();
       SkylarkImportLookupFunction skylarkImportLookupFunction =
-          new SkylarkImportLookupFunction(
-              this.getRuleClassProvider(),
-              this.getPackageFactory(),
-              /*starlarkImportLookupValueCacheSize=*/ 2);
+          new SkylarkImportLookupFunction(this.getRuleClassProvider(), this.getPackageFactory());
       skylarkImportLookupFunction.resetCache();
       ((PackageFunction) skyFunctions.get(SkyFunctions.PACKAGE))
           .setSkylarkImportLookupFunctionForInliningForTesting(skylarkImportLookupFunction);
