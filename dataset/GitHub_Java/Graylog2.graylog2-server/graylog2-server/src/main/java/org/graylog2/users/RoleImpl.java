@@ -40,9 +40,6 @@ public class RoleImpl implements Role {
     @Nullable
     private String description;
 
-    // readOnly is never set from the outside, except for the two built-in roles "Admin" and "Reader"
-    private boolean readOnly = false;
-
     @JsonProperty
     public String nameLower() {
         return name.toLowerCase();
@@ -89,15 +86,5 @@ public class RoleImpl implements Role {
     @Override
     public void setPermissions(Set<String> permissions) {
         this.permissions = permissions;
-    }
-
-    @Override
-    @JsonProperty
-    public boolean isReadOnly() {
-        return readOnly;
-    }
-
-    public void setReadOnly(boolean readOnly) {
-        this.readOnly = readOnly;
     }
 }
