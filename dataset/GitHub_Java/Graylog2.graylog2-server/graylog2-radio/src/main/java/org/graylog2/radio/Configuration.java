@@ -121,6 +121,10 @@ public class Configuration extends BaseConfiguration {
         return graylog2ServerUri == null ? null : Tools.getUriWithPort(graylog2ServerUri, GRAYLOG2_DEFAULT_PORT);
     }
 
+    public int getRingSize() {
+        return ringSize;
+    }
+
     public String getKafkaBrokers() {
         return kafkaBrokers;
     }
