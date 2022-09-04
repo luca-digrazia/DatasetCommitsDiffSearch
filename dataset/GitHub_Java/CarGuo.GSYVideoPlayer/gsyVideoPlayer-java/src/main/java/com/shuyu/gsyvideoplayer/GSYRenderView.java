@@ -29,8 +29,7 @@ public class GSYRenderView {
     }
 
     public void requestLayout() {
-        if (mShowView != null)
-            mShowView.requestLayout();
+        mShowView.requestLayout();
     }
 
     public float getRotation() {
@@ -38,8 +37,7 @@ public class GSYRenderView {
     }
 
     public void setRotation(float rotation) {
-        if (mShowView != null)
-            mShowView.setRotation(rotation);
+        mShowView.setRotation(rotation);
     }
 
     public void invalidate() {
@@ -52,10 +50,6 @@ public class GSYRenderView {
 
     public int getHeight() {
         return mShowView.getHeight();
-    }
-
-    public View getShowView() {
-        return mShowView;
     }
 
     /**
@@ -76,24 +70,7 @@ public class GSYRenderView {
     }
 
     public void setLayoutParams(ViewGroup.LayoutParams layoutParams) {
-        if (mShowView != null)
-            mShowView.setLayoutParams(layoutParams);
-    }
-
-    public void onResume() {
-        if (mShowView instanceof GSYVideoGLView) {
-            GSYVideoGLView gsyVideoGLView = (GSYVideoGLView) mShowView;
-            gsyVideoGLView.requestLayout();
-            gsyVideoGLView.onResume();
-        }
-    }
-
-    public void onPause() {
-        if (mShowView instanceof GSYVideoGLView) {
-            GSYVideoGLView gsyVideoGLView = (GSYVideoGLView) mShowView;
-            gsyVideoGLView.requestLayout();
-            gsyVideoGLView.onPause();
-        }
+        mShowView.setLayoutParams(layoutParams);
     }
 
     /**
@@ -146,33 +123,6 @@ public class GSYRenderView {
             FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(params, params);
             layoutParams.gravity = Gravity.CENTER;
             textureViewContainer.addView(showSurfaceView, layoutParams);
-        }
-    }
-
-    /**
-     * 添加播放的view
-     */
-    public void addGLView(Context context, ViewGroup textureViewContainer, int rotate, GSYVideoGLView.onGSYSurfaceListener gsySurfaceListener, GSYVideoGLView.ShaderInterface effect) {
-        if (textureViewContainer.getChildCount() > 0) {
-            textureViewContainer.removeAllViews();
-        }
-        GSYVideoGLView gsyVideoGLView = new GSYVideoGLView(context);
-        gsyVideoGLView.setEffect(effect);
-        gsyVideoGLView.setGSYSurfaceListener(gsySurfaceListener);
-        gsyVideoGLView.setRotation(rotate);
-
-        mShowView = gsyVideoGLView;
-
-        int params = getTextureParams();
-
-        if (textureViewContainer instanceof RelativeLayout) {
-            RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(params, params);
-            layoutParams.addRule(RelativeLayout.CENTER_IN_PARENT);
-            textureViewContainer.addView(gsyVideoGLView, layoutParams);
-        } else if (textureViewContainer instanceof FrameLayout) {
-            FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(params, params);
-            layoutParams.gravity = Gravity.CENTER;
-            textureViewContainer.addView(gsyVideoGLView, layoutParams);
         }
     }
 

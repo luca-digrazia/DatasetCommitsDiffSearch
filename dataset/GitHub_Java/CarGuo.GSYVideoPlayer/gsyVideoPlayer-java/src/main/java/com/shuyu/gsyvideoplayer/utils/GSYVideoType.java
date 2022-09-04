@@ -26,10 +26,6 @@ public class GSYVideoType {
 
     public final static int IJKEXOPLAYER = 1;
 
-
-    //gl
-    public final static int GLSURFACE = 2;
-
     //surface
     public final static int SUFRACE = 1;
 
@@ -43,11 +39,8 @@ public class GSYVideoType {
     //硬解码标志
     private static boolean MEDIA_CODEC_FLAG = false;
 
-    //渲染类型
-    private static int sRenderType = TEXTURE;
 
-    //是否使用硬解码优化
-    private static boolean sTextureMediaPlay = false;
+    private static int sRenderType = TEXTURE;
 
 
     /**
@@ -65,31 +58,10 @@ public class GSYVideoType {
     }
 
     /**
-     * 使能硬解码渲染优化
-     */
-    public static void enableMediaCodecTexture() {
-        sTextureMediaPlay = true;
-    }
-
-    /**
-     * 关闭硬解码渲染优化
-     */
-    public static void disableMediaCodecTexture() {
-        sTextureMediaPlay = false;
-    }
-
-    /**
      * 是否开启硬解码
      */
     public static boolean isMediaCodec() {
         return MEDIA_CODEC_FLAG;
-    }
-
-    /**
-     * 是否开启硬解码渲染优化
-     */
-    public static boolean isMediaCodecTexture() {
-        return sTextureMediaPlay;
     }
 
     public static int getShowType() {
@@ -116,5 +88,4 @@ public class GSYVideoType {
     public static void setRenderType(int renderType) {
         sRenderType = renderType;
     }
-
 }
