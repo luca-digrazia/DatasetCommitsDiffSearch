@@ -155,9 +155,7 @@ public class DeploymentInjectingDependencyVisitor {
     private DependencyNode collectDependencies(Artifact artifact) throws BootstrapDependencyProcessingException {
         try {
             return managedDeps.isEmpty() ? resolver.collectDependencies(artifact, Collections.emptyList(), mainRepos).getRoot()
-                    : resolver
-                            .collectManagedDependencies(artifact, Collections.emptyList(), managedDeps, mainRepos, "test",
-                                    "provided")
+                    : resolver.collectManagedDependencies(artifact, Collections.emptyList(), managedDeps, mainRepos, "test")
                             .getRoot();
         } catch (AppModelResolverException e) {
             throw new DeploymentInjectionException(e);

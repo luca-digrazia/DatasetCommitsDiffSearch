@@ -1,6 +1,6 @@
 package io.quarkus.test.junit;
 
-import static io.quarkus.test.common.PathTestHelper.getAppClassLocationForTestLocation;
+import static io.quarkus.test.common.PathTestHelper.getAppClassLocation;
 import static io.quarkus.test.common.PathTestHelper.getTestClassesLocation;
 
 import java.io.Closeable;
@@ -12,6 +12,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,7 +62,6 @@ import io.quarkus.test.common.TestClassIndexer;
 import io.quarkus.test.common.TestResourceManager;
 import io.quarkus.test.common.TestScopeManager;
 import io.quarkus.test.common.http.TestHTTPResourceManager;
-import io.quarkus.test.junit.buildchain.TestBuildChainCustomizerProducer;
 import io.quarkus.test.junit.callback.QuarkusTestAfterEachCallback;
 import io.quarkus.test.junit.callback.QuarkusTestBeforeAllCallback;
 import io.quarkus.test.junit.callback.QuarkusTestBeforeEachCallback;
@@ -93,17 +93,17 @@ public class QuarkusTestExtension
             final LinkedBlockingDeque<Runnable> shutdownTasks = new LinkedBlockingDeque<>();
 
             Class<?> requiredTestClass = context.getRequiredTestClass();
-            testClassLocation = getTestClassesLocation(requiredTestClass);
-            final Path appClassLocation = getAppClassLocationForTestLocation(testClassLocation.toString());
+            Path appClassLocation = getAppClassLocation(requiredTestClass);
 
-            originalCl = Thread.currentThread().getContextClassLoader();
-
-            final QuarkusBootstrap.Builder runnerBuilder = QuarkusBootstrap.builder()
+            final QuarkusBootstrap.Builder runnerBuilder = QuarkusBootstrap.builder(appClassLocation)
                     .setIsolateDeployment(true)
                     .setMode(QuarkusBootstrap.Mode.TEST);
 
+            originalCl = Thread.currentThread().getContextClassLoader();
+            testClassLocation = getTestClassesLocation(requiredTestClass);
+
             if (!appClassLocation.equals(testClassLocation)) {
-                runnerBuilder.addAdditionalApplicationArchive(AdditionalDependency.test(testClassLocation));
+                runnerBuilder.addAdditionalApplicationArchive(new AdditionalDependency(testClassLocation, false, true, true));
             }
             CuratedApplication curatedApplication = runnerBuilder
                     .setTest(true)
@@ -585,9 +585,7 @@ public class QuarkusTestExtension
             Path testLocation = (Path) stringObjectMap.get(TEST_LOCATION);
             // the index was written by the extension
             Index testClassesIndex = TestClassIndexer.readIndex((Class<?>) stringObjectMap.get(TEST_CLASS));
-
-            List<Consumer<BuildChainBuilder>> allCustomizers = new ArrayList<>(1);
-            Consumer<BuildChainBuilder> defaultCustomizer = new Consumer<BuildChainBuilder>() {
+            return Collections.singletonList(new Consumer<BuildChainBuilder>() {
 
                 private static final int ANNOTATION = 0x00002000;
 
@@ -663,16 +661,7 @@ public class QuarkusTestExtension
                     }
 
                 }
-            };
-            allCustomizers.add(defaultCustomizer);
-
-            // give other extensions the ability to customize the build chain
-            for (TestBuildChainCustomizerProducer testBuildChainCustomizerProducer : ServiceLoader
-                    .load(TestBuildChainCustomizerProducer.class, this.getClass().getClassLoader())) {
-                allCustomizers.add(testBuildChainCustomizerProducer.produce(testClassesIndex));
-            }
-
-            return allCustomizers;
+            });
         }
     }
 }
