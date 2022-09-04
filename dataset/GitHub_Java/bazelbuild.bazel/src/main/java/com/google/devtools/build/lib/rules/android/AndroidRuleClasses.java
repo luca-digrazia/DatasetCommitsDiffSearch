@@ -569,7 +569,6 @@ public final class AndroidRuleClasses {
                   .cfg(HostTransition.INSTANCE)
                   .exec()
                   .value(env.getToolsLabel(AndroidRuleClasses.MANIFEST_MERGE_TOOL_LABEL)))
-          .advertiseSkylarkProvider(AndroidResourcesInfo.PROVIDER.id())
           .build();
     }
 
