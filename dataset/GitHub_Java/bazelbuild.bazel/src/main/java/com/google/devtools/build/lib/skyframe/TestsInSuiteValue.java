@@ -89,6 +89,11 @@ final class TestsInSuiteValue implements SkyValue {
       return SkyFunctions.TESTS_IN_SUITE;
     }
 
+    @Override
+    public Object argument() {
+      return this;
+    }
+
     public Rule getTestSuite() {
       return testSuite;
     }

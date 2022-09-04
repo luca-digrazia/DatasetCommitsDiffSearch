@@ -22,8 +22,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.ServerDirectories;
-import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
@@ -44,6 +42,7 @@ import com.google.devtools.build.lib.syntax.GlobList;
 import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.testutil.TestConstants;
+import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Dirent;
@@ -469,7 +468,8 @@ public class IncrementalLoadingTest {
                   .getPackageFactoryBuilderForTesting()
                   .build(loadingMock.createRuleClassProvider(), fs),
               new BlazeDirectories(
-                  new ServerDirectories(fs.getPath("/install"), fs.getPath("/output")),
+                  fs.getPath("/install"),
+                  fs.getPath("/output"),
                   workspace,
                   loadingMock.getProductName()),
               null, /* BinTools */

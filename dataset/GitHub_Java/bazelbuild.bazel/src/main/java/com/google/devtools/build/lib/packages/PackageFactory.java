@@ -328,7 +328,7 @@ public final class PackageFactory {
     }
   }
 
-  private static final Logger logger = Logger.getLogger(PackageFactory.class.getName());
+  private static final Logger LOG = Logger.getLogger(PackageFactory.class.getName());
 
   private final RuleFactory ruleFactory;
   private final RuleClassProvider ruleClassProvider;
@@ -1345,9 +1345,9 @@ public final class PackageFactory {
       List<Statement> preludeStatements,
       ExtendedEventHandler eventHandler) {
     // Logged messages are used as a testability hook tracing the parsing progress
-    logger.fine("Starting to parse " + packageId);
+    LOG.fine("Starting to parse " + packageId);
     BuildFileAST buildFileAST = BuildFileAST.parseBuildFile(in, preludeStatements, eventHandler);
-    logger.fine("Finished parsing of " + packageId);
+    LOG.fine("Finished parsing of " + packageId);
     return buildFileAST;
   }
 
@@ -1592,7 +1592,8 @@ public final class PackageFactory {
         builder.put(function.getName(), function);
       }
     }
-    return NativeProvider.STRUCT.create(builder.build(), "no native function or rule '%s'");
+    return NativeClassObjectConstructor.STRUCT.create(
+        builder.build(), "no native function or rule '%s'");
   }
 
   /** @param fakeEnv specify if we declare no-op functions, or real functions. */

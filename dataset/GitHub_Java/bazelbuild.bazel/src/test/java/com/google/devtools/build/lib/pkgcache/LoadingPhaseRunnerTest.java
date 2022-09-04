@@ -27,7 +27,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
-import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
@@ -615,7 +614,8 @@ public class LoadingPhaseRunnerTest {
       storedErrors = new StoredEventHandler();
       BlazeDirectories directories =
           new BlazeDirectories(
-              new ServerDirectories(fs.getPath("/install"), fs.getPath("/output")),
+              fs.getPath("/install"),
+              fs.getPath("/output"),
               workspace,
               analysisMock.getProductName());
       skyframeExecutor =
