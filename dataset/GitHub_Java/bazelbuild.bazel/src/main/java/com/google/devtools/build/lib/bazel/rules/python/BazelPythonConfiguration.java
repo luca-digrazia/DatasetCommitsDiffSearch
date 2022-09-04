@@ -14,13 +14,13 @@
 
 package com.google.devtools.build.lib.bazel.rules.python;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.LabelConverter;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.config.RequiresOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
@@ -34,7 +34,6 @@ import com.google.devtools.common.options.OptionMetadataTag;
 
 /** Bazel-specific Python configuration. */
 @Immutable
-@RequiresOptions(options = {BazelPythonConfiguration.Options.class, PythonOptions.class})
 public class BazelPythonConfiguration extends Fragment {
 
   /** Bazel-specific Python configuration options. */
@@ -109,24 +108,33 @@ public class BazelPythonConfiguration extends Fragment {
     @Override
     public Fragment create(BuildOptions buildOptions)
         throws InvalidConfigurationException {
-      return new BazelPythonConfiguration(buildOptions);
+      BazelPythonConfiguration pythonConfiguration
+          = new BazelPythonConfiguration(buildOptions.get(Options.class));
+
+      String pythonPath = pythonConfiguration.getPythonPath();
+      if (!pythonPath.startsWith("python") && !PathFragment.create(pythonPath).isAbsolute()) {
+        throw new InvalidConfigurationException(
+            "python_path must be an absolute path when it is set.");
+      }
+
+      return pythonConfiguration;
     }
 
     @Override
     public Class<? extends Fragment> creates() {
       return BazelPythonConfiguration.class;
     }
+
+    @Override
+    public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
+      return ImmutableSet.of(Options.class, PythonOptions.class);
+    }
   }
 
   private final Options options;
 
-  private BazelPythonConfiguration(BuildOptions buildOptions) throws InvalidConfigurationException {
-    this.options = buildOptions.get(Options.class);
-    String pythonPath = getPythonPath();
-    if (!pythonPath.startsWith("python") && !PathFragment.create(pythonPath).isAbsolute()) {
-      throw new InvalidConfigurationException(
-          "python_path must be an absolute path when it is set.");
-    }
+  private BazelPythonConfiguration(Options options) {
+    this.options = options;
   }
 
   @Override

@@ -13,9 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.python;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.Fragment;
+import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 
 /**
@@ -23,9 +25,25 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
  */
 public class PythonConfigurationLoader implements ConfigurationFragmentFactory {
   @Override
+  public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
+    return ImmutableSet.of(PythonOptions.class);
+  }
+
+  @Override
   public PythonConfiguration create(BuildOptions buildOptions)
       throws InvalidConfigurationException {
-    return new PythonConfiguration(buildOptions);
+    PythonOptions pythonOptions = buildOptions.get(PythonOptions.class);
+    PythonVersion pythonVersion = pythonOptions.getPythonVersion();
+    return new PythonConfiguration(
+        pythonVersion,
+        pythonOptions.getDefaultPythonVersion(),
+        pythonOptions.buildPythonZip,
+        pythonOptions.buildTransitiveRunfilesTrees,
+        /*py2OutputsAreSuffixed=*/ pythonOptions.incompatiblePy2OutputsAreSuffixed,
+        /*disallowLegacyPyProvider=*/ pythonOptions.incompatibleDisallowLegacyPyProvider,
+        /*useToolchains=*/ pythonOptions.incompatibleUsePythonToolchains,
+        /*loadPythonRulesFromBzl=*/ pythonOptions.loadPythonRulesFromBzl,
+        /*defaultToExplicitInitPy=*/ pythonOptions.incompatibleDefaultToExplicitInitPy);
   }
 
   @Override

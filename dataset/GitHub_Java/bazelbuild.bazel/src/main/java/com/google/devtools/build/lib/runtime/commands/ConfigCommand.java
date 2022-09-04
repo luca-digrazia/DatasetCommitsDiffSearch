@@ -493,7 +493,7 @@ public class ConfigCommand implements BlazeCommand {
       ConfigCommandOutputFormatter writer,
       ImmutableSortedSet<ConfigurationForOutput> configurations) {
     writer.writeConfigurations(configurations);
-    return BlazeCommandResult.success();
+    return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
   }
 
   /**
@@ -504,7 +504,7 @@ public class ConfigCommand implements BlazeCommand {
       ImmutableSortedSet<ConfigurationForOutput> configurations) {
     writer.writeConfigurationIDs(
         configurations.stream().map(config -> config.configHash).collect(toList()));
-    return BlazeCommandResult.success();
+    return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
   }
 
   /**
@@ -528,7 +528,7 @@ public class ConfigCommand implements BlazeCommand {
     }
 
     writer.writeConfiguration(match.get());
-    return BlazeCommandResult.success();
+    return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
   }
 
   /**
@@ -567,7 +567,7 @@ public class ConfigCommand implements BlazeCommand {
     Table<Class<? extends FragmentOptions>, String, Pair<Object, Object>> diffs =
         diffConfigurations(config1.get(), config2.get());
     writer.writeConfigurationDiff(getConfigurationDiffForOutput(configHash1, configHash2, diffs));
-    return BlazeCommandResult.success();
+    return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
   }
 
   /**

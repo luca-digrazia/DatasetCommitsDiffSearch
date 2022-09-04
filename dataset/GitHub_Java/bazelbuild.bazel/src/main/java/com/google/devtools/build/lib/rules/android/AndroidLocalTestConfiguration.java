@@ -14,11 +14,11 @@
 
 package com.google.devtools.build.lib.rules.android;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.analysis.config.RequiresOptions;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
@@ -27,7 +27,6 @@ import javax.annotation.Nullable;
 
 /** Configuration fragment for android_local_test. */
 @Immutable
-@RequiresOptions(options = {AndroidLocalTestConfiguration.Options.class})
 public class AndroidLocalTestConfiguration extends Fragment {
   /** android_local_test specific options */
   public static final class Options extends FragmentOptions {
@@ -53,20 +52,24 @@ public class AndroidLocalTestConfiguration extends Fragment {
     @Nullable
     @Override
     public Fragment create(BuildOptions buildOptions) {
-      return new AndroidLocalTestConfiguration(buildOptions);
+      return new AndroidLocalTestConfiguration(buildOptions.get(Options.class));
     }
 
     @Override
     public Class<? extends Fragment> creates() {
       return AndroidLocalTestConfiguration.class;
     }
+
+    @Override
+    public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
+      return ImmutableSet.of(Options.class);
+    }
   }
 
   private final boolean androidLocalTestBinaryResources;
 
-  private AndroidLocalTestConfiguration(BuildOptions buildOptions) {
-    this.androidLocalTestBinaryResources =
-        buildOptions.get(Options.class).androidLocalTestBinaryResources;
+  private AndroidLocalTestConfiguration(Options options) {
+    this.androidLocalTestBinaryResources = options.androidLocalTestBinaryResources;
   }
 
   public boolean useAndroidLocalTestBinaryResources() {

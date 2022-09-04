@@ -20,7 +20,7 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.OUTPUT_LIST;
 import static com.google.devtools.build.lib.packages.ImplicitOutputsFunction.substitutePlaceholderIntoTemplate;
-import static com.google.devtools.build.lib.packages.RuleClass.Builder.STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME;
+import static com.google.devtools.build.lib.packages.RuleClass.Builder.SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME;
 import static com.google.devtools.build.lib.packages.RuleClass.NO_EXTERNAL_BINDINGS;
 import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
 import static com.google.devtools.build.lib.packages.Type.INTEGER;
@@ -269,7 +269,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
         .newPackageBuilder(
             PackageIdentifier.createInMainRepo(TEST_PACKAGE_NAME),
             "TESTING",
-            StarlarkSemantics.DEFAULT)
+            StarlarkSemantics.DEFAULT_SEMANTICS)
         .setFilename(RootedPath.toRootedPath(root, testBuildfilePath));
   }
 
@@ -898,17 +898,10 @@ public class RuleClassTest extends PackageLoadingTestCase {
       MissingFragmentPolicy missingFragmentPolicy,
       boolean supportsConstraintChecking,
       Attribute... attributes) {
-    // Here we dig the digest out of the thread, but alternatively we could stow it
-    // in Module.label (which is a currently a Label, but that could be changed into a tuple).
-    // Module.label is analogous to BazelStarlarkContext in that is a hook for applications
-    // to hang their state in the thread or module without a dependency.
-    // Observe that below, the rule definition starlark label comes out of the
-    // innermost enclosing caller's module, which is potentially inconsistent.
-    // TODO(adonovan): decide whether this is correct, and see below.
-    byte[] ruleDefinitionStarlarkTransitiveDigest =
+    String ruleDefinitionStarlarkThreadHashCode =
         ruleDefinitionStarlarkThread == null
             ? null
-            : BazelStarlarkContext.from(ruleDefinitionStarlarkThread).getTransitiveDigest();
+            : ruleDefinitionStarlarkThread.getTransitiveContentHashCode();
     return new RuleClass(
         name,
         DUMMY_STACK,
@@ -934,17 +927,12 @@ public class RuleClassTest extends PackageLoadingTestCase {
         configuredTargetFunction,
         externalBindingsFunction,
         /*optionReferenceFunction=*/ RuleClass.NO_OPTION_REFERENCE,
-        // TODO(adonovan): I think this has always been wrong: unlike the RDE digest which
-        // comes from the thread executing a .bzl file's toplevel, the RDE label comes from the
-        // innermost enclosing call. That means if a.bzl calls a function in b.bzl that calls rule
-        // (pretty weird, admittedly), then the RDE will have the digest of a but the label of b.
-        // See other comment above.
         ruleDefinitionStarlarkThread == null
             ? null
             : (Label)
                 Module.ofInnermostEnclosingStarlarkFunction(ruleDefinitionStarlarkThread)
                     .getLabel(),
-        ruleDefinitionStarlarkTransitiveDigest,
+        ruleDefinitionStarlarkThreadHashCode,
         new ConfigurationFragmentPolicy.Builder()
             .requiresConfigurationFragments(allowedConfigurationFragments)
             .setMissingFragmentPolicy(missingFragmentPolicy)
@@ -1202,8 +1190,8 @@ public class RuleClassTest extends PackageLoadingTestCase {
             .setBuildSetting(new BuildSetting(false, STRING))
             .build();
 
-    assertThat(labelFlag.hasAttr(STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, LABEL)).isTrue();
-    assertThat(stringSetting.hasAttr(STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, STRING)).isTrue();
+    assertThat(labelFlag.hasAttr(SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, LABEL)).isTrue();
+    assertThat(stringSetting.hasAttr(SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, STRING)).isTrue();
   }
 
   @Test
@@ -1214,7 +1202,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
             .add(attr("tags", STRING_LIST))
             .build();
 
-    assertThat(stringSetting.hasAttr(STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, LABEL)).isFalse();
+    assertThat(stringSetting.hasAttr(SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, LABEL)).isFalse();
   }
 
   @Test

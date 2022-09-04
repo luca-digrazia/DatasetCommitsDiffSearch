@@ -199,7 +199,7 @@ public final class RuleContext extends TargetContext
   private final ImmutableList<Class<? extends Fragment>> universalFragments;
   private final RuleErrorConsumer reporter;
   @Nullable private final ToolchainCollection<ResolvedToolchainContext> toolchainContexts;
-  private final ConstraintSemantics<RuleContext> constraintSemantics;
+  private final ConstraintSemantics constraintSemantics;
   private final ImmutableSet<String> requiredConfigFragments;
 
   private ActionOwner actionOwner;
@@ -219,7 +219,7 @@ public final class RuleContext extends TargetContext
       ActionLookupValue.ActionLookupKey actionLookupKey,
       ImmutableMap<String, Attribute> aspectAttributes,
       @Nullable ToolchainCollection<ResolvedToolchainContext> toolchainContexts,
-      ConstraintSemantics<RuleContext> constraintSemantics,
+      ConstraintSemantics constraintSemantics,
       ImmutableSet<String> requiredConfigFragments) {
     super(
         builder.env,
@@ -1246,7 +1246,7 @@ public final class RuleContext extends TargetContext
         .hasConstraintValue(constraintValue);
   }
 
-  public ConstraintSemantics<RuleContext> getConstraintSemantics() {
+  public ConstraintSemantics getConstraintSemantics() {
     return constraintSemantics;
   }
 
@@ -1623,7 +1623,7 @@ public final class RuleContext extends TargetContext
     private ImmutableMap<String, Attribute> aspectAttributes;
     private ImmutableList<Aspect> aspects;
     private ToolchainCollection<ResolvedToolchainContext> toolchainContexts;
-    private ConstraintSemantics<RuleContext> constraintSemantics;
+    private ConstraintSemantics constraintSemantics;
     private ImmutableSet<String> requiredConfigFragments = ImmutableSet.of();
 
     @VisibleForTesting
@@ -1753,7 +1753,7 @@ public final class RuleContext extends TargetContext
       return this;
     }
 
-    public Builder setConstraintSemantics(ConstraintSemantics<RuleContext> constraintSemantics) {
+    public Builder setConstraintSemantics(ConstraintSemantics constraintSemantics) {
       this.constraintSemantics = constraintSemantics;
       return this;
     }

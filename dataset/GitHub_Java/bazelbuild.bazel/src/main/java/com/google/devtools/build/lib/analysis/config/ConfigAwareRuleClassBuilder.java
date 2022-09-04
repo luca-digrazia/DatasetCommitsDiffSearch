@@ -83,8 +83,8 @@ public class ConfigAwareRuleClassBuilder {
    */
   public ConfigAwareRuleClassBuilder requiresHostConfigurationFragmentsBySkylarkModuleName(
       Collection<String> configurationFragmentNames) {
-    ruleClassBuilder.requiresConfigurationFragmentsByStarlarkModuleName(
-        HostTransition.INSTANCE, configurationFragmentNames);
+    ruleClassBuilder.requiresConfigurationFragmentsBySkylarkModuleName(HostTransition.INSTANCE,
+        configurationFragmentNames);
     return this;
   }
 }

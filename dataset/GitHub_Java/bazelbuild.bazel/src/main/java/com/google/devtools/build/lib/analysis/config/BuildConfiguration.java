@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.analysis.config;
 
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ArrayListMultimap;
@@ -30,6 +31,7 @@ import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.BuildConfigurationEvent;
 import com.google.devtools.build.lib.actions.CommandLines.CommandLineLimits;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
+import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.actions.Compression;
 import com.google.devtools.build.lib.buildeventstream.BuildEventIdUtil;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
@@ -335,7 +337,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
     Multimap<Class<? extends Fragment>, Class<? extends FragmentOptions>>
         fragmentToRequiredOptions = ArrayListMultimap.create();
     for (ConfigurationFragmentFactory fragmentLoader :
-        ((FragmentProvider) ruleClassProvider).getConfigurationFragments()) {
+        ((ConfiguredRuleClassProvider) ruleClassProvider).getConfigurationFragments()) {
       fragmentToRequiredOptions.putAll(fragmentLoader.creates(), fragmentLoader.requiredOptions());
     }
     Set<Class<? extends FragmentOptions>> options = new HashSet<>();

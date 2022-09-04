@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.analysis.config.transitions.ComposingTransi
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
 import com.google.devtools.build.lib.analysis.constraints.ConstraintSemantics;
-import com.google.devtools.build.lib.analysis.constraints.RuleContextConstraintSemantics;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkModules;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
@@ -145,8 +144,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements RuleClassProvider 
     private Set<String> reservedActionMnemonics = new TreeSet<>();
     private BuildConfiguration.ActionEnvironmentProvider actionEnvironmentProvider =
         (BuildOptions options) -> ActionEnvironment.EMPTY;
-    private ConstraintSemantics<RuleContext> constraintSemantics =
-        new RuleContextConstraintSemantics();
+    private ConstraintSemantics constraintSemantics = new ConstraintSemantics();
 
     private ThirdPartyLicenseExistencePolicy thirdPartyLicenseExistencePolicy =
         ThirdPartyLicenseExistencePolicy.USER_CONTROLLABLE;
@@ -274,7 +272,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements RuleClassProvider 
      * don't depend on rules that aren't compatible with the same environments. Defaults to
      * {@ConstraintSemantics}. See {@ConstraintSemantics} for more details.
      */
-    public Builder setConstraintSemantics(ConstraintSemantics<RuleContext> constraintSemantics) {
+    public Builder setConstraintSemantics(ConstraintSemantics constraintSemantics) {
       this.constraintSemantics = constraintSemantics;
       return this;
     }
@@ -547,7 +545,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements RuleClassProvider 
 
   private final ImmutableMap<String, Class<?>> configurationFragmentMap;
 
-  private final ConstraintSemantics<RuleContext> constraintSemantics;
+  private final ConstraintSemantics constraintSemantics;
 
   private final ThirdPartyLicenseExistencePolicy thirdPartyLicenseExistencePolicy;
 
@@ -573,7 +571,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements RuleClassProvider 
       ImmutableList<SymlinkDefinition> symlinkDefinitions,
       ImmutableSet<String> reservedActionMnemonics,
       BuildConfiguration.ActionEnvironmentProvider actionEnvironmentProvider,
-      ConstraintSemantics<RuleContext> constraintSemantics,
+      ConstraintSemantics constraintSemantics,
       ThirdPartyLicenseExistencePolicy thirdPartyLicenseExistencePolicy) {
     this.preludeLabel = preludeLabel;
     this.runfilesPrefix = runfilesPrefix;
@@ -840,7 +838,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements RuleClassProvider 
     return symlinkDefinitions;
   }
 
-  public ConstraintSemantics<RuleContext> getConstraintSemantics() {
+  public ConstraintSemantics getConstraintSemantics() {
     return constraintSemantics;
   }
 

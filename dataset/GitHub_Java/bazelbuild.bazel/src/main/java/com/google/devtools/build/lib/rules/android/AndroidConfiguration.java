@@ -894,16 +894,6 @@ public class AndroidConfiguration extends Fragment implements AndroidConfigurati
                 + " dex when compiling legacy multidex.")
     public Label legacyMainDexListGenerator;
 
-    @Option(
-        name = "experimental_disable_instrumentation_manifest_merge",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-        help =
-            "Disables manifest merging when an android_binary has instruments set (i.e. is used "
-                + "instrumentation testing.")
-    public boolean disableInstrumentationManifestMerging;
-
     @Override
     public FragmentOptions getHost() {
       Options host = (Options) super.getHost();
@@ -1001,7 +991,6 @@ public class AndroidConfiguration extends Fragment implements AndroidConfigurati
   private final boolean filterLibraryJarWithProgramJar;
   private final boolean useRTxtFromMergedResources;
   private final Label legacyMainDexListGenerator;
-  private final boolean disableInstrumentationManifestMerging;
 
   private AndroidConfiguration(Options options) throws InvalidConfigurationException {
     this.sdk = options.sdk;
@@ -1056,7 +1045,6 @@ public class AndroidConfiguration extends Fragment implements AndroidConfigurati
     this.filterLibraryJarWithProgramJar = options.filterLibraryJarWithProgramJar;
     this.useRTxtFromMergedResources = options.useRTxtFromMergedResources;
     this.legacyMainDexListGenerator = options.legacyMainDexListGenerator;
-    this.disableInstrumentationManifestMerging = options.disableInstrumentationManifestMerging;
 
     if (options.androidAaptVersion != AndroidAaptVersion.AAPT2) {
       throw new InvalidConfigurationException(
@@ -1307,10 +1295,6 @@ public class AndroidConfiguration extends Fragment implements AndroidConfigurati
 
   boolean useRTxtFromMergedResources() {
     return useRTxtFromMergedResources;
-  }
-
-  public boolean disableInstrumentationManifestMerging() {
-    return disableInstrumentationManifestMerging;
   }
 
   /** Returns the label provided with --legacy_main_dex_list_generator, if any. */

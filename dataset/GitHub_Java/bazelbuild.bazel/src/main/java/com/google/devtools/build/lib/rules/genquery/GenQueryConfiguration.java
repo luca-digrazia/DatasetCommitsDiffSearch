@@ -14,18 +14,17 @@
 
 package com.google.devtools.build.lib.rules.genquery;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.config.RequiresOptions;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 
 /** {@link Fragment} for {@link GenQuery}. */
-@RequiresOptions(options = {GenQueryConfiguration.GenQueryOptions.class})
 public class GenQueryConfiguration extends Fragment {
 
   /** GenQuery-specific options. */
@@ -44,20 +43,25 @@ public class GenQueryConfiguration extends Fragment {
   static class Loader implements ConfigurationFragmentFactory {
     @Override
     public Fragment create(BuildOptions buildOptions) throws InvalidConfigurationException {
-      return new GenQueryConfiguration(buildOptions);
+      return new GenQueryConfiguration(
+          buildOptions.get(GenQueryOptions.class).compressInMemoryResults);
     }
 
     @Override
     public Class<? extends Fragment> creates() {
       return GenQueryConfiguration.class;
     }
+
+    @Override
+    public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
+      return ImmutableSet.of(GenQueryOptions.class);
+    }
   }
 
   private final boolean inMemoryCompressionEnabled;
 
-  public GenQueryConfiguration(BuildOptions buildOptions) {
-    this.inMemoryCompressionEnabled =
-        buildOptions.get(GenQueryOptions.class).compressInMemoryResults;
+  GenQueryConfiguration(boolean inMemoryCompressionEnabled) {
+    this.inMemoryCompressionEnabled = inMemoryCompressionEnabled;
   }
 
   /** Returns whether or not genquery stored in memory can be stored in compressed form. */

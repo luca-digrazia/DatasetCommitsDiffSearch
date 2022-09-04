@@ -14,9 +14,12 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
+import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.Fragment;
+import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 
 /**
@@ -26,11 +29,18 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 public class ObjcConfigurationLoader implements ConfigurationFragmentFactory {
   @Override
   public ObjcConfiguration create(BuildOptions buildOptions) throws InvalidConfigurationException {
-    return new ObjcConfiguration(buildOptions);
+    CoreOptions options = buildOptions.get(CoreOptions.class);
+    ObjcCommandLineOptions objcOptions = buildOptions.get(ObjcCommandLineOptions.class);
+    return new ObjcConfiguration(objcOptions, options);
   }
 
   @Override
   public Class<? extends Fragment> creates() {
     return ObjcConfiguration.class;
+  }
+
+  @Override
+  public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
+    return ImmutableSet.<Class<? extends FragmentOptions>>of(ObjcCommandLineOptions.class);
   }
 }

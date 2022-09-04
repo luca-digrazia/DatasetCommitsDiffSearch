@@ -15,30 +15,25 @@
 package com.google.devtools.build.lib.rules.apple.swift;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.Fragment;
+import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.config.RequiresOptions;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.starlarkbuildapi.apple.SwiftConfigurationApi;
+import com.google.devtools.build.lib.skylarkbuildapi.apple.SwiftConfigurationApi;
 
 /**
  * A configuration containing flags required for Swift tools. This is used primarily by swift_*
  * family of rules written in Starlark.
  */
 @Immutable
-@RequiresOptions(options = {SwiftCommandLineOptions.class})
 public class SwiftConfiguration extends Fragment implements SwiftConfigurationApi {
   private final ImmutableList<String> copts;
 
-  public SwiftConfiguration(BuildOptions buildOptions) {
-    this.copts = ImmutableList.copyOf(buildOptions.get(SwiftCommandLineOptions.class).copts);
-  }
-
-  @Override
-  public boolean isImmutable() {
-    return true; // immutable and Starlark-hashable
+  private SwiftConfiguration(SwiftCommandLineOptions options) {
+    this.copts = ImmutableList.copyOf(options.copts);
   }
 
   /** Returns a list of options to use for compiling Swift. */
@@ -52,12 +47,19 @@ public class SwiftConfiguration extends Fragment implements SwiftConfigurationAp
     @Override
     public SwiftConfiguration create(BuildOptions buildOptions)
         throws InvalidConfigurationException {
-      return new SwiftConfiguration(buildOptions);
+      SwiftCommandLineOptions options = buildOptions.get(SwiftCommandLineOptions.class);
+
+      return new SwiftConfiguration(options);
     }
 
     @Override
     public Class<? extends Fragment> creates() {
       return SwiftConfiguration.class;
+    }
+
+    @Override
+    public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
+      return ImmutableSet.<Class<? extends FragmentOptions>>of(SwiftCommandLineOptions.class);
     }
   }
 }

@@ -26,17 +26,14 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactor
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.analysis.skylark.annotations.StarlarkConfigurationField;
+import com.google.devtools.build.lib.analysis.skylark.annotations.SkylarkConfigurationField;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions.AppleBitcodeMode;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
-import com.google.devtools.build.lib.starlarkbuildapi.apple.AppleConfigurationApi;
+import com.google.devtools.build.lib.skylarkbuildapi.apple.AppleConfigurationApi;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
 import javax.annotation.Nullable;
 
 /** A configuration containing flags required for Apple platforms and tools. */
@@ -73,7 +70,7 @@ public class AppleConfiguration extends Fragment implements AppleConfigurationAp
   private final ImmutableList<String> watchosCpus;
   private final ImmutableList<String> tvosCpus;
   private final ImmutableList<String> macosCpus;
-  private final EnumMap<ApplePlatform.PlatformType, AppleBitcodeMode> platformBitcodeModes;
+  private final AppleBitcodeMode bitcodeMode;
   private final Label xcodeConfigLabel;
   private final AppleCommandLineOptions options;
   @Nullable private final Label defaultProvisioningProfileLabel;
@@ -98,7 +95,7 @@ public class AppleConfiguration extends Fragment implements AppleConfigurationAp
     this.macosCpus = (options.macosCpus == null || options.macosCpus.isEmpty())
         ? ImmutableList.of(AppleCommandLineOptions.DEFAULT_MACOS_CPU)
         : ImmutableList.copyOf(options.macosCpus);
-    this.platformBitcodeModes = collectBitcodeModes(options.appleBitcodeMode);
+    this.bitcodeMode = options.appleBitcodeMode;
     this.xcodeConfigLabel =
         Preconditions.checkNotNull(options.xcodeVersionConfig, "xcodeConfigLabel");
     this.defaultProvisioningProfileLabel = options.defaultProvisioningProfile;
@@ -310,7 +307,7 @@ public class AppleConfiguration extends Fragment implements AppleConfigurationAp
    * context. For effective platform for bundling actions, see {@link
    * #getMultiArchPlatform(PlatformType)}.
    */
-  // TODO(b/28754442): Deprecate for more general Starlark-exposed platform retrieval.
+  // TODO(b/28754442): Deprecate for more general skylark-exposed platform retrieval.
   @Override
   public ApplePlatform getIosCpuPlatform() {
     return ApplePlatform.forTarget(PlatformType.IOS, iosCpu);
@@ -360,23 +357,22 @@ public class AppleConfiguration extends Fragment implements AppleConfigurationAp
    */
   @Override
   public AppleBitcodeMode getBitcodeMode() {
-    if (hasValidSingleArchPlatform()) {
-      ApplePlatform platform = getSingleArchPlatform();
-      if (platform.isDevice()) {
-        return platformBitcodeModes.get(applePlatformType);
-      }
+    if (hasValidSingleArchPlatform() && getSingleArchPlatform().isDevice()) {
+      return bitcodeMode;
+    } else {
+      return AppleBitcodeMode.NONE;
     }
-    return AppleBitcodeMode.NONE;
   }
 
   /**
    * Returns the label of the xcode_config rule to use for resolving the host system xcode version.
    */
-  @StarlarkConfigurationField(
+  @SkylarkConfigurationField(
       name = "xcode_config_label",
       doc = "Returns the target denoted by the value of the --xcode_version_config flag",
       defaultLabel = AppleCommandLineOptions.DEFAULT_XCODE_VERSION_CONFIG_LABEL,
-      defaultInToolRepository = true)
+      defaultInToolRepository = true
+  )
   public Label getXcodeConfigLabel() {
     return xcodeConfigLabel;
   }
@@ -436,35 +432,6 @@ public class AppleConfiguration extends Fragment implements AppleConfigurationAp
   @VisibleForTesting
   static AppleConfiguration create(AppleCommandLineOptions appleOptions, String cpu) {
     return new AppleConfiguration(appleOptions, iosCpuFromCpu(cpu));
-  }
-
-  /**
-   * Compute the platform-type-to-bitcode-mode mapping from the pairs that were passed on the
-   * command line.
-   */
-  private static EnumMap<ApplePlatform.PlatformType, AppleBitcodeMode> collectBitcodeModes(
-      List<Map.Entry<ApplePlatform.PlatformType, AppleBitcodeMode>> platformModeMappings) {
-    EnumMap<ApplePlatform.PlatformType, AppleBitcodeMode> modes =
-        new EnumMap<>(ApplePlatform.PlatformType.class);
-    ApplePlatform.PlatformType[] allPlatforms = ApplePlatform.PlatformType.values();
-
-    // Seed the map with the default mode for every key so that there is a valid mode for every
-    // platform.
-    // TODO(blaze-team): Default to embedded_markers when fully implemented.
-    Arrays.stream(allPlatforms).forEach(platform -> modes.put(platform, AppleBitcodeMode.NONE));
-
-    // Process the entries in order. If we encounter one with a null key, apply the mode to all
-    // platforms; otherwise, apply it only to that specific platform. This ensures that the later
-    // options override the earlier options.
-    for (Map.Entry<ApplePlatform.PlatformType, AppleBitcodeMode> entry : platformModeMappings) {
-      if (entry.getKey() == null) {
-        Arrays.stream(allPlatforms).forEach(platform -> modes.put(platform, entry.getValue()));
-      } else {
-        modes.put(entry.getKey(), entry.getValue());
-      }
-    }
-
-    return modes;
   }
 
   /**

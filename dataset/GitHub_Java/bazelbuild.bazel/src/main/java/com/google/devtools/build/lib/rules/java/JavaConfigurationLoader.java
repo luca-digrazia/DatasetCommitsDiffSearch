@@ -13,9 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
+import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.analysis.PlatformOptions;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.Fragment;
+import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 
 /**
@@ -24,8 +27,14 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
  */
 public class JavaConfigurationLoader implements ConfigurationFragmentFactory {
   @Override
+  public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
+    return ImmutableSet.<Class<? extends FragmentOptions>>of(
+        JavaOptions.class, PlatformOptions.class);
+  }
+
+  @Override
   public JavaConfiguration create(BuildOptions buildOptions) throws InvalidConfigurationException {
-    return new JavaConfiguration(buildOptions);
+    return new JavaConfiguration(buildOptions.get(JavaOptions.class));
   }
 
   @Override
