@@ -23,7 +23,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.buildjar.InvalidCommandLineException;
-import com.google.devtools.build.buildjar.javac.BlazeJavacResult.Status;
 import com.google.devtools.build.buildjar.javac.FormattedDiagnostic.Listener;
 import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
 import com.google.devtools.build.buildjar.javac.statistics.BlazeJavacStatistics;
@@ -85,7 +84,7 @@ public class BlazeJavacMain {
     setupBlazeJavaCompiler(arguments.plugins(), context);
     BlazeJavacStatistics.Builder builder = context.get(BlazeJavacStatistics.Builder.class);
 
-    Status status = Status.ERROR;
+    boolean ok = false;
     StringWriter errOutput = new StringWriter();
     // TODO(cushon): where is this used when a diagnostic listener is registered? Consider removing
     // it and handling exceptions directly in callers.
@@ -110,16 +109,16 @@ public class BlazeJavacMain {
       fileManager.setContext(context);
       setLocations(fileManager, arguments);
       try {
-        status = task.call() ? Status.OK : Status.ERROR;
+        ok = task.call();
       } catch (PropagatedException e) {
         throw e.getCause();
       }
     } catch (Throwable t) {
       t.printStackTrace(errWriter);
-      status = Status.ERROR;
+      ok = false;
     } finally {
       compiler = (BlazeJavaCompiler) JavaCompiler.instance(context);
-      if (status == Status.OK) {
+      if (ok) {
         // There could be situations where we incorrectly skip Error Prone and the compilation
         // ends up succeeding, e.g., if there are errors that are fixed by subsequent round of
         // annotation processing.  This check ensures that if there were any flow events at all,
@@ -127,13 +126,13 @@ public class BlazeJavacMain {
         // or empty source files.
         if (compiler.skippedFlowEvents() > 0 && compiler.flowEvents() == 0) {
           errWriter.println("Expected at least one FLOW event");
-          status = Status.ERROR;
+          ok = false;
         }
       }
     }
     errWriter.flush();
     return BlazeJavacResult.createFullResult(
-        status,
+        ok,
         filterDiagnostics(diagnostics.build()),
         errOutput.toString(),
         compiler,
@@ -273,7 +272,6 @@ public class BlazeJavacMain {
             @Override
             protected Class<?> findClass(String name) throws ClassNotFoundException {
               if (name.startsWith("com.google.errorprone.")
-                  || name.startsWith("com.github.benmanes.caffeine.cache.")
                   || name.startsWith("com.google.common.collect.")
                   || name.startsWith("com.google.common.base.")
                   || name.startsWith("org.checkerframework.dataflow.")
