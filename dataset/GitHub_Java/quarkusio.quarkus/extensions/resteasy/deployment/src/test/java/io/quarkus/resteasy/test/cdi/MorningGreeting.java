@@ -10,6 +10,6 @@ public class MorningGreeting extends Greeting {
 
     @Override
     public String greet() {
-        return "Good Morning";
+        return "Good morning";
     }
 }
