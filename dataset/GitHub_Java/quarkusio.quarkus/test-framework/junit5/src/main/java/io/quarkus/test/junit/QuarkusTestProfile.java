@@ -1,8 +1,11 @@
 package io.quarkus.test.junit;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
 /**
  * Defines a 'test profile'. Tests run under a test profile
@@ -38,5 +41,64 @@ public interface QuarkusTestProfile {
      */
     default String getConfigProfile() {
         return null;
+    }
+
+    /**
+     * {@link QuarkusTestResourceLifecycleManager} classes (along with their init params) to be used from this
+     * specific test profile
+     */
+    default List<TestResourceEntry> testResources() {
+        return Collections.emptyList();
+    }
+
+    /**
+     * If this is returns true then only the test resources returned from {@link #testResources()} will be started,
+     * global annotated test resources will be ignored.
+     */
+    default boolean disableGlobalTestResources() {
+        return false;
+    }
+
+    /**
+     * The tags this profile is associated with.
+     * When the {@code quarkus.test.profile.tags} System property is set (its value is a comma separated list of strings)
+     * then Quarkus will only execute tests that are annotated with a {@code @TestProfile} that has at least one of the
+     * supplied (via the aforementioned system property) tags.
+     */
+    default Set<String> tags() {
+        return Collections.emptySet();
+    }
+
+    final class TestResourceEntry {
+        private final Class<? extends QuarkusTestResourceLifecycleManager> clazz;
+        private final Map<String, String> args;
+        private final boolean parallel;
+
+        public TestResourceEntry(Class<? extends QuarkusTestResourceLifecycleManager> clazz) {
+            this(clazz, Collections.emptyMap());
+        }
+
+        public TestResourceEntry(Class<? extends QuarkusTestResourceLifecycleManager> clazz, Map<String, String> args) {
+            this(clazz, args, false);
+        }
+
+        public TestResourceEntry(Class<? extends QuarkusTestResourceLifecycleManager> clazz, Map<String, String> args,
+                boolean parallel) {
+            this.clazz = clazz;
+            this.args = args;
+            this.parallel = parallel;
+        }
+
+        public Class<? extends QuarkusTestResourceLifecycleManager> getClazz() {
+            return clazz;
+        }
+
+        public Map<String, String> getArgs() {
+            return args;
+        }
+
+        public boolean isParallel() {
+            return parallel;
+        }
     }
 }
