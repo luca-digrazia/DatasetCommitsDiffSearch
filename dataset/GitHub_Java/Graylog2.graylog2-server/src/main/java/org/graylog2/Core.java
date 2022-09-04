@@ -42,6 +42,8 @@ import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.graylog2.activities.Activity;
 import org.graylog2.activities.ActivityWriter;
 import org.graylog2.cluster.Cluster;
+import org.graylog2.communicator.Communicator;
+import org.graylog2.communicator.methods.CommunicatorMethod;
 import org.graylog2.database.HostCounterCacheImpl;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.plugin.GraylogServer;
@@ -88,6 +90,7 @@ public class Core implements GraylogServer {
     private List<MessageInput> inputs = Lists.newArrayList();
     private List<MessageFilter> filters = Lists.newArrayList();
     private List<Class<? extends MessageOutput>> outputs = Lists.newArrayList();
+    private List<Class<? extends CommunicatorMethod>> communicatorMethods = Lists.newArrayList();
     
     private int loadedFilterPlugins = 0;
     
@@ -97,7 +100,9 @@ public class Core implements GraylogServer {
     private Deflector deflector;
     
     private ActivityWriter activityWriter;
-
+    
+    private Communicator communicator;
+    
     private String serverId;
     
     private boolean localMode = false;
@@ -124,7 +129,9 @@ public class Core implements GraylogServer {
         
         cluster = new Cluster(this);
         
-        activityWriter = new ActivityWriter(this);
+        communicator = new Communicator(this);
+        
+        activityWriter = new ActivityWriter(mongoBridge, communicator);
         
         messageCounterManager = new MessageCounterManagerImpl();
         messageCounterManager.register(MASTER_COUNTER_NAME);
@@ -171,6 +178,10 @@ public class Core implements GraylogServer {
 
     public <T extends MessageOutput> void registerOutput(Class<T> klazz) {
         this.outputs.add(klazz);
+    }
+
+    public <T extends CommunicatorMethod> void registerCommunicatorMethod(Class<T> klazz) {
+        this.communicatorMethods.add(klazz);
     }
 
     @Override
@@ -294,13 +305,15 @@ public class Core implements GraylogServer {
     public List<Class<? extends MessageOutput>> getOutputs() {
         return this.outputs;
     }
+
+    public List<Class<? extends CommunicatorMethod>> getCommunicatorMethods() {
+        return this.communicatorMethods;
+    }
     
-    @Override
     public MessageCounterManagerImpl getMessageCounterManager() {
         return this.messageCounterManager;
     }
 
-    @Override
     public HostCounterCacheImpl getHostCounterCache() {
         return this.hostCounterCache;
     }

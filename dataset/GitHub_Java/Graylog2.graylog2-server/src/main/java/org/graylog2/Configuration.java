@@ -20,6 +20,11 @@
 
 package org.graylog2;
 
+import java.util.Arrays;
+import java.util.List;
+
+import org.apache.log4j.Logger;
+
 import com.github.joschi.jadconfig.Parameter;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.ValidatorMethod;
@@ -28,16 +33,9 @@ import com.github.joschi.jadconfig.validators.FileReadableValidator;
 import com.github.joschi.jadconfig.validators.InetPortValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.mongodb.ServerAddress;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.graylog2.indexer.EmbeddedElasticSearchClient;
-
 import java.net.UnknownHostException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import org.graylog2.indexer.EmbeddedElasticSearchClient;
 
 /**
  * Helper class to hold configuration of Graylog2
@@ -47,7 +45,7 @@ import java.util.Map;
  */
 public class Configuration {
 
-    private static final Logger LOG = LoggerFactory.getLogger(Configuration.class);
+    private static final Logger LOG = Logger.getLogger(Configuration.class);
 
     @Parameter(value = "is_master", required = true)
     private boolean isMaster = true;
@@ -112,12 +110,6 @@ public class Configuration {
     @Parameter(value = "elasticsearch_max_docs_per_index", validator = PositiveIntegerValidator.class, required = true)
     private int elasticsearchMaxDocsPerIndex = 80000000;
     
-    @Parameter(value = "elasticsearch_shards", validator = PositiveIntegerValidator.class, required = true)
-    private int elasticsearchShards = 4;
-    
-    @Parameter(value = "elasticsearch_replicas", validator = PositiveIntegerValidator.class, required = true)
-    private int elasticsearchReplicas = 0;
-    
     @Parameter(value = "elasticsearch_analyzer", required = true)
     private String elasticsearchAnalyzer = "standard";
     
@@ -163,6 +155,9 @@ public class Configuration {
     @Parameter(value = "amqp_port", validator = InetPortValidator.class)
     private int amqpPort = 5672;
 
+    @Parameter(value = "amqp_subscribed_queues", converter = StringListConverter.class)
+    private List<String> amqpSubscribedQueues;
+
     @Parameter("amqp_username")
     private String amqpUsername = "guest";
 
@@ -171,6 +166,9 @@ public class Configuration {
 
     @Parameter("amqp_virtualhost")
     private String amqpVirtualhost = "/";
+
+    @Parameter(value = "forwarder_loggly_timeout", validator = PositiveIntegerValidator.class)
+    private int forwarderLogglyTimeout = 3;
 
     @Parameter("rules_file")
     private String droolsRulesFile;
@@ -210,75 +208,22 @@ public class Configuration {
 
     @Parameter(value = "libratometrics_prefix", required = false)
     private String libratometricsPrefix = "gl2";
+    
+    @Parameter(value = "enable_cm_twilio", required = false)
+    private boolean enableCommunicationMethodTwilio = false;
+    
+    @Parameter(value = "twilio_sid", required = false)
+    private String twilioSid = "";
+    
+    @Parameter(value = "twilio_auth_token", required = false)
+    private String twilioAuthToken = "";
+    
+    @Parameter(value = "twilio_sender", required = false)
+    private String twilioSender = "";
 
     @Parameter(value = "plugin_dir", required = false)
     private String pluginDir = "plugin";
     
-    // Transport: Email
-    @Parameter(value = "transport_email_enabled", required = false)
-    private boolean emailTransportEnabled = false;
-    
-    @Parameter(value = "transport_email_hostname", required = false)
-    private String emailTransportHostname;
-    
-    @Parameter(value = "transport_email_port", validator = InetPortValidator.class, required = false)
-    private int emailTransportPort;
-    
-    @Parameter(value = "transport_email_use_auth", required = false)
-    private boolean emailTransportUseAuth = false;
-    
-    @Parameter(value = "transport_email_use_tls", required = false)
-    private boolean emailTransportUseTls = false;
-    
-    @Parameter(value = "transport_email_auth_username", required = false)
-    private String emailTransportUsername;
-    
-    @Parameter(value = "transport_email_auth_password", required = false)
-    private String emailTransportPassword;
-    
-    @Parameter(value = "transport_email_subject_prefix", required = false)
-    private String emailTransportSubjectPrefix;
-    
-    @Parameter(value = "transport_email_from_email", required = false)
-    private String emailTransportFromEmail;
-    
-    @Parameter(value = "transport_email_from_name", required = false)
-    private String emailTransportFromName;
-    
-    // Transport: Jabber
-    @Parameter(value = "transport_jabber_enabled", required = false)
-    private boolean jabberTransportEnabled = false;
-    
-    @Parameter(value = "transport_jabber_hostname", required = false)
-    private String jabberTransportHostname;
-    
-    @Parameter(value = "transport_jabber_port", validator = InetPortValidator.class, required = false)
-    private int jabberTransportPort = 5222;
-    
-    @Parameter(value = "transport_jabber_use_sasl_auth", required = false)
-    private boolean jabberTransportUseSASLAuth = true;
-    
-    @Parameter(value = "transport_jabber_allow_selfsigned_certs", required = false)
-    private boolean jabberTransportAllowSelfsignedCerts = false;
-    
-    @Parameter(value = "transport_jabber_auth_username", required = false)
-    private String jabberTransportUsername;
-    
-    @Parameter(value = "transport_jabber_auth_password", required = false)
-    private String jabberTransportPassword;
-    
-    @Parameter(value = "transport_jabber_message_prefix", required = false)
-    private String jabberTransportMessagePrefix;
-
-    @Parameter("http_enabled")
-    private boolean httpEnabled = false;
-
-    @Parameter("http_listen_address")
-    private String httpListenAddress = "0.0.0.0";
-
-    @Parameter(value = "http_listen_port", validator = InetPortValidator.class, required = false)
-    private int httpListenPort = 12202;
-
     public boolean isMaster() {
         return isMaster;
     }
@@ -333,7 +278,7 @@ public class Configuration {
     
     public String getRecentIndexStoreType() {
         if (!EmbeddedElasticSearchClient.ALLOWED_RECENT_INDEX_STORE_TYPES.contains(recentIndexStoreType)) {
-            LOG.error("Invalid recent index store type configured. Falling back to <{}>", EmbeddedElasticSearchClient.STANDARD_RECENT_INDEX_STORE_TYPE);
+            LOG.error("Invalid recent index store type configured. Falling back to <" + EmbeddedElasticSearchClient.STANDARD_RECENT_INDEX_STORE_TYPE + ">");
             return EmbeddedElasticSearchClient.STANDARD_RECENT_INDEX_STORE_TYPE;
         }
         return recentIndexStoreType;
@@ -373,14 +318,6 @@ public class Configuration {
     
     public int getElasticSearchMaxDocsPerIndex() {
         return this.elasticsearchMaxDocsPerIndex;
-    }
-    
-    public int getElasticSearchShards() {
-        return this.elasticsearchShards;
-    }
-    
-    public int getElasticSearchReplicas() {
-        return this.elasticsearchReplicas;
     }
     
     public String getElasticSearchAnalyzer() {
@@ -453,6 +390,10 @@ public class Configuration {
 
     public String getAmqpVirtualhost() {
         return amqpVirtualhost;
+    }
+
+    public int getForwarderLogglyTimeout() {
+        return forwarderLogglyTimeout * 1000;
     }
 
     public String getDroolsRulesFile() {
@@ -540,47 +481,25 @@ public class Configuration {
     public String getLibratoMetricsPrefix() {
         return libratometricsPrefix;
     }
+    
+    public boolean isEnableCommunicationMethodTwilio() {
+        return enableCommunicationMethodTwilio;
+    }
+    
+    public String getTwilioSid() {
+        return twilioSid;
+    }
+    
+    public String getTwilioAuthToken() {
+        return twilioAuthToken;
+    }
+    
+    public String getTwilioSender() {
+        return twilioSender;
+    }
 
     public String getPluginDir() {
         return pluginDir;
-    }
-    
-    public boolean isTransportEmailEnabled() {
-        return emailTransportEnabled;
-    }
-    
-    public Map<String, String> getEmailTransportConfiguration() {
-        Map<String, String> c = Maps.newHashMap();
-        
-        c.put("hostname", emailTransportHostname);
-        c.put("port", String.valueOf(emailTransportPort));
-        c.put("use_auth", String.valueOf(emailTransportUseAuth));
-        c.put("username", emailTransportUsername);
-        c.put("password", emailTransportPassword);
-        c.put("use_tls", String.valueOf(emailTransportUseTls));
-        c.put("subject_prefix", emailTransportSubjectPrefix);
-        c.put("from_email", emailTransportFromEmail);
-        c.put("from_name", emailTransportFromName);
-        
-        return c;
-    }
-    
-    public boolean isTransportJabberEnabled() {
-        return jabberTransportEnabled;
-    }
-    
-    public Map<String, String> getJabberTransportConfiguration() {
-        Map<String, String> c = Maps.newHashMap();
-        
-        c.put("hostname", jabberTransportHostname);
-        c.put("port", String.valueOf(jabberTransportPort));
-        c.put("sasl_auth", String.valueOf(jabberTransportUseSASLAuth));
-        c.put("allow_selfsigned_certs", String.valueOf(jabberTransportAllowSelfsignedCerts));
-        c.put("username", jabberTransportUsername);
-        c.put("password", jabberTransportPassword);
-        c.put("message_prefix", jabberTransportMessagePrefix);
-        
-        return c;
     }
     
     @ValidatorMethod
@@ -592,15 +511,4 @@ public class Configuration {
         }
     }
 
-    public boolean isHttpEnabled() {
-        return httpEnabled;
-    }
-
-    public String getHttpListenAddress() {
-        return httpListenAddress;
-    }
-
-    public int getHttpListenPort() {
-        return httpListenPort;
-    }
 }

@@ -25,8 +25,7 @@ import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.Timer;
 import com.yammer.metrics.core.TimerContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.Logger;
 import org.graylog2.Core;
 import org.graylog2.buffers.LogMessageEvent;
 import org.graylog2.plugin.filters.MessageFilter;
@@ -39,7 +38,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class ProcessBufferProcessor implements EventHandler<LogMessageEvent> {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ProcessBufferProcessor.class);
+    private static final Logger LOG = Logger.getLogger(ProcessBufferProcessor.class);
 
     private Core server;
     private final Meter incomingMessages = Metrics.newMeter(ProcessBufferProcessor.class, "IncomingMessages", "messages", TimeUnit.SECONDS);
@@ -64,22 +63,27 @@ public class ProcessBufferProcessor implements EventHandler<LogMessageEvent> {
             return;
         }
         
-        server.processBufferWatermark().decrementAndGet();
-        
         incomingMessages.mark();
         incomingMessagesPerMinute.mark();
         TimerContext tcx = processTime.time();
 
         LogMessage msg = event.getMessage();
 
-        LOG.debug("Starting to process message <{}>.", msg.getId());
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Starting to process message <" + msg.getId() + ">.");
+        }
 
         for (MessageFilter filter : server.getFilters()) {
             try {
-                LOG.debug("Applying filter [{}] on message <{}>.", filter.getName(), msg.getId());
+                
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("Applying filter [" + filter.getName() +"] on message <" + msg.getId() + ">.");
+                }
 
                 if (filter.filter(msg, server)) {
-                    LOG.debug("Filter [{}] marked message <{}> to be discarded. Dropping message.", filter.getName(), msg.getId());
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Filter [" + filter.getName() + "] marked message <" + msg.getId() + "> to be discarded. Dropping message.");
+                    }
                     filteredOutMessages.mark();
                     return;
                 }

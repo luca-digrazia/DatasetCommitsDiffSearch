@@ -26,10 +26,11 @@ import com.lmax.disruptor.SleepingWaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
-import org.apache.log4j.Logger;
 import org.graylog2.Core;
 import org.graylog2.buffers.processors.ProcessBufferProcessor;
+import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.logmessage.LogMessage;
 
@@ -38,8 +39,6 @@ import org.graylog2.plugin.logmessage.LogMessage;
  */
 public class ProcessBuffer implements Buffer {
 
-    private static final Logger LOG = Logger.getLogger(ProcessBuffer.class);
-    
     protected static RingBuffer<LogMessageEvent> ringBuffer;
 
     protected ExecutorService executor = Executors.newCachedThreadPool(
@@ -75,16 +74,10 @@ public class ProcessBuffer implements Buffer {
     
     @Override
     public void insert(LogMessage message) {
-        if (ringBuffer.remainingCapacity() > 0) {
-            long sequence = ringBuffer.next();
-            LogMessageEvent event = ringBuffer.get(sequence);
-            event.setMessage(message);
-            ringBuffer.publish(sequence);
-
-            server.processBufferWatermark().incrementAndGet();
-        } else {
-            LOG.fatal("ProcessBuffer is out of capacity. Raise the ring_size configuration parameter. DROPPING MESSAGE!");
-        }
+        long sequence = ringBuffer.next();
+        LogMessageEvent event = ringBuffer.get(sequence);
+        event.setMessage(message);
+        ringBuffer.publish(sequence);
     }
 
 }
