@@ -315,6 +315,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.dynamicMode;
   }
 
+  public boolean getLinkCompileOutputSeparately() {
+    return cppOptions.linkCompileOutputSeparately;
+  }
+
   public boolean isFdo() {
     return cppOptions.isFdo();
   }

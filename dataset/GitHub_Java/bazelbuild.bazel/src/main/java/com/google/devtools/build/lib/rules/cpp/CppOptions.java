@@ -239,6 +239,19 @@ public class CppOptions extends FragmentOptions {
   public DynamicMode dynamicMode;
 
   @Option(
+    name = "experimental_link_compile_output_separately",
+    defaultValue = "false",
+    documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+    effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
+    metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+    help =
+        "This flag is experimental and may go away at any time.  "
+            + "If true, dynamically linked binary targets will build and link their own srcs as "
+            + "a dynamic library instead of directly linking it in."
+  )
+  public boolean linkCompileOutputSeparately;
+
+  @Option(
     name = "force_pic",
     defaultValue = "false",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
@@ -983,9 +996,7 @@ public class CppOptions extends FragmentOptions {
 
   /** Returns true if targets under this configuration should apply CSFdo. */
   public boolean isCSFdo() {
-    return (getFdoOptimize() != null || fdoProfileLabel != null)
-        && (csFdoInstrumentForBuild != null
-            || csFdoProfileLabel != null
-            || csFdoAbsolutePathForBuild != null);
+    return ((getFdoOptimize() != null || fdoProfileLabel != null)
+        && (csFdoInstrumentForBuild != null || csFdoProfileLabel != null));
   }
 }
