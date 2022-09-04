@@ -22,14 +22,12 @@ package org.graylog2.filters;
 
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.TimerContext;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.log4j.Logger;
-import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.filters.MessageFilter;
-import org.graylog2.plugin.logmessage.LogMessage;
-
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.log4j.Logger;
+import org.graylog2.GraylogServer;
+import org.graylog2.logmessage.LogMessage;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -54,19 +52,18 @@ public class TokenizerFilter implements MessageFilter {
      */
 
     @Override
-    public void filter(LogMessage msg, GraylogServer server) {
+    public boolean filter(LogMessage msg, GraylogServer server) {
         TimerContext tcx = Metrics.newTimer(TokenizerFilter.class, "ProcessTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS).time();
 
         int extracted = 0;
         if (msg.getShortMessage().contains("=")) {
             try {
-                String nmsg = msg.getShortMessage().replaceAll("\\s?=\\s?", "=");
-                String[] parts = nmsg.split(" ");
+                String[] parts = msg.getShortMessage().split(" ");
                 if (parts != null) {
                     for (String part : parts) {
                         if (part.contains("=") && StringUtils.countMatches(part, "=") == 1) {
                             String[] kv = part.split("=");
-                            if (kv.length == 2 && p.matcher(kv[0]).matches() && !msg.getAdditionalData().containsKey("_" + kv[0])) {
+                            if (kv[0] != null && kv[1] != null && p.matcher(kv[0]).matches() && !msg.getAdditionalData().containsKey("_" + kv[0])) {
                                 msg.addAdditionalData(kv[0].trim(), kv[1].trim());
                                 extracted++;
                             }
@@ -81,10 +78,8 @@ public class TokenizerFilter implements MessageFilter {
         LOG.debug("Extracted <" + extracted + "> additional fields from message <" + msg.getId() + "> k=v pairs.");
 
         tcx.stop();
-    }
 
-    @Override
-    public boolean discard() {
+        // We never want to filter out this message.
         return false;
     }
 

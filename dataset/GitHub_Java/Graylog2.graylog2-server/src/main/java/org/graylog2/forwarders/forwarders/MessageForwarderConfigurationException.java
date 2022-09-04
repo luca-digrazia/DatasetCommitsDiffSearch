@@ -29,6 +29,8 @@ public class MessageForwarderConfigurationException extends Exception {
 
     /**
      * Thrown in case of missing or invalid configuration of an MessageForwarder.
+     *
+     * @param msg
      */
     public MessageForwarderConfigurationException(String msg) {
         super(msg);

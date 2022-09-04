@@ -20,41 +20,44 @@
 
 package org.graylog2.forwarders;
 
-import org.graylog2.Log;
-import org.graylog2.messagehandlers.gelf.GELFMessage;
+import org.apache.log4j.Logger;
+import org.graylog2.logmessage.LogMessage;
 import org.graylog2.streams.Stream;
 
 /**
- * Forwarder.java: Apr 2, 2011 11:27:02 PM
- *
  * Forwards messages to other endpoints. (i.e. other GELF or syslog servers)
  *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class Forwarder {
+
+    private static final Logger LOG = Logger.getLogger(Forwarder.class);
 
     /**
      * Forward a GELF message to it's streams forward endpoints.
      *
      * @param message The GELF message to forward.
      * @return Number of endpoints the message was successfully forwarded to.
-     * @throws Exception
      */
-    public static int forward(GELFMessage message) throws Exception {
-        int succeeded = 0;
+    public static int forward(LogMessage message) {
+     /*   int succeeded = 0;
         for (Stream stream : message.getStreams()) {
             try {
                 for (ForwardEndpoint endpoint : stream.getForwardedTo()) {
                     MessageForwarderIF launchPad = endpoint.getForwarder();
                     launchPad.forward(message);
-                    succeeded++;
+
+                    if (launchPad.succeeded()) {
+                        succeeded++;
+                    }
                 }
             } catch (Exception e) {
-                Log.warn("Skipping forwarding of message for a stream: " + e.toString());
+                LOG.warn("Skipping forwarding of message for a stream: " + e.getMessage(), e);
                 continue;
             }
         }
 
+        return succeeded;*/
         return 0;
     }
 

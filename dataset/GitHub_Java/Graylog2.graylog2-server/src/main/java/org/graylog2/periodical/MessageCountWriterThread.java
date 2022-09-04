@@ -20,11 +20,9 @@
 
 package org.graylog2.periodical;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.graylog2.Core;
-import org.graylog2.MessageCounterImpl;
-import org.graylog2.plugin.MessageCounter;
+import org.apache.log4j.Logger;
+import org.graylog2.GraylogServer;
+import org.graylog2.MessageCounter;
 
 
 /**
@@ -34,21 +32,21 @@ import org.graylog2.plugin.MessageCounter;
  */
 public class MessageCountWriterThread implements Runnable {
 
-    private static final Logger LOG = LoggerFactory.getLogger(MessageCountWriterThread.class);
+    private static final Logger LOG = Logger.getLogger(MessageCountWriterThread.class);
 
     public static final int INITIAL_DELAY = 60;
     public static final int PERIOD = 60;
 
-    private final Core graylogServer;
+    private final GraylogServer graylogServer;
 
-    public MessageCountWriterThread(Core graylogServer) {
+    public MessageCountWriterThread(GraylogServer graylogServer) {
         this.graylogServer = graylogServer;
     }
 
     @Override
     public void run() {
 
-        MessageCounter counter = this.graylogServer.getMessageCounterManager().get(Core.MASTER_COUNTER_NAME);
+        MessageCounter counter = this.graylogServer.getMessageCounterManager().get(GraylogServer.MASTER_COUNTER_NAME);
         try {
             graylogServer.getMongoBridge().writeMessageCounts(counter.getTotalCount(), counter.getStreamCounts(), counter.getHostCounts());
         } catch (Exception e) {

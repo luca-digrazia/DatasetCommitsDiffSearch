@@ -40,10 +40,5 @@ public class LibratoMetricsInitializer extends SimpleFixedRateScheduleInitialize
                 graylogServer.getConfiguration().getLibratoMetricsInterval()
         );
     }
-    
-    @Override
-    public boolean masterOnly() {
-        return false;
-    }
 
 }

@@ -24,8 +24,7 @@ import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.Logger;
 import org.productivity.java.syslog4j.server.impl.event.structured.StructuredSyslogServerEvent;
 
 /**
@@ -35,7 +34,7 @@ import org.productivity.java.syslog4j.server.impl.event.structured.StructuredSys
  */
 public class StructuredSyslog {
 
-    private static final Logger LOG = LoggerFactory.getLogger(StructuredSyslog.class);
+    private static final Logger LOG = Logger.getLogger(StructuredSyslog.class);
 
     public static Map<String, String> extractFields(byte[] rawSyslogMessage) {
         Map<String, String> fields = new HashMap<String, String>();

@@ -51,10 +51,5 @@ public class GraphiteInitializer extends SimpleFixedRateScheduleInitializer impl
                 GraphiteWriterThread.PERIOD
         );
     }
-    
-    @Override
-    public boolean masterOnly() {
-        return false;
-    }
 
 }

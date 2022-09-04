@@ -36,11 +36,14 @@ public interface MessageForwarderIF {
      *
      * @param message The message to forward
      * @return true in case of success, otherwise false
+     * @throws MessageForwarderConfigurationException
      */
     boolean forward(LogMessage message) throws MessageForwarderConfigurationException;
 
     /**
      * Indicates if the last forward has succeeded.
+     * 
+     * @return
      */
     boolean succeeded();
 

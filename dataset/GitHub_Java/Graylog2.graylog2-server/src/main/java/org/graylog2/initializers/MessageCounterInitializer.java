@@ -40,10 +40,5 @@ public class MessageCounterInitializer extends SimpleFixedRateScheduleInitialize
                 MessageCountWriterThread.PERIOD
         );
     }
-    
-    @Override
-    public boolean masterOnly() {
-        return false;
-    }
 
 }

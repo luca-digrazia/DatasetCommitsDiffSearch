@@ -20,18 +20,14 @@
 
 package org.graylog2.streams;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.Logger;
 import org.graylog2.streams.matchers.StreamRuleMatcher;
 
+import java.util.ArrayList;
 import java.util.List;
+import org.graylog2.logmessage.LogMessage;
 
 import com.google.common.collect.Lists;
-import java.util.Set;
-import org.graylog2.Core;
-import org.graylog2.plugin.logmessage.LogMessage;
-import org.graylog2.plugin.streams.Stream;
-import org.graylog2.plugin.streams.StreamRule;
 
 /**
  * Routes a GELF Message to it's streams.
@@ -40,11 +36,11 @@ import org.graylog2.plugin.streams.StreamRule;
  */
 public class StreamRouter {
 
-    private static final Logger LOG = LoggerFactory.getLogger(StreamRouter.class);
+    private static final Logger LOG = Logger.getLogger(StreamRouter.class);
 
-    public List<Stream> route(Core server, LogMessage msg) {
+    public List<Stream> route(LogMessage msg) {
         List<Stream> matches = Lists.newArrayList();
-        Set<Stream> streams = StreamImpl.fetchAllEnabled(server);
+        List<Stream> streams = Stream.fetchAllEnabled();
 
         for (Stream stream : streams) {
             boolean missed = false;

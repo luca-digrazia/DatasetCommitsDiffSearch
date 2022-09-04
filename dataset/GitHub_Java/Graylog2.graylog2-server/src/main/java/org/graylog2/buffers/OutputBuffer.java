@@ -26,25 +26,23 @@ import com.lmax.disruptor.SleepingWaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import org.graylog2.Core;
+import org.graylog2.GraylogServer;
 import org.graylog2.buffers.processors.OutputBufferProcessor;
-import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.buffers.Buffer;
-import org.graylog2.plugin.logmessage.LogMessage;
+import org.graylog2.logmessage.LogMessage;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class OutputBuffer implements Buffer {
+public class OutputBuffer {
 
     protected static final int RING_SIZE = 524288;
     protected RingBuffer<LogMessageEvent> ringBuffer;
 
     protected ExecutorService executor = Executors.newCachedThreadPool();
 
-    Core server;
+    GraylogServer server;
 
-    public OutputBuffer(Core server) {
+    public OutputBuffer(GraylogServer server) {
         this.server = server;
     }
 
@@ -56,18 +54,12 @@ public class OutputBuffer implements Buffer {
                 new SleepingWaitStrategy()
         );
 
-        OutputBufferProcessor[] processors = new OutputBufferProcessor[server.getConfiguration().getOutputBufferProcessors()];
-        
-        for (int i = 0; i < server.getConfiguration().getOutputBufferProcessors(); i++) {
-            processors[i] = new OutputBufferProcessor(this.server, i, server.getConfiguration().getOutputBufferProcessors());
-        }
-        
-        disruptor.handleEventsWith(processors);
-        
+        OutputBufferProcessor processor = new OutputBufferProcessor(this.server);
+
+        disruptor.handleEventsWith(processor);
         ringBuffer = disruptor.start();
     }
 
-    @Override
     public void insert(LogMessage message) {
         long sequence = ringBuffer.next();
         LogMessageEvent event = ringBuffer.get(sequence);

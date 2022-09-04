@@ -32,35 +32,32 @@ public class StreamRuleMatcherFactory {
 
         // IMPORTANT: Also add every new rule type to the unit test.
         switch (ruleType) {
-            case StreamRuleImpl.TYPE_MESSAGE:
+            case StreamRule.TYPE_MESSAGE:
                 matcher = new MessageMatcher();
                 break;
-            case StreamRuleImpl.TYPE_FULL_MESSAGE:
+            case StreamRule.TYPE_FULL_MESSAGE:
                 matcher = new FullMessageMatcher();
                 break;
-            case StreamRuleImpl.TYPE_HOST:
+            case StreamRule.TYPE_HOST:
                 matcher = new HostMatcher();
                 break;
-            case StreamRuleImpl.TYPE_SEVERITY:
+            case StreamRule.TYPE_SEVERITY:
                 matcher = new SeverityMatcher();
                 break;
-            case StreamRuleImpl.TYPE_FACILITY:
+            case StreamRule.TYPE_FACILITY:
                 matcher = new FacilityMatcher();
                 break;
-            case StreamRuleImpl.TYPE_ADDITIONAL:
+            case StreamRule.TYPE_ADDITIONAL:
                 matcher = new AdditionalFieldMatcher();
                 break;
-            case StreamRuleImpl.TYPE_SEVERITY_OR_HIGHER:
+            case StreamRule.TYPE_SEVERITY_OR_HIGHER:
                 matcher = new SeverityOrHigherMatcher();
                 break;
-            case StreamRuleImpl.TYPE_HOST_REGEX:
+            case StreamRule.TYPE_HOST_REGEX:
                 matcher = new HostRegexMatcher();
                 break;
-            case StreamRuleImpl.TYPE_FILENAME_LINE:
+            case StreamRule.TYPE_FILENAME_LINE:
                 matcher = new FileNameAndLineMatcher();
-                break;
-            case StreamRuleImpl.TYPE_FACILITY_REGEX:
-                matcher = new FacilityRegexMatcher();
                 break;
             default:
                 throw new InvalidStreamRuleTypeException();

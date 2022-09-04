@@ -20,10 +20,10 @@
 
 package org.graylog2.blacklists;
 
-import java.util.List;
-
-import org.graylog2.Core;
+import org.graylog2.GraylogServer;
 import org.graylog2.SimpleObjectCache;
+
+import java.util.List;
 
 /**
  * Singleton caching the already fetched blacklist.
@@ -33,11 +33,11 @@ import org.graylog2.SimpleObjectCache;
 public class BlacklistCache extends SimpleObjectCache<List<Blacklist>> {
     
     private static BlacklistCache instance;
-    private Core server;
+    private GraylogServer server;
 
     private BlacklistCache() { }
 
-    public static synchronized BlacklistCache initialize(Core server) {
+    public static synchronized BlacklistCache initialize(GraylogServer server) {
         BlacklistCache blacklistCache = getInstance();
         blacklistCache.setGraylogServer(server);
         return blacklistCache;
@@ -50,11 +50,11 @@ public class BlacklistCache extends SimpleObjectCache<List<Blacklist>> {
         return instance;
     }
 
-    private void setGraylogServer(Core server) {
+    private void setGraylogServer(GraylogServer server) {
         this.server = server;
     }
 
-    public Core getGraylogServer() {
+    public GraylogServer getGraylogServer() {
         return server;
     }
 }

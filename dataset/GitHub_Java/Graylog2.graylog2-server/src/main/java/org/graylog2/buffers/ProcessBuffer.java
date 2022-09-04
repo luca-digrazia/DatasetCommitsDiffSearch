@@ -26,30 +26,23 @@ import com.lmax.disruptor.SleepingWaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import org.apache.commons.lang3.concurrent.BasicThreadFactory;
-import org.graylog2.Core;
+import org.graylog2.GraylogServer;
 import org.graylog2.buffers.processors.ProcessBufferProcessor;
-import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.buffers.Buffer;
-import org.graylog2.plugin.logmessage.LogMessage;
+import org.graylog2.logmessage.LogMessage;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class ProcessBuffer implements Buffer {
+public class ProcessBuffer {
 
+    protected static final int RING_SIZE = 524288;
     protected static RingBuffer<LogMessageEvent> ringBuffer;
 
-    protected ExecutorService executor = Executors.newCachedThreadPool(
-            new BasicThreadFactory.Builder()
-                .namingPattern("processbufferprocessor-%d")
-                .build()
-    );
+    protected ExecutorService executor = Executors.newCachedThreadPool();
 
-    Core server;
+    GraylogServer server;
 
-    public ProcessBuffer(Core server) {
+    public ProcessBuffer(GraylogServer server) {
         this.server = server;
     }
 
@@ -57,22 +50,16 @@ public class ProcessBuffer implements Buffer {
         Disruptor disruptor = new Disruptor<LogMessageEvent>(
                 LogMessageEvent.EVENT_FACTORY,
                 executor,
-                new MultiThreadedClaimStrategy(server.getConfiguration().getRingSize()),
+                new MultiThreadedClaimStrategy(RING_SIZE),
                 new SleepingWaitStrategy()
         );
 
-        ProcessBufferProcessor[] processors = new ProcessBufferProcessor[server.getConfiguration().getProcessBufferProcessors()];
-        
-        for (int i = 0; i < server.getConfiguration().getProcessBufferProcessors(); i++) {
-            processors[i] = new ProcessBufferProcessor(this.server, i, server.getConfiguration().getProcessBufferProcessors());
-        }
-        
-        disruptor.handleEventsWith(processors);
-        
+        ProcessBufferProcessor processor = new ProcessBufferProcessor(this.server);
+
+        disruptor.handleEventsWith(processor);
         ringBuffer = disruptor.start();
     }
     
-    @Override
     public void insert(LogMessage message) {
         long sequence = ringBuffer.next();
         LogMessageEvent event = ringBuffer.get(sequence);

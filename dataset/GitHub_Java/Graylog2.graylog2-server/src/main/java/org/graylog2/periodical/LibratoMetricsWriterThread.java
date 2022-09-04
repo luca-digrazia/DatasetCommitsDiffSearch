@@ -20,33 +20,31 @@
 
 package org.graylog2.periodical;
 
-import org.graylog2.Core;
-import org.graylog2.LibratoMetricsFormatter;
-import org.graylog2.Tools;
-import org.graylog2.plugin.MessageCounter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.DataOutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import org.apache.log4j.Logger;
+import org.graylog2.GraylogServer;
+import org.graylog2.LibratoMetricsFormatter;
+import org.graylog2.MessageCounter;
+import org.graylog2.Tools;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class LibratoMetricsWriterThread implements Runnable {
 
-    private static final Logger LOG = LoggerFactory.getLogger(LibratoMetricsWriterThread.class);
+    private static final Logger LOG = Logger.getLogger(LibratoMetricsWriterThread.class);
 
     public static final String COUNTER_NAME = "libratocounter";
 
     public static final int INITIAL_DELAY = 0;
 
-    private final Core graylogServer;
+    private final GraylogServer graylogServer;
 
     private static final String API_TARGET = "https://metrics-api.librato.com/v1/metrics";
 
-    public LibratoMetricsWriterThread(Core graylogServer) {
+    public LibratoMetricsWriterThread(GraylogServer graylogServer) {
         this.graylogServer = graylogServer;
     }
 
@@ -61,7 +59,7 @@ public class LibratoMetricsWriterThread implements Runnable {
         try {
             LibratoMetricsFormatter f = new LibratoMetricsFormatter(
                     counter,
-                    graylogServer.getServerId() + "-" + graylogServer.getConfiguration().getLibratoMetricsPrefix(),
+                    graylogServer.getConfiguration().getLibratoMetricsPrefix(),
                     graylogServer.getConfiguration().getLibratoMetricsStreamFilter(),
                     graylogServer.getConfiguration().getLibratoMetricsHostsFilter()
             );
@@ -106,7 +104,7 @@ public class LibratoMetricsWriterThread implements Runnable {
             wr.close();
 
             if(connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
-                LOG.error("Could not write to Librato Metrics: Expected HTTP 200 but was {}", connection.getResponseCode());
+                LOG.error("Could not write to Librato Metrics: Expected HTTP 200 but was " + connection.getResponseCode());
             }
         } catch (Exception e) {
             LOG.error("Could not write to Librato Metrics.", e);

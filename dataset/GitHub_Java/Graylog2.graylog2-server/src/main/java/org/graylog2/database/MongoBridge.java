@@ -1,5 +1,5 @@
 /**
- * Copyright 2010, 2011, 2012 Lennart Koopmann <lennart@socketfeed.com>
+ * Copyright 2010, 2011 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -28,7 +28,6 @@ import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
 import java.util.Map;
-import org.graylog2.activities.Activity;
 
 
 /**
@@ -38,7 +37,8 @@ import org.graylog2.activities.Activity;
  */
 public class MongoBridge {
 
-    private static final Logger LOG = Logger.getLogger(MongoBridge.class);    
+    private static final Logger LOG = Logger.getLogger(MongoBridge.class);
+
     private MongoConnection connection;
 
     public MongoBridge() {
@@ -74,13 +74,11 @@ public class MongoBridge {
         }
     }
 
-    public void writeThroughput(String serverId, int current, int highest) {
+    public void writeThroughput(int current, int highest) {
         BasicDBObject query = new BasicDBObject();
-        query.put("server_id", serverId);
         query.put("type", "total_throughput");
 
         BasicDBObject update = new BasicDBObject();
-        update.put("server_id", serverId);
         update.put("type", "total_throughput");
         update.put("current", current);
         update.put("highest", highest);
@@ -89,13 +87,11 @@ public class MongoBridge {
         coll.update(query, update, true, false);
     }
 
-    public void setSimpleServerValue(String serverId, String key, Object value) {
+    public void setSimpleServerValue(String key, Object value) {
         BasicDBObject query = new BasicDBObject();
-        query.put("server_id", serverId);
         query.put("type", key);
 
         BasicDBObject update = new BasicDBObject();
-        update.put("server_id", serverId);
         update.put("value", value);
         update.put("type", key);
 
@@ -115,25 +111,6 @@ public class MongoBridge {
         getConnection().getMessageCountsColl().insert(obj);
     }
 
-    public void writeActivity(Activity activity) {
-        BasicDBObject obj = new BasicDBObject();
-        obj.put("timestamp", Tools.getUTCTimestamp());
-        obj.put("content", activity.getContent());
-        obj.put("caller", activity.getCaller().getCanonicalName());
-        
-        connection.getDatabase().getCollection("server_activities").insert(obj);
-    }
-    
-    public void writeDeflectorInformation(Map<String, Object> info) {
-        DBCollection coll = connection.getDatabase().getCollection("deflector_informations");
-
-        // Delete all entries, we only have one at a time.
-        coll.remove(new BasicDBObject());
-        
-        BasicDBObject obj = new BasicDBObject(info);
-        coll.insert(obj);
-    }
-    
     /**
      * Get a setting from the settings collection.
      *

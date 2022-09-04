@@ -44,9 +44,4 @@ public class MessageRetentionInitializer implements Initializer {
         this.graylogServer.getScheduler().schedule(new MessageRetentionThread(graylogServer),0,TimeUnit.SECONDS);
     }
     
-    @Override
-    public boolean masterOnly() {
-        return true;
-    }
-    
 }

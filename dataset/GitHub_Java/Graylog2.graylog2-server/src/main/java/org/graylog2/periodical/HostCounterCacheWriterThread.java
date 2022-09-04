@@ -20,9 +20,9 @@
 
 package org.graylog2.periodical;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.graylog2.Core;
+import org.apache.log4j.Logger;
+import org.graylog2.GraylogServer;
+import org.graylog2.database.HostCounterCache;
 import org.graylog2.database.MongoBridge;
 
 
@@ -33,14 +33,14 @@ import org.graylog2.database.MongoBridge;
  */
 public class HostCounterCacheWriterThread implements Runnable {
 
-    private static final Logger LOG = LoggerFactory.getLogger(HostCounterCacheWriterThread.class);
+    private static final Logger LOG = Logger.getLogger(HostCounterCacheWriterThread.class);
 
     public static final int PERIOD = 5;
     public static final int INITIAL_DELAY = 5;
 
-    private final Core graylogServer;
+    private final GraylogServer graylogServer;
 
-    public HostCounterCacheWriterThread(Core graylogServer) {
+    public HostCounterCacheWriterThread(GraylogServer graylogServer) {
         this.graylogServer = graylogServer;
     }
 

@@ -20,34 +20,25 @@
 
 package org.graylog2.inputs.syslog;
 
-import org.graylog2.Core;
+import org.graylog2.GraylogServer;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
 import org.jboss.netty.channel.Channels;
-import org.jboss.netty.handler.execution.ExecutionHandler;
-import org.jboss.netty.handler.execution.OrderedMemoryAwareThreadPoolExecutor;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class SyslogPipelineFactory implements ChannelPipelineFactory {
 
-    Core server;
+    GraylogServer server;
 
-    public SyslogPipelineFactory(Core server) {
+    public SyslogPipelineFactory(GraylogServer server) {
         this.server = server;
     }
 
     @Override
     public ChannelPipeline getPipeline() throws Exception {
-        ChannelPipeline p = Channels.pipeline();
-        p.addFirst(
-                "execution-handler",
-                new ExecutionHandler(new OrderedMemoryAwareThreadPoolExecutor(16, 0, 0))
-        );
-        p.addLast("handler", new SyslogDispatcher(server));
-        
-        return p;
+        return Channels.pipeline(new SyslogDispatcher(server));
     }
 
 }

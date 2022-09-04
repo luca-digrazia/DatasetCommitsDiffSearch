@@ -41,9 +41,4 @@ public class HostCounterCacheWriterInitializer extends SimpleFixedRateScheduleIn
         );
     }
 
-    @Override
-    public boolean masterOnly() {
-        return false;
-    }
-
 }

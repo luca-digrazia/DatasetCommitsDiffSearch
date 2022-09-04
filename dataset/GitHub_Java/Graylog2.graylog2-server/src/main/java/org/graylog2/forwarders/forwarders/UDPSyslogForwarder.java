@@ -59,6 +59,8 @@ public class UDPSyslogForwarder extends UDPForwarder implements MessageForwarder
     /**
      * Indicates if the last forward has succeeded. This is not guaranteeing
      * delivery for the SyslogForwarder as it it sending UDP.
+     *
+     * @return
      */
     public boolean succeeded() {
         return this.succeeded;

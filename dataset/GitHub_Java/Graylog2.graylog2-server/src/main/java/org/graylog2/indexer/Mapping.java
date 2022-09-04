@@ -35,7 +35,7 @@ import org.elasticsearch.client.Client;
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-@SuppressWarnings({"unchecked"})
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class Mapping {
 
     public static PutMappingRequest getPutMappingRequest(final Client client, final String index) {

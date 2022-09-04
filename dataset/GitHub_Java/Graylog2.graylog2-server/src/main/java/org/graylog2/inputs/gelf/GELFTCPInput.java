@@ -23,10 +23,9 @@ package org.graylog2.inputs.gelf;
 import java.net.InetSocketAddress;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.log4j.Logger;
 import org.graylog2.Configuration;
-import org.graylog2.Core;
+import org.graylog2.GraylogServer;
 import org.graylog2.inputs.MessageInput;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.ChannelException;
@@ -41,11 +40,11 @@ public class GELFTCPInput implements MessageInput {
 
     private static final String NAME = "GELF TCP";
 
-    private Core graylogServer;
+    private GraylogServer graylogServer;
     private InetSocketAddress socketAddress;
 
     @Override
-    public void initialize(Configuration configuration, Core graylogServer) {
+    public void initialize(Configuration configuration, GraylogServer graylogServer) {
         this.graylogServer = graylogServer;
         this.socketAddress = new InetSocketAddress(configuration.getGelfListenAddress(), configuration.getGelfListenPort());
 
@@ -53,15 +52,8 @@ public class GELFTCPInput implements MessageInput {
     }
 
     private void spinUp() {
-        final ExecutorService bossThreadPool = Executors.newCachedThreadPool(
-                new BasicThreadFactory.Builder()
-                .namingPattern("input-gelftcp-boss-%d")
-                .build());
-        
-        final ExecutorService workerThreadPool = Executors.newCachedThreadPool(
-                new BasicThreadFactory.Builder()
-                .namingPattern("input-gelftcp-worker-%d")
-                .build());
+        final ExecutorService bossThreadPool = Executors.newCachedThreadPool();
+        final ExecutorService workerThreadPool = Executors.newCachedThreadPool();
 
         ServerBootstrap tcpBootstrap = new ServerBootstrap(
             new NioServerSocketChannelFactory(bossThreadPool, workerThreadPool)

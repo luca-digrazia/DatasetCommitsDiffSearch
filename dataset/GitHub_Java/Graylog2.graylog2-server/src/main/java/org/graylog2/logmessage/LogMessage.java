@@ -20,11 +20,10 @@
 
 package org.graylog2.logmessage;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
 import org.graylog2.Tools;
 import org.graylog2.indexer.EmbeddedElasticSearchClient;
 import org.graylog2.streams.Stream;
@@ -33,8 +32,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 /**
- * LogMessage.java: 12.04.2012 13:06:01
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class LogMessage {
@@ -191,19 +188,22 @@ public class LogMessage {
         this.shortMessage = shortMessage;
     }
 
-    public void addAdditionalData(String key, Object value) {
-        // Add the required underscore if it was not set.
-        if (!key.startsWith("_")) {
-            key = "_" + key;
-        }
-        
-        this.additionalData.put(key, value);
+    public void addAdditionalData(String key, Object value) {       
+        this.additionalData.put(prepareAdditionalDataKey(key), value);
+    }
+    
+    public void addAdditionalData(String key, String value) {
+        this.additionalData.put(prepareAdditionalDataKey(key), value.trim());
     }
 
     public void addAdditionalData(Map<String, String> fields) {
         for (Map.Entry<String, String> field : fields.entrySet()) {
             addAdditionalData(field.getKey(), field.getValue());
         }
+    }
+
+    public void removeAdditionalData(String key) {
+        this.additionalData.remove(key);
     }
 
     public Map<String, Object> getAdditionalData() {
@@ -216,6 +216,17 @@ public class LogMessage {
 
     public List<Stream> getStreams() {
         return this.streams;
+    }
+    
+    private String prepareAdditionalDataKey(final String _key) {
+        String key = _key.trim();
+        
+        // Add the required underscore if it was not set.
+        if (!key.startsWith("_")) {
+            key = "_" + key;
+        }
+
+        return key;
     }
 
 }

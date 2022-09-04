@@ -30,11 +30,9 @@ import java.util.Map.Entry;
 public class GraphiteFormatter {
 
     private MessageCounter counter;
-    String serverId;
-    
-    public GraphiteFormatter(MessageCounter counter, String serverId) {
+
+    public GraphiteFormatter(MessageCounter counter) {
         this.counter = counter;
-        this.serverId = serverId;
     }
 
     public List<String> getAllMetrics() {
@@ -43,26 +41,22 @@ public class GraphiteFormatter {
         int now = Tools.getUTCTimestamp();
 
         // Overall count.
-        String overall = prefix() + "total " + counter.getTotalCount() + " " + now;
+        String overall = "graylog2.messagecounts.total " + counter.getTotalCount() + " " + now;
         r.add(overall);
 
         // Streams.
         for(Entry<String, Integer> stream : counter.getStreamCounts().entrySet()) {
-            String sval = prefix() + "streams." + stream.getKey() + " " + stream.getValue() + " " + now;
+            String sval = "graylog2.messagecounts.streams." + stream.getKey() + " " + stream.getValue() + " " + now;
             r.add(sval);
         }
 
         // Hosts.
         for(Entry<String, Integer> host : counter.getHostCounts().entrySet()) {
-            String hval = prefix() + "hosts." + Tools.decodeBase64(host.getKey()).replaceAll("[^a-zA-Z0-9]", "") + " " + host.getValue() + " " + Tools.getUTCTimestamp();
+            String hval = "graylog2.messagecounts.hosts." + Tools.decodeBase64(host.getKey()).replaceAll("[^a-zA-Z0-9]", "") + " " + host.getValue() + " " + Tools.getUTCTimestamp();
             r.add(hval);
         }
 
         return r;
-    }
-    
-    private String prefix() {
-        return "graylog2" + "." + serverId + "." + "messagecounts" + ".";
     }
 
 }
