@@ -21,6 +21,7 @@ import com.jayway.restassured.RestAssured;
 import com.jayway.restassured.authentication.AuthenticationScheme;
 import com.jayway.restassured.builder.RequestSpecBuilder;
 import com.jayway.restassured.config.MatcherConfig;
+import integration.util.graylog.ServerHelper;
 import org.hamcrest.BaseMatcher;
 import org.hamcrest.Description;
 import org.junit.rules.ExternalResource;
@@ -37,6 +38,7 @@ public class RestAssuredSetupRule extends ExternalResource {
 
     @Override
     protected void before() throws Throwable {
+        final ServerHelper serverHelper = new ServerHelper();
         final URL url = IntegrationTestsConfig.getGlServerURL();
         RestAssured.baseURI = url.getProtocol() + "://" + url.getHost();
         RestAssured.port = url.getPort();
