@@ -58,11 +58,6 @@ public class SyslogServerThread extends Thread {
         this.coreThread = syslogServer.getThread();
     }
 
-    /**
-     * Get the thread all syslog handling is running in
-     * 
-     * @return
-     */
     public Thread getCoreThread() {
         return this.coreThread;
     }

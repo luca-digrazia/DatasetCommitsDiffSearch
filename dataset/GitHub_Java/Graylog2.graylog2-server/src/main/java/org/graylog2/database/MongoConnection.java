@@ -23,9 +23,6 @@ package org.graylog2.database;
 import com.mongodb.Mongo;
 import com.mongodb.DB;
 import com.mongodb.MongoException;
-import com.mongodb.MongoOptions;
-import com.mongodb.ServerAddress;
-import java.util.List;
 
 /**
  * MongoConnection.java: Jun 6, 2010 1:36:19 PM
@@ -64,19 +61,9 @@ public final class MongoConnection {
      * @param useAuth Use authentication?
      * @throws Exception
      */
-    public void connect(String username, String password, String hostname, String database, int port, String useAuth, List<ServerAddress> replicaServers) throws Exception {
+    public void connect(String username, String password, String hostname, String database, int port, String useAuth) throws Exception {
         try {
-            MongoOptions options = new MongoOptions();
-            options.connectionsPerHost = 500;
-
-            // Connect to replica servers if given. Else the standard way to one server.
-            if (replicaServers != null && replicaServers.size() > 0) {
-                MongoConnection.m = new Mongo(replicaServers, options);
-            } else {
-                ServerAddress address = new ServerAddress(hostname, port);
-                MongoConnection.m = new Mongo(address, options);
-            }
-
+            MongoConnection.m = new Mongo(hostname, port);
             MongoConnection.db = m.getDB(database);
 
             // Try to authenticate if configured.
