@@ -62,12 +62,21 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Dispatches to the Blaze commands; that is, given a command line, this abstraction looks up the
- * appropriate command object, parses the options required by the object, and calls its exec method.
- * Also, this object provides the runtime state (BlazeRuntime) to the commands.
+ * Dispatches to the Blaze commands; that is, given a command line, this
+ * abstraction looks up the appropriate command object, parses the options
+ * required by the object, and calls its exec method. Also, this object provides
+ * the runtime state (BlazeRuntime) to the commands.
  */
-public class BlazeCommandDispatcher implements CommandDispatcher {
+public class BlazeCommandDispatcher {
   private static final Logger logger = Logger.getLogger(BlazeCommandDispatcher.class.getName());
+
+  /**
+   * What to do if the command lock is not available.
+   */
+  public enum LockingMode {
+    WAIT,  // Wait until it is available
+    ERROR_OUT,  // Return with an error
+  }
 
   private static final ImmutableList<String> HELP_COMMAND = ImmutableList.of("help");
 
@@ -111,7 +120,11 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
     this.commandLock = new Object();
   }
 
-  @Override
+  /**
+   * Executes a single command. Returns a {@link BlazeCommandResult} to indicate either an exit
+   * code, the desire to shut down the server, or that a given binary should be executed by the
+   * client.
+   */
   public BlazeCommandResult exec(
       InvocationPolicy invocationPolicy,
       List<String> args,
@@ -444,7 +457,11 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
 
       try (SilentCloseable closeable = Profiler.instance().profile("CommandEnv.beforeCommand")) {
         // Notify the BlazeRuntime, so it can do some initial setup.
-        env.beforeCommand(waitTimeInMs, invocationPolicy);
+        env.beforeCommand(
+            options,
+            commonOptions,
+            waitTimeInMs,
+            invocationPolicy);
       } catch (AbruptExitException e) {
         reporter.handle(Event.error(e.getMessage()));
         return BlazeCommandResult.exitCode(e.getExitCode());
@@ -461,36 +478,6 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
         try (SilentCloseable closeable =
             Profiler.instance().profile(module + ".injectExtraPrecomputedValues")) {
           env.getSkyframeExecutor().injectExtraPrecomputedValues(module.getPrecomputedValues());
-        }
-      }
-
-      // {@link CleanCommand} is annotated with {@code builds = true}
-      // to have access to relevant build options but don't actually do building.
-      // {@link InfoCommand} is annotated with {@code builds = true} but only conditionally
-      // does this step based on some complicated logic.
-      if (commandAnnotation.builds()
-          && !commandAnnotation.name().equals("clean")
-          && !commandAnnotation.name().equals("info")) {
-        try {
-          env.setupPackageCache(options);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          env.getReporter()
-              .handle(Event.error("command interrupted while setting up package cache"));
-          earlyExitCode = ExitCode.INTERRUPTED;
-        } catch (AbruptExitException e) {
-          env.getReporter().handle(Event.error(e.getMessage()));
-          earlyExitCode = e.getExitCode();
-        }
-        if (!earlyExitCode.equals(ExitCode.SUCCESS)) {
-          return replayEarlyExitEvents(
-              outErr,
-              optionHandler,
-              storedEventHandler,
-              env,
-              earlyExitCode,
-              new NoBuildEvent(
-                  commandName, firstContactTime, false, true, env.getCommandId().toString()));
         }
       }
 
@@ -522,7 +509,7 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
           "Internal error thrown during build. Printing stack trace: "
               + Throwables.getStackTraceAsString(e));
       e.printStackTrace();
-      BugReport.printBug(outErr, e, commonOptions.oomMessage);
+      BugReport.printBug(outErr, e);
       BugReport.sendBugReport(e, args, env.getCrashData());
       logger.log(Level.SEVERE, "Shutting down due to exception", e);
       return BlazeCommandResult.shutdown(BugReport.getExitCodeForThrowable(e));
@@ -631,8 +618,8 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
       throw new IllegalStateException(e);
     }
     Command annotation = command.getClass().getAnnotation(Command.class);
-    OptionsParser parser =
-        OptionsParser.newOptionsParser(optionsData, "--//", annotation.allowResidue());
+    OptionsParser parser = OptionsParser.newOptionsParser(optionsData, "--//");
+    parser.setAllowResidue(annotation.allowResidue());
     return parser;
   }
 
