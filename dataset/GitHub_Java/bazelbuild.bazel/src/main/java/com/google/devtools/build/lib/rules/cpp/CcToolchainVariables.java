@@ -344,15 +344,6 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
       return var;
     }
 
-    if (!name.contains(".")) {
-      if (throwOnMissingVariable) {
-        throw new ExpansionException(
-            String.format(
-                "Invalid toolchain configuration: Cannot find variable named '%s'.", name));
-      }
-      return null;
-    }
-
     if (structuredVariableCache == null) {
       structuredVariableCache = Maps.newConcurrentMap();
     }
