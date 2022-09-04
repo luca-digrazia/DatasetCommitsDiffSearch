@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.LockingMode;
 import com.google.devtools.build.lib.runtime.BlazeCommandResult;
-import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.CommandExecutor;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.server.CommandProtos.CancelRequest;
@@ -56,7 +55,7 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -110,6 +109,11 @@ import javax.annotation.concurrent.GuardedBy;
  */
 public class GrpcServerImpl implements RPCServer {
   private static final Logger logger = Logger.getLogger(GrpcServerImpl.class.getName());
+
+  // UTF-8 won't do because we want to be able to pass arbitrary binary strings.
+  // Not that the internals of Bazel handle that correctly, but why not make at least this little
+  // part correct?
+  private static final Charset CHARSET = Charset.forName("ISO-8859-1");
 
   private static final long NANOSECONDS_IN_MS = TimeUnit.MILLISECONDS.toNanos(1);
 
@@ -805,6 +809,11 @@ public class GrpcServerImpl implements RPCServer {
       return;
     }
 
+    ImmutableList.Builder<String> args = ImmutableList.builder();
+    for (ByteString requestArg : request.getArgList()) {
+      args.add(requestArg.toString(CHARSET));
+    }
+
     String commandId;
     BlazeCommandResult result;
 
@@ -814,12 +823,8 @@ public class GrpcServerImpl implements RPCServer {
     // Convert the startup options record to Java strings, source first.
     ImmutableList.Builder<Pair<String, String>> startupOptions = ImmutableList.builder();
     for (StartupOption option : request.getStartupOptionsList()) {
-      // UTF-8 won't do because we want to be able to pass arbitrary binary strings.
-      // Not that the internals of Bazel handle that correctly, but why not make at least this
-      // little part correct?
-      startupOptions.add(new Pair<>(
-          option.getSource().toString(StandardCharsets.ISO_8859_1),
-          option.getOption().toString(StandardCharsets.ISO_8859_1)));
+      startupOptions.add(
+          new Pair<>(option.getSource().toString(CHARSET), option.getOption().toString(CHARSET)));
     }
 
     try (RunningCommand command = new RunningCommand()) {
@@ -842,19 +847,11 @@ public class GrpcServerImpl implements RPCServer {
           new RpcOutputStream(command.id, responseCookie, StreamType.STDERR, sink));
 
       try {
-        // UTF-8 won't do because we want to be able to pass arbitrary binary strings.
-        // Not that the internals of Bazel handle that correctly, but why not make at least this
-        // little part correct?
-        ImmutableList<String> args = request.getArgList().stream()
-            .map(arg -> arg.toString(StandardCharsets.ISO_8859_1))
-            .collect(ImmutableList.toImmutableList());
-
         InvocationPolicy policy = InvocationPolicyParser.parsePolicy(request.getInvocationPolicy());
-        logger.info(BlazeRuntime.getRequestLogString(args));
         result =
             commandExecutor.exec(
                 policy,
-                args,
+                args.build(),
                 rpcOutErr,
                 request.getBlockForLock() ? LockingMode.WAIT : LockingMode.ERROR_OUT,
                 request.getClientDescription(),

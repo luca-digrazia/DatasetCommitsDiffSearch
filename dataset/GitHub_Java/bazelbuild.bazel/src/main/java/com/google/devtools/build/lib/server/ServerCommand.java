@@ -14,9 +14,12 @@
 package com.google.devtools.build.lib.server;
 
 import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher;
+import com.google.devtools.build.lib.runtime.BlazeCommandResult;
+import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
+import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.OutErr;
-
 import java.util.List;
+import java.util.Optional;
 
 /**
  * The {@link RPCServer} calls an arbitrary command implementing this
@@ -25,16 +28,21 @@ import java.util.List;
 public interface ServerCommand {
 
   /**
-   * Executes the request, writing any output or error messages into err.
-   * Returns 0 on success; any other value or exception indicates an error.
+   * Executes the request, writing any output or error messages into err. Returns 0 on success; any
+   * other value or exception indicates an error.
+   *
+   * @param startupOptionsTaggedWithBazelRc List of startup options in Pair(bazelRc, option) form.
+   *     The empty string bazelRc is interpreted as the command line, and option should be in
+   *     --[no]flag or --flag=value form. If we don't have access to this information (--batch),
+   *     leave this parameter as Optional.empty().
    */
-  int exec(List<String> args, OutErr outErr, BlazeCommandDispatcher.LockingMode lockingMode,
-      String clientDescription, long firstContactTime) throws InterruptedException;
-
-  /**
-   * The implementation returns true from this method to initiate a shutdown.
-   * No further requests will be handled.
-   */
-  boolean shutdown();
-
+  BlazeCommandResult exec(
+      InvocationPolicy policy,
+      List<String> args,
+      OutErr outErr,
+      BlazeCommandDispatcher.LockingMode lockingMode,
+      String clientDescription,
+      long firstContactTime,
+      Optional<List<Pair<String, String>>> startupOptionsTaggedWithBazelRc)
+      throws InterruptedException;
 }

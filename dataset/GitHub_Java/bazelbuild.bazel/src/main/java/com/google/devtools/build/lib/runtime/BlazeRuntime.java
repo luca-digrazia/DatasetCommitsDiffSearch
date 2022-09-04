@@ -618,7 +618,8 @@ public final class BlazeRuntime {
    * @param requestStrings
    * @return the filtered request to write to the log.
    */
-  public static String getRequestLogString(List<String> requestStrings) {
+  @VisibleForTesting
+  static String getRequestLogString(List<String> requestStrings) {
     StringBuilder buf = new StringBuilder();
     buf.append('[');
     String sep = "";
@@ -847,27 +848,7 @@ public final class BlazeRuntime {
   private static int serverMain(Iterable<BlazeModule> modules, OutErr outErr, String[] args) {
     InterruptSignalHandler sigintHandler = null;
     try {
-      final RPCServer[] rpcServer = new RPCServer[1];
-      Runnable prepareForAbruptShutdown = () -> rpcServer[0].prepareForAbruptShutdown();
-      BlazeRuntime runtime = newRuntime(modules, Arrays.asList(args), prepareForAbruptShutdown);
-      BlazeCommandDispatcher dispatcher = new BlazeCommandDispatcher(runtime);
-      CommandExecutor commandExecutor = new CommandExecutor(dispatcher);
-      BlazeServerStartupOptions startupOptions =
-          runtime.getStartupOptionsProvider().getOptions(BlazeServerStartupOptions.class);
-      try {
-        // This is necessary so that Bazel kind of works during bootstrapping, at which time the
-        // gRPC server is not compiled in so that we don't need gRPC for bootstrapping.
-        Class<?> factoryClass = Class.forName(
-            "com.google.devtools.build.lib.server.GrpcServerImpl$Factory");
-        RPCServer.Factory factory = (RPCServer.Factory) factoryClass.getConstructor().newInstance();
-        rpcServer[0] = factory.create(commandExecutor, runtime.getClock(),
-            startupOptions.commandPort,
-            runtime.getWorkspace().getWorkspace(),
-            runtime.getServerDirectory(),
-            startupOptions.maxIdleSeconds);
-      } catch (ReflectiveOperationException | IllegalArgumentException e) {
-        throw new AbruptExitException("gRPC server not compiled in", ExitCode.BLAZE_INTERNAL_ERROR);
-      }
+      final RPCServer blazeServer = createBlazeRPCServer(modules, Arrays.asList(args));
 
       // Register the signal handler.
       sigintHandler =
@@ -875,13 +856,11 @@ public final class BlazeRuntime {
             @Override
             public void run() {
               logger.severe("User interrupt");
-              rpcServer[0].interrupt();
+              blazeServer.interrupt();
             }
           };
 
-      rpcServer[0].serve();
-      runtime.shutdown();
-      dispatcher.shutdown();
+      blazeServer.serve();
       return ExitCode.SUCCESS.getNumericExitCode();
     } catch (OptionsParsingException e) {
       outErr.printErr(e.getMessage());
@@ -914,6 +893,40 @@ public final class BlazeRuntime {
     } else {
       return JavaSubprocessFactory.INSTANCE;
     }
+  }
+
+  /**
+   * Creates and returns a new Blaze RPCServer. Call {@link RPCServer#serve()} to start the server.
+   */
+  @SuppressWarnings("LiteralClassName")  // bootstrap binary does not have gRPC
+  private static RPCServer createBlazeRPCServer(
+      Iterable<BlazeModule> modules, List<String> args)
+      throws IOException, OptionsParsingException, AbruptExitException {
+    final RPCServer[] rpcServer = new RPCServer[1];
+    Runnable prepareForAbruptShutdown = () -> rpcServer[0].prepareForAbruptShutdown();
+
+    BlazeRuntime runtime = newRuntime(modules, args, prepareForAbruptShutdown);
+    BlazeCommandDispatcher dispatcher = new BlazeCommandDispatcher(runtime);
+    CommandExecutor commandExecutor = new CommandExecutor(runtime, dispatcher);
+
+    BlazeServerStartupOptions startupOptions =
+        runtime.getStartupOptionsProvider().getOptions(BlazeServerStartupOptions.class);
+    try {
+      // This is necessary so that Bazel kind of works during bootstrapping, at which time the
+      // gRPC server is not compiled in so that we don't need gRPC for bootstrapping.
+      Class<?> factoryClass = Class.forName(
+          "com.google.devtools.build.lib.server.GrpcServerImpl$Factory");
+      RPCServer.Factory factory = (RPCServer.Factory) factoryClass.getConstructor().newInstance();
+      rpcServer[0] = factory.create(commandExecutor, runtime.getClock(),
+          startupOptions.commandPort,
+          runtime.getWorkspace().getWorkspace(),
+          runtime.getServerDirectory(),
+          startupOptions.maxIdleSeconds);
+      return rpcServer[0];
+    } catch (ReflectiveOperationException | IllegalArgumentException e) {
+      throw new AbruptExitException("gRPC server not compiled in", ExitCode.BLAZE_INTERNAL_ERROR);
+    }
+
   }
 
   /**
