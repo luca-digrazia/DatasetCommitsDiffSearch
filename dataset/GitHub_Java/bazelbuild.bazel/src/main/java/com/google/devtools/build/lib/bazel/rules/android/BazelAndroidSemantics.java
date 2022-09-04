@@ -43,11 +43,13 @@ public class BazelAndroidSemantics implements AndroidSemantics {
   }
 
   @Override
-  public ImmutableList<String> getCompatibleJavacOptions(RuleContext ruleContext) {
+  public ImmutableList<String> getJavacArguments(RuleContext ruleContext) {
     ImmutableList.Builder<String> javacArgs = new ImmutableList.Builder<>();
+
     if (!ruleContext.getFragment(AndroidConfiguration.class).desugarJava8()) {
       javacArgs.add("-source", "7", "-target", "7");
     }
+
     return javacArgs.build();
   }
 
