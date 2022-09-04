@@ -19,6 +19,9 @@
  */
 package org.graylog2.inputs.raw;
 
+import org.graylog2.plugin.InputHost;
+import org.graylog2.plugin.inputs.util.ConnectionCounter;
+import org.graylog2.plugin.inputs.util.ThroughputCounter;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
@@ -26,8 +29,6 @@ import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.MisfireException;
-import org.graylog2.plugin.inputs.util.ConnectionCounter;
-import org.graylog2.plugin.inputs.util.ThroughputCounter;
 import org.jboss.netty.bootstrap.Bootstrap;
 import org.jboss.netty.channel.Channel;
 
@@ -94,8 +95,6 @@ public class RawInputBase extends MessageInput {
                         "it with a custom string.",
                 ConfigurationField.Optional.OPTIONAL
         ));
-
-        r.addField(ConfigurationRequest.Templates.recvBufferSize(CK_RECV_BUFFER_SIZE, 1024 * 1024));
 
         return r;
     }
