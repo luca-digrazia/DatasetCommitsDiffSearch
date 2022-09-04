@@ -419,10 +419,9 @@ public abstract class Layer implements Serializable {
      * @param activation the activation function.
      * @param neurons the number of neurons.
      * @param dropout the dropout rate.
-     * @param param the optional activation function parameter.
      * @return the layer builder.
      */
-    public static HiddenLayerBuilder builder(String activation, int neurons, double dropout, double param) {
+    public static HiddenLayerBuilder builder(String activation, int neurons, double dropout) {
         switch(activation.toLowerCase(Locale.ROOT)) {
             case "relu":
                 return rectifier(neurons, dropout);
@@ -432,11 +431,6 @@ public abstract class Layer implements Serializable {
                 return tanh(neurons, dropout);
             case "linear":
                 return linear(neurons, dropout);
-            case "leaky":
-                if (Double.isNaN(param))
-                    return leaky(neurons, dropout);
-                else
-                    return leaky(neurons, dropout, param);
             default:
                 throw new IllegalArgumentException("Unsupported activation function: " + activation);
         }
@@ -502,36 +496,6 @@ public abstract class Layer implements Serializable {
      */
     public static HiddenLayerBuilder rectifier(int neurons, double dropout) {
         return new HiddenLayerBuilder(neurons, dropout, ActivationFunction.rectifier());
-    }
-
-    /**
-     * Returns a hidden layer with leaky rectified linear activation function.
-     * @param neurons the number of neurons.
-     * @return the layer builder.
-     */
-    public static HiddenLayerBuilder leaky(int neurons) {
-        return rectifier(neurons, 0.0);
-    }
-
-    /**
-     * Returns a hidden layer with leaky rectified linear activation function.
-     * @param neurons the number of neurons.
-     * @param dropout the dropout rate.
-     * @return the layer builder.
-     */
-    public static HiddenLayerBuilder leaky(int neurons, double dropout) {
-        return new HiddenLayerBuilder(neurons, dropout, ActivationFunction.leaky());
-    }
-
-    /**
-     * Returns a hidden layer with leaky rectified linear activation function.
-     * @param neurons the number of neurons.
-     * @param dropout the dropout rate.
-     * @param a the parameter of leaky ReLU.
-     * @return the layer builder.
-     */
-    public static HiddenLayerBuilder leaky(int neurons, double dropout, double a) {
-        return new HiddenLayerBuilder(neurons, dropout, ActivationFunction.leaky(a));
     }
 
     /**
@@ -602,7 +566,7 @@ public abstract class Layer implements Serializable {
      * @return the layer builders.
      */
     public static LayerBuilder[] of(int k, int p, String spec) {
-        Pattern regex = Pattern.compile(String.format("(\\w+)\\((%s)(,\\s*(%s))?(,\\s*(%s))?\\)", Regex.INTEGER_REGEX, Regex.DOUBLE_REGEX, Regex.DOUBLE_REGEX));
+        Pattern regex = Pattern.compile(String.format("(\\w+)\\((%s)(,\\s*(%s))?\\)", Regex.INTEGER_REGEX, Regex.DOUBLE_REGEX));
         String[] layers = spec.split("\\|");
         ArrayList<LayerBuilder> builders = new ArrayList<>();
         for (int i = 0; i < layers.length; i++) {
@@ -615,20 +579,15 @@ public abstract class Layer implements Serializable {
                     dropout = Double.parseDouble(m.group(4));
                 }
 
-                double param = Double.NaN; // activation function parameter
-                if (m.group(5) != null) {
-                    param = Double.parseDouble(m.group(6));
-                }
-
                 if (i == 0) {
                     if (activation.equalsIgnoreCase("input")) {
                         builders.add(Layer.input(neurons, dropout));
                     } else {
                         builders.add(Layer.input(p));
-                        builders.add(Layer.builder(activation, neurons, dropout, param));
+                        builders.add(Layer.builder(activation, neurons, dropout));
                     }
                 } else {
-                    builders.add(Layer.builder(activation, neurons, dropout, param));
+                    builders.add(Layer.builder(activation, neurons, dropout));
                 }
             } else {
                 throw new IllegalArgumentException("Invalid layer: " + layers[i]);
