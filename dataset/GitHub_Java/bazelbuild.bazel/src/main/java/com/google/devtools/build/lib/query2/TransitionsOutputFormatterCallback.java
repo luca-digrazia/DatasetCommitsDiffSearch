@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.query2;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.Dependency;
@@ -131,7 +132,9 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
                     hostConfiguration,
                     /*aspect=*/ null,
                     configConditions,
-                    toolchainContext,
+                    toolchainContext == null
+                        ? ImmutableSet.of()
+                        : toolchainContext.resolvedToolchainLabels(),
                     trimmingTransitionFactory);
       } catch (EvalException | InconsistentAspectOrderException e) {
         throw new InterruptedException(e.getMessage());
