@@ -22,19 +22,19 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 
 import com.googlecode.androidannotations.annotations.Layout;
-import com.googlecode.androidannotations.helper.ValidatorHelper;
+import com.googlecode.androidannotations.helper.HasTargetAnnotationHelper;
 import com.googlecode.androidannotations.model.AnnotationElements;
-import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRInnerClass;
+import com.googlecode.androidannotations.rclass.RClass;
+import com.googlecode.androidannotations.rclass.RInnerClass;
 import com.googlecode.androidannotations.rclass.RClass.Res;
 
-public class LayoutValidator extends ValidatorHelper implements ElementValidator {
+public class LayoutValidator extends HasTargetAnnotationHelper implements ElementValidator {
 
 	private static final String ANDROID_ACTIVITY_QUALIFIED_NAME = "android.app.Activity";
-	private final IRClass rClass;
+	private final RClass rClass;
 	private final TypeElement activityTypeElement;
 
-	public LayoutValidator(ProcessingEnvironment processingEnv, IRClass rClass) {
+	public LayoutValidator(ProcessingEnvironment processingEnv, RClass rClass) {
 		super(processingEnv);
 		this.rClass = rClass;
 		activityTypeElement = typeElementFromQualifiedName(ANDROID_ACTIVITY_QUALIFIED_NAME);
@@ -61,11 +61,25 @@ public class LayoutValidator extends ValidatorHelper implements ElementValidator
 		return valid.isValid();
 	}
 
+	private void validateIsNotFinal(Element element, IsValid valid) {
+		if (isFinal(element)) {
+			valid.invalidate();
+			printAnnotationError(element, annotationName() + " should not be used on a final class");
+		}
+	}
+
+	private void validateIsNotAbstract(Element element, IsValid valid) {
+		if (isAbstract(element)) {
+			valid.invalidate();
+			printAnnotationError(element, annotationName() + " should not be used on an abstract class");
+		}
+	}
+
 	private void validateRFieldName(Element element, IsValid valid) {
 		Layout layoutAnnotation = element.getAnnotation(Layout.class);
 		int layoutIdValue = layoutAnnotation.value();
 
-		IRInnerClass rInnerClass = rClass.get(Res.LAYOUT);
+		RInnerClass rInnerClass = rClass.get(Res.LAYOUT);
 
 		if (!rInnerClass.containsIdValue(layoutIdValue)) {
 			valid.invalidate();
