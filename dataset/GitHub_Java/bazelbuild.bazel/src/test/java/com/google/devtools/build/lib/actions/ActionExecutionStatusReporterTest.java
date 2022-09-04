@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.actions;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.when;
 
 import com.google.common.base.Splitter;
@@ -23,24 +24,52 @@ import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
-import com.google.devtools.build.lib.testutil.ManualClock;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import com.google.devtools.build.lib.util.Clock;
+import com.google.devtools.build.lib.util.Preconditions;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
 
-/** Test for the {@link ActionExecutionStatusReporter} class. */
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+/**
+ * Test for the {@link ActionExecutionStatusReporter} class.
+ */
 @RunWith(JUnit4.class)
 public class ActionExecutionStatusReporterTest {
+  private static final class MockClock implements Clock {
+    private long millis = 0;
+
+    public void advance() {
+      advanceBy(1000);
+    }
+
+    public void advanceBy(long millis) {
+      Preconditions.checkArgument(millis > 0);
+      this.millis += millis;
+    }
+
+    @Override
+    public long currentTimeMillis() {
+      return millis;
+    }
+
+    @Override
+    public long nanoTime() {
+      // There's no reason to use a nanosecond-precision for a mock clock.
+      return millis * 1000000L;
+    }
+  }
 
   private EventCollectionApparatus events;
   private ActionExecutionStatusReporter statusReporter;
   private EventBus eventBus;
-  private ManualClock clock = new ManualClock();
+  private MockClock clock = new MockClock();
 
   private Action mockAction(String progressMessage) {
     Action action = Mockito.mock(Action.class);
@@ -69,32 +98,18 @@ public class ActionExecutionStatusReporterTest {
   private void verifyOutput(String... lines) throws Exception {
     events.clear();
     statusReporter.showCurrentlyExecutingActions("");
-    assertThat(
-            Splitter.on('\n')
-                .omitEmptyStrings()
-                .trimResults()
-                .split(
-                    Iterables.getOnlyElement(events.collector())
-                        .getMessage()
-                        .replaceAll(" +", " ")))
-        .containsExactlyElementsIn(Arrays.asList(lines))
-        .inOrder();
+    assertThat(Splitter.on('\n').omitEmptyStrings().trimResults().split(
+        Iterables.getOnlyElement(events.collector()).getMessage().replaceAll(" +", " ")))
+        .containsExactlyElementsIn(Arrays.asList(lines)).inOrder();
   }
 
   private void verifyWarningOutput(String... lines) throws Exception {
     events.setFailFast(false);
     events.clear();
     statusReporter.warnAboutCurrentlyExecutingActions();
-    assertThat(
-            Splitter.on('\n')
-                .omitEmptyStrings()
-                .trimResults()
-                .split(
-                    Iterables.getOnlyElement(events.collector())
-                        .getMessage()
-                        .replaceAll(" +", " ")))
-        .containsExactlyElementsIn(Arrays.asList(lines))
-        .inOrder();
+    assertThat(Splitter.on('\n').omitEmptyStrings().trimResults().split(
+        Iterables.getOnlyElement(events.collector()).getMessage().replaceAll(" +", " ")))
+        .containsExactlyElementsIn(Arrays.asList(lines)).inOrder();
   }
 
   @Test
@@ -102,12 +117,12 @@ public class ActionExecutionStatusReporterTest {
     verifyNoOutput();
     verifyWarningOutput("There are no active jobs - stopping the build");
     setPreparing(mockAction("action1"));
-    clock.advanceMillis(1000);
+    clock.advance();
     verifyWarningOutput("Still waiting for unfinished jobs");
     setScheduling(mockAction("action2"));
-    clock.advanceMillis(1000);
+    clock.advance();
     setRunning(mockAction("action3"), "remote");
-    clock.advanceMillis(1000);
+    clock.advance();
     setRunning(mockAction("action4"), "something else");
     verifyOutput("Still waiting for 4 jobs to complete:",
         "Preparing:", "action1, 3 s",
@@ -126,16 +141,16 @@ public class ActionExecutionStatusReporterTest {
     Action action = mockAction("action1");
     verifyNoOutput();
     setPreparing(action);
-    clock.advanceMillis(1200);
+    clock.advanceBy(1200);
     verifyOutput("Still waiting for 1 job to complete:", "Preparing:", "action1, 1 s");
-    clock.advanceMillis(5000);
+    clock.advanceBy(5000);
 
     setScheduling(action);
-    clock.advanceMillis(1200);
+    clock.advanceBy(1200);
     // Only started *scheduling* 1200 ms ago, not 6200 ms ago.
     verifyOutput("Still waiting for 1 job to complete:", "Scheduling:", "action1, 1 s");
     setRunning(action, "remote");
-    clock.advanceMillis(3000);
+    clock.advanceBy(3000);
     // Only started *running* 3000 ms ago, not 4200 ms ago.
     verifyOutput("Still waiting for 1 job to complete:", "Running (remote):", "action1, 3 s");
     statusReporter.remove(action);
@@ -147,15 +162,15 @@ public class ActionExecutionStatusReporterTest {
     Action action = mockAction("action1");
     verifyNoOutput();
     setPreparing(action);
-    clock.advanceMillis(1000);
+    clock.advance();
     verifyOutput("Still waiting for 1 job to complete:", "Preparing:", "action1, 1 s");
     setScheduling(action);
-    clock.advanceMillis(1000);
+    clock.advance();
     verifyOutput("Still waiting for 1 job to complete:", "Scheduling:", "action1, 1 s");
     setRunning(action, "remote");
-    clock.advanceMillis(1000);
+    clock.advance();
     verifyOutput("Still waiting for 1 job to complete:", "Running (remote):", "action1, 1 s");
-    clock.advanceMillis(1000);
+    clock.advance();
 
     eventBus.post(ActionStatusMessage.analysisStrategy(action));
     // Locality strategy was changed, so timer was reset to 0 s.
@@ -173,7 +188,7 @@ public class ActionExecutionStatusReporterTest {
 
     for (Action a : actions) {
       setScheduling(a);
-      clock.advanceMillis(1000);
+      clock.advance();
     }
 
     verifyOutput("Still waiting for 6 jobs to complete:",
@@ -183,7 +198,7 @@ public class ActionExecutionStatusReporterTest {
 
     for (Action a : actions) {
       setRunning(a, a.getProgressMessage().startsWith("remote") ? "remote" : "something else");
-      clock.advanceMillis(2000);
+      clock.advanceBy(2000);
     }
 
     // Timers got reset because now they are no longer scheduling but running.
@@ -205,7 +220,7 @@ public class ActionExecutionStatusReporterTest {
       Action a = mockAction("a" + i);
       actions.add(a);
       setScheduling(a);
-      clock.advanceMillis(1000);
+      clock.advance();
     }
     verifyOutput("Still waiting for 100 jobs to complete:", "Scheduling:",
         "a1, 100 s", "a2, 99 s", "a3, 98 s", "a4, 97 s", "a5, 96 s",
@@ -213,7 +228,7 @@ public class ActionExecutionStatusReporterTest {
 
     for (int i = 0; i < 5; i++) {
       setRunning(actions.get(i), "something else");
-      clock.advanceMillis(1000);
+      clock.advance();
     }
     verifyOutput("Still waiting for 100 jobs to complete:",
         "Running (something else):", "a1, 5 s", "a2, 4 s", "a3, 3 s", "a4, 2 s", "a5, 1 s",
@@ -225,13 +240,13 @@ public class ActionExecutionStatusReporterTest {
   public void testOrdering() throws Exception {
     verifyNoOutput();
     setScheduling(mockAction("a1"));
-    clock.advanceMillis(1000);
+    clock.advance();
     setPreparing(mockAction("b1"));
-    clock.advanceMillis(1000);
+    clock.advance();
     setPreparing(mockAction("b2"));
-    clock.advanceMillis(1000);
+    clock.advance();
     setScheduling(mockAction("a2"));
-    clock.advanceMillis(1000);
+    clock.advance();
     verifyOutput("Still waiting for 4 jobs to complete:",
         "Preparing:", "b1, 3 s", "b2, 2 s",
         "Scheduling:", "a1, 4 s", "a2, 1 s");
@@ -247,18 +262,18 @@ public class ActionExecutionStatusReporterTest {
   @Test
   public void testWaitTimeCalculation() throws Exception {
     // --progress_report_interval=0
-    assertThat(ActionExecutionStatusReporter.getWaitTime(0, 0)).isEqualTo(10);
-    assertThat(ActionExecutionStatusReporter.getWaitTime(0, 10)).isEqualTo(30);
-    assertThat(ActionExecutionStatusReporter.getWaitTime(0, 30)).isEqualTo(60);
-    assertThat(ActionExecutionStatusReporter.getWaitTime(0, 60)).isEqualTo(60);
+    assertEquals(10, ActionExecutionStatusReporter.getWaitTime(0, 0));
+    assertEquals(30, ActionExecutionStatusReporter.getWaitTime(0, 10));
+    assertEquals(60, ActionExecutionStatusReporter.getWaitTime(0, 30));
+    assertEquals(60, ActionExecutionStatusReporter.getWaitTime(0, 60));
 
     // --progress_report_interval=42
-    assertThat(ActionExecutionStatusReporter.getWaitTime(42, 0)).isEqualTo(42);
-    assertThat(ActionExecutionStatusReporter.getWaitTime(42, 42)).isEqualTo(42);
+    assertEquals(42, ActionExecutionStatusReporter.getWaitTime(42, 0));
+    assertEquals(42, ActionExecutionStatusReporter.getWaitTime(42, 42));
 
     // --progress_report_interval=30 (looks like one of the default timeout stages)
-    assertThat(ActionExecutionStatusReporter.getWaitTime(30, 0)).isEqualTo(30);
-    assertThat(ActionExecutionStatusReporter.getWaitTime(30, 30)).isEqualTo(30);
+    assertEquals(30, ActionExecutionStatusReporter.getWaitTime(30, 0));
+    assertEquals(30, ActionExecutionStatusReporter.getWaitTime(30, 30));
   }
 
   private void setScheduling(ActionExecutionMetadata action) {

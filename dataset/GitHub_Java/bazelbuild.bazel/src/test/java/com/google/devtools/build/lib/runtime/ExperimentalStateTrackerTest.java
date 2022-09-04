@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionCompletionEvent;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
-import com.google.devtools.build.lib.actions.ActionLookupData;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionStartedEvent;
 import com.google.devtools.build.lib.actions.ActionStatusMessage;
@@ -58,7 +57,7 @@ import org.mockito.Mockito;
 public class ExperimentalStateTrackerTest extends FoundationTestCase {
 
   private Action mockAction(String progressMessage, String primaryOutput) {
-    Path path = outputBase.getRelative(PathFragment.create(primaryOutput));
+    Path path = outputBase.getRelative(new PathFragment(primaryOutput));
     Artifact artifact = new Artifact(path, Root.asSourceRoot(path));
 
     Action action = Mockito.mock(Action.class);
@@ -146,8 +145,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
     ExperimentalStateTracker stateTracker = new ExperimentalStateTracker(clock);
     stateTracker.actionStarted(new ActionStartedEvent(fastAction, 123456789));
     stateTracker.actionStarted(new ActionStartedEvent(slowAction, 123456999));
-    stateTracker.actionCompletion(
-        new ActionCompletionEvent(20, fastAction, Mockito.mock(ActionLookupData.class)));
+    stateTracker.actionCompletion(new ActionCompletionEvent(20, fastAction));
 
     LoggingTerminalWriter terminalWriter = new LoggingTerminalWriter(/*discardHighlight=*/ true);
     stateTracker.writeProgressBar(terminalWriter);
@@ -424,7 +422,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
     String primaryOutput = "some/path/to/a/file";
 
     ManualClock clock = new ManualClock();
-    Path path = outputBase.getRelative(PathFragment.create(primaryOutput));
+    Path path = outputBase.getRelative(new PathFragment(primaryOutput));
     Artifact artifact = new Artifact(path, Root.asSourceRoot(path));
     ActionExecutionMetadata actionMetadata = Mockito.mock(ActionExecutionMetadata.class);
     when(actionMetadata.getOwner()).thenReturn(Mockito.mock(ActionOwner.class));
