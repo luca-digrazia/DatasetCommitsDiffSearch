@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.SourceManifestAction;
 import com.google.devtools.build.lib.analysis.SourceManifestAction.ManifestType;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkTreeAction;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -53,15 +52,6 @@ import javax.annotation.Nullable;
 public final class NativeLibs {
   public static final NativeLibs EMPTY = new NativeLibs(ImmutableMap.of(), null);
 
-  private static String getLibDirName(ConfiguredTargetAndData dep) {
-    BuildConfiguration configuration = dep.getConfiguration();
-    String name = configuration.getFragment(AndroidConfiguration.class).getCpu();
-    if (configuration.getFragment(AndroidConfiguration.class).isHwasan()) {
-      name += "-hwasan";
-    }
-    return name;
-  }
-
   public static NativeLibs fromLinkedNativeDeps(
       RuleContext ruleContext,
       ImmutableList<String> depsAttributes,
@@ -71,7 +61,9 @@ public final class NativeLibs {
     Map<String, ConfiguredTargetAndData> toolchainsByLibDir = new LinkedHashMap<>();
     for (ConfiguredTargetAndData toolchainDep :
         ruleContext.getConfiguredTargetAndDataMap().get("$cc_toolchain_split")) {
-      toolchainsByLibDir.put(getLibDirName(toolchainDep), toolchainDep);
+      toolchainsByLibDir.put(
+          toolchainDep.getConfiguration().getFragment(AndroidConfiguration.class).getCpu(),
+          toolchainDep);
     }
 
     // treeKeys() means that the resulting map sorts the entries by key, which is necessary to
@@ -81,7 +73,8 @@ public final class NativeLibs {
     for (String depsAttr : depsAttributes) {
       for (ConfiguredTargetAndData dep :
           ruleContext.getConfiguredTargetAndDataMap().get(depsAttr)) {
-        depsByLibDir.put(getLibDirName(dep), dep);
+        depsByLibDir.put(
+            dep.getConfiguration().getFragment(AndroidConfiguration.class).getCpu(), dep);
       }
     }
 
