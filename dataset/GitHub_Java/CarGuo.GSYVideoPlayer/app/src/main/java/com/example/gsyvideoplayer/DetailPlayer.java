@@ -10,24 +10,17 @@ import android.widget.ImageView;
 import android.widget.RelativeLayout;
 
 import com.example.gsyvideoplayer.listener.SampleListener;
-import com.example.gsyvideoplayer.video.LandLayoutVideo;
 import com.shuyu.gsyvideoplayer.GSYPreViewManager;
-import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.GSYVideoPlayer;
 
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
-import com.shuyu.gsyvideoplayer.model.VideoOptionModel;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
 import com.shuyu.gsyvideoplayer.video.CustomGSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 
 
-import java.util.ArrayList;
-import java.util.List;
-
 import butterknife.BindView;
 import butterknife.ButterKnife;
-import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 
 
 public class DetailPlayer extends AppCompatActivity {
@@ -38,7 +31,7 @@ public class DetailPlayer extends AppCompatActivity {
     //推荐使用StandardGSYVideoPlayer，功能一致
     //CustomGSYVideoPlayer部分功能处于试验阶段
     @BindView(R.id.detail_player)
-    LandLayoutVideo detailPlayer;
+    CustomGSYVideoPlayer detailPlayer;
 
     @BindView(R.id.activity_detail_player)
     RelativeLayout activityDetailPlayer;
@@ -55,18 +48,8 @@ public class DetailPlayer extends AppCompatActivity {
         ButterKnife.bind(this);
 
         String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
-        //String url = "http://pl-ali.youku.com/playlist/m3u8?type=mp4&ts=1490185963&keyframe=0&vid=XMjYxOTQ1Mzg2MA==&ep=ciadGkiFU8cF4SvajD8bYyuwJiYHXJZ3rHbN%2FrYDAcZuH%2BrC6DPcqJ21TPs%3D&sid=04901859548541247bba8&token=0524&ctype=12&ev=1&oip=976319194";
-        //String url = "http://hls.ciguang.tv/hdtv/video.m3u8";
-        //String url = "https://res.exexm.com/cw_145225549855002";
-        detailPlayer.setUp(url, false, null, "测试视频");
-
-        /*VideoOptionModel videoOptionModel =
-                new VideoOptionModel(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "framedrop", 50);
-        List<VideoOptionModel> list = new ArrayList<>();
-        list.add(videoOptionModel);
-        GSYVideoManager.instance().setOptionModelList(list);*/
-
-        GSYVideoManager.instance().setTimeOut(4000, true);
+        //String url = "https://d131x7vzzf85jg.cloudfront.net/upload/documents/paper/b2/61/00/00/20160420_115018_b544.mp4";
+        detailPlayer.setUp(url, true, null, "测试视频");
 
         //增加封面
         ImageView imageView = new ImageView(this);
@@ -87,7 +70,7 @@ public class DetailPlayer extends AppCompatActivity {
         detailPlayer.setLockLand(false);
         detailPlayer.setShowFullAnimation(false);
         detailPlayer.setNeedLockFull(true);
-        detailPlayer.setOpenPreView(false);
+        //detailPlayer.setOpenPreView(true);
         detailPlayer.getFullscreenButton().setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
