@@ -13,9 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.ArrayList;
 import java.util.Objects;
 
@@ -91,8 +91,7 @@ public final class AdvertisedProviderSet {
     if (canHaveAnyProvider()) {
       return "Any Provider";
     }
-    return String.format(
-        "allowed native providers=%s, allowed Starlark providers=%s",
+    return String.format("allowed native providers=%s, allowed skylark providers=%s",
         getNativeProviders(), getSkylarkProviders());
   }
 
@@ -120,28 +119,6 @@ public final class AdvertisedProviderSet {
 
   public static Builder builder() {
     return new Builder();
-  }
-
-  /**
-   * Returns {@code true} if this provider set can have any provider, or if it advertises the
-   * specific native provider requested.
-   */
-  public boolean advertises(Class<?> nativeProviderClass) {
-    if (canHaveAnyProvider()) {
-      return true;
-    }
-    return nativeProviders.contains(nativeProviderClass);
-  }
-
-  /**
-   * Returns {@code true} if this provider set can have any provider, or if it advertises the
-   * specific skylark provider requested.
-   */
-  public boolean advertises(SkylarkProviderIdentifier skylarkProvider) {
-    if (canHaveAnyProvider()) {
-      return true;
-    }
-    return skylarkProviders.contains(skylarkProvider);
   }
 
   /** Builder for {@link AdvertisedProviderSet} */
