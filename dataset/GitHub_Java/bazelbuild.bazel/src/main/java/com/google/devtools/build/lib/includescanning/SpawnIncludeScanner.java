@@ -195,11 +195,6 @@ public class SpawnIncludeScanner {
     }
 
     @Override
-    public ImmutableMap<String, String> getExecProperties() {
-      return actionExecutionMetadata.getExecProperties();
-    }
-
-    @Override
     @Nullable
     public PlatformInfo getExecutionPlatform() {
       return actionExecutionMetadata.getExecutionPlatform();
@@ -283,9 +278,8 @@ public class SpawnIncludeScanner {
       ActionExecutionContext actionExecutionContext,
       Artifact grepIncludes,
       GrepIncludesFileType fileType,
-      boolean isOutputFile)
+      boolean placeNextToFile)
       throws IOException, ExecException, InterruptedException {
-    boolean placeNextToFile = isOutputFile && !file.hasParent();
     Path output = getIncludesOutput(file, actionExecutionContext.getPathResolver(), fileType,
         placeNextToFile);
     if (!inMemoryOutput) {

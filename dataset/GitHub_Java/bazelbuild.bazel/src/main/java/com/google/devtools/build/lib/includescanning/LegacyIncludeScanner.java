@@ -859,18 +859,16 @@ public class LegacyIncludeScanner implements IncludeScanner {
         Hints hints = parser.getHints();
         if (hints != null) {
           // Follow "path" hints.
-          if (!pathHints.isEmpty()) {
-            result =
-                Futures.transformAsync(
-                    result, (v) -> processBulkAsync(pathHints, includes), includePool);
-          }
+          result =
+              Futures.transformAsync(
+                  result, (v) -> processBulkAsync(pathHints, includes), includePool);
 
-          Collection<Artifact> allHintedIncludes = allHintedIncludes(hints, sources);
-          if (!allHintedIncludes.isEmpty()) {
-            result =
-                Futures.transformAsync(
-                    result, (v) -> processBulkAsync(allHintedIncludes, includes), includePool);
-          }
+          result =
+              Futures.transformAsync(
+                  result,
+                  (v) -> processAllFileLevelHintsAsync(hints, sources, includes),
+                  includePool);
+
           // Follow "file" hints for all included headers, transitively.
           result =
               Futures.transformAsync(
@@ -1081,15 +1079,23 @@ public class LegacyIncludeScanner implements IncludeScanner {
     private ListenableFuture<?> processAllFileLevelHintsAsync(
         Hints hints, Collection<Artifact> sources, Set<Artifact> alsoVisited)
         throws InterruptedException, IOException, ExecException {
-      return processBulkAsync(allHintedIncludes(hints, sources), alsoVisited);
+      List<ListenableFuture<?>> allFutures = new ArrayList<>();
+      // Follow "file" hints for the primary sources.
+      for (Artifact source : sources) {
+        allFutures.add(processFileLevelHintsAsync(hints, source, alsoVisited));
+      }
+      return Futures.allAsList(allFutures);
     }
 
-    private Collection<Artifact> allHintedIncludes(Hints hints, Collection<Artifact> sources) {
-      List<Artifact> result = new ArrayList<>();
-      for (Artifact source : sources) {
-        result.addAll(hints.getFileLevelHintedInclusionsLegacy(source));
+    private ListenableFuture<?> processFileLevelHintsAsync(
+        final Hints hints, final Artifact include, final Set<Artifact> alsoVisited)
+        throws InterruptedException, IOException, ExecException {
+      Collection<Artifact> sources = hints.getFileLevelHintedInclusionsLegacy(include);
+      // Early-out if there's nothing to do to avoid enqueuing a closure
+      if (sources.isEmpty()) {
+        return Futures.immediateFuture(null);
       }
-      return result;
+      return processBulkAsync(sources, alsoVisited);
     }
   }
 

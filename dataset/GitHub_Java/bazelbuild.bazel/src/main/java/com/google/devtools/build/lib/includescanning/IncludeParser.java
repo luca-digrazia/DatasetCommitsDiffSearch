@@ -843,16 +843,13 @@ class IncludeParser {
       Artifact file,
       ActionExecutionMetadata actionExecutionMetadata,
       ActionExecutionContext actionExecutionContext,
-      @Nullable Artifact grepIncludes,
+      Artifact grepIncludes,
       @Nullable SpawnIncludeScanner remoteIncludeScanner,
       boolean isOutputFile)
       throws IOException, ExecException, InterruptedException {
     Collection<Inclusion> inclusions;
 
-    // TODO(ulfjack): grepIncludes may be null if the corresponding attribute on the rule is missing
-    //  (see CppHelper.getGrepIncludes) or misspelled. It would be better to disallow this case.
     if (remoteIncludeScanner != null
-        && grepIncludes != null
         && remoteIncludeScanner.shouldParseRemotely(file, actionExecutionContext)) {
       inclusions =
           remoteIncludeScanner.extractInclusions(
@@ -869,7 +866,7 @@ class IncludeParser {
             extractInclusions(
                 FileSystemUtils.readContent(actionExecutionContext.getInputPath(file)));
       } catch (IOException e) {
-        if (remoteIncludeScanner != null && grepIncludes != null) {
+        if (remoteIncludeScanner != null) {
           logger.log(
               Level.WARNING,
               "Falling back on remote parsing of " + actionExecutionContext.getInputPath(file),
