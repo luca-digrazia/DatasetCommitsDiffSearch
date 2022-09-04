@@ -1,22 +1,21 @@
-/**
- * This file is part of Graylog.
+/*
+ * Copyright (C) 2020 Graylog, Inc.
  *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
  */
 package org.graylog2.indexer.retention.strategies;
 
-import com.google.common.collect.Sets;
 import org.graylog2.indexer.IndexSet;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.plugin.indexer.retention.RetentionStrategyConfig;
@@ -33,6 +32,7 @@ import org.mockito.junit.MockitoRule;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -63,17 +63,16 @@ public class AbstractIndexCountBasedRetentionStrategyTest {
 
     @Before
     public void setUp() throws Exception {
-        indexMap = new HashMap<String, Set<String>>() {{
-            put("index1", Collections.emptySet());
-            put("index2", Collections.emptySet());
-            put("index3", Collections.emptySet());
-            put("index4", Collections.emptySet());
-            put("index5", Collections.emptySet());
-            put("index6", Collections.emptySet());
-        }};
+        indexMap = new HashMap<>();
+        indexMap.put("index1", Collections.emptySet());
+        indexMap.put("index2", Collections.emptySet());
+        indexMap.put("index3", Collections.emptySet());
+        indexMap.put("index4", Collections.emptySet());
+        indexMap.put("index5", Collections.emptySet());
+        indexMap.put("index6", Collections.emptySet());
 
-        when(indexSet.getAllDeflectorAliases()).thenReturn(indexMap);
-        when(indexSet.getManagedIndicesNames()).thenReturn(indexMap.keySet().stream().toArray(String[]::new));
+        when(indexSet.getAllIndexAliases()).thenReturn(indexMap);
+        when(indexSet.getManagedIndices()).thenReturn(indexMap.keySet().stream().toArray(String[]::new));
         when(indexSet.extractIndexNumber(anyString())).then(this::extractIndexNumber);
 
         retentionStrategy = spy(new AbstractIndexCountBasedRetentionStrategy(indices, activityWriter) {
@@ -83,7 +82,7 @@ public class AbstractIndexCountBasedRetentionStrategyTest {
             }
 
             @Override
-            protected void retain(String indexName, IndexSet indexSet) {
+            protected void retain(List<String> indexName, IndexSet indexSet) {
 
             }
 
@@ -106,9 +105,9 @@ public class AbstractIndexCountBasedRetentionStrategyTest {
     public void shouldRetainOldestIndex() throws Exception {
         retentionStrategy.retain(indexSet);
 
-        final ArgumentCaptor<String> retainedIndexName = ArgumentCaptor.forClass(String.class);
+        final ArgumentCaptor<List> retainedIndexName = ArgumentCaptor.forClass(List.class);
         verify(retentionStrategy, times(1)).retain(retainedIndexName.capture(), eq(indexSet));
-        assertThat(retainedIndexName.getValue()).isEqualTo("index1");
+        assertThat(retainedIndexName.getValue()).containsExactly("index1");
 
         verify(activityWriter, times(2)).write(any(Activity.class));
     }
@@ -119,11 +118,12 @@ public class AbstractIndexCountBasedRetentionStrategyTest {
 
         retentionStrategy.retain(indexSet);
 
-        final ArgumentCaptor<String> retainedIndexName = ArgumentCaptor.forClass(String.class);
-        verify(retentionStrategy, times(2)).retain(retainedIndexName.capture(), eq(indexSet));
-        assertThat(retainedIndexName.getAllValues()).contains("index1", "index2");
+        final ArgumentCaptor<List> retainedIndexName = ArgumentCaptor.forClass(List.class);
+        verify(retentionStrategy, times(1)).retain(retainedIndexName.capture(), eq(indexSet));
+        // Ensure that the oldest indices come first
+        assertThat(retainedIndexName.getAllValues().get(0)).containsExactly("index1", "index2");
 
-        verify(activityWriter, times(3)).write(any(Activity.class));
+        verify(activityWriter, times(2)).write(any(Activity.class));
     }
 
     @Test
@@ -132,7 +132,7 @@ public class AbstractIndexCountBasedRetentionStrategyTest {
 
         retentionStrategy.retain(indexSet);
 
-        verify(retentionStrategy, never()).retain(anyString(), eq(indexSet));
+        verify(retentionStrategy, never()).retain(any(List.class), eq(indexSet));
 
         verify(activityWriter, never()).write(any(Activity.class));
     }
@@ -144,9 +144,9 @@ public class AbstractIndexCountBasedRetentionStrategyTest {
 
         retentionStrategy.retain(indexSet);
 
-        final ArgumentCaptor<String> retainedIndexName = ArgumentCaptor.forClass(String.class);
+        final ArgumentCaptor<List> retainedIndexName = ArgumentCaptor.forClass(List.class);
         verify(retentionStrategy, times(1)).retain(retainedIndexName.capture(), eq(indexSet));
-        assertThat(retainedIndexName.getValue()).isEqualTo("index2");
+        assertThat(retainedIndexName.getValue()).containsExactly("index2");
 
         verify(activityWriter, times(2)).write(any(Activity.class));
     }
@@ -157,13 +157,13 @@ public class AbstractIndexCountBasedRetentionStrategyTest {
         final String writeIndexAlias = "WriteIndexAlias";
 
         when(indexSet.getWriteIndexAlias()).thenReturn(writeIndexAlias);
-        indexMap.put(indexWithWriteIndexAlias, Sets.newHashSet(writeIndexAlias));
+        indexMap.put(indexWithWriteIndexAlias, Collections.singleton(writeIndexAlias));
 
         retentionStrategy.retain(indexSet);
 
-        final ArgumentCaptor<String> retainedIndexName = ArgumentCaptor.forClass(String.class);
+        final ArgumentCaptor<List> retainedIndexName = ArgumentCaptor.forClass(List.class);
         verify(retentionStrategy, times(1)).retain(retainedIndexName.capture(), eq(indexSet));
-        assertThat(retainedIndexName.getValue()).isEqualTo("index2");
+        assertThat(retainedIndexName.getValue()).containsExactly("index2");
 
         verify(activityWriter, times(2)).write(any(Activity.class));
     }
