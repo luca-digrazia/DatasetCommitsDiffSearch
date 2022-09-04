@@ -285,21 +285,13 @@ public class HibernateOrmConfig {
         public boolean sql;
 
         /**
-         * Logs SQL bind parameter.
-         * <p>
-         * Setting it to true is obviously not recommended in production.
-         */
-        @ConfigItem(defaultValue = "false")
-        public boolean bindParam;
-
-        /**
          * Whether JDBC warnings should be collected and logged.
          */
         @ConfigItem(defaultValueDocumentation = "depends on dialect")
         public Optional<Boolean> jdbcWarnings;
 
         public boolean isAnyPropertySet() {
-            return sql || bindParam || jdbcWarnings.isPresent();
+            return sql || jdbcWarnings.isPresent();
         }
     }
 
