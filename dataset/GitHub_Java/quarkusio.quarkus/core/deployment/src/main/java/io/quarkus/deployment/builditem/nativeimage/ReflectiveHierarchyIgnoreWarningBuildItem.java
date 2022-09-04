@@ -14,11 +14,6 @@ public final class ReflectiveHierarchyIgnoreWarningBuildItem extends MultiBuildI
 
     private final Predicate<DotName> predicate;
 
-    // used by external extensions
-    public ReflectiveHierarchyIgnoreWarningBuildItem(DotName dotName) {
-        this.predicate = new DotNameExclusion(dotName);
-    }
-
     public ReflectiveHierarchyIgnoreWarningBuildItem(Predicate<DotName> predicate) {
         this.predicate = predicate;
     }
