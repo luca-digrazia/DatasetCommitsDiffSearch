@@ -110,7 +110,7 @@ final class WorkerPool {
   }
 
   private SimpleWorkerPool getPool(WorkerKey key) {
-    if (key.isMultiplex()) {
+    if (key.getProxied()) {
       return multiplexPools.getOrDefault(key.getMnemonic(), multiplexPools.get(""));
     } else {
       return workerPools.getOrDefault(key.getMnemonic(), workerPools.get(""));
