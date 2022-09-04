@@ -13,72 +13,63 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs;
 
+import com.google.devtools.build.lib.util.Preconditions;
 import java.io.InvalidObjectException;
 import java.io.ObjectInputStream;
 
 /**
  * Abstract base class for {@link PathFragment} instances that will be allocated when Blaze is run
- * on a Windows platform.
+ * on a non-Windows platform.
  */
-abstract class WindowsPathFragment extends PathFragment {
+abstract class UnixPathFragment extends PathFragment {
   static final Helper HELPER = new Helper();
+  /**
+    * We have two concrete subclasses with zero per-instance additional memory overhead. Do not add
+    * any fields. See the comment on memory use in PathFragment for details on the current
+    * per-instance memory usage.
+    */
 
-  protected final char driveLetter;
-
-  protected WindowsPathFragment(char driveLetter, String[] segments) {
+  protected UnixPathFragment(String[] segments) {
     super(segments);
-    this.driveLetter = driveLetter;
-  }
-
-  @Override
-  public String windowsVolume() {
-    return (driveLetter != '\0') ? driveLetter + ":" : "";
-  }
-
-  @Override
-  public char getDriveLetter() {
-    return driveLetter;
   }
 
   @Override
   protected int computeHashCode() {
     int h = 0;
     for (String segment : segments) {
-      int segmentHash = segment.toLowerCase().hashCode();
+      int segmentHash = segment.hashCode();
       h = h * 31 + segmentHash;
     }
     return h;
   }
 
+  @Override
+  public String windowsVolume() {
+    return "";
+  }
+
+  @Override
+  public char getDriveLetter() {
+    return '\0';
+  }
+
   private static class Helper extends PathFragment.Helper {
     private static final char SEPARATOR_CHAR = '/';
-    // TODO(laszlocsomor): Lots of internal PathFragment operations, e.g. getPathString, use the
-    // primary separator char and do not use this.
-    private static final char EXTRA_SEPARATOR_CHAR = '\\';
 
     @Override
     PathFragment create(String path) {
-      // TODO(laszlocsomor): Character#isLetter returns true for some non ASCII characters.
-      char driveLetter =
-          path.length() >= 2 && path.charAt(1) == ':' && Character.isLetter(path.charAt(0))
-              ? Character.toUpperCase(path.charAt(0))
-              : '\0';
-      if (driveLetter != '\0') {
-        path = path.substring(2);
-        // TODO(bazel-team): Decide what to do about non-absolute paths with a volume name, e.g.
-        // C:x.
-      }
       boolean isAbsolute = path.length() > 0 && isSeparator(path.charAt(0));
       return isAbsolute
-          ? new AbsoluteWindowsPathFragment(driveLetter, segment(path, 1))
-          : new RelativeWindowsPathFragment(driveLetter, segment(path, 0));
+          ? new AbsoluteUnixPathFragment(segment(path, 1))
+          : new RelativeUnixPathFragment(segment(path, 0));
     }
 
     @Override
     PathFragment createAlreadyInterned(char driveLetter, boolean isAbsolute, String[] segments) {
+      Preconditions.checkState(driveLetter == '\0', driveLetter);
       return isAbsolute
-          ? new AbsoluteWindowsPathFragment(driveLetter, segments)
-          : new RelativeWindowsPathFragment(driveLetter, segments);
+          ? new AbsoluteUnixPathFragment(segments)
+          : new RelativeUnixPathFragment(segments);
     }
 
     @Override
@@ -88,13 +79,12 @@ abstract class WindowsPathFragment extends PathFragment {
 
     @Override
     boolean isSeparator(char c) {
-      return c == SEPARATOR_CHAR || c == EXTRA_SEPARATOR_CHAR;
+      return c == SEPARATOR_CHAR;
     }
 
     @Override
     boolean containsSeparatorChar(String path) {
-      // TODO(laszlocsomor): This is inefficient.
-      return path.indexOf(SEPARATOR_CHAR) != -1 || path.indexOf(EXTRA_SEPARATOR_CHAR) != -1;
+      return path.indexOf(SEPARATOR_CHAR) != -1;
     }
 
     @Override
@@ -111,10 +101,6 @@ abstract class WindowsPathFragment extends PathFragment {
         if (seg1 == null) {
           continue;
         }
-        // TODO(laszlocsomor): The calls to String#toLowerCase are inefficient and potentially
-        // repeated too. Also, why not use String#equalsIgnoreCase.
-        seg1 = seg1.toLowerCase();
-        seg2 = seg2.toLowerCase();
         if (!seg1.equals(seg2)) {
           return false;
         }
@@ -127,19 +113,15 @@ abstract class WindowsPathFragment extends PathFragment {
       if (pathFragment1.isAbsolute() != pathFragment2.isAbsolute()) {
         return pathFragment1.isAbsolute() ? -1 : 1;
       }
-      int cmp = Character.compare(pathFragment1.getDriveLetter(), pathFragment2.getDriveLetter());
-      if (cmp != 0) {
-        return cmp;
-      }
       String[] segments1 = pathFragment1.segments();
       String[] segments2 = pathFragment2.segments();
       int len1 = segments1.length;
       int len2 = segments2.length;
       int n = Math.min(len1, len2);
       for (int i = 0; i < n; i++) {
-        String seg1 = segments1[i].toLowerCase();
-        String seg2 = segments2[i].toLowerCase();
-        cmp = seg1.compareTo(seg2);
+        String seg1 = segments1[i];
+        String seg2 = segments2[i];
+        int cmp = seg1.compareTo(seg2);
         if (cmp != 0) {
           return cmp;
         }
@@ -148,9 +130,9 @@ abstract class WindowsPathFragment extends PathFragment {
     }
   }
 
-  private static final class AbsoluteWindowsPathFragment extends WindowsPathFragment {
-    private AbsoluteWindowsPathFragment(char driveLetter, String[] segments) {
-      super(driveLetter, segments);
+  private static final class AbsoluteUnixPathFragment extends UnixPathFragment {
+    private AbsoluteUnixPathFragment(String[] segments) {
+      super(segments);
     }
 
     @Override
@@ -162,22 +144,19 @@ abstract class WindowsPathFragment extends PathFragment {
     protected int computeHashCode() {
       int h = Boolean.TRUE.hashCode();
       h = h * 31 + super.computeHashCode();
-      h = h * 31 + Character.valueOf(getDriveLetter()).hashCode();
       return h;
     }
 
     @Override
     public boolean equals(Object other) {
-      if (!(other instanceof AbsoluteWindowsPathFragment)) {
+      if (!(other instanceof AbsoluteUnixPathFragment)) {
         return false;
       }
       if (this == other) {
         return true;
       }
-      AbsoluteWindowsPathFragment otherAbsoluteWindowsPathFragment =
-          (AbsoluteWindowsPathFragment) other;
-      return this.driveLetter == otherAbsoluteWindowsPathFragment.driveLetter
-          && HELPER.segmentsEqual(this.segments, otherAbsoluteWindowsPathFragment.segments);
+      AbsoluteUnixPathFragment otherAbsoluteUnixPathFragment = (AbsoluteUnixPathFragment) other;
+      return HELPER.segmentsEqual(this.segments, otherAbsoluteUnixPathFragment.segments);
     }
 
     // Java serialization looks for the presence of this method in the concrete class. It is not
@@ -195,9 +174,9 @@ abstract class WindowsPathFragment extends PathFragment {
     }
   }
 
-  private static final class RelativeWindowsPathFragment extends WindowsPathFragment {
-    private RelativeWindowsPathFragment(char driveLetter, String[] segments) {
-      super(driveLetter, segments);
+  private static final class RelativeUnixPathFragment extends UnixPathFragment {
+    private RelativeUnixPathFragment(String[] segments) {
+      super(segments);
     }
 
     @Override
@@ -209,30 +188,19 @@ abstract class WindowsPathFragment extends PathFragment {
     protected int computeHashCode() {
       int h = Boolean.FALSE.hashCode();
       h = h * 31 + super.computeHashCode();
-      if (!isEmpty()) {
-        h = h * 31 + Character.valueOf(getDriveLetter()).hashCode();
-      }
       return h;
     }
 
     @Override
     public boolean equals(Object other) {
-      if (!(other instanceof RelativeWindowsPathFragment)) {
+      if (!(other instanceof RelativeUnixPathFragment)) {
         return false;
       }
       if (this == other) {
         return true;
       }
-      RelativeWindowsPathFragment otherRelativeWindowsPathFragment =
-          (RelativeWindowsPathFragment) other;
-      return isEmpty() && otherRelativeWindowsPathFragment.isEmpty()
-          ? true
-          : this.driveLetter == otherRelativeWindowsPathFragment.driveLetter
-              && HELPER.segmentsEqual(this.segments, otherRelativeWindowsPathFragment.segments);
-    }
-
-    private boolean isEmpty() {
-      return segmentCount() == 0;
+      RelativeUnixPathFragment otherRelativeUnixPathFragment = (RelativeUnixPathFragment) other;
+      return HELPER.segmentsEqual(this.segments, otherRelativeUnixPathFragment.segments);
     }
 
     // Java serialization looks for the presence of this method in the concrete class. It is not
