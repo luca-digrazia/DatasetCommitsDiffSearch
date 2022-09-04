@@ -158,15 +158,15 @@ final class RemoteSpawnCache implements SpawnCache {
                   .build();
           return SpawnCache.success(spawnResult);
         }
-      } catch (CacheNotFoundException e) {
-        // Intentionally left blank
       } catch (IOException e) {
-        String errorMsg = e.getMessage();
-        if (isNullOrEmpty(errorMsg)) {
+        if (!AbstractRemoteActionCache.causedByCacheMiss(e)) {
+          String errorMsg = e.getMessage();
+          if (isNullOrEmpty(errorMsg)) {
             errorMsg = e.getClass().getSimpleName();
-        }
+          }
           errorMsg = "Reading from Remote Cache:\n" + errorMsg;
           report(Event.warn(errorMsg));
+        }
       } finally {
         withMetadata.detach(previous);
       }
