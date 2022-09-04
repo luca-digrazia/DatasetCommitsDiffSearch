@@ -29,7 +29,7 @@ public class GoldenCase {
 
   @SkylarkCallable(
     name = "struct_field_method",
-    documented = false,
+    doc = "",
     structField = true)
   public String structFieldMethod() {
     return "foo";
@@ -37,7 +37,7 @@ public class GoldenCase {
 
   @SkylarkCallable(
     name = "struct_field_method_with_info",
-    documented = false,
+    doc = "",
     structField = true,
     useSkylarkSemantics = true
   )
@@ -47,20 +47,19 @@ public class GoldenCase {
 
   @SkylarkCallable(
     name = "zero_arg_method",
-    documented = false)
+    doc = "")
   public Integer zeroArgMethod() {
     return 0;
   }
 
-  @SkylarkCallable(name = "zero_arg_method_with_environment", documented = false,
-      useEnvironment = true)
+  @SkylarkCallable(name = "zero_arg_method_with_environment", doc = "", useEnvironment = true)
   public Integer zeroArgMethod(Environment environment) {
     return 0;
   }
 
   @SkylarkCallable(
     name = "zero_arg_method_with_skylark_info",
-    documented = false,
+    doc = "",
     useAst = true,
     useLocation = true,
     useEnvironment = true,
@@ -76,19 +75,19 @@ public class GoldenCase {
 
   @SkylarkCallable(
     name = "three_arg_method",
-    documented = false)
+    doc = "")
   public String threeArgMethod(String one, Integer two, String three) {
     return "bar";
   }
 
-  @SkylarkCallable(name = "three_arg_method_with_ast", documented = false, useAst = true)
+  @SkylarkCallable(name = "three_arg_method_with_ast", doc = "", useAst = true)
   public String threeArgMethod(String one, Integer two, String three, FuncallExpression ast) {
     return "bar";
   }
 
   @SkylarkCallable(
     name = "three_arg_method_with_params",
-    documented = false,
+    doc = "",
     parameters = {
       @Param(name = "one", type = String.class, named = true),
       @Param(name = "two", type = Integer.class, named = true),
@@ -105,7 +104,7 @@ public class GoldenCase {
 
   @SkylarkCallable(
     name = "three_arg_method_with_params_and_info",
-    documented = false,
+    doc = "",
     parameters = {
       @Param(name = "one", type = String.class, named = true),
       @Param(name = "two", type = Integer.class, named = true),
