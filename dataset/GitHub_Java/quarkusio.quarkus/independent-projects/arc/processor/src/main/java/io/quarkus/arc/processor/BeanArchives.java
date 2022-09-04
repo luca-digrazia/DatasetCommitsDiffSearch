@@ -1,5 +1,9 @@
 package io.quarkus.arc.processor;
 
+import io.quarkus.arc.Lock;
+import io.quarkus.arc.impl.ActivateRequestContextInterceptor;
+import io.quarkus.arc.impl.InjectableRequestContextController;
+import io.quarkus.arc.impl.LockInterceptor;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Modifier;
@@ -10,17 +14,17 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-
 import javax.enterprise.context.BeforeDestroyed;
 import javax.enterprise.context.Destroyed;
 import javax.enterprise.context.Initialized;
 import javax.enterprise.context.control.ActivateRequestContext;
 import javax.enterprise.inject.Any;
 import javax.enterprise.inject.Default;
+import javax.enterprise.inject.Intercepted;
+import javax.enterprise.inject.Model;
 import javax.inject.Named;
-
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.CompositeIndex;
@@ -29,40 +33,29 @@ import org.jboss.jandex.Index;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Indexer;
 import org.jboss.jandex.Type;
-
-import io.quarkus.arc.ActivateRequestContextInterceptor;
+import org.jboss.logging.Logger;
 
 public final class BeanArchives {
 
+    private static final Logger LOGGER = Logger.getLogger(BeanArchives.class);
+
     /**
-     * 
+     *
      * @param applicationIndexes
      * @return the final bean archive index
      */
-    public static IndexView buildBeanArchiveIndex(IndexView... applicationIndexes) {
+    public static IndexView buildBeanArchiveIndex(ClassLoader deploymentClassLoader,
+            Map<DotName, Optional<ClassInfo>> persistentClassIndex,
+            IndexView... applicationIndexes) {
         List<IndexView> indexes = new ArrayList<>();
         Collections.addAll(indexes, applicationIndexes);
-        // Add CDI API builtin annotations if needed
-        if (!contains(DotNames.ANY, applicationIndexes)) {
-            indexes.add(buildCdiApiIndex());
-        }
-        if (!contains(DotName.createSimple(ActivateRequestContextInterceptor.class.getName()), applicationIndexes)) {
-            indexes.add(buildBuiltinIndex());
-        }
-        return new IndexWrapper(CompositeIndex.create(indexes));
+        indexes.add(buildAdditionalIndex());
+        return new IndexWrapper(CompositeIndex.create(indexes), deploymentClassLoader, persistentClassIndex);
     }
 
-    private static boolean contains(DotName className, IndexView... indexes) {
-        for (IndexView index : indexes) {
-            if (index.getClassByName(className) != null) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static IndexView buildCdiApiIndex() {
+    private static IndexView buildAdditionalIndex() {
         Indexer indexer = new Indexer();
+        // CDI API
         index(indexer, ActivateRequestContext.class.getName());
         index(indexer, Default.class.getName());
         index(indexer, Any.class.getName());
@@ -70,12 +63,13 @@ public final class BeanArchives {
         index(indexer, Initialized.class.getName());
         index(indexer, BeforeDestroyed.class.getName());
         index(indexer, Destroyed.class.getName());
-        return indexer.complete();
-    }
-
-    private static IndexView buildBuiltinIndex() {
-        Indexer indexer = new Indexer();
+        index(indexer, Intercepted.class.getName());
+        index(indexer, Model.class.getName());
+        index(indexer, Lock.class.getName());
+        // Arc built-in beans
         index(indexer, ActivateRequestContextInterceptor.class.getName());
+        index(indexer, InjectableRequestContextController.class.getName());
+        index(indexer, LockInterceptor.class.getName());
         return indexer.complete();
     }
 
@@ -84,13 +78,15 @@ public final class BeanArchives {
      */
     static class IndexWrapper implements IndexView {
 
-        private final Map<DotName, ClassInfo> additionalClasses;
-
         private final IndexView index;
+        private final ClassLoader deploymentClassLoader;
+        final Map<DotName, Optional<ClassInfo>> additionalClasses;
 
-        public IndexWrapper(IndexView index) {
+        public IndexWrapper(IndexView index, ClassLoader deploymentClassLoader,
+                Map<DotName, Optional<ClassInfo>> additionalClasses) {
             this.index = index;
-            this.additionalClasses = new ConcurrentHashMap<>();
+            this.deploymentClassLoader = deploymentClassLoader;
+            this.additionalClasses = additionalClasses;
         }
 
         @Override
@@ -100,15 +96,9 @@ public final class BeanArchives {
 
         @Override
         public ClassInfo getClassByName(DotName className) {
-            ClassInfo classInfo = index.getClassByName(className);
+            ClassInfo classInfo = IndexClassLookupUtils.getClassByName(index, className, false);
             if (classInfo == null) {
-                return additionalClasses.computeIfAbsent(className, name -> {
-                    BeanProcessor.LOGGER.debugf("Index: %s", className);
-                    Indexer indexer = new Indexer();
-                    BeanArchives.index(indexer, className.toString());
-                    Index index = indexer.complete();
-                    return index.getClassByName(name);
-                });
+                classInfo = additionalClasses.computeIfAbsent(className, this::computeAdditional).orElse(null);
             }
             return classInfo;
         }
@@ -119,9 +109,9 @@ public final class BeanArchives {
                 return index.getKnownDirectSubclasses(className);
             }
             Set<ClassInfo> directSubclasses = new HashSet<ClassInfo>(index.getKnownDirectSubclasses(className));
-            for (ClassInfo additional : additionalClasses.values()) {
-                if (className.equals(additional.superName())) {
-                    directSubclasses.add(additional);
+            for (Optional<ClassInfo> additional : additionalClasses.values()) {
+                if (additional.isPresent() && className.equals(additional.get().superName())) {
+                    directSubclasses.add(additional.get());
                 }
             }
             return directSubclasses;
@@ -144,10 +134,13 @@ public final class BeanArchives {
                 return index.getKnownDirectImplementors(className);
             }
             Set<ClassInfo> directImplementors = new HashSet<ClassInfo>(index.getKnownDirectImplementors(className));
-            for (ClassInfo additional : additionalClasses.values()) {
-                for (Type interfaceType : additional.interfaceTypes()) {
+            for (Optional<ClassInfo> additional : additionalClasses.values()) {
+                if (!additional.isPresent()) {
+                    continue;
+                }
+                for (Type interfaceType : additional.get().interfaceTypes()) {
                     if (className.equals(interfaceType.name())) {
-                        directImplementors.add(additional);
+                        directImplementors.add(additional.get());
                         break;
                     }
                 }
@@ -177,6 +170,11 @@ public final class BeanArchives {
         @Override
         public Collection<AnnotationInstance> getAnnotations(DotName annotationName) {
             return index.getAnnotations(annotationName);
+        }
+
+        @Override
+        public Collection<AnnotationInstance> getAnnotationsWithRepeatable(DotName annotationName, IndexView index) {
+            return this.index.getAnnotationsWithRepeatable(annotationName, index);
         }
 
         private void getAllKnownSubClasses(DotName className, Set<ClassInfo> allKnown, Set<DotName> processedClasses) {
@@ -226,15 +224,41 @@ public final class BeanArchives {
             }
         }
 
-    }
-
-    static void index(Indexer indexer, String className) {
-        try (InputStream stream = BeanProcessor.class.getClassLoader()
-                .getResourceAsStream(className.replace('.', '/') + ".class")) {
-            indexer.index(stream);
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to index: " + className, e);
+        private Optional<ClassInfo> computeAdditional(DotName className) {
+            LOGGER.debugf("Index: %s", className);
+            Indexer indexer = new Indexer();
+            if (BeanArchives.index(indexer, className.toString(), deploymentClassLoader)) {
+                Index index = indexer.complete();
+                return Optional.of(index.getClassByName(className));
+            } else {
+                // Note that ConcurrentHashMap does not allow null to be used as a value
+                return Optional.empty();
+            }
         }
+
     }
 
+    static boolean index(Indexer indexer, String className) {
+        return index(indexer, className, BeanArchives.class.getClassLoader());
+    }
+
+    static boolean index(Indexer indexer, String className, ClassLoader classLoader) {
+        boolean result = false;
+        if (Types.isPrimitiveClassName(className) || className.startsWith("[")) {
+            // Ignore primitives and arrays
+            return false;
+        }
+        try (InputStream stream = classLoader
+                .getResourceAsStream(className.replace('.', '/') + ".class")) {
+            if (stream != null) {
+                indexer.index(stream);
+                result = true;
+            } else {
+                LOGGER.warnf("Failed to index %s: Class does not exist in ClassLoader %s", className, classLoader);
+            }
+        } catch (IOException e) {
+            LOGGER.warnf(e, "Failed to index %s: %s", className, e.getMessage());
+        }
+        return result;
+    }
 }
