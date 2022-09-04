@@ -14,12 +14,8 @@
 
 package com.google.devtools.build.lib.analysis.platform;
 
-import static com.google.common.base.Predicates.notNull;
-import static com.google.common.collect.ImmutableList.toImmutableList;
-
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.ProviderCollection;
-import java.util.List;
 import javax.annotation.Nullable;
 
 /** Utility methods to help locate platform-related providers. */
@@ -35,11 +31,8 @@ public class PlatformProviderUtils {
   }
 
   /** Retrieves and casts {@link PlatformInfo} providers from the given targets. */
-  public static ImmutableList<PlatformInfo> platforms(List<? extends ProviderCollection> targets) {
-    return targets.stream()
-        .map(PlatformProviderUtils::platform)
-        .filter(notNull())
-        .collect(toImmutableList());
+  public static Iterable<PlatformInfo> platforms(Iterable<? extends ProviderCollection> targets) {
+    return Iterables.transform(targets, PlatformProviderUtils::platform);
   }
 
   /** Retrieves and casts the {@link ConstraintSettingInfo} provider from the given target. */
@@ -52,12 +45,9 @@ public class PlatformProviderUtils {
   }
 
   /** Retrieves and casts {@link ConstraintSettingInfo} providers from the given targets. */
-  public static ImmutableList<ConstraintSettingInfo> constraintSettings(
-      List<? extends ProviderCollection> targets) {
-    return targets.stream()
-        .map(PlatformProviderUtils::constraintSetting)
-        .filter(notNull())
-        .collect(toImmutableList());
+  public static Iterable<ConstraintSettingInfo> constraintSettings(
+      Iterable<? extends ProviderCollection> targets) {
+    return Iterables.transform(targets, PlatformProviderUtils::constraintSetting);
   }
 
   /** Retrieves and casts the {@link ConstraintValueInfo} provider from the given target. */
@@ -75,26 +65,9 @@ public class PlatformProviderUtils {
   }
 
   /** Retrieves and casts {@link ConstraintValueInfo} providers from the given targets. */
-  public static ImmutableList<ConstraintValueInfo> constraintValues(
-      List<? extends ProviderCollection> targets) {
-    return targets.stream()
-        .map(PlatformProviderUtils::constraintValue)
-        .filter(notNull())
-        .collect(toImmutableList());
-  }
-
-  /**
-   * Retrieves and casts the {@link DeclaredToolchainInfo} from {@link
-   * com.google.devtools.build.lib.rules.platform.Toolchain} rule.
-   *
-   * <p>Returns null if the rule isn't a toolchain.
-   */
-  @Nullable
-  public static DeclaredToolchainInfo declaredToolchainInfo(@Nullable ProviderCollection target) {
-    if (target == null) {
-      return null;
-    }
-    return target.getProvider(DeclaredToolchainInfo.class);
+  public static Iterable<ConstraintValueInfo> constraintValues(
+      Iterable<? extends ProviderCollection> targets) {
+    return Iterables.transform(targets, PlatformProviderUtils::constraintValue);
   }
 
   /** Retrieves and casts the {@link ToolchainInfo} provider from the given target. */
