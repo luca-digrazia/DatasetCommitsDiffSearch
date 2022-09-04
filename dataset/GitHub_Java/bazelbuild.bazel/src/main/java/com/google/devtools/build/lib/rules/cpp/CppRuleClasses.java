@@ -32,6 +32,7 @@ import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.PIC_OBJECT_FI
 import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.SHARED_LIBRARY;
 import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.VERSIONED_SHARED_LIBRARY;
 
+import com.google.devtools.build.lib.analysis.LanguageDependentFragment.LibraryLanguage;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
@@ -107,6 +108,8 @@ public class CppRuleClasses {
           ASSEMBLER))
       .withSourceAttributes("srcs", "hdrs")
       .withDependencyAttributes("deps", "data");
+
+  public static final LibraryLanguage LANGUAGE = new LibraryLanguage("C++");
 
   /** Implicit outputs for cc_binary rules. */
   public static final SafeImplicitOutputsFunction CC_BINARY_STRIPPED =
@@ -378,9 +381,6 @@ public class CppRuleClasses {
 
   /** A string constant for the match-clif action. */
   public static final String MATCH_CLIF = "match_clif";
-
-  /** A string constant for is_cc_fake_binary feature. */
-  public static final String IS_CC_FAKE_BINARY = "is_cc_fake_binary";
 
   /** Ancestor for all rules that do include scanning. */
   public static final class CcIncludeScanningRule implements RuleDefinition {
