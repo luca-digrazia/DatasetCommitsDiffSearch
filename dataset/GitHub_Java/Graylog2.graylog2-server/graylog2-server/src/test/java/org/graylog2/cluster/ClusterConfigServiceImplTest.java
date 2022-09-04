@@ -16,9 +16,8 @@
  */
 package org.graylog2.cluster;
 
-import com.google.common.eventbus.Subscribe;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.eventbus.Subscribe;
 import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
 import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
 import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
@@ -26,7 +25,6 @@ import com.mongodb.BasicDBObjectBuilder;
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
 import com.mongodb.WriteConcern;
-
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.MongoConnectionRule;
@@ -86,6 +84,7 @@ public class ClusterConfigServiceImplTest {
                 provider,
                 mongoRule.getMongoConnection(),
                 nodeId,
+                objectMapper,
                 new ChainingClassLoader(getClass().getClassLoader()),
                 clusterEventBus
         );
