@@ -241,7 +241,7 @@ public abstract class ResourceTestBase extends AndroidBuildViewTestCase {
             targetConfig.extendedSanityChecks(),
             targetConfig.allowAnalysisFailures(),
             eventHandler,
-            skyframeExecutor.getSkyFunctionEnvironmentForTesting(eventHandler)),
+            null),
         new BuildConfigurationCollection(
             ImmutableList.of(dummy.getConfiguration()), dummy.getHostConfiguration()));
   }
