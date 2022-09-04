@@ -337,12 +337,6 @@ public class NativeConfig {
     }
 
     /**
-     * Generate the report files for GraalVM Dashboard.
-     */
-    @ConfigItem
-    public boolean enableDashboardDump;
-
-    /**
      * Supported Container runtimes
      */
     public static enum ContainerRuntime {
