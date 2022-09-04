@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,9 +13,9 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
-package smile.math.blas.mkl;
+package smile.math.matrix;
 
 import org.junit.After;
 import org.junit.AfterClass;
@@ -23,10 +23,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import smile.math.blas.UPLO;
-import smile.math.matrix.BandMatrix;
-import smile.math.matrix.FloatBandMatrix;
-import smile.math.matrix.FloatMatrix;
-import smile.math.matrix.Matrix;
 import static org.junit.Assert.*;
 
 /**
@@ -64,7 +60,7 @@ public class BandMatrixTest {
         };
         float[] b = {0.5f, 0.5f, 0.5f};
 
-        FloatMatrix a = new FloatMatrix(A);
+        FloatMatrix a = FloatMatrix.of(A);
         FloatMatrix.LU lu = a.lu();
         float[] x = lu.solve(b);
 
@@ -137,7 +133,7 @@ public class BandMatrixTest {
         };
         double[] b = {0.5, 0.5, 0.5};
 
-        Matrix a = new Matrix(A);
+        Matrix a = Matrix.of(A);
         Matrix.LU lu = a.lu();
         double[] x = lu.solve(b);
 

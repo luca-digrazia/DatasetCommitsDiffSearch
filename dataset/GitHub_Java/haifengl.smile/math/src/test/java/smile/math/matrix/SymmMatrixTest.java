@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.matrix;
 
@@ -60,7 +60,7 @@ public class SymmMatrixTest {
         };
         float[] b = {0.5f, 0.5f, 0.5f};
 
-        FloatMatrix a = new FloatMatrix(A);
+        FloatMatrix a = FloatMatrix.of(A);
         FloatMatrix.LU lu = a.lu();
         float[] x = lu.solve(b);
 
@@ -136,7 +136,7 @@ public class SymmMatrixTest {
         };
         double[] b = {0.5f, 0.5f, 0.5f};
 
-        Matrix a = new Matrix(A);
+        Matrix a = Matrix.of(A);
         Matrix.LU lu = a.lu();
         double[] x = lu.solve(b);
 

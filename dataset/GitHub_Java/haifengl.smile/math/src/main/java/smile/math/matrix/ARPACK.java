@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,14 +13,11 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.matrix;
 
-import java.nio.DoubleBuffer;
-import java.nio.FloatBuffer;
 import java.util.Arrays;
-import static smile.math.blas.Layout.*;
 import static org.bytedeco.arpackng.global.arpack.*;
 
 /**
@@ -31,7 +28,7 @@ import static org.bytedeco.arpackng.global.arpack.*;
  * corresponding eigenvectors of a general n by n matrix A.
  * It is most appropriate for large sparse or structured
  * matrices A where structured means that a matrix-vector
- * product requires order n rather than the usual order n^2
+ * product requires order n rather than the usual order O(n<sup>2</sup>)
  * floating point operations. This software is based upon an
  * algorithmic variant of the Arnoldi process called the
  * Implicitly Restarted Arnoldi Method (IRAM). When the matrix
@@ -45,11 +42,11 @@ import static org.bytedeco.arpackng.global.arpack.*;
  *
  * @author Haifeng Li
  */
-public interface ARPACK {
-    org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ARPACK.class);
+public class ARPACK {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ARPACK.class);
 
     /** Which eigenvalues of symmetric matrix to compute. */
-    enum SymmWhich {
+    public enum SymmOption {
         /**
          * The largest algebraic eigenvalues.
          */
@@ -75,7 +72,7 @@ public interface ARPACK {
     }
 
     /** Which eigenvalues of asymmetric matrix to compute. */
-    enum AsymmWhich {
+    public enum AsymmOption {
         /**
          * The eigenvalues largest in magnitude.
          */
@@ -102,29 +99,39 @@ public interface ARPACK {
         SI
     }
 
-    /**
-     * Computes NEV eigenvalues of a symmetric double precision matrix.
-     *
-     * @param nev the number of eigenvalues of OP to be computed. 0 &lt; k &lt; n.
-     * @param which which eigenvalues to compute.
-     */
-    static Matrix.EVD syev(DMatrix A, int nev, SymmWhich which) {
-        return syev(A, nev, which, 0.0);
+    /** Private constructor to prevent instance creation. */
+    private ARPACK() {
+
     }
 
     /**
      * Computes NEV eigenvalues of a symmetric double precision matrix.
      *
-     * @param nev the number of eigenvalues of OP to be computed. 0 &lt; k &lt; n.
+     * @param A the matrix to decompose.
      * @param which which eigenvalues to compute.
-     * @param tol the stopping criterion.
+     * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
+     * @return the eigen decomposition.
      */
-    static Matrix.EVD syev(DMatrix A, int nev, SymmWhich which, double tol) {
-        if (A.nrows() != A.ncols()) {
-            throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", A.nrows(), A.ncols()));
+    public static Matrix.EVD syev(DMatrix A, SymmOption which, int nev) {
+        return syev(A, which, nev, Math.min(3 * nev, A.nrow()), 1E-6);
+    }
+
+    /**
+     * Computes NEV eigenvalues of a symmetric double precision matrix.
+     *
+     * @param A the matrix to decompose.
+     * @param which which eigenvalues to compute.
+     * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
+     * @param ncv the number of Arnoldi vectors.
+     * @param tol the stopping criterion.
+     * @return the eigen decomposition.
+     */
+    public static Matrix.EVD syev(DMatrix A, SymmOption which, int nev, int ncv, double tol) {
+        if (A.nrow() != A.ncol()) {
+            throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", A.nrow(), A.ncol()));
         }
 
-        int n = A.nrows();
+        int n = A.nrow();
 
         if (nev <= 0 || nev >= n) {
             throw new IllegalArgumentException("Invalid NEV parameter k: " + nev);
@@ -135,7 +142,6 @@ public interface ARPACK {
         byte[] bmat = {'I'}; // standard eigenvalue problem
         String swhich = which.name();
         byte[] bwhich = {(byte) swhich.charAt(0), (byte) swhich.charAt(1)};
-        int ncv = Math.min(3 * nev, n);
 
         int[] iparam = new int[11];
         iparam[0] = 1;
@@ -173,7 +179,7 @@ public interface ARPACK {
         double[] d = new double[ncv * 2];
         int[] select = new int[ncv];
         double sigma = 0.0;
-        boolean rvec = true;
+        int rvec = 1;
 
         dseupd_c(rvec, howmny, select, d, V, ldv, sigma,
                  bmat, n, bwhich, nev, tol, resid, ncv, V, ldv, iparam, ipntr,
@@ -194,33 +200,38 @@ public interface ARPACK {
 
         d = Arrays.copyOfRange(d, 0, nev);
         V = Arrays.copyOfRange(V, 0, n * nev);
-        Matrix.EVD eig = new Matrix.EVD(d, Matrix.of(COL_MAJOR, n, nev, ldv, DoubleBuffer.wrap(V)));
+        Matrix.EVD eig = new Matrix.EVD(d, new Matrix(n, nev, ldv, V));
         return eig.sort();
     }
 
     /**
      * Computes NEV eigenvalues of a symmetric single precision matrix.
      *
-     * @param nev the number of eigenvalues of OP to be computed. 0 &lt; k &lt; n.
+     * @param A the matrix to decompose.
      * @param which which eigenvalues to compute.
+     * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
+     * @return the eigen decomposition.
      */
-    static FloatMatrix.EVD syev(SMatrix A, int nev, SymmWhich which) {
-        return syev(A, nev, which, 0.0f);
+    public static FloatMatrix.EVD syev(SMatrix A, SymmOption which, int nev) {
+        return syev(A, which, nev, Math.min(3 * nev, A.nrow()), 1E-6f);
     }
 
     /**
      * Computes NEV eigenvalues of a symmetric single precision matrix.
      *
-     * @param nev the number of eigenvalues of OP to be computed. 0 &lt; k &lt; n.
+     * @param A the matrix to decompose.
      * @param which which eigenvalues to compute.
+     * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
+     * @param ncv the number of Arnoldi vectors.
      * @param tol the stopping criterion.
+     * @return the eigen decomposition.
      */
-    static FloatMatrix.EVD syev(SMatrix A, int nev, SymmWhich which, float tol) {
-        if (A.nrows() != A.ncols()) {
-            throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", A.nrows(), A.ncols()));
+    public static FloatMatrix.EVD syev(SMatrix A, SymmOption which, int nev, int ncv, float tol) {
+        if (A.nrow() != A.ncol()) {
+            throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", A.nrow(), A.ncol()));
         }
 
-        int n = A.nrows();
+        int n = A.nrow();
 
         if (nev <= 0 || nev >= n) {
             throw new IllegalArgumentException("Invalid NEV: " + nev);
@@ -231,7 +242,6 @@ public interface ARPACK {
         byte[] bmat = {'I'}; // standard eigenvalue problem
         String swhich = which.name();
         byte[] bwhich = swhich.getBytes();//{(byte) swhich.charAt(0), (byte) swhich.charAt(1)};
-        int ncv = Math.min(3 * nev, n);
 
         int[] iparam = new int[11];
         iparam[0] = 1;
@@ -269,7 +279,7 @@ public interface ARPACK {
         float[] d = new float[ncv * 2];
         int[] select = new int[ncv];
         float sigma = 0.0f;
-        boolean rvec = true;
+        int rvec = 1;
 
         sseupd_c(rvec, howmny, select, d, V, ldv, sigma,
                 bmat, n, bwhich, nev, tol, resid, ncv, V, ldv, iparam, ipntr,
@@ -290,33 +300,38 @@ public interface ARPACK {
 
         d = Arrays.copyOfRange(d, 0, nev);
         V = Arrays.copyOfRange(V, 0, n * nev);
-        FloatMatrix.EVD eig = new FloatMatrix.EVD(d, FloatMatrix.of(COL_MAJOR, n, nev, ldv, FloatBuffer.wrap(V)));
+        FloatMatrix.EVD eig = new FloatMatrix.EVD(d, new FloatMatrix(n, nev, ldv, V));
         return eig.sort();
     }
 
     /**
      * Computes NEV eigenvalues of an asymmetric double precision matrix.
      *
-     * @param nev the number of eigenvalues of OP to be computed. 0 &lt; k &lt; n.
+     * @param A the matrix to decompose.
      * @param which which eigenvalues to compute.
+     * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
+     * @return the eigen decomposition.
      */
-    static Matrix.EVD eigen(DMatrix A, int nev, AsymmWhich which) {
-        return eigen(A, nev, which, 0.0);
+    public static Matrix.EVD eigen(DMatrix A, AsymmOption which, int nev) {
+        return eigen(A, which, nev, Math.min(3 * nev, A.nrow()), 1E-6);
     }
 
     /**
      * Computes NEV eigenvalues of an asymmetric double precision matrix.
      *
-     * @param nev the number of eigenvalues of OP to be computed. 0 &lt; k &lt; n.
+     * @param A the matrix to decompose.
      * @param which which eigenvalues to compute.
+     * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
+     * @param ncv the number of Arnoldi vectors.
      * @param tol the stopping criterion.
+     * @return the eigen decomposition.
      */
-    static Matrix.EVD eigen(DMatrix A, int nev, AsymmWhich which, double tol) {
-        if (A.nrows() != A.ncols()) {
-            throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", A.nrows(), A.ncols()));
+    public static Matrix.EVD eigen(DMatrix A, AsymmOption which, int nev, int ncv, double tol) {
+        if (A.nrow() != A.ncol()) {
+            throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", A.nrow(), A.ncol()));
         }
 
-        int n = A.nrows();
+        int n = A.nrow();
 
         if (nev <= 0 || nev >= n) {
             throw new IllegalArgumentException("Invalid NEV: " + nev);
@@ -327,7 +342,6 @@ public interface ARPACK {
         byte[] bmat = {'I'}; // standard eigenvalue problem
         String swhich = which.name();
         byte[] bwhich = {(byte) swhich.charAt(0), (byte) swhich.charAt(1)};
-        int ncv = Math.min(3 * nev, n);
 
         int[] iparam = new int[11];
         iparam[0] = 1;
@@ -368,7 +382,7 @@ public interface ARPACK {
         int[] select = new int[ncv];
         double sigmar = 0.0;
         double sigmai = 0.0;
-        boolean rvec = true;
+        int rvec = 1;
 
         dneupd_c(rvec, howmny, select, wr, wi, V, ldv, sigmar, sigmai, workev,
                 bmat, n, bwhich, nev, tol, resid, ncv, V, ldv, iparam, ipntr,
@@ -390,33 +404,38 @@ public interface ARPACK {
         wr = Arrays.copyOfRange(wr, 0, nev);
         wi = Arrays.copyOfRange(wi, 0, nev);
         V = Arrays.copyOfRange(V, 0, n * nev);
-        Matrix.EVD eig = new Matrix.EVD(wr, wi, null, Matrix.of(COL_MAJOR, n, nev, ldv, DoubleBuffer.wrap(V)));
+        Matrix.EVD eig = new Matrix.EVD(wr, wi, null, new Matrix(n, nev, ldv, V));
         return eig.sort();
     }
 
     /**
      * Computes NEV eigenvalues of an asymmetric single precision matrix.
      *
-     * @param nev the number of eigenvalues of OP to be computed. 0 &lt; k &lt; n.
+     * @param A the matrix to decompose.
      * @param which which eigenvalues to compute.
+     * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
+     * @return the eigen decomposition.
      */
-    static FloatMatrix.EVD eigen(SMatrix A, int nev, AsymmWhich which) {
-        return eigen(A, nev, which, 0.0f);
+    public static FloatMatrix.EVD eigen(SMatrix A, AsymmOption which, int nev) {
+        return eigen(A, which, nev, Math.min(3 * nev, A.nrow()), 1E-6f);
     }
 
     /**
      * Computes NEV eigenvalues of an asymmetric single precision matrix.
      *
-     * @param nev the number of eigenvalues of OP to be computed. 0 &lt; k &lt; n.
+     * @param A the matrix to decompose.
      * @param which which eigenvalues to compute.
+     * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
+     * @param ncv the number of Arnoldi vectors.
      * @param tol the stopping criterion.
+     * @return the eigen decomposition.
      */
-    static FloatMatrix.EVD eigen(SMatrix A, int nev, AsymmWhich which, float tol) {
-        if (A.nrows() != A.ncols()) {
-            throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", A.nrows(), A.ncols()));
+    public static FloatMatrix.EVD eigen(SMatrix A, AsymmOption which, int nev, int ncv, float tol) {
+        if (A.nrow() != A.ncol()) {
+            throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", A.nrow(), A.ncol()));
         }
 
-        int n = A.nrows();
+        int n = A.nrow();
 
         if (nev <= 0 || nev >= n) {
             throw new IllegalArgumentException("Invalid NEV: " + nev);
@@ -427,7 +446,6 @@ public interface ARPACK {
         byte[] bmat = {'I'}; // standard eigenvalue problem
         String swhich = which.name();
         byte[] bwhich = {(byte) swhich.charAt(0), (byte) swhich.charAt(1)};
-        int ncv = Math.min(3 * nev, n);
 
         int[] iparam = new int[11];
         iparam[0] = 1;
@@ -468,7 +486,7 @@ public interface ARPACK {
         int[] select = new int[ncv];
         float sigmar = 0.0f;
         float sigmai = 0.0f;
-        boolean rvec = true;
+        int rvec = 1;
 
         sneupd_c(rvec, howmny, select, wr, wi, V, ldv, sigmar, sigmai, workev,
                 bmat, n, bwhich, nev, tol, resid, ncv, V, ldv, iparam, ipntr,
@@ -490,7 +508,153 @@ public interface ARPACK {
         wr = Arrays.copyOfRange(wr, 0, nev);
         wi = Arrays.copyOfRange(wi, 0, nev);
         V = Arrays.copyOfRange(V, 0, n * nev);
-        FloatMatrix.EVD eig = new FloatMatrix.EVD(wr, wi, null, FloatMatrix.of(COL_MAJOR, n, nev, ldv, FloatBuffer.wrap(V)));
+        FloatMatrix.EVD eig = new FloatMatrix.EVD(wr, wi, null, new FloatMatrix(n, nev, ldv, V));
         return eig.sort();
+    }
+
+    /**
+     * Computes k largest approximate singular triples of a matrix.
+     *
+     * @param A the matrix to decompose.
+     * @param k the number of singular triples to compute.
+     * @return the singular value decomposition.
+     */
+    public static Matrix.SVD svd(DMatrix A, int k) {
+        return svd(A, k, Math.min(3 * k, Math.min(A.nrow(), A.ncol())), 1E-6);
+    }
+
+    /**
+     * Computes k largest approximate singular triples of a matrix.
+     *
+     * @param A the matrix to decompose.
+     * @param k the number of singular triples to compute.
+     * @param ncv the number of Arnoldi vectors.
+     * @param tol the stopping criterion.
+     * @return the singular value decomposition.
+     */
+    public static Matrix.SVD svd(DMatrix A, int k, int ncv, double tol) {
+        int m = A.nrow();
+        int n = A.ncol();
+
+        DMatrix ata = A.square();
+        Matrix.EVD eigen = syev(ata, SymmOption.LM, k, ncv, tol);
+
+        double[] s = eigen.wr;
+        for (int i = 0; i < s.length; i++) {
+            s[i] = Math.sqrt(s[i]);
+        }
+
+        if (m >= n) {
+            Matrix V = eigen.Vr;
+
+            double[] Av = new double[m];
+            double[] v = new double[n];
+            Matrix U = new Matrix(m, s.length);
+            for (int j = 0; j < s.length; j++) {
+                for (int i = 0; i < n; i++) {
+                    v[i] = V.get(i, j);
+                }
+
+                A.mv(v, Av);
+
+                for (int i = 0; i < m; i++) {
+                    U.set(i, j, Av[i] / s[j]);
+                }
+            }
+
+            return new Matrix.SVD(s, U, V);
+        } else {
+            Matrix U = eigen.Vr;
+
+            double[] Atu = new double[n];
+            double[] u = new double[m];
+            Matrix V = new Matrix(n, s.length);
+            for (int j = 0; j < s.length; j++) {
+                for (int i = 0; i < m; i++) {
+                    u[i] = U.get(i, j);
+                }
+
+                A.tv(u, Atu);
+
+                for (int i = 0; i < n; i++) {
+                    V.set(i, j, Atu[i] / s[j]);
+                }
+            }
+
+            return new Matrix.SVD(s, U, V);
+        }
+    }
+
+    /**
+     * Computes k largest approximate singular triples of a matrix.
+     *
+     * @param A the matrix to decompose.
+     * @param k the number of singular triples to compute.
+     * @return the singular value decomposition.
+     */
+    public static FloatMatrix.SVD svd(SMatrix A, int k) {
+        return svd(A, k, Math.min(3 * k, Math.min(A.nrow(), A.ncol())), 1E-6f);
+    }
+
+    /**
+     * Computes k largest approximate singular triples of a matrix.
+     *
+     * @param A the matrix to decompose.
+     * @param k the number of singular triples to compute.
+     * @param ncv the number of Arnoldi vectors.
+     * @param tol the stopping criterion.
+     * @return the singular value decomposition.
+     */
+    public static FloatMatrix.SVD svd(SMatrix A, int k, int ncv, float tol) {
+        int m = A.nrow();
+        int n = A.ncol();
+
+        SMatrix ata = A.square();
+        FloatMatrix.EVD eigen = syev(ata, SymmOption.LM, k, ncv, tol);
+
+        float[] s = eigen.wr;
+        for (int i = 0; i < s.length; i++) {
+            s[i] = (float) Math.sqrt(s[i]);
+        }
+
+        if (m >= n) {
+            FloatMatrix V = eigen.Vr;
+
+            float[] Av = new float[m];
+            float[] v = new float[n];
+            FloatMatrix U = new FloatMatrix(m, s.length);
+            for (int j = 0; j < s.length; j++) {
+                for (int i = 0; i < n; i++) {
+                    v[i] = V.get(i, j);
+                }
+
+                A.mv(v, Av);
+
+                for (int i = 0; i < m; i++) {
+                    U.set(i, j, Av[i] / s[j]);
+                }
+            }
+
+            return new FloatMatrix.SVD(s, U, V);
+        } else {
+            FloatMatrix U = eigen.Vr;
+
+            float[] Atu = new float[n];
+            float[] u = new float[m];
+            FloatMatrix V = new FloatMatrix(n, s.length);
+            for (int j = 0; j < s.length; j++) {
+                for (int i = 0; i < m; i++) {
+                    u[i] = U.get(i, j);
+                }
+
+                A.tv(u, Atu);
+
+                for (int i = 0; i < n; i++) {
+                    V.set(i, j, Atu[i] / s[j]);
+                }
+            }
+
+            return new FloatMatrix.SVD(s, U, V);
+        }
     }
 }

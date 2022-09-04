@@ -128,7 +128,7 @@ public class SymmMatrix extends DMatrix {
             return false;
         }
 
-        return equals((SymmMatrix) o, 1E-10);
+        return equals((SymmMatrix) o, 1E-7f);
     }
 
     /**
@@ -321,7 +321,7 @@ public class SymmMatrix extends DMatrix {
         }
 
         /**
-         * Returns the inverse of matrix.
+         * Returns the inverse of matrix. For pseudo inverse, use QRDecomposition.
          * @return the inverse of matrix.
          */
         public Matrix inverse() {

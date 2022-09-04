@@ -462,7 +462,7 @@ public class FloatBandMatrix extends SMatrix {
         }
 
         /**
-         * Returns the inverse of matrix.
+         * Returns the inverse of matrix. For pseudo inverse, use QRDecomposition.
          * @return the inverse of matrix.
          */
         public FloatMatrix inverse() {

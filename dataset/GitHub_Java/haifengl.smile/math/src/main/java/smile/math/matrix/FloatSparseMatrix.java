@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.matrix;
 
@@ -106,6 +106,9 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
         /**
          * Private constructor. Only the enclosure matrix can creates
          * the instances of entry.
+         * @param i the row index.
+         * @param j the column index.
+         * @param index the storage index.
          */
         private Entry(int i, int j, int index) {
             this.i = i;
@@ -115,8 +118,9 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
         }
 
         /**
-         * Update the value of entry in the matrix. Note that the field <code>value</code>
+         * Update the entry value in the matrix. Note that the field <code>value</code>
          * is final and thus not updated.
+         * @param value the new entry value.
          */
         public void update(float value) {
             nonzeros[index] = value;
@@ -124,7 +128,7 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
 
         @Override
         public String toString() {
-            return String.format("(%d, %d):%s", i, j, Strings.decimal(x));
+            return String.format("(%d, %d):%s", i, j, Strings.format(x));
         }
     }
 
@@ -169,7 +173,7 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
     /**
      * Constructor.
      * @param A a dense matrix to converted into sparse matrix format.
-     * @param tol the tolerance to regard a value as zero if |x| &lt; tol.
+     * @param tol the tolerance to regard a value as zero if {@code |x| < tol}.
      */
     public FloatSparseMatrix(float[][] A, float tol) {
         m = A.length;
@@ -207,21 +211,66 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
         return new FloatSparseMatrix(m, n, nonzeros.clone(), rowIndex.clone(), colIndex.clone());
     }
 
+    @Override
+    public int nrow() {
+        return m;
+    }
+
+    @Override
+    public int ncol() {
+        return n;
+    }
+
+    @Override
+    public long size() {
+        return colIndex[n];
+    }
+
     /**
-     * Returns an iterator of nonzero entries.
-     * @return an iterator of nonzero entries
+     * Returns the stream of the non-zero elements.
+     * @return the stream of the non-zero elements
      */
+    public Stream<Entry> nonzeros() {
+        Spliterator<Entry> spliterator = Spliterators.spliterator(iterator(), size(), ORDERED | SIZED | IMMUTABLE);
+        return StreamSupport.stream(spliterator, false);
+    }
+
+    /**
+     * Returns the stream of the non-zero elements in given column range.
+     *
+     * @param beginColumn the beginning column, inclusive.
+     * @param endColumn   the end column, exclusive.
+     * @return the stream of non-zero elements.
+     */
+    public Stream<Entry> nonzeros(int beginColumn, int endColumn) {
+        Spliterator<Entry> spliterator = Spliterators.spliterator(iterator(beginColumn, endColumn), colIndex[endColumn] - colIndex[beginColumn], ORDERED | SIZED | IMMUTABLE);
+        return StreamSupport.stream(spliterator, false);
+    }
+
+    /**
+     * Returns the iterator of nonzero entries.
+     * @return the iterator of nonzero entries
+     */
+    @Override
     public Iterator<Entry> iterator() {
         return iterator(0, n);
     }
 
     /**
-     * Returns an iterator of nonzero entries.
-     * @param beginColumn The beginning column, inclusive.
-     * @param endColumn   The end column, exclusive.
-     * @return an iterator of nonzero entries
+     * Returns the iterator of nonzero entries.
+     * @param beginColumn the beginning column, inclusive.
+     * @param endColumn   the end column, exclusive.
+     * @return the iterator of nonzero entries
      */
     public Iterator<Entry> iterator(int beginColumn, int endColumn) {
+        if (beginColumn < 0 || beginColumn >= n) {
+            throw new IllegalArgumentException("Invalid begin column: " + beginColumn);
+        }
+
+        if (endColumn <= beginColumn || endColumn > n) {
+            throw new IllegalArgumentException("Invalid end column: " + endColumn);
+        }
+
         return new Iterator<Entry>() {
             int k = colIndex[beginColumn]; // entry index
             int j = beginColumn; // column
@@ -240,79 +289,72 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
         };
     }
 
-    @Override
-    public int nrows() {
-        return m;
-    }
-
-    @Override
-    public int ncols() {
-        return n;
-    }
-
-    @Override
-    public long size() {
-        return colIndex[n];
-    }
-
-    /*
-     * Benchmarks of iteration and stream using jmh:
-     *
-     * Benchmark                                       Mode  Cnt        Score       Error   Units
-     * IteratorSpeed.timeDirect                        avgt    5   429888.246    3819.232   ns/op
-     * IteratorSpeed.timeDirect: gc.alloc.rate         avgt    5      ~ 10^-4              MB/sec
-     * IteratorSpeed.timeDirect: gc.alloc.rate.norm    avgt    5        0.088       0.001    B/op
-     * IteratorSpeed.timeDirect: gc.count              avgt    5          ~ 0              counts
-     * IteratorSpeed.timeDirect: stack                 avgt               NaN                 ---
-     * IteratorSpeed.timeIterator                      avgt    5   430718.537    7831.509   ns/op
-     * IteratorSpeed.timeIterator: gc.alloc.rate       avgt    5        0.028       0.001  MB/sec
-     * IteratorSpeed.timeIterator: gc.alloc.rate.norm  avgt    5       16.089       0.011    B/op
-     * IteratorSpeed.timeIterator: gc.count            avgt    5          ~ 0              counts
-     * IteratorSpeed.timeIterator: stack               avgt               NaN                 ---
-     * IteratorSpeed.timeStream                        avgt    5  1032370.658   55295.704   ns/op
-     * IteratorSpeed.timeStream: gc.alloc.rate         avgt    5        0.077       0.004  MB/sec
-     * IteratorSpeed.timeStream: gc.alloc.rate.norm    avgt    5      104.210       0.011    B/op
-     * IteratorSpeed.timeStream: gc.count              avgt    5          ~ 0              counts
-     * IteratorSpeed.timeStream: stack                 avgt               NaN                 ---
-     *
-     * The three cases are timeDirect for a direct loop over internal data structures,
-     * timeIterator for #foreachNonZero and timeStream for the streaming equivalent form.
-     * The timeIterator case is at most a few percent slower than the direct loops while
-     * the stream is about 2-3 times slower. Note that the JVM is clever enough to optimize
-     * away the creation of temporary objects in the streaming idiom.
-     */
-
     /**
-     * Provides a stream over all of the non-zero elements of a sparse matrix.
+     * For each loop on non-zero elements. This will be a bit faster than iterator or stream
+     * by avoiding boxing. But it will be considerably less general.
+     * <p>
+     * Note that the consumer could be called on values that are either effectively or actually
+     * zero. The only guarantee is that no values that are known to be zero based on the
+     * structure of the matrix will be processed.
+     *
+     * @param consumer The matrix element consumer.
      */
-    public Stream<Entry> nonzeros() {
-        Spliterator<Entry> spliterator = Spliterators.spliterator(iterator(), size(), ORDERED | SIZED | IMMUTABLE);
-        return StreamSupport.stream(spliterator, false);
+    public void forEachNonZero(DoubleConsumer consumer) {
+        for (int j = 0; j < n; j++) {
+            for (int k = colIndex[j]; k < colIndex[j + 1]; k++) {
+                int i = rowIndex[k];
+                consumer.accept(i, j, nonzeros[k]);
+            }
+        }
     }
 
     /**
-     * Provides a stream over all of the non-zero elements of range of columns of a sparse matrix.
+     * For each loop on non-zero elements. This will be a bit faster than iterator or stream
+     * by avoiding boxing. But it will be considerably less general.
+     * <p>
+     * Note that the consumer could be called on values that are either effectively or actually
+     * zero. The only guarantee is that no values that are known to be zero based on the
+     * structure of the matrix will be processed.
      *
      * @param beginColumn The beginning column, inclusive.
      * @param endColumn   The end column, exclusive.
+     * @param consumer    The matrix element consumer.
      */
-    public Stream<Entry> nonzeros(int beginColumn, int endColumn) {
-        Spliterator<Entry> spliterator = Spliterators.spliterator(iterator(beginColumn, endColumn), colIndex[endColumn] - colIndex[beginColumn], ORDERED | SIZED | IMMUTABLE);
-        return StreamSupport.stream(spliterator, false);
+    public void forEachNonZero(int beginColumn, int endColumn, FloatConsumer consumer) {
+        if (beginColumn < 0 || beginColumn >= n) {
+            throw new IllegalArgumentException("Invalid begin column: " + beginColumn);
+        }
+
+        if (endColumn <= beginColumn || endColumn > n) {
+            throw new IllegalArgumentException("Invalid end column: " + endColumn);
+        }
+
+        for (int j = beginColumn; j < endColumn; j++) {
+            for (int k = colIndex[j]; k < colIndex[j + 1]; k++) {
+                int i = rowIndex[k];
+                consumer.accept(i, j, nonzeros[k]);
+            }
+        }
     }
 
-    /** Returns the element at the storage index. */
-    /*
+    /**
+     * Returns the element at the storage index.
+     * @param index the storage index.
+     * @return the element.
+     */
     public float get(int index) {
         return nonzeros[index];
     }
-*/
-    /** Sets the element at the storage index. */
-    /*
-    public float set(int index, float value) {
-        return nonzeros[index] = value;
+
+    /**
+     * Sets the element at the storage index.
+     * @param index the storage index.
+     * @param value the element.
+     */
+    public void set(int index, float value) {
+        nonzeros[index] = value;
     }
-*/
+
     @Override
     public float get(int i, int j) {
         if (i < 0 || i >= m || j < 0 || j >= n) {
@@ -329,7 +371,7 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
     }
 
     @Override
-    public FloatSparseMatrix set(int i, int j, float x) {
+    public void set(int i, int j, float x) {
         throw new UnsupportedOperationException();
     }
 
@@ -388,6 +430,7 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
 
     /**
      * Returns the transpose of matrix.
+     * @return the transpose of matrix.
      */
     public FloatSparseMatrix transpose() {
         FloatSparseMatrix trans = new FloatSparseMatrix(n, m, nonzeros.length);
@@ -420,10 +463,12 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
 
     /**
      * Returns the matrix multiplication C = A * B.
+     * @param B the operand.
+     * @return the multiplication.
      */
     public FloatSparseMatrix mm(FloatSparseMatrix B) {
         if (n != B.m) {
-            throw new IllegalArgumentException(String.format("Matrix dimensions do not match for matrix multiplication: %d x %d vs %d x %d", nrows(), ncols(), B.nrows(), B.ncols()));
+            throw new IllegalArgumentException(String.format("Matrix dimensions do not match for matrix multiplication: %d x %d vs %d x %d", nrow(), ncol(), B.nrow(), B.ncol()));
         }
 
         int n = B.n;
@@ -498,7 +543,8 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
     }
 
     /**
-     * Returns A' * A
+     * Returns {@code A' * A}.
+     * @return {@code A' * A}
      */
     public FloatSparseMatrix ata() {
         FloatSparseMatrix AT = transpose();
@@ -506,7 +552,8 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
     }
 
     /**
-     * Returns A * A'
+     * Returns {@code A * A'}.
+     * @return {@code A * A'}
      */
     public FloatSparseMatrix aat() {
         FloatSparseMatrix AT = transpose();
@@ -593,7 +640,7 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
 
     @Override
     public float[] diag() {
-        int n = Math.min(nrows(), ncols());
+        int n = Math.min(nrow(), ncol());
         float[] d = new float[n];
 
         for (int i = 0; i < n; i++) {
@@ -617,6 +664,8 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
      * ignore the optional supplementary data (e.g. right hand side vectors).
      *
      * @param path the input file path.
+     * @throws IOException when fails to read the file.
+     * @return the matrix.
      */
     public static FloatSparseMatrix harwell(Path path) throws IOException {
         logger.info("Reads sparse matrix file '{}'", path.toAbsolutePath());
@@ -639,8 +688,8 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
             }
 
             tokens = line.split("\\s+");
-            int nrows = Integer.parseInt(tokens[1]);
-            int ncols = Integer.parseInt(tokens[2]);
+            int nrow = Integer.parseInt(tokens[1]);
+            int ncol = Integer.parseInt(tokens[2]);
             int nz = Integer.parseInt(tokens[3]);
 
             line = scanner.nextLine();
@@ -650,10 +699,10 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
                 logger.info(line);
             }
 
-            int[] colIndex = new int[ncols + 1];
+            int[] colIndex = new int[ncol + 1];
             int[] rowIndex = new int[nz];
             float[] data = new float[nz];
-            for (int i = 0; i <= ncols; i++) {
+            for (int i = 0; i <= ncol; i++) {
                 colIndex[i] = scanner.nextInt() - 1;
             }
             for (int i = 0; i < nz; i++) {
@@ -663,7 +712,7 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
                 data[i] = scanner.nextFloat();
             }
 
-            return new FloatSparseMatrix(nrows, ncols, data, rowIndex, colIndex);
+            return new FloatSparseMatrix(nrow, ncol, data, rowIndex, colIndex);
         }
     }
 
@@ -680,6 +729,8 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
      * the optional supplementary data (e.g. right hand side vectors).
      *
      * @param path the input file path.
+     * @throws IOException when fails to read the file.
+     * @return the matrix.
      */
     public static FloatSparseMatrix rutherford(Path path) throws IOException {
         // As we ignore the supplementary data, the parsing process
@@ -699,18 +750,20 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
      * entries.
      *
      * @param path the input file path.
+     * @throws IOException when fails to read the file.
+     * @return the matrix.
      */
     public static FloatSparseMatrix text(Path path) throws IOException {
         try (InputStream stream = Files.newInputStream(path);
              Scanner scanner = new Scanner(stream)) {
-            int nrows = scanner.nextInt();
-            int ncols = scanner.nextInt();
+            int nrow = scanner.nextInt();
+            int ncol = scanner.nextInt();
             int nz = scanner.nextInt();
 
-            int[] colIndex = new int[ncols + 1];
+            int[] colIndex = new int[ncol + 1];
             int[] rowIndex = new int[nz];
             float[] data = new float[nz];
-            for (int i = 0; i <= ncols; i++) {
+            for (int i = 0; i <= ncol; i++) {
                 colIndex[i] = scanner.nextInt() - 1;
             }
             for (int i = 0; i < nz; i++) {
@@ -720,7 +773,7 @@ public class FloatSparseMatrix extends SMatrix implements Iterable<FloatSparseMa
                 data[i] = scanner.nextFloat();
             }
 
-            return new FloatSparseMatrix(nrows, ncols, data, rowIndex, colIndex);
+            return new FloatSparseMatrix(nrow, ncol, data, rowIndex, colIndex);
         }
     }
 }
