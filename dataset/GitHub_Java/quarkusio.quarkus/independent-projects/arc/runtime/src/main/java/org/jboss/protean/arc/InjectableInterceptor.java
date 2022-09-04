@@ -17,7 +17,6 @@
 package org.jboss.protean.arc;
 
 import javax.enterprise.inject.spi.Interceptor;
-import javax.enterprise.inject.spi.Prioritized;
 
 /**
  * Represents an interceptor bean.
@@ -26,6 +25,12 @@ import javax.enterprise.inject.spi.Prioritized;
  *
  * @param <T>
  */
-public interface InjectableInterceptor<T> extends InjectableBean<T>, Interceptor<T>, Prioritized {
+public interface InjectableInterceptor<T> extends InjectableBean<T>, Interceptor<T> {
+
+    /**
+     *
+     * @return the priority value
+     */
+    int getPriority();
 
 }

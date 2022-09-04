@@ -23,7 +23,6 @@ import java.util.Map;
 import javax.inject.Inject;
 import javax.ws.rs.client.ClientRequestFilter;
 import javax.ws.rs.client.ClientResponseFilter;
-import javax.ws.rs.ext.Providers;
 
 import org.apache.commons.logging.impl.Jdk14Logger;
 import org.apache.commons.logging.impl.LogFactoryImpl;
@@ -40,30 +39,25 @@ import org.jboss.protean.gizmo.MethodDescriptor;
 import org.jboss.protean.gizmo.ResultHandle;
 import org.jboss.resteasy.client.jaxrs.internal.proxy.ResteasyClientProxy;
 import org.jboss.resteasy.spi.ResteasyConfiguration;
-import org.jboss.shamrock.arc.deployment.AdditionalBeanBuildItem;
-import org.jboss.shamrock.arc.deployment.BeanRegistrarBuildItem;
 import org.jboss.shamrock.deployment.annotations.BuildProducer;
 import org.jboss.shamrock.deployment.annotations.BuildStep;
+import org.jboss.shamrock.arc.deployment.AdditionalBeanBuildItem;
+import org.jboss.shamrock.arc.deployment.BeanRegistrarBuildItem;
 import org.jboss.shamrock.deployment.builditem.CombinedIndexBuildItem;
-import org.jboss.shamrock.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
 import org.jboss.shamrock.deployment.builditem.GeneratedClassBuildItem;
-import org.jboss.shamrock.deployment.builditem.SslNativeConfigBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateProxyDefinitionBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateResourceBuildItem;
-import org.jboss.shamrock.deployment.util.ServiceUtil;
 import org.jboss.shamrock.restclient.runtime.DefaultResponseExceptionMapper;
 import org.jboss.shamrock.restclient.runtime.RestClientBase;
 import org.jboss.shamrock.restclient.runtime.RestClientProxy;
 
 class RestClientProcessor {
-
+    
     private static final DotName REST_CLIENT = DotName.createSimple(RestClient.class.getName());
 
     private static final DotName REGISTER_REST_CLIENT = DotName.createSimple(RegisterRestClient.class.getName());
-
-    private static final String PROVIDERS_SERVICE_FILE = "META-INF/services/" + Providers.class.getName();
 
     @Inject
     BuildProducer<GeneratedClassBuildItem> generatedClass;
@@ -82,18 +76,12 @@ class RestClientProcessor {
 
     @Inject
     BuildProducer<BeanRegistrarBuildItem> beanRegistrars;
-
+    
     @Inject
     BuildProducer<FeatureBuildItem> feature;
-
+    
     @Inject
     CombinedIndexBuildItem combinedIndexBuildItem;
-
-    @Inject
-    SslNativeConfigBuildItem SslNativeConfigBuildItem;
-
-    @Inject
-    BuildProducer<ExtensionSslNativeSupportBuildItem> extensionSslNativeSupport;
 
     @BuildStep
     public void build() throws Exception {
@@ -106,21 +94,14 @@ class RestClientProcessor {
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, ClientResponseFilter[].class.getName()));
         proxyDefinition.produce(new SubstrateProxyDefinitionBuildItem("javax.ws.rs.ext.Providers"));
         additionalBeans.produce(new AdditionalBeanBuildItem(RestClient.class));
-
+        resources.produce(new SubstrateResourceBuildItem("META-INF/services/javax.ws.rs.ext.Providers"));
+        //TODO: fix this, we don't want to just add all the providers
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "org.jboss.resteasy.core.ResteasyProviderFactoryImpl", "org.jboss.resteasy.client.jaxrs.internal.proxy.ProxyBuilderImpl"));
-        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, javax.ws.rs.ext.ReaderInterceptor[].class.getName()));
-
-        // for now, register all the providers for reflection. This is not something we want to keep but not having it generates a pile of warnings.
-        // we will improve that later with the SmallRye REST client.
-        resources.produce(new SubstrateResourceBuildItem(PROVIDERS_SERVICE_FILE));
-        for (String provider : ServiceUtil.classNamesNamedIn(getClass().getClassLoader(), PROVIDERS_SERVICE_FILE)) {
-            reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, provider));
-        }
-        // This abstract one is also accessed directly via reflection
-        reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, "org.jboss.resteasy.plugins.providers.jsonb.AbstractJsonBindingProvider"));
-
+        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderFactoryImpl"));
+        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl"));
+        reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, "org.jboss.resteasy.plugins.providers.jsonb.JsonBindingProvider", "org.jboss.resteasy.plugins.providers.jsonb.AbstractJsonBindingProvider"));
         proxyDefinition.produce(new SubstrateProxyDefinitionBuildItem(ResteasyConfiguration.class.getName()));
-
+        
         // According to the spec only rest client interfaces annotated with RegisterRestClient are registered as beans
         Map<DotName, ClassInfo> interfaces = new HashMap<>();
         for (AnnotationInstance annotation : combinedIndexBuildItem.getIndex().getAnnotations(REGISTER_REST_CLIENT)) {
@@ -138,7 +119,7 @@ class RestClientProcessor {
             }
             interfaces.put(theInfo.name(), theInfo);
         }
-
+        
         if (interfaces.isEmpty()) {
             return;
         }
@@ -149,7 +130,7 @@ class RestClientProcessor {
             proxyDefinition.produce(new SubstrateProxyDefinitionBuildItem(iName, RestClientProxy.class.getName()));
             reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, iName));
         }
-
+        
         BeanRegistrar beanRegistrar = new BeanRegistrar() {
 
             @Override
@@ -173,8 +154,5 @@ class RestClientProcessor {
             }
         };
         beanRegistrars.produce(new BeanRegistrarBuildItem(beanRegistrar));
-
-        // Indicates that this extension would like the SSL support to be enabled
-        extensionSslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(FeatureBuildItem.MP_REST_CLIENT));
     }
 }
