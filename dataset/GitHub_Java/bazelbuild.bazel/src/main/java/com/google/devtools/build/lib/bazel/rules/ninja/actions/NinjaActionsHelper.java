@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.bazel.rules.ninja.actions;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.DerivedArtifact;
@@ -26,6 +25,7 @@ import com.google.devtools.build.lib.actions.EmptyRunfilesSupplier;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.ShToolchain;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
+import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.GenericParsingException;
 import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaRule;
 import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaRuleVariable;
@@ -41,8 +41,6 @@ import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
-import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -53,6 +51,7 @@ import java.util.stream.Collectors;
  */
 public class NinjaActionsHelper {
   private final RuleContext ruleContext;
+  private final List<String> outputRootInputs;
   private final ImmutableSortedMap<PathFragment, NinjaTarget> allUsualTargets;
   private final ImmutableSortedMap<PathFragment, PhonyTarget> phonyTargets;
 
@@ -68,6 +67,8 @@ public class NinjaActionsHelper {
    *
    * @param ruleContext parent NinjaGraphRule rule context
    * @param artifactsHelper helper object to create artifacts
+   * @param outputRootInputs inputs under output_root directory. Should be symlinked by absolute
+   *     paths under execroot/output_root.
    * @param allUsualTargets mapping of outputs to all non-phony Ninja targets from Ninja file
    * @param phonyTargets mapping of names to all phony Ninja actions from Ninja file
    * @param phonyTargetArtifacts helper class for computing transitively included artifacts of phony
@@ -77,12 +78,14 @@ public class NinjaActionsHelper {
   NinjaActionsHelper(
       RuleContext ruleContext,
       NinjaGraphArtifactsHelper artifactsHelper,
+      List<String> outputRootInputs,
       ImmutableSortedMap<PathFragment, NinjaTarget> allUsualTargets,
       ImmutableSortedMap<PathFragment, PhonyTarget> phonyTargets,
       PhonyTargetArtifacts phonyTargetArtifacts,
       List<PathFragment> pathsToBuild) {
     this.ruleContext = ruleContext;
     this.artifactsHelper = artifactsHelper;
+    this.outputRootInputs = outputRootInputs;
     this.allUsualTargets = allUsualTargets;
     this.phonyTargets = phonyTargets;
     this.shellExecutable = ShToolchain.getPathOrError(ruleContext);
@@ -91,7 +94,39 @@ public class NinjaActionsHelper {
     this.pathsToBuild = pathsToBuild;
   }
 
-  void createNinjaActions() throws GenericParsingException {
+  void process() throws GenericParsingException {
+    createSymlinkActions();
+    createNinjaActions();
+  }
+
+  private void createSymlinkActions() throws GenericParsingException {
+    if (this.outputRootInputs.isEmpty()) {
+      return;
+    }
+    for (String input : this.outputRootInputs) {
+      // output_root_inputs are relative to the output_root directory, and we should
+      // pass inside createOutputArtifact() paths, relative to working directory.
+      DerivedArtifact derivedArtifact =
+          artifactsHelper.createOutputArtifact(
+              artifactsHelper
+                  .getOutputRootPath()
+                  .getRelative(input)
+                  .relativeTo(artifactsHelper.getWorkingDirectory()));
+      // This method already expects the path relative to output_root.
+      PathFragment absolutePath =
+          artifactsHelper.createAbsolutePathUnderOutputRoot(PathFragment.create(input));
+      SymlinkAction symlinkAction =
+          SymlinkAction.toAbsolutePath(
+              ruleContext.getActionOwner(),
+              absolutePath,
+              derivedArtifact,
+              String.format(
+                  "Symlinking %s under <execroot>/%s", input, artifactsHelper.getOutputRootPath()));
+      ruleContext.registerAction(symlinkAction);
+    }
+  }
+
+  private void createNinjaActions() throws GenericParsingException {
     // Traverse the action graph starting from the targets, specified by the user.
     // Only create the required actions.
     Set<PathFragment> visitedPaths = Sets.newHashSet();
@@ -130,8 +165,7 @@ public class NinjaActionsHelper {
 
     NestedSetBuilder<Artifact> inputsBuilder = NestedSetBuilder.stableOrder();
     ImmutableList.Builder<Artifact> outputsBuilder = ImmutableList.builder();
-    TreeMap<PathFragment, Artifact> depsReplacements = Maps.newTreeMap();
-    boolean isAlwaysDirty = fillArtifacts(target, inputsBuilder, outputsBuilder, depsReplacements);
+    boolean isAlwaysDirty = fillArtifacts(target, inputsBuilder, outputsBuilder);
 
     NinjaScope targetScope = createTargetScope(target);
     int targetOffset = target.getOffset();
@@ -162,8 +196,7 @@ public class NinjaActionsHelper {
   private boolean fillArtifacts(
       NinjaTarget target,
       NestedSetBuilder<Artifact> inputsBuilder,
-      ImmutableList.Builder<Artifact> outputsBuilder,
-      SortedMap<PathFragment, Artifact> depsReplacements)
+      ImmutableList.Builder<Artifact> outputsBuilder)
       throws GenericParsingException {
     boolean isAlwaysDirty = false;
     for (PathFragment input : target.getAllInputs()) {
@@ -172,8 +205,7 @@ public class NinjaActionsHelper {
         inputsBuilder.addTransitive(phonyTargetArtifacts.getPhonyTargetArtifacts(input));
         isAlwaysDirty |= phonyTarget.isAlwaysDirty();
       } else {
-        Artifact artifact = artifactsHelper.getInputArtifact(input);
-        inputsBuilder.add(artifact);
+        inputsBuilder.add(artifactsHelper.getInputArtifact(input));
       }
     }
 
@@ -212,7 +244,7 @@ public class NinjaActionsHelper {
     }
   }
 
-  private NinjaScope createTargetScope(NinjaTarget target) {
+  private static NinjaScope createTargetScope(NinjaTarget target) {
     ImmutableSortedMap.Builder<String, List<Pair<Integer, String>>> builder =
         ImmutableSortedMap.naturalOrder();
     target
@@ -220,7 +252,7 @@ public class NinjaActionsHelper {
         .forEach((key, value) -> builder.put(key, ImmutableList.of(Pair.of(0, value))));
     String inNewline =
         target.getUsualInputs().stream()
-            .map(this::getInputPathWithDepsMappingReplacement)
+            .map(PathFragment::getPathString)
             .collect(Collectors.joining("\n"));
     String out =
         target.getOutputs().stream()
@@ -251,13 +283,5 @@ public class NinjaActionsHelper {
     Preconditions.checkNotNull(ruleContext.getConfiguration())
         .modifyExecutionInfo(map, "NinjaRule");
     return map;
-  }
-
-  private String getInputPathWithDepsMappingReplacement(PathFragment fragment) {
-    Artifact bazelArtifact = artifactsHelper.getDepsMappingArtifact(fragment);
-    if (bazelArtifact != null) {
-      return bazelArtifact.getPath().getPathString();
-    }
-    return fragment.getPathString();
   }
 }
