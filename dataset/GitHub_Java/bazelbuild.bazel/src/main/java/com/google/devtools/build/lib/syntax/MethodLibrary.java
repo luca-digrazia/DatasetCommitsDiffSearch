@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Ascii;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
@@ -768,7 +769,7 @@ class MethodLibrary {
     // "--internal_skylark_flag_test_canary" flag is enabled, append an extra marker string to
     // the output.
     if (thread.getSemantics().internalSkylarkFlagTestCanary()) {
-      p.append("<== Starlark flag test ==>");
+      p.append("<== skylark flag test ==>");
     }
 
     thread.getPrintHandler().print(thread, p.toString());
@@ -797,7 +798,7 @@ class MethodLibrary {
             noneable = true)
       })
   public String type(Object object) {
-    // There is no 'type' type in Starlark, so we return a string with the type name.
+    // There is no 'type' type in Skylark, so we return a string with the type name.
     return Starlark.type(object);
   }
 
@@ -927,8 +928,8 @@ class MethodLibrary {
       result =
           Depset.fromDirectAndTransitive(
               order,
-              Sequence.noneableCast(direct, Object.class, "direct"),
-              Sequence.noneableCast(transitive, Depset.class, "transitive"),
+              listFromNoneable(direct, Object.class, "direct"),
+              listFromNoneable(transitive, Depset.class, "transitive"),
               semantics.incompatibleAlwaysCheckDepsetElements());
     } else {
       if (x != Starlark.NONE) {
@@ -947,12 +948,22 @@ class MethodLibrary {
       // This is an extremely inefficient check and should be only done in the
       // "--debug_depset_depth" mode.
       try {
-        result.toCollection(); // may throw exception
+        result.getSet().toList();
       } catch (NestedSetDepthException ex) {
         throw Starlark.errorf("depset exceeded maximum depth %d", ex.getDepthLimit());
       }
     }
     return result;
+  }
+
+  private static <T> List<T> listFromNoneable(
+      Object listOrNone, Class<T> objectType, String paramName) throws EvalException {
+    if (listOrNone != Starlark.NONE) {
+      SkylarkType.checkType(listOrNone, Sequence.class, paramName);
+      return ((Sequence<?>) listOrNone).getContents(objectType, paramName);
+    } else {
+      return ImmutableList.of();
+    }
   }
 
   private static Depset legacyDepsetConstructor(
@@ -970,13 +981,22 @@ class MethodLibrary {
     }
 
     // Non-legacy behavior: either 'transitive' or 'direct' were specified.
-    List<Object> directElements =
-        direct != Starlark.NONE
-            ? Sequence.cast(direct, Object.class, "direct")
-            : Sequence.cast(items, Object.class, "items");
+    List<Object> directElements;
+    if (direct != Starlark.NONE) {
+      SkylarkType.checkType(direct, Sequence.class, "direct");
+      directElements = ((Sequence<?>) direct).getContents(Object.class, "direct");
+    } else {
+      SkylarkType.checkType(items, Sequence.class, "items");
+      directElements = ((Sequence<?>) items).getContents(Object.class, "items");
+    }
 
-    List<Depset> transitiveList = Sequence.noneableCast(transitive, Depset.class, "transitive");
-
+    List<Depset> transitiveList;
+    if (transitive != Starlark.NONE) {
+      SkylarkType.checkType(transitive, Sequence.class, "transitive");
+      transitiveList = ((Sequence<?>) transitive).getContents(Depset.class, "transitive");
+    } else {
+      transitiveList = ImmutableList.of();
+    }
     return Depset.fromDirectAndTransitive(
         order, directElements, transitiveList, semantics.incompatibleAlwaysCheckDepsetElements());
   }
@@ -1023,7 +1043,7 @@ class MethodLibrary {
     return StarlarkList.copyOf(thread.mutability(), result);
   }
 
-  /** Starlark int type. */
+  /** Skylark int type. */
   @SkylarkModule(
       name = "int",
       category = SkylarkModuleCategory.BUILTIN,
@@ -1042,7 +1062,7 @@ class MethodLibrary {
               + "</pre>")
   static final class IntModule implements StarlarkValue {} // (documentation only)
 
-  /** Starlark bool type. */
+  /** Skylark bool type. */
   @SkylarkModule(
       name = "bool",
       category = SkylarkModuleCategory.BUILTIN,
