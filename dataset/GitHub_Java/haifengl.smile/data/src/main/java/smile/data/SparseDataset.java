@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.data;
 
@@ -198,7 +198,6 @@ public interface SparseDataset extends Dataset<SparseArray> {
     /**
      * Reads spare dataset in coordinate triple tuple list format.
      * Coordinate file stores a list of (row, column, value) tuples:
-     * <p>
      * <pre>
      * instanceID attributeID value
      * instanceID attributeID value
@@ -214,12 +213,10 @@ public interface SparseDataset extends Dataset<SparseArray> {
      * construction.
      * <p>
      * In addition, there may a header line
-     * <p>
      * <pre>
      * D W N   // The number of rows, columns and nonzero entries.
      * </pre>
      * or 3 header lines
-     * <p>
      * <pre>
      * D    // The number of rows
      * W    // The number of columns
