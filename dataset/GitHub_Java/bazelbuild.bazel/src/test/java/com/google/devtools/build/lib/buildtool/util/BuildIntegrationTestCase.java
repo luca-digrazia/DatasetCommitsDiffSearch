@@ -321,11 +321,6 @@ public abstract class BuildIntegrationTestCase {
     return TestRuleModule.getModule();
   }
 
-  /** Gets a module to set up the strategies. */
-  protected BlazeModule getStrategyModule() {
-    return TestStrategyModule.getModule();
-  }
-
   private static BlazeModule getNoResolvedFileModule() {
     return new BlazeModule() {
       @Override
@@ -363,8 +358,7 @@ public abstract class BuildIntegrationTestCase {
         .addBlazeModule(getSpawnModule())
         .addBlazeModule(new IncludeScanningModule())
         .addBlazeModule(getBuildInfoModule())
-        .addBlazeModule(getRulesModule())
-        .addBlazeModule(getStrategyModule());
+        .addBlazeModule(getRulesModule());
   }
 
   protected List<String> getStartupOptions() {
