@@ -42,13 +42,11 @@ import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.BuildInfoCollectionFunction;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
 import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -77,7 +75,7 @@ public final class AnalysisPhaseRunner {
 
     // Target pattern evaluation.
     TargetPatternPhaseValue loadingResult;
-    Profiler.instance().markPhase(ProfilePhase.TARGET_PATTERN_EVAL);
+    Profiler.instance().markPhase(ProfilePhase.LOAD);
     try (SilentCloseable c = Profiler.instance().profile("evaluateTargetPatterns")) {
       loadingResult = evaluateTargetPatterns(env, request, validator);
     }
@@ -128,7 +126,12 @@ public final class AnalysisPhaseRunner {
       }
 
       for (BlazeModule module : env.getRuntime().getBlazeModules()) {
-        module.afterAnalysis(env, request, buildOptions, analysisResult.getTargetsToBuild());
+        module.afterAnalysis(
+            env,
+            request,
+            buildOptions,
+            analysisResult.getTargetsToBuild(),
+            analysisResult.getAspects());
       }
 
       reportTargets(env, analysisResult);
@@ -150,10 +153,9 @@ public final class AnalysisPhaseRunner {
       env.getReporter().handle(Event.progress("Loading complete."));
       env.getReporter().post(new NoAnalyzeEvent());
       logger.atInfo().log("No analysis requested, so finished");
-      FailureDetail failureDetail = BuildView.createFailureDetail(loadingResult, null, null);
-      if (failureDetail != null) {
-        throw new BuildFailedException(
-            failureDetail.getMessage(), DetailedExitCode.of(failureDetail));
+      String errorMessage = BuildView.createErrorMessage(loadingResult, null, null);
+      if (errorMessage != null) {
+        throw new BuildFailedException(errorMessage);
       }
     }
 

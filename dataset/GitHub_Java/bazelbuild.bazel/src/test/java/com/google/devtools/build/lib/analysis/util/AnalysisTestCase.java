@@ -404,8 +404,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
             reporter,
             eventBus);
     if (discardAnalysisCache) {
-      buildView.clearAnalysisCache(
-          analysisResult.getTargetsToBuild(), analysisResult.getAspectsMap().keySet());
+      buildView.clearAnalysisCache(analysisResult.getTargetsToBuild(), analysisResult.getAspects());
     }
     masterConfig = analysisResult.getConfigurationCollection();
     return analysisResult;
@@ -528,10 +527,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
       throws InterruptedException {
     Label label = owner.getLabel();
     ActionLookupValue.ActionLookupKey actionLookupKey =
-        ConfiguredTargetKey.builder()
-            .setLabel(label)
-            .setConfigurationKey(owner.getConfigurationKey())
-            .build();
+        ConfiguredTargetKey.of(label, owner.getConfigurationKey(), /*isHostConfiguration=*/ false);
     ActionLookupValue actionLookupValue;
     try {
       actionLookupValue =
@@ -554,11 +550,8 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         .getDerivedArtifact(
             label.getPackageFragment().getRelative(packageRelativePath),
             getTargetConfiguration().getBinDirectory(label.getPackageIdentifier().getRepository()),
-            ConfiguredTargetKey.builder()
-                .setConfiguredTarget(owner)
-                .setConfiguration(
-                    skyframeExecutor.getConfiguration(reporter, owner.getConfigurationKey()))
-                .build());
+            ConfiguredTargetKey.of(
+                owner, skyframeExecutor.getConfiguration(reporter, owner.getConfigurationKey())));
   }
 
   protected Set<SkyKey> getSkyframeEvaluatedTargetKeys() {
