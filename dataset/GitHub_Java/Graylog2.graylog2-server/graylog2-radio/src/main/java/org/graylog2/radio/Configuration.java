@@ -20,8 +20,8 @@
 package org.graylog2.radio;
 
 import com.github.joschi.jadconfig.Parameter;
-import com.github.joschi.jadconfig.validators.InetPortValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
+import com.lmax.disruptor.*;
 import org.graylog2.plugin.Tools;
 import org.graylog2.shared.BaseConfiguration;
 import org.slf4j.Logger;
@@ -36,15 +36,8 @@ public class Configuration extends BaseConfiguration {
 
     private static final Logger LOG = LoggerFactory.getLogger(Configuration.class);
 
-    public enum TRANSPORT_TYPE {
-        AMQP, KAFKA
-    }
-
-    @Parameter(value = "node_id_file")
+    @Parameter(value = "node_id_file", required = false)
     private String nodeIdFile = "/etc/graylog2-radio-node-id";
-
-    @Parameter(value = "transport_type", required = true)
-    private String transportType = "amqp";
 
     @Parameter(value = "rest_listen_uri", required = true)
     private String restListenUri = "http://127.0.0.1:12950/";
@@ -52,52 +45,26 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "graylog2_server_uri", required = true)
     private String graylog2ServerUri;
 
-    @Parameter(value = "rest_transport_uri")
-    private String restTransportUri;
-
-    @Parameter(value = "kafka_brokers")
+    @Parameter(value = "kafka_brokers", required = true)
     private String kafkaBrokers;
 
-    @Parameter(value = "kafka_required_acks")
+    @Parameter(value = "kafka_required_acks", required = true)
     private int kafkaRequiredAcks = 1;
 
-    @Parameter(value = "kafka_producer_type")
+    @Parameter(value = "kafka_producer_type", required = true)
     private String kafkaProducerType = "async";
 
-    @Parameter(value = "kafka_batch_size", validator = PositiveIntegerValidator.class)
+    @Parameter(value = "kafka_batch_size", required = true)
     private int kafkaBatchSize = 200;
 
-    @Parameter(value = "kafka_batch_max_wait_ms", validator = PositiveIntegerValidator.class)
+    @Parameter(value = "kafka_batch_max_wait_ms", required = true)
     private int kafkaBatchMaxWaitMs = 250;
-
-    @Parameter(value = "amqp_broker_hostname")
-    private String amqpHostname = "localhost";
-
-    @Parameter(value = "amqp_broker_port", validator = InetPortValidator.class)
-    private int amqpPort = 5672;
-
-    @Parameter(value = "amqp_broker_username")
-    private String amqpUsername;
-
-    @Parameter(value = "amqp_broker_password")
-    private String amqpPassword;
-
-    @Parameter(value = "amqp_broker_vhost")
-    private String amqpVhost = "/";
 
     @Parameter(value = "ring_size", required = true, validator = PositiveIntegerValidator.class)
     private int ringSize = 1024;
 
     public String getNodeIdFile() {
         return nodeIdFile;
-    }
-
-    public TRANSPORT_TYPE getTransportType() {
-        try {
-            return TRANSPORT_TYPE.valueOf(transportType.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new RuntimeException("Invalid [transport_type] configured: " + transportType);
-        }
     }
 
     public URI getRestListenUri() {
@@ -134,26 +101,6 @@ public class Configuration extends BaseConfiguration {
 
     public int getKafkaBatchMaxWaitMs() {
         return kafkaBatchMaxWaitMs;
-    }
-
-    public String getAmqpPassword() {
-        return amqpPassword;
-    }
-
-    public String getAmqpUsername() {
-        return amqpUsername;
-    }
-
-    public String getAmqpVirtualHost() {
-        return amqpVhost;
-    }
-
-    public int getAmqpPort() {
-        return amqpPort;
-    }
-
-    public String getAmqpHostname() {
-        return amqpHostname;
     }
 
 }

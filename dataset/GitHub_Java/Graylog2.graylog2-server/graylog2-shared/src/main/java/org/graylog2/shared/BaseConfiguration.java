@@ -1,22 +1,3 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
- *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package org.graylog2.shared;
 
 import com.github.joschi.jadconfig.Parameter;
@@ -31,7 +12,7 @@ import java.net.URI;
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
-public abstract class BaseConfiguration {
+public class BaseConfiguration {
     private static final Logger LOG = LoggerFactory.getLogger(BaseConfiguration.class);
 
     @Parameter(value = "rest_transport_uri", required = false)
@@ -42,12 +23,6 @@ public abstract class BaseConfiguration {
 
     @Parameter(value = "processor_wait_strategy", required = true)
     private String processorWaitStrategy = "blocking";
-
-    @Parameter(value = "rest_enable_cors", required = false)
-    private boolean restEnableCors = false;
-
-    @Parameter(value = "rest_enable_gzip", required = false)
-    private boolean restEnableGzip = false;
 
     public URI getRestTransportUri() {
         if (restTransportUri == null || restTransportUri.isEmpty()) {
@@ -86,15 +61,4 @@ public abstract class BaseConfiguration {
                 + " Falling back to default: BlockingWaitStrategy.");
         return new BlockingWaitStrategy();
     }
-
-    public boolean isRestEnableCors() {
-        return restEnableCors;
-    }
-
-    public boolean isRestEnableGzip() {
-        return restEnableGzip;
-    }
-
-    public abstract String getNodeIdFile();
-    public abstract URI getRestListenUri();
 }

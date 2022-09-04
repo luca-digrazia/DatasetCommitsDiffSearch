@@ -31,6 +31,7 @@ import com.google.common.collect.Lists;
 import com.lmax.disruptor.*;
 import com.mongodb.ServerAddress;
 import org.graylog2.plugin.Tools;
+import org.graylog2.shared.BaseConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +45,7 @@ import java.util.List;
  * @author Lennart Koopmann <lennart@socketfeed.com>
  * @author Jochen Schalanda <jochen@schalanda.name>
  */
-public class Configuration {
+public class Configuration extends BaseConfiguration {
 
     private static final Logger LOG = LoggerFactory.getLogger(Configuration.class);
 
@@ -53,12 +54,9 @@ public class Configuration {
 
     @Parameter(value = "password_secret", required = true)
     private String passwordSecret;
-    
+
     @Parameter(value = "rest_listen_uri", required = true)
     private String restListenUri = "http://127.0.0.1:12900/";
-
-    @Parameter(value = "rest_transport_uri", required = false)
-    private String restTransportUri;
 
     @Parameter(value = "udp_recvbuffer_sizes", required = true, validator = PositiveIntegerValidator.class)
     private int udpRecvBufferSizes = 1048576;
@@ -83,10 +81,7 @@ public class Configuration {
 
     @Parameter(value = "output_batch_size", required = true, validator = PositiveIntegerValidator.class)
     private int outputBatchSize = 5000;
-    
-    @Parameter(value = "processbuffer_processors", required = true, validator = PositiveIntegerValidator.class)
-    private int processBufferProcessors = 5;
-    
+
     @Parameter(value = "outputbuffer_processors", required = true, validator = PositiveIntegerValidator.class)
     private int outputBufferProcessors = 5;
     
@@ -95,15 +90,9 @@ public class Configuration {
     
     @Parameter(value = "outputbuffer_processor_threads_core_pool_size", required = true, validator = PositiveIntegerValidator.class)
     private int outputBufferProcessorThreadsCorePoolSize = 3;
-    
-    @Parameter(value = "processor_wait_strategy", required = true)
-    private String processorWaitStrategy = "blocking";
-    
+
     @Parameter(value = "ring_size", required = true, validator = PositiveIntegerValidator.class)
     private int ringSize = 1024;
-
-    @Parameter(value = "dead_letters_enabled")
-    private boolean deadLettersEnabled = false;
 
     @Parameter(value = "elasticsearch_config_file", required = false, validator = FileReadableValidator.class)
     private String elasticSearchConfigFile; // = "/etc/graylog2-elasticsearch.yml";
@@ -196,15 +185,6 @@ public class Configuration {
     @Parameter(value = "elasticsearch_discovery_initial_state_timeout", required = false)
     private String esInitialStateTimeout = "3s";
 
-    @Parameter(value = "elasticsearch_network_host", required = false)
-    private String esNetworkHost;
-
-    @Parameter(value = "elasticsearch_network_bind_host", required = false)
-    private String esNetworkBindHost;
-
-    @Parameter(value = "elasticsearch_network_publish_host", required = false)
-    private String esNetworkPublishHost;
-
     @Parameter(value = "versionchecks", required = false)
     private boolean versionchecks = true;
 
@@ -275,10 +255,6 @@ public class Configuration {
         return outputBatchSize;
     }
     
-    public int getProcessBufferProcessors() {
-        return processBufferProcessors;
-    }
-    
     public int getOutputBufferProcessors() {
         return outputBufferProcessors;
     }
@@ -289,28 +265,6 @@ public class Configuration {
     
     public int getOutputBufferProcessorThreadsMaxPoolSize() {
         return outputBufferProcessorThreadsMaxPoolSize;
-    }
-
-    public WaitStrategy getProcessorWaitStrategy() {
-        if (processorWaitStrategy.equals("sleeping")) {
-            return new SleepingWaitStrategy();
-        }
-        
-        if (processorWaitStrategy.equals("yielding")) {
-            return new YieldingWaitStrategy();
-        }
-        
-        if (processorWaitStrategy.equals("blocking")) {
-            return new BlockingWaitStrategy();
-        }
-        
-        if (processorWaitStrategy.equals("busy_spinning")) {
-            return new BusySpinWaitStrategy();
-        }
-        
-        LOG.warn("Invalid setting for [processor_wait_strategy]:"
-                + " Falling back to default: BlockingWaitStrategy.");
-        return new BlockingWaitStrategy();
     }
 
     public int getRingSize() {
@@ -430,28 +384,12 @@ public class Configuration {
         return Tools.getUriStandard(restListenUri);
     }
 
-    public URI getRestTransportUri() {
-        if (restTransportUri == null || restTransportUri.isEmpty()) {
-            return null;
-        }
-
-        return Tools.getUriStandard(restTransportUri);
-    }
-
     public String getRootUsername() {
         return rootUsername;
     }
 
     public String getRootPasswordSha2() {
         return rootPasswordSha2;
-    }
-
-    public void setRestTransportUri(String restTransportUri) {
-        this.restTransportUri = restTransportUri;
-    }
-
-    public int getUdpRecvBufferSizes() {
-        return udpRecvBufferSizes;
     }
 
     public String getEsClusterName() {
@@ -488,18 +426,6 @@ public class Configuration {
 
     public String getEsInitialStateTimeout() {
         return esInitialStateTimeout;
-    }
-
-    public String getEsNetworkHost() {
-        return esNetworkHost;
-    }
-
-    public String getEsNetworkBindHost() {
-        return esNetworkBindHost;
-    }
-
-    public String getEsNetworkPublishHost() {
-        return esNetworkPublishHost;
     }
 
     public String getRetentionStrategy() {
@@ -573,10 +499,5 @@ public class Configuration {
     public String getHttpProxyUri() {
         return httpProxyUri;
     }
-
-    public boolean isDeadLettersEnabled() {
-        return deadLettersEnabled;
-    }
-
 }
 
