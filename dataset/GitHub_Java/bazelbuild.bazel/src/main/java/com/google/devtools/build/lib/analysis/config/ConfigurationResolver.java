@@ -34,8 +34,8 @@ import com.google.devtools.build.lib.analysis.config.transitions.NullTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionUtil;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition.TransitionException;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition.TransitionException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
@@ -178,7 +178,7 @@ public final class ConfigurationResolver {
       DependencyKind dependencyKind, DependencyKey dependencyKey)
       throws DependencyEvaluationException, ValueMissingException, InterruptedException {
 
-    Dependency.Builder dependencyBuilder = dependencyKey.getDependencyBuilder();
+    Dependency.Builder dependencyBuilder = Dependency.builder().setLabel(dependencyKey.getLabel());
 
     ConfigurationTransition transition = dependencyKey.getTransition();
     if (transition == NullTransition.INSTANCE) {
@@ -419,7 +419,8 @@ public final class ConfigurationResolver {
     if (doesStarlarkTransition) {
       fromOptions =
           addDefaultStarlarkOptions(
-              fromOptions, StarlarkTransition.getDefaultValues(buildSettingPackages, transition));
+              fromOptions,
+              StarlarkTransition.getDefaultInputValues(buildSettingPackages, transition));
     }
 
     // TODO(bazel-team): Add safety-check that this never mutates fromOptions.

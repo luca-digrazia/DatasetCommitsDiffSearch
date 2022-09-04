@@ -46,12 +46,10 @@ import com.google.devtools.build.lib.analysis.ToolchainCollection;
 import com.google.devtools.build.lib.analysis.ToolchainContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.DependencyEvaluationException;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition.TransitionException;
 import com.google.devtools.build.lib.causes.AnalysisFailedCause;
@@ -490,14 +488,10 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     //         ...
     //
     // None of this has any effect on rules that don't utilize manual trimming.
-    PatchTransition toolchainTaggedTrimmingTransition =
-        ((ConfiguredRuleClassProvider) ruleClassProvider).getToolchainTaggedTrimmingTransition();
     BuildOptions toolchainOptions =
-        toolchainTaggedTrimmingTransition.patch(
-            new BuildOptionsView(
-                configuration.getOptions(),
-                toolchainTaggedTrimmingTransition.requiresOptionFragments()),
-            env.getListener());
+        ((ConfiguredRuleClassProvider) ruleClassProvider)
+            .getToolchainTaggedTrimmingTransition()
+            .patch(configuration.getOptions(), env.getListener());
 
     BuildConfigurationValue.Key toolchainConfig =
         BuildConfigurationValue.keyWithoutPlatformMapping(
@@ -525,8 +519,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
           group.getKey(),
           ToolchainContextKey.key()
               .configurationKey(toolchainConfig)
-              .requiredToolchainTypeLabels(execGroup.requiredToolchains())
-              .execConstraintLabels(execGroup.execCompatibleWith())
+              .requiredToolchainTypeLabels(execGroup.getRequiredToolchains())
+              .execConstraintLabels(execGroup.getExecutionPlatformConstraints())
               .shouldSanityCheckConfiguration(configuration.trimConfigurationsRetroactively())
               .build());
     }
@@ -544,14 +538,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
           (UnloadedToolchainContext) values.get(unloadedToolchainContextKey.getValue()).get();
       if (!valuesMissing) {
         String execGroup = unloadedToolchainContextKey.getKey();
-        if (parentToolchainContextKey != null) {
-          // Since we inherited the toolchain context from the parent of the dependency, the current
-          // target may also be in the resolved toolchains list. We need to clear it out.
-          // TODO(configurability): When updating this for config_setting, only remove the current
-          // target, not everything, because config_setting might want to check the toolchain
-          // dependencies.
-          unloadedToolchainContext = unloadedToolchainContext.withoutResolvedToolchains();
-        }
         if (execGroup.equals(targetUnloadedToolchainContext)) {
           toolchainContexts.addDefaultContext(unloadedToolchainContext);
         } else {
