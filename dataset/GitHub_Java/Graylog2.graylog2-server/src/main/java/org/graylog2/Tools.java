@@ -20,16 +20,23 @@
 
 package org.graylog2;
 
-import org.apache.log4j.Logger;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.Date;
+import java.util.Properties;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.InflaterInputStream;
-import org.apache.log4j.Level;
+
+import org.productivity.java.syslog4j.Syslog;
 
 /**
  * Tools.java: May 17, 2010 9:46:31 PM
@@ -39,8 +46,6 @@ import org.apache.log4j.Level;
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public final class Tools {
-
-    private static final Logger LOG = Logger.getLogger(Tools.class);
 
     private Tools() { }
 
@@ -57,7 +62,7 @@ public final class Tools {
             Process p = Runtime.getRuntime().exec(cmd);
             p.getInputStream().read(bo);
         } catch (IOException e) {
-            LOG.fatal("Could not determine own PID! " + e.getMessage(), e);
+            Log.emerg("Could not determine own PID! " + e.toString());
             return "unknown";
         }
         return new String(bo).trim();
@@ -141,22 +146,6 @@ public final class Tools {
         return ret;
     }
 
-    public static int log4jLevelToSyslog(Level level) {
-        if (level.equals(Level.DEBUG)) {
-            return 7;
-        } else if (level.equals(Level.INFO)) {
-            return 6;
-        } else if (level.equals(Level.WARN)) {
-            return 4;
-        } else if (level.equals(Level.ERROR)) {
-            return 3;
-        } else if (level.equals(Level.FATAL)) {
-            return 2;
-        }
-
-        return 4; // Warning.
-    }
-
 
     /**
      * Decompress ZLIB (RFC 1950) compressed data
@@ -199,6 +188,29 @@ public final class Tools {
     public static int getUTCTimestamp() {
        return (int) (System.currentTimeMillis()/1000);
     }
+
+	/**
+	 * Watch for file changes in the regular expression file.
+	 * This will allow you to add/remove/modify filters without restarting the server.
+	 * 
+	 */
+	public static void watchFilterFile(String regexPath) {
+		TimerTask task = new FileWatcher( new File(regexPath)) {
+			protected void onChange(File file) {
+				try {
+					FileInputStream regexStream = new FileInputStream(file);
+					Main.regexConfig.load(regexStream);
+					regexStream.close();
+					Syslog.getInstance("udp").alert(file.getName() + " has changed. Updating regexConfig properties.");
+				} catch (java.io.IOException e) {
+					Syslog.getInstance("udp").debug("Could not read regex config file: " + e.toString());
+				}
+			}
+		};
+		
+		Timer timer = new Timer();
+		timer.schedule(task, new Date(), 60000);
+	}
 
     public static String getLocalHostname() {
         InetAddress addr = null;

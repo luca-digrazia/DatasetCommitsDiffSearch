@@ -58,9 +58,9 @@ public final class Main {
     /**
      * This holds the filter out regular expressions. Defined in masterConfig
      */
+    public static Properties regexConfig = null;
+
     public static final String GRAYLOG2_VERSION = "0.9.5-dev";
-    
-    public static RulesEngine drools = null;
     
     private Main() { }
 
@@ -73,6 +73,7 @@ public final class Main {
         // Read config.
         System.out.println("[x] Reading config.");
         Main.masterConfig = new Properties();
+        Main.regexConfig = new Properties();
         // Allow -DconfigPath=/some/different/config.
         String configPath = System.getProperty("configPath", "/etc/graylog2.conf");
         System.out.println("[x] Using config: " + configPath);
@@ -85,6 +86,17 @@ public final class Main {
             System.out.println("Could not read config file: " + e.toString());
         }
         
+        try {
+        	String regexPath = Main.masterConfig.getProperty("filteroutPath");
+        	FileInputStream regexStream = new FileInputStream(regexPath);
+        	Main.regexConfig.load(regexStream);
+        	regexStream.close();
+			Tools.watchFilterFile(regexPath);
+			System.out.println("[x] Using filter out rules: " + regexPath);
+        } catch(java.io.IOException e) {
+        	System.out.println("Could not read regex config file: " + e.toString());
+        }
+
         // Define required configuration fields.
         List<String> requiredConfigFields = new ArrayList<String>();
         requiredConfigFields.add("syslog_listen_port");
@@ -178,22 +190,6 @@ public final class Main {
         ServerValue.setAvailableProcessors(HostSystem.getAvailableProcessors());
         ServerValue.setLocalHostname(Tools.getLocalHostname());
 
-        // Create Rules Engine
-        try {
-            String rulesFilePath = Main.masterConfig.getProperty("rulesFile");
-            if (rulesFilePath != null && !rulesFilePath.isEmpty()) {
-                Main.drools = new RulesEngine();
-                Main.drools.addRules(rulesFilePath);
-                System.out.println("[x] Using rules: " + rulesFilePath);
-            } else {
-                System.out.println("[x] Not using rules");
-            }
-        } catch (Exception e) {
-            System.out.println("Could not load rules engine: " + e.toString());
-            e.printStackTrace();
-            System.exit(1); // Exit with error.
-        }
-		
         // Start the Syslog thread that accepts syslog packages.
         SyslogServerThread syslogServerThread = new SyslogServerThread(Integer.parseInt(Main.masterConfig.getProperty("syslog_listen_port")));
         syslogServerThread.start();
@@ -217,7 +213,6 @@ public final class Main {
             
             System.out.println("[x] GELF threads are up.");
         }
-        
 
         // AMQP.
          if (AMQP.isEnabled(Main.masterConfig)) {

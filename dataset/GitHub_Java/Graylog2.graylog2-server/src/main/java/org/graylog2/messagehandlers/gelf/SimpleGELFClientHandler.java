@@ -28,10 +28,9 @@ import org.graylog2.Log;
 import org.graylog2.Main;
 import org.graylog2.Tools;
 import org.graylog2.database.MongoBridge;
+import org.graylog2.messagehandlers.common.GELFMessageFilterHook;
 import org.graylog2.messagehandlers.common.HostUpsertHook;
 import org.graylog2.messagehandlers.common.MessageCounterHook;
-import org.graylog2.messagehandlers.common.MessageFilterHook;
-import org.graylog2.messagehandlers.common.MessageParserHook;
 import org.graylog2.messagehandlers.common.ReceiveHookManager;
 import org.productivity.java.syslog4j.Syslog;
 
@@ -104,26 +103,34 @@ public class SimpleGELFClientHandler extends GELFClientHandlerBase implements GE
                 this.message.addAdditionalData("_amqp_queue", this.getAmqpReceiverQueue());
             }
 
+            // Store in MongoDB.
+            // Connect to database.
+            MongoBridge m = new MongoBridge();
 
             // Log if we are in debug mode.
             Log.info("Got GELF message: " + this.message.toString());
 
             // Insert message into MongoDB.
-            ReceiveHookManager.preProcess(new MessageParserHook(), message);
-            if( message.getFilterOut() ) {
+            boolean filterOut = ReceiveHookManager.preProcess(new GELFMessageFilterHook(), message);
+            if( filterOut ) {
             	if(Main.debugMode)
             		Syslog.getInstance("udp").debug("Not inserting event into database.");
             } else {
-                // Store in MongoDB.
-                // Connect to database.
-            	MongoBridge m = new MongoBridge();
-            	m.insertGelfMessage(message);
+                m.insertGelfMessage(message);
                 // This is doing the upcounting for statistics.
                 ReceiveHookManager.postProcess(new MessageCounterHook(), message);
 
                 // Counts up host in hosts collection.
                 ReceiveHookManager.postProcess(new HostUpsertHook(), message);
             }
+
+            m.insertGelfMessage(this.message);
+
+            // This is doing the upcounting for statistics.
+            ReceiveHookManager.postProcess(new MessageCounterHook(), this.message);
+
+            // Counts up host in hosts collection.
+            ReceiveHookManager.postProcess(new HostUpsertHook(), this.message);
         } catch(Exception e) {
             Log.warn("Could not handle GELF client: " + e.toString());
             return false;
