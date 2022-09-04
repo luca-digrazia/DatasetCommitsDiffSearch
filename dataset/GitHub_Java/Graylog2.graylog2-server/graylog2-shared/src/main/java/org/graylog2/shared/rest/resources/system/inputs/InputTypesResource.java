@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.shared.rest.resources.system.inputs;
 
@@ -24,8 +24,8 @@ import com.wordnik.swagger.annotations.ApiResponse;
 import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.rest.resources.system.inputs.responses.InputTypeInfo;
-import org.graylog2.shared.rest.resources.system.inputs.responses.InputTypesSummary;
+import org.graylog2.rest.models.system.inputs.responses.InputTypeInfo;
+import org.graylog2.rest.models.system.inputs.responses.InputTypesSummary;
 import org.graylog2.shared.inputs.InputDescription;
 import org.graylog2.shared.inputs.MessageInputFactory;
 import org.slf4j.Logger;
@@ -40,6 +40,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RequiresAuthentication
 @Api(value = "System/Inputs/Types", description = "Message input types of this node")
@@ -66,6 +67,22 @@ public class InputTypesResource extends RestResource {
 
     @GET
     @Timed
+    @Path("/all")
+    @ApiOperation(value = "Get information about all input types")
+    public Map<String, InputTypeInfo> all() {
+        final Map<String, InputDescription> availableTypes = messageInputFactory.getAvailableInputs();
+        return availableTypes
+                .entrySet()
+                .stream()
+                .collect(Collectors.toMap(entry -> entry.getKey(), entry -> {
+                    final InputDescription description = entry.getValue();
+                    return InputTypeInfo.create(entry.getKey(), description.getName(), description.isExclusive(),
+                            description.getRequestedConfiguration(), description.getLinkToDocs());
+                }));
+    }
+
+    @GET
+    @Timed
     @Path("{inputType}")
     @ApiOperation(value = "Get information about a single input type")
     @ApiResponses(value = {
@@ -79,6 +96,6 @@ public class InputTypesResource extends RestResource {
             throw new NotFoundException(message);
         }
 
-        return InputTypeInfo.create(inputType, description);
+        return InputTypeInfo.create(inputType, description.getName(), description.isExclusive(), description.getRequestedConfiguration(), description.getLinkToDocs());
     }
 }
