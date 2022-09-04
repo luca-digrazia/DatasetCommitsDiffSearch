@@ -6,6 +6,7 @@ import org.graylog.plugins.messageprocessor.EvaluationContext;
 import org.graylog.plugins.messageprocessor.ast.Rule;
 import org.graylog.plugins.messageprocessor.ast.statements.Statement;
 import org.graylog.plugins.messageprocessor.db.RuleSourceService;
+import org.graylog.plugins.messageprocessor.parser.FunctionRegistry;
 import org.graylog.plugins.messageprocessor.parser.ParseException;
 import org.graylog.plugins.messageprocessor.parser.RuleParser;
 import org.graylog.plugins.messageprocessor.rest.RuleSource;
@@ -26,16 +27,19 @@ public class NaiveRuleProcessor implements MessageProcessor {
 
     private final RuleSourceService ruleSourceService;
     private final RuleParser ruleParser;
+    private final FunctionRegistry functionRegistry;
     private final Journal journal;
     private final Meter filteredOutMessages;
 
     @Inject
     public NaiveRuleProcessor(RuleSourceService ruleSourceService,
                               RuleParser ruleParser,
+                              FunctionRegistry functionRegistry,
                               Journal journal,
                               MetricRegistry metricRegistry) {
         this.ruleSourceService = ruleSourceService;
         this.ruleParser = ruleParser;
+        this.functionRegistry = functionRegistry;
         this.journal = journal;
         this.filteredOutMessages = metricRegistry.meter(name(ProcessBufferProcessor.class, "filteredOutMessages"));
     }
@@ -54,7 +58,7 @@ public class NaiveRuleProcessor implements MessageProcessor {
 
             for (Message message : messages) {
                 try {
-                    final EvaluationContext context = new EvaluationContext();
+                    final EvaluationContext context = new EvaluationContext(functionRegistry);
                     if (rule.when().evaluateBool(context, message)) {
                         log.info("[✓] Message {} matches condition", message.getId());
 
