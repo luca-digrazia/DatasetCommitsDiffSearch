@@ -1,5 +1,6 @@
 package io.quarkus.cli.commands;
 
+import static io.quarkus.maven.utilities.MojoUtils.Element;
 import static io.quarkus.maven.utilities.MojoUtils.QUARKUS_VERSION_PROPERTY;
 import static io.quarkus.maven.utilities.MojoUtils.configuration;
 import static io.quarkus.maven.utilities.MojoUtils.getBomArtifactId;
@@ -7,7 +8,6 @@ import static io.quarkus.maven.utilities.MojoUtils.getPluginArtifactId;
 import static io.quarkus.maven.utilities.MojoUtils.getPluginGroupId;
 import static io.quarkus.maven.utilities.MojoUtils.getPluginVersion;
 import static io.quarkus.maven.utilities.MojoUtils.plugin;
-import static io.quarkus.templates.QuarkusTemplate.ADDITIONAL_GITIGNORE_ENTRIES;
 import static io.quarkus.templates.QuarkusTemplate.CLASS_NAME;
 import static io.quarkus.templates.QuarkusTemplate.PACKAGE_NAME;
 import static io.quarkus.templates.QuarkusTemplate.PROJECT_ARTIFACT_ID;
@@ -16,14 +16,12 @@ import static io.quarkus.templates.QuarkusTemplate.PROJECT_VERSION;
 import static io.quarkus.templates.QuarkusTemplate.QUARKUS_VERSION;
 import static io.quarkus.templates.QuarkusTemplate.SOURCE_TYPE;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 
 import org.apache.maven.model.Activation;
 import org.apache.maven.model.ActivationProperty;
@@ -37,10 +35,7 @@ import org.apache.maven.model.PluginExecution;
 import org.apache.maven.model.PluginManagement;
 import org.apache.maven.model.Profile;
 
-import io.quarkus.cli.commands.writer.Writer;
 import io.quarkus.maven.utilities.MojoUtils;
-import io.quarkus.maven.utilities.MojoUtils.Element;
-import io.quarkus.templates.BuildTool;
 import io.quarkus.templates.SourceType;
 import io.quarkus.templates.TemplateRegistry;
 import io.quarkus.templates.rest.BasicRest;
@@ -50,19 +45,17 @@ import io.quarkus.templates.rest.BasicRest;
  */
 public class CreateProject {
 
-    private static final String POM_PATH = "/pom.xml";
-    private Writer writer;
+    private File root;
     private String groupId;
     private String artifactId;
     private String version = getPluginVersion();
     private SourceType sourceType = SourceType.JAVA;
-    private BuildTool buildTool = BuildTool.MAVEN;
     private String className;
 
     private Model model;
 
-    public CreateProject(final Writer writer) {
-        this.writer = writer;
+    public CreateProject(final File file) {
+        root = file;
     }
 
     public CreateProject groupId(String groupId) {
@@ -90,19 +83,23 @@ public class CreateProject {
         return this;
     }
 
-    public CreateProject buildTool(BuildTool buildTool) {
-        this.buildTool = buildTool;
-        return this;
-    }
-
     public Model getModel() {
         return model;
     }
 
     public boolean doCreateProject(final Map<String, Object> context) throws IOException {
-        if (!writer.init()) {
+        if (root.exists() && !root.isDirectory()) {
+            System.out.println("Project root needs to either not exist or be a directory");
             return false;
+        } else if (!root.exists()) {
+            boolean mkdirStatus = root.mkdirs();
+            if (!mkdirStatus) {
+                System.out.println("Failed to create root directory");
+                return false;
+            }
         }
+
+        System.out.println("Creating a new project in " + root.getAbsolutePath());
 
         MojoUtils.getAllProperties().forEach((k, v) -> context.put(k.replace("-", "_"), v));
 
@@ -111,7 +108,6 @@ public class CreateProject {
         context.put(PROJECT_VERSION, version);
         context.put(QUARKUS_VERSION, getPluginVersion());
         context.put(SOURCE_TYPE, sourceType);
-        context.put(ADDITIONAL_GITIGNORE_ENTRIES, buildTool.getGitIgnoreEntries());
 
         if (className != null) {
             className = sourceType.stripExtensionFrom(className);
@@ -124,17 +120,15 @@ public class CreateProject {
             context.put(CLASS_NAME, className);
         }
 
-        TemplateRegistry.createTemplateWith(BasicRest.TEMPLATE_NAME).generate(writer, context);
+        TemplateRegistry.createTemplateWith(BasicRest.TEMPLATE_NAME).generate(root, context);
 
-        final byte[] pom = writer.getContent(POM_PATH);
-        model = MojoUtils.readPom(new ByteArrayInputStream(pom));
+        final File pom = new File(root + "/pom.xml");
+        model = MojoUtils.readPom(pom);
         addVersionProperty(model);
         addBom(model);
         addMainPluginConfig(model);
         addNativeProfile(model);
-        ByteArrayOutputStream pomOutputStream = new ByteArrayOutputStream();
-        MojoUtils.write(model, pomOutputStream);
-        writer.write(POM_PATH, pomOutputStream.toString());
+        MojoUtils.write(model, pom);
 
         return true;
     }
@@ -257,11 +251,5 @@ public class CreateProject {
 
     private boolean isParentPom(Model model) {
         return "pom".equals(model.getPackaging());
-    }
-
-    public static SourceType determineSourceType(Set<String> extensions) {
-        return extensions.stream().anyMatch(e -> e.toLowerCase().contains("kotlin"))
-                ? SourceType.KOTLIN
-                : SourceType.JAVA;
     }
 }

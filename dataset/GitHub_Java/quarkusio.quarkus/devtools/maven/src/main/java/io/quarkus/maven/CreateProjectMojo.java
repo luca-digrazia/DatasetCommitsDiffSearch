@@ -37,8 +37,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.maven.execution.DefaultMavenExecutionRequest;
-import org.apache.maven.execution.MavenExecutionRequest;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.BuildPluginManager;
@@ -46,17 +44,15 @@ import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
-import org.apache.maven.project.DefaultProjectBuildingRequest;
 import org.apache.maven.project.MavenProject;
-import org.apache.maven.project.ProjectBuilder;
 import org.fusesource.jansi.Ansi;
 
-import io.quarkus.SourceType;
 import io.quarkus.cli.commands.AddExtensions;
 import io.quarkus.cli.commands.CreateProject;
 import io.quarkus.maven.components.MavenVersionEnforcer;
 import io.quarkus.maven.components.Prompter;
 import io.quarkus.maven.utilities.MojoUtils;
+import io.quarkus.templates.SourceType;
 
 /**
  * This goal helps in setting up Quarkus Maven project with quarkus-maven-plugin, with sensible defaults
@@ -101,9 +97,6 @@ public class CreateProjectMojo extends AbstractMojo {
     @Component
     private BuildPluginManager pluginManager;
 
-    @Component
-    private ProjectBuilder projectBuilder;
-
     @Override
     public void execute() throws MojoExecutionException {
         // We detect the Maven version during the project generation to indicate the user immediately that the installed
@@ -140,26 +133,26 @@ public class CreateProjectMojo extends AbstractMojo {
 
         boolean success;
         try {
-            sanitizeOptions();
+            final SourceType sourceType = determineSourceType(extensions);
+            sanitizeOptions(sourceType);
 
             final Map<String, Object> context = new HashMap<>();
-            context.put("className", className);
             context.put("path", path);
 
             success = new CreateProject(projectRoot)
                     .groupId(projectGroupId)
                     .artifactId(projectArtifactId)
                     .version(projectVersion)
-                    .sourceType(determineSourceType(extensions))
+                    .sourceType(sourceType)
+                    .className(className)
                     .doCreateProject(context);
 
-            File createdPomFile = new File(projectRoot, "pom.xml");
             if (success) {
-                new AddExtensions(createdPomFile)
+                new AddExtensions(new File(projectRoot, "pom.xml"))
                         .addExtensions(extensions);
             }
 
-            createMavenWrapper(createdPomFile);
+            createMavenWrapper();
         } catch (IOException e) {
             throw new MojoExecutionException(e.getMessage(), e);
         }
@@ -168,20 +161,8 @@ public class CreateProjectMojo extends AbstractMojo {
         }
     }
 
-    private void createMavenWrapper(File createdPomFile) {
+    private void createMavenWrapper() {
         try {
-            // we need to modify the maven environment used by the wrapper plugin since the project could have been
-            // created in a directory other than the current
-            MavenProject newProject = projectBuilder.build(
-                    createdPomFile, new DefaultProjectBuildingRequest(session.getProjectBuildingRequest())).getProject();
-
-            MavenExecutionRequest newExecutionRequest = DefaultMavenExecutionRequest.copy(session.getRequest());
-            newExecutionRequest.setBaseDirectory(createdPomFile.getParentFile());
-
-            MavenSession newSession = new MavenSession(session.getContainer(), session.getRepositorySession(),
-                    newExecutionRequest, session.getResult());
-            newSession.setCurrentProject(newProject);
-
             executeMojo(
                     plugin(
                             groupId("io.takari"),
@@ -191,8 +172,8 @@ public class CreateProjectMojo extends AbstractMojo {
                     configuration(
                             element(name("maven"), MojoUtils.getProposedMavenVersion())),
                     executionEnvironment(
-                            newProject,
-                            newSession,
+                            project,
+                            session,
                             pluginManager));
         } catch (Exception e) {
             // no reason to fail if the wrapper could not be created
@@ -275,14 +256,10 @@ public class CreateProjectMojo extends AbstractMojo {
         return "true".equalsIgnoreCase(content) || "yes".equalsIgnoreCase(content) || "y".equalsIgnoreCase(content);
     }
 
-    private void sanitizeOptions() {
+    private void sanitizeOptions(SourceType sourceType) {
         // If className is null, we won't create the REST resource,
         if (className != null) {
-            if (className.endsWith(MojoUtils.JAVA_EXTENSION)) {
-                className = className.substring(0, className.length() - MojoUtils.JAVA_EXTENSION.length());
-            } else if (className.endsWith(MojoUtils.KOTLIN_EXTENSION)) {
-                className = className.substring(0, className.length() - MojoUtils.KOTLIN_EXTENSION.length());
-            }
+            className = sourceType.stripExtensionFrom(className);
 
             if (!className.contains(".")) {
                 // No package name, inject one

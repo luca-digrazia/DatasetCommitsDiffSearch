@@ -5,7 +5,6 @@ import static io.quarkus.maven.utilities.MojoUtils.getBomArtifactId;
 import static io.quarkus.maven.utilities.MojoUtils.getPluginArtifactId;
 import static io.quarkus.maven.utilities.MojoUtils.getPluginGroupId;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.contentOf;
 
 import java.io.File;
 import java.io.IOException;
@@ -16,6 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.maven.model.Model;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -42,7 +42,7 @@ public class CreateProjectTest {
 
         Model model = new Model();
         model.setModelVersion("4.0.0");
-        model.setGroupId("org.acme");
+        model.setGroupId("com.acme");
         model.setArtifactId("foobar");
         model.setVersion("10.1.2");
         final File pom = new File(testDir, "pom.xml");
@@ -53,7 +53,7 @@ public class CreateProjectTest {
 
         Assertions.assertTrue(createProject.doCreateProject(new HashMap<>()));
 
-        assertThat(contentOf(pom, "UTF-8"))
+        assertThat(FileUtils.readFileToString(pom, "UTF-8"))
                 .contains(getPluginArtifactId(), QUARKUS_VERSION_PROPERTY, getPluginGroupId());
         assertThat(new File(testDir, "src/main/java")).isDirectory();
         assertThat(new File(testDir, "src/test/java")).isDirectory();
@@ -69,7 +69,7 @@ public class CreateProjectTest {
             return list != null && list.length == 0;
         });
 
-        assertThat(contentOf(new File(testDir, "pom.xml"), "UTF-8"))
+        assertThat(FileUtils.readFileToString(new File(testDir, "pom.xml"), "UTF-8"))
                 .containsIgnoringCase(getBomArtifactId());
 
     }
@@ -82,7 +82,7 @@ public class CreateProjectTest {
 
         Model model = new Model();
         model.setModelVersion("4.0.0");
-        model.setGroupId("org.acme");
+        model.setGroupId("com.acme");
         model.setArtifactId("foobar");
         model.setVersion("10.1.2");
         final File pom = new File(testDir, "pom.xml");
@@ -94,7 +94,7 @@ public class CreateProjectTest {
 
         Assertions.assertTrue(createProject.doCreateProject(new HashMap<>()));
 
-        assertThat(contentOf(pom, "UTF-8"))
+        assertThat(FileUtils.readFileToString(pom, "UTF-8"))
                 .contains(getPluginArtifactId(), QUARKUS_VERSION_PROPERTY, getPluginGroupId());
         assertThat(new File(testDir, "src/main/java")).isDirectory();
         assertThat(new File(testDir, "src/test/java")).isDirectory();
@@ -107,7 +107,8 @@ public class CreateProjectTest {
         assertThat(new File(testDir, "src/test/java/org/foo/MyResourceTest.java")).isFile();
         assertThat(new File(testDir, "src/test/java/org/foo/NativeMyResourceIT.java")).isFile();
 
-        assertThat(contentOf(new File(testDir, "pom.xml"))).contains(getBomArtifactId());
+        assertThat(FileUtils.readFileToString(new File(testDir, "pom.xml"), "UTF-8"))
+                .containsIgnoringCase(getBomArtifactId());
 
     }
 
@@ -134,7 +135,7 @@ public class CreateProjectTest {
         assertThat(new File(testDir, "src/main/java/org/acme/MyResource.java")).isFile();
         assertThat(new File(testDir, "src/main/java/org/acme/MyApplication.java")).doesNotExist();
 
-        assertThat(contentOf(pom, "UTF-8"))
+        assertThat(FileUtils.readFileToString(pom, "UTF-8"))
                 .contains(getPluginArtifactId(), QUARKUS_VERSION_PROPERTY, getPluginGroupId());
         assertThat(new File(testDir, "src/main/java")).isDirectory();
         assertThat(new File(testDir, "src/test/java")).isDirectory();
@@ -142,7 +143,7 @@ public class CreateProjectTest {
         assertThat(new File(testDir, "src/main/resources/application.properties")).exists();
         assertThat(new File(testDir, "src/main/resources/META-INF/resources/index.html")).exists();
 
-        assertThat(contentOf(new File(testDir, "pom.xml"), "UTF-8"))
+        assertThat(FileUtils.readFileToString(new File(testDir, "pom.xml"), "UTF-8"))
                 .containsIgnoringCase(MojoUtils.QUARKUS_VERSION_PROPERTY);
 
     }
