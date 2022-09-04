@@ -41,7 +41,7 @@ public class GenerateConfigTask implements BiConsumer<CuratedApplication, Map<St
         try {
             Path temp = Files.createTempDirectory("empty");
             try {
-                AugmentActionImpl augmentAction = new AugmentActionImpl(application);
+                AugmentActionImpl augmentAction = new AugmentActionImpl(application, Collections.emptyList());
                 BuildResult buildResult = augmentAction.runCustomAction(new Consumer<BuildChainBuilder>() {
                     @Override
                     public void accept(BuildChainBuilder chainBuilder) {
