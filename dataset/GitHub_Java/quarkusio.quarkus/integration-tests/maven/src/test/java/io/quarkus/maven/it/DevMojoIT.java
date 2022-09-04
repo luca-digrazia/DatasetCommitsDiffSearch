@@ -47,6 +47,10 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         String pkg = DevModeTestUtils.getHttpResponse("/app/hello/package");
         assertThat(pkg).isEqualTo("org.acme");
 
+        //make sure the proper profile is set
+        String profile = DevModeTestUtils.getHttpResponse("/app/hello/profile");
+        assertThat(profile).isEqualTo("dev");
+
         //make sure webjars work
         DevModeTestUtils.getHttpResponse("webjars/bootstrap/3.1.0/css/bootstrap.min.css");
 
@@ -92,41 +96,6 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/hello").contains("carambar"));
-    }
-
-    @Test
-    public void testThatSourceChangesAreDetectedOnPomChange() throws Exception {
-        testDir = initProject("projects/classic", "projects/project-classic-run-src-and-pom-change");
-        runAndCheck();
-
-        // Edit a Java file too
-        final File javaSource = new File(testDir, "src/main/java/org/acme/HelloResource.java");
-        final String uuid = UUID.randomUUID().toString();
-        filter(javaSource, Collections.singletonMap("return \"hello\";", "return \"hello " + uuid + "\";"));
-
-        // edit the application.properties too
-        final File applicationProps = new File(testDir, "src/main/resources/application.properties");
-        filter(applicationProps, Collections.singletonMap("greeting=bonjour", "greeting=" + uuid + ""));
-
-        // Now edit the pom.xml to trigger the dev mode restart
-        final File pomSource = new File(testDir, "pom.xml");
-        filter(pomSource, Collections.singletonMap("<!-- insert test dependencies here -->",
-                "        <dependency>\n" +
-                        "            <groupId>io.quarkus</groupId>\n" +
-                        "            <artifactId>quarkus-smallrye-openapi</artifactId>\n" +
-                        "        </dependency>"));
-
-        // Wait until we get the updated responses
-        await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/app/hello").contains("hello " + uuid));
-
-        await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/app/hello/greeting").contains(uuid));
-
     }
 
     @Test
