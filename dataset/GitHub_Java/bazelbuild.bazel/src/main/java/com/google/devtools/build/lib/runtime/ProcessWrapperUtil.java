@@ -14,14 +14,11 @@
 
 package com.google.devtools.build.lib.runtime;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Utility functions for the process wrapper embedded tool, which should work on most platforms and
@@ -39,13 +36,13 @@ public final class ProcessWrapperUtil {
 
   /** Returns the {@link Path} of the process wrapper binary, or null if it doesn't exist. */
   public static Path getProcessWrapper(CommandEnvironment cmdEnv) {
-    PathFragment execPath = cmdEnv.getBlazeWorkspace().getBinTools().getExecPath(PROCESS_WRAPPER);
-    return execPath != null ? cmdEnv.getExecRoot().getRelative(execPath) : null;
+    return cmdEnv.getBlazeWorkspace().getBinTools().getEmbeddedPath(PROCESS_WRAPPER);
   }
 
   /** Returns a new {@link CommandLineBuilder} for the process wrapper tool. */
-  public static CommandLineBuilder commandLineBuilder() {
-    return new CommandLineBuilder();
+  public static CommandLineBuilder commandLineBuilder(
+      String processWrapperPath, List<String> commandArguments) {
+    return new CommandLineBuilder(processWrapperPath, commandArguments);
   }
 
   /**
@@ -53,39 +50,34 @@ public final class ProcessWrapperUtil {
    * process-wrapper tool.
    */
   public static class CommandLineBuilder {
-    private Optional<String> stdoutPath;
-    private Optional<String> stderrPath;
-    private Optional<Duration> timeout;
-    private Optional<Duration> killDelay;
-    private Optional<String> statisticsPath;
-    private Optional<List<String>> commandArguments;
-    private Optional<String> processWrapperPath;
+    private final String processWrapperPath;
+    private final List<String> commandArguments;
+    private Path stdoutPath;
+    private Path stderrPath;
+    private Duration timeout;
+    private Duration killDelay;
+    private Path statisticsPath;
 
-    private CommandLineBuilder() {
-      this.stdoutPath = Optional.empty();
-      this.stderrPath = Optional.empty();
-      this.timeout = Optional.empty();
-      this.killDelay = Optional.empty();
-      this.statisticsPath = Optional.empty();
-      this.commandArguments = Optional.empty();
-      this.processWrapperPath = Optional.empty();
+    private CommandLineBuilder(String processWrapperPath, List<String> commandArguments) {
+      this.processWrapperPath = processWrapperPath;
+      this.commandArguments = commandArguments;
     }
 
     /** Sets the path to use for redirecting stdout, if any. */
-    public CommandLineBuilder setStdoutPath(String stdoutPath) {
-      this.stdoutPath = Optional.of(stdoutPath);
+    public CommandLineBuilder setStdoutPath(Path stdoutPath) {
+      this.stdoutPath = stdoutPath;
       return this;
     }
 
     /** Sets the path to use for redirecting stderr, if any. */
-    public CommandLineBuilder setStderrPath(String stderrPath) {
-      this.stderrPath = Optional.of(stderrPath);
+    public CommandLineBuilder setStderrPath(Path stderrPath) {
+      this.stderrPath = stderrPath;
       return this;
     }
 
     /** Sets the timeout for the command run using the process-wrapper tool. */
     public CommandLineBuilder setTimeout(Duration timeout) {
-      this.timeout = Optional.of(timeout);
+      this.timeout = timeout;
       return this;
     }
 
@@ -94,54 +86,38 @@ public final class ProcessWrapperUtil {
      * timeout.
      */
     public CommandLineBuilder setKillDelay(Duration killDelay) {
-      this.killDelay = Optional.of(killDelay);
+      this.killDelay = killDelay;
       return this;
     }
 
     /** Sets the path for writing execution statistics (e.g. resource usage). */
-    public CommandLineBuilder setStatisticsPath(String statisticsPath) {
-      this.statisticsPath = Optional.of(statisticsPath);
-      return this;
-    }
-
-    /** Sets the command (and its arguments) to run using the process wrapper tool. */
-    public CommandLineBuilder setCommandArguments(List<String> commandArguments) {
-      this.commandArguments = Optional.of(commandArguments);
-      return this;
-    }
-
-    /** Sets the path of the process wrapper tool. */
-    public CommandLineBuilder setProcessWrapperPath(String processWrapperPath) {
-      this.processWrapperPath = Optional.of(processWrapperPath);
+    public CommandLineBuilder setStatisticsPath(Path statisticsPath) {
+      this.statisticsPath = statisticsPath;
       return this;
     }
 
     /** Build the command line to invoke a specific command using the process wrapper tool. */
     public List<String> build() {
-      Preconditions.checkState(
-          this.processWrapperPath.isPresent(), "processWrapperPath is required");
-      Preconditions.checkState(this.commandArguments.isPresent(), "commandArguments are required");
-
       List<String> fullCommandLine = new ArrayList<>();
-      fullCommandLine.add(processWrapperPath.get());
+      fullCommandLine.add(processWrapperPath);
 
-      if (timeout.isPresent()) {
-        fullCommandLine.add("--timeout=" + timeout.get().getSeconds());
+      if (timeout != null) {
+        fullCommandLine.add("--timeout=" + timeout.getSeconds());
       }
-      if (killDelay.isPresent()) {
-        fullCommandLine.add("--kill_delay=" + killDelay.get().getSeconds());
+      if (killDelay != null) {
+        fullCommandLine.add("--kill_delay=" + killDelay.getSeconds());
       }
-      if (stdoutPath.isPresent()) {
-        fullCommandLine.add("--stdout=" + stdoutPath.get());
+      if (stdoutPath != null) {
+        fullCommandLine.add("--stdout=" + stdoutPath);
       }
-      if (stderrPath.isPresent()) {
-        fullCommandLine.add("--stderr=" + stderrPath.get());
+      if (stderrPath != null) {
+        fullCommandLine.add("--stderr=" + stderrPath);
       }
-      if (statisticsPath.isPresent()) {
-        fullCommandLine.add("--stats=" + statisticsPath.get());
+      if (statisticsPath != null) {
+        fullCommandLine.add("--stats=" + statisticsPath);
       }
 
-      fullCommandLine.addAll(commandArguments.get());
+      fullCommandLine.addAll(commandArguments);
 
       return fullCommandLine;
     }

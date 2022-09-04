@@ -15,9 +15,17 @@ package com.google.devtools.build.lib.exec;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import com.google.devtools.build.lib.actions.ActionExecutionContext;
+import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
+import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.ExecutionRequirements;
+import com.google.devtools.build.lib.actions.ResourceSet;
+import com.google.devtools.build.lib.actions.SimpleSpawn;
+import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
@@ -27,6 +35,7 @@ import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.util.List;
 
@@ -76,7 +85,11 @@ public final class SymlinkTreeHelper {
       ImmutableMap<String, String> shellEnvironment,
       OutErr outErr)
       throws CommandException {
-    Command command = createCommand(execRoot, binTools, shellEnvironment);
+    List<String> argv = getSpawnArgumentList(execRoot,
+        binTools.getEmbeddedPath(BUILD_RUNFILES).asFragment());
+    Preconditions.checkNotNull(shellEnvironment);
+    Command command =
+        new CommandBuilder().addArgs(argv).setWorkingDir(execRoot).setEnv(shellEnvironment).build();
     if (outErr != null) {
       command.execute(outErr.getOutputStream(), outErr.getErrorStream());
     } else {
@@ -85,20 +98,27 @@ public final class SymlinkTreeHelper {
   }
 
   /**
-   * Creates symlink tree and output manifest using the {@code build-runfiles.cc} tool.
+   * Creates symlink tree using appropriate method. At this time tree always created using
+   * build-runfiles helper application.
    *
-   * @param enableRunfiles If {@code false} only the output manifest is created.
+   * @param owner action instance that requested symlink tree creation
+   * @param actionExecutionContext Services that are in the scope of the action.
+   * @param enableRunfiles
+   * @return a list of SpawnResults created during symlink creation, if any
    */
   public void createSymlinks(
-      Path execRoot,
-      OutErr outErr,
+      ActionExecutionContext actionExecutionContext,
       BinTools binTools,
       ImmutableMap<String, String> shellEnvironment,
       boolean enableRunfiles)
       throws ExecException {
     if (enableRunfiles) {
       try {
-        createSymlinksUsingCommand(execRoot, binTools, shellEnvironment, outErr);
+        createSymlinksUsingCommand(
+            actionExecutionContext.getExecRoot(),
+            binTools,
+            shellEnvironment,
+            actionExecutionContext.getFileOutErr());
       } catch (CommandException e) {
         throw new UserExecException(CommandUtils.describeCommandFailure(true, e), e);
       }
@@ -114,21 +134,39 @@ public final class SymlinkTreeHelper {
   }
 
   @VisibleForTesting
-  Command createCommand(
-      Path execRoot, BinTools binTools, ImmutableMap<String, String> shellEnvironment) {
-    Preconditions.checkNotNull(shellEnvironment);
+  Spawn createSpawn(
+      ActionExecutionMetadata owner,
+      Path execRoot,
+      BinTools binTools,
+      ImmutableMap<String, String> environment,
+      ActionInput inputManifestArtifact) {
+    ActionInput buildRunfiles = binTools.getActionInput(BUILD_RUNFILES);
+    return new SimpleSpawn(
+        owner,
+        getSpawnArgumentList(execRoot, buildRunfiles.getExecPath()),
+        environment,
+        ImmutableMap.of(
+            ExecutionRequirements.LOCAL, "",
+            ExecutionRequirements.NO_CACHE, "",
+            ExecutionRequirements.NO_SANDBOX, ""),
+        ImmutableList.of(inputManifestArtifact, buildRunfiles),
+        /*outputs=*/ ImmutableList.of(),
+        ResourceSet.ZERO);
+  }
+
+  /** Returns the complete argument list build-runfiles has to be called with. */
+  private ImmutableList<String> getSpawnArgumentList(Path execRoot, PathFragment buildRunfiles) {
     List<String> args = Lists.newArrayList();
-    args.add(binTools.getEmbeddedPath(BUILD_RUNFILES).asFragment().getPathString());
+    args.add(buildRunfiles.getPathString());
+
     if (filesetTree) {
       args.add("--allow_relative");
       args.add("--use_metadata");
     }
+
     args.add(inputManifest.relativeTo(execRoot).getPathString());
     args.add(symlinkTreeRoot.relativeTo(execRoot).getPathString());
-    return new CommandBuilder()
-        .addArgs(args)
-        .setWorkingDir(execRoot)
-        .setEnv(shellEnvironment)
-        .build();
+
+    return ImmutableList.copyOf(args);
   }
 }

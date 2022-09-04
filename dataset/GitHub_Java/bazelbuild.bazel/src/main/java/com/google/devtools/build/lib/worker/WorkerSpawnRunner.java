@@ -26,12 +26,12 @@ import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnResult;
-import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -80,7 +80,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
   private final LocalEnvProvider localEnvProvider;
   private final boolean sandboxUsesExpandedTreeArtifactsInRunfiles;
   private final BinTools binTools;
-  private final ResourceManager resourceManager;
 
   public WorkerSpawnRunner(
       Path execRoot,
@@ -90,8 +89,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
       SpawnRunner fallbackRunner,
       LocalEnvProvider localEnvProvider,
       boolean sandboxUsesExpandedTreeArtifactsInRunfiles,
-      BinTools binTools,
-      ResourceManager resourceManager) {
+      BinTools binTools) {
     this.execRoot = execRoot;
     this.workers = Preconditions.checkNotNull(workers);
     this.extraFlags = extraFlags;
@@ -100,7 +98,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
     this.localEnvProvider = localEnvProvider;
     this.sandboxUsesExpandedTreeArtifactsInRunfiles = sandboxUsesExpandedTreeArtifactsInRunfiles;
     this.binTools = binTools;
-    this.resourceManager = resourceManager;
   }
 
   @Override
@@ -111,7 +108,8 @@ final class WorkerSpawnRunner implements SpawnRunner {
   @Override
   public SpawnResult exec(Spawn spawn, SpawnExecutionContext context)
       throws ExecException, IOException, InterruptedException {
-    if (!Spawns.supportsWorkers(spawn)) {
+    if (!spawn.getExecutionInfo().containsKey(ExecutionRequirements.SUPPORTS_WORKERS)
+        || !spawn.getExecutionInfo().get(ExecutionRequirements.SUPPORTS_WORKERS).equals("1")) {
       // TODO(ulfjack): Don't circumvent SpawnExecutionPolicy. Either drop the warning here, or
       // provide a mechanism in SpawnExecutionPolicy to report warnings.
       reporter.handle(
@@ -122,11 +120,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
 
     context.report(ProgressStatus.SCHEDULING, getName());
     return actuallyExec(spawn, context);
-  }
-
-  @Override
-  public boolean canExec(Spawn spawn) {
-    return Spawns.supportsWorkers(spawn);
   }
 
   private SpawnResult actuallyExec(Spawn spawn, SpawnExecutionContext context)
@@ -315,7 +308,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
       }
 
       try (ResourceHandle handle =
-          resourceManager.acquireResources(owner, spawn.getLocalResources())) {
+          ResourceManager.instance().acquireResources(owner, spawn.getLocalResources())) {
         context.report(ProgressStatus.EXECUTING, getName());
         try {
           worker.prepareExecution(inputFiles, outputs, key.getWorkerFilesWithHashes().keySet());

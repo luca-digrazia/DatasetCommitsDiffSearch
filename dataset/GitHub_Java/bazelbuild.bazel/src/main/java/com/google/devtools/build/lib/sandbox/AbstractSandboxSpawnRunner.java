@@ -97,7 +97,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
       OutErr outErr = context.getFileOutErr();
       context.prefetchInputs();
 
-      SpawnResult result = run(originalSpawn, sandbox, outErr, timeout, statisticsPath);
+      SpawnResult result = run(originalSpawn, sandbox, outErr, timeout, execRoot, statisticsPath);
 
       context.lockOutputFiles();
       try {
@@ -119,6 +119,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
       SandboxedSpawn sandbox,
       OutErr outErr,
       Duration timeout,
+      Path execRoot,
       Path statisticsPath)
       throws IOException, InterruptedException {
     Command cmd = new Command(
@@ -132,7 +133,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
               true,
               sandbox.getArguments(),
               sandbox.getEnvironment(),
-              sandbox.getSandboxExecRoot().getPathString(),
+              execRoot.getPathString(),
               null);
     } else {
       failureMessage =
@@ -140,7 +141,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
                   verboseFailures,
                   originalSpawn.getArguments(),
                   originalSpawn.getEnvironment(),
-                  sandbox.getSandboxExecRoot().getPathString(),
+                  execRoot.getPathString(),
                   originalSpawn.getExecutionPlatform())
               + SANDBOX_DEBUG_SUGGESTION;
     }

@@ -404,11 +404,6 @@ public class ExecutionTool {
 
       if (explanationHandler != null) {
         uninstallExplanationHandler(explanationHandler);
-        try {
-          explanationHandler.close();
-        } catch (IOException _ignored) {
-          // Ignored
-        }
       }
       // Finalize output service last, so that if we do throw an exception, we know all the other
       // code has already run.
@@ -513,10 +508,10 @@ public class ExecutionTool {
   }
 
   /**
-   * An ErrorEventListener implementation that records DEPCHECKER events into a log file, iff the
-   * --explain flag is specified during a build.
+   * An ErrorEventListener implementation that records DEPCHECKER events into a log
+   * file, iff the --explain flag is specified during a build.
    */
-  private static class ExplanationHandler implements EventHandler, AutoCloseable {
+  private static class ExplanationHandler implements EventHandler {
     private final PrintWriter log;
 
     private ExplanationHandler(OutputStream log, String optionsDescription) {
@@ -524,10 +519,6 @@ public class ExecutionTool {
       this.log.println("Build options: " + optionsDescription);
     }
 
-    @Override
-    public void close() throws IOException {
-      this.log.close();
-    }
 
     @Override
     public void handle(Event event) {

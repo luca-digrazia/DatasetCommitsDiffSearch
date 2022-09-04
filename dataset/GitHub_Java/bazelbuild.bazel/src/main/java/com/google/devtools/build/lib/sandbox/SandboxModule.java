@@ -302,6 +302,7 @@ public final class SandboxModule extends BlazeModule {
     if (sandboxfsProcess != null) {
       checkNotNull(env, "env not initialized; was beforeCommand called?");
       env.getReporter().handle(Event.info(reason));
+      // TODO(jmmv): This can be incredibly slow.  Either fix sandboxfs or do it in the background.
       sandboxfsProcess.destroy();
       sandboxfsProcess = null;
     }

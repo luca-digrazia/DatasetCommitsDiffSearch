@@ -192,7 +192,6 @@ public class StandaloneSpawnStrategyTest {
         new ActionKeyContext(),
         null,
         outErr,
-        executor.getEventHandler(),
         ImmutableMap.<String, String>of(),
         ImmutableMap.of(),
         SIMPLE_ARTIFACT_EXPANDER,

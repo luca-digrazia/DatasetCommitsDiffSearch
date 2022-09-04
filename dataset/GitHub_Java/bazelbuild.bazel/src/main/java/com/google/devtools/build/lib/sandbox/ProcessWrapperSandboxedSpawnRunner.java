@@ -16,8 +16,10 @@ package com.google.devtools.build.lib.sandbox;
 
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.exec.TreeDeleter;
+import com.google.devtools.build.lib.actions.SpawnResult;
+import com.google.devtools.build.lib.exec.apple.XcodeLocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
+import com.google.devtools.build.lib.exec.local.PosixLocalEnvProvider;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
 import com.google.devtools.build.lib.util.OS;
@@ -38,7 +40,6 @@ final class ProcessWrapperSandboxedSpawnRunner extends AbstractSandboxSpawnRunne
   private final Path sandboxBase;
   private final LocalEnvProvider localEnvProvider;
   private final Duration timeoutKillDelay;
-  private final TreeDeleter treeDeleter;
 
   /**
    * Creates a sandboxed spawn runner that uses the {@code process-wrapper} tool.
@@ -49,23 +50,21 @@ final class ProcessWrapperSandboxedSpawnRunner extends AbstractSandboxSpawnRunne
    * @param timeoutKillDelay additional grace period before killing timing out commands
    */
   ProcessWrapperSandboxedSpawnRunner(
-      CommandEnvironment cmdEnv,
-      Path sandboxBase,
-      String productName,
-      Duration timeoutKillDelay,
-      TreeDeleter treeDeleter) {
+      CommandEnvironment cmdEnv, Path sandboxBase, String productName, Duration timeoutKillDelay) {
     super(cmdEnv);
     this.processWrapper = ProcessWrapperUtil.getProcessWrapper(cmdEnv);
     this.execRoot = cmdEnv.getExecRoot();
-    this.localEnvProvider = LocalEnvProvider.forCurrentOs(cmdEnv.getClientEnv());
+    this.localEnvProvider =
+        OS.getCurrent() == OS.DARWIN
+            ? new XcodeLocalEnvProvider(cmdEnv.getClientEnv())
+            : new PosixLocalEnvProvider(cmdEnv.getClientEnv());
     this.sandboxBase = sandboxBase;
     this.timeoutKillDelay = timeoutKillDelay;
-    this.treeDeleter = treeDeleter;
   }
 
   @Override
-  protected SandboxedSpawn prepareSpawn(Spawn spawn, SpawnExecutionContext context)
-      throws IOException, ExecException {
+  protected SpawnResult actuallyExec(Spawn spawn, SpawnExecutionContext context)
+      throws ExecException, IOException, InterruptedException {
     // Each invocation of "exec" gets its own sandbox base.
     // Note that the value returned by context.getId() is only unique inside one given SpawnRunner,
     // so we have to prefix our name to turn it into a globally unique value.
@@ -96,20 +95,21 @@ final class ProcessWrapperSandboxedSpawnRunner extends AbstractSandboxSpawnRunne
       commandLineBuilder.setStatisticsPath(statisticsPath);
     }
 
-    return new SymlinkedSandboxedSpawn(
-        sandboxPath,
-        sandboxExecRoot,
-        commandLineBuilder.build(),
-        environment,
-        SandboxHelpers.processInputFiles(
-            spawn,
-            context,
-            execRoot,
-            getSandboxOptions().symlinkedSandboxExpandsTreeArtifactsInRunfilesTree),
-        SandboxHelpers.getOutputs(spawn),
-        getWritableDirs(sandboxExecRoot, environment),
-        treeDeleter,
-        statisticsPath);
+    SandboxedSpawn sandbox =
+        new SymlinkedSandboxedSpawn(
+            sandboxPath,
+            sandboxExecRoot,
+            commandLineBuilder.build(),
+            environment,
+            SandboxHelpers.processInputFiles(
+                spawn,
+                context,
+                execRoot,
+                getSandboxOptions().symlinkedSandboxExpandsTreeArtifactsInRunfilesTree),
+            SandboxHelpers.getOutputs(spawn),
+            getWritableDirs(sandboxExecRoot, environment));
+
+    return runSpawn(spawn, sandbox, context, execRoot, timeout, statisticsPath);
   }
 
   @Override

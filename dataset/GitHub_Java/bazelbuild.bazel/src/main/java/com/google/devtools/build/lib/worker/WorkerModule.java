@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.eventbus.Subscribe;
+import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
@@ -26,16 +27,19 @@ import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.exec.ExecutorBuilder;
 import com.google.devtools.build.lib.exec.SpawnRunner;
+import com.google.devtools.build.lib.exec.apple.XcodeLocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
 import com.google.devtools.build.lib.exec.local.LocalSpawnRunner;
+import com.google.devtools.build.lib.exec.local.PosixLocalEnvProvider;
+import com.google.devtools.build.lib.exec.local.WindowsLocalEnvProvider;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.commands.CleanCommand.CleanStartingEvent;
 import com.google.devtools.build.lib.sandbox.SandboxOptions;
+import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.worker.WorkerOptions.MultiResourceConverter;
 import com.google.devtools.common.options.OptionsBase;
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -47,9 +51,9 @@ public class WorkerModule extends BlazeModule {
 
   private WorkerFactory workerFactory;
   private WorkerPool workerPool;
-  private WorkerOptions options;
   private ImmutableMap<String, Integer> workerPoolConfig;
-  
+  private WorkerOptions options;
+
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
     return "build".equals(command.name())
@@ -111,15 +115,11 @@ public class WorkerModule extends BlazeModule {
     for (Map.Entry<String, Integer> entry : options.workerMaxInstances) {
       newConfigBuilder.put(entry.getKey(), entry.getValue());
     }
-
     if (!newConfigBuilder.containsKey("")) {
       // Empty string gives the number of workers for any type of worker not explicitly specified.
       // If no value is given, use the default, 4.
-      // TODO(steinman): Calculate a reasonable default value instead of arbitrarily defaulting to
-      // 4.
-      newConfigBuilder.put("", MultiResourceConverter.DEFAULT_VALUE);
+      newConfigBuilder.put("", 4);
     }
-
     ImmutableMap<String, Integer> newConfig = ImmutableMap.copyOf(newConfigBuilder);
 
     // If the config changed compared to the last run, we have to create a new pool.
@@ -140,7 +140,7 @@ public class WorkerModule extends BlazeModule {
     Preconditions.checkNotNull(workerPool);
     ImmutableMultimap<String, String> extraFlags =
         ImmutableMultimap.copyOf(env.getOptions().getOptions(WorkerOptions.class).workerExtraFlags);
-    LocalEnvProvider localEnvProvider = LocalEnvProvider.forCurrentOs(env.getClientEnv());
+    LocalEnvProvider localEnvProvider = createLocalEnvProvider(env);
     WorkerSpawnRunner spawnRunner =
         new WorkerSpawnRunner(
             env.getExecRoot(),
@@ -152,8 +152,7 @@ public class WorkerModule extends BlazeModule {
             env.getOptions()
                 .getOptions(SandboxOptions.class)
                 .symlinkedSandboxExpandsTreeArtifactsInRunfilesTree,
-            env.getBlazeWorkspace().getBinTools(),
-            env.getLocalResourceManager());
+            env.getBlazeWorkspace().getBinTools());
     builder.addActionContext(new WorkerSpawnStrategy(env.getExecRoot(), spawnRunner));
 
     builder.addStrategyByContext(SpawnActionContext.class, "standalone");
@@ -167,9 +166,17 @@ public class WorkerModule extends BlazeModule {
     return new LocalSpawnRunner(
         env.getExecRoot(),
         localExecutionOptions,
-        env.getLocalResourceManager(),
+        ResourceManager.instance(),
         localEnvProvider,
         env.getBlazeWorkspace().getBinTools());
+  }
+
+  private static LocalEnvProvider createLocalEnvProvider(CommandEnvironment env) {
+    return OS.getCurrent() == OS.DARWIN
+        ? new XcodeLocalEnvProvider(env.getClientEnv())
+        : (OS.getCurrent() == OS.WINDOWS
+            ? new WindowsLocalEnvProvider(env.getClientEnv())
+            : new PosixLocalEnvProvider(env.getClientEnv()));
   }
 
   @Subscribe

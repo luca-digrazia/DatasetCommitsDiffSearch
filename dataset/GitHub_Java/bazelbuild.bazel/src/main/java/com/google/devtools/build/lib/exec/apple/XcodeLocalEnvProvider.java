@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.exec.apple;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
+import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
@@ -64,7 +65,7 @@ public final class XcodeLocalEnvProvider implements LocalEnvProvider {
 
   @Override
   public Map<String, String> rewriteLocalEnv(
-      Map<String, String> env, Path execRoot, String fallbackTmpDir) throws IOException {
+      Map<String, String> env, BinTools binTools, String fallbackTmpDir) throws IOException {
     boolean containsXcodeVersion = env.containsKey(AppleConfiguration.XCODE_VERSION_ENV_NAME);
     boolean containsAppleSdkVersion =
         env.containsKey(AppleConfiguration.APPLE_SDK_VERSION_ENV_NAME);
@@ -91,7 +92,7 @@ public final class XcodeLocalEnvProvider implements LocalEnvProvider {
     String developerDir = "";
     if (containsXcodeVersion) {
       String version = env.get(AppleConfiguration.XCODE_VERSION_ENV_NAME);
-      developerDir = getDeveloperDir(execRoot, DottedVersion.fromString(version));
+      developerDir = getDeveloperDir(binTools, DottedVersion.fromString(version));
       newEnvBuilder.put("DEVELOPER_DIR", developerDir);
     }
     if (containsAppleSdkVersion) {
@@ -151,17 +152,20 @@ public final class XcodeLocalEnvProvider implements LocalEnvProvider {
                     + "This most likely indicates that SDK version [%s] for platform [%s] is "
                     + "unsupported for the target version of xcode.\n"
                     + "%s\n"
-                    + "Stderr: %s",
+                    + "stdout: %s"
+                    + "stderr: %s",
                 terminationStatus.getExitCode(),
                 sdkVersion,
                 appleSdkPlatform,
                 terminationStatus.toString(),
+                new String(e.getResult().getStdout(), StandardCharsets.UTF_8),
                 new String(e.getResult().getStderr(), StandardCharsets.UTF_8)));
       }
       String message =
           String.format(
-              "xcrun failed.\n%s\n%s",
+              "xcrun failed.\n" + "%s\n" + "stdout: %s\n" + "stderr: %s",
               e.getResult().getTerminationStatus(),
+              new String(e.getResult().getStdout(), StandardCharsets.UTF_8),
               new String(e.getResult().getStderr(), StandardCharsets.UTF_8));
       throw new IOException(message, e);
     } catch (CommandException e) {
@@ -211,22 +215,19 @@ public final class XcodeLocalEnvProvider implements LocalEnvProvider {
    * operation, always call {@link #getDeveloperDir(Path, DottedVersion)} instead, which does
    * caching.
    *
-   * @param execRoot the execution root path, used to locate the cache file
+   * @param binTools the {@link BinTools}, used to locate the cache file
    * @param version the xcode version number to look up
    * @return an absolute path to the root of the Xcode developer directory
    * @throws IOException if there is an issue with obtaining the path from the spawned process,
    *     either because there is no installed xcode with the given version, or there was an
    *     unexpected issue finding or running the tool
    */
-  private static String queryDeveloperDir(Path execRoot, DottedVersion version)
+  private static String queryDeveloperDir(BinTools binTools, DottedVersion version)
       throws IOException {
+    String xcodeLocatorPath = binTools.getEmbeddedPath("xcode-locator").getPathString();
     try {
       CommandResult xcodeLocatorResult =
-          new Command(
-                  new String[] {
-                    execRoot.getRelative("_bin/xcode-locator").getPathString(), version.toString()
-                  })
-              .execute();
+          new Command(new String[] {xcodeLocatorPath, version.toString()}).execute();
 
       return new String(xcodeLocatorResult.getStdout(), StandardCharsets.UTF_8).trim();
     } catch (AbnormalTerminationException e) {
@@ -236,20 +237,27 @@ public final class XcodeLocalEnvProvider implements LocalEnvProvider {
       if (e.getResult().getTerminationStatus().exited()) {
         message =
             String.format(
-                "xcode-locator failed with code %s.\n"
+                "Running '%s %s' failed with code %s.\n"
                     + "This most likely indicates that xcode version %s is not available on the "
                     + "host machine.\n"
                     + "%s\n"
+                    + "stdout: %s\n"
                     + "stderr: %s",
+                xcodeLocatorPath,
+                version,
                 terminationStatus.getExitCode(),
                 version,
                 terminationStatus.toString(),
+                new String(e.getResult().getStdout(), StandardCharsets.UTF_8),
                 new String(e.getResult().getStderr(), StandardCharsets.UTF_8));
       } else {
         message =
             String.format(
-                "xcode-locator failed. %s\nstderr: %s",
+                "Running '%s %s' failed.\n" + "%s\n" + "stdout: %s\n" + "stderr: %s",
+                xcodeLocatorPath,
+                version,
                 e.getResult().getTerminationStatus(),
+                new String(e.getResult().getStdout(), StandardCharsets.UTF_8),
                 new String(e.getResult().getStderr(), StandardCharsets.UTF_8));
       }
       throw new IOException(message, e);
@@ -266,21 +274,21 @@ public final class XcodeLocalEnvProvider implements LocalEnvProvider {
    * external sources in the system. Values are cached in-memory throughout the lifetime of the
    * Bazel server.
    *
-   * @param execRoot the execution root path, used to locate the cache file
+   * @param binTools the {@link BinTools} path, used to locate the cache file
    * @param version the xcode version number to look up
    * @return an absolute path to the root of the Xcode developer directory
    * @throws IOException if there is an issue with obtaining the path from the spawned process,
    *     either because there is no installed xcode with the given version, or there was an
    *     unexpected issue finding or running the tool
    */
-  private static String getDeveloperDir(Path execRoot, DottedVersion version)
+  private static String getDeveloperDir(BinTools binTools, DottedVersion version)
       throws IOException {
     try {
       return developerDirCache.computeIfAbsent(
           version.toString(),
           (key) -> {
             try {
-              String developerDir = queryDeveloperDir(execRoot, version);
+              String developerDir = queryDeveloperDir(binTools, version);
               log.info("Queried Xcode developer dir with key " + key + " and got " + developerDir);
               return developerDir;
             } catch (IOException e) {
