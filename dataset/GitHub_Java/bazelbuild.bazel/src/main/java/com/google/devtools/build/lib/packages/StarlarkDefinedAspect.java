@@ -342,7 +342,7 @@ public class StarlarkDefinedAspect implements StarlarkExportable, StarlarkAspect
         && Objects.equals(hostTransition, that.hostTransition)
         && Objects.equals(hostFragments, that.hostFragments)
         && Objects.equals(requiredToolchains, that.requiredToolchains)
-        && useToolchainTransition == that.useToolchainTransition
+        && Objects.equals(useToolchainTransition, that.useToolchainTransition)
         && Objects.equals(aspectClass, that.aspectClass);
   }
 

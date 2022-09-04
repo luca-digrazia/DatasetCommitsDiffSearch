@@ -80,14 +80,15 @@ public final class Attribute implements Comparable<Attribute> {
   abstract static class RuleAspect<C extends AspectClass> {
     private static final ImmutableList<String> ALL_ATTR_ASPECTS = ImmutableList.of("*");
 
-    final C aspectClass;
-    final Function<Rule, AspectParameters> parametersExtractor;
+    protected final C aspectClass;
+    protected final Function<Rule, AspectParameters> parametersExtractor;
 
-    String baseAspectName;
-    ImmutableList.Builder<ImmutableSet<StarlarkProviderIdentifier>> inheritedRequiredProviders;
-    ImmutableList.Builder<String> inheritedAttributeAspects;
-    boolean inheritedAllProviders = false;
-    boolean inheritedAllAttributes = false;
+    protected String baseAspectName;
+    protected ImmutableList.Builder<ImmutableSet<StarlarkProviderIdentifier>>
+        inheritedRequiredProviders;
+    protected ImmutableList.Builder<String> inheritedAttributeAspects;
+    protected boolean inheritedAllProviders = false;
+    protected boolean inheritedAllAttributes = false;
 
     private RuleAspect(C aspectClass, Function<Rule, AspectParameters> parametersExtractor) {
       this.aspectClass = aspectClass;
@@ -123,21 +124,21 @@ public final class Attribute implements Comparable<Attribute> {
       }
     }
 
-    String getName() {
+    public String getName() {
       return this.aspectClass.getName();
     }
 
-    ImmutableSet<String> getRequiredParameters() {
-      return ImmutableSet.of();
+    public ImmutableSet<String> getRequiredParameters() {
+      return ImmutableSet.<String>of();
     }
 
-    protected abstract Aspect getAspect(Rule rule);
+    public abstract Aspect getAspect(Rule rule);
 
-    C getAspectClass() {
+    public C getAspectClass() {
       return aspectClass;
     }
 
-    void updateInheritedRequiredProviders(
+    protected void updateInheritedRequiredProviders(
         ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> requiredProviders) {
       if (!inheritedAllProviders && !requiredProviders.isEmpty()) {
         if (inheritedRequiredProviders == null) {
@@ -150,7 +151,7 @@ public final class Attribute implements Comparable<Attribute> {
       }
     }
 
-    void updateInheritedAttributeAspects(ImmutableList<String> attributeAspects) {
+    protected void updateInheritedAttributeAspects(ImmutableList<String> attributeAspects) {
       if (!inheritedAllAttributes && !ALL_ATTR_ASPECTS.equals(attributeAspects)) {
         if (inheritedAttributeAspects == null) {
           inheritedAttributeAspects = ImmutableList.builder();
@@ -162,7 +163,7 @@ public final class Attribute implements Comparable<Attribute> {
       }
     }
 
-    RequiredProviders buildInheritedRequiredProviders() {
+    protected RequiredProviders buildInheritedRequiredProviders() {
       if (baseAspectName == null) {
         return RequiredProviders.acceptNoneBuilder().build();
       } else if (inheritedAllProviders) {
@@ -183,13 +184,13 @@ public final class Attribute implements Comparable<Attribute> {
     }
 
     @Nullable
-    ImmutableSet<String> buildInheritedAttributeAspects() {
+    protected ImmutableSet<String> buildInheritedAttributeAspects() {
       if (baseAspectName == null) {
         return ImmutableSet.of();
       } else if (inheritedAllAttributes) {
         return null;
       } else {
-        return ImmutableSet.copyOf(inheritedAttributeAspects.build());
+        return ImmutableSet.<String>copyOf(inheritedAttributeAspects.build());
       }
     }
 
@@ -202,6 +203,11 @@ public final class Attribute implements Comparable<Attribute> {
     @VisibleForSerialization
     public ImmutableList<String> getInheritedAttributeAspectsList() {
       return inheritedAttributeAspects == null ? null : inheritedAttributeAspects.build();
+    }
+
+    @VisibleForSerialization
+    public String getBaseAspectName() {
+      return baseAspectName;
     }
   }
 
@@ -620,7 +626,7 @@ public final class Attribute implements Comparable<Attribute> {
      *     set.
      */
     public Builder<TYPE> setPropertyFlag(String propertyName) throws EvalException {
-      PropertyFlag flag;
+      PropertyFlag flag = null;
       try {
         flag = PropertyFlag.valueOf(propertyName);
       } catch (IllegalArgumentException e) {
@@ -1043,7 +1049,7 @@ public final class Attribute implements Comparable<Attribute> {
      * <p>This only works on a per-target basis, not on a per-file basis; with other words, it works
      * for 'deps' attributes, but not 'srcs' attributes.
      */
-    Builder<TYPE> allowedRuleClassesWithWarning(RuleClassNamePredicate allowedRuleClasses) {
+    public Builder<TYPE> allowedRuleClassesWithWarning(RuleClassNamePredicate allowedRuleClasses) {
       Preconditions.checkState(
           type.getLabelClass() == LabelClass.DEPENDENCY, "must be a label-valued type");
       propertyFlags.add(PropertyFlag.STRICT_LABEL_CHECKING);
@@ -1075,7 +1081,7 @@ public final class Attribute implements Comparable<Attribute> {
      * this label type attribute has to provide all the providers from one of those lists, otherwise
      * an error is produced during the analysis phase.
      */
-    final Builder<TYPE> mandatoryBuiltinProvidersList(
+    public final Builder<TYPE> mandatoryBuiltinProvidersList(
         Iterable<? extends Iterable<Class<? extends TransitiveInfoProvider>>> providersList) {
       Preconditions.checkState(
           type.getLabelClass() == LabelClass.DEPENDENCY, "must be a label-valued type");
@@ -1107,6 +1113,16 @@ public final class Attribute implements Comparable<Attribute> {
         this.requiredProvidersBuilder.addStarlarkSet(ImmutableSet.copyOf(providers));
       }
       return this;
+    }
+
+    public Builder<TYPE> legacyMandatoryProviders(String... ids) {
+      return mandatoryProviders(
+          Iterables.transform(
+              Arrays.asList(ids),
+              s -> {
+                Preconditions.checkNotNull(s);
+                return StarlarkProviderIdentifier.forLegacy(s);
+              }));
     }
 
     public Builder<TYPE> mandatoryProviders(Iterable<StarlarkProviderIdentifier> providers) {
@@ -1346,7 +1362,11 @@ public final class Attribute implements Comparable<Attribute> {
    * natively-defined {@link ComputedDefault}s, which are limited in the number of configurable
    * attributes they depend on, not on the number of different combinations of possible inputs.
    */
-  private static final ComputationLimiter<RuntimeException> NULL_COMPUTATION_LIMITER = count -> {};
+  private static final ComputationLimiter<RuntimeException> NULL_COMPUTATION_LIMITER =
+      new ComputationLimiter<RuntimeException>() {
+        @Override
+        public void onComputationCount(int count) throws RuntimeException {}
+      };
 
   /** Exception for computed default attributes that depend on too many configurable attributes. */
   private static class TooManyConfigurableAttributesException extends Exception {
@@ -1485,15 +1505,15 @@ public final class Attribute implements Comparable<Attribute> {
      * Create a computed default that can read all non-configurable attribute values and no
      * configurable attribute values.
      */
-    protected ComputedDefault() {
-      this(ImmutableList.of());
+    public ComputedDefault() {
+      this(ImmutableList.<String>of());
     }
 
     /**
      * Create a computed default that can read all non-configurable attributes values and one
      * explicitly specified configurable attribute value
      */
-    protected ComputedDefault(String depAttribute) {
+    public ComputedDefault(String depAttribute) {
       this(ImmutableList.of(depAttribute));
     }
 
@@ -1501,7 +1521,7 @@ public final class Attribute implements Comparable<Attribute> {
      * Create a computed default that can read all non-configurable attributes values and two
      * explicitly specified configurable attribute values.
      */
-    protected ComputedDefault(String depAttribute1, String depAttribute2) {
+    public ComputedDefault(String depAttribute1, String depAttribute2) {
       this(ImmutableList.of(depAttribute1, depAttribute2));
     }
 
@@ -1514,7 +1534,7 @@ public final class Attribute implements Comparable<Attribute> {
      * growth of possible values. {@link StarlarkComputedDefault} uses this, but is limited by
      * {@link FixedComputationLimiter#COMPUTED_DEFAULT_MAX_COMBINATIONS}.
      */
-    ComputedDefault(ImmutableList<String> dependencies) {
+    protected ComputedDefault(ImmutableList<String> dependencies) {
       // Order is important for #createDependencyAssignmentTuple.
       this.dependencies = Ordering.natural().immutableSortedCopy(dependencies);
     }
@@ -1617,7 +1637,7 @@ public final class Attribute implements Comparable<Attribute> {
           };
 
       ImmutableList.Builder<Type<?>> dependencyTypesBuilder = ImmutableList.builder();
-      Map<List<Object>, Object> lookupTable;
+      Map<List<Object>, Object> lookupTable = new HashMap<>();
       try {
         for (String dependency : dependencies) {
           Attribute attribute = rule.getRuleClassObject().getAttributeByNameMaybe(dependency);
@@ -1627,10 +1647,9 @@ public final class Attribute implements Comparable<Attribute> {
           }
           dependencyTypesBuilder.add(attribute.getType());
         }
-        lookupTable =
-            new HashMap<>(
-                strategy.computeValuesForAllCombinations(
-                    dependencies, attr.getType(), rule, FixedComputationLimiter.INSTANCE));
+        lookupTable.putAll(
+            strategy.computeValuesForAllCombinations(
+                dependencies, attr.getType(), rule, FixedComputationLimiter.INSTANCE));
         if (caughtEvalExceptionIfAny.get() != null) {
           throw caughtEvalExceptionIfAny.get();
         }
@@ -1984,9 +2003,10 @@ public final class Attribute implements Comparable<Attribute> {
   public static class LabelListLateBoundDefault<FragmentT>
       extends SimpleLateBoundDefault<FragmentT, List<Label>> {
     private LabelListLateBoundDefault(
+        boolean useHostConfiguration,
         Class<FragmentT> fragmentClass,
         Resolver<FragmentT, List<Label>> resolver) {
-      super(/*useHostConfiguration=*/ false, fragmentClass, ImmutableList.of(), resolver);
+      super(useHostConfiguration, fragmentClass, ImmutableList.of(), resolver);
     }
 
     public static <FragmentT> LabelListLateBoundDefault<FragmentT> fromTargetConfiguration(
@@ -1995,7 +2015,7 @@ public final class Attribute implements Comparable<Attribute> {
           !fragmentClass.equals(Void.class),
           "Use fromRuleAndAttributesOnly to specify a LateBoundDefault which does not use "
               + "configuration.");
-      return new LabelListLateBoundDefault<>(fragmentClass, resolver);
+      return new LabelListLateBoundDefault<>(false, fragmentClass, resolver);
     }
 
     /**
@@ -2012,7 +2032,7 @@ public final class Attribute implements Comparable<Attribute> {
      */
     public static LabelListLateBoundDefault<Void> fromRuleAndAttributesOnly(
         Resolver<Void, List<Label>> resolver) {
-      return new LabelListLateBoundDefault<>(Void.class, resolver);
+      return new LabelListLateBoundDefault<>(false, Void.class, resolver);
     }
   }
 
@@ -2084,7 +2104,7 @@ public final class Attribute implements Comparable<Attribute> {
    * @param transitionFactory the configuration transition for this attribute (which must be of type
    *     LABEL, LABEL_LIST, NODEP_LABEL or NODEP_LABEL_LIST).
    */
-  private Attribute(
+  Attribute(
       String name,
       String doc,
       Type<?> type,
@@ -2163,7 +2183,7 @@ public final class Attribute implements Comparable<Attribute> {
    * of '$' or ':').
    */
   public String getPublicName() {
-    return getStarlarkName(name);
+    return getStarlarkName(getName());
   }
 
   /**
@@ -2289,8 +2309,8 @@ public final class Attribute implements Comparable<Attribute> {
   /** Returns true if this attribute's value can be influenced by the build configuration. */
   public boolean isConfigurable() {
     // Output types are excluded because of Rule#populateExplicitOutputFiles.
-    return type.getLabelClass() != LabelClass.OUTPUT
-        && !getPropertyFlag(PropertyFlag.NONCONFIGURABLE);
+    return !(type.getLabelClass() == LabelClass.OUTPUT
+        || getPropertyFlag(PropertyFlag.NONCONFIGURABLE));
   }
 
   /**
@@ -2301,13 +2321,13 @@ public final class Attribute implements Comparable<Attribute> {
    * <p>Non-dependency attributes will always return {@code false}.
    */
   public boolean isToolDependency() {
-    if (type.getLabelClass() != LabelClass.DEPENDENCY) {
+    if (getType().getLabelClass() != LabelClass.DEPENDENCY) {
       return false;
     }
     if (getPropertyFlag(PropertyFlag.IS_TOOL_DEPENDENCY)) {
       return true;
     }
-    return transitionFactory.isTool();
+    return getTransitionFactory().isTool();
   }
   /**
    * Returns a predicate that evaluates to true for rule classes that are allowed labels in this
@@ -2344,7 +2364,7 @@ public final class Attribute implements Comparable<Attribute> {
   }
 
   public Predicate<AttributeMap> getCondition() {
-    return condition == null ? Predicates.alwaysTrue() : condition;
+    return condition == null ? Predicates.<AttributeMap>alwaysTrue() : condition;
   }
 
   public PredicateWithMessage<Object> getAllowedValues() {
@@ -2434,7 +2454,7 @@ public final class Attribute implements Comparable<Attribute> {
    * designates implicit attributes.
    */
   public boolean isImplicit() {
-    return isImplicit(name);
+    return isImplicit(getName());
   }
 
   /**
@@ -2450,7 +2470,7 @@ public final class Attribute implements Comparable<Attribute> {
    * late-bound attributes.
    */
   public boolean isLateBound() {
-    return isLateBound(name);
+    return isLateBound(getName());
   }
 
   /**
@@ -2572,12 +2592,12 @@ public final class Attribute implements Comparable<Attribute> {
   public static Object valueToStarlark(Object x) {
     // Is x a non-empty string_list_dict?
     if (x instanceof Map) {
-      Map<?, ?> map = (Map<?, ?>) x;
+      Map<?, ?> map = (Map) x;
       if (!map.isEmpty() && map.values().iterator().next() instanceof List) {
         // Recursively convert subelements.
         Dict.Builder<Object, Object> dict = Dict.builder();
         for (Map.Entry<?, ?> e : map.entrySet()) {
-          dict.put(e.getKey(), Starlark.fromJava(e.getValue(), null));
+          dict.put((String) e.getKey(), Starlark.fromJava(e.getValue(), null));
         }
         return dict.buildImmutable();
       }
