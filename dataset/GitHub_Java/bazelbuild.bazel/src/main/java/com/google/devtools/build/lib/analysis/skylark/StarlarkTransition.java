@@ -33,9 +33,9 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.PackageValue;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
+import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -52,8 +52,6 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
     INPUTS,
     /** Build settings that are written by a {@link StarlarkTransition} */
     OUTPUTS,
-    /** Build settings that are read and/or written by a {@link StarlarkTransition } */
-    INPUTS_AND_OUTPUTS
   }
 
   private final StarlarkDefinedConfigTransition starlarkDefinedConfigTransition;
@@ -107,9 +105,11 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
    * fetch the actual target.
    *
    * @param root transition to inspect
+   * @param inputsOrOutputs whether to return inputs or outputs
    */
   // TODO(juliexxia): handle the possibility of aliased build settings.
-  public static ImmutableSet<SkyKey> getAllBuildSettingPackageKeys(ConfigurationTransition root) {
+  public static ImmutableSet<SkyKey> getBuildSettingPackageKeys(
+      ConfigurationTransition root, Settings inputsOrOutputs) {
     ImmutableSet.Builder<SkyKey> keyBuilder = new ImmutableSet.Builder<>();
     try {
       root.visit(
@@ -117,8 +117,7 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
               transition -> {
                 keyBuilder.addAll(
                     getBuildSettingPackageKeys(
-                        getRelevantStarlarkSettingsFromTransition(
-                            transition, Settings.INPUTS_AND_OUTPUTS)));
+                        getRelevantStarlarkSettingsFromTransition(transition, inputsOrOutputs)));
               });
     } catch (TransitionException e) {
       // Not actually thrown in the visitor, but declared.
@@ -215,11 +214,22 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
   /**
    * For a given transition, find all Starlark build settings that are read while applying it, then
    * return a map of their label to their default values.
-   *
-   * @param buildSettingPackages contains packages of all build settings read by Starlark
-   *     transitions composing {@code root}. It may also contain other packages (e.g. packages of
-   *     build settings *written* by relevant transitions) so do not iterate over for input
-   *     packages.
+   */
+  public static ImmutableMap<Label, Object> getDefaultInputValues(
+      Environment env, ConfigurationTransition root)
+      throws TransitionException, InterruptedException {
+    ImmutableSet<SkyKey> buildSettingInputPackageKeys =
+        getBuildSettingPackageKeys(root, Settings.INPUTS);
+    Map<SkyKey, SkyValue> buildSettingPackages = env.getValues(buildSettingInputPackageKeys);
+    if (env.valuesMissing()) {
+      return null;
+    }
+    return getDefaultInputValues(buildSettingPackages, root);
+  }
+
+  /**
+   * For a given transition, find all Starlark build settings that are read while applying it, then
+   * return a map of their label to their default values.
    */
   public static ImmutableMap<Label, Object> getDefaultInputValues(
       Map<SkyKey, SkyValue> buildSettingPackages, ConfigurationTransition root)
@@ -244,7 +254,6 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
     return defaultValues.build();
   }
 
-  /** @param buildSettingPackages packages that include {@code setting}'s package */
   private static Target getAndCheckBuildSettingTarget(
       Map<SkyKey, SkyValue> buildSettingPackages, Label setting) throws TransitionException {
     Package buildSettingPackage =
@@ -267,20 +276,9 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
   }
 
   private static ImmutableSet<Label> getRelevantStarlarkSettingsFromTransition(
-      StarlarkTransition transition, Settings settings) {
-    Set<String> toGet = new HashSet<>();
-    switch (settings) {
-      case INPUTS:
-        toGet.addAll(transition.getInputs());
-        break;
-      case OUTPUTS:
-        toGet.addAll(transition.getOutputs());
-        break;
-      case INPUTS_AND_OUTPUTS:
-        toGet.addAll(transition.getInputs());
-        toGet.addAll(transition.getOutputs());
-        break;
-    }
+      StarlarkTransition transition, Settings inputOrOutput) {
+    List<String> toGet =
+        inputOrOutput.equals(Settings.INPUTS) ? transition.getInputs() : transition.getOutputs();
     return ImmutableSet.copyOf(
         toGet.stream()
             .filter(setting -> !setting.startsWith(COMMAND_LINE_OPTION_PREFIX))
