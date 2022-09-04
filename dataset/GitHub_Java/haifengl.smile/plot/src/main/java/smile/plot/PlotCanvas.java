@@ -135,7 +135,7 @@ public class PlotCanvas extends JPanel {
     /**
      * The shapes in the canvas, e.g. label, plots, etc.
      */
-    private List<Shape> shapes = new ArrayList<>();
+    private List<Shape> shapes = new ArrayList<Shape>();
     /**
      * The real canvas for plots.
      */

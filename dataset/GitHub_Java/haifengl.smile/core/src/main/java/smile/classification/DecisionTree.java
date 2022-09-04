@@ -511,7 +511,7 @@ public class DecisionTree implements SoftClassifier<double[]>, Serializable {
                 }
             } else {
 
-                List<SplitTask> tasks = new ArrayList<>(mtry);
+                List<SplitTask> tasks = new ArrayList<SplitTask>(mtry);
                 for (int j = 0; j < mtry; j++) {
                     tasks.add(new SplitTask(n, count, impurity, variables[j]));
                 }
@@ -944,7 +944,7 @@ public class DecisionTree implements SoftClassifier<double[]>, Serializable {
         }
 
         // Priority queue for best-first tree growing.
-        PriorityQueue<TrainNode> nextSplits = new PriorityQueue<>();
+        PriorityQueue<TrainNode> nextSplits = new PriorityQueue<TrainNode>();
 
         int n = y.length;
         int[] count = new int[k];
