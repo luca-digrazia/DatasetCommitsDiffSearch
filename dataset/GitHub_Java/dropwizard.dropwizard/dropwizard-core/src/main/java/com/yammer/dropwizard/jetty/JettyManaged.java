@@ -29,9 +29,10 @@ public class JettyManaged extends AbstractLifeCycle implements Managed {
         managed.stop();
     }
 
-    @Override
-    public String toString() {
-        //Delegate to the wrapped instance
-        return managed.toString();
+    /**
+     * @return the instance wrapped by this JettyManaged object
+     */
+    public Managed getWrappedInstance() {
+        return managed;
     }
 }
