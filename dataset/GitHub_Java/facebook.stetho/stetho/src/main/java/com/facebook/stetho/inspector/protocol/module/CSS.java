@@ -315,7 +315,7 @@ public class CSS implements ChromeDevtoolsDomain {
     public String value;
 
     @JsonProperty
-    public Boolean important;
+    public Boolean imporant;
   }
 
   private static class CSSProperty {
