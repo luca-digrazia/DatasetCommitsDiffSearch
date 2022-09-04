@@ -30,7 +30,7 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class DateHistogramResult extends HistogramResult {
+public class DateHistogramResult extends IndexQueryResult {
 	
 	private final DateHistogramFacet result;
 	private final Indexer.DateHistogramInterval interval;
@@ -41,13 +41,11 @@ public class DateHistogramResult extends HistogramResult {
 		this.result = result;
 		this.interval = interval;
 	}
-
-    @Override
+	
 	public Indexer.DateHistogramInterval getInterval() {
 		return interval;
 	}
-
-    @Override
+	
 	public Map<Long, Long> getResults() {
 		Map<Long, Long> results = Maps.newTreeMap();
 		
