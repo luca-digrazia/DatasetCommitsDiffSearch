@@ -49,7 +49,6 @@ import org.jboss.shamrock.core.ArchiveContext;
 import org.jboss.shamrock.core.ProcessorContext;
 import org.jboss.shamrock.core.ResourceProcessor;
 import org.jboss.shamrock.core.RuntimePriority;
-import org.jboss.shamrock.injection.InjectionInstance;
 import org.jboss.shamrock.undertow.runtime.UndertowDeploymentTemplate;
 
 /**
@@ -129,8 +128,8 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
         String path = appPath.value().asString();
         try (BytecodeRecorder recorder = processorContext.addDeploymentTask(RuntimePriority.JAXRS_DEPLOYMENT)) {
             UndertowDeploymentTemplate undertow = recorder.getRecordingProxy(UndertowDeploymentTemplate.class);
-            InjectionInstance<?> instanceFactory = recorder.newInstanceFactory(HttpServlet30Dispatcher.class.getName());
-            undertow.createInstanceFactory(instanceFactory);
+            recorder.newInstanceFactory(HttpServlet30Dispatcher.class.getName(), "injector");
+            undertow.createInstanceFactory(null);
             undertow.registerServlet(null, JAX_RS_SERVLET_NAME, HttpServlet30Dispatcher.class.getName(), true, null);
             undertow.addServletMapping(null, JAX_RS_SERVLET_NAME, path + "/*");
             List<AnnotationInstance> paths = index.getAnnotations(PATH);
