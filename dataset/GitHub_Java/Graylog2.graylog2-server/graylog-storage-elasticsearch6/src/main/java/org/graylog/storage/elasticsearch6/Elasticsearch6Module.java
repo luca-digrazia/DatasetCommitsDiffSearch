@@ -1,7 +1,6 @@
 package org.graylog.storage.elasticsearch6;
 
 import org.graylog.events.indices.EventIndexerAdapter;
-import org.graylog2.indexer.IndexToolsAdapter;
 import org.graylog2.indexer.cluster.ClusterAdapter;
 import org.graylog2.indexer.cluster.NodeAdapter;
 import org.graylog2.indexer.fieldtypes.IndexFieldTypePollerAdapter;
@@ -22,6 +21,5 @@ public class Elasticsearch6Module extends PluginModule {
         bind(NodeAdapter.class).to(NodeAdapterES6.class);
         bind(EventIndexerAdapter.class).to(EventIndexerAdapterES6.class);
         bind(IndexFieldTypePollerAdapter.class).to(IndexFieldTypePollerAdapterES6.class);
-        bind(IndexToolsAdapter.class).to(IndexToolsAdapterES6.class);
     }
 }
