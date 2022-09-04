@@ -176,7 +176,7 @@ public class ParserTest extends EvaluationTestCase {
   public void testFuncallExpr() throws Exception {
     FuncallExpression e = (FuncallExpression) parseExpression("foo(1, 2, bar=wiz)");
 
-    Identifier ident = (Identifier) e.getFunction();
+    Identifier ident = e.getFunction();
     assertThat(ident.getName()).isEqualTo("foo");
 
     assertThat(e.getArguments()).hasSize(3);
@@ -199,8 +199,8 @@ public class ParserTest extends EvaluationTestCase {
     FuncallExpression e =
       (FuncallExpression) parseExpression("foo.foo(1, 2, bar=wiz)");
 
-    DotExpression dotExpression = (DotExpression) e.getFunction();
-    assertThat(dotExpression.getField().getName()).isEqualTo("foo");
+    Identifier ident = e.getFunction();
+    assertThat(ident.getName()).isEqualTo("foo");
 
     assertThat(e.getArguments()).hasSize(3);
     assertThat(e.getNumPositionalArguments()).isEqualTo(2);
@@ -222,8 +222,8 @@ public class ParserTest extends EvaluationTestCase {
     FuncallExpression e =
       (FuncallExpression) parseExpression("foo.replace().split(1)");
 
-    DotExpression dotExpr = (DotExpression) e.getFunction();
-    assertThat(dotExpr.getField().getName()).isEqualTo("split");
+    Identifier ident = e.getFunction();
+    assertThat(ident.getName()).isEqualTo("split");
 
     assertThat(e.getArguments()).hasSize(1);
     assertThat(e.getNumPositionalArguments()).isEqualTo(1);
@@ -244,8 +244,8 @@ public class ParserTest extends EvaluationTestCase {
   public void testStringMethExpr() throws Exception {
     FuncallExpression e = (FuncallExpression) parseExpression("'foo'.foo()");
 
-    DotExpression dotExpression = (DotExpression) e.getFunction();
-    assertThat(dotExpression.getField().getName()).isEqualTo("foo");
+    Identifier ident = e.getFunction();
+    assertThat(ident.getName()).isEqualTo("foo");
 
     assertThat(e.getArguments()).isEmpty();
   }
@@ -291,8 +291,7 @@ public class ParserTest extends EvaluationTestCase {
 
     FuncallExpression e = (FuncallExpression) parseExpression(
         "'FOO.CC'.lower()[1:].startswith('oo')");
-    DotExpression dotExpression = (DotExpression) e.getFunction();
-    assertThat(dotExpression.getField().getName()).isEqualTo("startswith");
+    assertThat(e.getFunction().getName()).isEqualTo("startswith");
     assertThat(e.getArguments()).hasSize(1);
 
     s = (SliceExpression) parseExpression("'FOO.CC'[1:][:2]");
@@ -337,7 +336,7 @@ public class ParserTest extends EvaluationTestCase {
 
     // Test that the actual parameters are: (1, $error$, 3):
 
-    Identifier ident = (Identifier) e.getFunction();
+    Identifier ident = e.getFunction();
     assertThat(ident.getName()).isEqualTo("f");
 
     assertThat(e.getArguments()).hasSize(3);
@@ -524,7 +523,7 @@ public class ParserTest extends EvaluationTestCase {
     List<Statement> body = ((FunctionDefStatement) file.get(0)).getStatements();
     assertThat(body).hasSize(1);
 
-    List<Statement> loop = ((ForStatement) body.get(0)).getBlock();
+    List<Statement> loop = ((ForStatement) body.get(0)).block();
     assertThat(loop).hasSize(3);
 
     assertThat(((FlowStatement) loop.get(0)).getKind()).isEqualTo(FlowStatement.Kind.BREAK);
