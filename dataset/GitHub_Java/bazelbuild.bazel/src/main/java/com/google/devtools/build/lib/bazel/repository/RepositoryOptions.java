@@ -47,27 +47,17 @@ public class RepositoryOptions extends OptionsBase {
   public PathFragment experimentalRepositoryCache;
 
   @Option(
-      name = "experimental_repository_cache_hardlinks",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.BAZEL_CLIENT_OPTIONS,
-      effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
-      help =
-          "If set, the repository cache will hardlink the file in case of a"
-              + " cache hit, rather than copying. This is inteded to save disk space.")
-  public boolean useHardlinks;
-
-  @Option(
-      name = "distdir",
-      oldName = "experimental_distdir",
-      defaultValue = "null",
-      allowMultiple = true,
-      documentationCategory = OptionDocumentationCategory.BAZEL_CLIENT_OPTIONS,
-      effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      converter = OptionsUtils.PathFragmentConverter.class,
-      help =
-          "Additional places to search for archives before accessing the network "
-              + "to download them.")
+    name = "experimental_distdir",
+    defaultValue = "null",
+    allowMultiple = true,
+    documentationCategory = OptionDocumentationCategory.BAZEL_CLIENT_OPTIONS,
+    effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
+    metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+    converter = OptionsUtils.PathFragmentConverter.class,
+    help =
+        "Additional places to search for archives before accessing the network "
+            + "to download them."
+  )
   public List<PathFragment> experimentalDistdir;
 
   @Option(
