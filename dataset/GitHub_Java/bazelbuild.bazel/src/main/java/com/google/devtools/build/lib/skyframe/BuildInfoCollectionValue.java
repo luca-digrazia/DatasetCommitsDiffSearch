@@ -15,15 +15,13 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Interner;
+import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
-import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoCollection;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import java.util.Objects;
 
@@ -35,10 +33,10 @@ public class BuildInfoCollectionValue extends ActionLookupValue {
   private final BuildInfoCollection collection;
 
   BuildInfoCollectionValue(
+      ActionKeyContext actionKeyContext,
       BuildInfoCollection collection,
-      GeneratingActions generatingActions,
       boolean removeActionsAfterEvaluation) {
-    super(generatingActions, removeActionsAfterEvaluation);
+    super(actionKeyContext, collection.getActions(), removeActionsAfterEvaluation);
     this.collection = collection;
   }
 
@@ -51,19 +49,17 @@ public class BuildInfoCollectionValue extends ActionLookupValue {
     return getStringHelper().add("collection", collection).toString();
   }
 
+  private static final Interner<BuildInfoKeyAndConfig> keyInterner =
+      BlazeInterners.newWeakInterner();
+
   public static BuildInfoKeyAndConfig key(
       BuildInfoFactory.BuildInfoKey key, BuildConfiguration config) {
-    return BuildInfoKeyAndConfig.create(key, ConfiguredTargetKey.keyFromConfiguration(config).key);
+    return keyInterner.intern(
+        new BuildInfoKeyAndConfig(key, ConfiguredTargetKey.keyFromConfiguration(config).key));
   }
 
   /** Key for BuildInfoCollectionValues. */
-  @AutoCodec
   public static class BuildInfoKeyAndConfig extends ActionLookupKey {
-    private static final Interner<BuildInfoKeyAndConfig> keyInterner =
-        BlazeInterners.newWeakInterner();
-    public static final ObjectCodec<BuildInfoKeyAndConfig> CODEC =
-        new BuildInfoCollectionValue_BuildInfoKeyAndConfig_AutoCodec();
-
     private final BuildInfoFactory.BuildInfoKey infoKey;
     private final BuildConfigurationValue.Key configKey;
 
@@ -71,12 +67,6 @@ public class BuildInfoCollectionValue extends ActionLookupValue {
         BuildInfoFactory.BuildInfoKey key, BuildConfigurationValue.Key configKey) {
       this.infoKey = Preconditions.checkNotNull(key, configKey);
       this.configKey = Preconditions.checkNotNull(configKey, key);
-    }
-
-    @AutoCodec.Instantiator
-    static BuildInfoKeyAndConfig create(
-        BuildInfoFactory.BuildInfoKey infoKey, BuildConfigurationValue.Key configKey) {
-      return keyInterner.intern(new BuildInfoKeyAndConfig(infoKey, configKey));
     }
 
     @Override
