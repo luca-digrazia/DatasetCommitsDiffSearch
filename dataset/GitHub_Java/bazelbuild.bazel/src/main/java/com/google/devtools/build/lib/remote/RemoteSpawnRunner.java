@@ -14,18 +14,14 @@
 
 package com.google.devtools.build.lib.remote;
 
-import static com.google.devtools.build.lib.remote.util.Utils.getFromFuture;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.CommandLines.ParamFileActionInput;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.SpawnResult.Status;
@@ -36,7 +32,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.SpawnExecException;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.remote.Retrier.RetryException;
@@ -61,7 +56,6 @@ import com.google.protobuf.TextFormat.ParseException;
 import io.grpc.Context;
 import io.grpc.Status.Code;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -80,15 +74,13 @@ class RemoteSpawnRunner implements SpawnRunner {
   private static final int POSIX_TIMEOUT_EXIT_CODE = /*SIGNAL_BASE=*/128 + /*SIGALRM=*/14;
 
   private final Path execRoot;
-  private final RemoteOptions remoteOptions;
-  private final ExecutionOptions executionOptions;
+  private final RemoteOptions options;
   private final SpawnRunner fallbackRunner;
   private final boolean verboseFailures;
 
   @Nullable private final Reporter cmdlineReporter;
   @Nullable private final AbstractRemoteActionCache remoteCache;
   @Nullable private final GrpcRemoteExecutor remoteExecutor;
-  @Nullable private final RemoteRetrier retrier;
   private final String buildRequestId;
   private final String commandId;
   private final DigestUtil digestUtil;
@@ -99,8 +91,7 @@ class RemoteSpawnRunner implements SpawnRunner {
 
   RemoteSpawnRunner(
       Path execRoot,
-      RemoteOptions remoteOptions,
-      ExecutionOptions executionOptions,
+      RemoteOptions options,
       SpawnRunner fallbackRunner,
       boolean verboseFailures,
       @Nullable Reporter cmdlineReporter,
@@ -108,12 +99,10 @@ class RemoteSpawnRunner implements SpawnRunner {
       String commandId,
       @Nullable AbstractRemoteActionCache remoteCache,
       @Nullable GrpcRemoteExecutor remoteExecutor,
-      @Nullable RemoteRetrier retrier,
       DigestUtil digestUtil,
       Path logDir) {
     this.execRoot = execRoot;
-    this.remoteOptions = remoteOptions;
-    this.executionOptions = executionOptions;
+    this.options = options;
     this.fallbackRunner = fallbackRunner;
     this.remoteCache = remoteCache;
     this.remoteExecutor = remoteExecutor;
@@ -121,7 +110,6 @@ class RemoteSpawnRunner implements SpawnRunner {
     this.cmdlineReporter = cmdlineReporter;
     this.buildRequestId = buildRequestId;
     this.commandId = commandId;
-    this.retrier = retrier;
     this.digestUtil = digestUtil;
     this.logDir = logDir;
   }
@@ -140,12 +128,11 @@ class RemoteSpawnRunner implements SpawnRunner {
 
     context.report(ProgressStatus.EXECUTING, getName());
     // Temporary hack: the TreeNodeRepository should be created and maintained upstream!
-    MetadataProvider inputFileCache = context.getMetadataProvider();
+    ActionInputFileCache inputFileCache = context.getActionInputFileCache();
     TreeNodeRepository repository = new TreeNodeRepository(execRoot, inputFileCache, digestUtil);
     SortedMap<PathFragment, ActionInput> inputMap = context.getInputMapping();
     TreeNode inputRoot = repository.buildFromActionInputs(inputMap);
     repository.computeMerkleDigests(inputRoot);
-    maybeWriteParamFilesLocally(spawn);
     Command command = buildCommand(spawn.getArguments(), spawn.getEnvironment());
     Action action =
         buildAction(
@@ -162,8 +149,8 @@ class RemoteSpawnRunner implements SpawnRunner {
         TracingMetadataUtils.contextWithMetadata(buildRequestId, commandId, actionKey);
     Context previous = withMetadata.attach();
     try {
-      boolean acceptCachedResult = remoteOptions.remoteAcceptCached && Spawns.mayBeCached(spawn);
-      boolean uploadLocalResults = remoteOptions.remoteUploadLocalResults;
+      boolean acceptCachedResult = options.remoteAcceptCached && Spawns.mayBeCached(spawn);
+      boolean uploadLocalResults = options.remoteUploadLocalResults;
 
       try {
         // Try to lookup the action in the action cache.
@@ -197,50 +184,39 @@ class RemoteSpawnRunner implements SpawnRunner {
         return execLocally(spawn, context, inputMap, uploadLocalResults, remoteCache, actionKey);
       }
 
-      ExecuteRequest request =
-          ExecuteRequest.newBuilder()
-              .setInstanceName(remoteOptions.remoteInstanceName)
-              .setAction(action)
-              .setSkipCacheLookup(!acceptCachedResult)
-              .build();
       try {
-        return retrier.execute(
-            () -> {
-              // Upload the command and all the inputs into the remote cache.
-              remoteCache.ensureInputsPresent(repository, execRoot, inputRoot, command);
+        // Upload the command and all the inputs into the remote cache.
+        remoteCache.ensureInputsPresent(repository, execRoot, inputRoot, command);
+      } catch (IOException e) {
+        return execLocallyOrFail(spawn, context, inputMap, actionKey, uploadLocalResults, e);
+      }
 
-              ExecuteResponse reply = remoteExecutor.executeRemotely(request);
-              maybeDownloadServerLogs(reply, actionKey);
+      final ActionResult result;
+      boolean remoteCacheHit = false;
+      try {
+        ExecuteRequest.Builder request =
+            ExecuteRequest.newBuilder()
+                .setInstanceName(options.remoteInstanceName)
+                .setAction(action)
+                .setSkipCacheLookup(!acceptCachedResult);
+        ExecuteResponse reply = remoteExecutor.executeRemotely(request.build());
+        maybeDownloadServerLogs(reply, actionKey);
+        result = reply.getResult();
+        remoteCacheHit = reply.getCachedResult();
+      } catch (IOException e) {
+        return execLocallyOrFail(spawn, context, inputMap, actionKey, uploadLocalResults, e);
+      }
 
-              return downloadRemoteResults(reply.getResult(), context.getFileOutErr())
-                  .setRunnerName(reply.getCachedResult() ? "remote cache hit" : getName())
-                  .setCacheHit(reply.getCachedResult())
-                  .build();
-            });
+      try {
+        return downloadRemoteResults(result, context.getFileOutErr())
+            .setRunnerName(remoteCacheHit ? "remote cache hit" : getName())
+            .setCacheHit(remoteCacheHit)
+            .build();
       } catch (IOException e) {
         return execLocallyOrFail(spawn, context, inputMap, actionKey, uploadLocalResults, e);
       }
     } finally {
       withMetadata.detach(previous);
-    }
-  }
-
-  private void maybeWriteParamFilesLocally(Spawn spawn) throws IOException {
-    if (!executionOptions.materializeParamFiles) {
-      return;
-    }
-    for (ActionInput actionInput : spawn.getInputFiles()) {
-      if (actionInput instanceof ParamFileActionInput) {
-        ParamFileActionInput paramFileActionInput = (ParamFileActionInput) actionInput;
-        Path outputPath = execRoot.getRelative(paramFileActionInput.getExecPath());
-        if (outputPath.exists()) {
-          outputPath.delete();
-        }
-        outputPath.getParentDirectory().createDirectoryAndParents();
-        try (OutputStream out = outputPath.getOutputStream()) {
-          paramFileActionInput.writeTo(out);
-        }
-      }
     }
   }
 
@@ -257,7 +233,7 @@ class RemoteSpawnRunner implements SpawnRunner {
           logPath = parent.getRelative(e.getKey());
           logCount++;
           try {
-            getFromFuture(remoteCache.downloadFile(logPath, e.getValue().getDigest(), null));
+            remoteCache.downloadFile(logPath, e.getValue().getDigest(), false, null);
           } catch (IOException ex) {
             reportOnce(Event.warn("Failed downloading server logs from the remote cache."));
           }
@@ -292,7 +268,7 @@ class RemoteSpawnRunner implements SpawnRunner {
     if (Thread.currentThread().isInterrupted()) {
       throw new InterruptedException();
     }
-    if (remoteOptions.remoteLocalFallback
+    if (options.remoteLocalFallback
         && !(cause instanceof RetryException
             && RemoteRetrierUtils.causedByExecTimeout((RetryException) cause))) {
       return execLocally(spawn, context, inputMap, uploadLocalResults, remoteCache, actionKey);
@@ -465,12 +441,12 @@ class RemoteSpawnRunner implements SpawnRunner {
         return result;
       }
     }
-    boolean uploadAction =
-        Spawns.mayBeCached(spawn)
-            && Status.SUCCESS.equals(result.status())
-            && result.exitCode() == 0;
-    Collection<Path> outputFiles = resolveActionInputs(execRoot, spawn.getOutputFiles());
+    List<Path> outputFiles = listExistingOutputFiles(execRoot, spawn);
     try {
+      boolean uploadAction =
+          Spawns.mayBeCached(spawn)
+              && Status.SUCCESS.equals(result.status())
+              && result.exitCode() == 0;
       remoteCache.upload(actionKey, execRoot, outputFiles, context.getFileOutErr(), uploadAction);
     } catch (IOException e) {
       if (verboseFailures) {
@@ -494,12 +470,16 @@ class RemoteSpawnRunner implements SpawnRunner {
     }
   }
 
-  /** Resolve a collection of {@link com.google.build.lib.actions.ActionInput}s to {@link Path}s. */
-  static Collection<Path> resolveActionInputs(
-      Path execRoot, Collection<? extends ActionInput> actionInputs) {
-    return actionInputs
-        .stream()
-        .map((inp) -> execRoot.getRelative(inp.getExecPath()))
-        .collect(ImmutableList.toImmutableList());
+  static List<Path> listExistingOutputFiles(Path execRoot, Spawn spawn) {
+    ArrayList<Path> outputFiles = new ArrayList<>();
+    for (ActionInput output : spawn.getOutputFiles()) {
+      Path outputPath = execRoot.getRelative(output.getExecPathString());
+      // TODO(ulfjack): Store the actual list of output files in SpawnResult and use that instead
+      // of statting the files here again.
+      if (outputPath.exists()) {
+        outputFiles.add(outputPath);
+      }
+    }
+    return outputFiles;
   }
 }
