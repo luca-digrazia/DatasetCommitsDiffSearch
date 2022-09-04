@@ -263,12 +263,7 @@ public class JarResultBuildStep {
             originalJar = null;
         }
 
-        return new JarBuildItem(runnerJar, originalJar, null, PackageConfig.UBER_JAR,
-                suffixToClassifier(packageConfig.runnerSuffix));
-    }
-
-    private String suffixToClassifier(String suffix) {
-        return suffix.startsWith("-") ? suffix.substring(1) : suffix;
+        return new JarBuildItem(runnerJar, originalJar, null, PackageConfig.UBER_JAR);
     }
 
     private void buildUberJar0(CurateOutcomeBuildItem curateOutcomeBuildItem,
@@ -426,7 +421,7 @@ public class JarResultBuildStep {
         }
         runnerJar.toFile().setReadable(true, false);
 
-        return new JarBuildItem(runnerJar, null, libDir, PackageConfig.LEGACY, suffixToClassifier(packageConfig.runnerSuffix));
+        return new JarBuildItem(runnerJar, null, libDir, PackageConfig.LEGACY);
     }
 
     private JarBuildItem buildThinJar(CurateOutcomeBuildItem curateOutcomeBuildItem,
@@ -633,7 +628,7 @@ public class JarResultBuildStep {
                 }
             });
         }
-        return new JarBuildItem(initJar, null, libDir, packageConfig.type, null);
+        return new JarBuildItem(initJar, null, libDir, packageConfig.type);
     }
 
     private void copyDependency(CurateOutcomeBuildItem curateOutcomeBuildItem, Map<AppArtifactKey, List<Path>> runtimeArtifacts,
