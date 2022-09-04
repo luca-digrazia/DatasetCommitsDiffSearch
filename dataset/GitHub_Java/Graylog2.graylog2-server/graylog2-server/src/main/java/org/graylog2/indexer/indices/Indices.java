@@ -60,7 +60,7 @@ import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.search.SearchHit;
-import org.graylog2.configuration.ElasticsearchConfiguration;
+import org.graylog2.Configuration;
 import org.graylog2.indexer.IndexNotFoundException;
 import org.graylog2.indexer.Mapping;
 import org.graylog2.indexer.messages.Messages;
@@ -69,6 +69,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -80,10 +81,10 @@ public class Indices implements IndexManagement {
     private static final Logger LOG = LoggerFactory.getLogger(Indices.class);
 
     private final Client c;
-    private final ElasticsearchConfiguration configuration;
+    private final Configuration configuration;
 
     @Inject
-    public Indices(Node node, ElasticsearchConfiguration configuration) {
+    public Indices(Node node, Configuration configuration) {
         this.c = node.client();
         this.configuration = configuration;
     }
@@ -170,7 +171,7 @@ public class Indices implements IndexManagement {
     }
 
     public String allIndicesAlias() {
-        return configuration.getIndexPrefix() + "_*";
+        return configuration.getElasticSearchIndexPrefix() + "_*";
     }
 
     public boolean exists(String index) {
@@ -189,8 +190,8 @@ public class Indices implements IndexManagement {
 
     public boolean create(String indexName) {
         Map<String, Object> settings = Maps.newHashMap();
-        settings.put("number_of_shards", configuration.getShards());
-        settings.put("number_of_replicas", configuration.getReplicas());
+        settings.put("number_of_shards", configuration.getElasticSearchShards());
+        settings.put("number_of_replicas", configuration.getElasticSearchReplicas());
         Map<String, String> keywordLowercase = Maps.newHashMap();
         keywordLowercase.put("tokenizer", "keyword");
         keywordLowercase.put("filter", "lowercase");
@@ -204,7 +205,7 @@ public class Indices implements IndexManagement {
         if (!acknowledged) {
             return false;
         }
-        final PutMappingRequest mappingRequest = Mapping.getPutMappingRequest(c, indexName, configuration.getAnalyzer());
+        final PutMappingRequest mappingRequest = Mapping.getPutMappingRequest(c, indexName, configuration.getElasticSearchAnalyzer());
         return c.admin().indices().putMapping(mappingRequest).actionGet().isAcknowledged();
     }
 
@@ -299,10 +300,10 @@ public class Indices implements IndexManagement {
         final Set<String> closedIndices = Sets.newHashSet();
 
         ClusterStateRequest csr = new ClusterStateRequest()
-                .nodes(false)
-                .routingTable(false)
-                .blocks(false)
-                .metaData(true);
+                .nodes(true)
+                .routingTable(true)
+                .blocks(true)
+                .metaData(false);
 
         ClusterState state = c.admin().cluster().state(csr).actionGet().getState();
 
@@ -311,7 +312,7 @@ public class Indices implements IndexManagement {
         while (it.hasNext()) {
             IndexMetaData indexMeta = it.next();
             // Only search in our indices.
-            if (!indexMeta.getIndex().startsWith(configuration.getIndexPrefix())) {
+            if (!indexMeta.getIndex().startsWith(configuration.getElasticSearchIndexPrefix())) {
                 continue;
             }
             if (indexMeta.getState().equals(IndexMetaData.State.CLOSE)) {
