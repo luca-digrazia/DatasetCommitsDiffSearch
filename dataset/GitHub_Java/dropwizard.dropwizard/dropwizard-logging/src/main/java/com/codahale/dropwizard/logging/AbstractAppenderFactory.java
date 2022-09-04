@@ -1,13 +1,13 @@
 package com.codahale.dropwizard.logging;
 
-import ch.qos.logback.classic.AsyncAppender;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.filter.ThresholdFilter;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.spi.FilterAttachable;
-import com.codahale.dropwizard.validation.ValidationMethod;
+import com.codahale.dropwizard.util.Duration;
+import com.codahale.dropwizard.validation.MinDuration;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Strings;
 
@@ -15,135 +15,102 @@ import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import java.util.TimeZone;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A base implementation of {@link AppenderFactory}.
+ * <p/>
+ * <b>Configuration Parameters:</b>
+ * <table>
+ *     <tr>
+ *         <td>Name</td>
+ *         <td>Default</td>
+ *         <td>Description</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code threshold}</td>
+ *         <td>ALL</td>
+ *         <td>The minimum event level the appender will handle.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code logFormat}</td>
+ *         <td>(none)</td>
+ *         <td>An appender-specific log format.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code batchSize}</td>
+ *         <td>128</td>
+ *         <td>
+ *             The maximum number of requests to write in a single batch.
+ *         </td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code batchDuration}</td>
+ *         <td>100ms</td>
+ *         <td>
+ *             The maximum amount of time to wait for a full batch before writing a partial batch.
+ *         </td>
+ *     </tr>
+ * </table>
  */
 public abstract class AbstractAppenderFactory implements AppenderFactory {
     @NotNull
     protected Level threshold = Level.ALL;
 
-    protected boolean async = false;
-
-    protected boolean calleeData = false;
-
-    protected boolean discarding = false;
+    protected String logFormat;
 
     @Min(1)
     @Max(Integer.MAX_VALUE)
-    protected int asyncQueueLength = 10000;
+    private int batchSize = 128;
 
-    protected String logFormat;
+    @NotNull
+    @MinDuration(value = 1, unit = TimeUnit.MILLISECONDS)
+    private Duration batchDuration = Duration.milliseconds(100);
 
-    /**
-     * Returns the lowest level of events to print to the console.
-     */
+    @JsonProperty
+    public int getBatchSize() {
+        return batchSize;
+    }
+
+    @JsonProperty
+    public void setBatchSize(int batchSize) {
+        this.batchSize = batchSize;
+    }
+
+    @JsonProperty
+    public Duration getBatchDuration() {
+        return batchDuration;
+    }
+
+    @JsonProperty
+    public void setBatchDuration(Duration batchDuration) {
+        this.batchDuration = batchDuration;
+    }
+
     @JsonProperty
     public Level getThreshold() {
         return threshold;
     }
 
-    /**
-     * Sets the lowest level of events to print to the console.
-     */
     @JsonProperty
     public void setThreshold(Level threshold) {
         this.threshold = threshold;
     }
 
-    /**
-     * Returns the Logback pattern with which events will be formatted.
-     */
     @JsonProperty
     public String getLogFormat() {
         return logFormat;
     }
 
-    /**
-     * Sets the Logback pattern with which events will be formatted.
-     *
-     * @see <a href="http://logback.qos.ch/manual/layouts.html#conversionWord">the Logback documentation</a>
-     */
     @JsonProperty
     public void setLogFormat(String logFormat) {
         this.logFormat = logFormat;
     }
 
-    /**
-     * Returns true if the appender is asynchronous
-     */
-    public boolean isAsync() {
-        return async;
-    }
-
-    /**
-     * Sets if the appender will be created as an async appender.
-     */
-    @JsonProperty
-    public void setAsync(boolean async) {
-        this.async = async;
-    }
-
-    /**
-     * Returns true if the async appender retains full callee data
-     */
-    public boolean isCalleeData() {
-        return calleeData;
-    }
-
-    /**
-     * Sets if the appender retains full callee data, this can be expensive
-     *
-     * @see <a href="http://logback.qos.ch/manual/appenders.html#asyncIncludeCallerData">the Logback documentation</a>
-     */
-    @JsonProperty
-    public void setCalleeData(boolean calleeData) {
-        this.calleeData = calleeData;
-    }
-
-    /**
-     * Returns true if the appender is asynchronous and, in cases where the log queue is overflowing starts dropping new
-     * events of level TRACE, DEBUG and INFO
-     */
-    public boolean isDiscarding() {
-        return discarding;
-    }
-
-    /**
-     * Sets the behaviour of the appender to be asynchronous and, in cases where the log queue
-     * is overflowing starts dropping new events of level TRACE, DEBUG and INFO
-     */
-    @JsonProperty
-    public void setDiscarding(boolean discarding) {
-        this.discarding = discarding;
-    }
-
-    /**
-     * If the appender is an async appender, return the queue length, if not return -1
-     */
-    public int getAsyncQueueLength() {
-        return this.async ? asyncQueueLength : -1;
-    }
-
-    /**
-     * Sets the queue length for async loggers
-     */
-    @JsonProperty
-    public void setAsyncQueueLength(int asyncQueueLength) {
-        this.asyncQueueLength = asyncQueueLength;
-    }
-
-    protected Appender<ILoggingEvent> wrapAppenderAsAsyncIfNecessary(Appender<ILoggingEvent> delegate) {
-        if (this.async) {
-            AsyncAppender asyncAppender = new AsyncAppender();
-            asyncAppender.addAppender(delegate);
-            asyncAppender.setQueueSize(this.asyncQueueLength);
-            asyncAppender.setDiscardingThreshold(this.discarding ? 5 : 0);
-            asyncAppender.setIncludeCallerData(this.calleeData);
-            return asyncAppender;
-        } else {
-            return delegate;
-        }
+    protected Appender<ILoggingEvent> wrapAsync(Appender<ILoggingEvent> appender) {
+        final AsyncAppender asyncAppender = new AsyncAppender(appender, batchSize, batchDuration);
+        asyncAppender.start();
+        return asyncAppender;
     }
 
     protected void addThresholdFilter(FilterAttachable<ILoggingEvent> appender, Level threshold) {
@@ -161,15 +128,4 @@ public abstract class AbstractAppenderFactory implements AppenderFactory {
         formatter.start();
         return formatter;
     }
-
-    @ValidationMethod(message="Async logging parameters specified for appender, but appender not configured to be async!")
-    @SuppressWarnings("UnusedDeclaration")
-    private boolean isValidConfiguration() {
-        if (isDiscarding() || isCalleeData()) {
-            return isAsync();
-        } else {
-            return true;
-        }
-    }
-
 }
