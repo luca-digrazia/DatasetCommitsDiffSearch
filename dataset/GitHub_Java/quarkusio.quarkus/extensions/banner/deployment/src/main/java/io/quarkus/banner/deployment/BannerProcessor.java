@@ -10,7 +10,6 @@ import org.jboss.logging.Logger;
 
 import io.quarkus.banner.runtime.BannerRecorder;
 import io.quarkus.builder.Version;
-import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
@@ -22,14 +21,14 @@ public class BannerProcessor {
 
     private static final Logger logger = Logger.getLogger(BannerProcessor.class);
 
-    @BuildStep(loadsApplicationClasses = true, onlyIf = { IsBanner.class, IsDevelopment.class })
+    @BuildStep(loadsApplicationClasses = true, onlyIf = IsBanner.class)
     @Record(ExecutionTime.RUNTIME_INIT)
     public ConsoleFormatterBannerBuildItem recordBanner(BannerRecorder recorder, BannerConfig config) {
         String bannerText = readBannerFile(config);
         return new ConsoleFormatterBannerBuildItem(recorder.provideBannerSupplier(bannerText));
     }
 
-    @BuildStep(onlyIf = IsDevelopment.class)
+    @BuildStep
     HotDeploymentWatchedFileBuildItem watchBannerChanges(BannerConfig config) {
         return new HotDeploymentWatchedFileBuildItem(config.path);
     }
