@@ -137,7 +137,7 @@ public class QuarkusBuild extends QuarkusTask {
                         .setFinalName(extension().finalName())
                         .setMainClass(getMainClass())
                         .setUberJar(isUberJar()))
-                .setWorkDir(getProject().getBuildDir().toPath())
+                .setWorkDir(extension().buildDir().toPath())
                 .build()) {
 
             final AppArtifact appArtifact = new AppArtifact(extension().groupId(), extension().artifactId(),
