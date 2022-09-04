@@ -1,80 +1,72 @@
 package com.example.helloworld.resources;
+import static org.fest.assertions.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
 
 import com.example.helloworld.core.Person;
 import com.example.helloworld.db.PersonDAO;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
+import io.dropwizard.jackson.Jackson;
 import io.dropwizard.testing.junit.ResourceTestRule;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.MockitoAnnotations;
 
-import javax.ws.rs.client.Entity;
-import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link PeopleResource}.
  */
-@RunWith(MockitoJUnitRunner.class)
 public class PeopleResourceTest {
-    private static final PersonDAO PERSON_DAO = mock(PersonDAO.class);
+    @Captor ArgumentCaptor<Person> personCaptor;
+    private static final PersonDAO dao = mock(PersonDAO.class);
+
+    private static final ObjectMapper MAPPER = Jackson.newObjectMapper();
+
     @ClassRule
-    public static final ResourceTestRule RESOURCES = ResourceTestRule.builder()
-            .addResource(new PeopleResource(PERSON_DAO))
+    public static final ResourceTestRule resources = ResourceTestRule.builder()
+            .addResource(new PeopleResource(dao))
             .build();
-    @Captor
-    private ArgumentCaptor<Person> personCaptor;
+
     private Person person;
 
     @Before
-    public void setUp() {
+    public void setup() {
+        MockitoAnnotations.initMocks(this);
         person = new Person();
         person.setFullName("Full Name");
-        person.setJobTitle("Job Title");
+        person.setJobTitle("job title");
     }
 
     @After
     public void tearDown() {
-        reset(PERSON_DAO);
+        reset(dao);
     }
 
     @Test
     public void createPerson() throws JsonProcessingException {
-        when(PERSON_DAO.create(any(Person.class))).thenReturn(person);
-        final Response response = RESOURCES.target("/people")
-                .request(MediaType.APPLICATION_JSON_TYPE)
-                .post(Entity.entity(person, MediaType.APPLICATION_JSON_TYPE));
+        resources.client().resource("/people")
+                .type(MediaType.APPLICATION_JSON_TYPE)
+                .post(person);
 
-        assertThat(response.getStatusInfo()).isEqualTo(Response.Status.OK);
-        verify(PERSON_DAO).create(personCaptor.capture());
-        assertThat(personCaptor.getValue()).isEqualTo(person);
+        verify(dao).create(personCaptor.capture());
+        assertThat(MAPPER.writeValueAsString(personCaptor.getValue()))
+                .isEqualTo(MAPPER.writeValueAsString(person));
     }
 
     @Test
     public void listPeople() throws Exception {
-        final ImmutableList<Person> people = ImmutableList.of(person);
-        when(PERSON_DAO.findAll()).thenReturn(people);
+        when(dao.findAll()).thenReturn(ImmutableList.of(person));
+        List people = resources.client().resource("/people").get(List.class);
 
-        final List<Person> response = RESOURCES.target("/people")
-            .request().get(new GenericType<List<Person>>() {
-            });
-
-        verify(PERSON_DAO).findAll();
-        assertThat(response).containsAll(people);
+        assertThat(MAPPER.writeValueAsString(people))
+                .isEqualTo(MAPPER.writeValueAsString(ImmutableList.of(person)));
+        verify(dao).findAll();
     }
 }
