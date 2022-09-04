@@ -89,46 +89,64 @@ public class Indexer {
         if (conn.getResponseCode() == 200) {
             return true;
         } else {
-            LOG.warn("Response code of create index operation was not 200, but " + conn.getResponseCode());
+            LOG.warn("Response code of create index operation was not 201, but " + conn.getResponseCode());
             return false;
         }
     }
 
     /**
-     * Bulk-indexes/persists messages to ElasticSearch.
-     * http://www.elasticsearch.org/guide/reference/api/bulk.html
+     * Indexes a message.
      *
      * @param message The message to index.
      * @return
      */
-    public static boolean bulkIndex(List<GELFMessage> messages) {
-        if (messages.isEmpty()) {
-            return true;
-        }
-        
-        String batch = "";
+    public static boolean index(GELFMessage message) {
+        Map<String, Object> obj = new HashMap<String, Object>();
+        obj.put("message", message.getShortMessage());
+        obj.put("full_message", message.getFullMessage());
+        obj.put("file", message.getFile());
+        obj.put("line", message.getLine());
+        obj.put("host", message.getHost());
+        obj.put("facility", message.getFacility());
+        obj.put("level", message.getLevel());
 
-        for (GELFMessage message : messages) {
-            batch += "{\"index\":{\"_index\":\"" + INDEX + "\",\"_type\":\"" + TYPE + "\"}}\n";
-            batch += JSONValue.toJSONString(message.toElasticSearchObject()) + "\n";
+        // Add additional fields. XXX PERFORMANCE
+        for(Map.Entry<String, Object> entry : message.getAdditionalData().entrySet()) {
+            obj.put(entry.getKey(), entry.getValue());
         }
+
+        if (message.getCreatedAt() <= 0) {
+            // This should have already been set at receiving, but to make sure...
+            obj.put("created_at", Tools.getUTCTimestampWithMilliseconds());
+        } else {
+            obj.put("created_at", message.getCreatedAt());
+        }
+
+        ////// XXX ELASTIC: required to manually convert to string? caused strange problems without it.
+        List<String> streamIds = new ArrayList<String>();
+        for (ObjectId id : message.getStreamIds()) {
+            streamIds.add(id.toString());
+        }
+
+        obj.put("streams", streamIds);
+        ///////////////
 
         try {
-            URL url = new URL("http://localhost:9200/_bulk");
+            URL url = new URL(Indexer.buildIndexWithTypeUrl());
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setDoOutput(true);
             conn.setRequestMethod("POST");
             OutputStreamWriter writer = new OutputStreamWriter(conn.getOutputStream());
-            writer.write(batch);
+            writer.write(JSONValue.toJSONString(obj));
             writer.close();
-            if (conn.getResponseCode() == 200) {
+            if (conn.getResponseCode() == 201) {
                 return true;
             } else {
-                LOG.warn("Indexer response code was not 200, but " + conn.getResponseCode());
+                LOG.warn("Indexer response code was not 201, but " + conn.getResponseCode());
                 return false; 
             }
         } catch (IOException e) {
-            LOG.warn("IO error when trying to index messages: " + e.getMessage(), e);
+            LOG.warn("IO error when trying to index message: " + e.getMessage(), e);
         }
 
         // Not reached.
