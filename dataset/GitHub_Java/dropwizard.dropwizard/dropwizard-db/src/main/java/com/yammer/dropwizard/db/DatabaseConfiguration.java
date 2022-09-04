@@ -61,9 +61,6 @@ public class DatabaseConfiguration {
     @JsonProperty
     private Duration closeConnectionIfIdleFor = Duration.minutes(1);
 
-    @JsonProperty
-    private boolean defaultReadOnly = false;
-
     public String getDriverClass() {
         return driverClass;
     }
@@ -160,14 +157,6 @@ public class DatabaseConfiguration {
         this.closeConnectionIfIdleFor = closeConnectionIfIdleFor;
     }
 
-    public boolean isDefaultReadOnly() {
-        return defaultReadOnly;
-    }
-
-    public void setDefaultReadOnly(boolean defaultReadOnly) {
-        this.defaultReadOnly = defaultReadOnly;
-    }
-
     @ValidationMethod(message = ".minSize must be less than or equal to maxSize")
     public boolean isPoolSizedCorrectly() {
         return minSize <= maxSize;
@@ -183,7 +172,6 @@ public class DatabaseConfiguration {
                 (minSize == that.minSize) &&
                 !((checkConnectionHealthWhenIdleFor != null) ? !checkConnectionHealthWhenIdleFor.equals(that.checkConnectionHealthWhenIdleFor) : (that.checkConnectionHealthWhenIdleFor != null)) &&
                 !((closeConnectionIfIdleFor != null) ? !closeConnectionIfIdleFor.equals(that.closeConnectionIfIdleFor) : (that.closeConnectionIfIdleFor != null)) &&
-                (defaultReadOnly == that.defaultReadOnly) &&
                 !((driverClass != null) ? !driverClass.equals(that.driverClass) : (that.driverClass != null)) &&
                 !((maxWaitForConnection != null) ? !maxWaitForConnection.equals(that.maxWaitForConnection) : (that.maxWaitForConnection != null)) &&
                 !((password != null) ? !password.equals(that.password) : (that.password != null)) &&
@@ -207,7 +195,6 @@ public class DatabaseConfiguration {
         result = (31 * result) + (checkConnectionWhileIdle ? 1 : 0);
         result = (31 * result) + ((checkConnectionHealthWhenIdleFor != null) ? checkConnectionHealthWhenIdleFor.hashCode() : 0);
         result = (31 * result) + ((closeConnectionIfIdleFor != null) ? closeConnectionIfIdleFor.hashCode() : 0);
-        result = (31 * result) + (defaultReadOnly ? 1 : 0);
         return result;
     }
 
@@ -226,7 +213,6 @@ public class DatabaseConfiguration {
                       .add("checkConnectionWhileIdle", checkConnectionWhileIdle)
                       .add("checkConnectionHealthWhenIdleFor", checkConnectionHealthWhenIdleFor)
                       .add("closeConnectionIfIdleFor", closeConnectionIfIdleFor)
-                      .add("defaultReadOnly", defaultReadOnly)
                       .toString();
     }
 }
