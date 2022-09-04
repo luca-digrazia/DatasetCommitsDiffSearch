@@ -53,7 +53,7 @@ public class SystemApiController extends AuthenticatedController {
     public Result jobs() {
         try {
             List<Map<String, Object>> jobs = Lists.newArrayList();
-            for (SystemJob j : clusterService.allSystemJobs()) {
+            for(SystemJob j : SystemJob.all()) {
                 Map<String, Object> job = Maps.newHashMap();
 
                 job.put("id", j.getId());
@@ -76,7 +76,7 @@ public class SystemApiController extends AuthenticatedController {
     public Result notifications() {
         try {
             Map<String, Object> result = Maps.newHashMap();
-            result.put("count", clusterService.allNotifications().size());
+            result.put("count", Notification.all().size());
 
             return ok(new Gson().toJson(result)).as("application/json");
         } catch (IOException e) {
@@ -88,7 +88,7 @@ public class SystemApiController extends AuthenticatedController {
 
     public Result deleteNotification(String notificationType) {
         try {
-            clusterService.deleteNotification(Notification.Type.fromString(notificationType));
+            Notification.delete(Notification.Type.valueOf(notificationType.toUpperCase()));
             return ok();
         } catch (IllegalArgumentException e1) {
             return notFound("no such notification type");
