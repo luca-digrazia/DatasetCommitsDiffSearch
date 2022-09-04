@@ -24,7 +24,6 @@ import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.vertx.ConsumeEvent;
-import io.vertx.core.Context;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.eventbus.EventBus;
@@ -34,6 +33,7 @@ import io.vertx.core.eventbus.MessageConsumer;
 import io.vertx.core.file.FileSystemOptions;
 import io.vertx.core.http.ClientAuth;
 import io.vertx.core.impl.VertxImpl;
+import io.vertx.core.impl.VertxThread;
 import io.vertx.core.net.JksOptions;
 import io.vertx.core.net.PemKeyCertOptions;
 import io.vertx.core.net.PemTrustOptions;
@@ -79,7 +79,7 @@ public class VertxRecorder {
         return new IOThreadDetector() {
             @Override
             public boolean isInIOThread() {
-                return Context.isOnEventLoopThread();
+                return Thread.currentThread() instanceof VertxThread;
             }
         };
     }
@@ -226,11 +226,9 @@ public class VertxRecorder {
             List<String> certs = new ArrayList<>();
             List<String> keys = new ArrayList<>();
             eb.keyCertificatePem.certs.ifPresent(
-                    s -> certs.addAll(Pattern.compile(",").splitAsStream(s).map(String::trim)
-                            .collect(Collectors.toList())));
+                    s -> certs.addAll(Pattern.compile(",").splitAsStream(s).map(String::trim).collect(Collectors.toList())));
             eb.keyCertificatePem.keys.ifPresent(
-                    s -> keys.addAll(Pattern.compile(",").splitAsStream(s).map(String::trim)
-                            .collect(Collectors.toList())));
+                    s -> keys.addAll(Pattern.compile(",").splitAsStream(s).map(String::trim).collect(Collectors.toList())));
             PemKeyCertOptions o = new PemKeyCertOptions()
                     .setCertPaths(certs)
                     .setKeyPaths(keys);
@@ -345,23 +343,28 @@ public class VertxRecorder {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void registerCodecs(Map<Class<?>, Class<?>> codecByClass) {
-        EventBus eventBus = vertx.eventBus();
         for (Map.Entry<Class<?>, Class<?>> codecEntry : codecByClass.entrySet()) {
-            Class<?> target = codecEntry.getKey();
-            Class<?> codec = codecEntry.getValue();
-            try {
-                if (MessageCodec.class.isAssignableFrom(codec)) {
-                    MessageCodec messageCodec = (MessageCodec) codec.newInstance();
-                    eventBus.registerDefaultCodec(target, messageCodec);
-                } else {
-                    LOGGER.error(String.format("The codec %s does not inherit from MessageCodec ", target.toString()));
-                }
-            } catch (InstantiationException | IllegalAccessException e) {
-                LOGGER.error("Cannot instantiate the MessageCodec " + target.toString(), e);
-            }
+            registerCodec(codecEntry.getKey(), codecEntry.getValue());
         }
+    }
+
+    private void registerCodec(Class<?> typeToAdd, Class<?> messageCodecClass) {
+        try {
+            if (MessageCodec.class.isAssignableFrom(messageCodecClass)) {
+                MessageCodec messageCodec = (MessageCodec) messageCodecClass.newInstance();
+                registerCodec(typeToAdd, messageCodec);
+            } else {
+                LOGGER.error(String.format("The codec %s does not inherit from MessageCodec ", messageCodecClass.toString()));
+            }
+        } catch (InstantiationException | IllegalAccessException e) {
+            LOGGER.error("Cannot instantiate the MessageCodec " + messageCodecClass.toString(), e);
+        }
+    }
+
+    private void registerCodec(Class<?> typeToAdd, MessageCodec codec) {
+        EventBus eventBus = vertx.eventBus();
+        eventBus.registerDefaultCodec(typeToAdd, codec);
     }
 
     public Supplier<EventLoopGroup> bossSupplier() {

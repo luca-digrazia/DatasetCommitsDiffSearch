@@ -61,6 +61,7 @@ public class TransactionScopedEntityManager implements EntityManager {
                 @Override
                 public void beforeCompletion() {
                     newEm.flush();
+                    newEm.close();
                 }
 
                 @Override

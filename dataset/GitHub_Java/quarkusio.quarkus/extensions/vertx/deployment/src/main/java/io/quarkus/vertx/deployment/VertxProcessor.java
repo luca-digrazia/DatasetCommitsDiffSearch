@@ -47,6 +47,7 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.AnnotationProxyBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
+import io.quarkus.deployment.builditem.IOThreadDetectorBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
@@ -176,6 +177,12 @@ class VertxProcessor {
                 shutdown, codecByClass);
         serviceStart.produce(new ServiceStartBuildItem("vertx"));
         return new VertxBuildItem(vertx);
+    }
+
+    @BuildStep
+    @Record(ExecutionTime.STATIC_INIT)
+    IOThreadDetectorBuildItem ioThreadDetector(VertxRecorder recorder) {
+        return new IOThreadDetectorBuildItem(recorder.detector());
     }
 
     @BuildStep
@@ -403,9 +410,7 @@ class VertxProcessor {
                 codecByTypes.put(typeToAdd, GENERIC_MESSAGE_CODEC);
             }
         }
-
-        reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, GenericMessageCodec.class));
-
+        Map<Class<?>, Class<?>> codecByClass = new HashMap<>();
         for (Map.Entry<Type, DotName> entry : codecByTypes.entrySet()) {
             messageCodecs.produce(new MessageCodecBuildItem(entry.getKey().toString(), entry.getValue().toString()));
         }
