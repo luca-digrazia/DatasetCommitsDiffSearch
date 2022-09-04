@@ -1,64 +1,65 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+package io.quarkus.arc.test.beanmanager;
 
-package org.jboss.quarkus.arc.test.beanmanager;
-
+import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.METHOD;
+import static java.lang.annotation.ElementType.PARAMETER;
 import static java.lang.annotation.ElementType.TYPE;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.wildfly.common.Assert.assertFalse;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ManagedContext;
+import io.quarkus.arc.test.ArcTestContainer;
+import java.lang.annotation.Annotation;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
+import java.lang.reflect.Member;
+import java.lang.reflect.Type;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.annotation.Priority;
+import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.context.RequestScoped;
 import javax.enterprise.context.spi.CreationalContext;
+import javax.enterprise.event.Observes;
 import javax.enterprise.inject.Alternative;
+import javax.enterprise.inject.Any;
+import javax.enterprise.inject.Default;
+import javax.enterprise.inject.spi.Annotated;
 import javax.enterprise.inject.spi.Bean;
 import javax.enterprise.inject.spi.BeanManager;
+import javax.enterprise.inject.spi.InjectionPoint;
 import javax.enterprise.inject.spi.InterceptionType;
+import javax.enterprise.inject.spi.ObserverMethod;
 import javax.enterprise.util.AnnotationLiteral;
 import javax.enterprise.util.Nonbinding;
 import javax.inject.Inject;
+import javax.inject.Qualifier;
+import javax.inject.Singleton;
 import javax.interceptor.AroundInvoke;
 import javax.interceptor.Interceptor;
 import javax.interceptor.InterceptorBinding;
 import javax.interceptor.InvocationContext;
-
-import org.jboss.quarkus.arc.Arc;
-import org.jboss.quarkus.arc.test.ArcTestContainer;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 public class BeanManagerTest {
 
-    @Rule
-    public ArcTestContainer container = new ArcTestContainer(Legacy.class, AlternativeLegacy.class, Fool.class, DummyInterceptor.class, DummyBinding.class,
-            LowPriorityInterceptor.class);
+    @RegisterExtension
+    public ArcTestContainer container = new ArcTestContainer(Legacy.class, AlternativeLegacy.class, Fool.class,
+            DummyInterceptor.class, DummyBinding.class, LowPriorityInterceptor.class, WithInjectionPointMetadata.class,
+            High.class, Observers.class);
 
     @Test
     public void testGetBeans() {
@@ -80,8 +81,12 @@ public class BeanManagerTest {
         @SuppressWarnings("unchecked")
         Bean<Fool> foolBean = (Bean<Fool>) foolBeans.iterator().next();
         Fool fool1 = (Fool) beanManager.getReference(foolBean, Fool.class, beanManager.createCreationalContext(foolBean));
-        Arc.container().withinRequest(() -> assertEquals(fool1.getId(),
-                ((Fool) beanManager.getReference(foolBean, Fool.class, beanManager.createCreationalContext(foolBean))).getId())).run();
+
+        ManagedContext requestContext = Arc.container().requestContext();
+        requestContext.activate();
+        assertEquals(fool1.getId(),
+                ((Fool) beanManager.getReference(foolBean, Fool.class, beanManager.createCreationalContext(foolBean))).getId());
+        requestContext.terminate();
         assertTrue(Fool.DESTROYED.get());
 
         Set<Bean<?>> legacyBeans = beanManager.getBeans(AlternativeLegacy.class);
@@ -94,7 +99,58 @@ public class BeanManagerTest {
         ctx.release();
         assertTrue(Legacy.DESTROYED.get());
     }
-    
+
+    @Test
+    public void testGetInjectableReference() {
+        BeanManager beanManager = Arc.container().beanManager();
+        Set<Bean<?>> beans = beanManager.getBeans(WithInjectionPointMetadata.class);
+        assertEquals(1, beans.size());
+        @SuppressWarnings("unchecked")
+        Bean<WithInjectionPointMetadata> bean = (Bean<WithInjectionPointMetadata>) beans.iterator().next();
+        WithInjectionPointMetadata injectableReference = (WithInjectionPointMetadata) beanManager
+                .getInjectableReference(new InjectionPoint() {
+
+                    @Override
+                    public boolean isTransient() {
+                        return false;
+                    }
+
+                    @Override
+                    public boolean isDelegate() {
+                        return false;
+                    }
+
+                    @Override
+                    public Type getType() {
+                        return WithInjectionPointMetadata.class;
+                    }
+
+                    @Override
+                    public Set<Annotation> getQualifiers() {
+                        return Collections.singleton(Any.Literal.INSTANCE);
+                    }
+
+                    @Override
+                    public Member getMember() {
+                        return null;
+                    }
+
+                    @Override
+                    public Bean<?> getBean() {
+                        return null;
+                    }
+
+                    @Override
+                    public Annotated getAnnotated() {
+                        return null;
+                    }
+                }, beanManager.createCreationalContext(bean));
+        assertNotNull(injectableReference.injectionPoint);
+        assertEquals(WithInjectionPointMetadata.class, injectableReference.injectionPoint.getType());
+        assertNull(injectableReference.injectionPoint.getBean());
+    }
+
+    @SuppressWarnings("serial")
     @Test
     public void testResolveInterceptors() {
         BeanManager beanManager = Arc.container().beanManager();
@@ -103,10 +159,60 @@ public class BeanManagerTest {
         interceptors = beanManager.resolveInterceptors(InterceptionType.AROUND_CONSTRUCT, new DummyBinding.Literal(true, true));
         assertTrue(interceptors.isEmpty());
         // alpha is @Nonbinding
-        interceptors = beanManager.resolveInterceptors(InterceptionType.AROUND_INVOKE, new DummyBinding.Literal(false, true));
+        interceptors = beanManager.resolveInterceptors(InterceptionType.AROUND_INVOKE, new DummyBinding.Literal(false, true),
+                new AnnotationLiteral<UselessBinding>() {
+                });
         assertEquals(2, interceptors.size());
         assertEquals(DummyInterceptor.class, interceptors.get(0).getBeanClass());
         assertEquals(LowPriorityInterceptor.class, interceptors.get(1).getBeanClass());
+    }
+
+    @Test
+    public void testIsQualifier() {
+        BeanManager beanManager = Arc.container().beanManager();
+        assertTrue(beanManager.isQualifier(Default.class));
+        assertTrue(beanManager.isQualifier(High.class));
+        assertFalse(beanManager.isQualifier(ApplicationScoped.class));
+    }
+
+    @Test
+    public void testIsInterceptorBinding() {
+        BeanManager beanManager = Arc.container().beanManager();
+        assertTrue(beanManager.isInterceptorBinding(DummyBinding.class));
+        assertFalse(beanManager.isInterceptorBinding(Default.class));
+    }
+
+    @Test
+    public void testIsScope() {
+        BeanManager beanManager = Arc.container().beanManager();
+        assertTrue(beanManager.isScope(Singleton.class));
+        assertTrue(beanManager.isNormalScope(RequestScoped.class));
+        assertFalse(beanManager.isNormalScope(Dependent.class));
+    }
+
+    @Test
+    public void testResolveObservers() {
+        BeanManager beanManager = Arc.container().beanManager();
+        Set<ObserverMethod<? super Long>> observers = beanManager.resolveObserverMethods(Long.valueOf(1),
+                new AnnotationLiteral<High>() {
+                });
+        assertEquals(1, observers.size());
+        assertEquals(Number.class, observers.iterator().next().getObservedType());
+    }
+
+    @ApplicationScoped
+    static class Observers {
+
+        void observe(@Observes @High Number number) {
+        }
+    }
+
+    @Target({ TYPE, METHOD, PARAMETER, FIELD })
+    @Retention(RUNTIME)
+    @Documented
+    @Qualifier
+    public @interface High {
+
     }
 
     @Dependent
@@ -157,24 +263,24 @@ public class BeanManagerTest {
         }
 
     }
-    
+
     @Target({ TYPE, METHOD })
     @Retention(RUNTIME)
     @Documented
     @InterceptorBinding
     public @interface DummyBinding {
-        
+
         @Nonbinding
         boolean alpha();
-        
+
         boolean bravo();
-        
+
         @SuppressWarnings("serial")
         static class Literal extends AnnotationLiteral<DummyBinding> implements DummyBinding {
 
             private final boolean alpha;
             private final boolean bravo;
-            
+
             public Literal(boolean alpha, boolean bravo) {
                 this.alpha = alpha;
                 this.bravo = bravo;
@@ -189,11 +295,19 @@ public class BeanManagerTest {
             public boolean bravo() {
                 return bravo;
             }
-            
+
         }
 
     }
-    
+
+    @Target({ TYPE, METHOD })
+    @Retention(RUNTIME)
+    @Documented
+    @InterceptorBinding
+    public @interface UselessBinding {
+
+    }
+
     @DummyBinding(alpha = true, bravo = true)
     @Priority(10)
     @Interceptor
@@ -204,7 +318,7 @@ public class BeanManagerTest {
             return ctx.proceed();
         }
     }
-    
+
     @DummyBinding(alpha = true, bravo = true)
     @Priority(1)
     @Interceptor
@@ -214,6 +328,14 @@ public class BeanManagerTest {
         Object intercept(InvocationContext ctx) throws Exception {
             return ctx.proceed();
         }
+    }
+
+    @Dependent
+    static class WithInjectionPointMetadata {
+
+        @Inject
+        InjectionPoint injectionPoint;
+
     }
 
 }

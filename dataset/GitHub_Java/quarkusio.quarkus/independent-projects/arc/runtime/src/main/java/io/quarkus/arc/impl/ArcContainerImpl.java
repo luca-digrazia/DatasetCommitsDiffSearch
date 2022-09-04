@@ -6,7 +6,6 @@ import io.quarkus.arc.Components;
 import io.quarkus.arc.ComponentsProvider;
 import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableContext;
-import io.quarkus.arc.InjectableInstance;
 import io.quarkus.arc.InjectableInterceptor;
 import io.quarkus.arc.InjectableObserverMethod;
 import io.quarkus.arc.InstanceHandle;
@@ -87,8 +86,6 @@ public class ArcContainerImpl implements ArcContainer {
 
     private final List<ResourceReferenceProvider> resourceProviders;
 
-    final InstanceImpl<Object> instance;
-
     private volatile ExecutorService executorService;
 
     public ArcContainerImpl() {
@@ -144,8 +141,6 @@ public class ArcContainerImpl implements ArcContainer {
         for (ResourceReferenceProvider resourceProvider : ServiceLoader.load(ResourceReferenceProvider.class)) {
             resourceProviders.add(resourceProvider);
         }
-
-        instance = InstanceImpl.of(Object.class, Collections.emptySet());
     }
 
     private void addBuiltInBeans() {
@@ -259,16 +254,6 @@ public class ArcContainerImpl implements ArcContainer {
     }
 
     @Override
-    public <T> InjectableInstance<T> select(Class<T> type, Annotation... qualifiers) {
-        return instance.select(type, qualifiers);
-    }
-
-    @Override
-    public <T> InjectableInstance<T> select(TypeLiteral<T> type, Annotation... qualifiers) {
-        return instance.select(type, qualifiers);
-    }
-
-    @Override
     public boolean isRunning() {
         return running.get();
     }
@@ -362,18 +347,6 @@ public class ArcContainerImpl implements ArcContainer {
 
             LOGGER.debugf("ArC DI container shut down");
         }
-    }
-
-    public List<InjectableBean<?>> getBeans() {
-        return new ArrayList<>(beans);
-    }
-
-    public List<InjectableInterceptor<?>> getInterceptors() {
-        return new ArrayList<>(interceptors);
-    }
-
-    public List<InjectableObserverMethod<?>> getObservers() {
-        return new ArrayList<>(observers);
     }
 
     InstanceHandle<Object> getResource(Type type, Set<Annotation> annotations) {
@@ -691,7 +664,7 @@ public class ArcContainerImpl implements ArcContainer {
         }
     }
 
-    public static ArcContainerImpl instance() {
+    static ArcContainerImpl instance() {
         return unwrap(Arc.container());
     }
 

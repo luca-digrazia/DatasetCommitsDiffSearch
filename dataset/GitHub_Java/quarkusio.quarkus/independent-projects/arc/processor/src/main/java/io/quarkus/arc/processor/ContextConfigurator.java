@@ -1,34 +1,19 @@
-/*
- * Copyright 2019 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.arc.processor;
-
-import java.lang.annotation.Annotation;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Objects;
-import java.util.function.Consumer;
-import java.util.function.Function;
 
 import io.quarkus.arc.ContextCreator;
 import io.quarkus.arc.InjectableContext;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
+import java.lang.annotation.Annotation;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import javax.enterprise.context.NormalScope;
 
 /**
  * Custom context configurator.
@@ -37,10 +22,12 @@ import io.quarkus.gizmo.ResultHandle;
  */
 public final class ContextConfigurator {
 
+    private final AtomicBoolean consumed;
+
     private final Consumer<ContextConfigurator> configuratorConsumer;
 
     Class<? extends Annotation> scopeAnnotation;
-    
+
     boolean isNormal;
 
     Function<MethodCreator, ResultHandle> creator;
@@ -48,9 +35,11 @@ public final class ContextConfigurator {
     final Map<String, Object> params;
 
     ContextConfigurator(Class<? extends Annotation> scopeAnnotation, Consumer<ContextConfigurator> configuratorConsumer) {
+        this.consumed = new AtomicBoolean(false);
         this.scopeAnnotation = Objects.requireNonNull(scopeAnnotation);
         this.params = new HashMap<>();
         this.configuratorConsumer = configuratorConsumer;
+        this.isNormal = scopeAnnotation.isAnnotationPresent(NormalScope.class);
     }
 
     public ContextConfigurator param(String name, Class<?> value) {
@@ -82,12 +71,32 @@ public final class ContextConfigurator {
         params.put(name, value);
         return this;
     }
-    
+
+    /**
+     * By default, the context is considered normal if the scope annotion is annotated with {@link NormalScope}.
+     * <p>
+     * It is possible to change this behavior. However, in such case the registrator is responsible for the correct
+     * implementation of {@link InjectableContext#isNormal()}.
+     * 
+     * @return self
+     */
     public ContextConfigurator normal() {
-        this.isNormal = true;
+        return normal(true);
+    }
+
+    /**
+     * By default, the context is considered normal if the scope annotion is annotated with {@link NormalScope}.
+     * <p>
+     * It is possible to change this behavior. However, in such case the registrator is responsible for the correct
+     * implementation of {@link InjectableContext#isNormal()}.
+     * 
+     * @return self
+     */
+    public ContextConfigurator normal(boolean value) {
+        this.isNormal = value;
         return this;
     }
-    
+
     public ContextConfigurator contextClass(Class<? extends InjectableContext> contextClazz) {
         return creator(mc -> mc.newInstance(MethodDescriptor.ofConstructor(contextClazz)));
     }
@@ -117,7 +126,8 @@ public final class ContextConfigurator {
             }
             ResultHandle creatorHandle = mc.newInstance(MethodDescriptor.ofConstructor(creatorClazz));
             ResultHandle ret = mc.invokeInterfaceMethod(
-                    MethodDescriptor.ofMethod(ContextCreator.class, "create", InjectableContext.class, Map.class), creatorHandle, paramsHandle);
+                    MethodDescriptor.ofMethod(ContextCreator.class, "create", InjectableContext.class, Map.class),
+                    creatorHandle, paramsHandle);
             return ret;
         });
     }
@@ -128,8 +138,10 @@ public final class ContextConfigurator {
     }
 
     public void done() {
-        Objects.requireNonNull(creator);
-        Objects.requireNonNull(configuratorConsumer).accept(this);
+        if (consumed.compareAndSet(false, true)) {
+            Objects.requireNonNull(creator);
+            Objects.requireNonNull(configuratorConsumer).accept(this);
+        }
     }
 
 }

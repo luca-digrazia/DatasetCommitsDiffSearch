@@ -121,9 +121,7 @@ public class BeanManagerImpl implements BeanManager {
 
     @Override
     public void fireEvent(Object event, Annotation... qualifiers) {
-        Set<Annotation> eventQualifiers = new HashSet<>();
-        Collections.addAll(eventQualifiers, qualifiers);
-        new EventImpl<Object>(event.getClass(), eventQualifiers).fire(event);
+        getEvent().select(qualifiers).fire(event);
     }
 
     @Override
