@@ -31,7 +31,6 @@ import org.graylog2.Configuration;
 import org.graylog2.GraylogServer;
 import org.graylog2.inputs.MessageInput;
 import org.jboss.netty.bootstrap.ConnectionlessBootstrap;
-import org.jboss.netty.channel.FixedReceiveBufferSizePredictorFactory;
 import org.jboss.netty.channel.socket.nio.NioDatagramChannelFactory;
 
 /**
@@ -60,7 +59,6 @@ public class GELFUDPInput implements MessageInput {
         final ExecutorService workerThreadPool = Executors.newCachedThreadPool();
         final ConnectionlessBootstrap bootstrap = new ConnectionlessBootstrap(new NioDatagramChannelFactory(workerThreadPool));
 
-        bootstrap.setOption("receiveBufferSizePredictorFactory", new FixedReceiveBufferSizePredictorFactory(8192));
         bootstrap.setPipelineFactory(new GELFPipelineFactory(graylogServer));
 
         try {
