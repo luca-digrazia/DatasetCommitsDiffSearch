@@ -30,10 +30,12 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.infinispan.client.hotrod.exceptions.HotRodClientException;
 import org.infinispan.client.hotrod.impl.ConfigurationProperties;
 import org.infinispan.client.hotrod.logging.Log;
 import org.infinispan.client.hotrod.logging.LogFactory;
+import org.infinispan.commons.util.FileLookupFactory;
 import org.infinispan.commons.util.Util;
 import org.infinispan.protean.runtime.InfinispanClientProducer;
 import org.infinispan.protean.runtime.InfinispanConfiguration;
@@ -43,10 +45,10 @@ import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.Type;
-import org.jboss.shamrock.deployment.annotations.BuildProducer;
-import org.jboss.shamrock.deployment.annotations.BuildStep;
-import org.jboss.shamrock.deployment.annotations.ExecutionTime;
-import org.jboss.shamrock.deployment.annotations.Record;
+import org.jboss.shamrock.annotations.BuildProducer;
+import org.jboss.shamrock.annotations.BuildStep;
+import org.jboss.shamrock.annotations.ExecutionTime;
+import org.jboss.shamrock.annotations.Record;
 import org.jboss.shamrock.arc.deployment.AdditionalBeanBuildItem;
 import org.jboss.shamrock.arc.deployment.BeanContainerListenerBuildItem;
 import org.jboss.shamrock.arc.deployment.UnremovableBeanBuildItem;
@@ -77,7 +79,7 @@ class InfinispanClientProcessor {
         hotDeployment.produce(new HotDeploymentConfigFileBuildItem(HOTROD_CLIENT_PROPERTIES));
 
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
-        InputStream stream = cl.getResourceAsStream(HOTROD_CLIENT_PROPERTIES);
+        InputStream stream = FileLookupFactory.newInstance().lookupFile(HOTROD_CLIENT_PROPERTIES, cl);
         Properties properties;
         if (stream == null) {
             properties = null;
@@ -164,21 +166,22 @@ class InfinispanClientProcessor {
     /**
      * The Infinispan client configuration, if set.
      */
-    InfinispanConfiguration infinispanClient;
+    @ConfigProperty(name = "shamrock.infinispan-client")
+    Optional<InfinispanConfiguration> infinispanConfig;
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
     BeanContainerListenerBuildItem build(InfinispanTemplate template, PropertiesBuildItem builderBuildItem) {
         Properties properties = builderBuildItem.getProperties();
-        InfinispanConfiguration conf = infinispanClient;
-        final Optional<String> serverList = conf.serverList;
-        if (serverList.isPresent()) {
+        if (infinispanConfig.isPresent()) {
+            InfinispanConfiguration conf = infinispanConfig.get();
             log.debugf("Applying micro profile configuration on top of hotrod properties: %s", conf);
             if (properties == null) {
                 properties = new Properties();
             }
-            properties.put(ConfigurationProperties.SERVER_LIST, serverList);
+            properties.put(ConfigurationProperties.SERVER_LIST, conf.serverList);
         }
+
         return new BeanContainerListenerBuildItem(template.configureInfinispan(properties));
     }
 
