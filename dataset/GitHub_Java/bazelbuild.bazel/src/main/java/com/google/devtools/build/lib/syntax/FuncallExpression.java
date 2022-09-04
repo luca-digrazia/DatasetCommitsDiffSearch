@@ -21,12 +21,10 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
@@ -40,7 +38,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -140,8 +137,7 @@ public final class FuncallExpression extends Expression {
    */
   public static ImmutableMap<Method, SkylarkCallable> collectSkylarkMethodsWithAnnotation(
       Class<?> classObj) {
-    ImmutableSortedMap.Builder<Method, SkylarkCallable> methodMap
-        = ImmutableSortedMap.orderedBy(Comparator.comparing(Object::toString));
+    ImmutableMap.Builder<Method, SkylarkCallable> methodMap = ImmutableMap.builder();
     for (Method method : classObj.getMethods()) {
       // Synthetic methods lead to false multiple matches
       if (!method.isSynthetic()) {
@@ -192,11 +188,11 @@ public final class FuncallExpression extends Expression {
 
   private final Expression function;
 
-  private final ImmutableList<Argument.Passed> arguments;
+  private final List<Argument.Passed> arguments;
 
   private final int numPositionalArgs;
 
-  public FuncallExpression(Expression function, ImmutableList<Argument.Passed> arguments) {
+  public FuncallExpression(Expression function, List<Argument.Passed> arguments) {
     this.function = Preconditions.checkNotNull(function);
     this.arguments = Preconditions.checkNotNull(arguments);
     this.numPositionalArgs = countPositionalArguments();
@@ -392,24 +388,11 @@ public final class FuncallExpression extends Expression {
   }
 
   private static SkylarkType getType(Param param) {
-    if (param.allowedTypes().length > 0) {
-      Preconditions.checkState(Object.class.equals(param.type()));
-      SkylarkType result = SkylarkType.BOTTOM;
-      for (ParamType paramType : param.allowedTypes()) {
-        SkylarkType t =
-            paramType.generic1() != Object.class
-                ? SkylarkType.of(paramType.type(), paramType.generic1())
-                : SkylarkType.of(paramType.type());
-        result = SkylarkType.Union.of(result, t);
-      }
-      return result;
-    } else {
-      SkylarkType type =
-          param.generic1() != Object.class
-              ? SkylarkType.of(param.type(), param.generic1())
-              : SkylarkType.of(param.type());
-      return type;
-    }
+    SkylarkType type =
+        param.generic1() != Object.class
+            ? SkylarkType.of(param.type(), param.generic1())
+            : SkylarkType.of(param.type());
+    return type;
   }
 
   /**
@@ -679,10 +662,7 @@ public final class FuncallExpression extends Expression {
     // or star arguments, because the argument list was already validated by
     // Argument#validateFuncallArguments, as called by the Parser,
     // which should be the only place that build FuncallExpression-s.
-    // Argument lists are typically short and functions are frequently called, so go by index
-    // (O(1) for ImmutableList) to avoid the iterator overhead.
-    for (int i = 0; i < arguments.size(); i++) {
-      Argument.Passed arg = arguments.get(i);
+    for (Argument.Passed arg : arguments) {
       Object value = arg.getValue().eval(env);
       if (arg.isPositional()) {
         posargs.add(value);
