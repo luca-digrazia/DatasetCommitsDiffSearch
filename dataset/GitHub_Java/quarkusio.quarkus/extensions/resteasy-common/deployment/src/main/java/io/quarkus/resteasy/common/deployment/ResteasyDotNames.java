@@ -1,7 +1,6 @@
 package io.quarkus.resteasy.common.deployment;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -52,9 +51,6 @@ public final class ResteasyDotNames {
             .createSimple(ConfigProperty.class.getName());
     public static final DotName CDI_INSTANCE = DotName
             .createSimple(javax.enterprise.inject.Instance.class.getName());
-
-    public static final List<DotName> JAXRS_METHOD_ANNOTATIONS = Collections
-            .unmodifiableList(Arrays.asList(GET, POST, HEAD, DELETE, PUT, PATCH, OPTIONS));
 
     public static final IgnoreForReflectionPredicate IGNORE_FOR_REFLECTION_PREDICATE = new IgnoreForReflectionPredicate();
 
