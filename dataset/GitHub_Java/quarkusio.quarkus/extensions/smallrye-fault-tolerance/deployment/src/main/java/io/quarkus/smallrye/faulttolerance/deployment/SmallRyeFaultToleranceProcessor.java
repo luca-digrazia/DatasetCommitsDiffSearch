@@ -4,15 +4,12 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.OptionalInt;
 import java.util.Set;
 
 import javax.annotation.Priority;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
-import org.eclipse.microprofile.config.Config;
-import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.faulttolerance.Asynchronous;
 import org.eclipse.microprofile.faulttolerance.Bulkhead;
 import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
@@ -37,8 +34,10 @@ import io.quarkus.arc.deployment.BeanDefiningAnnotationBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
 import io.quarkus.arc.processor.AnnotationsTransformer;
 import io.quarkus.arc.processor.BeanInfo;
+import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.deployment.Capabilities;
+import io.quarkus.deployment.QuarkusConfig;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -174,13 +173,12 @@ public class SmallRyeFaultToleranceProcessor {
                             .equals("io.smallrye.faulttolerance.HystrixCommandInterceptor")) {
                         return;
                     }
-                    final Config config = ConfigProvider.getConfig();
 
-                    OptionalInt priority = config.getValue("mp.fault.tolerance.interceptor.priority", OptionalInt.class);
-                    if (priority.isPresent()) {
+                    Integer priority = QuarkusConfig.getBoxedInt("mp.fault.tolerance.interceptor.priority", null, true);
+                    if (priority != null) {
                         ctx.transform()
                                 .remove(ann -> ann.name().toString().equals(Priority.class.getName()))
-                                .add(Priority.class, AnnotationValue.createIntegerValue("value", priority.getAsInt()))
+                                .add(Priority.class, AnnotationValue.createIntegerValue("value", priority))
                                 .done();
                     }
                 }
@@ -194,8 +192,10 @@ public class SmallRyeFaultToleranceProcessor {
     void validateFaultToleranceAnnotations(
             ValidationPhaseBuildItem validationPhase, SmallryeFaultToleranceRecorder recorder) {
         List<String> beanNames = new ArrayList<>();
-        for (BeanInfo bean : validationPhase.getContext().beans().classBeans()) {
-            beanNames.add(bean.getBeanClass().toString());
+        for (BeanInfo bean : validationPhase.getContext().get(BuildExtension.Key.BEANS)) {
+            if (bean.isClassBean()) {
+                beanNames.add(bean.getBeanClass().toString());
+            }
         }
         recorder.validate(beanNames);
     }

@@ -106,14 +106,9 @@ class ConfigDoItemFinder {
 
             String hyphenatedFieldName = hyphenate(fieldName);
             String configDocMapKey = hyphenatedFieldName;
-            boolean isDeprecated = false;
 
             for (AnnotationMirror annotationMirror : annotationMirrors) {
                 String annotationName = annotationMirror.getAnnotationType().toString();
-                if (annotationName.equals(Deprecated.class.getName())) {
-                    isDeprecated = true;
-                    break;
-                }
                 if (annotationName.equals(Constants.ANNOTATION_CONFIG_ITEM)
                         || annotationName.equals(Constants.ANNOTATION_CONFIG_DOC_MAP_KEY)) {
                     for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry : annotationMirror
@@ -152,10 +147,6 @@ class ConfigDoItemFinder {
                     configSection.setSectionDetailsTitle(sectionHolder.title);
                     configSection.setName(parentName + Constants.DOT + hyphenatedFieldName);
                 }
-            }
-
-            if (isDeprecated) {
-                continue; // do not include deprecated config items
             }
 
             if (name.isEmpty()) {

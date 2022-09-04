@@ -30,8 +30,6 @@ public class DocGeneratorUtil {
     private static final Map<String, String> PRIMITIVE_DEFAULT_VALUES = new HashMap<>();
     private static final Map<String, String> EXTENSION_JAVA_DOC_LINK = new HashMap<>();
     private static Pattern PACKAGE_PATTERN = Pattern.compile("^(\\w+)\\.(\\w+)\\..*$");
-    private static final String HYPHEN = "-";
-    private static final Pattern PATTERN = Pattern.compile("([-_]+)");
 
     static {
         PRIMITIVE_DEFAULT_VALUES.put("int", "0");
@@ -237,18 +235,8 @@ public class DocGeneratorUtil {
         return join(lowerCase(camelHumpsIterator(orig)));
     }
 
-    /**
-     * This needs to be consistent with io.quarkus.runtime.configuration.HyphenateEnumConverter.
-     */
     static String hyphenateEnumValue(String orig) {
-        StringBuffer target = new StringBuffer();
-        String hyphenate = hyphenate(orig);
-        Matcher matcher = PATTERN.matcher(hyphenate);
-        while (matcher.find()) {
-            matcher.appendReplacement(target, HYPHEN);
-        }
-        matcher.appendTail(target);
-        return target.toString();
+        return orig.replace('_', '-').toLowerCase(Locale.ROOT);
     }
 
     static String joinAcceptedValues(List<String> acceptedValues) {
