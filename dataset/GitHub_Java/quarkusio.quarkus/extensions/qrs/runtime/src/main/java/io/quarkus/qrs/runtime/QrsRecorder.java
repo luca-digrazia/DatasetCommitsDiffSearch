@@ -11,7 +11,7 @@ import java.util.function.Supplier;
 import javax.ws.rs.core.MediaType;
 
 import io.quarkus.arc.runtime.BeanContainer;
-import io.quarkus.qrs.runtime.core.ArcBeanFactory;
+import io.quarkus.qrs.runtime.core.ArcEndpointFactory;
 import io.quarkus.qrs.runtime.core.ContextParamExtractor;
 import io.quarkus.qrs.runtime.core.FormParamExtractor;
 import io.quarkus.qrs.runtime.core.HeaderParamExtractor;
@@ -19,7 +19,6 @@ import io.quarkus.qrs.runtime.core.ParameterExtractor;
 import io.quarkus.qrs.runtime.core.PathParamExtractor;
 import io.quarkus.qrs.runtime.core.QueryParamExtractor;
 import io.quarkus.qrs.runtime.core.ResourceRequestInterceptorHandler;
-import io.quarkus.qrs.runtime.core.ResourceResponseInterceptorHandler;
 import io.quarkus.qrs.runtime.handlers.BlockingHandler;
 import io.quarkus.qrs.runtime.handlers.InstanceHandler;
 import io.quarkus.qrs.runtime.handlers.InvocationHandler;
@@ -27,7 +26,6 @@ import io.quarkus.qrs.runtime.handlers.ParameterHandler;
 import io.quarkus.qrs.runtime.handlers.QrsInitialHandler;
 import io.quarkus.qrs.runtime.handlers.ReadBodyHandler;
 import io.quarkus.qrs.runtime.handlers.ResponseHandler;
-import io.quarkus.qrs.runtime.handlers.ResponseWriterHandler;
 import io.quarkus.qrs.runtime.handlers.RestHandler;
 import io.quarkus.qrs.runtime.mapping.RequestMapper;
 import io.quarkus.qrs.runtime.mapping.RuntimeResource;
@@ -38,8 +36,7 @@ import io.quarkus.qrs.runtime.model.ResourceClass;
 import io.quarkus.qrs.runtime.model.ResourceInterceptors;
 import io.quarkus.qrs.runtime.model.ResourceMethod;
 import io.quarkus.qrs.runtime.model.ResourceRequestInterceptor;
-import io.quarkus.qrs.runtime.model.ResourceResponseInterceptor;
-import io.quarkus.qrs.runtime.spi.BeanFactory;
+import io.quarkus.qrs.runtime.spi.EndpointFactory;
 import io.quarkus.qrs.runtime.spi.EndpointInvoker;
 import io.quarkus.runtime.annotations.Recorder;
 import io.vertx.core.Handler;
@@ -48,8 +45,8 @@ import io.vertx.ext.web.RoutingContext;
 @Recorder
 public class QrsRecorder {
 
-    public <T> BeanFactory<T> factory(String targetClass, BeanContainer beanContainer) {
-        return new ArcBeanFactory<>(loadClass(targetClass),
+    public EndpointFactory factory(String targetClass, BeanContainer beanContainer) {
+        return new ArcEndpointFactory(loadClass(targetClass),
                 beanContainer);
     }
 
@@ -122,11 +119,6 @@ public class QrsRecorder {
                 }
                 handlers.add(new InvocationHandler(invoker));
                 handlers.add(new ResponseHandler());
-                List<ResourceResponseInterceptor> responseInterceptors = interceptors.getResponseInterceptors();
-                if (!responseInterceptors.isEmpty()) {
-                    handlers.add(new ResourceResponseInterceptorHandler(responseInterceptors));
-                }
-                handlers.add(new ResponseWriterHandler());
                 RuntimeResource resource = new RuntimeResource(method.getMethod(), new URITemplate(method.getPath()),
                         method.getProduces() == null ? null : MediaType.valueOf(method.getProduces()[0]),
                         method.getConsumes() == null ? null : MediaType.valueOf(method.getConsumes()[0]), invoker,
@@ -150,10 +142,9 @@ public class QrsRecorder {
         return new QrsInitialHandler(mappersByMethod);
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T> Class<T> loadClass(String name) {
+    private static Class<?> loadClass(String name) {
         try {
-            return (Class<T>) Class.forName(name, false, Thread.currentThread().getContextClassLoader());
+            return Class.forName(name, false, Thread.currentThread().getContextClassLoader());
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
