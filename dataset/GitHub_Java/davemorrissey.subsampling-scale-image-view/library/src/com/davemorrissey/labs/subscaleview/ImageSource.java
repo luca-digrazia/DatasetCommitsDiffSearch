@@ -1,7 +1,9 @@
 package com.davemorrissey.labs.subscaleview;
 
+import android.content.ContentResolver;
+import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.Rect;
+import android.media.Image;
 import android.net.Uri;
 
 /**
@@ -22,7 +24,6 @@ public final class ImageSource {
     private boolean tile;
     private int sWidth;
     private int sHeight;
-    private Rect sRegion;
 
     private ImageSource(Bitmap bitmap) {
         this.bitmap = bitmap;
@@ -107,8 +108,7 @@ public final class ImageSource {
     }
 
     /**
-     * Enable tiling of the image. This does not apply to preview images which are always loaded as a single bitmap.,
-     * and tiling cannot be disabled when displaying a region of the source image.
+     * Enable tiling of the image. This does not apply to preview images which are always loaded as a single bitmap.
      * @return this instance for chaining.
      */
     public ImageSource withTilingEnabled() {
@@ -116,8 +116,7 @@ public final class ImageSource {
     }
 
     /**
-     * Disable tiling of the image. This does not apply to preview images which are always loaded as a single bitmap,
-     * and tiling cannot be disabled when displaying a region of the source image.
+     * Disable tiling of the image. This does not apply to preview images which are always loaded as a single bitmap.
      * @return this instance for chaining.
      */
     public ImageSource withTilingDisabled() {
@@ -125,23 +124,11 @@ public final class ImageSource {
     }
 
     /**
-     * Enable or disable tiling of the image. This does not apply to preview images which are always loaded as a single bitmap,
-     * and tiling cannot be disabled when displaying a region of the source image.
+     * Enable or disable tiling of the image. This does not apply to preview images which are always loaded as a single bitmap.
      * @return this instance for chaining.
      */
     public ImageSource withTiling(boolean tile) {
         this.tile = tile;
-        return this;
-    }
-
-    /**
-     * Use a region of the source image. Region must be set independently for the full size image and the preview if
-     * you are using one.
-     * @return this instance for chaining.
-     */
-    public ImageSource withRegion(Rect sRegion) {
-        this.sRegion = sRegion;
-        setInvariants();
         return this;
     }
 
@@ -156,16 +143,7 @@ public final class ImageSource {
             this.sWidth = sWidth;
             this.sHeight = sHeight;
         }
-        setInvariants();
         return this;
-    }
-
-    private void setInvariants() {
-        if (this.sRegion != null) {
-            this.tile = true;
-            this.sWidth = this.sRegion.width();
-            this.sHeight = this.sRegion.height();
-        }
     }
 
     protected final Uri getUri() {
@@ -190,9 +168,5 @@ public final class ImageSource {
 
     protected final int getSHeight() {
         return sHeight;
-    }
-
-    protected final Rect getSRegion() {
-        return sRegion;
     }
 }
