@@ -43,31 +43,20 @@ public abstract class NativeImageBuildRunner {
 
     public int build(List<String> args, Path outputDir, boolean processInheritIODisabled)
             throws InterruptedException, IOException {
-        preBuild(args);
-        try {
-            CountDownLatch errorReportLatch = new CountDownLatch(1);
-            final ProcessBuilder processBuilder = new ProcessBuilder(getBuildCommand(args))
-                    .directory(outputDir.toFile());
-            final Process process = ProcessUtil.launchProcessStreamStdOut(processBuilder, processInheritIODisabled);
-            ExecutorService executor = Executors.newSingleThreadExecutor();
-            executor.submit(new ErrorReplacingProcessReader(process.getErrorStream(), outputDir.resolve("reports").toFile(),
-                    errorReportLatch));
-            executor.shutdown();
-            errorReportLatch.await();
-            return process.waitFor();
-        } finally {
-            postBuild();
-        }
+        CountDownLatch errorReportLatch = new CountDownLatch(1);
+        final ProcessBuilder processBuilder = new ProcessBuilder(getBuildCommand(args))
+                .directory(outputDir.toFile());
+        final Process process = ProcessUtil.launchProcessStreamStdOut(processBuilder, processInheritIODisabled);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.submit(new ErrorReplacingProcessReader(process.getErrorStream(), outputDir.resolve("reports").toFile(),
+                errorReportLatch));
+        executor.shutdown();
+        errorReportLatch.await();
+        return process.waitFor();
     }
 
     protected abstract String[] getGraalVMVersionCommand(List<String> args);
 
     protected abstract String[] getBuildCommand(List<String> args);
-
-    protected void preBuild(List<String> buildArgs) throws IOException, InterruptedException {
-    }
-
-    protected void postBuild() throws InterruptedException, IOException {
-    }
 
 }

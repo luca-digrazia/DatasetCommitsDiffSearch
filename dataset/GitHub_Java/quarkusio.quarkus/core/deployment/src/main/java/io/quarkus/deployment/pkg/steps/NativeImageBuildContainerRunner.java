@@ -19,14 +19,14 @@ import io.quarkus.deployment.pkg.NativeConfig;
 import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.deployment.util.ProcessUtil;
 
-public abstract class NativeImageBuildContainerRunner extends NativeImageBuildRunner {
+public class NativeImageBuildContainerRunner extends NativeImageBuildRunner {
 
     private static final Logger log = Logger.getLogger(NativeImageBuildContainerRunner.class);
 
     private final NativeConfig nativeConfig;
-    protected final NativeConfig.ContainerRuntime containerRuntime;
+    private final NativeConfig.ContainerRuntime containerRuntime;
     private final String[] baseContainerRuntimeArgs;
-    protected final String outputPath;
+    private final String outputPath;
 
     public NativeImageBuildContainerRunner(NativeConfig nativeConfig, Path outputDir) {
         this.nativeConfig = nativeConfig;
@@ -34,9 +34,13 @@ public abstract class NativeImageBuildContainerRunner extends NativeImageBuildRu
         log.infof("Using %s to run the native image builder", containerRuntime.getExecutableName());
 
         List<String> containerRuntimeArgs = new ArrayList<>();
-        Collections.addAll(containerRuntimeArgs, "--env", "LANG=C");
+        Collections.addAll(containerRuntimeArgs, "run", "--env", "LANG=C");
 
-        outputPath = outputDir == null ? null : outputDir.toAbsolutePath().toString();
+        String outputPath = outputDir.toAbsolutePath().toString();
+        if (SystemUtils.IS_OS_WINDOWS) {
+            outputPath = FileUtil.translateToVolumePath(outputPath);
+        }
+        this.outputPath = outputPath;
 
         if (SystemUtils.IS_OS_LINUX) {
             String uid = getLinuxID("-ur");
@@ -49,6 +53,7 @@ public abstract class NativeImageBuildContainerRunner extends NativeImageBuildRu
                 }
             }
         }
+        Collections.addAll(containerRuntimeArgs, "--rm");
         this.baseContainerRuntimeArgs = containerRuntimeArgs.toArray(new String[0]);
     }
 
@@ -78,28 +83,26 @@ public abstract class NativeImageBuildContainerRunner extends NativeImageBuildRu
 
     @Override
     protected String[] getGraalVMVersionCommand(List<String> args) {
-        return buildCommand("run", Collections.singletonList("--rm"), args);
+        return buildCommand(Collections.emptyList(), args);
     }
 
     @Override
     protected String[] getBuildCommand(List<String> args) {
-        return buildCommand("run", getContainerRuntimeBuildArgs(), args);
-    }
-
-    protected List<String> getContainerRuntimeBuildArgs() {
         List<String> containerRuntimeArgs = new ArrayList<>();
+        Collections.addAll(containerRuntimeArgs, "-v",
+                outputPath + ":" + NativeImageBuildStep.CONTAINER_BUILD_VOLUME_PATH + ":z");
         nativeConfig.containerRuntimeOptions.ifPresent(containerRuntimeArgs::addAll);
         if (nativeConfig.debugBuildProcess && nativeConfig.publishDebugBuildProcessPort) {
             // publish the debug port onto the host if asked for
             containerRuntimeArgs.add("--publish=" + NativeImageBuildStep.DEBUG_BUILD_PROCESS_PORT + ":"
                     + NativeImageBuildStep.DEBUG_BUILD_PROCESS_PORT);
         }
-        return containerRuntimeArgs;
+        return buildCommand(containerRuntimeArgs, args);
     }
 
-    protected String[] buildCommand(String dockerCmd, List<String> containerRuntimeArgs, List<String> command) {
+    private String[] buildCommand(List<String> containerRuntimeArgs, List<String> command) {
         return Stream
-                .of(Stream.of(containerRuntime.getExecutableName()), Stream.of(dockerCmd), Stream.of(baseContainerRuntimeArgs),
+                .of(Stream.of(containerRuntime.getExecutableName()), Stream.of(baseContainerRuntimeArgs),
                         containerRuntimeArgs.stream(), Stream.of(nativeConfig.builderImage), command.stream())
                 .flatMap(Function.identity()).toArray(String[]::new);
     }
