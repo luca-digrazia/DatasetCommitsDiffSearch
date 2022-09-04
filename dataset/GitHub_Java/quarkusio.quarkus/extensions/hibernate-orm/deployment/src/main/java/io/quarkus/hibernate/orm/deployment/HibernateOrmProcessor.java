@@ -26,8 +26,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-import javax.enterprise.context.ApplicationScoped;
-import javax.enterprise.inject.Default;
 import javax.inject.Singleton;
 import javax.persistence.Entity;
 import javax.persistence.MappedSuperclass;
@@ -69,7 +67,6 @@ import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
-import io.quarkus.arc.deployment.SyntheticBeanBuildItem.ExtendedBeanConfigurator;
 import io.quarkus.arc.deployment.staticmethods.InterceptedStaticMethodsTransformersRegisteredBuildItem;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.datasource.common.runtime.DataSourceUtil;
@@ -116,7 +113,6 @@ import io.quarkus.hibernate.orm.runtime.dialect.QuarkusH2Dialect;
 import io.quarkus.hibernate.orm.runtime.dialect.QuarkusPostgreSQL10Dialect;
 import io.quarkus.hibernate.orm.runtime.proxies.PreGeneratedProxies;
 import io.quarkus.hibernate.orm.runtime.tenant.DataSourceTenantConnectionResolver;
-import io.quarkus.hibernate.orm.runtime.tenant.TenantConnectionResolver;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.configuration.ConfigurationException;
 import net.bytebuddy.description.type.TypeDescription;
@@ -275,10 +271,7 @@ public final class HibernateOrmProcessor {
         for (PersistenceXmlDescriptorBuildItem persistenceXmlDescriptorBuildItem : persistenceXmlDescriptors) {
             persistenceUnitDescriptors
                     .produce(new PersistenceUnitDescriptorBuildItem(persistenceXmlDescriptorBuildItem.getDescriptor(),
-                            getMultiTenancyStrategy(Optional.ofNullable(persistenceXmlDescriptorBuildItem.getDescriptor()
-                                    .getProperties().getProperty(AvailableSettings.MULTI_TENANT))),
-                            null,
-                            false));
+                            getMultiTenancyStrategy(hibernateOrmConfig), false));
         }
 
         if (impliedPU.shouldGenerateImpliedBlockingPersistenceUnit()) {
@@ -438,6 +431,9 @@ public final class HibernateOrmProcessor {
             unremovableClasses.add(TransactionEntityManagers.class);
         }
         unremovableClasses.add(RequestScopedEntityManagerHolder.class);
+        if (getMultiTenancyStrategy(hibernateOrmConfig) != MultiTenancyStrategy.NONE) {
+            unremovableClasses.add(DataSourceTenantConnectionResolver.class);
+        }
 
         additionalBeans.produce(AdditionalBeanBuildItem.builder().setUnremovable()
                 .addBeanClasses(unremovableClasses.toArray(new Class<?>[unremovableClasses.size()]))
@@ -468,6 +464,9 @@ public final class HibernateOrmProcessor {
             return;
         }
 
+        MultiTenancyStrategy multiTenancyStrategy = MultiTenancyStrategy
+                .valueOf(hibernateOrmConfig.multitenant.orElse(MultiTenancyStrategy.NONE.name()));
+
         Set<String> persistenceUnitNames = new HashSet<>();
 
         Map<String, Set<String>> entityPersistenceUnitMapping = new HashMap<>();
@@ -486,7 +485,8 @@ public final class HibernateOrmProcessor {
                 .scope(Singleton.class)
                 .unremovable()
                 .supplier(recorder.jpaConfigSupportSupplier(
-                        new JPAConfigSupport(persistenceUnitNames, entityPersistenceUnitMapping)))
+                        new JPAConfigSupport(persistenceUnitNames, entityPersistenceUnitMapping, multiTenancyStrategy,
+                                hibernateOrmConfig.multitenantSchemaDatasource.orElse(null))))
                 .done());
     }
 
@@ -502,39 +502,6 @@ public final class HibernateOrmProcessor {
         }
 
         recorder.startAllPersistenceUnits(beanContainer.getValue());
-    }
-
-    @BuildStep
-    @Record(RUNTIME_INIT)
-    public void multitenancy(HibernateOrmRecorder recorder,
-            List<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptors,
-            BuildProducer<SyntheticBeanBuildItem> syntheticBeans) {
-        for (PersistenceUnitDescriptorBuildItem persistenceUnitDescriptor : persistenceUnitDescriptors) {
-            if (persistenceUnitDescriptor.getMultiTenancyStrategy() == MultiTenancyStrategy.NONE) {
-                continue;
-            }
-
-            ExtendedBeanConfigurator configurator = SyntheticBeanBuildItem.configure(DataSourceTenantConnectionResolver.class)
-                    .scope(ApplicationScoped.class)
-                    .types(TenantConnectionResolver.class)
-                    .setRuntimeInit()
-                    .defaultBean()
-                    .unremovable()
-                    .supplier(recorder.dataSourceTenantConnectionResolver(persistenceUnitDescriptor.getPersistenceUnitName(),
-                            persistenceUnitDescriptor.getDataSource(), persistenceUnitDescriptor.getMultiTenancyStrategy(),
-                            persistenceUnitDescriptor.getMultiTenancySchemaDataSource()));
-
-            if (PersistenceUnitUtil.isDefaultPersistenceUnit(persistenceUnitDescriptor.getPersistenceUnitName())) {
-                configurator.addQualifier(Default.class);
-            } else {
-                configurator.addQualifier().annotation(DotNames.NAMED)
-                        .addValue("value", persistenceUnitDescriptor.getPersistenceUnitName()).done();
-                configurator.addQualifier().annotation(PersistenceUnit.class)
-                        .addValue("value", persistenceUnitDescriptor.getPersistenceUnitName()).done();
-            }
-
-            syntheticBeans.produce(configurator.done());
-        }
     }
 
     @BuildStep
@@ -842,8 +809,7 @@ public final class HibernateOrmProcessor {
 
         persistenceUnitDescriptors.produce(
                 new PersistenceUnitDescriptorBuildItem(descriptor, dataSource,
-                        getMultiTenancyStrategy(persistenceUnitConfig.multitenant),
-                        persistenceUnitConfig.multitenantSchemaDatasource.orElse(null),
+                        getMultiTenancyStrategy(hibernateOrmConfig),
                         false));
     }
 
@@ -1095,13 +1061,12 @@ public final class HibernateOrmProcessor {
         return scanner;
     }
 
-    private static MultiTenancyStrategy getMultiTenancyStrategy(Optional<String> multitenancyStrategy) {
+    private static MultiTenancyStrategy getMultiTenancyStrategy(HibernateOrmConfig hibernateOrmConfig) {
         final MultiTenancyStrategy multiTenancyStrategy = MultiTenancyStrategy
-                .valueOf(multitenancyStrategy.orElse(MultiTenancyStrategy.NONE.name())
-                        .toUpperCase(Locale.ROOT));
+                .valueOf(hibernateOrmConfig.multitenant.orElse(MultiTenancyStrategy.NONE.name()));
         if (multiTenancyStrategy == MultiTenancyStrategy.DISCRIMINATOR) {
             // See https://hibernate.atlassian.net/browse/HHH-6054
-            throw new ConfigurationError("The Hibernate ORM multitenancy strategy "
+            throw new ConfigurationError("The Hibernate ORM multi tenancy strategy "
                     + MultiTenancyStrategy.DISCRIMINATOR + " is currently not supported");
         }
         return multiTenancyStrategy;
