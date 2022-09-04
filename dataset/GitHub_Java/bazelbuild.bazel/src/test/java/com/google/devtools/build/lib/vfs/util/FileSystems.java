@@ -28,13 +28,13 @@ public final class FileSystems {
   /** Constructs a platform native (Unix or Windows) file system. */
   public static FileSystem getNativeFileSystem() {
     if (OS.getCurrent() == OS.WINDOWS) {
-      return new WindowsFileSystem(DigestHashFunction.getDefaultUnchecked());
+      return new WindowsFileSystem(DigestHashFunction.DEFAULT_HASH_FOR_TESTS);
     }
     try {
       return Class.forName(TestConstants.TEST_REAL_UNIX_FILE_SYSTEM)
           .asSubclass(FileSystem.class)
           .getDeclaredConstructor(DigestHashFunction.class)
-          .newInstance(DigestHashFunction.getDefaultUnchecked());
+          .newInstance(DigestHashFunction.DEFAULT_HASH_FOR_TESTS);
     } catch (Exception e) {
       throw new IllegalStateException(e);
     }
@@ -42,6 +42,6 @@ public final class FileSystems {
 
   /** Constructs a java.io.File file system. */
   public static FileSystem getJavaIoFileSystem() {
-    return new JavaIoFileSystem(DigestHashFunction.getDefaultUnchecked());
+    return new JavaIoFileSystem(DigestHashFunction.DEFAULT_HASH_FOR_TESTS);
   }
 }
