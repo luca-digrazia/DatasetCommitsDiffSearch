@@ -105,7 +105,7 @@ public class IndexRangesResource extends RestResource {
     }
 
     @GET
-    @Path("/{index: [a-z_0-9]+}")
+    @Path("/{index: [a-z_0-9]+}/rebuild")
     @Timed
     @ApiOperation(value = "Show single index range")
     @Produces(MediaType.APPLICATION_JSON)

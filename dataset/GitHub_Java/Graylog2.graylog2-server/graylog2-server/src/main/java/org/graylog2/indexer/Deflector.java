@@ -18,8 +18,8 @@ package org.graylog2.indexer;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
-import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.indices.InvalidAliasNameException;
 import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.indexer.indices.Indices;
@@ -182,7 +182,7 @@ public class Deflector { // extends Ablenkblech
 
         final List<Integer> indexNumbers = Lists.newArrayListWithExpectedSize(indices.size());
         for (String indexName : indices.keySet()) {
-            if (!isGraylogIndex(indexName)) {
+            if (!isGraylog2Index(indexName)) {
                 continue;
             }
 
@@ -204,7 +204,7 @@ public class Deflector { // extends Ablenkblech
         final Map<String, IndexStats> indices = this.indices.getAll();
         final List<String> result = Lists.newArrayListWithExpectedSize(indices.size());
         for (String indexName : indices.keySet()) {
-            if (isGraylogIndex(indexName)) {
+            if (isGraylog2Index(indexName)) {
                 result.add(indexName);
             }
         }
@@ -217,7 +217,7 @@ public class Deflector { // extends Ablenkblech
         for (Map.Entry<String, IndexStats> e : indices.getAll().entrySet()) {
             final String name = e.getKey();
 
-            if (isGraylogIndex(name)) {
+            if (isGraylog2Index(name)) {
                 result.put(name, e.getValue());
             }
         }
@@ -282,7 +282,7 @@ public class Deflector { // extends Ablenkblech
         return getName().equals(indexName);
     }
 
-    public boolean isGraylogIndex(final String indexName) {
+    public boolean isGraylog2Index(final String indexName) {
         return !isNullOrEmpty(indexName) && !isDeflectorAlias(indexName) && indexName.startsWith(indexPrefix + SEPARATOR);
     }
 }
