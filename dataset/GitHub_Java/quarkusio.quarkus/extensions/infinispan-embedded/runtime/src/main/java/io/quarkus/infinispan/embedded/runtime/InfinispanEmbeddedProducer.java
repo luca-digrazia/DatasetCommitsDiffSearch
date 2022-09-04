@@ -6,6 +6,8 @@ import java.util.Map;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.inject.Produces;
+import javax.inject.Inject;
+import javax.inject.Singleton;
 
 import org.infinispan.commons.CacheConfigurationException;
 import org.infinispan.commons.configuration.attributes.Attribute;
@@ -24,12 +26,10 @@ import org.infinispan.transaction.lookup.JBossStandaloneJTAManagerLookup;
 @ApplicationScoped
 public class InfinispanEmbeddedProducer {
 
-    private InfinispanEmbeddedRuntimeConfig config;
+    @Inject
+    InfinispanEmbeddedRuntimeConfig config;
 
-    public void setRuntimeConfig(InfinispanEmbeddedRuntimeConfig config) {
-        this.config = config;
-    }
-
+    @Singleton
     @Produces
     EmbeddedCacheManager manager() {
         if (config.xmlConfig.isPresent()) {
@@ -51,8 +51,9 @@ public class InfinispanEmbeddedProducer {
     }
 
     /**
-     * Verifies that if a configuration  has transactions enabled that it only uses the lookup that uses the
+     * Verifies that if a configuration has transactions enabled that it only uses the lookup that uses the
      * JBossStandaloneJTAManager, which looks up the transaction manager used by Quarkus
+     * 
      * @param configurationBuilder the current configuration
      * @param cacheName the cache for the configuration
      */
