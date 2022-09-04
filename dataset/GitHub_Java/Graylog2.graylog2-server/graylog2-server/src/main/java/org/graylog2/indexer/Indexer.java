@@ -64,7 +64,7 @@ public class Indexer {
 
     public static enum DateHistogramInterval {
         YEAR(Period.years(1)),
-        QUARTER(Period.months(3)),
+        QUARTER(Period.months(3)), // TODO this isn't really correct, is it?
         MONTH(Period.months(1)),
         WEEK(Period.weeks(1)),
         DAY(Period.days(1)),
@@ -136,16 +136,6 @@ public class Indexer {
 
         if (conf.getEsUnicastHosts() != null) {
             settings.put("discovery.zen.ping.unicast.hosts", Joiner.on(",").join(conf.getEsUnicastHosts()));
-        }
-
-        if (conf.getEsNetworkHost() != null) {
-            settings.put("network.host", conf.getEsNetworkHost());
-        }
-        if (conf.getEsNetworkBindHost() != null) {
-            settings.put("network.bind_host", conf.getEsNetworkBindHost());
-        }
-        if (conf.getEsNetworkPublishHost() != null) {
-            settings.put("network.publish_host", conf.getEsNetworkPublishHost());
         }
 
         // Overwrite from a custom ElasticSearch config file.

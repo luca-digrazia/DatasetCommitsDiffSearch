@@ -53,7 +53,7 @@ public class IndexFailure extends Persisted {
         List<IndexFailure> failures = Lists.newArrayList();
 
         DBObject sort = new BasicDBObject();
-        sort.put("$natural", -1);
+        sort.put("timestamp", -1);
 
         List<DBObject> results = query(new BasicDBObject(), sort, limit, offset, core, COLLECTION);
         for (DBObject o : results) {
@@ -73,8 +73,6 @@ public class IndexFailure extends Persisted {
     public Map<String, Object> asMap() {
         return new HashMap<String, Object>() {{
             put("timestamp", Tools.getISO8601String((DateTime) fields.get("timestamp")));
-            put("letter_id", fields.get("letter_id"));
-            put("written", fields.get("written"));
             put("message", fields.get("message"));
             put("index", fields.get("index"));
             put("type", fields.get("type"));
