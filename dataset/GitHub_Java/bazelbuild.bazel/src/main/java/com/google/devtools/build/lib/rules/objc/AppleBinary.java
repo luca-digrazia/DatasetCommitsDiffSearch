@@ -235,7 +235,6 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     switch (binaryType) {
       case LOADABLE_BUNDLE:
         extraLinkArgs.add("-bundle");
-        extraLinkArgs.add("-Xlinker", "-rpath", "-Xlinker", "@loader_path/Frameworks");
         if (didProvideBundleLoader) {
           AppleExecutableBinaryProvider executableProvider =
               (AppleExecutableBinaryProvider) ruleContext.getPrerequisite(
@@ -243,6 +242,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
                   AppleExecutableBinaryProvider.SKYLARK_CONSTRUCTOR.getKey());
           extraLinkArgs.add(
               "-bundle_loader", executableProvider.getAppleExecutableBinary().getExecPathString());
+          extraLinkArgs.add("-Xlinker", "-rpath", "-Xlinker", "@loader_path/Frameworks");
         }
         break;
       case DYLIB:
