@@ -20,12 +20,10 @@
 
 package org.graylog2.filters;
 
-import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.TimerContext;
 import java.util.concurrent.TimeUnit;
 import org.graylog2.GraylogServer;
 import org.graylog2.MessageCounter;
-import org.graylog2.Tools;
 import org.graylog2.logmessage.LogMessage;
 import org.graylog2.streams.Stream;
 
@@ -40,10 +38,8 @@ public class CounterUpdateFilter implements MessageFilter {
 
     @Override
     public boolean filter(LogMessage msg, GraylogServer server) {
-        TimerContext tcx = Metrics.newTimer(CounterUpdateFilter.class, "ProcessTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS).time();
+        TimerContext tcx = server.getTimer(CounterUpdateFilter.class, "ProcessTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS).time();
 
-        server.setLastReceivedMessageTimestamp(Tools.getUTCTimestamp());
-        
         // Increment all registered message counters.
         for (MessageCounter counter : server.getMessageCounterManager().getAllCounters().values()) {
             // Five second throughput for health page.

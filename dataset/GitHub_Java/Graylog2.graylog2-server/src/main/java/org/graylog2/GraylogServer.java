@@ -1,23 +1,3 @@
-/**
- * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
- *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
- */
-
 package org.graylog2;
 
 import java.util.List;
@@ -39,8 +19,13 @@ import org.graylog2.outputs.MessageOutput;
 import org.graylog2.streams.StreamCache;
 
 import com.google.common.collect.Lists;
-import com.yammer.metrics.HealthChecks;
-import com.yammer.metrics.core.HealthCheck;
+import com.google.common.collect.Maps;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Histogram;
+import com.yammer.metrics.core.Meter;
+import com.yammer.metrics.core.Timer;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import org.graylog2.database.HostCounterCache;
 
 public class GraylogServer implements Runnable {
@@ -71,6 +56,11 @@ public class GraylogServer implements Runnable {
     private List<MessageInput> inputs = Lists.newArrayList();
     private List<Class<? extends MessageFilter>> filters = Lists.newArrayList();
     private List<Class<? extends MessageOutput>> outputs = Lists.newArrayList();
+
+    // Metrics.
+    private Map<String, Meter> meters = Maps.newHashMap();
+    private Map<String, Timer> timers = Maps.newHashMap();
+    private Map<String, Histogram> histograms = Maps.newHashMap();
 
     private ProcessBuffer processBuffer;
     private OutputBuffer outputBuffer;
@@ -124,10 +114,6 @@ public class GraylogServer implements Runnable {
 
     public <T extends MessageOutput> void registerOutput(Class<T> klazz) {
         this.outputs.add(klazz);
-    }
-
-    public void registerHealthCheck(HealthCheck check) {
-        HealthChecks.register(check);
     }
 
     @Override
@@ -231,6 +217,42 @@ public class GraylogServer implements Runnable {
 
     public MessageCounterManager getMessageCounterManager() {
         return this.messageCounterManager;
+    }
+
+    public Meter getMeter(Class meteredClass, String name, String eventType) {
+        String id = meteredClass.getSimpleName() + name + eventType;
+        if (this.meters.containsKey(id)) {
+            return this.meters.get(id);
+        } else {
+            Meter meter = Metrics.newMeter(meteredClass, name, eventType, TimeUnit.SECONDS);
+            this.meters.put(id, meter);
+            
+            return meter;
+        }
+    }
+
+    public Timer getTimer(Class meteredClass, String name, TimeUnit measureUnit, TimeUnit bucketUnit) {
+        String id = name + meteredClass.getSimpleName();
+        if (this.timers.containsKey(id)) {
+            return this.timers.get(id);
+        } else {
+            Timer timer = Metrics.newTimer(meteredClass, name, measureUnit, bucketUnit);
+            this.timers.put(id, timer);
+
+            return timer;
+        }
+    }
+
+    public Histogram getHistogram(Class meteredClass, String name) {
+        String id = name + meteredClass.getSimpleName();
+        if (this.histograms.containsKey(id)) {
+            return this.histograms.get(id);
+        } else {
+            Histogram histogram = Metrics.newHistogram(meteredClass, name);
+            this.histograms.put(id, histogram);
+
+            return histogram;
+        }
     }
 
     public HostCounterCache getHostCounterCache() {
