@@ -131,7 +131,6 @@ import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.testutil.BlazeTestUtils;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
@@ -285,8 +284,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return ImmutableList.<EnvironmentExtension>of();
   }
 
-  protected SkylarkSemantics getSkylarkSemantics() {
-    return skylarkSemanticsOptions.toSkylarkSemantics();
+  protected SkylarkSemanticsOptions getSkylarkSemantics() {
+    return skylarkSemanticsOptions;
   }
 
   protected ResourceSet getStartingResources() {
@@ -1711,7 +1710,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     @Override
-    public SkylarkSemantics getSkylarkSemantics() {
+    public SkylarkSemanticsOptions getSkylarkSemantics() {
       throw new UnsupportedOperationException();
     }
 

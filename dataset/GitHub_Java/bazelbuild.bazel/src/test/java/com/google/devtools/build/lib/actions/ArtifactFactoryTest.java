@@ -68,7 +68,6 @@ public class ArtifactFactoryTest {
   private PathFragment alienRelative;
 
   private ArtifactFactory artifactFactory;
-  private final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
   @Before
   public final void createFiles() throws Exception  {
@@ -195,7 +194,7 @@ public class ArtifactFactoryTest {
   public void testSetGeneratingActionIdempotenceNewActionGraph() throws Exception {
     Artifact a = artifactFactory.getDerivedArtifact(fooRelative, outRoot, NULL_ARTIFACT_OWNER);
     Artifact b = artifactFactory.getDerivedArtifact(barRelative, outRoot, NULL_ARTIFACT_OWNER);
-    MutableActionGraph actionGraph = new MapBasedActionGraph(actionKeyContext);
+    MutableActionGraph actionGraph = new MapBasedActionGraph();
     Action originalAction = new ActionsTestUtil.NullAction(NULL_ACTION_OWNER, a);
     actionGraph.registerAction(originalAction);
 
@@ -207,6 +206,26 @@ public class ArtifactFactoryTest {
     } catch (ActionConflictException e) {
       assertThat(e.getArtifact()).isSameAs(a);
       assertThat(actionGraph.getGeneratingAction(a)).isSameAs(originalAction);
+    }
+  }
+
+  @Test
+  public void testGetDerivedArtifact() throws Exception {
+    PathFragment toolPath = PathFragment.create("_bin/tool");
+    Artifact artifact = artifactFactory.getDerivedArtifact(toolPath, execRoot);
+    assertThat(artifact.getExecPath()).isEqualTo(toolPath);
+    assertThat(artifact.getRoot()).isEqualTo(Root.asDerivedRoot(execRoot));
+    assertThat(artifact.getPath()).isEqualTo(execRoot.getRelative(toolPath));
+    assertThat(artifact.getOwner()).isNull();
+  }
+
+  @Test
+  public void testGetDerivedArtifactFailsForAbsolutePath() throws Exception {
+    try {
+      artifactFactory.getDerivedArtifact(PathFragment.create("/_bin/b"), execRoot);
+      fail();
+    } catch (IllegalArgumentException e) {
+      // Expected exception
     }
   }
 

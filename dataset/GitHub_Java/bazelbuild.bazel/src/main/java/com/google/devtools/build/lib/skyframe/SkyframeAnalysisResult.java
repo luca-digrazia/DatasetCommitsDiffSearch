@@ -58,7 +58,7 @@ public class SkyframeAnalysisResult {
     return hasAnalysisError;
   }
 
-  public ImmutableList<ConfiguredTarget> getConfiguredTargets() {
+  public Collection<ConfiguredTarget> getConfiguredTargets() {
     return configuredTargets;
   }
 

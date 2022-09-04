@@ -17,7 +17,6 @@ import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Strings;
@@ -92,6 +91,7 @@ import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
@@ -223,10 +223,15 @@ public class ExecutionTool {
           }
         });
 
-    // Unfortunately, the exec root cache is not shared with caches in the remote execution client.
-    this.fileCache =
-        new SingleBuildFileCache(
-            env.getExecRoot().getPathString(), env.getRuntime().getFileSystem());
+    ActionInputFileCache cache = builder.getActionInputFileCache();
+    if (cache == null) {
+      // Unfortunately, the exec root cache is not shared with caches in the remote execution
+      // client.
+      cache =
+          new SingleBuildFileCache(
+              env.getExecRoot().getPathString(), env.getDirectories().getFileSystem());
+    }
+    this.fileCache = cache;
     this.prefetcher = builder.getActionInputPrefetcher();
         
     this.actionContextProviders = builder.getActionContextProviders();
@@ -297,7 +302,6 @@ public class ExecutionTool {
   private BlazeExecutor createExecutor()
       throws ExecutorInitException {
     return new BlazeExecutor(
-        runtime.getFileSystem(),
         env.getExecRoot(),
         getReporter(),
         env.getEventBus(),
@@ -432,9 +436,10 @@ public class ExecutionTool {
       executor.executionPhaseStarting();
       skyframeExecutor.drainChangedFiles();
 
-      if (request.getViewOptions().discardAnalysisCache
-          || !skyframeExecutor.tracksStateForIncrementality()) {
-        // Free memory by removing cache entries that aren't going to be needed.
+      if (request.getViewOptions().discardAnalysisCache) {
+        // Free memory by removing cache entries that aren't going to be needed. Note that in
+        // skyframe full, this destroys the action graph as well, so we can only do it after the
+        // action graph is no longer needed.
         env.getSkyframeBuildView()
             .clearAnalysisCache(analysisResult.getTargetsToBuild(), analysisResult.getAspects());
       }
@@ -661,7 +666,7 @@ public class ExecutionTool {
     return successfulTargets;
   }
 
-  /** Get action cache if present or reload it from the on-disk cache. */
+
   private ActionCache getActionCache() throws LocalEnvironmentException {
     try {
       return env.getPersistentActionCache();
@@ -679,8 +684,8 @@ public class ExecutionTool {
       ActionCache actionCache,
       SkyframeExecutor skyframeExecutor,
       ModifiedFileSet modifiedOutputFiles) {
-    BuildRequestOptions options = request.getBuildOptions();
-    boolean keepGoing = request.getKeepGoing();
+    BuildRequest.BuildRequestOptions options = request.getBuildOptions();
+    boolean keepGoing = request.getViewOptions().keepGoing;
 
     Path actionOutputRoot = env.getActionConsoleOutputDirectory();
     Predicate<Action> executionFilter = CheckUpToDateFilter.fromOptions(
@@ -697,7 +702,6 @@ public class ExecutionTool {
         new ActionCacheChecker(
             actionCache,
             artifactFactory,
-            skyframeExecutor.getActionKeyContext(),
             executionFilter,
             ActionCacheChecker.CacheConfig.builder()
                 .setEnabled(options.useActionCache)
