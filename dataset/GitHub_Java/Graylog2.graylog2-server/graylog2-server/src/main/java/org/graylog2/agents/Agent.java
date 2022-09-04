@@ -33,6 +33,7 @@ public interface Agent {
     @NotNull
     @Size(min = 1)
     String getNodeId();
+    String getOperatingSystem();
 
     @NotNull
     String getAgentVersion();

@@ -27,6 +27,7 @@ import org.graylog2.restclient.models.api.responses.system.indices.ShardMeterRes
 import org.graylog2.restclient.models.api.responses.system.indices.ShardRoutingResponse;
 import org.graylog2.restroutes.generated.routes;
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -199,28 +200,30 @@ public class Index {
 
     public static class Range {
 
-        private final DateTime begin;
-        private final DateTime end;
-        private final long calculationTookMs;
-        private final DateTime calculatedAt;
+        private final DateTime starts;
+        private final boolean providesCalculationInfo;
+
+        private long calculationTookMs = 0;
+        private DateTime calculatedAt = null;
 
         public Range(IndexRangeSummary ir) {
-            this.begin = ir.begin();
-            this.end = ir.end();
+            this.starts = new DateTime(ir.start(), DateTimeZone.UTC);
+
+            if (ir.calculatedAt() != null && ir.calculationTookMs() >= 0) {
+                this.providesCalculationInfo = true;
                 this.calculationTookMs = ir.calculationTookMs();
-                this.calculatedAt = ir.calculatedAt();
+                this.calculatedAt = new DateTime(ir.calculatedAt(), DateTimeZone.UTC);
+            } else {
+                this.providesCalculationInfo = false;
+            }
         }
 
-        public DateTime getBegin() {
-            return begin;
-        }
-
-        public DateTime getEnd() {
-            return end;
+        public DateTime getStarts() {
+            return starts;
         }
 
         public boolean isProvidesCalculationInfo() {
-            return true;
+            return providesCalculationInfo;
         }
 
         public long getCalculationTookMs() {
