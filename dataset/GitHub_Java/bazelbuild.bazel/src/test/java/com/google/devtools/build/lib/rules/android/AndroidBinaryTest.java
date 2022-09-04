@@ -1602,7 +1602,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
     // No prefix should be added because of resource filtering.
     assertThat(
-            getConfiguration(binary)
+            binary
+                .getConfiguration()
                 .getFragment(AndroidConfiguration.class)
                 .getOutputDirectoryName())
         .isNull();
