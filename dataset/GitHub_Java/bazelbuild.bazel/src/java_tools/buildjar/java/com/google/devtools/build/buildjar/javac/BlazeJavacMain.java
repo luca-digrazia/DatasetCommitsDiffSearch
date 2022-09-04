@@ -35,8 +35,6 @@ import com.sun.tools.javac.file.CacheFSInfo;
 import com.sun.tools.javac.file.JavacFileManager;
 import com.sun.tools.javac.main.JavaCompiler;
 import com.sun.tools.javac.util.Context;
-import com.sun.tools.javac.util.Log;
-import com.sun.tools.javac.util.Options;
 import com.sun.tools.javac.util.PropagatedException;
 import java.io.IOError;
 import java.io.IOException;
@@ -49,7 +47,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import javax.tools.Diagnostic;
-import javax.tools.DiagnosticListener;
 import javax.tools.StandardLocation;
 
 /**
@@ -99,16 +96,8 @@ public class BlazeJavacMain {
     Listener diagnosticsBuilder = new Listener(arguments.failFast(), context);
     BlazeJavaCompiler compiler;
 
-    // Initialize parts of context that the filemanager depends on
-    context.put(DiagnosticListener.class, diagnosticsBuilder);
-    Log.instance(context).setWriters(errWriter);
-    Options.instance(context).put("-Xlint:path", "path");
-
     try (JavacFileManager fileManager =
-        new ClassloaderMaskingFileManager(context, arguments.builtinProcessors())) {
-
-      setLocations(fileManager, arguments);
-
+        new ClassloaderMaskingFileManager(arguments.builtinProcessors())) {
       JavacTask task =
           JavacTool.create()
               .getTask(
@@ -119,6 +108,8 @@ public class BlazeJavacMain {
                   /* classes= */ ImmutableList.of(),
                   fileManager.getJavaFileObjectsFromPaths(arguments.sourceFiles()),
                   context);
+      fileManager.setContext(context);
+      setLocations(fileManager, arguments);
       try {
         status = task.call() ? Status.OK : Status.ERROR;
       } catch (PropagatedException e) {
@@ -300,8 +291,14 @@ public class BlazeJavacMain {
 
     private final ImmutableSet<String> builtinProcessors;
 
-    public ClassloaderMaskingFileManager(Context context, ImmutableSet<String> builtinProcessors) {
-      super(context, true, UTF_8);
+    private static Context getContext() {
+      Context context = new Context();
+      CacheFSInfo.preRegister(context);
+      return context;
+    }
+
+    public ClassloaderMaskingFileManager(ImmutableSet<String> builtinProcessors) {
+      super(getContext(), false, UTF_8);
       this.builtinProcessors = builtinProcessors;
     }
 
