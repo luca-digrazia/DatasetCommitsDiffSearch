@@ -2,8 +2,6 @@ package org.litepal.crud;
 
 import java.util.List;
 
-import org.litepal.util.BaseUtility;
-
 import android.database.sqlite.SQLiteDatabase;
 
 /**
@@ -121,7 +119,7 @@ class QueryHandler extends DataHandler {
 	 */
 	<T> List<T> onFind(Class<T> modelClass, String[] columns, String[] conditions, String orderBy,
 			String limit) {
-		BaseUtility.checkConditionsCorrect(conditions);
+		checkConditionsCorrect(conditions);
 		List<T> dataList = query(modelClass, columns, getWhereClause(conditions),
 				getWhereArgs(conditions), null, null, orderBy, limit);
 		return dataList;
