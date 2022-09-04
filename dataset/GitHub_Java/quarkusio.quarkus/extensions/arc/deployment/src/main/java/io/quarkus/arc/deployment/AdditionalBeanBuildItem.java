@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.deployment;
 
 import java.util.ArrayList;
@@ -12,15 +28,10 @@ import org.jboss.jandex.DotName;
 import io.quarkus.builder.item.MultiBuildItem;
 
 /**
- * This build item is used to specify one or more additional bean classes to be analyzed during bean discovery.
+ * This build item is used to specify one or more additional bean classes to be analyzed.
  * <p>
  * By default, the resulting beans may be removed if they are considered unused and {@link ArcConfig#removeUnusedBeans} is
- * enabled. You can change the default behavior by setting the {@link #removable} to {@code false} and via
- * {@link Builder#setUnremovable()}.
- * <p>
- * An additional bean may have the scope defaulted via {@link #defaultScope} and {@link Builder#setDefaultScope(DotName)}. The
- * default scope is only used if there is no scope declared on the bean class. The default scope should be used in cases where a
- * bean class source is not controlled by the extension and the scope annotation cannot be declared directly on the class.
+ * enabled.
  */
 public final class AdditionalBeanBuildItem extends MultiBuildItem {
 
@@ -127,15 +138,6 @@ public final class AdditionalBeanBuildItem extends MultiBuildItem {
             return this;
         }
 
-        /**
-         * The default scope is only used if there is no scope declared on the bean class.
-         * <p>
-         * The default scope should be used in cases where a bean class source is not controlled by the extension and the
-         * scope annotation cannot be declared directly on the class.
-         * 
-         * @param defaultScope
-         * @return self
-         */
         public Builder setDefaultScope(DotName defaultScope) {
             this.defaultScope = defaultScope;
             return this;
