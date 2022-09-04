@@ -40,22 +40,22 @@ public class GELFHeader {
     /**
      * The start byte of the sequence number
      */
-    public static final int HEADER_PART_SEQNUM_START = 10;
+    public static final int HEADER_PART_SEQNUM_START = 34;
 
     /**
      * The length of the sequence number
      */
-    public static final int HEADER_PART_SEQNUM_LENGTH = 1;
+    public static final int HEADER_PART_SEQNUM_LENGTH = 2;
 
     /**
      * The start byte of the sequence count
      */
-    public static final int HEADER_PART_SEQCNT_START = 11;
+    public static final int HEADER_PART_SEQCNT_START = 36;
 
     /**
      * The length of the sequence count
      */
-    public static final int HEADER_PART_SEQCNT_LENGTH = 1;
+    public static final int HEADER_PART_SEQCNT_LENGTH = 2;
 
     /**
      * The start byte of the message hash
@@ -65,7 +65,7 @@ public class GELFHeader {
     /**
      * The length of the message hash
      */
-    public static final int HEADER_PART_HASH_LENGTH = 8;
+    public static final int HEADER_PART_HASH_LENGTH = 32;
 
     /**
      * Representing the header of chunked GELF messages
