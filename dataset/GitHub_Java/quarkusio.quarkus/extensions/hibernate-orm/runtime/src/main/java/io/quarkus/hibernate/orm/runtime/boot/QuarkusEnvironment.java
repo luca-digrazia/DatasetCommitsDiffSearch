@@ -30,11 +30,11 @@ public class QuarkusEnvironment {
             if (stream != null) {
                 final CoreMessageLogger LOG = Logger.getMessageLogger(CoreMessageLogger.class, Environment.class.getName());
                 LOG.warnf(
-                        "The resource hibernate.properties was found in the root of your application. This configuration source is deprecated and will be removed in a future version of Quarkus, "
+                        "Resource /hibernate.properties was found. This configuration source is deprecated and will be removed in a future version of Quarkus, "
                                 +
-                                "as it's not compatible with Live Coding, multiple Persistence Units and many more cool features we have planned. Please refrain from "
+                                "as it's not compatible with Live-Reloading, with multiple Persistence Units and many more cool features we have planned. Please try to stop "
                                 +
-                                "using it to configure your ORM and use the available configurations in application.properties (check the guide in https://quarkus.io/guides/hibernate-orm#quarkus-hibernate-orm_configuration). Should no configuration exist for your use case please report in: https://github.com/quarkusio/quarkus/issues/. Thank you! ");
+                                "using this to configure your ORM and report anything you will need to do so: https://github.com/quarkusio/quarkus/issues/ . Thanks! ");
                 final Properties p = new Properties();
                 try {
                     p.load(stream);
