@@ -89,6 +89,26 @@ public class BootstrapAppModelResolver implements AppModelResolver {
     }
 
     @Override
+    public List<AppDependency> readManagedDependencies(AppArtifact artifact) throws AppModelResolverException {
+        final List<Dependency> aetherDeps = mvn.resolveDescriptor(toAetherArtifact(artifact)).getManagedDependencies();
+        if(aetherDeps.isEmpty()) {
+            return Collections.emptyList();
+        }
+        final List<AppDependency> result = new ArrayList<>(aetherDeps.size());
+        for(Dependency aetherDep : aetherDeps) {
+            result.add(new AppDependency(new AppArtifact(
+                    aetherDep.getArtifact().getGroupId(),
+                    aetherDep.getArtifact().getArtifactId(),
+                    aetherDep.getArtifact().getClassifier(),
+                    aetherDep.getArtifact().getExtension(),
+                    aetherDep.getArtifact().getVersion()
+                    ),
+                    aetherDep.getScope(), aetherDep.isOptional()));
+        }
+        return result;
+    }
+
+    @Override
     public List<AppDependency> resolveUserDependencies(AppArtifact appArtifact, List<AppDependency> deps) throws AppModelResolverException {
         final List<Dependency> mvnDeps;
         if(deps.isEmpty()) {
@@ -120,20 +140,16 @@ public class BootstrapAppModelResolver implements AppModelResolver {
 
     @Override
     public AppModel resolveModel(AppArtifact appArtifact) throws AppModelResolverException {
-        return resolveManagedModel(appArtifact, Collections.emptyList(), null);
+        return resolveManagedModel(appArtifact, Collections.emptyList(), Collections.emptyList());
     }
 
     @Override
     public AppModel resolveModel(AppArtifact appArtifact, List<AppDependency> directDeps) throws AppModelResolverException {
-        return resolveManagedModel(appArtifact, directDeps, null);
+        return resolveManagedModel(appArtifact, directDeps, Collections.emptyList());
     }
 
-    public AppModel resolveManagedModel(AppArtifact appArtifact, List<AppDependency> directDeps, AppArtifact managingProject) throws AppModelResolverException {
-        List<Dependency> managedDeps = Collections.emptyList();
-        if(managingProject != null) {
-            managedDeps = mvn.resolveDescriptor(toAetherArtifact(managingProject)).getManagedDependencies();
-        }
-        return doResolveModel(appArtifact, toAetherDeps(directDeps), managedDeps);
+    public AppModel resolveManagedModel(AppArtifact appArtifact, List<AppDependency> directDeps, List<AppDependency> managedDeps) throws AppModelResolverException {
+        return doResolveModel(appArtifact, toAetherDeps(directDeps), toAetherDeps(managedDeps));
     }
 
     private AppModel doResolveModel(AppArtifact appArtifact, List<Dependency> directMvnDeps, List<Dependency> managedMvnDeps) throws AppModelResolverException {
