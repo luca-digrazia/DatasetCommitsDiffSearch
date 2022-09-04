@@ -52,7 +52,6 @@ import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.substrate.SubstrateSystemPropertyBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.deployment.util.HashUtil;
 import io.quarkus.gizmo.AssignableResultHandle;
@@ -66,8 +65,8 @@ import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.gizmo.TryBlock;
 import io.quarkus.vertx.ConsumeEvent;
-import io.quarkus.vertx.core.deployment.CoreVertxBuildItem;
-import io.quarkus.vertx.core.runtime.VertxCoreRecorder;
+import io.quarkus.vertx.common.deployment.EventConsumerBusinessMethodItem;
+import io.quarkus.vertx.common.deployment.InternalVertxBuildItem;
 import io.quarkus.vertx.runtime.EventConsumerInvoker;
 import io.quarkus.vertx.runtime.VertxProducer;
 import io.quarkus.vertx.runtime.VertxRecorder;
@@ -119,18 +118,13 @@ class VertxProcessor {
     BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
 
     @BuildStep
-    SubstrateSystemPropertyBuildItem enableJson() {
-        return new SubstrateSystemPropertyBuildItem(VertxCoreRecorder.ENABLE_JSON, "true");
-    }
-
-    @BuildStep
     AdditionalBeanBuildItem registerBean() {
         return AdditionalBeanBuildItem.unremovableOf(VertxProducer.class);
     }
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    VertxBuildItem build(CoreVertxBuildItem internalVertx, VertxRecorder recorder, BeanContainerBuildItem beanContainer,
+    VertxBuildItem build(InternalVertxBuildItem internalVertx, VertxRecorder recorder, BeanContainerBuildItem beanContainer,
             BuildProducer<FeatureBuildItem> feature, List<EventConsumerBusinessMethodItem> messageConsumerBusinessMethods,
             BuildProducer<GeneratedClassBuildItem> generatedClass,
             AnnotationProxyBuildItem annotationProxy, LaunchModeBuildItem launchMode, ShutdownContextBuildItem shutdown,

@@ -5,7 +5,6 @@ import static io.quarkus.vertx.deployment.VertxConstants.COMPLETION_STAGE;
 import static io.quarkus.vertx.deployment.VertxConstants.CONSUME_EVENT;
 import static io.quarkus.vertx.deployment.VertxConstants.LOCAL_EVENT_BUS_CODEC;
 import static io.quarkus.vertx.deployment.VertxConstants.MESSAGE;
-import static io.quarkus.vertx.deployment.VertxConstants.MUTINY_MESSAGE;
 import static io.quarkus.vertx.deployment.VertxConstants.RX_MESSAGE;
 
 import java.util.Arrays;
@@ -29,7 +28,7 @@ import org.jboss.logging.Logger;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -122,7 +121,6 @@ public class EventBusCodecProcessor {
 
             // Buffers classes
             Buffer.class.getName(),
-            io.vertx.mutiny.core.buffer.Buffer.class.getName(),
             io.vertx.axle.core.buffer.Buffer.class.getName(),
             io.vertx.reactivex.core.buffer.Buffer.class.getName());
 
@@ -132,8 +130,7 @@ public class EventBusCodecProcessor {
             return returnType;
         } else if (returnType.kind() == Type.Kind.PARAMETERIZED_TYPE) {
             ParameterizedType returnedParamType = returnType.asParameterizedType();
-            if (!returnedParamType.arguments().isEmpty()
-                    && (returnedParamType.name().equals(COMPLETION_STAGE))) {
+            if (!returnedParamType.arguments().isEmpty() && (returnedParamType.name().equals(COMPLETION_STAGE))) {
                 return returnedParamType.arguments().get(0);
             } else {
                 return returnedParamType;
@@ -184,7 +181,6 @@ public class EventBusCodecProcessor {
     private static boolean isMessageClass(ParameterizedType type) {
         return type.name().equals(MESSAGE)
                 || type.name().equals(RX_MESSAGE)
-                || type.name().equals(AXLE_MESSAGE)
-                || type.name().equals(MUTINY_MESSAGE);
+                || type.name().equals(AXLE_MESSAGE);
     }
 }
