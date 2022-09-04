@@ -65,7 +65,7 @@ public final class JavaCompilationHelper {
   private final List<Artifact> translations = new ArrayList<>();
   private boolean translationsFrozen;
   private final JavaSemantics semantics;
-  private final ImmutableList<Artifact> additionalInputsForDatabinding;
+  private final ImmutableList<Artifact> additionalJavaBaseInputs;
   private final StrictDepsMode strictJavaDeps;
   private final String fixDepsTool;
   private NestedSet<Artifact> localClassPathEntries = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
@@ -76,7 +76,7 @@ public final class JavaCompilationHelper {
       ImmutableList<String> javacOpts,
       JavaTargetAttributes.Builder attributes,
       JavaToolchainProvider javaToolchainProvider,
-      ImmutableList<Artifact> additionalInputsForDatabinding,
+      ImmutableList<Artifact> additionalJavaBaseInputs,
       boolean disableStrictDeps) {
     this.ruleContext = ruleContext;
     this.javaToolchain = Preconditions.checkNotNull(javaToolchainProvider);
@@ -84,7 +84,7 @@ public final class JavaCompilationHelper {
     this.customJavacOpts = javacOpts;
     this.customJavacJvmOpts = javaToolchain.getJavabuilderJvmOptions();
     this.semantics = semantics;
-    this.additionalInputsForDatabinding = additionalInputsForDatabinding;
+    this.additionalJavaBaseInputs = additionalJavaBaseInputs;
     this.strictJavaDeps =
         disableStrictDeps ? StrictDepsMode.OFF : getJavaConfiguration().getFilteredStrictJavaDeps();
     this.fixDepsTool = getJavaConfiguration().getFixDepsTool();
@@ -96,14 +96,14 @@ public final class JavaCompilationHelper {
       ImmutableList<String> javacOpts,
       JavaTargetAttributes.Builder attributes,
       JavaToolchainProvider javaToolchainProvider,
-      ImmutableList<Artifact> additionalInputsForDatabinding) {
+      ImmutableList<Artifact> additionalJavaBaseInputs) {
     this(
         ruleContext,
         semantics,
         javacOpts,
         attributes,
         javaToolchainProvider,
-        additionalInputsForDatabinding,
+        additionalJavaBaseInputs,
         false);
   }
 
@@ -118,7 +118,7 @@ public final class JavaCompilationHelper {
         javacOpts,
         attributes,
         JavaToolchainProvider.from(ruleContext),
-        /* additionalInputsForDatabinding= */ ImmutableList.of());
+        ImmutableList.of());
   }
 
   public JavaCompilationHelper(
@@ -126,7 +126,7 @@ public final class JavaCompilationHelper {
       JavaSemantics semantics,
       ImmutableList<String> javacOpts,
       JavaTargetAttributes.Builder attributes,
-      ImmutableList<Artifact> additionalInputsForDatabinding,
+      ImmutableList<Artifact> additionalJavaBaseInputs,
       boolean disableStrictDeps) {
     this(
         ruleContext,
@@ -134,7 +134,7 @@ public final class JavaCompilationHelper {
         javacOpts,
         attributes,
         JavaToolchainProvider.from(ruleContext),
-        additionalInputsForDatabinding,
+        additionalJavaBaseInputs,
         disableStrictDeps);
   }
 
@@ -257,8 +257,10 @@ public final class JavaCompilationHelper {
     JavaClasspathMode classpathMode = getJavaConfiguration().getReduceJavaClasspath();
     builder.setClasspathMode(classpathMode);
     builder.setJavaExecutable(javaToolchain.getJavaRuntime().javaBinaryExecPathFragment());
-    builder.setJavaBaseInputs(javaToolchain.getJavaRuntime().javaBaseInputsMiddleman());
-    builder.setAdditionalInputs(additionalInputsForDatabinding);
+    builder.setJavaBaseInputs(
+        NestedSetBuilder.fromNestedSet(javaToolchain.getJavaRuntime().javaBaseInputsMiddleman())
+            .addAll(additionalJavaBaseInputs)
+            .build());
     Label label = ruleContext.getLabel();
     builder.setTargetLabel(label);
     Artifact coverageArtifact = maybeCreateCoverageArtifact(outputs.output());
@@ -376,7 +378,6 @@ public final class JavaCompilationHelper {
     if (jacocoRunner == null) {
       ruleContext.ruleError(
           "jacocorunner not set in java_toolchain:" + javaToolchain.getToolchainLabel());
-      return;
     }
     Artifact jacocoRunnerJar = jacocoRunner.getExecutable();
     if (isStrict()) {
@@ -505,7 +506,7 @@ public final class JavaCompilationHelper {
     builder.setDirectJars(attributes.getDirectJars());
     builder.setTargetLabel(attributes.getTargetLabel());
     builder.setInjectingRuleKind(attributes.getInjectingRuleKind());
-    builder.setAdditionalInputs(additionalInputsForDatabinding);
+    builder.setAdditionalInputs(NestedSetBuilder.wrap(Order.LINK_ORDER, additionalJavaBaseInputs));
     builder.setToolsJars(javaToolchain.getTools());
     return builder;
   }
@@ -584,8 +585,7 @@ public final class JavaCompilationHelper {
     checkNotNull(resourceJar, "resource jar output must not be null");
     JavaTargetAttributes attributes = getAttributes();
     new ResourceJarActionBuilder()
-        .setAdditionalInputs(
-            NestedSetBuilder.wrap(Order.STABLE_ORDER, additionalInputsForDatabinding))
+        .setAdditionalInputs(NestedSetBuilder.wrap(Order.STABLE_ORDER, additionalJavaBaseInputs))
         .setJavaToolchain(javaToolchain)
         .setOutputJar(resourceJar)
         .setResources(attributes.getResources())
