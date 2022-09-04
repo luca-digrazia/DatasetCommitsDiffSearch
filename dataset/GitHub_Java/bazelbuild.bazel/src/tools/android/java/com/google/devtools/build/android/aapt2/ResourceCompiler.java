@@ -82,19 +82,16 @@ public class ResourceCompiler {
     private final Path compiledResourcesOut;
     private final Path aapt2;
     private final Revision buildToolsVersion;
-    private final boolean generatePseudoLocale;
 
     private CompileTask(
         Path file,
         Path compiledResourcesOut,
         Path aapt2,
-        Revision buildToolsVersion,
-        boolean generatePseudoLocale) {
+        Revision buildToolsVersion) {
       this.file = file;
       this.compiledResourcesOut = compiledResourcesOut;
       this.aapt2 = aapt2;
       this.buildToolsVersion = buildToolsVersion;
-      this.generatePseudoLocale = generatePseudoLocale;
     }
 
     @Override
@@ -106,8 +103,6 @@ public class ResourceCompiler {
               .add("compile")
               .add("-v")
               .add("--legacy")
-              .when(generatePseudoLocale)
-              .thenAdd("--pseudo-localize")
               .add("-o", compiledResourcesOut.toString())
               .add(file.toString())
               .execute("Compiling " + file));
@@ -155,7 +150,8 @@ public class ResourceCompiler {
               XmlResourceValues.iterateAttributesFrom(rootElement);
 
           if (attributeIterator.hasNext()) {
-            results.add(createAttributesProto(type, filename, attributeIterator));
+            results.add(
+                createAttributesProto(type, filename, attributeIterator));
           }
         } finally {
           if (xmlEventReader != null) {
@@ -175,7 +171,10 @@ public class ResourceCompiler {
     }
 
     private Path createAttributesProto(
-        String type, String filename, Iterator<Attribute> attributeIterator) throws IOException {
+        String type,
+        String filename,
+        Iterator<Attribute> attributeIterator)
+        throws IOException {
 
       AndroidDataSerializer serializer = AndroidDataSerializer.create();
       final Path resourcesAttributesPath =
@@ -189,7 +188,10 @@ public class ResourceCompiler {
         QName qName = new QName(namespaceUri, localPart, prefix);
 
         Namespaces namespaces = Namespaces.from(qName);
-        String attributeName = namespaceUri.isEmpty() ? localPart : prefix + ":" + localPart;
+        String attributeName =
+            namespaceUri.isEmpty()
+                ? localPart
+                : prefix + ":" + localPart;
 
         final String[] dirNameAndQualifiers = type.split(SdkConstants.RES_QUALIFIER_SEP);
         Factory fqnFactory = Factory.fromDirectoryName(dirNameAndQualifiers);
@@ -220,19 +222,16 @@ public class ResourceCompiler {
     private final List<ListenableFuture<List<Path>>> tasks = new ArrayList<>();
     private final Path aapt2;
     private final Revision buildToolsVersion;
-    private final boolean generatePseudoLocale;
 
     public CompilingVisitor(
         ListeningExecutorService executorService,
         Path compiledResources,
         Path aapt2,
-        Revision buildToolsVersion,
-        boolean generatePseudoLocale) {
+        Revision buildToolsVersion) {
       this.executorService = executorService;
       this.compiledResources = compiledResources;
       this.aapt2 = aapt2;
       this.buildToolsVersion = buildToolsVersion;
-      this.generatePseudoLocale = generatePseudoLocale;
     }
 
     @Override
@@ -241,38 +240,39 @@ public class ResourceCompiler {
       if (!Files.isDirectory(file) && !file.getFileName().toString().startsWith(".")) {
         // Creates a relative output path based on the input path under the
         // compiledResources path.
-        Path outputDirectory =
-            Files.createDirectories(
-                compiledResources.resolve(
-                    (file.isAbsolute() ? file.getRoot().relativize(file) : file)
-                        .getParent()
-                        .getParent()));
+        Path outputDirectory = Files.createDirectories(
+            compiledResources.resolve(
+                (file.isAbsolute() ? file.getRoot().relativize(file) : file)
+                    .getParent()
+                    .getParent()));
 
         String resFolder = file.getParent().getFileName().toString().toLowerCase();
 
         // Aapt cannot interpret these regions so we rename them to get them to compile
-        String renamedResFolder =
-            resFolder
-                .replaceFirst("sr[_\\-]r?latn", "b+sr+Latn")
-                .replaceFirst("es[_\\-]r?419", "b+es+419");
+        String renamedResFolder = resFolder
+            .replaceFirst("sr[_\\-]r?latn", "b+sr+Latn")
+            .replaceFirst("es[_\\-]r?419", "b+es+419");
 
         if (!renamedResFolder.equals(resFolder)) {
-          file =
-              Files.copy(
-                  file,
-                  Files.createDirectories(outputDirectory.resolve(renamedResFolder))
-                      .resolve(file.getFileName()));
+          file = Files.copy(
+              file,
+              Files.createDirectories(
+                  outputDirectory.resolve(renamedResFolder))
+                  .resolve(file.getFileName()));
         }
 
         tasks.add(
             executorService.submit(
                 new CompileTask(
-                    file, outputDirectory, aapt2, buildToolsVersion, generatePseudoLocale)));
+                    file,
+                    outputDirectory,
+                    aapt2,
+                    buildToolsVersion)));
       }
       return super.visitFile(file, attrs);
     }
 
-    List<Path> getCompiledArtifacts() {
+    List<Path> getCompiledArtifacts() throws InterruptedException, ExecutionException {
       Builder<Path> builder = ImmutableList.builder();
       List<Throwable> compilationErrors = new ArrayList<>();
       for (ListenableFuture<List<Path>> task : tasks) {
@@ -294,11 +294,9 @@ public class ResourceCompiler {
       ListeningExecutorService executorService,
       Path compiledResources,
       Path aapt2,
-      Revision buildToolsVersion,
-      boolean generatePseudoLocale) {
+      Revision buildToolsVersion) {
     return new ResourceCompiler(
-        new CompilingVisitor(
-            executorService, compiledResources, aapt2, buildToolsVersion, generatePseudoLocale));
+        new CompilingVisitor(executorService, compiledResources, aapt2, buildToolsVersion));
   }
 
   private ResourceCompiler(CompilingVisitor compilingVisitor) {
