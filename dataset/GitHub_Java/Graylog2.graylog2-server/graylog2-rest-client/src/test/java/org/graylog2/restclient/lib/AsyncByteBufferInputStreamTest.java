@@ -18,7 +18,6 @@ package org.graylog2.restclient.lib;
 
 import com.google.common.util.concurrent.Uninterruptibles;
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -118,7 +117,6 @@ public class AsyncByteBufferInputStreamTest {
     }
 
     @Test
-    @Ignore
     public void testAsyncException() throws InterruptedException {
         final AsyncByteBufferInputStream stream = new AsyncByteBufferInputStream();
 
@@ -161,7 +159,6 @@ public class AsyncByteBufferInputStreamTest {
     }
 
     @Test
-    @Ignore
     public void readIsBlockingUntilDataIsPresent() throws InterruptedException {
         final AsyncByteBufferInputStream stream = new AsyncByteBufferInputStream();
 
