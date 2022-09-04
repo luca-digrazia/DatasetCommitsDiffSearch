@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableList.Builder;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 
@@ -56,7 +57,7 @@ public class SkylarkCallbackFunction {
    */
   private ImmutableList<Object> buildArgumentList(ClassObject ctx, Object... arguments)
       throws EvalException {
-    ImmutableList.Builder<Object> builder = ImmutableList.builder();
+    Builder<Object> builder = ImmutableList.builder();
     ImmutableList<String> names = getParameterNames();
     int requiredParameters = names.size() - arguments.length;
     for (int pos = 0; pos < requiredParameters; ++pos) {
