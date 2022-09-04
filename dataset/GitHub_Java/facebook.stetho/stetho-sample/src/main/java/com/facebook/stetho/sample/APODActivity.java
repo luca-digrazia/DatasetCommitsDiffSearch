@@ -1,3 +1,12 @@
+/*
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
+
 package com.facebook.stetho.sample;
 
 import java.io.IOException;
@@ -100,7 +109,7 @@ public class APODActivity extends ListActivity {
       int bindPosition = cursor.getPosition();
       holder.position = bindPosition;
 
-      final String imageUrl = cursor.getString(APODPostsQuery.DESCRIPTION_IMAGE_URL_INDEX);
+      final String imageUrl = cursor.getString(APODPostsQuery.LARGE_IMAGE_URL_INDEX);
       holder.image.setImageDrawable(null);
       fetchImage(imageUrl, bindPosition, holder);
 
@@ -172,13 +181,13 @@ public class APODActivity extends ListActivity {
         APODContract.Columns._ID,
         APODContract.Columns.TITLE,
         APODContract.Columns.DESCRIPTION_TEXT,
-        APODContract.Columns.DESCRIPTION_IMAGE_URL,
+        APODContract.Columns.LARGE_IMAGE_URL,
     };
 
     public static final int ID_INDEX = 0;
     public static final int TITLE_INDEX = 1;
     public static final int DESCRIPTION_TEXT_INDEX = 2;
-    public static final int DESCRIPTION_IMAGE_URL_INDEX = 3;
+    public static final int LARGE_IMAGE_URL_INDEX = 3;
 
     public static CursorLoader createCursorLoader(Context context) {
       return new CursorLoader(
