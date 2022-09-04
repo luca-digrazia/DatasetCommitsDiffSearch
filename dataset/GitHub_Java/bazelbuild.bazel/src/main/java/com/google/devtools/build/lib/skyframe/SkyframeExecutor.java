@@ -203,6 +203,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -2807,39 +2808,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     return packageProgress;
   }
 
-  /**
-   * Loads the given target patterns without applying any filters (such as removing non-test targets
-   * if {@code --build_tests_only} is set).
-   *
-   * @param eventHandler handler which accepts update events
-   * @param targetPatterns patterns to be loaded
-   * @param threadCount number of threads to use for this skyframe evaluation
-   * @param keepGoing whether to attempt to ignore errors. See also {@link KeepGoingOption}
-   */
-  public TargetPatternPhaseValue loadTargetPatternsWithoutFilters(
-      ExtendedEventHandler eventHandler,
-      List<String> targetPatterns,
-      PathFragment relativeWorkingDirectory,
-      int threadCount,
-      boolean keepGoing)
-      throws TargetParsingException, InterruptedException {
-    SkyKey key =
-        TargetPatternPhaseValue.keyWithoutFilters(
-            ImmutableList.copyOf(targetPatterns), relativeWorkingDirectory.getPathString());
-    return getTargetPatternPhaseValue(eventHandler, targetPatterns, threadCount, keepGoing, key);
-  }
-
-  /**
-   * Loads the given target patterns after applying filters configured through parameters and
-   * options (such as removing non-test targets if {@code --build_tests_only} is set).
-   *
-   * @param eventHandler handler which accepts update events
-   * @param targetPatterns patterns to be loaded
-   * @param threadCount number of threads to use for this skyframe evaluation
-   * @param keepGoing whether to attempt to ignore errors. See also {@link KeepGoingOption}
-   * @param determineTests whether to ignore any targets that aren't tests or test suites
-   */
-  public TargetPatternPhaseValue loadTargetPatternsWithFilters(
+  public TargetPatternPhaseValue loadTargetPatterns(
       ExtendedEventHandler eventHandler,
       List<String> targetPatterns,
       PathFragment relativeWorkingDirectory,
@@ -2848,6 +2817,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       boolean keepGoing,
       boolean determineTests)
       throws TargetParsingException, InterruptedException {
+    Stopwatch timer = Stopwatch.createStarted();
     SkyKey key =
         TargetPatternPhaseValue.key(
             ImmutableList.copyOf(targetPatterns),
@@ -2859,20 +2829,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             options.buildManualTests,
             options.expandTestSuites,
             TestFilter.forOptions(options, eventHandler, pkgFactory.getRuleClassNames()));
-    return getTargetPatternPhaseValue(eventHandler, targetPatterns, threadCount, keepGoing, key);
-  }
-
-  private TargetPatternPhaseValue getTargetPatternPhaseValue(
-      ExtendedEventHandler eventHandler,
-      List<String> targetPatterns,
-      int threadCount,
-      boolean keepGoing,
-      SkyKey key)
-      throws InterruptedException, TargetParsingException {
-    Stopwatch timer = Stopwatch.createStarted();
+    EvaluationResult<TargetPatternPhaseValue> evalResult;
     eventHandler.post(new LoadingPhaseStartedEvent(packageProgress));
-    EvaluationResult<TargetPatternPhaseValue> evalResult =
-        evaluate(ImmutableList.of(key), keepGoing, threadCount, eventHandler);
+    evalResult = evaluate(ImmutableList.of(key), keepGoing, threadCount, eventHandler);
     if (evalResult.hasError()) {
       ErrorInfo errorInfo = evalResult.getError(key);
       TargetParsingException exc;
@@ -2904,8 +2863,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       }
       throw exc;
     }
-    eventHandler.post(new TargetParsingPhaseTimeEvent(timer.stop().elapsed().toMillis()));
-    return evalResult.get(key);
+    long timeMillis = timer.stop().elapsed(TimeUnit.MILLISECONDS);
+    eventHandler.post(new TargetParsingPhaseTimeEvent(timeMillis));
+
+    TargetPatternPhaseValue patternParsingValue = evalResult.get(key);
+    return patternParsingValue;
   }
 
   public PrepareAnalysisPhaseValue prepareAnalysisPhase(

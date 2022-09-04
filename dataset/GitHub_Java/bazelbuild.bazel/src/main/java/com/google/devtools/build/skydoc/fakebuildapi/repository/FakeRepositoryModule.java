@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeDescriptor;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeSkylarkRuleFunctionsApi.AttributeNameComparator;
@@ -52,7 +51,7 @@ public class FakeRepositoryModule implements RepositoryModuleApi {
 
   @Override
   public BaseFunction repositoryRule(
-      StarlarkFunction implementation,
+      BaseFunction implementation,
       Object attrs,
       Boolean local,
       Sequence<?> environ, // <String> expected

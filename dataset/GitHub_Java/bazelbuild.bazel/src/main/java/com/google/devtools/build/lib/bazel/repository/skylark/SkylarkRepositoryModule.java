@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.packages.RuleFactory.InvalidRuleException;
 import com.google.devtools.build.lib.packages.SkylarkExportable;
 import com.google.devtools.build.lib.packages.WorkspaceFactoryHelper;
 import com.google.devtools.build.lib.skylarkbuildapi.repository.RepositoryModuleApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.DebugFrame;
 import com.google.devtools.build.lib.syntax.DotExpression;
@@ -45,11 +46,9 @@ import com.google.devtools.build.lib.syntax.Expression;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Identifier;
-import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.Map;
@@ -62,7 +61,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
 
   @Override
   public BaseFunction repositoryRule(
-      StarlarkFunction implementation,
+      BaseFunction implementation,
       Object attrs,
       Boolean local,
       Sequence<?> environ, // <String> expected
@@ -135,7 +134,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
     }
 
     @Override
-    public void repr(Printer printer) {
+    public void repr(SkylarkPrinter printer) {
       if (exportedName == null) {
         printer.append("<anonymous starlark repository rule>");
       } else {

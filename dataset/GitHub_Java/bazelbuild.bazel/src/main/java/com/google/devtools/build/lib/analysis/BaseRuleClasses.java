@@ -104,7 +104,7 @@ public class BaseRuleClasses {
       "//tools/test:coverage_report_generator";
 
   private static final String DEFAULT_COVERAGE_OUTPUT_GENERATOR_VALUE =
-      "@bazel_tools//tools/test:lcov_merger";
+      "@bazel_tools//tools/test/CoverageOutputGenerator/java/com/google/devtools/coverageoutputgenerator:Main";
 
   @AutoCodec
   static final Resolver<TestConfiguration, Label> COVERAGE_REPORT_GENERATOR_CONFIGURATION_RESOLVER =
@@ -331,14 +331,7 @@ public class BaseRuleClasses {
                     "special logic for constraints and select: see ConstraintSemantics"))
         .add(
             attr(RuleClass.CONFIG_SETTING_DEPS_ATTRIBUTE, LABEL_LIST)
-                .nonconfigurable("stores configurability keys"))
-        .add(
-            attr(RuleClass.APPLICABLE_LICENSES_ATTR, LABEL_LIST)
-                .cfg(HostTransition.createFactory())
-                .allowedFileTypes(FileTypeSet.NO_FILE)
-                // TODO(b/148601291): Require provider to be "LicenseInfo".
-                .dontCheckConstraints()
-                .nonconfigurable("applicable_licenses is not configurable"));
+                .nonconfigurable("stores configurability keys"));
   }
 
   public static RuleClass.Builder nameAttribute(RuleClass.Builder builder) {
