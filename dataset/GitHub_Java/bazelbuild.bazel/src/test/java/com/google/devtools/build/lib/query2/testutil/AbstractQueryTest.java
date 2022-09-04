@@ -124,20 +124,6 @@ public abstract class AbstractQueryTest<T> {
     helper.overwriteFile(pathName, lines);
   }
 
-  protected final void overwriteFile(String pathName, ImmutableList<String> lines)
-      throws IOException {
-    helper.overwriteFile(pathName, lines.toArray(new String[lines.size()]));
-  }
-
-  protected final void appendToWorkspace(String... lines) throws IOException {
-    overwriteFile(
-        "WORKSPACE",
-        new ImmutableList.Builder<String>()
-            .addAll(analysisMock.getWorkspaceContents(mockToolsConfig))
-            .add(lines)
-            .build());
-  }
-
   protected void assertContainsEvent(String expectedMessage) {
     helper.assertContainsEvent(expectedMessage);
   }
@@ -590,124 +576,8 @@ public abstract class AbstractQueryTest<T> {
         .containsNoneOf("//deps:BUILD", "//deps:build_def", "//deps:skylark.bzl", "//s:BUILD");
   }
 
-  protected void writeAspectDefinition(String aspectAttrs) throws Exception {
-    writeFile(
-        "test/aspect.bzl",
-        "def _aspect_impl(target, ctx):",
-        "   return struct()",
-        "def _rule_impl(ctx):",
-        "   return struct()",
-        "",
-        "MyAspect = aspect(",
-        "   implementation=_aspect_impl,",
-        "   attr_aspects=['deps'],",
-        "   attrs = ",
-        aspectAttrs,
-        ")",
-        "aspect_rule = rule(",
-        "   implementation=_rule_impl,",
-        "   attrs = { 'attr' : ",
-        "             attr.label_list(mandatory=True, allow_files=True, aspects = [MyAspect]),",
-        "             'param' : attr.string(),",
-        "           },",
-        ")",
-        "plain_rule = rule(",
-        "   implementation=_rule_impl,",
-        "   attrs = { 'attr' : ",
-        "             attr.label_list(mandatory=False, allow_files=True) ",
-        "           },",
-        ")");
-    writeFile(
-        "prod/BUILD",
-        "load('//test:aspect.bzl', 'plain_rule')",
-        "plain_rule(",
-        "     name = 'zzz'",
-        ")");
-  }
-
   @Test
-  public void testAspectOnRuleWithoutDeclaredProviders() throws Exception {
-    writeAspectDefinition("{'_extra_deps' : attr.label(default = Label('//test:z'))}");
-    writeFile(
-        "test/BUILD",
-        "load('//test:aspect.bzl', 'aspect_rule', 'plain_rule')",
-        "aspect_rule(name='a', attr=[':b'])",
-        "plain_rule(name='b')",
-        "plain_rule(name='z')");
-
-    assertThat(eval("deps(//test:a)")).containsAtLeastElementsIn(eval("//test:b + //test:z"));
-  }
-
-  @Test
-  public void testQueryStarlarkAspects() throws Exception {
-    writeAspectDefinition("{'_extra_deps' : attr.label(default = Label('//prod:zzz'))}");
-    writeFile(
-        "test/BUILD",
-        "load('//test:aspect.bzl', 'aspect_rule', 'plain_rule')",
-        "plain_rule(",
-        "     name = 'yyy',",
-        ")",
-        "aspect_rule(",
-        "     name = 'xxx',",
-        "     attr = [':yyy'],",
-        ")",
-        "aspect_rule(",
-        "     name = 'qqq',",
-        "     attr = ['//external:yyy'],",
-        ")");
-    appendToWorkspace("bind(name = 'yyy', actual = '//test:yyy')");
-
-    assertThat(eval("deps(//test:xxx)")).containsAtLeastElementsIn(eval("//prod:zzz + //test:yyy"));
-    assertThat(eval("deps(//test:qqq)")).containsAtLeastElementsIn(eval("//prod:zzz + //test:yyy"));
-  }
-
-  @Test
-  public void testQueryStarlarkAspectWithParameters() throws Exception {
-    writeAspectDefinition(
-        "{'_extra_deps' : attr.label(default = Label('//prod:zzz')),"
-            + "'param' : attr.string(values=['a', 'b']) }");
-    writeFile(
-        "test/BUILD",
-        "load('//test:aspect.bzl', 'aspect_rule', 'plain_rule')",
-        "plain_rule(",
-        "     name = 'yyy',",
-        ")",
-        "aspect_rule(",
-        "     name = 'xxx',",
-        "     attr = [':yyy'],",
-        "     param = 'a',",
-        ")",
-        "aspect_rule(",
-        "     name = 'qqq',",
-        "     attr = ['//external:yyy'],",
-        "     param = 'b',",
-        ")");
-    appendToWorkspace("bind(name = 'yyy', actual = '//test:yyy')");
-
-    assertThat(eval("deps(//test:xxx)")).containsAtLeastElementsIn(eval("//prod:zzz + //test:yyy"));
-    assertThat(eval("deps(//test:qqq)")).containsAtLeastElementsIn(eval("//prod:zzz + //test:yyy"));
-  }
-
-  @Test
-  public void testQueryStarlarkAspectsNoImplicitDeps() throws Exception {
-    writeAspectDefinition("{'_extra_deps':attr.label(default = Label('//prod:zzz'))}");
-    writeFile(
-        "test/BUILD",
-        "load('//test:aspect.bzl', 'aspect_rule', 'plain_rule')",
-        "plain_rule(",
-        "     name = 'yyy',",
-        ")",
-        "aspect_rule(",
-        "     name = 'xxx',",
-        "     attr = [':yyy'],",
-        ")");
-    helper.setQuerySettings(Setting.NO_IMPLICIT_DEPS);
-
-    assertThat(eval("deps(//test:xxx)")).containsNoneIn(eval("//prod:zzz"));
-  }
-
-  @Test
-  public void testStarlarkDiamondEquality() throws Exception {
+  public void testSkylarkDiamondEquality() throws Exception {
     writeFile(
         "foo/BUILD",
         "load('//foo:a.bzl', 'A')",
@@ -816,7 +686,7 @@ public abstract class AbstractQueryTest<T> {
     assertThat(evalToListOfStrings("deps(//a:a)")).containsExactly("//a:a", "//a:dep");
   }
 
-  protected void setupCycleInStarlarkParentDir() throws Exception {
+  protected void setupCycleInSkylarkParentDir() throws Exception {
     writeFile("a/BUILD", "load('//a:cycle1.bzl', 'C1')", "sh_library(name = 'a')");
     writeFile("a/cycle1.bzl", "load('//a:cycle2.bzl', 'C2')", "C1 = struct()");
     writeFile("a/cycle2.bzl", "load('//a:cycle1.bzl', 'C1')", "C2 = struct()");
@@ -824,8 +694,8 @@ public abstract class AbstractQueryTest<T> {
   }
 
   @Test
-  public void testCycleInStarlarkParentDir() throws Exception {
-    setupCycleInStarlarkParentDir();
+  public void testCycleInSkylarkParentDir() throws Exception {
+    setupCycleInSkylarkParentDir();
     assertThat(evalToListOfStrings("//a/subdir:all")).containsExactly("//a/subdir:subdir");
   }
 
@@ -938,7 +808,7 @@ public abstract class AbstractQueryTest<T> {
   }
 
   @Test
-  public void testCycleInStarlark() throws Exception {
+  public void testCycleInSkylark() throws Exception {
     writeFile("a/BUILD", "load('//a:cycle1.bzl', 'C1')", "sh_library(name = 'a')");
     writeFile("a/cycle1.bzl", "load('//a:cycle2.bzl', 'C2')", "C1 = struct()");
     writeFile("a/cycle2.bzl", "load('//a:cycle1.bzl', 'C1')", "C2 = struct()");
