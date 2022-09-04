@@ -2,12 +2,9 @@ package io.dropwizard.logging;
 
 import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.core.Appender;
-import ch.qos.logback.core.spi.DeferredProcessingAware;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import io.dropwizard.jackson.Discoverable;
-import io.dropwizard.logging.async.AsyncAppenderFactory;
-import io.dropwizard.logging.filter.LevelFilterFactory;
-import io.dropwizard.logging.layout.LayoutFactory;
+import io.dropwizard.logging.filter.FilterFactory;
 
 /**
  * A service provider interface for creating Logback {@link Appender} instances.
@@ -25,21 +22,21 @@ import io.dropwizard.logging.layout.LayoutFactory;
  * @see SyslogAppenderFactory
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
-public interface AppenderFactory<E extends DeferredProcessingAware> extends Discoverable {
+public interface AppenderFactory<E> extends Discoverable {
     /**
      * Given a Logback context, an application name, a layout,
-     * a levelFilterFactory, and an asyncAppenderFactory build a new appender.
+     * a thresholdFilterFactory, and an asyncAppenderFactory build a new appender.
      *
      * @param context         the Logback context
      * @param applicationName the application name
      * @param layoutFactory   the factory for the layout for logging
-     * @param levelFilterFactory the factory for the level filter
+     * @param thresholdFilterFactory the factory for the threshold filter
      * @param asyncAppenderFactory   the factory for the async appender
      * @return a new, started {@link Appender}
      */
     Appender<E> build(LoggerContext context,
                                   String applicationName,
                                   LayoutFactory<E> layoutFactory,
-                                  LevelFilterFactory<E> levelFilterFactory,
+                                  FilterFactory<E> thresholdFilterFactory,
                                   AsyncAppenderFactory<E> asyncAppenderFactory);
 }

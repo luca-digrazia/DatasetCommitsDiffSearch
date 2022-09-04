@@ -7,9 +7,7 @@ import ch.qos.logback.core.encoder.LayoutWrappingEncoder;
 import ch.qos.logback.core.spi.DeferredProcessingAware;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import io.dropwizard.logging.async.AsyncAppenderFactory;
-import io.dropwizard.logging.filter.LevelFilterFactory;
-import io.dropwizard.logging.layout.LayoutFactory;
+import io.dropwizard.logging.filter.FilterFactory;
 
 import javax.validation.constraints.NotNull;
 
@@ -92,7 +90,7 @@ public class ConsoleAppenderFactory<E extends DeferredProcessingAware> extends A
 
     @Override
     public Appender<E> build(LoggerContext context, String applicationName, LayoutFactory<E> layoutFactory,
-                             LevelFilterFactory<E> levelFilterFactory, AsyncAppenderFactory<E> asyncAppenderFactory) {
+                             FilterFactory<E> thresholdFilterFactory, AsyncAppenderFactory<E> asyncAppenderFactory) {
         final ConsoleAppender<E> appender = new ConsoleAppender<>();
         appender.setName("console-appender");
         appender.setContext(context);
@@ -102,7 +100,7 @@ public class ConsoleAppenderFactory<E extends DeferredProcessingAware> extends A
         layoutEncoder.setLayout(buildLayout(context, layoutFactory));
         appender.setEncoder(layoutEncoder);
 
-        appender.addFilter(levelFilterFactory.build(threshold));
+        appender.addFilter(thresholdFilterFactory.build(threshold));
         appender.start();
 
         return wrapAsync(appender, asyncAppenderFactory);
