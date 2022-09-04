@@ -2,7 +2,6 @@ package io.quarkus.reactive.pg.client.runtime;
 
 import static io.quarkus.credentials.CredentialsProvider.PASSWORD_PROPERTY_NAME;
 import static io.quarkus.credentials.CredentialsProvider.USER_PROPERTY_NAME;
-import static io.quarkus.vertx.core.runtime.SSLConfigHelper.*;
 
 import java.util.Map;
 
@@ -121,18 +120,6 @@ public class PgPoolRecorder {
         if (dataSourceReactivePostgreSQLConfig.pipeliningLimit.isPresent()) {
             pgConnectOptions.setPipeliningLimit(dataSourceReactivePostgreSQLConfig.pipeliningLimit.getAsInt());
         }
-
-        if (dataSourceReactivePostgreSQLConfig.sslMode.isPresent()) {
-            pgConnectOptions.setSslMode(dataSourceReactivePostgreSQLConfig.sslMode.get());
-        }
-
-        configurePemTrustOptions(pgConnectOptions, dataSourceReactivePostgreSQLConfig.trustCertificatePem);
-        configureJksTrustOptions(pgConnectOptions, dataSourceReactivePostgreSQLConfig.trustCertificateJks);
-        configurePfxTrustOptions(pgConnectOptions, dataSourceReactivePostgreSQLConfig.trustCertificatePfx);
-
-        configurePemKeyCertOptions(pgConnectOptions, dataSourceReactivePostgreSQLConfig.keyCertificatePem);
-        configureJksKeyCertOptions(pgConnectOptions, dataSourceReactivePostgreSQLConfig.keyCertificateJks);
-        configurePfxKeyCertOptions(pgConnectOptions, dataSourceReactivePostgreSQLConfig.keyCertificatePfx);
 
         return pgConnectOptions;
     }
