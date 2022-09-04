@@ -59,7 +59,6 @@ public class QuarkusTestExtension
     private static ClassLoader originalCl;
     private static RunningQuarkusApplication runningQuarkusApplication;
     private static Path testClassLocation;
-    private static Throwable firstException; //if this is set then it will be thrown from the very first test that is run, the rest are aborted
 
     private ExtensionState doJavaStart(ExtensionContext context, TestResourceManager testResourceManager) {
 
@@ -132,7 +131,8 @@ public class QuarkusTestExtension
             return;
         }
         if (!failedBoot) {
-            boolean nativeImageTest = isNativeTest(context);
+            boolean nativeImageTest = context.getRequiredTestClass().isAnnotationPresent(SubstrateTest.class)
+                    || isNativeTest(context);
             runningQuarkusApplication.getClassLoader().loadClass(RestAssuredURLManager.class.getName())
                     .getDeclaredMethod("clearURL").invoke(null);
             runningQuarkusApplication.getClassLoader().loadClass(TestScopeManager.class.getName())
@@ -141,7 +141,8 @@ public class QuarkusTestExtension
     }
 
     private boolean isNativeTest(ExtensionContext context) {
-        return context.getRequiredTestClass().isAnnotationPresent(NativeImageTest.class);
+        return context.getRequiredTestClass().isAnnotationPresent(NativeImageTest.class)
+                | context.getRequiredTestClass().isAnnotationPresent(SubstrateTest.class);
     }
 
     @Override
@@ -150,20 +151,13 @@ public class QuarkusTestExtension
             return;
         }
         if (!failedBoot) {
-            boolean nativeImageTest = isNativeTest(context);
+            boolean nativeImageTest = context.getRequiredTestClass().isAnnotationPresent(SubstrateTest.class)
+                    || isNativeTest(context);
             if (runningQuarkusApplication != null) {
                 runningQuarkusApplication.getClassLoader().loadClass(RestAssuredURLManager.class.getName())
                         .getDeclaredMethod("setURL", boolean.class).invoke(null, false);
                 runningQuarkusApplication.getClassLoader().loadClass(TestScopeManager.class.getName())
                         .getDeclaredMethod("setup", boolean.class).invoke(null, nativeImageTest);
-            }
-        } else {
-            if (firstException != null) {
-                Throwable throwable = firstException;
-                firstException = null;
-                throw new RuntimeException(throwable);
-            } else {
-                throw new TestAbortedException("Boot failed");
             }
         }
     }
@@ -187,7 +181,7 @@ public class QuarkusTestExtension
                     e.addSuppressed(ex);
                 }
                 failedBoot = true;
-                firstException = e;
+                throw e;
             }
         }
         return state;
@@ -208,6 +202,9 @@ public class QuarkusTestExtension
         ensureStarted(context);
         if (runningQuarkusApplication != null) {
             setCCL(runningQuarkusApplication.getClassLoader());
+        }
+        if (failedBoot) {
+            throw new TestAbortedException("Not running test as boot failed");
         }
     }
 
@@ -239,7 +236,7 @@ public class QuarkusTestExtension
         }
         ExtensionState state = ensureStarted(extensionContext);
         if (failedBoot) {
-            return result;
+            return invocation.proceed();
         }
         initTestState(extensionContext, state);
         return result;
