@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe.actiongraph.v2;
 
-import java.io.IOException;
+import com.google.devtools.build.lib.analysis.AnalysisProtosV2.ActionGraphContainer;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,17 +21,17 @@ import java.util.Map;
  * Basic class to abstract action graph cache functionality.
  */
 abstract class BaseCache<K, P> {
-  private final Map<K, Integer> cache = new HashMap<>();
-  protected final AqueryOutputHandler aqueryOutputHandler;
+  private final Map<K, Long> cache = new HashMap<>();
+  protected final ActionGraphContainer.Builder actionGraphBuilder;
 
-  BaseCache(AqueryOutputHandler aqueryOutputHandler) {
-    this.aqueryOutputHandler = aqueryOutputHandler;
+  BaseCache(ActionGraphContainer.Builder actionGraphBuilder) {
+    this.actionGraphBuilder = actionGraphBuilder;
   }
 
-  private int generateNextId() {
+  private long generateNextId() {
     // protobuf interprets the value 0 as "default value" for uint64, thus treating the field as
     // "unset". We should start from 1 instead.
-    return cache.size() + 1;
+    return cache.size() + 1L;
   }
 
   protected K transformToKey(K data) {
@@ -42,12 +42,10 @@ abstract class BaseCache<K, P> {
   /**
    * Store the data in the internal cache, if it's not yet present. Return the generated id. Ids are
    * positive and unique.
-   *
-   * <p>Stream the proto to output, the first time it's generated.
    */
-  int dataToIdAndStreamOutputProto(K data) throws IOException, InterruptedException {
+  Long dataToId(K data) {
     K key = transformToKey(data);
-    Integer id = cache.get(key);
+    Long id = cache.get(key);
     if (id == null) {
       // Note that this cannot be replaced by computeIfAbsent since createProto is a recursive
       // operation for the case of nested sets which will call dataToId on the same object and thus
@@ -55,12 +53,12 @@ abstract class BaseCache<K, P> {
       id = generateNextId();
       cache.put(key, id);
       P proto = createProto(data, id);
-      toOutput(proto);
+      addToActionGraphBuilder(proto);
     }
     return id;
   }
 
-  abstract P createProto(K key, int id) throws IOException, InterruptedException;
+  abstract P createProto(K key, Long id);
 
-  abstract void toOutput(P proto) throws IOException;
+  abstract void addToActionGraphBuilder(P proto);
 }
