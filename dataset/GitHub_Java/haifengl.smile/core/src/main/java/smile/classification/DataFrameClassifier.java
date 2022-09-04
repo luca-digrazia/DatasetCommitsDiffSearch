@@ -1,28 +1,25 @@
 /*
- * Copyright (c) 2010-2021 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
  * Smile is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 package smile.classification;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.stream.IntStream;
-
 import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
 import smile.data.Tuple;
@@ -100,13 +97,12 @@ public interface DataFrameClassifier extends Classifier<Tuple> {
         // it is different from that of training data.
         formula().bind(data.schema());
 
-        int n = data.size();
         int k = numClasses();
-        double[][] prob = new double[n][k];
-        Collections.addAll(posteriori, prob);
-        return IntStream.range(0, n).parallel()
-                .map(i -> predict(data.get(i), prob[i]))
-                .toArray();
+        return data.stream().mapToInt(xi -> {
+            double[] prob = new double[k];
+            posteriori.add(prob);
+            return predict(xi, prob);
+        }).toArray();
     }
 
     /**

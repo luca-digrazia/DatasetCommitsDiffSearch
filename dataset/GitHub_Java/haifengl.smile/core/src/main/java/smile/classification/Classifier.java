@@ -1,17 +1,17 @@
 /*
- * Copyright (c) 2010-2021 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
  * Smile is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
  */
 
@@ -19,13 +19,10 @@ package smile.classification;
 
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.function.ToDoubleFunction;
 import java.util.function.ToIntFunction;
-import java.util.stream.IntStream;
-
 import smile.data.Dataset;
 import smile.data.Instance;
 import smile.math.MathEx;
@@ -185,10 +182,16 @@ public interface Classifier<T> extends ToIntFunction<T>, ToDoubleFunction<T>, Se
      * @return the predicted class labels.
      */
     default int[] predict(T[] x, double[][] posteriori) {
+        int k = numClasses();
         int n = x.length;
-        return IntStream.range(0, n).parallel()
-                .map(i -> predict(x[i], posteriori[i]))
-                .toArray();
+        int[] y = new int[n];
+        for (int i = 0; i < n; i++) {
+            if (posteriori[i] == null) {
+                posteriori[i] = new double[k];
+            }
+            y[i] = predict(x[i], posteriori[i]);
+        }
+        return y;
     }
 
     /**
@@ -199,13 +202,12 @@ public interface Classifier<T> extends ToIntFunction<T>, ToDoubleFunction<T>, Se
      * @return the predicted class labels.
      */
     default int[] predict(List<T> x, List<double[]> posteriori) {
-        int n = x.size();
         int k = numClasses();
-        double[][] prob = new double[n][k];
-        Collections.addAll(posteriori, prob);
-        return IntStream.range(0, n).parallel()
-                .map(i -> predict(x.get(i), prob[i]))
-                .toArray();
+        return x.stream().mapToInt(xi -> {
+            double[] prob = new double[k];
+            posteriori.add(prob);
+            return predict(xi, prob);
+        }).toArray();
     }
 
     /**
@@ -216,13 +218,12 @@ public interface Classifier<T> extends ToIntFunction<T>, ToDoubleFunction<T>, Se
      * @return the predicted class labels.
      */
     default int[] predict(Dataset<T> x, List<double[]> posteriori) {
-        int n = x.size();
         int k = numClasses();
-        double[][] prob = new double[n][k];
-        Collections.addAll(posteriori, prob);
-        return IntStream.range(0, n).parallel()
-                .map(i -> predict(x.get(i), prob[i]))
-                .toArray();
+        return x.stream().mapToInt(xi -> {
+            double[] prob = new double[k];
+            posteriori.add(prob);
+            return predict(xi, prob);
+        }).toArray();
     }
 
     /**
