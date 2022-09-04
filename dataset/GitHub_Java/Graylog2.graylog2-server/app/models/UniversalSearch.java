@@ -20,47 +20,28 @@ package models;
 
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import controllers.routes;
 import lib.APIException;
 import lib.ApiClient;
-import lib.Tools;
 import lib.timeranges.TimeRange;
 import models.api.responses.DateHistogramResponse;
 import models.api.responses.FieldStatsResponse;
-import models.api.responses.FieldTermsResponse;
 import models.api.responses.SearchResultResponse;
 import models.api.results.DateHistogramResult;
 import models.api.results.SearchResult;
-import play.mvc.Call;
-import play.mvc.Http.Request;
 
 import java.io.IOException;
 
 public class UniversalSearch {
 
-    public static final int PER_PAGE = 100;
-
     private final ApiClient api;
     private final String query;
     private final TimeRange timeRange;
-    private final Integer page;
 
     @AssistedInject
     private UniversalSearch(ApiClient api, @Assisted TimeRange timeRange, @Assisted String query) {
-        this(api, timeRange, query, 0);
-    }
-
-    @AssistedInject
-    private UniversalSearch(ApiClient api, @Assisted TimeRange timeRange, @Assisted String query, @Assisted Integer page) {
         this.api = api;
         this.query = query;
         this.timeRange = timeRange;
-
-        if (page == 0) {
-            this.page = 0;
-        } else {
-            this.page = page-1;
-        }
     }
 
     public SearchResult search() throws IOException, APIException {
@@ -68,8 +49,6 @@ public class UniversalSearch {
                 .path("/search/universal/{0}", timeRange.getType().toString().toLowerCase())
                 .queryParams(timeRange.getQueryParams())
                 .queryParam("query", query)
-                .queryParam("limit", PER_PAGE)
-                .queryParam("offset", page*PER_PAGE)
                 .execute();
 
         SearchResult result = new SearchResult(
@@ -103,37 +82,7 @@ public class UniversalSearch {
                 .execute();
     }
 
-    public FieldTermsResponse fieldTerms(String field) throws IOException, APIException {
-        return api.get(FieldTermsResponse.class)
-                .path("/search/universal/{0}/terms", timeRange.getType().toString().toLowerCase())
-                .queryParam("field", field)
-                .queryParam("query", query)
-                .queryParams(timeRange.getQueryParams())
-                .execute();
-    }
-
-    public Call getRoute(Request request, int page) {
-        int relative = Tools.intSearchParamOrEmpty(request, "relative");
-        String from = Tools.stringSearchParamOrEmpty(request, "from");
-        String to = Tools.stringSearchParamOrEmpty(request, "to");
-        String keyword = Tools.stringSearchParamOrEmpty(request, "keyword");
-        String interval = Tools.stringSearchParamOrEmpty(request, "interval");
-
-        return routes.SearchController.index(
-                query,
-                timeRange.getType().toString().toLowerCase(),
-                relative,
-                from,
-                to,
-                keyword,
-                interval,
-                page
-        );
-    }
-
     public interface Factory {
         UniversalSearch queryWithRange(String query, TimeRange timeRange);
-        UniversalSearch queryWithRangeAndPage(String query, TimeRange timeRange, Integer page);
     }
-
 }
