@@ -2,6 +2,7 @@ package io.dropwizard.lifecycle.setup;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 import org.slf4j.Logger;
 
 import java.util.concurrent.ArrayBlockingQueue;
