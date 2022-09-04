@@ -31,7 +31,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
-import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
@@ -67,6 +66,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
@@ -77,8 +78,8 @@ import javax.annotation.Nullable;
 public final class BuildOptions implements Cloneable, Serializable {
   private static final Comparator<Class<? extends FragmentOptions>>
       lexicalFragmentOptionsComparator = Comparator.comparing(Class::getName);
-  private static final Comparator<Label> starlarkOptionsComparator = Ordering.natural();
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Comparator<Label> skylarkOptionsComparator = Ordering.natural();
+  private static final Logger logger = Logger.getLogger(BuildOptions.class.getName());
 
   public static Map<Label, Object> labelizeStarlarkOptions(Map<String, Object> starlarkOptions) {
     return starlarkOptions.entrySet().stream()
@@ -103,7 +104,7 @@ public final class BuildOptions implements Cloneable, Serializable {
     for (FragmentOptions options : fragmentOptionsMap.values()) {
       builder.addFragmentOptions(options.getHost());
     }
-    return builder.addStarlarkOptions(starlarkOptionsMap).build();
+    return builder.addStarlarkOptions(skylarkOptionsMap).build();
   }
 
   /**
@@ -130,7 +131,7 @@ public final class BuildOptions implements Cloneable, Serializable {
     for (FragmentOptions options : retainedOptions) {
       builder.addFragmentOptions(options);
     }
-    return builder.addStarlarkOptions(starlarkOptionsMap).build();
+    return builder.addStarlarkOptions(skylarkOptionsMap).build();
   }
 
   /**
@@ -168,11 +169,11 @@ public final class BuildOptions implements Cloneable, Serializable {
   }
 
   /*
-   * Returns a BuildOptions class that only has Starlark options.
+   * Returns a BuildOptions class that only has skylark options.
    */
   @VisibleForTesting
-  public static BuildOptions of(Map<Label, Object> starlarkOptions) {
-    return builder().addStarlarkOptions(starlarkOptions).build();
+  public static BuildOptions of(Map<Label, Object> skylarkOptions) {
+    return builder().addStarlarkOptions(skylarkOptions).build();
   }
 
   /** Returns the actual instance of a FragmentOptions class. */
@@ -195,7 +196,7 @@ public final class BuildOptions implements Cloneable, Serializable {
     }
     keyBuilder.append(
         OptionsBase.mapToCacheKey(
-            starlarkOptionsMap.entrySet().stream()
+            skylarkOptionsMap.entrySet().stream()
                 .collect(Collectors.toMap(e -> e.getKey().toString(), Map.Entry::getValue))));
     return keyBuilder.toString();
   }
@@ -225,12 +226,12 @@ public final class BuildOptions implements Cloneable, Serializable {
   }
 
   public ImmutableMap<Label, Object> getStarlarkOptions() {
-    return starlarkOptionsMap;
+    return skylarkOptionsMap;
   }
 
   /**
    * Creates a copy of the BuildOptions object that contains copies of the FragmentOptions and
-   * Starlark options.
+   * skylark options.
    */
   @Override
   public BuildOptions clone() {
@@ -240,7 +241,7 @@ public final class BuildOptions implements Cloneable, Serializable {
         fragmentOptionsMap.entrySet()) {
       nativeOptionsBuilder.put(entry.getKey(), entry.getValue().clone());
     }
-    return new BuildOptions(nativeOptionsBuilder.build(), ImmutableMap.copyOf(starlarkOptionsMap));
+    return new BuildOptions(nativeOptionsBuilder.build(), ImmutableMap.copyOf(skylarkOptionsMap));
   }
 
   private boolean fingerprintAndHashCodeInitialized() {
@@ -270,7 +271,7 @@ public final class BuildOptions implements Cloneable, Serializable {
         fingerprint.addString(entry.getKey().getName());
         fingerprint.addString(entry.getValue().cacheKey());
       }
-      for (Map.Entry<Label, Object> entry : starlarkOptionsMap.entrySet()) {
+      for (Map.Entry<Label, Object> entry : skylarkOptionsMap.entrySet()) {
         fingerprint.addString(entry.getKey().toString());
         fingerprint.addString(entry.getValue().toString());
       }
@@ -306,15 +307,15 @@ public final class BuildOptions implements Cloneable, Serializable {
 
   /** Maps options class definitions to FragmentOptions objects. */
   private final ImmutableMap<Class<? extends FragmentOptions>, FragmentOptions> fragmentOptionsMap;
-  /** Maps Starlark options names to Starlark options values. */
-  private final ImmutableMap<Label, Object> starlarkOptionsMap;
+  /** Maps skylark options names to skylark options values. */
+  private final ImmutableMap<Label, Object> skylarkOptionsMap;
 
   @AutoCodec.VisibleForSerialization
   BuildOptions(
       ImmutableMap<Class<? extends FragmentOptions>, FragmentOptions> fragmentOptionsMap,
-      ImmutableMap<Label, Object> starlarkOptionsMap) {
+      ImmutableMap<Label, Object> skylarkOptionsMap) {
     this.fragmentOptionsMap = fragmentOptionsMap;
-    this.starlarkOptionsMap = starlarkOptionsMap;
+    this.skylarkOptionsMap = skylarkOptionsMap;
   }
 
   public BuildOptions applyDiff(OptionsDiffForReconstruction optionsDiff) {
@@ -340,19 +341,19 @@ public final class BuildOptions implements Cloneable, Serializable {
       builder.addFragmentOptions(extraSecondFragment);
     }
 
-    Map<Label, Object> starlarkOptions = new HashMap<>();
-    for (Map.Entry<Label, Object> buildSettingAndValue : starlarkOptionsMap.entrySet()) {
+    Map<Label, Object> skylarkOptions = new HashMap<>();
+    for (Map.Entry<Label, Object> buildSettingAndValue : skylarkOptionsMap.entrySet()) {
       Label buildSetting = buildSettingAndValue.getKey();
       if (optionsDiff.extraFirstStarlarkOptions.contains(buildSetting)) {
         continue;
       } else if (optionsDiff.differingStarlarkOptions.containsKey(buildSetting)) {
-        starlarkOptions.put(buildSetting, optionsDiff.differingStarlarkOptions.get(buildSetting));
+        skylarkOptions.put(buildSetting, optionsDiff.differingStarlarkOptions.get(buildSetting));
       } else {
-        starlarkOptions.put(buildSetting, starlarkOptionsMap.get(buildSetting));
+        skylarkOptions.put(buildSetting, skylarkOptionsMap.get(buildSetting));
       }
     }
-    starlarkOptions.putAll(optionsDiff.extraSecondStarlarkOptions);
-    reconstructedOptions = builder.addStarlarkOptions(starlarkOptions).build();
+    skylarkOptions.putAll(optionsDiff.extraSecondStarlarkOptions);
+    reconstructedOptions = builder.addStarlarkOptions(skylarkOptions).build();
     optionsDiff.cachedReconstructed = new SoftReference<>(reconstructedOptions);
     return reconstructedOptions;
   }
@@ -384,7 +385,7 @@ public final class BuildOptions implements Cloneable, Serializable {
       }
     }
 
-    Map<Label, Object> starlarkOptions = new HashMap<>(starlarkOptionsMap);
+    Map<Label, Object> starlarkOptions = new HashMap<>(skylarkOptionsMap);
     Map<Label, Object> parsedStarlarkOptions =
         labelizeStarlarkOptions(parsingResult.getStarlarkOptions());
     for (Map.Entry<Label, Object> starlarkOption : parsedStarlarkOptions.entrySet()) {
@@ -467,7 +468,7 @@ public final class BuildOptions implements Cloneable, Serializable {
     Map<Label, Object> starlarkOptions =
         labelizeStarlarkOptions(parsingResult.getStarlarkOptions());
     MapDifference<Label, Object> starlarkDifference =
-        Maps.difference(starlarkOptionsMap, starlarkOptions);
+        Maps.difference(skylarkOptionsMap, starlarkOptions);
     if (starlarkDifference.entriesInCommon().size() < starlarkOptions.size()) {
       return false;
     }
@@ -552,7 +553,7 @@ public final class BuildOptions implements Cloneable, Serializable {
     public BuildOptions build() {
       return new BuildOptions(
           ImmutableSortedMap.copyOf(fragmentOptions, lexicalFragmentOptionsComparator),
-          ImmutableSortedMap.copyOf(starlarkOptions, starlarkOptionsComparator));
+          ImmutableSortedMap.copyOf(starlarkOptions, skylarkOptionsComparator));
     }
 
     private final Map<Class<? extends FragmentOptions>, FragmentOptions> fragmentOptions;
@@ -633,17 +634,17 @@ public final class BuildOptions implements Cloneable, Serializable {
       }
     }
 
-    // Compare Starlark options for the two classes.
-    Map<Label, Object> starlarkFirst = first.getStarlarkOptions();
-    Map<Label, Object> starlarkSecond = second.getStarlarkOptions();
-    for (Label buildSetting : Sets.union(starlarkFirst.keySet(), starlarkSecond.keySet())) {
-      if (starlarkFirst.get(buildSetting) == null) {
-        diff.addExtraSecondStarlarkOption(buildSetting, starlarkSecond.get(buildSetting));
-      } else if (starlarkSecond.get(buildSetting) == null) {
+    // Compare skylark options for the two classes.
+    Map<Label, Object> skylarkFirst = first.getStarlarkOptions();
+    Map<Label, Object> skylarkSecond = second.getStarlarkOptions();
+    for (Label buildSetting : Sets.union(skylarkFirst.keySet(), skylarkSecond.keySet())) {
+      if (skylarkFirst.get(buildSetting) == null) {
+        diff.addExtraSecondStarlarkOption(buildSetting, skylarkSecond.get(buildSetting));
+      } else if (skylarkSecond.get(buildSetting) == null) {
         diff.addExtraFirstStarlarkOption(buildSetting);
-      } else if (!starlarkFirst.get(buildSetting).equals(starlarkSecond.get(buildSetting))) {
+      } else if (!skylarkFirst.get(buildSetting).equals(skylarkSecond.get(buildSetting))) {
         diff.putStarlarkDiff(
-            buildSetting, starlarkFirst.get(buildSetting), starlarkSecond.get(buildSetting));
+            buildSetting, skylarkFirst.get(buildSetting), skylarkSecond.get(buildSetting));
       }
     }
     return diff;
@@ -727,7 +728,7 @@ public final class BuildOptions implements Cloneable, Serializable {
             Comparator.comparing(o -> o.getClass().getName()), diff.extraSecondFragments),
         first.fingerprint,
         second.computeChecksum(),
-        diff.starlarkSecond,
+        diff.skylarkSecond,
         diff.extraStarlarkOptionsFirst,
         diff.extraStarlarkOptionsSecond,
         second);
@@ -751,10 +752,10 @@ public final class BuildOptions implements Cloneable, Serializable {
     private final Set<Class<? extends FragmentOptions>> extraFirstFragments = new HashSet<>();
     private final Set<FragmentOptions> extraSecondFragments = new HashSet<>();
 
-    private final Map<Label, Object> starlarkFirst = new LinkedHashMap<>();
+    private final Map<Label, Object> skylarkFirst = new LinkedHashMap<>();
     // TODO(b/112041323): This should also be multimap but we don't diff multiple times with
-    // Starlark options anywhere yet so add that feature when necessary.
-    private final Map<Label, Object> starlarkSecond = new LinkedHashMap<>();
+    // skylark options anywhere yet so add that feature when necessary.
+    private final Map<Label, Object> skylarkSecond = new LinkedHashMap<>();
 
     private final List<Label> extraStarlarkOptionsFirst = new ArrayList<>();
     private final Map<Label, Object> extraStarlarkOptionsSecond = new HashMap<>();
@@ -798,8 +799,8 @@ public final class BuildOptions implements Cloneable, Serializable {
     }
 
     private void putStarlarkDiff(Label buildSetting, Object firstValue, Object secondValue) {
-      starlarkFirst.put(buildSetting, firstValue);
-      starlarkSecond.put(buildSetting, secondValue);
+      skylarkFirst.put(buildSetting, firstValue);
+      skylarkSecond.put(buildSetting, secondValue);
       hasStarlarkOptions = true;
     }
 
@@ -819,8 +820,8 @@ public final class BuildOptions implements Cloneable, Serializable {
      */
     public Set<Label> getChangedStarlarkOptions() {
       return ImmutableSet.<Label>builder()
-          .addAll(starlarkFirst.keySet())
-          .addAll(starlarkSecond.keySet())
+          .addAll(skylarkFirst.keySet())
+          .addAll(skylarkSecond.keySet())
           .addAll(extraStarlarkOptionsFirst)
           .addAll(extraStarlarkOptionsSecond.keySet())
           .build();
@@ -828,12 +829,12 @@ public final class BuildOptions implements Cloneable, Serializable {
 
     @VisibleForTesting
     Map<Label, Object> getStarlarkFirstForTesting() {
-      return starlarkFirst;
+      return skylarkFirst;
     }
 
     @VisibleForTesting
     Map<Label, Object> getStarlarkSecondForTesting() {
-      return starlarkSecond;
+      return skylarkSecond;
     }
 
     @VisibleForTesting
@@ -856,8 +857,8 @@ public final class BuildOptions implements Cloneable, Serializable {
           && extraSecondFragments.isEmpty()
           && extraFirstFragments.isEmpty()
           && differingOptions.isEmpty()
-          && starlarkFirst.isEmpty()
-          && starlarkSecond.isEmpty()
+          && skylarkFirst.isEmpty()
+          && skylarkSecond.isEmpty()
           && extraStarlarkOptionsFirst.isEmpty()
           && extraStarlarkOptionsSecond.isEmpty();
     }
@@ -875,8 +876,8 @@ public final class BuildOptions implements Cloneable, Serializable {
       first.forEach(
           (option, value) ->
               toReturn.add(option.getOptionName() + ":" + value + " -> " + second.get(option)));
-      starlarkFirst.forEach(
-          (option, value) -> toReturn.add(option + ":" + value + starlarkSecond.get(option)));
+      skylarkFirst.forEach(
+          (option, value) -> toReturn.add(option + ":" + value + skylarkSecond.get(option)));
       return toReturn;
     }
   }
@@ -1184,9 +1185,14 @@ public final class BuildOptions implements Cloneable, Serializable {
           int optionsDiffSize = byteStringOut.size();
           bytes = byteStringOut.toByteString();
           cache.putBytesFromOptionsDiff(diff, bytes);
-          logger.atFine().log(
-              "Serialized OptionsDiffForReconstruction %s. Diff took %d bytes.",
-              diff, optionsDiffSize);
+          if (logger.isLoggable(Level.FINE)) {
+            logger.fine(
+                "Serialized OptionsDiffForReconstruction "
+                    + diff
+                    + ". Diff took "
+                    + optionsDiffSize
+                    + " bytes.");
+          }
         }
         codedOut.writeBytesNoTag(bytes);
       }
