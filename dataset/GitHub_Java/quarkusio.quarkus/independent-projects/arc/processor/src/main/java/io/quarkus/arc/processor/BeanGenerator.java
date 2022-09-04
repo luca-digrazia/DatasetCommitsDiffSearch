@@ -5,7 +5,6 @@ import static org.objectweb.asm.Opcodes.ACC_BRIDGE;
 import static org.objectweb.asm.Opcodes.ACC_FINAL;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
-import static org.objectweb.asm.Opcodes.ACC_VOLATILE;
 
 import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableInterceptor;
@@ -154,7 +153,8 @@ public class BeanGenerator extends AbstractGenerator {
         }
         if (bean.getScope().isNormal()) {
             // For normal scopes a client proxy is generated too
-            initializeProxy(bean, baseName, beanCreator);
+            beanCreator.getFieldCreator(FIELD_NAME_PROXY, getProxyTypeName(bean, baseName))
+                    .setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
         FieldCreator stereotypes = null;
         if (!bean.getStereotypes().isEmpty()) {
@@ -264,7 +264,8 @@ public class BeanGenerator extends AbstractGenerator {
         }
         if (bean.getScope().isNormal()) {
             // For normal scopes a client proxy is generated too
-            initializeProxy(bean, baseName, beanCreator);
+            beanCreator.getFieldCreator(FIELD_NAME_PROXY, getProxyTypeName(bean, baseName))
+                    .setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
         FieldCreator stereotypes = null;
         if (!bean.getStereotypes().isEmpty()) {
@@ -359,7 +360,8 @@ public class BeanGenerator extends AbstractGenerator {
         }
         if (bean.getScope().isNormal()) {
             // For normal scopes a client proxy is generated too
-            initializeProxy(bean, baseName, beanCreator);
+            beanCreator.getFieldCreator(FIELD_NAME_PROXY, getProxyTypeName(bean, baseName))
+                    .setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
         FieldCreator stereotypes = null;
         if (!bean.getStereotypes().isEmpty()) {
@@ -444,7 +446,8 @@ public class BeanGenerator extends AbstractGenerator {
         }
         if (bean.getScope().isNormal()) {
             // For normal scopes a client proxy is generated too
-            initializeProxy(bean, baseName, beanCreator);
+            beanCreator.getFieldCreator(FIELD_NAME_PROXY, getProxyTypeName(bean, baseName))
+                    .setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
         FieldCreator stereotypes = null;
         if (!bean.getStereotypes().isEmpty()) {
@@ -679,6 +682,16 @@ public class BeanGenerator extends AbstractGenerator {
                     constructor.getThis(),
                     unmodifiableStereotypesHandle);
         }
+
+        if (bean.getScope().isNormal()) {
+            // this.proxy = new Bar_ClientProxy(this)
+            String proxyTypeName = getProxyTypeName(bean, baseName);
+            constructor.writeInstanceField(FieldDescriptor.of(beanCreator.getClassName(), FIELD_NAME_PROXY, proxyTypeName),
+                    constructor.getThis(),
+                    constructor.newInstance(
+                            MethodDescriptor.ofConstructor(proxyTypeName, beanCreator.getClassName()), constructor.getThis()));
+        }
+
         return constructor;
     }
 
@@ -1418,10 +1431,12 @@ public class BeanGenerator extends AbstractGenerator {
                     DotNames.POST_CONSTRUCT,
                     bean.getDeployment().getIndex());
             for (MethodInfo callback : postConstructCallbacks) {
-                if (Modifier.isPrivate(callback.flags())) {
-                    privateMembers.add(isApplicationClass,
-                            String.format("@PostConstruct callback %s#%s()", callback.declaringClass().name(),
-                                    callback.name()));
+                if (isReflectionFallbackNeeded(callback, targetPackage)) {
+                    if (Modifier.isPrivate(callback.flags())) {
+                        privateMembers.add(isApplicationClass,
+                                String.format("@PostConstruct callback %s#%s()", callback.declaringClass().name(),
+                                        callback.name()));
+                    }
                     reflectionRegistration.registerMethod(callback);
                     create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD,
                             create.loadClass(callback.declaringClass().name().toString()),
@@ -1492,10 +1507,11 @@ public class BeanGenerator extends AbstractGenerator {
             get.returnValue(
                     get.invokeInterfaceMethod(MethodDescriptors.CONTEXT_GET, context, get.getThis(), creationalContext));
         } else if (bean.getScope().isNormal()) {
-            // return proxy()
-            get.returnValue(get.invokeVirtualMethod(
-                    MethodDescriptor.ofMethod(beanCreator.getClassName(), FIELD_NAME_PROXY, getProxyTypeName(bean, baseName)),
-                    get.getThis()));
+            // return proxy.get()
+            ResultHandle proxy = get.readInstanceField(
+                    FieldDescriptor.of(beanCreator.getClassName(), FIELD_NAME_PROXY, getProxyTypeName(bean, baseName)),
+                    get.getThis());
+            get.returnValue(proxy);
         } else {
             ResultHandle instance = get.invokeVirtualMethod(
                     MethodDescriptor.ofMethod(beanCreator.getClassName(), "create", providerTypeName, CreationalContext.class),
@@ -1625,28 +1641,6 @@ public class BeanGenerator extends AbstractGenerator {
                 constructor.getThis(), constructor.getMethodParam(paramIdx),
                 Types.getTypeHandle(constructor, injectionPoint.getRequiredType(), tccl),
                 requiredQualifiersHandle, annotationsHandle, javaMemberHandle, constructor.load(injectionPoint.getPosition()));
-    }
-
-    private void initializeProxy(BeanInfo bean, String baseName, ClassCreator beanCreator) {
-        // Add proxy volatile field
-        String proxyTypeName = getProxyTypeName(bean, baseName);
-        beanCreator.getFieldCreator(FIELD_NAME_PROXY, proxyTypeName)
-                .setModifiers(ACC_PRIVATE | ACC_VOLATILE);
-
-        // Add proxy() method
-        MethodCreator proxy = beanCreator.getMethodCreator(FIELD_NAME_PROXY, proxyTypeName).setModifiers(ACC_PRIVATE);
-        AssignableResultHandle proxyInstance = proxy.createVariable(DescriptorUtils.extToInt(proxyTypeName));
-        proxy.assign(proxyInstance, proxy.readInstanceField(
-                FieldDescriptor.of(beanCreator.getClassName(), FIELD_NAME_PROXY, proxyTypeName),
-                proxy.getThis()));
-        // Create a new proxy instance, atomicity does not really matter here
-        BytecodeCreator proxyNull = proxy.ifNull(proxyInstance).trueBranch();
-        proxyNull.assign(proxyInstance, proxyNull.newInstance(
-                MethodDescriptor.ofConstructor(proxyTypeName, beanCreator.getClassName()), proxyNull.getThis()));
-        proxyNull.writeInstanceField(FieldDescriptor.of(beanCreator.getClassName(), FIELD_NAME_PROXY, proxyTypeName),
-                proxyNull.getThis(),
-                proxyInstance);
-        proxy.returnValue(proxyInstance);
     }
 
     static ResultHandle getJavaMemberHandle(MethodCreator constructor,
