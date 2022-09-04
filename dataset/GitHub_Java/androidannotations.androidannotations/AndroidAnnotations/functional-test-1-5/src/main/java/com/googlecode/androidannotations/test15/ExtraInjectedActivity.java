@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -40,18 +40,12 @@ public class ExtraInjectedActivity extends Activity {
 
 	@Extra("byteArrayExtra")
 	byte[] byteArrayExtra;
-
+	
 	@Extra
 	String extraWithoutValue;
 
 	@Override
 	protected void onNewIntent(Intent intent) {
 		setIntent(intent);
-	}
-
-	void intentWithExtras() {
-		ExtraInjectedActivity_.intent(this).arrayExtra(null).start();
-		ExtraInjectedActivity_.intent(this).intExtra(42).get();
-		ExtraInjectedActivity_.intent(this).stringExtra("hello").startForResult(42);
 	}
 }
