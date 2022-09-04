@@ -20,6 +20,7 @@ import static com.google.common.base.Preconditions.checkState;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Sets;
 import com.google.common.flogger.GoogleLogger;
 import com.google.common.io.BaseEncoding;
@@ -321,7 +322,8 @@ final class ActionMetadataHandler implements MetadataHandler {
       setPathReadOnlyAndExecutable(treeDir);
     }
 
-    TreeArtifactValue.Builder tree = TreeArtifactValue.newBuilder(parent);
+    ImmutableSortedMap.Builder<TreeFileArtifact, FileArtifactValue> values =
+        ImmutableSortedMap.naturalOrder();
 
     TreeArtifactValue.visitTree(
         treeDir,
@@ -345,10 +347,10 @@ final class ActionMetadataHandler implements MetadataHandler {
             throw new IOException(errorMessage, e);
           }
 
-          tree.putChild(child, metadata);
+          values.put(child, metadata);
         });
 
-    return tree.build();
+    return TreeArtifactValue.create(values.build());
   }
 
   @Override
@@ -377,7 +379,7 @@ final class ActionMetadataHandler implements MetadataHandler {
     checkArgument(isKnownOutput(output), "%s is not a declared output of this action", output);
     checkArgument(
         !output.isTreeArtifact() && !output.isChildOfDeclaredDirectory(),
-        "Tree artifacts and their children must be injected via injectTree: %s",
+        "Tree artifacts and their children must be injected via injectDirectory: %s",
         output);
     checkState(executionMode.get(), "Tried to inject %s outside of execution", output);
 
@@ -385,12 +387,13 @@ final class ActionMetadataHandler implements MetadataHandler {
   }
 
   @Override
-  public void injectTree(SpecialArtifact output, TreeArtifactValue tree) {
+  public void injectDirectory(
+      SpecialArtifact output, Map<TreeFileArtifact, FileArtifactValue> children) {
     checkArgument(isKnownOutput(output), "%s is not a declared output of this action", output);
     checkArgument(output.isTreeArtifact(), "Output must be a tree artifact: %s", output);
     checkState(executionMode.get(), "Tried to inject %s outside of execution", output);
 
-    store.putTreeArtifactData(output, tree);
+    store.putTreeArtifactData(output, TreeArtifactValue.create(children));
   }
 
   @Override
@@ -415,7 +418,7 @@ final class ActionMetadataHandler implements MetadataHandler {
   }
 
   @Override
-  public void resetOutputs(Iterable<? extends Artifact> outputs) {
+  public void resetOutputs(Iterable<Artifact> outputs) {
     checkState(
         executionMode.get(), "resetOutputs() should only be called from within a running action.");
     for (Artifact output : outputs) {

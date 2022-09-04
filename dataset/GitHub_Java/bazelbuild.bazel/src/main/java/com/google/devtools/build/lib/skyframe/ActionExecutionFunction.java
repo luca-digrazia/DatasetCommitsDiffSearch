@@ -38,10 +38,8 @@ import com.google.devtools.build.lib.actions.ActionInputMap;
 import com.google.devtools.build.lib.actions.ActionInputMapSink;
 import com.google.devtools.build.lib.actions.ActionLookupData;
 import com.google.devtools.build.lib.actions.ActionRewoundEvent;
-import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.AlreadyReportedActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.DiscoveredInputsEvent;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
@@ -148,7 +146,7 @@ public class ActionExecutionFunction implements SkyFunction {
       return null;
     }
     skyframeActionExecutor.noteActionEvaluationStarted(actionLookupData, action);
-    if (Actions.dependsOnBuildId(action)) {
+    if (SkyframeActionExecutor.actionDependsOnBuildId(action)) {
       PrecomputedValue.BUILD_ID.get(env);
     }
 
@@ -247,6 +245,10 @@ public class ActionExecutionFunction implements SkyFunction {
             ValueOrException3<
                 IOException, ActionExecutionException, ArtifactNestedSetEvalException>>
         inputDeps = getInputDeps(env, allInputs, state);
+    // If there's a missing value.
+    if (inputDeps == null) {
+      return null;
+    }
 
     try {
       if (previousExecution == null && !state.hasArtifactData()) {
@@ -729,12 +731,15 @@ public class ActionExecutionFunction implements SkyFunction {
               env.getListener(), state.discoveredInputs != null, action, actionLookupData));
     }
 
-    ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets =
-        state.getExpandedFilesets();
-
-    ArtifactExpander artifactExpander =
-        new Artifact.ArtifactExpanderImpl(
-            Collections.unmodifiableMap(state.expandedArtifacts), expandedFilesets);
+    ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets;
+    if (state.topLevelFilesets == null || state.topLevelFilesets.isEmpty()) {
+      expandedFilesets = state.filesetsInsideRunfiles;
+    } else {
+      Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetsMap =
+          new HashMap<>(state.filesetsInsideRunfiles);
+      filesetsMap.putAll(state.topLevelFilesets);
+      expandedFilesets = ImmutableMap.copyOf(filesetsMap);
+    }
 
     ArtifactPathResolver pathResolver =
         ArtifactPathResolver.createPathResolver(
@@ -756,7 +761,6 @@ public class ActionExecutionFunction implements SkyFunction {
               env.getListener(),
               action,
               metadataHandler,
-              artifactExpander,
               actionStartTime,
               state.allInputs.actionCacheInputs,
               clientEnv,
@@ -776,7 +780,7 @@ public class ActionExecutionFunction implements SkyFunction {
           (action instanceof IncludeScannable)
               ? ((IncludeScannable) action).getDiscoveredModules()
               : null,
-          Actions.dependsOnBuildId(action));
+          SkyframeActionExecutor.actionDependsOnBuildId(action));
     }
 
     metadataHandler.prepareForActionExecution();
@@ -837,7 +841,7 @@ public class ActionExecutionFunction implements SkyFunction {
         metadataHandler,
         actionStartTime,
         actionLookupData,
-        artifactExpander,
+        Collections.unmodifiableMap(state.expandedArtifacts),
         expandedFilesets,
         state.topLevelFilesets,
         state.actionFileSystem,
@@ -861,11 +865,6 @@ public class ActionExecutionFunction implements SkyFunction {
         ActionMetadataHandler metadataHandler,
         Map<String, String> clientEnv)
         throws InterruptedException, ActionExecutionException {
-      // TODO(b/160603797): For the sake of action key computation, we should not need
-      //  state.filesetsInsideRunfiles. In fact, for the metadataHandler, we are guaranteed to not
-      //  expand any filesets since we request metadata for input/output Artifacts only.
-      ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets =
-          state.getExpandedFilesets();
       if (action.discoversInputs()) {
         state.discoveredInputs = action.getInputs();
         switch (addDiscoveredInputs(
@@ -887,15 +886,7 @@ public class ActionExecutionFunction implements SkyFunction {
         }
       }
       Preconditions.checkState(!env.valuesMissing(), action);
-      skyframeActionExecutor.updateActionCache(
-          action,
-          metadataHandler,
-          new Artifact.ArtifactExpanderImpl(
-              // Skipping the filesets in runfiles since those cannot participate in command line
-              // creation.
-              Collections.unmodifiableMap(state.expandedArtifacts), expandedFilesets),
-          state.token,
-          clientEnv);
+      skyframeActionExecutor.updateActionCache(action, metadataHandler, state.token, clientEnv);
     }
   }
 
@@ -920,6 +911,9 @@ public class ActionExecutionFunction implements SkyFunction {
     Map<SkyKey, ValueOrException<IOException>> nonMandatoryDiscovered =
         env.getValuesOrThrow(
             Iterables.transform(discoveredInputs, Artifact::key), IOException.class);
+    if (env.valuesMissing()) {
+      return DiscoveredState.VALUES_MISSING;
+    }
     if (nonMandatoryDiscovered.isEmpty()) {
       return DiscoveredState.NO_DISCOVERED_DATA;
     }
@@ -948,14 +942,6 @@ public class ActionExecutionFunction implements SkyFunction {
             createDetailedExitCode(message, Code.DISCOVERED_INPUT_DOES_NOT_EXIST);
         throw new ActionExecutionException(message, actionForError, false, code);
       }
-      if (retrievedMetadata == null) {
-        Preconditions.checkState(
-            env.valuesMissing(),
-            "%s had no metadata but all values were present for %s",
-            input,
-            actionForError);
-        continue;
-      }
       if (retrievedMetadata instanceof TreeArtifactValue) {
         TreeArtifactValue treeValue = (TreeArtifactValue) retrievedMetadata;
         expandedArtifacts.put(input, ImmutableSet.copyOf(treeValue.getChildren()));
@@ -976,7 +962,7 @@ public class ActionExecutionFunction implements SkyFunction {
             "unknown metadata for " + input.getExecPathString() + ": " + retrievedMetadata);
       }
     }
-    return env.valuesMissing() ? DiscoveredState.VALUES_MISSING : DiscoveredState.DISCOVERED_DATA;
+    return DiscoveredState.DISCOVERED_DATA;
   }
 
   private static <E extends Exception> Object establishSkyframeDependencies(
@@ -1442,18 +1428,6 @@ public class ActionExecutionFunction implements SkyFunction {
     Iterable<Artifact> filterKnownDiscoveredInputs() {
       return Iterables.filter(
           discoveredInputs.toList(), input -> inputArtifactData.getMetadata(input) == null);
-    }
-
-    ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> getExpandedFilesets() {
-      if (topLevelFilesets == null || topLevelFilesets.isEmpty()) {
-        return filesetsInsideRunfiles;
-      }
-
-      Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetsMap =
-          Maps.newHashMapWithExpectedSize(filesetsInsideRunfiles.size() + topLevelFilesets.size());
-      filesetsMap.putAll(filesetsInsideRunfiles);
-      filesetsMap.putAll(topLevelFilesets);
-      return ImmutableMap.copyOf(filesetsMap);
     }
 
     @Override

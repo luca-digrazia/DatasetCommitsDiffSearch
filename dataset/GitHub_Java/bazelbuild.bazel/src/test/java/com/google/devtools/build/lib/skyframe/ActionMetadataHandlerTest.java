@@ -38,13 +38,13 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Set;
 import org.junit.Before;
 import org.junit.Test;
@@ -59,7 +59,7 @@ public final class ActionMetadataHandlerTest {
 
   private final Scratch scratch =
       new Scratch(
-          new InMemoryFileSystem(DigestHashFunction.SHA256) {
+          new InMemoryFileSystem() {
             @Override
             public void chmod(Path path, int mode) throws IOException {
               assertThat(mode).isEqualTo(0555); // Read only and executable.
@@ -75,9 +75,8 @@ public final class ActionMetadataHandlerTest {
 
   private final ArtifactRoot sourceRoot =
       ArtifactRoot.asSourceRoot(Root.fromPath(scratch.resolve("/workspace")));
-  private final PathFragment derivedPathPrefix = PathFragment.create("bin");
   private final ArtifactRoot outputRoot =
-      ArtifactRoot.asDerivedRoot(scratch.resolve("/output"), false, derivedPathPrefix);
+      ArtifactRoot.asDerivedRoot(scratch.resolve("/output"), "bin");
   private final Path execRoot = outputRoot.getRoot().asPath();
 
   @Before
@@ -91,12 +90,10 @@ public final class ActionMetadataHandlerTest {
     return ActionMetadataHandler.create(
         inputMap,
         forInputDiscovery,
-        /*archivedTreeArtifactsEnabled=*/ false,
         outputs,
         tsgm,
         ArtifactPathResolver.IDENTITY,
         execRoot.asFragment(),
-        derivedPathPrefix,
         /*expandedFilesets=*/ ImmutableMap.of());
   }
 
@@ -385,31 +382,34 @@ public final class ActionMetadataHandlerTest {
             /*outputs=*/ ImmutableSet.of(treeArtifact));
     handler.prepareForActionExecution();
 
-    TreeArtifactValue tree =
-        TreeArtifactValue.newBuilder(treeArtifact)
-            .putChild(
-                TreeFileArtifact.createTreeOutput(treeArtifact, "foo"),
-                new RemoteFileArtifactValue(new byte[] {1, 2, 3}, 5, 1, "foo"))
-            .putChild(
-                TreeFileArtifact.createTreeOutput(treeArtifact, "bar"),
-                new RemoteFileArtifactValue(new byte[] {4, 5, 6}, 10, 1, "bar"))
-            .build();
+    RemoteFileArtifactValue fooValue =
+        new RemoteFileArtifactValue(new byte[] {1, 2, 3}, 5, 1, "foo");
+    RemoteFileArtifactValue barValue =
+        new RemoteFileArtifactValue(new byte[] {4, 5, 6}, 10, 1, "bar");
+    Map<TreeFileArtifact, FileArtifactValue> children =
+        ImmutableMap.of(
+            TreeFileArtifact.createTreeOutput(treeArtifact, "foo"), fooValue,
+            TreeFileArtifact.createTreeOutput(treeArtifact, "bar"), barValue);
 
-    handler.injectTree(treeArtifact, tree);
+    handler.injectDirectory(treeArtifact, children);
 
     FileArtifactValue value = handler.getMetadata(treeArtifact);
     assertThat(value).isNotNull();
-    assertThat(value.getDigest()).isEqualTo(tree.getDigest());
-    assertThat(handler.getOutputStore().getTreeArtifactData(treeArtifact)).isEqualTo(tree);
+    TreeArtifactValue treeValue = handler.getOutputStore().getTreeArtifactData(treeArtifact);
+    assertThat(treeValue).isNotNull();
+    assertThat(treeValue.getDigest()).isEqualTo(value.getDigest());
     assertThat(chmodCalls).isEmpty();
 
-    assertThat(handler.getTreeArtifactChildren(treeArtifact)).isEqualTo(tree.getChildren());
+    assertThat(treeValue.getChildPaths())
+        .containsExactly(PathFragment.create("foo"), PathFragment.create("bar"));
+    assertThat(treeValue.getChildValues().values()).containsExactly(fooValue, barValue);
+    assertThat(handler.getTreeArtifactChildren(treeArtifact)).isEqualTo(treeValue.getChildren());
 
     // Make sure that all children are transferred properly into the ActionExecutionValue. If any
     // child is missing, getExistingFileArtifactValue will throw.
     ActionExecutionValue actionExecutionValue =
         ActionExecutionValue.createFromOutputStore(handler.getOutputStore(), null, null, false);
-    tree.getChildren().forEach(actionExecutionValue::getExistingFileArtifactValue);
+    treeValue.getChildren().forEach(actionExecutionValue::getExistingFileArtifactValue);
   }
 
   @Test
@@ -435,12 +435,10 @@ public final class ActionMetadataHandlerTest {
         ActionMetadataHandler.create(
             new ActionInputMap(0),
             /*forInputDiscovery=*/ false,
-            /*archivedTreeArtifactsEnabled=*/ false,
             /*outputs=*/ ImmutableSet.of(),
             tsgm,
             ArtifactPathResolver.IDENTITY,
             execRoot.asFragment(),
-            derivedPathPrefix,
             expandedFilesets);
 
     // Only the regular FileArtifactValue should have its metadata stored.
