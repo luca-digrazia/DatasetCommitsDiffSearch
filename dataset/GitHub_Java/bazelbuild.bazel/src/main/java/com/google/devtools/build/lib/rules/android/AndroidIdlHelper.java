@@ -371,7 +371,7 @@ public class AndroidIdlHelper {
             .addInputs(getIdlPreprocessed(ruleContext))
             .addOutput(output)
             .setProgressMessage("Android IDL generation")
-            .setMnemonic("AndroidIDLGenerate")
+            .setMnemonic("AndroidIDLGnerate")
             .setCommandLine(
                 CustomCommandLine.builder()
                     .add("-b") // Fail if trying to compile a parcelable.
