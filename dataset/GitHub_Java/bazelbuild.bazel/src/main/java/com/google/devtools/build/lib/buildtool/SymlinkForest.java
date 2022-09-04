@@ -34,8 +34,10 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Creates a symlink forest based on a package path map. */
-public class SymlinkForest {
+/**
+ * Creates a symlink forest based on a package path map.
+ */
+class SymlinkForest {
 
   private static final Logger logger = Logger.getLogger(SymlinkForest.class.getName());
   private static final boolean LOG_FINER = logger.isLoggable(Level.FINER);
@@ -45,16 +47,7 @@ public class SymlinkForest {
   private final String productName;
   private final String prefix;
 
-  /**
-   * Constructor for a symlink forest creator; does not perform any i/o.
-   *
-   * <p>Use {@link #plantSymlinkForest()} to actually create the symlink forest.
-   *
-   * @param packageRoots source package roots to which to create symlinks
-   * @param execroot path where to plant the symlink forest
-   * @param productName {@code BlazeRuntime#getProductName()}
-   */
-  public SymlinkForest(
+  SymlinkForest(
       ImmutableMap<PackageIdentifier, Root> packageRoots, Path execroot, String productName) {
     this.packageRoots = packageRoots;
     this.execroot = execroot;
@@ -262,8 +255,7 @@ public class SymlinkForest {
     }
   }
 
-  /** Performs the filesystem operations to plant the symlink forest. */
-  public void plantSymlinkForest() throws IOException {
+  void plantSymlinkForest() throws IOException {
     deleteTreesBelowNotPrefixed(execroot, prefix);
 
     boolean shouldLinkAllTopLevelItems = false;
@@ -324,8 +316,6 @@ public class SymlinkForest {
     } else {
       plantSymlinkForestWithPartialMainRepository(mainRepoLinks);
     }
-
-    logger.info("Planted symlink forest in " + execroot);
   }
 
   private static PackageIdentifier createInRepo(
