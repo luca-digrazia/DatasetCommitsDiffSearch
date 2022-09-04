@@ -68,7 +68,6 @@ public class BazelCppSemantics implements AspectLegalCppSemantics {
     actionBuilder
         .addTransitiveMandatoryInputs(
             configuration.getFragment(CppConfiguration.class).useSpecificToolFiles()
-                    && !actionBuilder.getSourceFile().isTreeArtifact()
                 ? (actionBuilder.getActionName().equals(CppActionNames.ASSEMBLE)
                     ? toolchain.getAsFiles()
                     : toolchain.getCompilerFiles())

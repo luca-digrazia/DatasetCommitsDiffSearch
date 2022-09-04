@@ -262,8 +262,7 @@ public class CppCompileActionBuilder {
     NestedSet<Artifact> prunableHeaders = buildPrunableHeaders();
 
     configuration.modifyExecutionInfo(
-        executionInfo,
-        CppCompileAction.actionNameToMnemonic(getActionName(), featureConfiguration));
+        executionInfo, CppCompileAction.actionNameToMnemonic(getActionName()));
 
     // Copying the collections is needed to make the builder reusable.
     CppCompileAction action;
