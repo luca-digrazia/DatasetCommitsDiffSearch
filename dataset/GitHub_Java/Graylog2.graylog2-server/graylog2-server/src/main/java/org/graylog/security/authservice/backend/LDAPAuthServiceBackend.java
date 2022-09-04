@@ -29,6 +29,7 @@ import org.graylog.security.authservice.ldap.LDAPUser;
 import org.graylog.security.authservice.ldap.UnboundLDAPConnector;
 import org.graylog.security.authservice.test.AuthServiceBackendTestResult;
 import org.graylog2.security.encryption.EncryptedValue;
+import org.graylog2.shared.security.ldap.LdapEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -218,10 +219,12 @@ public class LDAPAuthServiceBackend implements AuthServiceBackend {
     private LDAPAuthServiceBackendConfig buildTestConfig(@Nullable AuthServiceBackendDTO existingBackendConfig) {
         final LDAPAuthServiceBackendConfig.Builder newConfigBuilder = config.toBuilder();
 
-        // If the existing password should be kept and we got an existing config, use the password of the
+        // If there is no password set in the current config and we got an existing config, use the password of the
         // existing config for the connection check. This is needed to make connection tests of existing backends work
         // because the UI doesn't have access to the existing password.
-        if (config.systemUserPassword().isKeepValue() && existingBackendConfig != null) {
+        // TODO: This logic doesn't work if a user wants to update a backend that currently has a password set to a
+        //       backend that doesn't need a password.
+        if (!config.systemUserPassword().isSet() && existingBackendConfig != null) {
             final LDAPAuthServiceBackendConfig existingConfig = (LDAPAuthServiceBackendConfig) existingBackendConfig.config();
             newConfigBuilder.systemUserPassword(existingConfig.systemUserPassword());
         }

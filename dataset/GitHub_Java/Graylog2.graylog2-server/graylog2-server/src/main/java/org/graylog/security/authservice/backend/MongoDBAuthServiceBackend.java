@@ -16,7 +16,6 @@
  */
 package org.graylog.security.authservice.backend;
 
-import com.unboundid.util.Base64;
 import org.graylog.security.authservice.AuthServiceBackend;
 import org.graylog.security.authservice.AuthServiceBackendDTO;
 import org.graylog.security.authservice.AuthServiceCredentials;
@@ -68,21 +67,15 @@ public class MongoDBAuthServiceBackend implements AuthServiceBackend {
         if (user.isLocalAdmin()) {
             throw new IllegalStateException("Local admin user should have been handled earlier and not reach the authentication service authenticator");
         }
-        if (!user.getAccountStatus().equals(User.AccountStatus.ENABLED)) {
-            LOG.warn("Account for user <{}> is disabled.", user.getName());
-            return Optional.empty();
-        }
         if (user.isExternalUser()) {
             // We don't store passwords for users synced from an authentication service, so we can't handle them here.
             LOG.trace("Skipping mongodb-based password check for external user {}", authCredentials.username());
             return Optional.empty();
         }
 
-        if (!authCredentials.isAuthenticated()) {
-            if (!isValidPassword(user, authCredentials.password())) {
-                LOG.warn("Failed to validate password for user <{}>", username);
-                return Optional.empty();
-            }
+        if (!isValidPassword(user, authCredentials.password())) {
+            LOG.warn("Failed to validate password for user <{}>", username);
+            return Optional.empty();
         }
 
         LOG.debug("Successfully validated password for user <{}>", username);
@@ -90,12 +83,11 @@ public class MongoDBAuthServiceBackend implements AuthServiceBackend {
         final UserDetails userDetails = provisionerService.provision(provisionerService.newDetails(this)
                 .databaseId(user.getId())
                 .username(user.getName())
-                .accountIsEnabled(user.getAccountStatus().equals(User.AccountStatus.ENABLED))
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 // No need to set default roles because MongoDB users will not be provisioned by the provisioner
                 .defaultRoles(Collections.emptySet())
-                .base64AuthServiceUid(Base64.encode(user.getId()))
+                .authServiceUid(user.getId())
                 .build());
 
         return Optional.of(userDetails);

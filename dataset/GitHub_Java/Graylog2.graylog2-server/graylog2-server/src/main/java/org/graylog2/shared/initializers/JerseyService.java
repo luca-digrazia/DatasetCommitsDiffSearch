@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.shared.initializers;
 
@@ -32,7 +32,6 @@ import org.glassfish.grizzly.http.server.NetworkListener;
 import org.glassfish.grizzly.ssl.SSLContextConfigurator;
 import org.glassfish.grizzly.ssl.SSLEngineConfigurator;
 import org.glassfish.jersey.grizzly2.httpserver.GrizzlyHttpServerFactory;
-import org.glassfish.jersey.media.multipart.MultiPartFeature;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.ServerProperties;
 import org.glassfish.jersey.server.model.Resource;
@@ -49,7 +48,6 @@ import org.graylog2.shared.rest.CORSFilter;
 import org.graylog2.shared.rest.NodeIdResponseFilter;
 import org.graylog2.shared.rest.NotAuthorizedResponseFilter;
 import org.graylog2.shared.rest.PrintModelProcessor;
-import org.graylog2.shared.rest.RequestIdFilter;
 import org.graylog2.shared.rest.RestAccessLogFilter;
 import org.graylog2.shared.rest.VerboseCsrfProtectionFilter;
 import org.graylog2.shared.rest.XHRFilter;
@@ -60,7 +58,6 @@ import org.graylog2.shared.rest.exceptionmappers.JsonMappingExceptionMapper;
 import org.graylog2.shared.rest.exceptionmappers.JsonProcessingExceptionMapper;
 import org.graylog2.shared.rest.exceptionmappers.MissingStreamPermissionExceptionMapper;
 import org.graylog2.shared.rest.exceptionmappers.WebApplicationExceptionMapper;
-import org.graylog2.shared.security.ShiroRequestHeadersBinder;
 import org.graylog2.shared.security.ShiroSecurityContextFilter;
 import org.graylog2.shared.security.tls.KeyStoreUtils;
 import org.graylog2.shared.security.tls.PemKeyStore;
@@ -247,11 +244,10 @@ public class JerseyService extends AbstractIdleService {
         final ResourceConfig rc = new ResourceConfig()
                 .property(ServerProperties.BV_SEND_ERROR_IN_RESPONSE, true)
                 .property(ServerProperties.WADL_FEATURE_DISABLE, true)
-                .register(new PrefixAddingModelProcessor(packagePrefixes, graylogConfiguration))
+                .register(new PrefixAddingModelProcessor(packagePrefixes))
                 .register(new AuditEventModelProcessor(pluginAuditEventTypes))
                 .registerClasses(
                         ShiroSecurityContextFilter.class,
-                        ShiroRequestHeadersBinder.class,
                         VerboseCsrfProtectionFilter.class,
                         JacksonJaxbJsonProvider.class,
                         JsonProcessingExceptionMapper.class,
@@ -263,7 +259,6 @@ public class JerseyService extends AbstractIdleService {
                         BadRequestExceptionMapper.class,
                         RestAccessLogFilter.class,
                         NodeIdResponseFilter.class,
-                        RequestIdFilter.class,
                         XHRFilter.class,
                         NotAuthorizedResponseFilter.class,
                         WebAppNotFoundResponseFilter.class)
@@ -274,7 +269,6 @@ public class JerseyService extends AbstractIdleService {
                     }
                 })
                 .register(new UserContextBinder())
-                .register(MultiPartFeature.class)
                 .packages(true, controllerPackages)
                 .packages(true, RESOURCE_PACKAGE_WEB)
                 .registerResources(additionalResources);
