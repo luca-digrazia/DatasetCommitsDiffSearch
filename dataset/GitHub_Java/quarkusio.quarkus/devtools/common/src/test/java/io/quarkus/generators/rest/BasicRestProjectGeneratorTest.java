@@ -34,17 +34,17 @@ class BasicRestProjectGeneratorTest {
             .put(PROJECT_VERSION, "0.0.1-SNAPSHOT")
             .put(QUARKUS_VERSION, getPluginVersion())
             .put(SOURCE_TYPE, SourceType.JAVA)
-            .put(BUILD_TOOL, BuildTool.MAVEN)
+            .put(ADDITIONAL_GITIGNORE_ENTRIES, BuildTool.MAVEN.getGitIgnoreEntries())
             .put(PACKAGE_NAME, "org.example")
             .put(CLASS_NAME, "ExampleResource")
             .put("path", "/hello")
             .build();
 
     @Test
-    @Timeout(2)
+    @Timeout(1)
     @DisplayName("Should generate correctly multiple times in parallel with multiple threads")
     void generateMultipleTimes() throws InterruptedException {
-        final ExecutorService executorService = Executors.newFixedThreadPool(4);
+        final ExecutorService executorService = Executors.newFixedThreadPool(10);
         final CountDownLatch latch = new CountDownLatch(20);
         final BasicRestProjectGenerator basicRestProjectGenerator = new BasicRestProjectGenerator();
         List<Callable<Void>> collect = IntStream.range(0, 20).boxed().map(i -> (Callable<Void>) () -> {
