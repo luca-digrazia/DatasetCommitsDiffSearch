@@ -20,11 +20,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.Fragment;
-import com.google.devtools.build.lib.analysis.config.RequiresOptions;
+import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.starlark.annotations.StarlarkConfigurationField;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -40,7 +41,6 @@ import javax.annotation.Nullable;
 
 /** A configuration containing flags required for Apple platforms and tools. */
 @Immutable
-@RequiresOptions(options = {AppleCommandLineOptions.class})
 public class AppleConfiguration extends Fragment implements AppleConfigurationApi<PlatformType> {
   /**
    * Environment variable name for the xcode version. The value of this environment variable should
@@ -80,9 +80,7 @@ public class AppleConfiguration extends Fragment implements AppleConfigurationAp
   private final boolean mandatoryMinimumVersion;
   private final boolean objcProviderFromLinked;
 
-  private AppleConfiguration(BuildOptions buildOptions) {
-    AppleCommandLineOptions options = buildOptions.get(AppleCommandLineOptions.class);
-    String iosCpu = iosCpuFromCpu(buildOptions.get(CoreOptions.class).cpu);
+  private AppleConfiguration(AppleCommandLineOptions options, String iosCpu) {
     this.options = options;
     this.iosCpu = iosCpu;
     this.appleSplitCpu = Preconditions.checkNotNull(options.appleSplitCpu, "appleSplitCpu");
@@ -435,6 +433,11 @@ public class AppleConfiguration extends Fragment implements AppleConfigurationAp
     return options.hashCode();
   }
 
+  @VisibleForTesting
+  static AppleConfiguration create(AppleCommandLineOptions appleOptions, String cpu) {
+    return new AppleConfiguration(appleOptions, iosCpuFromCpu(cpu));
+  }
+
   /**
    * Compute the platform-type-to-bitcode-mode mapping from the pairs that were passed on the
    * command line.
@@ -470,13 +473,21 @@ public class AppleConfiguration extends Fragment implements AppleConfigurationAp
   public static class Loader implements ConfigurationFragmentFactory {
     @Override
     public AppleConfiguration create(BuildOptions buildOptions) {
-      return new AppleConfiguration(buildOptions);
+      AppleCommandLineOptions appleOptions = buildOptions.get(AppleCommandLineOptions.class);
+      String cpu = buildOptions.get(CoreOptions.class).cpu;
+      return AppleConfiguration.create(appleOptions, cpu);
     }
 
     @Override
     public Class<? extends Fragment> creates() {
       return AppleConfiguration.class;
     }
+
+    @Override
+    public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
+      return ImmutableSet.<Class<? extends FragmentOptions>>of(AppleCommandLineOptions.class);
+    }
+
   }
 
   /**
