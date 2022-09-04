@@ -36,7 +36,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -52,7 +51,6 @@ import java.util.concurrent.TimeUnit;
 public class StreamRouterEngine {
     private static final Logger LOG = LoggerFactory.getLogger(StreamRouterEngine.class);
 
-    private final EnumSet<StreamRuleType> ruleTypesNotNeedingFieldPresence = EnumSet.of(StreamRuleType.PRESENCE, StreamRuleType.EXACT, StreamRuleType.REGEX);
     private final List<Stream> streams;
     private final StreamFaultManager streamFaultManager;
     private final StreamMetrics streamMetrics;
@@ -158,8 +156,7 @@ public class StreamRouterEngine {
             final StreamRule streamRule = rule.getStreamRule();
             final StreamRuleType streamRuleType = streamRule.getType();
             final Stream.MatchingType matchingType = rule.getMatchingType();
-            if (!ruleTypesNotNeedingFieldPresence.contains(streamRuleType)
-                && !message.hasField(streamRule.getField())) {
+            if (streamRuleType != StreamRuleType.PRESENCE && !message.hasField(streamRule.getField())) {
                 if (matchingType == Stream.MatchingType.AND) {
                     result.remove(rule.getStream());
                     // blacklist stream because it can't match anymore
