@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.DependencyResolver.DependencyKind;
 import com.google.devtools.build.lib.analysis.ResolvedToolchainContext;
-import com.google.devtools.build.lib.analysis.ToolchainCollection;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -751,9 +750,7 @@ public final class SkyframeBuildView {
     // Make a map of the package names to their root paths.
     ImmutableMap.Builder<PackageIdentifier, Root> packageRoots = ImmutableMap.builder();
     for (Package pkg : packages) {
-      if (pkg.getSourceRoot().isPresent()) {
-        packageRoots.put(pkg.getPackageIdentifier(), pkg.getSourceRoot().get());
-      }
+      packageRoots.put(pkg.getPackageIdentifier(), pkg.getSourceRoot());
     }
     return packageRoots.build();
   }
@@ -870,7 +867,7 @@ public final class SkyframeBuildView {
       ConfiguredTargetKey configuredTargetKey,
       OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> prerequisiteMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      @Nullable ToolchainCollection<ResolvedToolchainContext> toolchainContexts)
+      @Nullable ResolvedToolchainContext toolchainContext)
       throws InterruptedException, ActionConflictException {
     Preconditions.checkState(
         enableAnalysis, "Already in execution phase %s %s", target, configuration);
@@ -886,7 +883,7 @@ public final class SkyframeBuildView {
         configuredTargetKey,
         prerequisiteMap,
         configConditions,
-        toolchainContexts);
+        toolchainContext);
   }
 
   /**

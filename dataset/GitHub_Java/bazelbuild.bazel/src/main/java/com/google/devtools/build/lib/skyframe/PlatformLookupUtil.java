@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.ConfiguredTargetValue;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformProviderUtils;
@@ -35,7 +34,6 @@ import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.server.FailureDetails.Toolchain.Code;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.ValueOrException;
@@ -201,7 +199,7 @@ public class PlatformLookupUtil {
       return false;
     }
 
-    return ruleClass.getAdvertisedProviders().advertises(PlatformInfo.PROVIDER.id());
+    return ruleClass.getAdvertisedProviders().advertises(PlatformInfo.class);
   }
 
   /** Exception used when a platform label is not a valid platform. */
@@ -227,11 +225,6 @@ public class PlatformLookupUtil {
 
     InvalidPlatformException(Label label, String error) {
       super(formatError(label, error));
-    }
-
-    @Override
-    protected Code getDetailedCode() {
-      return Code.INVALID_PLATFORM_VALUE;
     }
 
     private static String formatError(Label label, String error) {

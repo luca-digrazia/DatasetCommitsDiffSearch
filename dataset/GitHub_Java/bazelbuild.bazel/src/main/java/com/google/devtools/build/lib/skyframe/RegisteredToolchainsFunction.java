@@ -128,13 +128,9 @@ public class RegisteredToolchainsFunction implements SkyFunction {
       List<Label> labels)
       throws InterruptedException, RegisteredToolchainsFunctionException {
     ImmutableList<SkyKey> keys =
-        labels.stream()
-            .map(
-                label ->
-                    ConfiguredTargetKey.builder()
-                        .setLabel(label)
-                        .setConfiguration(configuration)
-                        .build())
+        labels
+            .stream()
+            .map(label -> ConfiguredTargetKey.of(label, configuration))
             .collect(toImmutableList());
 
     Map<SkyKey, ValueOrException<ConfiguredValueCreationException>> values =

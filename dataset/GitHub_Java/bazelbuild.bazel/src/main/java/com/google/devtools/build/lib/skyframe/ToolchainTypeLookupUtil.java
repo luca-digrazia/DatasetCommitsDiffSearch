@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.analysis.platform.PlatformProviderUtils;
 import com.google.devtools.build.lib.analysis.platform.ToolchainTypeInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.ConfiguredValueCreationException;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.ValueOrException3;
@@ -107,6 +106,13 @@ public class ToolchainTypeLookupUtil {
       }
       ToolchainTypeInfo toolchainTypeInfo = PlatformProviderUtils.toolchainType(configuredTarget);
       if (toolchainTypeInfo == null) {
+        if (PlatformProviderUtils.declaredToolchainInfo(configuredTarget) != null) {
+          throw new InvalidToolchainTypeException(
+              configuredTarget.getLabel(),
+              "is a toolchain instance. Is the rule definition for the target you're building "
+                  + "setting \"toolchains =\" to a toolchain() instead of the expected "
+                  + "toolchain_type()?");
+        }
         throw new InvalidToolchainTypeException(configuredTarget.getLabel());
       }
 
