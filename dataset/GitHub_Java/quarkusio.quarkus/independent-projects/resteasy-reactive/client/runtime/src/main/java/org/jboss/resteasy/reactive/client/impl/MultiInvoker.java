@@ -13,13 +13,14 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import org.jboss.resteasy.reactive.client.impl.MultiInvoker.MultiRequest;
 
 public class MultiInvoker extends AbstractRxInvoker<Multi<?>> {
 
-    private final InvocationBuilderImpl invocationBuilder;
+    private final WebTargetImpl target;
 
-    public MultiInvoker(InvocationBuilderImpl target) {
-        this.invocationBuilder = target;
+    public MultiInvoker(WebTargetImpl target) {
+        this.target = target;
     }
 
     @SuppressWarnings("unchecked")
@@ -84,7 +85,7 @@ public class MultiInvoker extends AbstractRxInvoker<Multi<?>> {
 
     @Override
     public <R> Multi<R> method(String name, Entity<?> entity, GenericType<R> responseType) {
-        AsyncInvokerImpl invoker = (AsyncInvokerImpl) invocationBuilder.rx();
+        AsyncInvokerImpl invoker = (AsyncInvokerImpl) target.request().rx();
         // FIXME: backpressure setting?
         return Multi.createFrom().emitter(emitter -> {
             MultiRequest<R> multiRequest = new MultiRequest<>(emitter);
@@ -121,8 +122,7 @@ public class MultiInvoker extends AbstractRxInvoker<Multi<?>> {
         // honestly, isn't reconnect contradictory with completion?
         // FIXME: Reconnect settings?
         // For now we don't want multi to reconnect
-        SseEventSourceImpl sseSource = new SseEventSourceImpl(invocationBuilder.getTarget(),
-                invocationBuilder, Integer.MAX_VALUE, TimeUnit.SECONDS);
+        SseEventSourceImpl sseSource = new SseEventSourceImpl(target, Integer.MAX_VALUE, TimeUnit.SECONDS);
         // FIXME: deal with cancellation
         sseSource.register(event -> {
             // DO NOT pass the response mime type because it's SSE: let the event pick between the X-SSE-Content-Type header or
