@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import com.mongodb.client.model.Collation;
+
 import io.quarkus.panache.common.Page;
 
 /**
@@ -23,7 +25,7 @@ public interface PanacheQuery<Entity> {
      * Defines a projection class: the getters, and the public fields, will be used to restrict which fields should be
      * retrieved from the database.
      *
-     * @return this query, modified
+     * @return a new query with the same state as the previous one (params, page, range, ...).
      */
     public <T> PanacheQuery<T> project(Class<T> type);
 
@@ -133,6 +135,14 @@ public interface PanacheQuery<Entity> {
      * @return this query, modified
      */
     public <T extends Entity> PanacheQuery<T> range(int startIndex, int lastIndex);
+
+    /**
+     * Define the collation used for this query.
+     *
+     * @param collation the collation to be used for this query.
+     * @return this query, modified
+     */
+    public <T extends Entity> PanacheQuery<T> withCollation(Collation collation);
 
     // Results
 

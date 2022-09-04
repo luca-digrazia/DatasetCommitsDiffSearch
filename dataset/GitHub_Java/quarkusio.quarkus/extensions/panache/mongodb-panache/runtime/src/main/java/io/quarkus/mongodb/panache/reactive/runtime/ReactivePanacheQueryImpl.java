@@ -38,8 +38,8 @@ public class ReactivePanacheQueryImpl<Entity> implements ReactivePanacheQuery<En
         this.sort = sort;
     }
 
-    private ReactivePanacheQueryImpl(ReactivePanacheQueryImpl previousQuery, Bson projections, Class<?> type) {
-        this.collection = previousQuery.collection.withDocumentClass(type);
+    private ReactivePanacheQueryImpl(ReactivePanacheQueryImpl previousQuery, Bson projections) {
+        this.collection = previousQuery.collection;
         this.mongoQuery = previousQuery.mongoQuery;
         this.sort = previousQuery.sort;
         this.projections = projections;
@@ -62,7 +62,7 @@ public class ReactivePanacheQueryImpl<Entity> implements ReactivePanacheQuery<En
             projections.append(fieldName, 1);
         }
 
-        return new ReactivePanacheQueryImpl(this, projections, type);
+        return new ReactivePanacheQueryImpl(this, projections);
     }
 
     @Override
