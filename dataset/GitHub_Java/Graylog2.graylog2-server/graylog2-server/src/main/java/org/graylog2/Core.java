@@ -25,7 +25,6 @@ import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.cliffc.high_scale_lib.Counter;
 import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.glassfish.jersey.server.ContainerFactory;
@@ -69,7 +68,7 @@ import org.graylog2.rest.ObjectMapperProvider;
 import org.graylog2.security.ShiroSecurityBinding;
 import org.graylog2.security.ShiroSecurityContextFactory;
 import org.graylog2.security.ldap.LdapConnector;
-import org.graylog2.security.realm.LdapUserAuthenticator;
+import org.graylog2.security.realm.LdapRealm;
 import org.graylog2.streams.StreamImpl;
 import org.graylog2.system.activities.Activity;
 import org.graylog2.system.activities.ActivityWriter;
@@ -162,9 +161,8 @@ public class Core implements GraylogServer, InputHost {
     
     private DateTime startedAt;
     private MetricRegistry metricRegistry;
-    private LdapUserAuthenticator ldapUserAuthenticator;
+    private LdapRealm ldapRealm;
     private LdapConnector ldapConnector;
-    private DefaultSecurityManager securityManager;
 
     public void initialize(Configuration configuration, MetricRegistry metrics) {
     	startedAt = new DateTime(DateTimeZone.UTC);
@@ -348,14 +346,6 @@ public class Core implements GraylogServer, InputHost {
         return ldapConnector;
     }
 
-    public DefaultSecurityManager getSecurityManager() {
-        return securityManager;
-    }
-
-    public void setSecurityManager(DefaultSecurityManager securityManager) {
-        this.securityManager = securityManager;
-    }
-
     private class Graylog2Binder extends AbstractBinder {
 
         @Override
@@ -389,7 +379,6 @@ public class Core implements GraylogServer, InputHost {
                 .register(ObjectMapperProvider.class)
                 .register(JacksonJsonProvider.class)
                 .registerFinder(new PackageNamesScanner(new String[]{"org.graylog2.rest.resources"}, true));
-
         final NettyContainer jerseyHandler = ContainerFactory.createContainer(NettyContainer.class, rc);
         jerseyHandler.setSecurityContextFactory(new ShiroSecurityContextFactory(this));
 
@@ -523,12 +512,12 @@ public class Core implements GraylogServer, InputHost {
         return this.systemJobManager;
     }
 
-    public void setLdapAuthenticator(LdapUserAuthenticator authenticator) {
-        this.ldapUserAuthenticator = authenticator;
+    public void setLdapRealm(LdapRealm ldapRealm) {
+        this.ldapRealm = ldapRealm;
     }
 
-    public LdapUserAuthenticator getLdapAuthenticator() {
-        return ldapUserAuthenticator;
+    public LdapRealm getLdapRealm() {
+        return ldapRealm;
     }
 
     @Override
