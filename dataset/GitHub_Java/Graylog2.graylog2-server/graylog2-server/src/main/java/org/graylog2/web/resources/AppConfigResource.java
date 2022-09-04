@@ -34,17 +34,14 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-import static java.util.Objects.requireNonNull;
-
 @Path("/config.js")
 public class AppConfigResource {
+    private static final Engine engine = new Engine();
     private final Configuration configuration;
-    private final Engine templateEngine;
 
     @Inject
-    public AppConfigResource(Configuration configuration, Engine templateEngine) {
-        this.configuration = requireNonNull(configuration, "configuration");
-        this.templateEngine = requireNonNull(templateEngine, "templateEngine");
+    public AppConfigResource(Configuration configuration) {
+        this.configuration = configuration;
     }
 
     @GET
@@ -61,7 +58,7 @@ public class AppConfigResource {
         final Map<String, Object> model = ImmutableMap.of(
             "rootTimeZone", configuration.getRootTimeZone(),
             "serverUri", RestTools.buildEndpointUri(headers, configuration.getWebEndpointUri()),
-            "appPathPrefix", configuration.getWebPrefix());
-        return templateEngine.transform(template, model);
+            "appPathPrefix", "");
+        return engine.transform(template, model);
     }
 }

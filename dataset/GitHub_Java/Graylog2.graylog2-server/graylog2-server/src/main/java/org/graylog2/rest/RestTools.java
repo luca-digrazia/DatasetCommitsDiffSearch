@@ -18,10 +18,9 @@ package org.graylog2.rest;
 
 import com.google.common.base.Strings;
 import org.glassfish.grizzly.http.server.Request;
-import org.glassfish.jersey.server.model.Resource;
 import org.graylog2.shared.security.ShiroPrincipal;
 import org.graylog2.shared.security.ShiroSecurityContext;
-import org.graylog2.utilities.IpSubnet;
+import org.jboss.netty.handler.ipfilter.IpSubnet;
 
 import javax.annotation.Nullable;
 import javax.validation.constraints.NotNull;
@@ -107,22 +106,5 @@ public class RestTools {
         }
 
         return endpointUri.orElse(defaultEndpointUri.toString());
-    }
-
-    public static String getPathFromResource(Resource resource) {
-        String path = resource.getPath();
-        Resource parent = resource.getParent();
-
-        while (parent != null) {
-            if (!path.startsWith("/")) {
-                path = "/" + path;
-            }
-
-            path = parent.getPath() + path;
-            parent = parent.getParent();
-        }
-
-        return path;
-
     }
 }

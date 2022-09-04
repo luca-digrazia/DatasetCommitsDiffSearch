@@ -18,7 +18,7 @@ package org.graylog2.rest;
 
 import com.google.common.collect.ImmutableList;
 import org.glassfish.grizzly.http.server.Request;
-import org.graylog2.utilities.IpSubnet;
+import org.jboss.netty.handler.ipfilter.IpSubnet;
 import org.junit.Test;
 
 import javax.ws.rs.core.HttpHeaders;
@@ -26,7 +26,7 @@ import java.net.URI;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -86,26 +86,8 @@ public class RestToolsTest {
     public void buildEndpointUriReturnsFirstHeaderValueIfMultipleHeadersArePresent() throws Exception {
         final HttpHeaders httpHeaders = mock(HttpHeaders.class);
         when(httpHeaders.getRequestHeader(anyString())).thenReturn(
-                ImmutableList.of("http://header1.example.com", "http://header2.example.com"));
+            ImmutableList.of("http://header1.example.com", "http://header2.example.com"));
         final URI endpointUri = URI.create("http://graylog.example.com");
         assertThat(RestTools.buildEndpointUri(httpHeaders, endpointUri)).isEqualTo("http://header1.example.com");
-    }
-
-    @Test
-    public void getRemoteAddrFromRequestWorksWithIPv6IfSubnetsContainsOnlyIPv4() throws Exception {
-        final Request request = mock(Request.class);
-        when(request.getRemoteAddr()).thenReturn("2001:DB8::42");
-        when(request.getHeader("X-Forwarded-For")).thenReturn("2001:DB8::1");
-        final String s = RestTools.getRemoteAddrFromRequest(request, Collections.singleton(new IpSubnet("127.0.0.1/32")));
-        assertThat(s).isEqualTo("2001:DB8::42");
-    }
-
-    @Test
-    public void getRemoteAddrFromRequestWorksWithIPv6IfSubnetsContainsOnlyIPv6() throws Exception {
-        final Request request = mock(Request.class);
-        when(request.getRemoteAddr()).thenReturn("2001:DB8::42");
-        when(request.getHeader("X-Forwarded-For")).thenReturn("2001:DB8::1:2:3:4:5:6");
-        final String s = RestTools.getRemoteAddrFromRequest(request, Collections.singleton(new IpSubnet("2001:DB8::/32")));
-        assertThat(s).isEqualTo("2001:DB8::1:2:3:4:5:6");
     }
 }
