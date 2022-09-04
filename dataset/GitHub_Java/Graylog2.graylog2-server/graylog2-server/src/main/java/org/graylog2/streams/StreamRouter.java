@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2011, 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2.streams;
@@ -27,17 +28,9 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.inject.Inject;
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.Configuration;
-import org.graylog2.database.MongoConnection;
+import org.graylog2.Core;
 import org.graylog2.database.NotFoundException;
-import com.google.common.util.concurrent.SimpleTimeLimiter;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.common.util.concurrent.TimeLimiter;
-import org.graylog2.notifications.Notification;
-import org.graylog2.notifications.NotificationService;
+import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
@@ -47,8 +40,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Routes a GELF Message to it's streams.
@@ -56,108 +49,49 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class StreamRouter {
-    public interface Factory {
-        public StreamRouter create(boolean useCaching);
-    }
 
     private static final Logger LOG = LoggerFactory.getLogger(StreamRouter.class);
     private static LoadingCache<String, List<Stream>> cachedStreams;
-    private static LoadingCache<Stream, List<StreamRule>> cachedStreamRules;
+    private static LoadingCache<String, List<StreamRule>> cachedStreamRules;
 
     private final Map<String, Meter> streamIncomingMeters = Maps.newHashMap();
     private final Map<String, Timer> streamExecutionTimers = Maps.newHashMap();
     private final Map<String, Meter> streamExceptionMeters = Maps.newHashMap();
 
-    private final StreamService streamService;
-    private final StreamRuleService streamRuleService;
-    private final MetricRegistry metricRegistry;
-    private final Configuration configuration;
-    private final NotificationService notificationService;
+    private Boolean useCaching = false;
 
-    private final ExecutorService executor;
-    private final TimeLimiter timeLimiter;
+    public StreamRouter() {
+        this(true);
+    }
 
-    final private ConcurrentMap<String, AtomicInteger> faultCounter;
-
-    private final Boolean useCaching;
-
-    @AssistedInject
-    public StreamRouter(@Assisted boolean useCaching,
-                        StreamService streamService,
-                        StreamRuleService streamRuleService,
-                        MetricRegistry metricRegistry,
-                        Configuration configuration,
-                        NotificationService notificationService) {
+    public StreamRouter(Boolean useCaching) {
         this.useCaching = useCaching;
-        this.streamService = streamService;
-        this.streamRuleService = streamRuleService;
-        this.metricRegistry = metricRegistry;
-        this.configuration = configuration;
-        this.notificationService = notificationService;
-        this.faultCounter = Maps.newConcurrentMap();
-        this.executor = Executors.newCachedThreadPool(
-                new ThreadFactoryBuilder()
-                        .setNameFormat("stream-router-%d")
-                        .setDaemon(true)
-                        .build()
-        );
-        this.timeLimiter = new SimpleTimeLimiter(executor);
     }
 
-    private AtomicInteger getFaultCount(String streamId) {
-        faultCounter.putIfAbsent(streamId, new AtomicInteger());
-        return faultCounter.get(streamId);
-    }
-
-    public List<Stream> route(final Message msg) {
+    public List<Stream> route(Core server, Message msg) {
         List<Stream> matches = Lists.newArrayList();
-        List<Stream> streams = getStreams();
+        List<Stream> streams = getStreams(server);
 
-        final long timeout = configuration.getStreamProcessingTimeout();
-        final int maxFaultCount = configuration.getStreamProcessingMaxFaults();
-
-        for (final Stream stream : streams) {
-            Timer timer = getExecutionTimer(stream.getId());
+        for (Stream stream : streams) {
+            Timer timer = getExecutionTimer(stream.getId(), server);
             final Timer.Context timerContext = timer.time();
 
-            Callable<Boolean> task = new Callable<Boolean>() {
-                public Boolean call() {
-                    Map<StreamRule, Boolean> result = getRuleMatches(stream, msg);
-                    return doesStreamMatch(result);
-                }
-            };
+            Map<StreamRule, Boolean> result = getRuleMatches(server, stream, msg);
 
-            try {
-                boolean matched = timeLimiter.callWithTimeout(task, timeout, TimeUnit.MILLISECONDS, true);
-                if (matched) {
-                    getIncomingMeter(stream.getId()).mark();
-                    matches.add(stream);
-                }
-            } catch (Exception e) {
-                AtomicInteger faultCount = getFaultCount(stream.getId());
-                if (maxFaultCount > 0 && faultCount.incrementAndGet() >= maxFaultCount) {
-                    streamService.pause(stream);
-                    Integer streamFaultCount = faultCount.getAndSet(0);
-                    LOG.error("Processing of stream <" + stream.getId() + "> failed to return within " + timeout + "ms for more than " + maxFaultCount + " times. Disabling stream.");
+            boolean matched = doesStreamMatch(result);
 
-                    Notification notification = notificationService.buildNow()
-                            .addType(Notification.Type.STREAM_PROCESSING_DISABLED)
-                            .addSeverity(Notification.Severity.NORMAL)
-                            .addDetail("stream_id", stream.getId())
-                            .addDetail("fault_count", streamFaultCount);
-                    notificationService.publishIfFirst(notification);
-                } else
-                    LOG.warn("Processing of stream <{}> failed to return within {}ms.", stream.getId(), timeout);
+            // All rules were matched.
+            if (matched) {
+                getIncomingMeter(stream.getId(), server).mark();
+                matches.add(stream);
             }
-
-
             timerContext.close();
         }
 
         return matches;
     }
 
-    private List<Stream> getStreams() {
+    private List<Stream> getStreams(final Core server) {
         if (this.useCaching) {
             if (cachedStreams == null)
                 cachedStreams = CacheBuilder.newBuilder()
@@ -167,7 +101,7 @@ public class StreamRouter {
                                 new CacheLoader<String, List<Stream>>() {
                                     @Override
                                     public List<Stream> load(String s) throws Exception {
-                                        return streamService.loadAllEnabled();
+                                        return StreamImpl.loadAllEnabled(server);
                                     }
                                 }
                         );
@@ -179,26 +113,26 @@ public class StreamRouter {
             }
             return result;
         } else {
-            return streamService.loadAllEnabled();
+            return StreamImpl.loadAllEnabled(server);
         }
     }
 
-    private List<StreamRule> getStreamRules(Stream stream) {
+    private List<StreamRule> getStreamRules(String streamId, final Core server) {
         if (this.useCaching) {
             if (cachedStreamRules == null)
                 cachedStreamRules = CacheBuilder.newBuilder()
                         .expireAfterWrite(1, TimeUnit.SECONDS)
                         .build(
-                                new CacheLoader<Stream, List<StreamRule>>() {
+                                new CacheLoader<String, List<StreamRule>>() {
                                     @Override
-                                    public List<StreamRule> load(Stream s) throws Exception {
-                                        return streamRuleService.loadForStream(s);
+                                    public List<StreamRule> load(String s) throws Exception {
+                                        return StreamRuleImpl.findAllForStream(s, server);
                                     }
                                 }
                         );
             List<StreamRule> result = null;
             try {
-                result = cachedStreamRules.get(stream);
+                result = cachedStreamRules.get(streamId);
             } catch (ExecutionException e) {
                 LOG.error("Caught exception while fetching from cache", e);
             }
@@ -206,7 +140,7 @@ public class StreamRouter {
             return result;
         } else {
             try {
-                return streamRuleService.loadForStream(stream);
+                return StreamRuleImpl.findAllForStream(streamId, server);
             } catch (NotFoundException e) {
                 LOG.error("Caught exception while fetching stream rules", e);
                 return null;
@@ -214,15 +148,15 @@ public class StreamRouter {
         }
     }
 
-    public Map<StreamRule, Boolean> getRuleMatches(Stream stream, Message msg) {
+    public Map<StreamRule, Boolean> getRuleMatches(final Core server, Stream stream, Message msg) {
         Map<StreamRule, Boolean> result = Maps.newHashMap();
 
-        List<StreamRule> streamRules = getStreamRules(stream);
+        List<StreamRule> streamRules = getStreamRules(stream.getId(), server);
 
         for (StreamRule rule : streamRules) {
             try {
                 StreamRuleMatcher matcher = StreamRuleMatcherFactory.build(rule.getType());
-                result.put(rule, matchStreamRule(msg, matcher, rule));
+                result.put(rule, matchStreamRule(msg, matcher, rule, server));
             } catch (InvalidStreamRuleTypeException e) {
                 LOG.warn("Invalid stream rule type. Skipping matching for this rule. " + e.getMessage(), e);
             }
@@ -235,40 +169,40 @@ public class StreamRouter {
         return !ruleMatches.isEmpty() && !ruleMatches.values().contains(false);
     }
 
-    public boolean matchStreamRule(Message msg, StreamRuleMatcher matcher, StreamRule rule) {
+    public boolean matchStreamRule(Message msg, StreamRuleMatcher matcher, StreamRule rule, Core server) {
         try {
             return matcher.match(msg, rule);
         } catch (Exception e) {
             LOG.debug("Could not match stream rule <" + rule.getType() + "/" + rule.getValue() + ">: " + e.getMessage(), e);
-            getExceptionMeter(rule.getStreamId()).mark();
+            getExceptionMeter(rule.getStreamId(), server).mark();
             return false;
         }
     }
 
-    protected Meter getIncomingMeter(String streamId) {
+    protected Meter getIncomingMeter(String streamId, GraylogServer server) {
         Meter meter = this.streamIncomingMeters.get(streamId);
         if (meter == null) {
-            meter = metricRegistry.meter(MetricRegistry.name(Stream.class, streamId, "incomingMessages"));
+            meter = server.metrics().meter(MetricRegistry.name(Stream.class, streamId, "incomingMessages"));
             this.streamIncomingMeters.put(streamId, meter);
         }
 
         return meter;
     }
 
-    protected Timer getExecutionTimer(String streamId) {
+    protected Timer getExecutionTimer(String streamId, GraylogServer server) {
         Timer timer = this.streamExecutionTimers.get(streamId);
         if (timer == null) {
-            timer = metricRegistry.timer(MetricRegistry.name(Stream.class, streamId, "executionTime"));
+            timer = server.metrics().timer(MetricRegistry.name(Stream.class, streamId, "executionTime"));
             this.streamExecutionTimers.put(streamId, timer);
         }
 
         return timer;
     }
 
-    protected Meter getExceptionMeter(String streamId) {
+    protected Meter getExceptionMeter(String streamId, GraylogServer server) {
         Meter meter = this.streamExceptionMeters.get(streamId);
         if (meter == null) {
-            meter = metricRegistry.meter(MetricRegistry.name(Stream.class, streamId, "matchingExceptions"));
+            meter = server.metrics().meter(MetricRegistry.name(Stream.class, streamId, "matchingExceptions"));
             this.streamExceptionMeters.put(streamId, meter);
         }
 
