@@ -62,6 +62,7 @@ import com.google.devtools.build.lib.server.FailureDetails.BuildProgress;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.DetailedExitCode;
+import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -154,13 +155,14 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       ModuleEnvironment moduleEnvironment,
       String msg,
       Exception exception,
+      ExitCode exitCode,
       BuildProgress.Code besCode) {
     // Don't hide unchecked exceptions as part of the error reporting.
     Throwables.throwIfUnchecked(exception);
 
     googleLogger.atSevere().withCause(exception).log(msg);
     reportCommandLineError(commandLineReporter, exception);
-    moduleEnvironment.exit(createAbruptExitException(exception, msg, besCode));
+    moduleEnvironment.exit(createAbruptExitException(exception, msg, exitCode, besCode));
   }
 
   @Override
@@ -348,6 +350,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
               createAbruptExitException(
                   e,
                   "Could not create BEP transports.",
+                  ExitCode.LOCAL_ENVIRONMENTAL_ERROR,
                   BuildProgress.Code.BES_INITIALIZATION_ERROR));
       return;
     }
@@ -474,6 +477,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
         throw createAbruptExitException(
             e,
             "The Build Event Protocol upload timed out.",
+            ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR,
             BuildProgress.Code.BES_UPLOAD_TIMEOUT_ERROR);
       }
 
@@ -641,6 +645,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
           cmdEnv.getBlazeModuleEnvironment(),
           msg,
           new OptionsParsingException(msg),
+          ExitCode.COMMAND_LINE_ERROR,
           BuildProgress.Code.BES_RUNS_PER_TEST_LIMIT_UNSUPPORTED);
       return null;
     }
@@ -667,6 +672,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
           cmdEnv.getBlazeModuleEnvironment(),
           e.getMessage(),
           e,
+          ExitCode.LOCAL_ENVIRONMENTAL_ERROR,
           BuildProgress.Code.BES_INITIALIZATION_ERROR);
       return null;
     }
@@ -725,6 +731,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
                 + besStreamOptions.buildEventTextFile
                 + "'. Omitting --build_event_text_file.",
             exception,
+            ExitCode.LOCAL_ENVIRONMENTAL_ERROR,
             BuildProgress.Code.BES_LOCAL_WRITE_ERROR);
       }
     }
@@ -755,6 +762,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
                 + besStreamOptions.buildEventBinaryFile
                 + "'. Omitting --build_event_binary_file.",
             exception,
+            ExitCode.LOCAL_ENVIRONMENTAL_ERROR,
             BuildProgress.Code.BES_LOCAL_WRITE_ERROR);
       }
     }
@@ -784,6 +792,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
                 + besStreamOptions.buildEventJsonFile
                 + "'. Omitting --build_event_json_file.",
             exception,
+            ExitCode.LOCAL_ENVIRONMENTAL_ERROR,
             BuildProgress.Code.BES_LOCAL_WRITE_ERROR);
       }
     }
@@ -800,9 +809,10 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   }
 
   private static AbruptExitException createAbruptExitException(
-      Exception e, String message, BuildProgress.Code besCode) {
+      Exception e, String message, ExitCode exitCode, BuildProgress.Code besCode) {
     return new AbruptExitException(
         DetailedExitCode.of(
+            exitCode,
             FailureDetail.newBuilder()
                 .setMessage(message + " " + e.getMessage())
                 .setBuildProgress(BuildProgress.newBuilder().setCode(besCode).build())
