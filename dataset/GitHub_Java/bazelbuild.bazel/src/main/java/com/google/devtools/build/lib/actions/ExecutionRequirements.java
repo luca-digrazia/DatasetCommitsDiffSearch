@@ -16,12 +16,24 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Function;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
  * Strings used to express requirements on action execution environments.
+ *
+ * <ol>
+ *   If you are adding a new execution requirement, pay attention to the following:
+ *   <li>If its name starts with one of the supported prefixes, then it can be also used as a tag on
+ *       a target and will be propagated to the execution requirements, see for prefixes {@link
+ *       com.google.devtools.build.lib.packages.TargetUtils#getExecutionInfo}
+ *   <li>If this is a potentially conflicting execution requirements, e.g. you are adding a pair
+ *       'requires-x' and 'block-x', you MUST take care of a potential conflict in the Executor that
+ *       is using new execution requirements. As an example, see {@link
+ *       Spawns#requiresNetwork(com.google.devtools.build.lib.actions.Spawn, boolean)}.
+ * </ol>
  */
 public class ExecutionRequirements {
 
@@ -104,36 +116,148 @@ public class ExecutionRequirements {
     }
   }
 
+  /** If specified, the timeout of this action in seconds. Must be decimal integer. */
+  public static final String TIMEOUT = "timeout";
+
   /** If an action would not successfully run other than on Darwin. */
   public static final String REQUIRES_DARWIN = "requires-darwin";
+
+  /** Whether we should disable prefetching of inputs before running a local action. */
+  public static final String DISABLE_LOCAL_PREFETCH = "disable-local-prefetch";
 
   /** How many hardware threads an action requires for execution. */
   public static final ParseableRequirement CPU =
       ParseableRequirement.create(
           "cpu:<int>",
           Pattern.compile("cpu:(.+)"),
-          new Function<String, String>() {
-            @Override
-            public String apply(String s) {
-              Preconditions.checkNotNull(s);
+          s -> {
+            Preconditions.checkNotNull(s);
 
-              int value;
-              try {
-                value = Integer.parseInt(s);
-              } catch (NumberFormatException e) {
-                return "can't be parsed as an integer";
-              }
-
-              // De-and-reserialize & compare to only allow canonical integer formats.
-              if (!Integer.toString(value).equals(s)) {
-                return "must be in canonical format (e.g. '4' instead of '+04')";
-              }
-
-              if (value < 1) {
-                return "can't be zero or negative";
-              }
-
-              return null;
+            int value;
+            try {
+              value = Integer.parseInt(s);
+            } catch (NumberFormatException e) {
+              return "can't be parsed as an integer";
             }
+
+            // De-and-reserialize & compare to only allow canonical integer formats.
+            if (!Integer.toString(value).equals(s)) {
+              return "must be in canonical format (e.g. '4' instead of '+04')";
+            }
+
+            if (value < 1) {
+              return "can't be zero or negative";
+            }
+
+            return null;
           });
+
+  /** If an action supports running in persistent worker mode. */
+  public static final String SUPPORTS_WORKERS = "supports-workers";
+
+  public static final String SUPPORTS_MULTIPLEX_WORKERS = "supports-multiplex-workers";
+
+  /** Specify the type of worker protocol the worker uses. */
+  public static final String REQUIRES_WORKER_PROTOCOL = "requires-worker-protocol";
+
+  /** Denotes what the type of worker protocol the worker uses. */
+  public enum WorkerProtocolFormat {
+    JSON,
+    PROTO,
+  }
+
+  /** Override for the action's mnemonic to allow for better worker process reuse. */
+  public static final String WORKER_KEY_MNEMONIC = "worker-key-mnemonic";
+
+  public static final ImmutableMap<String, String> WORKER_MODE_ENABLED =
+      ImmutableMap.of(SUPPORTS_WORKERS, "1");
+
+  /**
+   * Requires local execution without sandboxing for a spawn.
+   *
+   * <p>This tag is deprecated; use no-cache, no-remote, or no-sandbox instead.
+   */
+  public static final String LOCAL = "local";
+
+  /**
+   * Disables local and remote caching for a spawn, but note that the local action cache may still
+   * apply.
+   *
+   * <p>This tag can also be set on an action, in which case it completely disables all caching for
+   * that action, but note that action-generated spawns may still be cached, unless they also carry
+   * this tag.
+   */
+  public static final String NO_CACHE = "no-cache";
+
+  /** Disables remote caching of a spawn. Note: does not disable remote execution */
+  public static final String NO_REMOTE_CACHE = "no-remote-cache";
+
+  /** Disables remote execution of a spawn. Note: does not disable remote caching */
+  public static final String NO_REMOTE_EXEC = "no-remote-exec";
+
+  /** Tag for Google internal use. Requires local execution with correct permissions. */
+  public static final String NO_TESTLOASD = "no-testloasd";
+
+  /**
+   * Disables both remote execution and remote caching of a spawn. This is the equivalent of using
+   * no-remote-cache and no-remote-exec together.
+   */
+  public static final String NO_REMOTE = "no-remote";
+
+  /** Disables local execution of a spawn. */
+  public static final String NO_LOCAL = "no-local";
+
+  /** Disables local sandboxing of a spawn. */
+  public static final String LEGACY_NOSANDBOX = "nosandbox";
+
+  /** Disables local sandboxing of a spawn. */
+  public static final String NO_SANDBOX = "no-sandbox";
+
+  /**
+   * Set for Xcode-related rules. Used for quality control to make sure that all Xcode-dependent
+   * rules propagate the necessary configurations. Begins with "supports" so as not to be filtered
+   * out for Bazel by {@code TargetUtils}.
+   */
+  public static final String REQUIREMENTS_SET = "supports-xcode-requirements-set";
+
+  /**
+   * Enables networking for a spawn if possible (only if sandboxing is enabled and if the sandbox
+   * supports it).
+   */
+  public static final String REQUIRES_NETWORK = "requires-network";
+
+  /**
+   * Disables networking for a spawn if possible (only if sandboxing is enabled and if the sandbox
+   * supports it).
+   */
+  public static final String BLOCK_NETWORK = "block-network";
+
+  /**
+   * On linux, if sandboxing is enabled, ensures that a spawn is run with uid 0, i.e., root. Has no
+   * effect otherwise.
+   */
+  public static final String REQUIRES_FAKEROOT = "requires-fakeroot";
+
+  /** Suppress CLI reporting for this spawn - it's part of another action. */
+  public static final String DO_NOT_REPORT = "internal-do-not-report";
+
+  /** Use this to request eager fetching of a single remote output into local memory. */
+  public static final String REMOTE_EXECUTION_INLINE_OUTPUTS = "internal-inline-outputs";
+
+  /**
+   * Request graceful termination of subprocesses on interrupt (that is, an initial {@code SIGTERM}
+   * followed by a {@code SIGKILL} after a grace period).
+   */
+  public static final String GRACEFUL_TERMINATION = "supports-graceful-termination";
+
+  /** Requires the execution service to support a given xcode version e.g. "xcode_version:1.0". */
+  public static final String REQUIRES_XCODE = "requires-xcode";
+
+  /**
+   * Requires the execution service to support a "label" in addition to the xcode version. The user
+   * specifies the label as a hyphenated extension to their requested version. For example, if the
+   * user requests "--xcode_version=1.0-unstable", the action request will include
+   * "requires-xcode-label:unstable" and "requires-xcode:1.0".
+   */
+  public static final String REQUIRES_XCODE_LABEL = "requires-xcode-label";
 }

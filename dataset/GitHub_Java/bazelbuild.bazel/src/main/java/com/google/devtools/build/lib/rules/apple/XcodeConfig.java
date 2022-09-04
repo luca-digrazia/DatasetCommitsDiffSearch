@@ -412,9 +412,22 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
                 printableXcodeVersions(remoteVersions.getAvailableVersions())));
       }
     }
+    if (preferMutualXcode && !mutuallyAvailableVersions.isEmpty()) {
+      DottedVersion newestVersionNumber = DottedVersion.fromStringUnchecked("0.0");
+      XcodeVersionRuleData defaultVersion = null;
+      for (XcodeVersionRuleData versionRuleData : mutuallyAvailableVersions) {
+        if (versionRuleData.getVersion().compareTo(newestVersionNumber) > 0) {
+          defaultVersion = versionRuleData;
+          newestVersionNumber = defaultVersion.getVersion();
+        }
+      }
+      // This should never occur. All input versions should be above 0.0.
+      checkState(defaultVersion != null);
+      return Maps.immutableEntry(defaultVersion, Availability.BOTH);
+    }
+    // Select the local default.
     Availability availability = null;
     XcodeVersionRuleData localVersion = null;
-    // If there aren't any mutually available versions, select the local default.
     if (mutuallyAvailableVersions.isEmpty()) {
       ruleContext.ruleWarning(
           String.format(
@@ -427,14 +440,11 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
       localVersion = localVersions.getDefaultVersion();
       availability = Availability.LOCAL;
     } else if (remoteAliasesToVersionMap.containsKey(
-        localVersions
-            .getDefaultVersion()
-            .getVersion()
-            .toString())) { // If the local default version is also available remotely, use it.
+        localVersions.getDefaultVersion().getVersion().toString())) {
       availability = Availability.BOTH;
       localVersion =
           remoteAliasesToVersionMap.get(localVersions.getDefaultVersion().getVersion().toString());
-    } else { // If an alias of the local default version is available remotely, use it.
+    } else {
       for (String versionNumber : localVersions.getDefaultVersion().getAliases()) {
         if (remoteAliasesToVersionMap.containsKey(versionNumber)) {
           availability = Availability.BOTH;
@@ -442,30 +452,16 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
           break;
         }
       }
-    }
-    if (localVersion != null) {
-      return Maps.immutableEntry(localVersion, availability);
-    }
-    // The local default is not available remotely.
-    if (preferMutualXcode) { // If we prefer a mutually available version, the newest one.
-      DottedVersion newestVersionNumber = DottedVersion.fromStringUnchecked("0.0");
-      XcodeVersionRuleData defaultVersion = null;
-      for (XcodeVersionRuleData versionRuleData : mutuallyAvailableVersions) {
-        if (versionRuleData.getVersion().compareTo(newestVersionNumber) > 0) {
-          defaultVersion = versionRuleData;
-          newestVersionNumber = defaultVersion.getVersion();
-        }
-      }
-      // This should never occur. All input versions should be above 0.0.
-      checkState(defaultVersion != null);
-      return Maps.immutableEntry(defaultVersion, Availability.BOTH);
-    } else { // Use the local default.
+      if (localVersion == null) {
         ruleContext.ruleWarning(
             "You passed --experimental_prefer_mutual_xcode=false, which prevents Bazel from"
                 + " selecting an Xcode version that optimizes your performance. Please consider"
                 + " using --experimental_prefer_mutual_xcode=true.");
-      return Maps.immutableEntry(localVersions.getDefaultVersion(), Availability.LOCAL);
+        availability = Availability.LOCAL;
+        localVersion = localVersions.getDefaultVersion();
+      }
     }
+    return Maps.immutableEntry(localVersion, availability);
   }
 
   private static String printableXcodeVersions(Iterable<XcodeVersionRuleData> xcodeVersions) {
