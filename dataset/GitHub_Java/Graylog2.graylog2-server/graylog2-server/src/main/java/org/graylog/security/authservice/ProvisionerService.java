@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import javax.inject.Named;
 import java.util.Collections;
-import java.util.Map;
+import java.util.Set;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 
@@ -36,15 +36,15 @@ public class ProvisionerService {
 
     private final UserService userService;
     private final DateTimeZone rootTimeZone;
-    private final Map<String, ProvisionerAction.Factory<? extends ProvisionerAction>> provisionerActionFactories;
+    private final Set<ProvisionerAction> provisionerActions;
 
     @Inject
     public ProvisionerService(UserService userService,
                               @Named("root_timezone") DateTimeZone rootTimeZone,
-                              Map<String, ProvisionerAction.Factory<? extends ProvisionerAction>> provisionerActionFactories) {
+                              Set<ProvisionerAction> provisionerActions) {
         this.userService = userService;
         this.rootTimeZone = rootTimeZone;
-        this.provisionerActionFactories = provisionerActionFactories;
+        this.provisionerActions = provisionerActions;
     }
 
     public UserDetails.Builder newDetails() {
@@ -75,23 +75,14 @@ public class ProvisionerService {
         // Provision actions might need the user's database ID, so make sure it's included
         final UserDetails userDetailsWithId = userDetails.withDatabaseId(userId);
 
-        final ProvisionerAction.Factory<? extends ProvisionerAction> actionFactory = provisionerActionFactories.get(userDetails.authServiceType());
-        if (actionFactory != null) {
+        LOG.info("Running {} provisioner actions", provisionerActions.size());
+        for (final ProvisionerAction action : provisionerActions) {
             try {
-                final ProvisionerAction action = actionFactory.create(userDetails.authServiceId());
-                try {
-                    LOG.info("Running provisioner action: {}", action.getClass().getCanonicalName());
-                    action.provision(userDetailsWithId);
-                } catch (Exception e) {
-                    LOG.error("Error running provisioner action <{}>", action.getClass().getCanonicalName(), e);
-                    // TODO: Should we fail the login here or just continue?
-                }
+                action.provision(userDetailsWithId);
             } catch (Exception e) {
-                LOG.error("Error creating provisioner action instance with factory <{}>", actionFactory.getClass().getCanonicalName());
+                LOG.error("Error running provisioner action <{}>", action.getClass().getCanonicalName(), e);
                 // TODO: Should we fail the login here or just continue?
             }
-        } else {
-            LOG.debug("No provisioner action for authentication service <{}>", userDetails.authServiceType());
         }
 
         return userDetails;

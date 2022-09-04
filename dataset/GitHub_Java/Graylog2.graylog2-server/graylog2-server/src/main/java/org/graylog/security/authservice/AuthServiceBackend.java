@@ -21,10 +21,6 @@ import java.util.Optional;
 public interface AuthServiceBackend {
     String INTERNAL_BACKEND_ID = "000000000000000000000001";
 
-    interface Factory<TYPE extends AuthServiceBackend> {
-        TYPE create(AuthServiceBackendDTO backend);
-    }
-
     Optional<UserDetails> authenticateAndProvision(AuthServiceCredentials authCredentials,
                                                    ProvisionerService provisionerService);
 
