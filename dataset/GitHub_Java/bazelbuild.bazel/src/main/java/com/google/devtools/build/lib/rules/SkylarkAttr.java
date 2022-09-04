@@ -1428,7 +1428,7 @@ public final class SkylarkAttr {
 
   /** A descriptor of an attribute defined in Skylark. */
   @SkylarkModule(
-    name = "attr_definition",
+    name = "attr_defintion",
     category = SkylarkModuleCategory.NONE,
     doc =
         "Representation of a definition of an attribute; constructed by <code>attr.*</code> "

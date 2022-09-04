@@ -49,10 +49,8 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.AttributeValueSource;
-import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunctionWithCallback;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunctionWithMap;
-import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.PackageContext;
@@ -188,7 +186,7 @@ public class SkylarkRuleClassFunctions {
     extraKeywords = @Param(name = "kwargs", doc = "the struct attributes."),
     useLocation = true
   )
-  private static final ClassObjectConstructor struct = NativeClassObjectConstructor.STRUCT;
+  private static final SkylarkClassObjectConstructor struct = SkylarkClassObjectConstructor.STRUCT;
 
   // TODO(bazel-team): Move to a "testing" namespace module. Normally we'd pass an objectType
   // to @SkylarkSignature to do this, but that doesn't work here because we're exposing an already-
@@ -207,7 +205,7 @@ public class SkylarkRuleClassFunctions {
           + "<a href=\"globals.html#rule._skylark_testable\">_skylark_testable</a> set to "
           + "<code>True</code>."
   )
-  private static final ClassObjectConstructor actions = ActionsProvider.SKYLARK_CONSTRUCTOR;
+  private static final SkylarkClassObjectConstructor actions = ActionsProvider.SKYLARK_CONSTRUCTOR;
 
   @SkylarkSignature(name = "provider", returnType = SkylarkClassObjectConstructor.class, doc =
       "Creates a declared provider 'constructor'. The return value of this"
@@ -220,7 +218,7 @@ public class SkylarkRuleClassFunctions {
   private static final BuiltinFunction provider =
       new BuiltinFunction("provider") {
         public SkylarkClassObjectConstructor invoke(Location location) {
-          return new SkylarkClassObjectConstructor(
+          return SkylarkClassObjectConstructor.createSkylark(
               "<no name>", // name is set on export.
               location);
         }
