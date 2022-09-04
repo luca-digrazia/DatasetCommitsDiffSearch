@@ -89,7 +89,8 @@ class AnotherHttpClientBuilder extends org.apache.http.impl.client.HttpClientBui
 }
 
 public class HttpClientBuilderTest {
-    static class CustomRequestExecutor extends HttpRequestExecutor {
+    class CustomRequestExecutor extends HttpRequestExecutor {
+
     }
 
     static class CustomBuilder extends HttpClientBuilder {
@@ -112,15 +113,11 @@ public class HttpClientBuilderTest {
         }
 
         @Override
-        protected HttpRequestExecutor createRequestExecutor(String name) {
-            return new CustomRequestExecutor();
-        }
-
-        @Override
         protected org.apache.http.impl.client.HttpClientBuilder customizeBuilder(
             org.apache.http.impl.client.HttpClientBuilder builder
         ) {
             customized = true;
+            builder.setRequestExecutor(mock(CustomRequestExecutor.class));
             return builder;
         }
     }
