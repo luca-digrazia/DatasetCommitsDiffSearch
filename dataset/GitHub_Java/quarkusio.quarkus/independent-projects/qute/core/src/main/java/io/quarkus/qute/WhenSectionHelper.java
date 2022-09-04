@@ -76,7 +76,7 @@ public class WhenSectionHelper implements SectionHelper {
                 if (caseBlocks.hasNext()) {
                     return resolveCaseBlocks(context, value, caseBlocks);
                 } else {
-                    return CompletableFuture.completedFuture(ResultNode.NOOP);
+                    return ResultNode.NOOP;
                 }
             }
         });
@@ -89,7 +89,7 @@ public class WhenSectionHelper implements SectionHelper {
                 return context.execute(caseBlock.block, context.resolutionContext());
             }
         }
-        return CompletableFuture.completedFuture(ResultNode.NOOP);
+        return ResultNode.NOOP;
     }
 
     public static class Factory implements SectionHelperFactory<WhenSectionHelper> {
@@ -127,24 +127,34 @@ public class WhenSectionHelper implements SectionHelper {
                 Expression valueExpr = block.addExpression(VALUE, value);
                 if (valueExpr.hasTypeInfo()) {
                     // If type info is available we do add the expression id 
-                    previousScope.setAttribute(VALUE_EXPR_ID, valueExpr.getGeneratedId());
+                    previousScope.putAttribute(VALUE_EXPR_ID, valueExpr.getGeneratedId());
                 }
             } else if (ELSE.equals(block.getLabel())) {
                 // No special handling required for "else"
             } else if (IS.equals(block.getLabel()) || CASE.equals(block.getLabel())) {
                 Object valueExprId = previousScope.getAttribute(VALUE_EXPR_ID);
-                for (String param : block.getParameters().values()) {
+                int added = 0;
+                Iterator<String> it = block.getParameters().values().iterator();
+                while (it.hasNext()) {
+                    String param = it.next();
+                    if (added == 0 && it.hasNext()) {
+                        // Skip the operator param
+                        continue;
+                    }
+                    added++;
                     if (valueExprId != null) {
                         // This could be an enum switch - we need to add a hint in order to validate the enum constants properly 
-                        String binding = previousScope.getBindingType(param);
-                        if (binding == null) {
-                            binding = param;
+                        String previousBinding = previousScope.getBinding(param);
+                        String newBinding = previousBinding;
+                        if (newBinding == null) {
+                            newBinding = param;
                         }
                         // Append hint to the existing binding if needed
                         // E.g. ON -> ON<when:12345>
-                        binding += HINT_PREFIX + valueExprId + ">";
-                        previousScope.put(param, binding);
+                        newBinding += HINT_PREFIX + valueExprId + ">";
+                        previousScope.putBinding(param, newBinding);
                         block.addExpression(param, param);
+                        previousScope.putBinding(param, previousBinding);
                     } else {
                         block.addExpression(param, param);
                     }
@@ -296,17 +306,13 @@ public class WhenSectionHelper implements SectionHelper {
 
         CompletionStage<Boolean> resolve(SectionResolutionContext context, Object value) {
             if (params.isEmpty()) {
-                return CompletableFuture.completedFuture(true);
+                return CompletedStage.of(true);
             } else if (params.size() == 1) {
                 Expression paramExpr = params.get(0);
                 if (paramExpr.isLiteral()) {
-                    // A param is very often a literal.. no need for async constructs
-                    try {
-                        return CompletableFuture.completedFuture(
-                                caseOperator.evaluate(value, Collections.singletonList(paramExpr.getLiteralValue().get())));
-                    } catch (InterruptedException | ExecutionException e) {
-                        throw new IllegalStateException(e);
-                    }
+                    // A param is very often a literal, there's no need for async constructs
+                    return CompletedStage.of(
+                            caseOperator.evaluate(value, Collections.singletonList(paramExpr.getLiteral())));
                 }
                 return context.resolutionContext().evaluate(paramExpr)
                         .thenApply(p -> caseOperator.evaluate(value, Collections.singletonList(p)));
@@ -326,7 +332,7 @@ public class WhenSectionHelper implements SectionHelper {
                 }
                 if (results.isEmpty()) {
                     // Parameters are literals only
-                    return CompletableFuture.completedFuture(caseOperator.evaluate(value,
+                    return CompletedStage.of(caseOperator.evaluate(value,
                             Arrays.stream(allResults).map(t1 -> {
                                 try {
                                     return t1.get();
@@ -335,23 +341,27 @@ public class WhenSectionHelper implements SectionHelper {
                                 }
                             }).collect(Collectors.toList())));
                 }
-                return CompletableFuture.allOf(results.toArray(Futures.EMPTY_RESULTS)).thenApply(new Function<Void, Boolean>() {
-                    @Override
-                    public Boolean apply(Void t) {
-                        return caseOperator.evaluate(value,
-                                Arrays.stream(allResults).map(t1 -> {
-                                    try {
-                                        return t1.get();
-                                    } catch (InterruptedException | ExecutionException e) {
-                                        throw new IllegalStateException(e);
-                                    }
-                                }).collect(Collectors.toList()));
-                    }
-                });
+                return CompletableFuture.allOf(results.toArray(new CompletableFuture[0]))
+                        .thenApply(new Function<Void, Boolean>() {
+                            @Override
+                            public Boolean apply(Void t) {
+                                return caseOperator.evaluate(value,
+                                        Arrays.stream(allResults).map(t1 -> {
+                                            try {
+                                                return t1.get();
+                                            } catch (InterruptedException | ExecutionException e) {
+                                                throw new IllegalStateException(e);
+                                            }
+                                        }).collect(Collectors.toList()));
+                            }
+                        });
             }
         }
 
         boolean resolveEnum(SectionResolutionContext context, Object value) {
+            if (params.isEmpty()) {
+                return true;
+            }
             String enumValue = value.toString();
             if (params.size() == 1) {
                 // case enum value with the current value

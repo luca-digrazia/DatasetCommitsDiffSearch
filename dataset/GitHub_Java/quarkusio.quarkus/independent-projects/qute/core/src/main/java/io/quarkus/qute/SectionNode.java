@@ -2,28 +2,29 @@ package io.quarkus.qute;
 
 import io.quarkus.qute.SectionHelper.SectionResolutionContext;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Function;
 
 /**
  * Section node.
  */
 class SectionNode implements TemplateNode {
 
-    static Builder builder(String helperName, Origin origin) {
-        return new Builder(helperName, origin);
+    static Builder builder(String helperName, Origin origin, Function<String, Expression> expressionFun,
+            Function<String, TemplateException> errorFun) {
+        return new Builder(helperName, origin, expressionFun, errorFun);
     }
 
+    final String name;
     final List<SectionBlock> blocks;
-
     private final SectionHelper helper;
     private final Origin origin;
 
-    SectionNode(List<SectionBlock> blocks, SectionHelper helper, Origin origin) {
-        this.blocks = ImmutableList.copyOf(blocks);
+    SectionNode(String name, List<SectionBlock> blocks, SectionHelper helper, Origin origin) {
+        this.name = name;
+        this.blocks = blocks;
         this.helper = helper;
         this.origin = origin;
     }
@@ -37,15 +38,22 @@ class SectionNode implements TemplateNode {
         return origin;
     }
 
+    void optimizeNodes(Set<TemplateNode> nodes) {
+        for (SectionBlock block : blocks) {
+            block.optimizeNodes(nodes);
+        }
+    }
+
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
-        builder.append("SectionNode [helper=").append(helper.getClass().getSimpleName()).append("]");
+        builder.append("SectionNode [helper=").append(helper.getClass().getSimpleName()).append(", origin= ").append(origin)
+                .append("]");
         return builder.toString();
     }
 
-    public Set<Expression> getExpressions() {
-        Set<Expression> expressions = new HashSet<>();
+    public List<Expression> getExpressions() {
+        List<Expression> expressions = new ArrayList<>();
         for (SectionBlock block : blocks) {
             expressions.addAll(block.getExpressions());
         }
@@ -56,19 +64,36 @@ class SectionNode implements TemplateNode {
 
         final String helperName;
         final Origin origin;
-        private final List<SectionBlock> blocks;
+        private final List<SectionBlock.Builder> blocks;
+        private SectionBlock.Builder currentBlock;
         SectionHelperFactory<?> factory;
         private EngineImpl engine;
 
-        public Builder(String helperName, Origin origin) {
+        public Builder(String helperName, Origin origin, Function<String, Expression> expressionFun,
+                Function<String, TemplateException> errorFun) {
             this.helperName = helperName;
             this.origin = origin;
             this.blocks = new ArrayList<>();
+            // The main block is always present 
+            addBlock(SectionBlock
+                    .builder(SectionHelperFactory.MAIN_BLOCK_NAME, expressionFun, errorFun)
+                    .setOrigin(origin));
         }
 
-        Builder addBlock(SectionBlock block) {
+        Builder addBlock(SectionBlock.Builder block) {
             this.blocks.add(block);
+            this.currentBlock = block;
             return this;
+        }
+
+        Builder endBlock() {
+            // Set main as the current
+            this.currentBlock = blocks.get(0);
+            return this;
+        }
+
+        SectionBlock.Builder currentBlock() {
+            return currentBlock;
         }
 
         Builder setHelperFactory(SectionHelperFactory<?> factory) {
@@ -82,7 +107,24 @@ class SectionNode implements TemplateNode {
         }
 
         SectionNode build() {
-            return new SectionNode(blocks, factory.initialize(new SectionInitContextImpl(engine, blocks)), origin);
+            ImmutableList.Builder<SectionBlock> builder = ImmutableList.builder();
+            for (SectionBlock.Builder block : blocks) {
+                builder.add(block.build());
+            }
+            List<SectionBlock> blocks = builder.build();
+            return new SectionNode(helperName, blocks,
+                    factory.initialize(new SectionInitContextImpl(engine, blocks, this::createParserError)), origin);
+        }
+
+        TemplateException createParserError(String message) {
+            StringBuilder builder = new StringBuilder("Parser error");
+            if (!origin.getTemplateId().equals(origin.getTemplateGeneratedId())) {
+                builder.append(" in template [").append(origin.getTemplateId()).append("]");
+            }
+            builder.append(" on line ").append(origin.getLine()).append(": ")
+                    .append(message);
+            return new TemplateException(origin,
+                    builder.toString());
         }
 
     }
@@ -101,26 +143,16 @@ class SectionNode implements TemplateNode {
                 // Use the main block
                 block = blocks.get(0);
             }
-            if (block.nodes.size() == 1) {
+            int size = block.nodes.size();
+            if (size == 1) {
+                // Single node in the block
                 return block.nodes.get(0).resolve(context);
             }
-            CompletableFuture<ResultNode> result = new CompletableFuture<ResultNode>();
-            @SuppressWarnings("unchecked")
-            CompletableFuture<ResultNode>[] results = new CompletableFuture[block.nodes.size()];
-            int idx = 0;
+            List<CompletionStage<ResultNode>> results = new ArrayList<>(size);
             for (TemplateNode node : block.nodes) {
-                results[idx++] = node.resolve(context).toCompletableFuture();
+                results.add(node.resolve(context));
             }
-            CompletableFuture
-                    .allOf(results)
-                    .whenComplete((v, t) -> {
-                        if (t != null) {
-                            result.completeExceptionally(t);
-                        } else {
-                            result.complete(new MultiResultNode(results));
-                        }
-                    });
-            return result;
+            return Results.process(results);
         }
 
         @Override

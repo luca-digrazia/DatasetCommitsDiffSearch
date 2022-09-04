@@ -145,7 +145,7 @@ public class SimpleTest {
     @Test
     public void testNotFound() {
         assertEquals("Property \"foo\" not found in foo.bar Collection size: 0",
-                Engine.builder().strictRendering(false).addDefaultValueResolvers()
+                Engine.builder().addDefaultValueResolvers()
                         .addResultMapper(new ResultMapper() {
 
                             public int getPriority() {
@@ -193,7 +193,7 @@ public class SimpleTest {
     @Test
     public void testNotFoundThrowException() {
         try {
-            Engine.builder().strictRendering(false).addDefaults()
+            Engine.builder().addDefaults()
                     .addResultMapper(new ResultMapper() {
 
                         public boolean appliesTo(Origin origin, Object val) {

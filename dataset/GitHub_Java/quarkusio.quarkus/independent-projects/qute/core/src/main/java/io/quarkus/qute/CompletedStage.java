@@ -39,10 +39,6 @@ public final class CompletedStage<T> implements CompletionStage<T>, Supplier<T> 
     }
 
     public T get() {
-        if (exception != null) {
-            // Throw an exception if completed exceptionally
-            throw new TemplateException(exception);
-        }
         return result;
     }
 

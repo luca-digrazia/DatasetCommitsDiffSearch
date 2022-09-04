@@ -2,21 +2,17 @@ package io.quarkus.qute;
 
 import java.lang.reflect.Array;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 
 @SuppressWarnings("rawtypes")
 public final class EvaluatedParams {
 
-    static final EvaluatedParams EMPTY;
-
-    static {
-        CompletableFuture<Void> empty = new CompletableFuture<Void>();
-        empty.complete(null);
-        EMPTY = new EvaluatedParams(empty, new CompletableFuture<?>[0]);
-    }
+    static final EvaluatedParams EMPTY = new EvaluatedParams(CompletedStage.VOID, new Supplier<?>[0]);
 
     /**
      * 
@@ -30,13 +26,35 @@ public final class EvaluatedParams {
         } else if (params.size() == 1) {
             return new EvaluatedParams(context.evaluate(params.get(0)));
         }
-        CompletableFuture<?>[] results = new CompletableFuture<?>[params.size()];
+        Supplier<?>[] allResults = new Supplier[params.size()];
+        List<CompletableFuture<?>> asyncResults = null;
         int i = 0;
         Iterator<Expression> it = params.iterator();
         while (it.hasNext()) {
-            results[i++] = context.evaluate(it.next()).toCompletableFuture();
+            Expression expression = it.next();
+            CompletionStage<?> result = context.evaluate(expression);
+            if (result instanceof CompletedStage) {
+                allResults[i++] = (CompletedStage<?>) result;
+                // No async computation needed
+                continue;
+            } else {
+                CompletableFuture<?> fu = result.toCompletableFuture();
+                if (asyncResults == null) {
+                    asyncResults = new LinkedList<>();
+                }
+                asyncResults.add(fu);
+                allResults[i++] = Futures.toSupplier(fu);
+            }
         }
-        return new EvaluatedParams(CompletableFuture.allOf(results), results);
+        CompletionStage<?> cs;
+        if (asyncResults == null) {
+            cs = CompletedStage.VOID;
+        } else if (asyncResults.size() == 1) {
+            cs = asyncResults.get(0);
+        } else {
+            cs = CompletableFuture.allOf(asyncResults.toArray(new CompletableFuture[0]));
+        }
+        return new EvaluatedParams(cs, allResults);
     }
 
     public static EvaluatedParams evaluateMessageKey(EvalContext context) {
@@ -52,24 +70,50 @@ public final class EvaluatedParams {
         if (params.size() < 2) {
             return EMPTY;
         }
-        CompletableFuture<?>[] results = new CompletableFuture<?>[params.size() - 1];
+        Supplier<?>[] allResults = new Supplier[params.size()];
+        List<CompletableFuture<Object>> asyncResults = null;
+
         int i = 0;
         Iterator<Expression> it = params.subList(1, params.size()).iterator();
         while (it.hasNext()) {
-            results[i++] = context.evaluate(it.next()).toCompletableFuture();
+            CompletionStage<Object> result = context.evaluate(it.next());
+            if (result instanceof CompletedStage) {
+                allResults[i++] = (CompletedStage<Object>) result;
+                // No async computation needed
+                continue;
+            } else {
+                CompletableFuture<Object> fu = result.toCompletableFuture();
+                if (asyncResults == null) {
+                    asyncResults = new LinkedList<>();
+                }
+                asyncResults.add(fu);
+                allResults[i++] = Futures.toSupplier(fu);
+            }
         }
-        return new EvaluatedParams(CompletableFuture.allOf(results), results);
+        CompletionStage<?> cs;
+        if (asyncResults == null) {
+            cs = CompletedStage.VOID;
+        } else if (asyncResults.size() == 1) {
+            cs = asyncResults.get(0);
+        } else {
+            cs = CompletableFuture.allOf(asyncResults.toArray(new CompletableFuture[0]));
+        }
+        return new EvaluatedParams(cs, allResults);
     }
 
-    public final CompletionStage stage;
-    private final CompletableFuture<?>[] results;
+    public final CompletionStage<?> stage;
+    private final Supplier<?>[] results;
 
-    EvaluatedParams(CompletionStage stage) {
+    EvaluatedParams(CompletionStage<?> stage) {
         this.stage = stage;
-        this.results = new CompletableFuture<?>[] { stage.toCompletableFuture() };
+        if (stage instanceof CompletedStage) {
+            this.results = new Supplier[] { (CompletedStage) stage };
+        } else {
+            this.results = new Supplier[] { Futures.toSupplier(stage.toCompletableFuture()) };
+        }
     }
 
-    EvaluatedParams(CompletionStage stage, CompletableFuture[] results) {
+    EvaluatedParams(CompletionStage<?> stage, Supplier<?>[] results) {
         this.stage = stage;
         this.results = results;
     }
@@ -87,19 +131,21 @@ public final class EvaluatedParams {
      * @throws ExecutionException
      */
     public boolean parameterTypesMatch(boolean varargs, Class<?>[] types) throws InterruptedException, ExecutionException {
-        if (types.length != results.length) {
+        // Check the number of parameters and replace the last param type with component type if needed
+        if (types.length == results.length) {
+            if (varargs) {
+                types[types.length - 1] = types[types.length - 1].getComponentType();
+            }
+        } else {
             if (varargs) {
                 int diff = types.length - results.length;
-                if (diff == 1) {
-                    // varargs may be empty
-                    return true;
-                } else if (diff > 1) {
+                if (diff > 1) {
                     return false;
+                } else if (diff < 1) {
+                    Class<?> varargsType = types[types.length - 1];
+                    types[types.length - 1] = varargsType.getComponentType();
                 }
-                // diff < 1
-                // Replace the last param type with component type
-                Class<?> varargsType = types[types.length - 1];
-                types[types.length - 1] = varargsType.getComponentType();
+                // if diff == 1 then vargs may be empty and we need to compare the result types
             } else {
                 return false;
             }
@@ -112,7 +158,7 @@ public final class EvaluatedParams {
                 return false;
             }
             if (types.length > ++i) {
-                paramType = types[i];
+                paramType = boxType(types[i]);
             }
         }
         return true;
