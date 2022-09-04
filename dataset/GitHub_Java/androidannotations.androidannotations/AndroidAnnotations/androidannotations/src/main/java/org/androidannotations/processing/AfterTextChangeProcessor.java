@@ -40,6 +40,7 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JVar;
 
 /**
+ * @author Mathieu Boniface
  */
 public class AfterTextChangeProcessor implements DecoratingElementProcessor {
 
