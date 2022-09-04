@@ -35,6 +35,7 @@ import io.dekorate.deps.openshift.api.model.Build;
 import io.dekorate.deps.openshift.api.model.BuildConfig;
 import io.dekorate.deps.openshift.api.model.ImageStream;
 import io.dekorate.deps.openshift.client.OpenShiftClient;
+import io.dekorate.s2i.util.S2iUtils;
 import io.dekorate.utils.Clients;
 import io.dekorate.utils.Packaging;
 import io.dekorate.utils.Serialization;
@@ -218,19 +219,14 @@ public class S2iProcessor {
         LOG.info("Performing s2i binary build with native image on server: " + kubernetesClient.getClient().getMasterUrl()
                 + " in namespace:" + namespace + ".");
 
-        Optional<GeneratedFileSystemResourceBuildItem> openshiftYml = generatedResources
+        GeneratedFileSystemResourceBuildItem openshiftYml = generatedResources
                 .stream()
-                .filter(r -> r.getName().endsWith("kubernetes" + File.separator + "openshift.yml"))
-                .findFirst();
+                .filter(r -> r.getName().endsWith("kubernetes/openshift.yml"))
+                .findFirst().orElseThrow(() -> new IllegalStateException("Could not find kubernetes/openshift.yml"));
 
-        if (!openshiftYml.isPresent()) {
-            LOG.warn(
-                    "No Openshift manifests were generated (most likely due to the fact that the service is not an HTTP service) so no s2i process will be taking place");
-            return;
-        }
-
-        createContainerImage(kubernetesClient, openshiftYml.get(), s2iConfig, out.getOutputDirectory(), nativeImage.getPath());
+        createContainerImage(kubernetesClient, openshiftYml, s2iConfig, out.getOutputDirectory(), nativeImage.getPath());
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "native-container", Collections.emptyMap()));
+        ;
     }
 
     public static void createContainerImage(KubernetesClientBuildItem kubernetesClient,
@@ -301,7 +297,7 @@ public class S2iProcessor {
                 client.resource(i).createOrReplace();
                 LOG.info("Applied: " + i.getKind() + " " + i.getMetadata().getName());
             }
-            S2iUtils.waitForImageStreamTags(client, buildResources, 2, TimeUnit.MINUTES);
+            S2iUtils.waitForImageStreamTags(buildResources, 2, TimeUnit.MINUTES);
 
         } catch (KubernetesClientException e) {
             KubernetesClientErrorHanlder.handle(e);
