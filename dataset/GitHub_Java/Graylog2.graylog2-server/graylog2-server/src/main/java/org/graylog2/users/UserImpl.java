@@ -49,6 +49,7 @@ public class UserImpl extends PersistedImpl implements User {
             .put("updateUnfocussed", false)
             .put("disableExpensiveUpdates", false)
             .put("enableSmartSearch", true)
+            .put("enableNewWidgets", true)
             .build();
 
     public static final String USERNAME = "username";

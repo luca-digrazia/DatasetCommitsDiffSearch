@@ -16,7 +16,6 @@
  */
 package org.graylog2.restclient.models;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.apache.shiro.SecurityUtils;
@@ -178,7 +177,6 @@ public class User {
         this.subject = subject;
     }
 
-    @JsonIgnore
     public Subject getSubject() {
         if (subject == null) {
             // TODO we should do this cleanly via shiro, but time is too short. clean up post-RC

@@ -41,10 +41,8 @@ package org.graylog2.plugin.database.users;
 import org.graylog2.plugin.database.Persisted;
 import org.joda.time.DateTimeZone;
 
-import javax.annotation.Nonnull;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public interface User extends Persisted {
     boolean isReadOnly();
@@ -77,9 +75,9 @@ public interface User extends Persisted {
 
     String getHashedPassword();
 
-    void setPassword(String password);
+    void setPassword(String password, String passwordSecret);
 
-    boolean isUserPassword(String password);
+    boolean isUserPassword(String password, String passwordSecret);
 
     DateTimeZone getTimeZone();
 
@@ -94,9 +92,4 @@ public interface User extends Persisted {
     void setStartpage(String type, String id);
 
     boolean isLocalAdmin();
-
-    @Nonnull
-    Set<String> getRoleIds();
-
-    void setRoleIds(Set<String> roles);
 }
