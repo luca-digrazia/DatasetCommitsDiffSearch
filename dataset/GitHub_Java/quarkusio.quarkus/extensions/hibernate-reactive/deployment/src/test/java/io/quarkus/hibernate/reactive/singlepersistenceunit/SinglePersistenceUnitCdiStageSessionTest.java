@@ -8,7 +8,6 @@ import javax.inject.Inject;
 import org.hibernate.reactive.stage.Stage;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -26,7 +25,6 @@ public class SinglePersistenceUnitCdiStageSessionTest {
     Stage.Session session;
 
     @Test
-    @Disabled("#14812: We're getting a ContextNotActiveException for some (unknown) reason")
     @ActivateRequestContext
     public void test() {
         DefaultEntity entity = new DefaultEntity("default");
