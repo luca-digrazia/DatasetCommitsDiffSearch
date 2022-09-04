@@ -39,43 +39,28 @@ public class Beta {
     }
 
     /**
-     * A small number close to the smallest representable floating point number.
+     *  A small number close to the smallest representable floating point number.
      */
     private static final double FPMIN = 1e-300;
-    /**
-     * A tiny slack to avoid brute exception.
-     */
-    private static final double EPS = 1E-8;
 
     /**
      * Beta function, also called the Euler integral of the first kind.
      * The beta function is symmetric, i.e. B(x,y)==B(y,x).
-     * @param x {@code x > 0}
-     * @param y {@code y > 0}
-     * @return the function value.
      */
     public static double beta(double x, double y) {
         return exp(lgamma(x) + lgamma(y) - lgamma(x + y));
     }
 
     /**
-     * Regularized Incomplete Beta function. The regularized incomplete
-     * beta function is the cumulative distribution function of the beta
-     * distribution, and is related to the cumulative distribution function
-     * of a random variable X following a binomial distribution.
-     * <p>
-     * The implementation employs the continued fraction approximation
-     * (see Numerical Recipes).
-     *
-     * @param x {@code x > 0}
-     * @param alpha {@code alpha > 0}
-     * @param beta {@code beta > 0}
-     * @return the function value.
+     * Regularized Incomplete Beta function.
+     * Continued Fraction approximation (see Numerical recipies for details)
      */
     public static double regularizedIncompleteBetaFunction(double alpha, double beta, double x) {
         // This function is often used to calculate p-value of model fitting.
         // Due to floating error, the model may provide a x that could be slightly
         // greater than 1 or less than 0. We allow tiny slack here to avoid brute exception.
+        final double EPS = 1E-8;
+
         if (x < 0.0 && abs(x) < EPS) {
             return 0.0;
         }
@@ -88,19 +73,24 @@ public class Beta {
             throw new IllegalArgumentException("Invalid x: " + x);
         }
 
-        if (x == 0.0) return 0.0;
-        if (x == 1.0) return 1.0;
-
-        // Term before continued fraction
-        double ibeta = exp(lgamma(alpha + beta) - lgamma(alpha) - lgamma(beta) + alpha * log(x) + beta * log(1.0D - x));
-        // Continued fraction
-        if (x < (alpha + 1.0) / (alpha + beta + 2.0)) {
-            ibeta = ibeta * incompleteFractionSummation(alpha, beta, x) / alpha;
+        double ibeta = 0.0;
+        if (x == 0.0) {
+            ibeta = 0.0;
         } else {
-            // Use symmetry relationship
-            ibeta = 1.0 - ibeta * incompleteFractionSummation(beta, alpha, 1.0 - x) / beta;
+            if (x == 1.0) {
+                ibeta = 1.0;
+            } else {
+                // Term before continued fraction
+                ibeta = exp(lgamma(alpha + beta) - lgamma(alpha) - lgamma(beta) + alpha * log(x) + beta * log(1.0D - x));
+                // Continued fraction
+                if (x < (alpha + 1.0) / (alpha + beta + 2.0)) {
+                    ibeta = ibeta * incompleteFractionSummation(alpha, beta, x) / alpha;
+                } else {
+                    // Use symmetry relationship
+                    ibeta = 1.0 - ibeta * incompleteFractionSummation(beta, alpha, 1.0 - x) / beta;
+                }
+            }
         }
-
         return ibeta;
     }
 
@@ -122,11 +112,13 @@ public class Beta {
         }
         d = 1.0 / d;
         double h = d;
-        int i = 1;
+        double aa = 0.0;
+        double del = 0.0;
+        int i = 1, i2 = 0;
         boolean test = true;
         while (test) {
-            int i2 = 2 * i;
-            double aa = i * (beta - i) * x / ((aminus1 + i2) * (alpha + i2));
+            i2 = 2 * i;
+            aa = i * (beta - i) * x / ((aminus1 + i2) * (alpha + i2));
             d = 1.0 + aa * d;
             if (abs(d) < FPMIN) {
                 d = FPMIN;
@@ -147,7 +139,7 @@ public class Beta {
                 c = FPMIN;
             }
             d = 1.0 / d;
-            double del = d * c;
+            del = d * c;
             h *= del;
             i++;
             if (abs(del - 1.0) < EPS) {
@@ -163,12 +155,14 @@ public class Beta {
 
     /**
      * Inverse of regularized incomplete beta function.
-     * @param alpha {@code alpha > 0}
-     * @param beta {@code beta > 0}
-     * @param p {@code 0 <= p <= 1}
-     * @return the function value.
      */
     public static double inverseRegularizedIncompleteBetaFunction(double alpha, double beta, double p) {
+        final double EPS = 1.0E-8;
+
+        double pp, t, u, err, x, al, h, w, afac;
+        double a1 = alpha - 1.;
+        double b1 = beta - 1.;
+
         if (p <= 0.0) {
             return 0.0;
         }
@@ -176,10 +170,6 @@ public class Beta {
         if (p >= 1.0) {
             return 1.0;
         }
-
-        double pp, t, u, err, x, al, h, w;
-        double a1 = alpha - 1.;
-        double b1 = beta - 1.;
 
         if (alpha >= 1. && beta >= 1.) {
             pp = (p < 0.5) ? p : 1. - p;
@@ -204,9 +194,7 @@ public class Beta {
                 x = 1. - pow(beta * w * (1. - p), 1. / beta);
             }
         }
-
-        double afac = -lgamma(alpha) - lgamma(beta) + lgamma(alpha + beta);
-
+        afac = -lgamma(alpha) - lgamma(beta) + lgamma(alpha + beta);
         for (int j = 0; j < 10; j++) {
             if (x == 0. || x == 1.) {
                 return x;

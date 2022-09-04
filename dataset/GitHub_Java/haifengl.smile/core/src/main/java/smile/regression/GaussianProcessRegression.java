@@ -297,8 +297,7 @@ public class GaussianProcessRegression<T> implements Regression<T> {
      * @param x the training dataset.
      * @param y the response variable.
      * @param kernel the Mercer kernel.
-     * @param prop the hyper-parameters.
-     * @return the model.
+     * @param prop Training algorithm hyper-parameters and properties.
      */
     public static <T> GaussianProcessRegression<T> fit(T[] x, double[] y, MercerKernel<T> kernel, Properties prop) {
         double noise = Double.parseDouble(prop.getProperty("smile.gaussian.process.noise"));
@@ -389,8 +388,7 @@ public class GaussianProcessRegression<T> implements Regression<T> {
      * @param x the training dataset.
      * @param y the response variable.
      * @param kernel the Mercer kernel.
-     * @param prop the hyper-parameters.
-     * @return the model.
+     * @param prop Training algorithm hyper-parameters and properties.
      */
     public static <T> GaussianProcessRegression<T> fit(T[] x, double[] y, T[] t, MercerKernel<T> kernel, Properties prop) {
         double noise = Double.parseDouble(prop.getProperty("smile.gaussian.process.noise"));
@@ -464,8 +462,7 @@ public class GaussianProcessRegression<T> implements Regression<T> {
      * @param x the training dataset.
      * @param y the response variable.
      * @param kernel the Mercer kernel.
-     * @param prop the hyper-parameters.
-     * @return the model.
+     * @param prop Training algorithm hyper-parameters and properties.
      */
     public static <T> GaussianProcessRegression<T> nystrom(T[] x, double[] y, T[] t, MercerKernel<T> kernel, Properties prop) {
         double noise = Double.parseDouble(prop.getProperty("smile.gaussian.process.noise"));

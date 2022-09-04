@@ -45,11 +45,11 @@ import static org.bytedeco.arpackng.global.arpack.*;
  *
  * @author Haifeng Li
  */
-public class ARPACK {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ARPACK.class);
+public interface ARPACK {
+    org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ARPACK.class);
 
     /** Which eigenvalues of symmetric matrix to compute. */
-    public enum SymmOption {
+    enum SymmOption {
         /**
          * The largest algebraic eigenvalues.
          */
@@ -75,7 +75,7 @@ public class ARPACK {
     }
 
     /** Which eigenvalues of asymmetric matrix to compute. */
-    public enum AsymmOption {
+    enum AsymmOption {
         /**
          * The eigenvalues largest in magnitude.
          */
@@ -102,20 +102,14 @@ public class ARPACK {
         SI
     }
 
-    /** Private constructor to prevent instance creation. */
-    private ARPACK() {
-
-    }
-
     /**
      * Computes NEV eigenvalues of a symmetric double precision matrix.
      *
      * @param A the matrix to decompose.
      * @param which which eigenvalues to compute.
      * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
-     * @return the eigen decomposition.
      */
-    public static Matrix.EVD syev(DMatrix A, SymmOption which, int nev) {
+    static Matrix.EVD syev(DMatrix A, SymmOption which, int nev) {
         return syev(A, which, nev, Math.min(3 * nev, A.nrows()), 1E-6);
     }
 
@@ -127,9 +121,8 @@ public class ARPACK {
      * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
      * @param ncv the number of Arnoldi vectors.
      * @param tol the stopping criterion.
-     * @return the eigen decomposition.
      */
-    public static Matrix.EVD syev(DMatrix A, SymmOption which, int nev, int ncv, double tol) {
+    static Matrix.EVD syev(DMatrix A, SymmOption which, int nev, int ncv, double tol) {
         if (A.nrows() != A.ncols()) {
             throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", A.nrows(), A.ncols()));
         }
@@ -213,9 +206,8 @@ public class ARPACK {
      * @param A the matrix to decompose.
      * @param which which eigenvalues to compute.
      * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
-     * @return the eigen decomposition.
      */
-    public static FloatMatrix.EVD syev(SMatrix A, SymmOption which, int nev) {
+    static FloatMatrix.EVD syev(SMatrix A, SymmOption which, int nev) {
         return syev(A, which, nev, Math.min(3 * nev, A.nrows()), 1E-6f);
     }
 
@@ -227,9 +219,8 @@ public class ARPACK {
      * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
      * @param ncv the number of Arnoldi vectors.
      * @param tol the stopping criterion.
-     * @return the eigen decomposition.
      */
-    public static FloatMatrix.EVD syev(SMatrix A, SymmOption which, int nev, int ncv, float tol) {
+    static FloatMatrix.EVD syev(SMatrix A, SymmOption which, int nev, int ncv, float tol) {
         if (A.nrows() != A.ncols()) {
             throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", A.nrows(), A.ncols()));
         }
@@ -313,9 +304,8 @@ public class ARPACK {
      * @param A the matrix to decompose.
      * @param which which eigenvalues to compute.
      * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
-     * @return the eigen decomposition.
      */
-    public static Matrix.EVD eigen(DMatrix A, AsymmOption which, int nev) {
+    static Matrix.EVD eigen(DMatrix A, AsymmOption which, int nev) {
         return eigen(A, which, nev, Math.min(3 * nev, A.nrows()), 1E-6);
     }
 
@@ -327,9 +317,8 @@ public class ARPACK {
      * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
      * @param ncv the number of Arnoldi vectors.
      * @param tol the stopping criterion.
-     * @return the eigen decomposition.
      */
-    public static Matrix.EVD eigen(DMatrix A, AsymmOption which, int nev, int ncv, double tol) {
+    static Matrix.EVD eigen(DMatrix A, AsymmOption which, int nev, int ncv, double tol) {
         if (A.nrows() != A.ncols()) {
             throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", A.nrows(), A.ncols()));
         }
@@ -417,9 +406,8 @@ public class ARPACK {
      * @param A the matrix to decompose.
      * @param which which eigenvalues to compute.
      * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
-     * @return the eigen decomposition.
      */
-    public static FloatMatrix.EVD eigen(SMatrix A, AsymmOption which, int nev) {
+    static FloatMatrix.EVD eigen(SMatrix A, AsymmOption which, int nev) {
         return eigen(A, which, nev, Math.min(3 * nev, A.nrows()), 1E-6f);
     }
 
@@ -431,9 +419,8 @@ public class ARPACK {
      * @param nev the number of eigenvalues of OP to be computed. {@code 0 < nev < n}.
      * @param ncv the number of Arnoldi vectors.
      * @param tol the stopping criterion.
-     * @return the eigen decomposition.
      */
-    public static FloatMatrix.EVD eigen(SMatrix A, AsymmOption which, int nev, int ncv, float tol) {
+    static FloatMatrix.EVD eigen(SMatrix A, AsymmOption which, int nev, int ncv, float tol) {
         if (A.nrows() != A.ncols()) {
             throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", A.nrows(), A.ncols()));
         }
@@ -520,9 +507,8 @@ public class ARPACK {
      *
      * @param A the matrix to decompose.
      * @param k the number of singular triples to compute.
-     * @return the singular value decomposition.
      */
-    public static Matrix.SVD svd(DMatrix A, int k) {
+    static Matrix.SVD svd(DMatrix A, int k) {
         return svd(A, k, Math.min(3 * k, Math.min(A.nrows(), A.ncols())), 1E-6);
     }
 
@@ -533,9 +519,8 @@ public class ARPACK {
      * @param k the number of singular triples to compute.
      * @param ncv the number of Arnoldi vectors.
      * @param tol the stopping criterion.
-     * @return the singular value decomposition.
      */
-    public static Matrix.SVD svd(DMatrix A, int k, int ncv, double tol) {
+    static Matrix.SVD svd(DMatrix A, int k, int ncv, double tol) {
         int m = A.nrows();
         int n = A.ncols();
 
@@ -593,9 +578,8 @@ public class ARPACK {
      *
      * @param A the matrix to decompose.
      * @param k the number of singular triples to compute.
-     * @return the singular value decomposition.
      */
-    public static FloatMatrix.SVD svd(SMatrix A, int k) {
+    static FloatMatrix.SVD svd(SMatrix A, int k) {
         return svd(A, k, Math.min(3 * k, Math.min(A.nrows(), A.ncols())), 1E-6f);
     }
 
@@ -606,9 +590,8 @@ public class ARPACK {
      * @param k the number of singular triples to compute.
      * @param ncv the number of Arnoldi vectors.
      * @param tol the stopping criterion.
-     * @return the singular value decomposition.
      */
-    public static FloatMatrix.SVD svd(SMatrix A, int k, int ncv, float tol) {
+    static FloatMatrix.SVD svd(SMatrix A, int k, int ncv, float tol) {
         int m = A.nrows();
         int n = A.ncols();
 

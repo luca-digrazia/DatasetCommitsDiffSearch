@@ -1,33 +1,32 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package smile.netlib;
 
-import smile.math.Math;
 import smile.math.matrix.DenseMatrix;
 import com.github.fommil.netlib.LAPACK;
 import org.netlib.util.intW;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import smile.math.matrix.Matrix;
 
 /**
- * For an m-by-n matrix A with m &ge; n, the LU decomposition is an m-by-n
+ * For an m-by-n matrix A with {@code m >= n}, the LU decomposition is an m-by-n
  * unit lower triangular matrix L, an n-by-n upper triangular matrix U,
  * and a permutation vector piv of length m so that A(piv,:) = L*U.
- * If m &lt; n, then L is m-by-m and U is m-by-n.
+ * If {@code m < n}, then L is m-by-m and U is m-by-n.
  * <p>
  * The LU decomposition with pivoting always exists, even if the matrix is
  * singular. The primary use of the LU decomposition is in the solution of
@@ -37,9 +36,8 @@ import org.slf4j.LoggerFactory;
  *
  * @author Haifeng Li
  */
-public class LU extends smile.math.matrix.LU {
-    private static final long serialVersionUID = 1L;
-    private static final Logger logger = LoggerFactory.getLogger(LU.class);
+class LU extends smile.math.matrix.LU {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(LU.class);
 
     /**
      * Constructor.
@@ -47,7 +45,7 @@ public class LU extends smile.math.matrix.LU {
      * @param piv      pivot vector
      * @param singular True if the matrix is singular
      */
-    public LU(DenseMatrix lu, int[] piv, boolean singular) {
+    public LU(NLMatrix lu, int[] piv, boolean singular) {
         super(lu, piv, pivsign(piv, Math.min(lu.nrows(), lu.ncols())), singular);
     }
 
@@ -71,12 +69,14 @@ public class LU extends smile.math.matrix.LU {
         int m = lu.nrows();
         int n = lu.ncols();
 
-        if (m != n)
+        if (m != n) {
             throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", m, n));
+        }
 
         int nb = LAPACK.getInstance().ilaenv(1, "DGETRI", "", n, -1, -1, -1);
-        if (nb < 0)
+        if (nb < 0) {
             logger.warn("LAPACK ILAENV error code: {}", nb);
+        }
 
         if (nb < 1) nb = 1;
 
@@ -85,29 +85,19 @@ public class LU extends smile.math.matrix.LU {
         intW info = new intW(0);
         LAPACK.getInstance().dgetri(lu.ncols(), lu.data(), lu.ld(), piv, work, lwork, info);
 
-        if (info.val != 0)
+        if (info.val != 0) {
+            logger.error("LAPACK DGETRI error code: {}", info.val);
             throw new IllegalArgumentException("LAPACK DGETRI error code: " + info.val);
+        }
 
         return lu;
     }
 
     @Override
     public void solve(double[] b) {
-        int m = lu.nrows();
-        int n = lu.ncols();
-
-        if (b.length != m)
-            throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but B is %d x 1", lu.nrows(), lu.ncols(), b.length));
-
-        if (isSingular()) {
-            throw new RuntimeException("Matrix is singular.");
-        }
-
-        intW info = new intW(0);
-        LAPACK.getInstance().dgetrs(NLMatrix.Transpose, lu.nrows(), 1, lu.data(), lu.ld(), piv, b, b.length, info);
-
-        if (info.val < 0)
-            throw new IllegalArgumentException("LAPACK DGETRS error code: " + info.val);
+        // B use b as the internal storage. Therefore b will contains the results.
+        DenseMatrix B = Matrix.of(b);
+        solve(B);
     }
 
     @Override
@@ -115,8 +105,9 @@ public class LU extends smile.math.matrix.LU {
         int m = lu.nrows();
         int n = lu.ncols();
 
-        if (B.nrows() != m)
+        if (B.nrows() != m) {
             throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but B is %d x %d", lu.nrows(), lu.ncols(), B.nrows(), B.ncols()));
+        }
 
         if (isSingular()) {
             throw new RuntimeException("Matrix is singular.");
@@ -125,7 +116,9 @@ public class LU extends smile.math.matrix.LU {
         intW info = new intW(0);
         LAPACK.getInstance().dgetrs(NLMatrix.Transpose, lu.nrows(), B.ncols(), lu.data(), lu.ld(), piv, B.data(), B.ld(), info);
 
-        if (info.val < 0)
+        if (info.val < 0) {
+            logger.error("LAPACK DGETRS error code: {}", info.val);
             throw new IllegalArgumentException("LAPACK DGETRS error code: " + info.val);
+        }
     }
 }

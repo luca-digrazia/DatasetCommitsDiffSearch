@@ -86,7 +86,6 @@ public class HierarchicalClustering implements Serializable {
      * method, which includes proximity matrix.
      * @param linkage a linkage method to merge clusters. The linkage object
      * includes the proximity matrix of data.
-     * @return the model.
      */
     public static HierarchicalClustering fit(Linkage linkage) {
         int n = linkage.size();
@@ -129,9 +128,8 @@ public class HierarchicalClustering implements Serializable {
      * step i of the clustering. If an element j in the row is less than n, then
      * observation j was merged at this stage. If {@code j >= n} then the merge
      * was with the cluster formed at the (earlier) stage j-n of the algorithm.
-     * @return the merge tree.
      */
-    public int[][] tree() {
+    public int[][] getTree() {
         return merge;
     }
 
@@ -139,9 +137,8 @@ public class HierarchicalClustering implements Serializable {
      * Returns a set of n-1 non-decreasing real values, which are the clustering height,
      * i.e., the value of the criterion associated with the clustering method
      * for the particular agglomeration.
-     * @return the tree node height.
      */
-    public double[] height() {
+    public double[] getHeight() {
         return height;
     }
 

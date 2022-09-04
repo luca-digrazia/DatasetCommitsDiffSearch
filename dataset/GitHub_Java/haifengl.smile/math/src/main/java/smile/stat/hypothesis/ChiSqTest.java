@@ -98,10 +98,8 @@ public class ChiSqTest {
      * and an array prob containing the expected probabilities of events,
      * and given one constraint, a small value of p-value indicates
      * a significant difference between the distributions.
-     *
      * @param bins the observed number of events.
      * @param prob the expected probabilities of events.
-     * @return the test results.
      */
     public static ChiSqTest test(int[] bins, double[] prob) {
         return test(bins, prob, 1);
@@ -113,11 +111,9 @@ public class ChiSqTest {
      * and an array prob containing the expected probabilities of events,
      * and given the number of constraints (normally one), a small value
      * of p-value indicates a significant difference between the distributions.
-     *
      * @param bins the observed number of events.
      * @param prob the expected probabilities of events.
      * @param constraints the constraints on the degree of freedom.
-     * @return the test results.
      */
     public static ChiSqTest test(int[] bins, double[] prob, int constraints) {
         int nbins = bins.length;
@@ -153,10 +149,8 @@ public class ChiSqTest {
      * Given the arrays bins1 and bins2, containing two sets of binned data,
      * and given one constraint, a small value of p-value indicates
      * a significant difference between the distributions.
-     *
      * @param bins1 the observed number of events in first sample.
      * @param bins2 the observed number of events in second sample.
-     * @return the test results.
      */
     public static ChiSqTest test(int[] bins1, int[] bins2) {
         return test(bins1, bins2, 1);
@@ -167,11 +161,9 @@ public class ChiSqTest {
      * Given the arrays bins1 and bins2, containing two sets of binned data,
      * and given the number of constraints (normally one), a small value of
      * p-value indicates a significant difference between the distributions.
-     *
      * @param bins1 the observed number of events in first sample.
      * @param bins2 the observed number of events in second sample.
      * @param constraints the constraints on the degree of freedom.
-     * @return the test results.
      */
     public static ChiSqTest test(int[] bins1, int[] bins2, int constraints) {
         if (bins1.length != bins2.length) {
@@ -208,24 +200,23 @@ public class ChiSqTest {
      * calculated as Cramer's V.
      *
      * @param table the contingency table.
-     * @return the test results.
      */
     public static ChiSqTest test(int[][] table) {
         final double TINY = 1.0e-16;
 
-        int nrow = table.length;
-        int ncol = table[0].length;
+        int nrows = table.length;
+        int ncols = table[0].length;
 
         boolean correct = false;
-        if (nrow == 2 && ncol == 2) {
+        if (nrows == 2 && ncols == 2) {
             correct = true;
         }
 
         double n = 0.0; // total observations
-        int r = nrow; // without all zero rows
-        double[] ni = new double[nrow]; // observations per row
-        for (int i = 0; i < nrow; i++) {
-            for (int j = 0; j < ncol; j++) {
+        int r = nrows; // without all zero rows
+        double[] ni = new double[nrows]; // observations per row
+        for (int i = 0; i < nrows; i++) {
+            for (int j = 0; j < ncols; j++) {
                 ni[i] += table[i][j];
                 n += table[i][j];
             }
@@ -234,9 +225,9 @@ public class ChiSqTest {
             }
         }
 
-        int k = ncol; // without all zero columns
-        double[] nj = new double[ncol]; // observations per column
-        for (int j = 0; j < ncol; j++) {
+        int k = ncols; // without all zero columns
+        double[] nj = new double[ncols]; // observations per column
+        for (int j = 0; j < ncols; j++) {
             for (int[] row : table) {
                 nj[j] += row[j];
             }
@@ -247,8 +238,8 @@ public class ChiSqTest {
 
         int df = r * k - r - k + 1;
         double chisq = 0.0;
-        for (int i = 0; i < nrow; i++) {
-            for (int j = 0; j < ncol; j++) {
+        for (int i = 0; i < nrows; i++) {
+            for (int j = 0; j < ncols; j++) {
                 double expctd = nj[j] * ni[i] / n;
                 double temp = table[i][j] - expctd;
                 if (correct) temp = Math.abs(temp) - 0.5;

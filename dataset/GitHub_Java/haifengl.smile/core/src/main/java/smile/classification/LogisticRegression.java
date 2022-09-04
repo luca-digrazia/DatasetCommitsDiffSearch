@@ -118,7 +118,7 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      * @param lambda {@code lambda > 0} gives a "regularized" estimate of linear
      *               weights which often has superior generalization performance,
      *               especially when the dimensionality is high.
-     * @param labels the class label encoder.
+     * @param labels class labels
      */
     public LogisticRegression(int p, double L, double lambda, IntSet labels) {
         this.k = labels.size();
@@ -142,7 +142,7 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
          * @param lambda {@code lambda > 0} gives a "regularized" estimate of linear
          *               weights which often has superior generalization performance,
          *               especially when the dimensionality is high.
-         * @param labels the class label encoder.
+         * @param labels class labels
          */
         public Binomial(double[] w, double L, double lambda, IntSet labels) {
             super(w.length - 1, L, lambda, labels);
@@ -153,7 +153,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
          * Returns an array of size (p+1) containing the linear weights
          * of binary logistic regression, where p is the dimension of
          * feature vectors. The last element is the weight of bias.
-         * @return the linear weights.
          */
         public double[] coefficients() {
             return w;
@@ -224,7 +223,7 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
          * @param lambda {@code lambda > 0} gives a "regularized" estimate of linear
          *               weights which often has superior generalization performance,
          *               especially when the dimensionality is high.
-         * @param labels the class label encoder.
+         * @param labels class labels
          */
         public Multinomial(double[][] w, double L, double lambda, IntSet labels) {
             super(w[0].length - 1, L, lambda, labels);
@@ -236,7 +235,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
          * of multi-class logistic regression, where k is the number of classes
          * and p is the dimension of feature vectors. The last element of each
          * row is the weight of bias.
-         * @return the linear weights.
          */
         public double[][] coefficients() {
             return w;
@@ -305,7 +303,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      *
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
-     * @return the model.
      */
     public static Binomial binomial(Formula formula, DataFrame data) {
         return binomial(formula, data, new Properties());
@@ -316,8 +313,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      *
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
-     * @param prop the hyper-parameters.
-     * @return the model.
      */
     public static Binomial binomial(Formula formula, DataFrame data, Properties prop) {
         DataFrame X = formula.x(data);
@@ -330,7 +325,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      * Fits binomial logistic regression.
      * @param x training samples.
      * @param y training labels.
-     * @return the model.
      */
     public static Binomial binomial(double[][] x, int[] y) {
         return binomial(x, y, new Properties());
@@ -340,8 +334,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      * Fits binomial logistic regression.
      * @param x training samples.
      * @param y training labels.
-     * @param prop the hyper-parameters.
-     * @return the model.
      */
     public static Binomial binomial(double[][] x, int[] y, Properties prop) {
         double lambda = Double.parseDouble(prop.getProperty("smile.logit.lambda", "0.1"));
@@ -360,7 +352,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      *               especially when the dimensionality is high.
      * @param tol the tolerance for stopping iterations.
      * @param maxIter the maximum number of iterations.
-     * @return the model.
      */
     public static Binomial binomial(double[][] x, int[] y, double lambda, double tol, int maxIter) {
         if (x.length != y.length) {
@@ -402,7 +393,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      *
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
-     * @return the model.
      */
     public static Multinomial multinomial(Formula formula, DataFrame data) {
         return multinomial(formula, data, new Properties());
@@ -413,8 +403,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      *
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
-     * @param prop the hyper-parameters.
-     * @return the model.
      */
     public static Multinomial multinomial(Formula formula, DataFrame data, Properties prop) {
         DataFrame X = formula.x(data);
@@ -427,7 +415,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      * Fits multinomial logistic regression.
      * @param x training samples.
      * @param y training labels.
-     * @return the model.
      */
     public static Multinomial multinomial(double[][] x, int[] y) {
         return multinomial(x, y, new Properties());
@@ -437,8 +424,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      * Fits multinomial logistic regression.
      * @param x training samples.
      * @param y training labels.
-     * @param prop the hyper-parameters.
-     * @return the model.
      */
     public static Multinomial multinomial(double[][] x, int[] y, Properties prop) {
         double lambda = Double.parseDouble(prop.getProperty("smile.logit.lambda", "0.1"));
@@ -457,7 +442,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      *               especially when the dimensionality is high.
      * @param tol the tolerance for stopping iterations.
      * @param maxIter the maximum number of iterations.
-     * @return the model.
      */
     public static Multinomial multinomial(double[][] x, int[] y, double lambda, double tol, int maxIter) {
         if (x.length != y.length) {
@@ -506,7 +490,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      *
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
-     * @return the model.
      */
     public static LogisticRegression fit(Formula formula, DataFrame data) {
         return fit(formula, data, new Properties());
@@ -517,8 +500,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      *
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
-     * @param prop the hyper-parameters.
-     * @return the model.
      */
     public static LogisticRegression fit(Formula formula, DataFrame data, Properties prop) {
         DataFrame X = formula.x(data);
@@ -531,7 +512,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      * Fits logistic regression.
      * @param x training samples.
      * @param y training labels.
-     * @return the model.
      */
     public static LogisticRegression fit(double[][] x, int[] y) {
         return fit(x, y, new Properties());
@@ -541,8 +521,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      * Fits logistic regression.
      * @param x training samples.
      * @param y training labels.
-     * @param prop the hyper-parameters.
-     * @return the model.
      */
     public static LogisticRegression fit(double[][] x, int[] y, Properties prop) {
         double lambda = Double.parseDouble(prop.getProperty("smile.logistic.lambda", "0.1"));
@@ -561,7 +539,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
      *               especially when the dimensionality is high.
      * @param tol the tolerance for stopping iterations.
      * @param maxIter the maximum number of iterations.
-     * @return the model.
      */
     public static LogisticRegression fit(double[][] x, int[] y, double lambda, double tol, int maxIter) {
         ClassLabels codec = ClassLabels.fit(y);
@@ -873,7 +850,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
 
     /**
      * Returns the learning rate of stochastic gradient descent.
-     * @return the learning rate of stochastic gradient descent.
      */
     public double getLearningRate() {
         return eta;
@@ -881,7 +857,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
 
     /**
      * Returns the log-likelihood of model.
-     * @return the log-likelihood of model.
      */
     public double loglikelihood() {
         return L;
@@ -889,7 +864,6 @@ public abstract class LogisticRegression implements SoftClassifier<double[]>, On
 
     /**
      * Returns the AIC score.
-     * @return the AIC score.
      */
     public double AIC() {
         return ModelSelection.AIC(L, (k-1)*(p+1));

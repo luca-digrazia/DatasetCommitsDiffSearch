@@ -175,7 +175,6 @@ public class FloatMatrix extends SMatrix {
      * @param layout the matrix layout.
      * @param m the number of rows.
      * @param n the number of columns.
-     * @return the matrix.
      */
     public static FloatMatrix of(Layout layout, int m, int n) {
         if (layout == COL_MAJOR) {
@@ -196,7 +195,6 @@ public class FloatMatrix extends SMatrix {
      * @param n the number of columns.
      * @param ld the leading dimension.
      * @param A the matrix storage.
-     * @return the matrix.
      */
     public static FloatMatrix of(Layout layout, int m, int n, int ld, FloatBuffer A) {
         if (layout == COL_MAJOR && ld < m) {
@@ -233,7 +231,6 @@ public class FloatMatrix extends SMatrix {
      * Returns a random matrix of standard normal distribution.
      * @param m the number of rows.
      * @param n the number of columns.
-     * @return the matrix.
      */
     public static FloatMatrix randn(int m, int n) {
         return rand(m, n, GaussianDistribution.getInstance());
@@ -245,7 +242,6 @@ public class FloatMatrix extends SMatrix {
      * @param m the number of rows.
      * @param n the number of columns.
      * @param distribution the distribution of random number.
-     * @return the matrix.
      */
     public static FloatMatrix rand(int m, int n, Distribution distribution) {
         FloatMatrix matrix = new FloatMatrix(m, n);
@@ -266,7 +262,6 @@ public class FloatMatrix extends SMatrix {
      * @param n the number of columns.
      * @param lo the lower bound of uniform distribution.
      * @param hi the upper bound of uniform distribution.
-     * @return the matrix.
      */
     public static FloatMatrix rand(int m, int n, float lo, float hi) {
         FloatMatrix matrix = new FloatMatrix(m, n);
@@ -283,7 +278,6 @@ public class FloatMatrix extends SMatrix {
     /**
      * Returns an identity matrix.
      * @param n the number of rows/columns.
-     * @return the matrix.
      */
     public static FloatMatrix eye(int n) {
         return diag(n, 1.0f);
@@ -293,7 +287,6 @@ public class FloatMatrix extends SMatrix {
      * Returns an m-by-n identity matrix.
      * @param m the number of rows.
      * @param n the number of columns.
-     * @return the matrix.
      */
     public static FloatMatrix eye(int m, int n) {
         return diag(m, n, 1.0f);
@@ -304,7 +297,6 @@ public class FloatMatrix extends SMatrix {
      *
      * @param n the number of rows/columns.
      * @param diag the diagonal value.
-     * @return the matrix.
      */
     public static FloatMatrix diag(int n, float diag) {
         return diag(n, n, diag);
@@ -316,7 +308,6 @@ public class FloatMatrix extends SMatrix {
      * @param m the number of rows.
      * @param n the number of columns.
      * @param diag the diagonal value.
-     * @return the matrix.
      */
     public static FloatMatrix diag(int m, int n, float diag) {
         FloatMatrix D = new FloatMatrix(m, n);
@@ -331,7 +322,6 @@ public class FloatMatrix extends SMatrix {
      * Returns a square diagonal matrix.
      *
      * @param diag the diagonal elements.
-     * @return the matrix.
      */
     public static FloatMatrix diag(float[] diag) {
         int n = diag.length;
@@ -346,8 +336,7 @@ public class FloatMatrix extends SMatrix {
      * Returns a symmetric Toeplitz matrix in which each descending diagonal
      * from left to right is constant.
      *
-     * @param a A[i, j] = a[i - j] for {@code i >= j} (or a[j - i] when {@code j > i})
-     * @return the matrix.
+     * @param a A[i, j] = a[i - j] for i >= j (or a[j - i] when j > i)
      */
     public static FloatMatrix toeplitz(float[] a) {
         int n = a.length;
@@ -373,7 +362,6 @@ public class FloatMatrix extends SMatrix {
      *
      * @param kl {@code A[i, j] = kl[i - j]} for {@code i >  j}
      * @param ku {@code A[i, j] = ku[j - i]} for {@code i <= j}
-     * @return the matrix.
      */
     public static FloatMatrix toeplitz(float[] kl, float[] ku) {
         if (kl.length != ku.length - 1) {
@@ -490,7 +478,6 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * Returns the matrix layout.
-     * @return the matrix layout.
      */
     public Layout layout() {
         return COL_MAJOR;
@@ -498,33 +485,26 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * Returns the leading dimension.
-     * @return the leading dimension.
      */
     public int ld() {
         return ld;
     }
 
     /**
-     * Returns true if the matrix is a submatrix (sharing the storage with larger matrix).
-     * @return true if the matrix is a submatrix.
+     * Returns if the matrix is a submatrix.
      */
     public boolean isSubmatrix() {
         return A.position() != 0 || A.limit() != A.capacity();
     }
 
     /**
-     * Return true if the matrix is symmetric ({@code uplo != null && diag == null}).
-     * @return true if the matrix is symmetric.
+     * Return if the matrix is symmetric ({@code uplo != null && diag == null}).
      */
     public boolean isSymmetric() {
         return uplo != null && diag == null;
     }
 
-    /**
-     * Sets the format of packed matrix.
-     * @param uplo the format of packed matrix..
-     * @return this matrix.
-     */
+    /** Sets the format of packed matrix. */
     public FloatMatrix uplo(UPLO uplo) {
         if (m != n) {
             throw new IllegalArgumentException(String.format("The matrix is not square: %d x %d", m, n));
@@ -534,10 +514,7 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * Gets the format of packed matrix.
-     * @return the format of packed matrix.
-     */
+    /** Gets the format of packed matrix. */
     public UPLO uplo() {
         return uplo;
     }
@@ -545,7 +522,6 @@ public class FloatMatrix extends SMatrix {
     /**
      * Sets/unsets if the matrix is triangular.
      * @param diag if not null, it specifies if the triangular matrix has unit diagonal elements.
-     * @return this matrix.
      */
     public FloatMatrix triangular(Diag diag) {
         if (m != n) {
@@ -559,7 +535,6 @@ public class FloatMatrix extends SMatrix {
     /**
      * Gets the flag if a triangular matrix has unit diagonal elements.
      * Returns null if the matrix is not triangular.
-     * @return the flag if a triangular matrix has unit diagonal elements.
      */
     public Diag triangular() {
         return diag;
@@ -597,11 +572,7 @@ public class FloatMatrix extends SMatrix {
         return array;
     }
 
-    /**
-     * Returns the i-th row.
-     * @param i the row index.
-     * @return the row.
-     */
+    /** Returns the i-th row. */
     public double[] row(int i) {
         double[] x = new double[n];
 
@@ -612,11 +583,7 @@ public class FloatMatrix extends SMatrix {
         return x;
     }
 
-    /**
-     * Returns the j-th column.
-     * @param j the column index.
-     * @return the column.
-     */
+    /** Returns the j-th column. */
     public double[] col(int j) {
         double[] x = new double[m];
 
@@ -627,11 +594,7 @@ public class FloatMatrix extends SMatrix {
         return x;
     }
 
-    /**
-     * Returns the matrix of selected rows.
-     * @param rows the row indices.
-     * @return the submatrix.
-     */
+    /** Returns the matrix of selected rows. */
     public FloatMatrix row(int... rows) {
         FloatMatrix x = new FloatMatrix(rows.length, n);
 
@@ -645,11 +608,7 @@ public class FloatMatrix extends SMatrix {
         return x;
     }
 
-    /**
-     * Returns the matrix of selected columns.
-     * @param cols the column indices.
-     * @return the submatrix.
-     */
+    /** Returns the matrix of selected columns. */
     public FloatMatrix col(int... cols) {
         FloatMatrix x = new FloatMatrix(m, cols.length);
 
@@ -672,7 +631,6 @@ public class FloatMatrix extends SMatrix {
      * @param j the beginning column, inclusive,
      * @param k the ending row, inclusive.
      * @param l the ending column, inclusive.
-     * @return the submatrix.
      */
     public FloatMatrix submatrix(int i, int j, int k, int l) {
         if (i < 0 || i >= m || k < i || k >= m || j < 0 || j >= n || l < j || l >= n) {
@@ -688,23 +646,17 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * Fill the matrix with a value.
-     * @param x the value.
      */
     public void fill(float x) {
-        if (isSubmatrix()) {
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    set(i, j, x);
-                }
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                set(i, j, x);
             }
-        } else {
-            Arrays.fill(A.array(), x);
         }
     }
 
     /**
      * Returns the transpose of matrix.
-     * @return the transpose of matrix.
      */
     public FloatMatrix transpose() {
         return of(ROW_MAJOR, n, m, ld, A);
@@ -720,20 +672,19 @@ public class FloatMatrix extends SMatrix {
     }
 
     /**
-     * Returns true if two matrices equal in given precision.
+     * Returns if two matrices equals given an error margin.
      *
      * @param o the other matrix.
-     * @param epsilon a number close to zero.
-     * @return true if two matrices equal in given precision.
+     * @param eps the error margin.
      */
-    public boolean equals(FloatMatrix o, float epsilon) {
+    public boolean equals(FloatMatrix o, float eps) {
         if (m != o.m || n != o.n) {
             return false;
         }
 
         for (int j = 0; j < n; j++) {
             for (int i = 0; i < m; i++) {
-                if (!MathEx.isZero(get(i, j) - o.get(i, j), epsilon)) {
+                if (!MathEx.isZero(get(i, j) - o.get(i, j), eps)) {
                     return false;
                 }
             }
@@ -742,12 +693,7 @@ public class FloatMatrix extends SMatrix {
         return true;
     }
 
-    /**
-     * Returns the linearized index of matrix element.
-     * @param i the row index.
-     * @param j the column index.
-     * @return the linearized index.
-     */
+    /** Returns the linear index of matrix element. */
     protected int index(int i , int j) {
         return j * ld + i + A.position();
     }
@@ -765,10 +711,6 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * Sets submatrix A[i,j] = B.
-     * @param i the row index of left top corner of submatrix.
-     * @param j the column index of left top corner of submatrix.
-     * @param B the right-hand-side submatrix.
-     * @return this matrix.
      */
     public FloatMatrix set(int i, int j, FloatMatrix B) {
         for (int jj = 0; jj < B.n; jj++) {
@@ -781,10 +723,6 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * A[i,j] += b
-     * @param i the row index.
-     * @param j the column index.
-     * @param b the operand.
-     * @return the updated cell value.
      */
     public float add(int i, int j, float b) {
         int k = index(i, j);
@@ -795,10 +733,6 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * A[i,j] -= b
-     * @param i the row index.
-     * @param j the column index.
-     * @param b the operand.
-     * @return the updated cell value.
      */
     public float sub(int i, int j, float b) {
         int k = index(i, j);
@@ -809,10 +743,6 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * A[i,j] *= b
-     * @param i the row index.
-     * @param j the column index.
-     * @param b the operand.
-     * @return the updated cell value.
      */
     public float mul(int i, int j, float b) {
         int k = index(i, j);
@@ -823,10 +753,6 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * A[i,j] /= b
-     * @param i the row index.
-     * @param j the column index.
-     * @param b the operand.
-     * @return the updated cell value.
      */
     public float div(int i, int j, float b) {
         int k = index(i, j);
@@ -835,11 +761,7 @@ public class FloatMatrix extends SMatrix {
         return y;
     }
 
-    /**
-     * A += b
-     * @param b the operand.
-     * @return this matrix.
-     */
+    /** A += b */
     public FloatMatrix add(float b) {
         for (int j = 0; j < n; j++) {
             for (int i = 0; i < m; i++) {
@@ -850,11 +772,7 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * A -= b
-     * @param b the operand.
-     * @return this matrix.
-     */
+    /** A -= b */
     public FloatMatrix sub(float b) {
         for (int j = 0; j < n; j++) {
             for (int i = 0; i < m; i++) {
@@ -865,11 +783,7 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * A *= b
-     * @param b the operand.
-     * @return this matrix.
-     */
+    /** A *= b */
     public FloatMatrix mul(float b) {
         for (int j = 0; j < n; j++) {
             for (int i = 0; i < m; i++) {
@@ -880,11 +794,7 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * A /= b
-     * @param b the operand.
-     * @return this matrix.
-     */
+    /** A /= b */
     public FloatMatrix div(float b) {
         for (int j = 0; j < n; j++) {
             for (int i = 0; i < m; i++) {
@@ -895,14 +805,7 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * Element-wise submatrix addition A[i, j] += alpha * B
-     * @param i the row index of left top corner of submatrix.
-     * @param j the column index of left top corner of submatrix.
-     * @param alpha the scalar alpha.
-     * @param B the submatrix operand.
-     * @return this matrix.
-     */
+    /** Element-wise submatrix addition A[i, j] += alpha * B */
     public FloatMatrix add(int i, int j, float alpha, FloatMatrix B) {
         for (int jj = 0; jj < B.n; jj++) {
             for (int ii = 0; ii < B.m; ii++) {
@@ -912,14 +815,7 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * Element-wise submatrix subtraction A[i, j] -= alpha * B
-     * @param i the row index of left top corner of submatrix.
-     * @param j the column index of left top corner of submatrix.
-     * @param alpha the scalar alpha.
-     * @param B the submatrix operand.
-     * @return this matrix.
-     */
+    /** Element-wise submatrix subtraction A[i, j] -= alpha * B */
     public FloatMatrix sub(int i, int j, float alpha, FloatMatrix B) {
         for (int jj = 0; jj < B.n; jj++) {
             for (int ii = 0; ii < B.m; ii++) {
@@ -929,14 +825,7 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * Element-wise submatrix multiplication A[i, j] *= alpha * B
-     * @param i the row index of left top corner of submatrix.
-     * @param j the column index of left top corner of submatrix.
-     * @param alpha the scalar alpha.
-     * @param B the submatrix operand.
-     * @return this matrix.
-     */
+    /** Element-wise submatrix multiplication A[i, j] *= alpha * B */
     public FloatMatrix mul(int i, int j, float alpha, FloatMatrix B) {
         for (int jj = 0; jj < B.n; jj++) {
             for (int ii = 0; ii < B.m; ii++) {
@@ -946,14 +835,7 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * Element-wise submatrix division A[i, j] /= alpha * B
-     * @param i the row index of left top corner of submatrix.
-     * @param j the column index of left top corner of submatrix.
-     * @param alpha the scalar alpha.
-     * @param B the submatrix operand.
-     * @return this matrix.
-     */
+    /** Element-wise submatrix division A[i, j] /= alpha * B */
     public FloatMatrix div(int i, int j, float alpha, FloatMatrix B) {
         for (int jj = 0; jj < B.n; jj++) {
             for (int ii = 0; ii < B.m; ii++) {
@@ -963,48 +845,27 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * Element-wise addition A += B
-     * @param B the operand.
-     * @return this matrix.
-     */
+    /** Element-wise addition A += B */
     public FloatMatrix add(FloatMatrix B) {
         return add(1.0f, B);
     }
 
-    /**
-     * Element-wise subtraction A -= B
-     * @param B the operand.
-     * @return this matrix.
-     */
+    /** Element-wise subtraction A -= B */
     public FloatMatrix sub(FloatMatrix B) {
         return sub(1.0f, B);
     }
 
-    /**
-     * Element-wise multiplication A *= B
-     * @param B the operand.
-     * @return this matrix.
-     */
+    /** Element-wise multiplication A *= B */
     public FloatMatrix mul(FloatMatrix B) {
         return mul(1.0f, B);
     }
 
-    /**
-     * Element-wise division A /= B
-     * @param B the operand.
-     * @return this matrix.
-     */
+    /** Element-wise division A /= B */
     public FloatMatrix div(FloatMatrix B) {
         return div(1.0f, B);
     }
 
-    /**
-     * Element-wise addition A += alpha * B
-     * @param alpha the scalar alpha.
-     * @param B the operand.
-     * @return this matrix.
-     */
+    /** Element-wise addition A += alpha * B */
     public FloatMatrix add(float alpha, FloatMatrix B) {
         if (m != B.m || n != B.n) {
             throw new IllegalArgumentException("Matrix is not of same size.");
@@ -1018,12 +879,7 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * Element-wise subtraction A -= alpha * B
-     * @param alpha the scalar alpha.
-     * @param B the operand.
-     * @return this matrix.
-     */
+    /** Element-wise subtraction A -= alpha * B */
     public FloatMatrix sub(float alpha, FloatMatrix B) {
         if (m != B.m || n != B.n) {
             throw new IllegalArgumentException("Matrix is not of same size.");
@@ -1037,12 +893,7 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * Element-wise multiplication A *= alpha * B
-     * @param alpha the scalar alpha.
-     * @param B the operand.
-     * @return this matrix.
-     */
+    /** Element-wise multiplication A *= alpha * B */
     public FloatMatrix mul(float alpha, FloatMatrix B) {
         if (m != B.m || n != B.n) {
             throw new IllegalArgumentException("Matrix is not of same size.");
@@ -1056,12 +907,7 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * Element-wise division A /= alpha * B
-     * @param alpha the scalar alpha.
-     * @param B the operand.
-     * @return this matrix.
-     */
+    /** Element-wise division A /= alpha * B */
     public FloatMatrix div(float alpha, FloatMatrix B) {
         if (m != B.m || n != B.n) {
             throw new IllegalArgumentException("Matrix is not of same size.");
@@ -1075,14 +921,7 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * Element-wise addition C = alpha * A + beta * B
-     * @param alpha the scalar alpha.
-     * @param A the operand.
-     * @param beta the scalar beta.
-     * @param B the operand.
-     * @return this matrix.
-     */
+    /** Element-wise addition C = alpha * A + beta * B */
     public FloatMatrix add(float alpha, FloatMatrix A, float beta, FloatMatrix B) {
         if (m != A.m || n != A.n) {
             throw new IllegalArgumentException("Matrix A is not of same size.");
@@ -1100,25 +939,12 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * Element-wise subtraction C = alpha * A - beta * B
-     * @param alpha the scalar alpha.
-     * @param A the operand.
-     * @param beta the scalar beta.
-     * @param B the operand.
-     * @return this matrix.
-     */
+    /** Element-wise subtraction C = alpha * A - beta * B */
     public FloatMatrix sub(float alpha, FloatMatrix A, float beta, FloatMatrix B) {
         return add(alpha, A, -beta, B);
     }
 
-    /**
-     * Element-wise multiplication C = alpha * A * B
-     * @param alpha the scalar alpha.
-     * @param A the operand.
-     * @param B the operand.
-     * @return this matrix.
-     */
+    /** Element-wise multiplication C = alpha * A * B */
     public FloatMatrix mul(float alpha, FloatMatrix A, FloatMatrix B) {
         if (m != A.m || n != A.n) {
             throw new IllegalArgumentException("Matrix A is not of same size.");
@@ -1136,13 +962,7 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * Element-wise division C = alpha * A / B
-     * @param alpha the scalar alpha.
-     * @param A the operand.
-     * @param B the operand.
-     * @return this matrix.
-     */
+    /** Element-wise division C = alpha * A / B */
     public FloatMatrix div(float alpha, FloatMatrix A, FloatMatrix B) {
         if (m != A.m || n != A.n) {
             throw new IllegalArgumentException("Matrix A is not of same size.");
@@ -1162,11 +982,6 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * A[i,j] = alpha * A[i,j] + beta
-     * @param i the row index.
-     * @param j the column index.
-     * @param alpha the scalar alpha.
-     * @param beta the operand.
-     * @return the updated A[i,j]
      */
     public double add(int i, int j, float alpha, float beta) {
         int k = index(i, j);
@@ -1175,15 +990,7 @@ public class FloatMatrix extends SMatrix {
         return y;
     }
 
-    /**
-     * Element-wise submatrix addition A[i, j] = alpha * A[i, j] + beta * B
-     * @param i the row index of left top corner of submatrix.
-     * @param j the column index of left top corner of submatrix.
-     * @param alpha the scalar alpha.
-     * @param beta the scalar beta.
-     * @param B the submatrix operand.
-     * @return this matrix.
-     */
+    /** Element-wise submatrix addition A[i, j] = alpha * A[i, j] + beta * B */
     public FloatMatrix add(int i, int j, float alpha, float beta, FloatMatrix B) {
         for (int jj = 0; jj < B.n; jj++) {
             for (int ii = 0; ii < B.m; ii++) {
@@ -1193,13 +1000,7 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * Element-wise addition A = alpha * A + beta * B
-     * @param alpha the scalar alpha.
-     * @param beta the scalar beta.
-     * @param B the operand.
-     * @return this matrix.
-     */
+    /** Element-wise addition A = alpha * A + beta * B */
     public FloatMatrix add(float alpha, float beta, FloatMatrix B) {
         if (m != B.m || n != B.n) {
             throw new IllegalArgumentException("Matrix B is not of same size.");
@@ -1214,13 +1015,7 @@ public class FloatMatrix extends SMatrix {
         return this;
     }
 
-    /**
-     * Rank-1 update A += alpha * x * y'
-     * @param alpha the scalar alpha.
-     * @param x the column vector.
-     * @param y the row vector.
-     * @return this matrix.
-     */
+    /** Rank-1 update A += alpha * x * y' */
     public FloatMatrix add(float alpha, float[] x, float[] y) {
         if (m != x.length || n != y.length) {
             throw new IllegalArgumentException("Matrix is not of same size.");
@@ -1237,8 +1032,6 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * Replaces NaN's with given value.
-     * @param x a real number.
-     * @return this matrix.
      */
     public FloatMatrix replaceNaN(float x) {
         for (int j = 0; j < n; j++) {
@@ -1253,7 +1046,7 @@ public class FloatMatrix extends SMatrix {
     }
 
     /**
-     * Returns the sum of all elements.
+     * Returns the sum of all elements in the matrix.
      * @return the sum of all elements.
      */
     public float sum() {
@@ -1268,8 +1061,7 @@ public class FloatMatrix extends SMatrix {
     }
 
     /**
-     * L<sub>1</sub> matrix norm that is the maximum of column sums.
-     * @return L<sub>1</sub> matrix norm.
+     * L1 matrix norm. Maximum column sum.
      */
     public float norm1() {
         float f = 0.0f;
@@ -1285,24 +1077,21 @@ public class FloatMatrix extends SMatrix {
     }
 
     /**
-     * L<sub>2</sub> matrix norm that is the maximum singular value.
-     * @return L<sub>2</sub> matrix norm.
+     * L2 matrix norm. Maximum singular value.
      */
     public float norm2() {
         return svd(false, false).s[0];
     }
 
     /**
-     * L<sub>2</sub> matrix norm that is the maximum singular value.
-     * @return L<sub>2</sub> matrix norm.
+     * L2 matrix norm. Maximum singular value.
      */
     public float norm() {
         return norm2();
     }
 
     /**
-     * L<sub>&infin;</sub> matrix norm that is the maximum of row sums.
-     * @return L<sub>&infin;</sub> matrix norm.
+     * Infinity matrix norm. Maximum row sum.
      */
     public float normInf() {
         float[] f = new float[m];
@@ -1316,8 +1105,7 @@ public class FloatMatrix extends SMatrix {
     }
 
     /**
-     * Frobenius matrix norm that is the square root of sum of squares of all elements.
-     * @return Frobenius matrix norm.
+     * Frobenius matrix norm. Sqrt of sum of squares of all elements.
      */
     public float normFro() {
         double f = 0.0;
@@ -1331,11 +1119,9 @@ public class FloatMatrix extends SMatrix {
     }
 
     /**
-     * Returns the quadratic form {@code x' * A * x}.
+     * Returns x' * A * x.
      * The left upper submatrix of A is used in the computation based
      * on the size of x.
-     * @param x the vector.
-     * @return the quadratic form.
      */
     public float xAx(float[] x) {
         if (m != n) {
@@ -1359,7 +1145,6 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * Returns the sum of each row.
-     * @return the sum of each row.
      */
     public float[] rowSums() {
         float[] x = new float[m];
@@ -1375,7 +1160,6 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * Returns the mean of each row.
-     * @return the mean of each row.
      */
     public float[] rowMeans() {
         float[] x = new float[m];
@@ -1395,7 +1179,6 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * Returns the standard deviations of each row.
-     * @return the standard deviations of each row.
      */
     public float[] rowSds() {
         float[] x = new float[m];
@@ -1419,7 +1202,6 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * Returns the sum of each column.
-     * @return the sum of each column.
      */
     public float[] colSums() {
         float[] x = new float[n];
@@ -1435,8 +1217,7 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * Returns the mean of each column.
-     * @return the mean of each column.
-    */
+     */
     public float[] colMeans() {
         float[] x = new float[n];
 
@@ -1452,7 +1233,6 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * Returns the standard deviations of each column.
-     * @return the standard deviations of each column.
      */
     public float[] colSds() {
         float[] x = new float[n];
@@ -1519,8 +1299,7 @@ public class FloatMatrix extends SMatrix {
     }
 
     /**
-     * Returns the inverse of matrix.
-     * @return the inverse of matrix.
+     * Returns the inverse matrix.
      */
     public FloatMatrix inverse() {
         if (m != n) {
@@ -1550,12 +1329,6 @@ public class FloatMatrix extends SMatrix {
      * <pre>{@code
      *     y = alpha * A * x + beta * y
      * }</pre>
-     * @param trans normal, transpose, or conjugate transpose
-     *               operation on the matrix A.
-     * @param alpha the scalar alpha.
-     * @param x the operand.
-     * @param beta the scalar beta.
-     * @param y the operand.
      */
     public void mv(Transpose trans, float alpha, FloatBuffer x, float beta, FloatBuffer y) {
         if (uplo != null) {
@@ -1602,14 +1375,6 @@ public class FloatMatrix extends SMatrix {
      * <pre>{@code
      *     C := alpha*A*B + beta*C
      * }</pre>
-     * @param transA normal, transpose, or conjugate transpose
-     *               operation on the matrix A.
-     * @param transB normal, transpose, or conjugate transpose
-     *               operation on the matrix B.
-     * @param alpha the scalar alpha.
-     * @param B the operand.
-     * @param beta the scalar beta.
-     * @param C the operand.
      */
     public void mm(Transpose transA, Transpose transB, float alpha, FloatMatrix B, float beta, FloatMatrix C) {
         if (isSymmetric() && transB == NO_TRANSPOSE && B.layout() == C.layout()) {
@@ -1625,10 +1390,7 @@ public class FloatMatrix extends SMatrix {
         }
     }
 
-    /**
-     * Returns {@code A' * A}.
-     * @return {@code A' * A}.
-     */
+    /** Returns A' * A */
     public FloatMatrix ata() {
         FloatMatrix C = new FloatMatrix(n, n);
         mm(TRANSPOSE, NO_TRANSPOSE, 1.0f, this, 0.0f, C);
@@ -1636,10 +1398,7 @@ public class FloatMatrix extends SMatrix {
         return C;
     }
 
-    /**
-     * Returns {@code A * A'}.
-     * @return {@code A * A'}.
-     */
+    /** Returns A * A' */
     public FloatMatrix aat() {
         FloatMatrix C = new FloatMatrix(m, m);
         mm(NO_TRANSPOSE, TRANSPOSE, 1.0f, this, 0.0f, C);
@@ -1647,16 +1406,7 @@ public class FloatMatrix extends SMatrix {
         return C;
     }
 
-    /**
-     * Returns {@code A * D * B}, where D is a diagonal matrix.
-     * @param transA normal, transpose, or conjugate transpose
-     *               operation on the matrix A.
-     * @param transB normal, transpose, or conjugate transpose
-     *               operation on the matrix B.
-     * @param B the operand.
-     * @param diag the diagonal matrix.
-     * @return the multiplication.
-     */
+    /** Returns A * D * B, where D is a diagonal matrix. */
     public FloatMatrix adb(Transpose transA, Transpose transB, FloatMatrix B, float[] diag) {
         FloatMatrix C;
         if (transA == NO_TRANSPOSE) {
@@ -1678,11 +1428,7 @@ public class FloatMatrix extends SMatrix {
         return transB == NO_TRANSPOSE ? C.mm(B) : C.mt(B);
     }
 
-    /**
-     * Returns matrix multiplication {@code A * B}.
-     * @param B the operand.
-     * @return the multiplication.
-     */
+    /** Returns matrix multiplication A * B. */
     public FloatMatrix mm(FloatMatrix B) {
         if (n != B.m) {
             throw new IllegalArgumentException(String.format("Matrix multiplication A * B: %d x %d vs %d x %d", m, n, B.m, B.n));
@@ -1693,11 +1439,7 @@ public class FloatMatrix extends SMatrix {
         return C;
     }
 
-    /**
-     * Returns matrix multiplication {@code A * B'}.
-     * @param B the operand.
-     * @return the multiplication.
-     */
+    /** Returns matrix multiplication A * B'. */
     public FloatMatrix mt(FloatMatrix B) {
         if (n != B.n) {
             throw new IllegalArgumentException(String.format("Matrix multiplication A * B': %d x %d vs %d x %d", m, n, B.m, B.n));
@@ -1708,11 +1450,7 @@ public class FloatMatrix extends SMatrix {
         return C;
     }
 
-    /**
-     * Returns matrix multiplication {@code A' * B}.
-     * @param B the operand.
-     * @return the multiplication.
-     */
+    /** Returns matrix multiplication A' * B. */
     public FloatMatrix tm(FloatMatrix B) {
         if (m != B.m) {
             throw new IllegalArgumentException(String.format("Matrix multiplication A' * B: %d x %d vs %d x %d", m, n, B.m, B.n));
@@ -1723,11 +1461,7 @@ public class FloatMatrix extends SMatrix {
         return C;
     }
 
-    /**
-     * Returns matrix multiplication {@code A' * B'}.
-     * @param B the operand.
-     * @return the multiplication.
-     */
+    /** Returns matrix multiplication A' * B'. */
     public FloatMatrix tt(FloatMatrix B) {
         if (m != B.n) {
             throw new IllegalArgumentException(String.format("Matrix multiplication A' * B': %d x %d vs %d x %d", m, n, B.m, B.n));
@@ -1740,7 +1474,6 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * LU decomposition.
-     * @return LU decomposition.
      */
     public LU lu() {
         return lu(false);
@@ -1750,7 +1483,6 @@ public class FloatMatrix extends SMatrix {
      * LU decomposition.
      *
      * @param overwrite The flag if the decomposition overwrites this matrix.
-     * @return LU decomposition.
      */
     public LU lu(boolean overwrite) {
         FloatMatrix lu = overwrite ? this : clone();
@@ -1768,7 +1500,6 @@ public class FloatMatrix extends SMatrix {
      * Cholesky decomposition for symmetric and positive definite matrix.
      *
      * @throws ArithmeticException if the matrix is not positive definite.
-     * @return Cholesky decomposition.
      */
     public Cholesky cholesky() {
         return cholesky(false);
@@ -1779,7 +1510,6 @@ public class FloatMatrix extends SMatrix {
      *
      * @param overwrite The flag if the decomposition overwrites this matrix.
      * @throws ArithmeticException if the matrix is not positive definite.
-     * @return Cholesky decomposition.
      */
     public Cholesky cholesky(boolean overwrite) {
         if (uplo == null) {
@@ -1798,7 +1528,6 @@ public class FloatMatrix extends SMatrix {
 
     /**
      * QR Decomposition.
-     * @return QR decomposition.
      */
     public QR qr() {
         return qr(false);
@@ -1808,7 +1537,6 @@ public class FloatMatrix extends SMatrix {
      * QR Decomposition.
      *
      * @param overwrite The flag if the decomposition overwrites this matrix.
-     * @return QR decomposition.
      */
     public QR qr(boolean overwrite) {
         FloatMatrix qr = overwrite ? this : clone();
@@ -1835,7 +1563,6 @@ public class FloatMatrix extends SMatrix {
      * U or V that multiply those zeros in the expression A = U*S*V'. Removing these
      * zeros and columns can improve execution time and reduce storage requirements
      * without compromising the accuracy of the decomposition.
-     * @return singular value decomposition.
      */
     public SVD svd() {
         return svd(true, false);
@@ -1857,7 +1584,6 @@ public class FloatMatrix extends SMatrix {
      *
      * @param vectors The flag if computing the singular vectors.
      * @param overwrite The flag if the decomposition overwrites this matrix.
-     * @return singular value decomposition.
      */
     public SVD svd(boolean vectors, boolean overwrite) {
         int k = Math.min(m, n);
@@ -1897,7 +1623,6 @@ public class FloatMatrix extends SMatrix {
      * and eigenvectors in sorted order. Use the <code>EVD.sort</code> function
      * to put the eigenvalues in descending order and reorder the corresponding
      * eigenvectors.
-     * @return eigen value decomposition.
      */
     public EVD eigen() {
         return eigen(false, true, false);
@@ -1915,7 +1640,6 @@ public class FloatMatrix extends SMatrix {
      * @param vl The flag if computing the left eigenvectors.
      * @param vr The flag if computing the right eigenvectors.
      * @param overwrite The flag if the decomposition overwrites this matrix.
-     * @return eigen value decomposition.
      */
     public EVD eigen(boolean vl, boolean vr, boolean overwrite) {
         if (m != n) {
@@ -2002,9 +1726,6 @@ public class FloatMatrix extends SMatrix {
 
         /**
          * Constructor.
-         * @param m the number of rows of matrix.
-         * @param n the number of columns of matrix.
-         * @param s the singular values in descending order.
          */
         public SVD(int m, int n, float[] s) {
             this.m = m;
@@ -2016,9 +1737,6 @@ public class FloatMatrix extends SMatrix {
 
         /**
          * Constructor.
-         * @param s the singular values in descending order.
-         * @param U the left singular vectors
-         * @param V the right singular vectors.
          */
         public SVD(float[] s, FloatMatrix U, FloatMatrix V) {
             this.m = U.m;
@@ -2030,7 +1748,6 @@ public class FloatMatrix extends SMatrix {
 
         /**
          * Returns the diagonal matrix of singular values.
-         * @return the diagonal matrix of singular values.
          */
         public FloatMatrix diag() {
             FloatMatrix S = new FloatMatrix(U.m, V.m);
@@ -2043,8 +1760,7 @@ public class FloatMatrix extends SMatrix {
         }
 
         /**
-         * Returns the L<sub>2</sub> matrix norm that is the largest singular value.
-         * @return L<sub>2</sub> matrix norm.
+         * Returns the L2 matrix norm. The largest singular value.
          */
         public double norm() {
             return s[0];
@@ -2053,7 +1769,6 @@ public class FloatMatrix extends SMatrix {
         /**
          * Returns the threshold to determine the effective rank.
          * Singular values S(i) <= RCOND are treated as zero.
-         * @return the threshold to determine the effective rank.
          */
         private float rcond() {
             return 0.5f * (float) Math.sqrt(m + n + 1) * s[0] * MathEx.FLOAT_EPSILON;
@@ -2062,7 +1777,6 @@ public class FloatMatrix extends SMatrix {
         /**
          * Returns the effective numerical matrix rank. The number of non-negligible
          * singular values.
-         * @return the effective numerical matrix rank.
          */
         public int rank() {
             if (s.length != Math.min(m, n)) {
@@ -2083,7 +1797,6 @@ public class FloatMatrix extends SMatrix {
         /**
          * Returns the dimension of null space. The number of negligible
          * singular values.
-         * @return the dimension of null space.
          */
         public int nullity() {
             return Math.min(m, n) - rank();
@@ -2103,8 +1816,6 @@ public class FloatMatrix extends SMatrix {
          * If it is close to one, the matrix is well conditioned. If the condition
          * number is large, then the matrix is said to be ill-conditioned. A matrix
          * that is not invertible has the condition number equal to infinity.
-         *
-         * @return L<sub>2</sub> norm condition number.
          */
         public float condition() {
             if (s.length != Math.min(m, n)) {
@@ -2117,7 +1828,6 @@ public class FloatMatrix extends SMatrix {
         /**
          * Returns the matrix which columns are the orthonormal basis for the range space.
          * Returns null if the rank is zero (if and only if zero matrix).
-         * @return the range space span matrix.
          */
         public FloatMatrix range() {
             if (s.length != Math.min(m, n)) {
@@ -2147,7 +1857,6 @@ public class FloatMatrix extends SMatrix {
         /**
          * Returns the matrix which columns are the orthonormal basis for the null space.
          * Returns null if the matrix is of full rank.
-         * @return the null space span matrix.
          */
         public FloatMatrix nullspace() {
             if (s.length != Math.min(m, n)) {
@@ -2173,10 +1882,7 @@ public class FloatMatrix extends SMatrix {
             return N;
         }
 
-        /**
-         * Returns the pseudo inverse.
-         * @return the pseudo inverse.
-         */
+        /** Returns the pseudo inverse. */
         public FloatMatrix pinv() {
             int k = s.length;
             float[] sigma = new float[k];
@@ -2190,9 +1896,9 @@ public class FloatMatrix extends SMatrix {
 
         /**
          * Solves the least squares min || B - A*X ||.
-         * @param b the right hand side of overdetermined linear system.
-         * @throws RuntimeException when matrix is rank deficient.
-         * @return the solution vector beta that minimizes ||Y - X*beta||.
+         * @param b  the right hand side of overdetermined linear system.
+         * @return   the solution vector beta that minimizes ||Y - X*beta||.
+         * @exception  RuntimeException if matrix is rank deficient.
          */
         public float[] solve(float[] b) {
             if (U == null || V == null) {
@@ -2329,7 +2035,6 @@ public class FloatMatrix extends SMatrix {
          * Returns the block diagonal eigenvalue matrix whose diagonal are the real
          * part of eigenvalues, lower subdiagonal are positive imaginary parts, and
          * upper subdiagonal are negative imaginary parts.
-         * @return the diagonal eigenvalue matrix.
          */
         public FloatMatrix diag() {
             FloatMatrix D = FloatMatrix.diag(wr);
@@ -2351,7 +2056,6 @@ public class FloatMatrix extends SMatrix {
         /**
          * Sorts the eigenvalues in descending order and reorders the
          * corresponding eigenvectors.
-         * @return sorted eigen decomposition.
          */
         public EVD sort() {
             int n = wr.length;
@@ -2454,7 +2158,6 @@ public class FloatMatrix extends SMatrix {
 
         /**
          * Returns if the matrix is singular.
-         * @return true if the matrix is singular.
          */
         public boolean isSingular() {
             return info > 0;
@@ -2462,7 +2165,6 @@ public class FloatMatrix extends SMatrix {
 
         /**
          * Returns the matrix determinant.
-         * @return the matrix determinant.
          */
         public float det() {
             int m = lu.m;
@@ -2487,8 +2189,7 @@ public class FloatMatrix extends SMatrix {
         }
 
         /**
-         * Returns the inverse of matrix. For pseudo inverse, use QRDecomposition.
-         * @return the inverse of matrix.
+         * Returns the matrix inverse. For pseudo inverse, use QRDecomposition.
          */
         public FloatMatrix inverse() {
             FloatMatrix inv = FloatMatrix.eye(lu.n);
@@ -2498,9 +2199,9 @@ public class FloatMatrix extends SMatrix {
 
         /**
          * Solve A * x = b.
-         * @param b the right hand side of linear system.
-         * @throws RuntimeException when the matrix is singular.
-         * @return the solution vector.
+         * @param b  right hand side of linear system.
+         *           On output, b will be overwritten with the solution matrix.
+         * @exception  RuntimeException  if matrix is singular.
          */
         public float[] solve(float[] b) {
             float[] x = b.clone();
@@ -2510,9 +2211,9 @@ public class FloatMatrix extends SMatrix {
 
         /**
          * Solve A * X = B. B will be overwritten with the solution matrix on output.
-         * @param B the right hand side of linear system.
-         *          On output, B will be overwritten with the solution matrix.
-         * @throws RuntimeException when the matrix is singular.
+         * @param B  right hand side of linear system.
+         *           On output, B will be overwritten with the solution matrix.
+         * @throws  RuntimeException  if matrix is singular.
          */
         public void solve(FloatMatrix B) {
             if (lu.m != lu.n) {
@@ -2583,7 +2284,6 @@ public class FloatMatrix extends SMatrix {
 
         /**
          * Returns the matrix determinant.
-         * @return the matrix determinant.
          */
         public float det() {
             double d = 1.0;
@@ -2596,7 +2296,6 @@ public class FloatMatrix extends SMatrix {
 
         /**
          * Returns the log of matrix determinant.
-         * @return the log of matrix determinant.
          */
         public float logdet() {
             int n = lu.n;
@@ -2609,8 +2308,7 @@ public class FloatMatrix extends SMatrix {
         }
 
         /**
-         * Returns the inverse of matrix.
-         * @return the inverse of matrix.
+         * Returns the matrix inverse.
          */
         public FloatMatrix inverse() {
             FloatMatrix inv = FloatMatrix.eye(lu.n);
@@ -2665,14 +2363,12 @@ public class FloatMatrix extends SMatrix {
          */
         public final FloatMatrix qr;
         /**
-         * The scalar factors of the elementary reflectors.
+         * The scalar factors of the elementary reflectors
          */
         public final float[] tau;
 
         /**
          * Constructor.
-         * @param qr the QR decomposition.
-         * @param tau the scalar factors of the elementary reflectors
          */
         public QR(FloatMatrix qr, float[] tau) {
             this.qr = qr;
@@ -2681,7 +2377,6 @@ public class FloatMatrix extends SMatrix {
 
         /**
          * Returns the Cholesky decomposition of A'A.
-         * @return the Cholesky decomposition of A'A.
          */
         public Cholesky CholeskyOfAtA() {
             int n = qr.n;
@@ -2698,7 +2393,6 @@ public class FloatMatrix extends SMatrix {
 
         /**
          * Returns the upper triangular factor.
-         * @return the upper triangular factor.
          */
         public FloatMatrix R() {
             int n = qr.n;
@@ -2714,7 +2408,6 @@ public class FloatMatrix extends SMatrix {
 
         /**
          * Returns the orthogonal factor.
-         * @return the orthogonal factor.
          */
         public FloatMatrix Q() {
             int m = qr.m;
@@ -2740,9 +2433,9 @@ public class FloatMatrix extends SMatrix {
 
         /**
          * Solves the least squares min || B - A*X ||.
-         * @param b the right hand side of overdetermined linear system.
-         * @throws RuntimeException when the matrix is rank deficient.
-         * @return the solution vector beta that minimizes ||Y - X*beta||.
+         * @param b  the right hand side of overdetermined linear system.
+         * @return   the solution vector beta that minimizes ||Y - X*beta||.
+         * @exception  RuntimeException if matrix is rank deficient.
          */
         public float[] solve(float[] b) {
             if (b.length != qr.m) {
@@ -2760,7 +2453,7 @@ public class FloatMatrix extends SMatrix {
          * Solves the least squares min || B - A*X ||.
          * @param B the right hand side of overdetermined linear system.
          *          B will be overwritten with the solution matrix on output.
-         * @throws RuntimeException when the matrix is rank deficient.
+         * @exception  RuntimeException if matrix is rank deficient.
          */
         public void solve(FloatMatrix B) {
             if (B.m != qr.m) {

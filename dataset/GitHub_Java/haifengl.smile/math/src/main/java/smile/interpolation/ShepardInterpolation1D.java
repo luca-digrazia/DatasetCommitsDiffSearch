@@ -35,18 +35,14 @@ package smile.interpolation;
  */
 public class ShepardInterpolation1D implements Interpolation {
 
-    /** The control points. */
     private final double[] x;
-    /** The function values. */
     private final double[] y;
-    /** The parameter in the radial basis function. */
     private final double p;
 
     /**
      * Constructor. By default p = 2.
-     *
-     * @param x the tabulated points.
-     * @param y the function values at <code>x</code>.
+     * @param x the point set.
+     * @param y the function values at given points.
      */
     public ShepardInterpolation1D(double[] x, double[] y) {
         this(x, y, 2);
@@ -54,9 +50,8 @@ public class ShepardInterpolation1D implements Interpolation {
 
     /**
      * Constructor.
-     *
-     * @param x the tabulated points.
-     * @param y the function values at <code>x</code>.
+     * @param x the point set.
+     * @param y the function values at given points.
      * @param p the parameter in the radial basis function &phi;(r) = r<sup>-p</sup>.
      */
     public ShepardInterpolation1D(double[] x, double[] y, double p) {

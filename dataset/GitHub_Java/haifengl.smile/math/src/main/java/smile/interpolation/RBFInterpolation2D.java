@@ -67,12 +67,9 @@ import smile.math.rbf.RadialBasisFunction;
 public class RBFInterpolation2D implements Interpolation2D {
 
     /**
-     * The first dimension of tabulated control points.
+     * The control points.
      */
     private final double[] x1;
-    /**
-     * The second dimension of tabulated control points.
-     */
     private final double[] x2;
     /**
      * The linear weights.
@@ -92,7 +89,7 @@ public class RBFInterpolation2D implements Interpolation2D {
      * normalization.
      * @param x1 the 1st dimension of data points.
      * @param x2 the 2nd dimension of data points.
-     * @param y the function values at <code>(x1, x2)</code>.
+     * @param y the function values.
      * @param rbf the radial basis function used in the interpolation
      */
     public RBFInterpolation2D(double[] x1, double[] x2, double[] y, RadialBasisFunction rbf) {
@@ -103,7 +100,7 @@ public class RBFInterpolation2D implements Interpolation2D {
      * Constructor.
      * @param x1 the 1st dimension of data points.
      * @param x2 the 2nd dimension of data points.
-     * @param y the function values at <code>(x1, x2)</code>.
+     * @param y the function values.
      * @param rbf the radial basis function used in the interpolation
      * @param normalized true for the normalized RBF interpolation.
      */

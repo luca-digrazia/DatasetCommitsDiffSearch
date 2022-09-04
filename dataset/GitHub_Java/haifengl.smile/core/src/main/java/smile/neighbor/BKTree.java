@@ -50,7 +50,7 @@ import smile.math.distance.Metric;
  * <li> W. Burkhard and R. Keller. Some approaches to best-match file searching. CACM, 1973. </li>
  * </ol>
  *
- * @param <E> the data type of objects in the tree.
+ * @param <E> the type of data objects in the tree.
  *
  * @author Haifeng Li
  */
@@ -139,8 +139,9 @@ public class BKTree<E> implements RNNSearch<E, E>, Serializable {
     }
 
     /**
-     * Adds a dataset into BK-tree.
+     * Add a dataset into BK-tree.
      * @param data the dataset to insert into the BK-tree.
+
      */
     public void add(E[] data) {
         for (E datum : data) {
@@ -149,7 +150,7 @@ public class BKTree<E> implements RNNSearch<E, E>, Serializable {
     }
 
     /**
-     * Adds a dataset into BK-tree.
+     * Add a dataset into BK-tree.
      * @param data the dataset to insert into the BK-tree.
      */
     public void add(Collection<E> data) {
@@ -164,8 +165,7 @@ public class BKTree<E> implements RNNSearch<E, E>, Serializable {
     }
 
     /**
-     * Adds a datum into the BK-tree.
-     * @param datum the datum.
+     * Add a datum into the BK-tree.
      */
     public void add(E datum) {
         if (root == null) {
@@ -176,7 +176,7 @@ public class BKTree<E> implements RNNSearch<E, E>, Serializable {
     }
 
     /**
-     * Range search in the given subtree.
+     * Do a range search in the given subtree.
      * @param node the root of subtree.
      * @param q the query object.
      * @param k the range of query.
