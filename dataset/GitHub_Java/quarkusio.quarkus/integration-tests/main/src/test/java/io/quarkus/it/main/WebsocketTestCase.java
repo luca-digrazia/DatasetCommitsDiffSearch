@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.it.main;
 
 import static org.hamcrest.Matchers.is;
@@ -14,10 +30,8 @@ import javax.websocket.MessageHandler;
 import javax.websocket.Session;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
-import io.quarkus.it.websocket.WebSocketOpenEndpoint;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.RestAssured;
@@ -30,9 +44,6 @@ public class WebsocketTestCase {
 
     @TestHTTPResource("recoder")
     URI recoderUri;
-
-    @TestHTTPResource("wsopen")
-    URI openURI;
 
     @Test
     public void websocketTest() throws Exception {
@@ -93,6 +104,7 @@ public class WebsocketTestCase {
     @Test
     public void websocketClientEncodingAndDecodingTest() {
         String echoUriWsUri = echoUri.toString().replaceFirst("http", "ws");
+        System.out.println("echo uri: " + echoUriWsUri); // mstod remove
         RestAssured
                 .given()
                 .queryParam("echoServerUri", echoUriWsUri)
@@ -102,31 +114,5 @@ public class WebsocketTestCase {
                 // "initial-data" is sent from the ClientCodingResource to the EchoService
                 // encoder and decoder prepend it with the [encoded] and [decoded] strings.
                 .body(is("[decoded][encoded]initial data"));
-    }
-
-    @Test
-    @Disabled("test disabled as the message handler may be registered after the messages being sent.")
-    public void testSendMessageOnOpen() throws Exception {
-
-        LinkedBlockingDeque<String> message = new LinkedBlockingDeque<>();
-        Session session = ContainerProvider.getWebSocketContainer().connectToServer(new Endpoint() {
-            @Override
-            public void onOpen(Session session, EndpointConfig endpointConfig) {
-                session.addMessageHandler(new MessageHandler.Whole<String>() {
-                    @Override
-                    public void onMessage(String s) {
-                        message.add(s);
-                    }
-                });
-            }
-        }, ClientEndpointConfig.Builder.create().build(), openURI);
-
-        try {
-            for (String i : WebSocketOpenEndpoint.messages) {
-                Assertions.assertEquals(i, message.poll(20, TimeUnit.SECONDS));
-            }
-        } finally {
-            session.close();
-        }
     }
 }

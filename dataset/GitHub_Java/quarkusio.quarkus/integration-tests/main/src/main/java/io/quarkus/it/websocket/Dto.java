@@ -15,27 +15,21 @@
  */
 package io.quarkus.it.websocket;
 
-import java.io.Reader;
+public class Dto {
+    private String content;
 
-import javax.json.Json;
-import javax.json.JsonObject;
-import javax.websocket.Decoder;
-import javax.websocket.EndpointConfig;
+    public String getContent() {
+        return content;
+    }
 
-public class ServerDtoDecoder implements Decoder.TextStream<Dto> {
-    @Override
-    public Dto decode(Reader reader) {
-        JsonObject jsonObject = Json.createReader(reader).readObject();
-        Dto result = new Dto();
-        result.setContent(jsonObject.getString("content"));
-        return result;
+    public void setContent(String content) {
+        this.content = content;
     }
 
     @Override
-    public void init(EndpointConfig config) {
-    }
-
-    @Override
-    public void destroy() {
+    public String toString() {
+        return "Dto{" +
+                "content='" + content + '\'' +
+                '}';
     }
 }

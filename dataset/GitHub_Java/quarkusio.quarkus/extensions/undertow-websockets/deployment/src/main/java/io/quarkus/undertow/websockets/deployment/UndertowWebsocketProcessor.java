@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.undertow.websockets.deployment;
 
 import java.lang.reflect.Modifier;
@@ -33,7 +49,7 @@ import io.quarkus.deployment.builditem.substrate.ServiceProviderBuildItem;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.undertow.deployment.ServletContextAttributeBuildItem;
 import io.quarkus.undertow.deployment.UndertowBuildItem;
-import io.quarkus.undertow.websockets.runtime.UndertowWebsocketRecorder;
+import io.quarkus.undertow.websockets.runtime.UndertowWebsocketTemplate;
 import io.undertow.websockets.jsr.JsrWebSocketFilter;
 import io.undertow.websockets.jsr.UndertowContainerProvider;
 import io.undertow.websockets.jsr.WebSocketDeploymentInfo;
@@ -76,7 +92,7 @@ public class UndertowWebsocketProcessor {
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
     public ServletContextAttributeBuildItem deploy(final CombinedIndexBuildItem indexBuildItem,
-            UndertowWebsocketRecorder recorder,
+            UndertowWebsocketTemplate template,
             BuildProducer<ReflectiveClassBuildItem> reflection, BuildProducer<FeatureBuildItem> feature,
             List<AnnotatedWebsocketEndpointBuildItem> annotatedEndpoints) throws Exception {
 
@@ -121,7 +137,7 @@ public class UndertowWebsocketProcessor {
                 new ReflectiveClassBuildItem(true, true, ClientEndpointConfig.Configurator.class.getName()));
 
         return new ServletContextAttributeBuildItem(WebSocketDeploymentInfo.ATTRIBUTE_NAME,
-                recorder.createDeploymentInfo(annotated, endpoints, config));
+                template.createDeploymentInfo(annotated, endpoints, config));
     }
 
     private void registerCodersForReflection(BuildProducer<ReflectiveClassBuildItem> reflection,
@@ -147,8 +163,8 @@ public class UndertowWebsocketProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    ServiceStartBuildItem setupWorker(UndertowWebsocketRecorder recorder, UndertowBuildItem undertow) {
-        recorder.setupWorker(undertow.getUndertow());
+    ServiceStartBuildItem setupWorker(UndertowWebsocketTemplate template, UndertowBuildItem undertow) {
+        template.setupWorker(undertow.getUndertow());
         return new ServiceStartBuildItem("Websockets");
     }
 

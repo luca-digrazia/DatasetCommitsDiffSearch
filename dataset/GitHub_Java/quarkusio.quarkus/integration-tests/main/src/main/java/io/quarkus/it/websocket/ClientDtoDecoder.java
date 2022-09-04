@@ -15,20 +15,22 @@
  */
 package io.quarkus.it.websocket;
 
+import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.Reader;
 
-import javax.json.Json;
-import javax.json.JsonObject;
 import javax.websocket.Decoder;
 import javax.websocket.EndpointConfig;
 
-public class ServerDtoDecoder implements Decoder.TextStream<Dto> {
+public class ClientDtoDecoder implements Decoder.TextStream<Dto> {
     @Override
-    public Dto decode(Reader reader) {
-        JsonObject jsonObject = Json.createReader(reader).readObject();
-        Dto result = new Dto();
-        result.setContent(jsonObject.getString("content"));
-        return result;
+    public Dto decode(Reader reader) throws IOException {
+        try (BufferedReader bufferedReader = new BufferedReader(reader)) {
+            String input = bufferedReader.readLine(); // expecting one line input
+            Dto result = new Dto();
+            result.setContent("[decoded]" + input);
+            return result;
+        }
     }
 
     @Override
