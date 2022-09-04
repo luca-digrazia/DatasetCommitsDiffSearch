@@ -1,6 +1,7 @@
 package com.davemorrissey.labs.subscaleview.test.extension;
 
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -14,14 +15,17 @@ import com.davemorrissey.labs.subscaleview.test.R.layout;
 public class ExtensionCircleFragment extends Fragment {
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View rootView = inflater.inflate(layout.extension_circle_fragment, container, false);
-        rootView.findViewById(id.next).setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { ((ExtensionActivity) ExtensionCircleFragment.this.getActivity()).next(); }
-        });
-        rootView.findViewById(id.previous).setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { ((ExtensionActivity) ExtensionCircleFragment.this.getActivity()).previous(); }
-        });
+        final ExtensionActivity activity = (ExtensionActivity)getActivity();
+        if (activity != null) {
+            rootView.findViewById(id.next).setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { activity.next(); }
+            });
+            rootView.findViewById(id.previous).setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { activity.previous(); }
+            });
+        }
         SubsamplingScaleImageView imageView = rootView.findViewById(id.imageView);
         imageView.setImage(ImageSource.asset("sanmartino.jpg"));
         return rootView;
