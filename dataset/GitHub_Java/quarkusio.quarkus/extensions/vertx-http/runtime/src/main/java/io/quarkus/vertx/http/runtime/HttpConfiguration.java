@@ -1,6 +1,5 @@
 package io.quarkus.vertx.http.runtime;
 
-import java.time.Duration;
 import java.util.OptionalInt;
 
 import io.quarkus.runtime.LaunchMode;
@@ -82,25 +81,9 @@ public class HttpConfiguration {
     public ServerLimitsConfig limits;
 
     /**
-     * Http connection idle timeout
-     */
-    @ConfigItem(defaultValue = "30M", name = "idle-timeout")
-    public Duration idleTimeout;
-
-    /**
      * Request body related settings
      */
     public BodyConfig body;
-
-    /**
-     * The encryption key that is used to store persistent logins (e.g. for form auth). Logins are stored in a persistent
-     * cookie that is encrypted with AES-256 using a key derived from a SHA-256 hash of the key that is provided here.
-     *
-     * If no key is provided then an in-memory one will be generated, this will change on every restart though so it
-     * is not suitable for production environments. This must be more than 16 characters long for security reasons
-     */
-    @ConfigItem(name = "auth.session.encryption-key")
-    public String encryptionKey;
 
     public int determinePort(LaunchMode launchMode) {
         return launchMode == LaunchMode.TEST ? testPort : port;
