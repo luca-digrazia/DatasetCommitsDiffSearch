@@ -18,11 +18,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.RuleSet;
-import com.google.devtools.build.lib.bazel.rules.objc.BazelObjcImportRule;
-import com.google.devtools.build.lib.bazel.rules.objc.BazelObjcLibraryRule;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
-import com.google.devtools.build.lib.rules.apple.AvailableXcodesRule;
 import com.google.devtools.build.lib.rules.apple.XcodeConfigAlias.XcodeConfigAliasRule;
 import com.google.devtools.build.lib.rules.apple.XcodeConfigRule;
 import com.google.devtools.build.lib.rules.apple.XcodeVersionRule;
@@ -30,22 +27,24 @@ import com.google.devtools.build.lib.rules.apple.cpp.AppleCcToolchainRule;
 import com.google.devtools.build.lib.rules.apple.swift.SwiftConfiguration;
 import com.google.devtools.build.lib.rules.core.CoreRules;
 import com.google.devtools.build.lib.rules.objc.AppleBinaryRule;
-import com.google.devtools.build.lib.rules.objc.AppleStarlarkCommon;
+import com.google.devtools.build.lib.rules.objc.AppleSkylarkCommon;
 import com.google.devtools.build.lib.rules.objc.AppleStaticLibraryRule;
 import com.google.devtools.build.lib.rules.objc.J2ObjcConfiguration;
 import com.google.devtools.build.lib.rules.objc.ObjcBuildInfoFactory;
-import com.google.devtools.build.lib.rules.objc.ObjcConfiguration;
-import com.google.devtools.build.lib.rules.objc.ObjcImportBaseRule;
-import com.google.devtools.build.lib.rules.objc.ObjcLibraryBaseRule;
+import com.google.devtools.build.lib.rules.objc.ObjcConfigurationLoader;
+import com.google.devtools.build.lib.rules.objc.ObjcImportRule;
+import com.google.devtools.build.lib.rules.objc.ObjcLibraryRule;
 import com.google.devtools.build.lib.rules.objc.ObjcProtoAspect;
 import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses;
-import com.google.devtools.build.lib.starlarkbuildapi.apple.AppleBootstrap;
+import com.google.devtools.build.lib.skylarkbuildapi.apple.AppleBootstrap;
 
-/** Rules for Objective-C support in Bazel. */
+/**
+ * Rules for Objective-C support in Bazel.
+ */
 public class ObjcRules implements RuleSet {
   public static final ObjcRules INSTANCE = new ObjcRules();
 
-  private ObjcRules() {
+  protected ObjcRules() {
     // Use the static INSTANCE field instead.
   }
 
@@ -59,11 +58,11 @@ public class ObjcRules implements RuleSet {
 
     builder.addBuildInfoFactory(new ObjcBuildInfoFactory());
 
-    builder.addConfigurationFragment(ObjcConfiguration.class);
-    builder.addConfigurationFragment(AppleConfiguration.class);
-    builder.addConfigurationFragment(SwiftConfiguration.class);
+    builder.addConfigurationFragment(new ObjcConfigurationLoader());
+    builder.addConfigurationFragment(new AppleConfiguration.Loader());
+    builder.addConfigurationFragment(new SwiftConfiguration.Loader());
     // j2objc shouldn't be here!
-    builder.addConfigurationFragment(J2ObjcConfiguration.class);
+    builder.addConfigurationFragment(new J2ObjcConfiguration.Loader());
 
     builder.addNativeAspectClass(objcProtoAspect);
     builder.addRuleDefinition(new AppleBinaryRule(objcProtoAspect));
@@ -71,10 +70,8 @@ public class ObjcRules implements RuleSet {
 
     builder.addRuleDefinition(new AppleCcToolchainRule());
     builder.addRuleDefinition(new AppleToolchain.RequiresXcodeConfigRule(toolsRepository));
-    builder.addRuleDefinition(new BazelObjcImportRule());
-    builder.addRuleDefinition(new BazelObjcLibraryRule());
-    builder.addRuleDefinition(new ObjcImportBaseRule());
-    builder.addRuleDefinition(new ObjcLibraryBaseRule());
+    builder.addRuleDefinition(new ObjcImportRule());
+    builder.addRuleDefinition(new ObjcLibraryRule());
     builder.addRuleDefinition(new ObjcRuleClasses.CoptsRule());
     builder.addRuleDefinition(new ObjcRuleClasses.DylibDependingRule(objcProtoAspect));
     builder.addRuleDefinition(new ObjcRuleClasses.CompilingRule());
@@ -85,13 +82,13 @@ public class ObjcRules implements RuleSet {
     builder.addRuleDefinition(new ObjcRuleClasses.SdkFrameworksDependerRule());
     builder.addRuleDefinition(new ObjcRuleClasses.CompileDependencyRule());
     builder.addRuleDefinition(new ObjcRuleClasses.XcrunRule());
+    builder.addRuleDefinition(new ObjcRuleClasses.LibtoolRule());
     builder.addRuleDefinition(new ObjcRuleClasses.CrosstoolRule());
     builder.addRuleDefinition(new XcodeConfigRule());
     builder.addRuleDefinition(new XcodeConfigAliasRule());
-    builder.addRuleDefinition(new AvailableXcodesRule());
     builder.addRuleDefinition(new XcodeVersionRule());
 
-    builder.addStarlarkBootstrap(new AppleBootstrap(new AppleStarlarkCommon(objcProtoAspect)));
+    builder.addSkylarkBootstrap(new AppleBootstrap(new AppleSkylarkCommon(objcProtoAspect)));
   }
 
   @Override

@@ -256,16 +256,7 @@ public class Package {
       throw new UnsupportedOperationException("Can only access the external package repository"
           + "mappings from the //external package");
     }
-
-    // We are passed a repository name as seen from the main repository, not necessarily
-    // a canonical repository name. So, we first have to find the canonical name for the
-    // repository in question before we can look up the mapping for it.
-    RepositoryName actualRepositoryName =
-        externalPackageRepositoryMappings
-            .getOrDefault(RepositoryName.MAIN, ImmutableMap.of())
-            .getOrDefault(repository, repository);
-
-    return externalPackageRepositoryMappings.getOrDefault(actualRepositoryName, ImmutableMap.of());
+    return externalPackageRepositoryMappings.getOrDefault(repository, ImmutableMap.of());
   }
 
   /** Get the repository mapping for this package. */
@@ -815,7 +806,7 @@ public class Package {
 
     // The map from each repository to that repository's remappings map.
     // This is only used in the //external package, it is an empty map for all other packages.
-    public final HashMap<RepositoryName, HashMap<RepositoryName, RepositoryName>>
+    private final HashMap<RepositoryName, HashMap<RepositoryName, RepositoryName>>
         externalPackageRepositoryMappings = new HashMap<>();
     // The map of repository reassignments for BUILD packages loaded within external repositories.
     // It contains an entry from "@<main workspace name>" to "@" for packages within
@@ -1474,7 +1465,10 @@ public class Package {
           // All labels mentioned in a rule that refer to an unknown target in the
           // current package are assumed to be InputFiles, so let's create them:
           for (AttributeMap.DepEdge depEdge : AggregatingAttributeMapper.of(rule).visitLabels()) {
-            InputFile inputFile = createInputFileMaybe(depEdge.getLabel(), rule.getLocation());
+            InputFile inputFile =
+                createInputFileMaybe(
+                    depEdge.getLabel(),
+                    rule.getAttributeLocation(depEdge.getAttribute().getName()));
             if (inputFile != null && !newInputFiles.containsKey(depEdge.getLabel())) {
               newInputFiles.put(depEdge.getLabel(), inputFile);
             }
