@@ -52,8 +52,8 @@ public class SecretConfigSourceUtil extends AbstractKubernetesConfigSourceUtil {
 
         private static final String NAME_PREFIX = "SecretLiteralDataPropertiesConfigSource[secret=";
 
-        public SecretLiteralDataPropertiesConfigSource(String secretMapName, Map<String, String> propertyMap, int ordinal) {
-            super(NAME_PREFIX + secretMapName + "]", decodeMapValues(propertyMap), ordinal);
+        public SecretLiteralDataPropertiesConfigSource(String secretName, Map<String, String> propertyMap, int ordinal) {
+            super(NAME_PREFIX + secretName + "]", decodeMapValues(propertyMap), ordinal);
         }
     }
 
@@ -61,8 +61,8 @@ public class SecretConfigSourceUtil extends AbstractKubernetesConfigSourceUtil {
 
         private static final String NAME_FORMAT = "SecretStringInputPropertiesConfigSource[secret=%s,file=%s]";
 
-        SecretStringInputPropertiesConfigSource(String secretMapName, String fileName, String input, int ordinal) {
-            super(String.format(NAME_FORMAT, secretMapName, fileName), readProperties(decodeValue(input)), ordinal);
+        SecretStringInputPropertiesConfigSource(String secretName, String fileName, String input, int ordinal) {
+            super(String.format(NAME_FORMAT, secretName, fileName), readProperties(decodeValue(input)), ordinal);
         }
 
         @SuppressWarnings({ "rawtypes", "unchecked" })
@@ -81,8 +81,8 @@ public class SecretConfigSourceUtil extends AbstractKubernetesConfigSourceUtil {
 
         private static final String NAME_FORMAT = "SecretStringInputYamlConfigSource[secret=%s,file=%s]";
 
-        public SecretStringInputYamlConfigSource(String secretMapName, String fileName, String input, int ordinal) {
-            super(String.format(NAME_FORMAT, secretMapName, fileName), decodeValue(input), ordinal);
+        public SecretStringInputYamlConfigSource(String secretName, String fileName, String input, int ordinal) {
+            super(String.format(NAME_FORMAT, secretName, fileName), decodeValue(input), ordinal);
         }
     }
 }
