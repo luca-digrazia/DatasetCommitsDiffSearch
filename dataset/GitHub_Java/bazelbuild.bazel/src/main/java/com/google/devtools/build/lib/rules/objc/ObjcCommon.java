@@ -68,7 +68,6 @@ import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationContextInfo;
-import com.google.devtools.build.lib.rules.cpp.CcCompilationInfo;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsInfo;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
@@ -258,33 +257,22 @@ public final class ObjcCommon {
     Builder addDeps(List<ConfiguredTargetAndData> deps) {
       ImmutableList.Builder<ObjcProvider> propagatedObjcDeps =
           ImmutableList.<ObjcProvider>builder();
-      ImmutableList.Builder<CcCompilationInfo> cppDeps = ImmutableList.builder();
+      ImmutableList.Builder<CcCompilationContextInfo> cppDeps =
+          ImmutableList.<CcCompilationContextInfo>builder();
       ImmutableList.Builder<CcLinkParamsInfo> cppDepLinkParams =
           ImmutableList.<CcLinkParamsInfo>builder();
 
       for (ConfiguredTargetAndData dep : deps) {
         ConfiguredTarget depCT = dep.getConfiguredTarget();
         addAnyProviders(propagatedObjcDeps, depCT, ObjcProvider.SKYLARK_CONSTRUCTOR);
-        addAnyProviders(cppDeps, depCT, CcCompilationInfo.PROVIDER);
+        addAnyProviders(cppDeps, depCT, CcCompilationContextInfo.PROVIDER);
         if (isCcLibrary(dep)) {
           cppDepLinkParams.add(depCT.get(CcLinkParamsInfo.PROVIDER));
-          CcCompilationContextInfo ccCompilationContextInfo =
-              depCT.get(CcCompilationInfo.PROVIDER).getCcCompilationContextInfo();
-          addDefines(ccCompilationContextInfo.getDefines());
-        }
-      }
-      ImmutableList.Builder<CcCompilationContextInfo> ccCompilationContextInfoBuilder =
-          ImmutableList.builder();
-      for (CcCompilationInfo ccCompilationInfo : cppDeps.build()) {
-        CcCompilationContextInfo ccCompilationContextInfo =
-            ccCompilationInfo.getCcCompilationContextInfo();
-        if (ccCompilationContextInfo == null) {
-          ccCompilationContextInfoBuilder.add(ccCompilationContextInfo);
+          addDefines(depCT.get(CcCompilationContextInfo.PROVIDER).getDefines());
         }
       }
       addDepObjcProviders(propagatedObjcDeps.build());
-      this.depCcHeaderProviders =
-          Iterables.concat(this.depCcHeaderProviders, ccCompilationContextInfoBuilder.build());
+      this.depCcHeaderProviders = Iterables.concat(this.depCcHeaderProviders, cppDeps.build());
       this.depCcLinkProviders = Iterables.concat(this.depCcLinkProviders, cppDepLinkParams.build());
       return this;
     }
