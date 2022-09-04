@@ -93,12 +93,7 @@ public final class BinaryOperatorExpression extends Expression {
       Operator operator, Expression lhs, Expression rhs, Environment env, Location location)
       throws EvalException, InterruptedException {
     Object lval = lhs.eval(env);
-    return evaluate(operator, lval, rhs, env, location);
-  }
 
-  public static Object evaluate(
-      Operator operator, Object lval, Expression rhs, Environment env, Location location)
-      throws EvalException, InterruptedException {
     // Short-circuit operators
     if (operator == Operator.AND) {
       if (EvalUtils.toBoolean(lval)) {
