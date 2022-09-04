@@ -2,7 +2,6 @@ package io.quarkus.spring.cloud.config.client.runtime;
 
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Map;
 import java.util.Optional;
 
 import io.quarkus.runtime.annotations.ConfigItem;
@@ -31,14 +30,6 @@ public class SpringCloudConfigClientConfig {
      */
     @ConfigItem(defaultValue = "http://localhost:8888")
     public String url;
-
-    /**
-     * The label to be used to pull remote configuration properties.
-     * The default is set on the Spring Cloud Config Server
-     * (generally "master" when the server uses a Git backend).
-     */
-    @ConfigItem
-    public Optional<String> label;
 
     /**
      * The amount of time to wait when initially establishing a connection before giving up and timing out.
@@ -105,13 +96,7 @@ public class SpringCloudConfigClientConfig {
      * When using HTTPS and no keyStore has been specified, whether or not to trust all certificates
      */
     @ConfigItem(defaultValue = "false")
-    public boolean trustCerts;
-
-    /**
-     * Custom headers to pass the Spring Cloud Config Server when performing the HTTP request
-     */
-    @ConfigItem
-    public Map<String, String> headers;
+    boolean trustCerts;
 
     public boolean usernameAndPasswordSet() {
         return username.isPresent() && password.isPresent();

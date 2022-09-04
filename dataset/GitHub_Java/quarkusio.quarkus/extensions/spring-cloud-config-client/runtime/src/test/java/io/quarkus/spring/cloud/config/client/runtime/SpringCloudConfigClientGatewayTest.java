@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.entry;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.Optional;
 
 import org.apache.commons.io.IOUtils;
@@ -22,9 +21,8 @@ class SpringCloudConfigClientGatewayTest {
     private static final int MOCK_SERVER_PORT = 9300;
     private static final WireMockServer wireMockServer = new WireMockServer(MOCK_SERVER_PORT);
 
-    private static final SpringCloudConfigClientConfig springCloudConfigClientConfig = configForTesting();
     private final SpringCloudConfigClientGateway sut = new DefaultSpringCloudConfigClientGateway(
-            springCloudConfigClientConfig);
+            configForTesting());
 
     @BeforeAll
     static void start() {
@@ -40,9 +38,7 @@ class SpringCloudConfigClientGatewayTest {
     void testBasicExchange() throws Exception {
         final String applicationName = "foo";
         final String profile = "dev";
-        final String springCloudConfigUrl = String.format(
-                "/%s/%s/%s", applicationName, profile, springCloudConfigClientConfig.label.get());
-        wireMockServer.stubFor(WireMock.get(springCloudConfigUrl).willReturn(WireMock
+        wireMockServer.stubFor(WireMock.get(String.format("/%s/%s", applicationName, profile)).willReturn(WireMock
                 .okJson(getJsonStringForApplicationAndProfile(applicationName, profile))));
 
         final Response response = sut.exchange(applicationName, profile);
@@ -76,7 +72,6 @@ class SpringCloudConfigClientGatewayTest {
     private static SpringCloudConfigClientConfig configForTesting() {
         SpringCloudConfigClientConfig springCloudConfigClientConfig = new SpringCloudConfigClientConfig();
         springCloudConfigClientConfig.url = "http://localhost:" + MOCK_SERVER_PORT;
-        springCloudConfigClientConfig.label = Optional.of("master");
         springCloudConfigClientConfig.connectionTimeout = Duration.ZERO;
         springCloudConfigClientConfig.readTimeout = Duration.ZERO;
         springCloudConfigClientConfig.username = Optional.empty();
@@ -84,7 +79,6 @@ class SpringCloudConfigClientGatewayTest {
         springCloudConfigClientConfig.trustStore = Optional.empty();
         springCloudConfigClientConfig.keyStore = Optional.empty();
         springCloudConfigClientConfig.trustCerts = false;
-        springCloudConfigClientConfig.headers = new HashMap<>();
         return springCloudConfigClientConfig;
     }
 }
