@@ -29,9 +29,6 @@ package org.graylog2.messagehandlers.gelf;
  */
 public class EmptyGELFMessageException extends Exception {
 
-    /**
-     *
-     */
     public EmptyGELFMessageException() {
     }
 
