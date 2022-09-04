@@ -176,12 +176,12 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
      *
      * @param url           播放url
      * @param cacheWithPlay 是否边播边缓存
-     * @param title         title
+     * @param objects       object[0]目前为title
      * @return
      */
     @Override
-    public boolean setUp(String url, boolean cacheWithPlay, String title) {
-        return setUp(url, cacheWithPlay, (File) null, title);
+    public boolean setUp(String url, boolean cacheWithPlay, Object... objects) {
+        return setUp(url, cacheWithPlay, (File) null, objects);
     }
 
     /**
@@ -190,14 +190,14 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
      * @param url           播放url
      * @param cacheWithPlay 是否边播边缓存
      * @param cachePath     缓存路径，如果是M3U8或者HLS，请设置为false
-     * @param title         title
+     * @param objects       object[0]目前为title
      * @return
      */
     @Override
-    public boolean setUp(String url, boolean cacheWithPlay, File cachePath, String title) {
-        if (super.setUp(url, cacheWithPlay, cachePath, title)) {
-            if (title != null) {
-                mTitleTextView.setText(title);
+    public boolean setUp(String url, boolean cacheWithPlay, File cachePath, Object... objects) {
+        if (super.setUp(url, cacheWithPlay, cachePath, objects)) {
+            if (objects != null && objects.length > 0) {
+                mTitleTextView.setText(objects[0].toString());
             }
             if (mIfCurrentIsFullscreen) {
                 mFullscreenButton.setImageResource(getShrinkImageRes());
@@ -313,10 +313,10 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
             if (mStandardVideoAllCallBack != null && isCurrentMediaListener()) {
                 if (mIfCurrentIsFullscreen) {
                     Debuger.printfLog("onClickBlankFullscreen");
-                    mStandardVideoAllCallBack.onClickBlankFullscreen(mOriginUrl, mTitle, StandardGSYVideoPlayer.this);
+                    mStandardVideoAllCallBack.onClickBlankFullscreen(mUrl, mObjects);
                 } else {
                     Debuger.printfLog("onClickBlank");
-                    mStandardVideoAllCallBack.onClickBlank(mOriginUrl, mTitle, StandardGSYVideoPlayer.this);
+                    mStandardVideoAllCallBack.onClickBlank(mUrl, mObjects);
                 }
             }
             startDismissControlViewTimer();
@@ -353,7 +353,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
     public void startPlayLogic() {
         if (mStandardVideoAllCallBack != null) {
             Debuger.printfLog("onClickStartThumb");
-            mStandardVideoAllCallBack.onClickStartThumb(mOriginUrl, mTitle, StandardGSYVideoPlayer.this);
+            mStandardVideoAllCallBack.onClickStartThumb(mUrl, mObjects);
         }
         prepareVideo();
         startDismissControlViewTimer();
@@ -609,19 +609,17 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
     }
 
     protected void updateStartImage() {
-        if(mStartButton instanceof ENPlayView) {
-            ENPlayView enPlayView = (ENPlayView) mStartButton;
-            enPlayView.setDuration(500);
-            if (mCurrentState == CURRENT_STATE_PLAYING) {
-                enPlayView.play();
-                //mStartButton.setImageResource(R.drawable.video_click_pause_selector);
-            } else if (mCurrentState == CURRENT_STATE_ERROR) {
-                enPlayView.pause();
-                //mStartButton.setImageResource(R.drawable.video_click_error_selector);
-            } else {
-                enPlayView.pause();
-                //mStartButton.setImageResource(R.drawable.video_click_play_selector);
-            }
+        ENPlayView enPlayView = (ENPlayView) mStartButton;
+        enPlayView.setDuration(500);
+        if (mCurrentState == CURRENT_STATE_PLAYING) {
+            enPlayView.play();
+            //mStartButton.setImageResource(R.drawable.video_click_pause_selector);
+        } else if (mCurrentState == CURRENT_STATE_ERROR) {
+            enPlayView.pause();
+            //mStartButton.setImageResource(R.drawable.video_click_error_selector);
+        } else {
+            enPlayView.pause();
+            //mStartButton.setImageResource(R.drawable.video_click_play_selector);
         }
     }
 
