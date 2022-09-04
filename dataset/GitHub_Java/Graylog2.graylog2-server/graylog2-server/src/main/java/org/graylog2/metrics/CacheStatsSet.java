@@ -25,16 +25,13 @@ import com.google.common.collect.ImmutableMap;
 
 import java.util.Map;
 
-import static com.codahale.metrics.MetricRegistry.name;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class CacheStatsSet implements MetricSet {
     // without type args, because the only call we care about (.stats()) is not generic
     private final Cache cache;
-    private final String prefix;
 
-    public CacheStatsSet(String prefix, Cache cache) {
-        this.prefix = checkNotNull(prefix);
+    public CacheStatsSet(Cache cache) {
         this.cache = checkNotNull(cache);
     }
 
@@ -42,55 +39,55 @@ public class CacheStatsSet implements MetricSet {
     public Map<String, Metric> getMetrics() {
         final CacheStats cacheStats = cache.stats();
         return ImmutableMap.<String, Metric>builder()
-                .put(name(prefix, "requests"), new Gauge<Long>() {
+                .put("requests", new Gauge<Long>() {
                     @Override
                     public Long getValue() {
                         return cacheStats.requestCount();
                     }
                 })
-                .put(name(prefix, "hits"), new Gauge<Long>() {
+                .put("hits", new Gauge<Long>() {
                     @Override
                     public Long getValue() {
                         return cacheStats.hitCount();
                     }
                 })
-                .put(name(prefix, "misses"), new Gauge<Long>() {
+                .put("misses", new Gauge<Long>() {
                     @Override
                     public Long getValue() {
                         return cacheStats.missCount();
                     }
                 })
-                .put(name(prefix, "evictions"), new Gauge<Long>() {
+                .put("evictions", new Gauge<Long>() {
                     @Override
                     public Long getValue() {
                         return cacheStats.evictionCount();
                     }
                 })
-                .put(name(prefix, "total-load-time-ns"), new Gauge<Long>() {
+                .put("total-load-time-ns", new Gauge<Long>() {
                     @Override
                     public Long getValue() {
                         return cacheStats.totalLoadTime();
                     }
                 })
-                .put(name(prefix, "load-successes"), new Gauge<Long>() {
+                .put("load-successes", new Gauge<Long>() {
                     @Override
                     public Long getValue() {
                         return cacheStats.loadSuccessCount();
                     }
                 })
-                .put(name(prefix, "load-exceptions"), new Gauge<Long>() {
+                .put("load-exceptions", new Gauge<Long>() {
                     @Override
                     public Long getValue() {
                         return cacheStats.loadExceptionCount();
                     }
                 })
-                .put(name(prefix, "hit-rate"), new Gauge<Double>() {
+                .put("hit-rate", new Gauge<Double>() {
                     @Override
                     public Double getValue() {
                         return cacheStats.hitRate();
                     }
                 })
-                .put(name(prefix, "miss-rate"), new Gauge<Double>() {
+                .put("miss-rate", new Gauge<Double>() {
                     @Override
                     public Double getValue() {
                         return cacheStats.missRate();
