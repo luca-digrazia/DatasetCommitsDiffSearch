@@ -391,9 +391,16 @@ public class JavaCommon {
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.<Artifact>stableOrder()
         .addAll(targetSrcJars);
 
-    for (JavaSourceJarsProvider sourceJarsProvider : JavaProvider.getProvidersFromListOfTargets(
-        JavaSourceJarsProvider.class, getDependencies())) {
-      builder.addTransitive(sourceJarsProvider.getTransitiveSourceJars());
+    for (TransitiveInfoCollection dep : getDependencies()) {
+      JavaSourceJarsProvider sourceJarsProvider = dep.getProvider(JavaSourceJarsProvider.class);
+      if (sourceJarsProvider == null) {
+        // A target can either have both JavaSourceJarsProvider and JavaProvider that
+        // encapsulates the same information, or just one of them.
+        sourceJarsProvider = JavaProvider.getProvider(JavaSourceJarsProvider.class, dep);
+      }
+      if (sourceJarsProvider != null) {
+        builder.addTransitive(sourceJarsProvider.getTransitiveSourceJars());
+      }
     }
 
     return builder.build();
@@ -657,7 +664,7 @@ public class JavaCommon {
     }
     builder.addAll(ruleContext.getPrerequisites("deps", Mode.TARGET));
 
-    semantics.collectTargetsTreatedAsDeps(ruleContext, builder, type);
+    semantics.collectTargetsTreatedAsDeps(ruleContext, builder);
 
     // Implicitly add dependency on java launcher cc_binary when --java_launcher= is enabled,
     // or when launcher attribute is specified in a build rule.
