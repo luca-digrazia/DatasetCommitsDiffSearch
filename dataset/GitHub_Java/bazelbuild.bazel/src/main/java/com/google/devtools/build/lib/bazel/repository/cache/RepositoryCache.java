@@ -128,7 +128,7 @@ public class RepositoryCache {
   }
 
   public synchronized Path get(String cacheKey, Path targetPath, KeyType keyType)
-      throws IOException, InterruptedException {
+      throws IOException {
     return get(cacheKey, targetPath, keyType, null);
   }
 
@@ -150,11 +150,7 @@ public class RepositoryCache {
    */
   @Nullable
   public synchronized Path get(
-      String cacheKey, Path targetPath, KeyType keyType, String canonicalId)
-      throws IOException, InterruptedException {
-    if (Thread.interrupted()) {
-      throw new InterruptedException();
-    }
+      String cacheKey, Path targetPath, KeyType keyType, String canonicalId) throws IOException {
     Preconditions.checkState(isEnabled());
 
     assertKeyIsValid(cacheKey, keyType);
@@ -196,7 +192,7 @@ public class RepositoryCache {
   }
 
   public synchronized void put(String cacheKey, Path sourcePath, KeyType keyType)
-      throws IOException, InterruptedException {
+      throws IOException {
     put(cacheKey, sourcePath, keyType, null);
   }
 
@@ -211,12 +207,7 @@ public class RepositoryCache {
    * @throws IOException
    */
   public synchronized void put(
-      String cacheKey, Path sourcePath, KeyType keyType, String canonicalId)
-      throws IOException, InterruptedException {
-    // Check for interrupts while waiting for the monitor of this synchronized method
-    if (Thread.interrupted()) {
-      throw new InterruptedException();
-    }
+      String cacheKey, Path sourcePath, KeyType keyType, String canonicalId) throws IOException {
     Preconditions.checkState(isEnabled());
 
     assertKeyIsValid(cacheKey, keyType);
@@ -238,8 +229,7 @@ public class RepositoryCache {
     }
   }
 
-  public synchronized String put(Path sourcePath, KeyType keyType)
-      throws IOException, InterruptedException {
+  public synchronized String put(Path sourcePath, KeyType keyType) throws IOException {
     return put(sourcePath, keyType, null);
   }
 
@@ -254,7 +244,7 @@ public class RepositoryCache {
    * @return The key for the cached entry.
    */
   public synchronized String put(Path sourcePath, KeyType keyType, String canonicalId)
-      throws IOException, InterruptedException {
+      throws IOException {
     String cacheKey = getChecksum(keyType, sourcePath);
     put(cacheKey, sourcePath, keyType, canonicalId);
     return cacheKey;
@@ -273,11 +263,11 @@ public class RepositoryCache {
    * @param expectedChecksum The expected checksum of the file.
    * @param filePath The path to the file.
    * @param keyType The type of hash function. e.g. SHA-1, SHA-256
-   * @throws IOException If the checksum does not match or the file cannot be hashed, an exception
-   *     is thrown.
+   * @throws IOException If the checksum does not match or the file cannot be hashed, an
+   *   exception is thrown.
    */
   public static void assertFileChecksum(String expectedChecksum, Path filePath, KeyType keyType)
-      throws IOException, InterruptedException {
+      throws IOException {
     Preconditions.checkArgument(!expectedChecksum.isEmpty());
 
     String actualChecksum;
@@ -302,8 +292,7 @@ public class RepositoryCache {
    * @param path The path to the file.
    * @throws IOException
    */
-  public static String getChecksum(KeyType keyType, Path path)
-      throws IOException, InterruptedException {
+  public static String getChecksum(KeyType keyType, Path path) throws IOException {
     Hasher hasher = keyType.newHasher();
     byte[] byteBuffer = new byte[BUFFER_SIZE];
     try (InputStream stream = path.getInputStream()) {
@@ -312,9 +301,6 @@ public class RepositoryCache {
         if (numBytesRead != 0) {
           // If more than 0 bytes were read, add them to the hash.
           hasher.putBytes(byteBuffer, 0, numBytesRead);
-        }
-        if (Thread.interrupted()) {
-          throw new InterruptedException();
         }
         numBytesRead = stream.read(byteBuffer);
       }
