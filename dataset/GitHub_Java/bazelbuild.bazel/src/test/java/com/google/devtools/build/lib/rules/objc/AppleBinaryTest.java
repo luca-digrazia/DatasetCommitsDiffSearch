@@ -469,7 +469,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
         ")");
 
     if (depBinaryType == BinaryType.DYLIB) {
-      scratchFrameworkStarlarkStub("frameworkstub/framework_stub.bzl");
+      scratchFrameworkSkylarkStub("frameworkstub/framework_stub.bzl");
       scratch.file(
           "depBinary/BUILD",
           "load('//frameworkstub:framework_stub.bzl', 'framework_stub_rule')",
@@ -604,7 +604,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
         ")");
 
     if (depBinaryType == BinaryType.DYLIB) {
-      scratchFrameworkStarlarkStub("frameworkstub/framework_stub.bzl");
+      scratchFrameworkSkylarkStub("frameworkstub/framework_stub.bzl");
       scratch.file(
           "depBinary/BUILD",
           "load('//frameworkstub:framework_stub.bzl', 'framework_stub_rule')",
@@ -736,7 +736,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
         ")");
 
     if (depBinaryType == BinaryType.DYLIB) {
-      scratchFrameworkStarlarkStub("frameworkstub/framework_stub.bzl");
+      scratchFrameworkSkylarkStub("frameworkstub/framework_stub.bzl");
       scratch.file(
           "depBinary/BUILD",
           "load('//frameworkstub:framework_stub.bzl', 'framework_stub_rule')",
@@ -890,8 +890,8 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
         ")");
 
     useConfiguration("--ios_multi_cpus=armv7,arm64");
-    ConfiguredTarget starlarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
-    StructImpl myInfo = getMyInfoFromTarget(starlarkTarget);
+    ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
+    StructImpl myInfo = getMyInfoFromTarget(skylarkTarget);
 
     assertThat(myInfo.getValue("binary")).isInstanceOf(Artifact.class);
     assertThat(myInfo.getValue("objc")).isInstanceOf(ObjcProvider.class);
@@ -941,8 +941,8 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
         ")");
 
     useConfiguration("--ios_multi_cpus=armv7,arm64");
-    ConfiguredTarget starlarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
-    StructImpl myInfo = getMyInfoFromTarget(starlarkTarget);
+    ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
+    StructImpl myInfo = getMyInfoFromTarget(skylarkTarget);
 
     assertThat(myInfo.getValue("binary")).isInstanceOf(Artifact.class);
     assertThat(myInfo.getValue("objc")).isInstanceOf(ObjcProvider.class);
@@ -991,8 +991,8 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
         ")");
 
     useConfiguration("--ios_multi_cpus=armv7,arm64");
-    ConfiguredTarget starlarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
-    StructImpl myInfo = getMyInfoFromTarget(starlarkTarget);
+    ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
+    StructImpl myInfo = getMyInfoFromTarget(skylarkTarget);
 
     assertThat((Artifact) myInfo.getValue("binary")).isNotNull();
 
@@ -1391,7 +1391,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     assertThat(getSingleArchBinary(lipoAction, "armv7k")).isNotNull();
   }
 
-  private Dict<String, Dict<String, Artifact>> generateAppleDebugOutputsStarlarkProviderMap()
+  private Dict<String, Dict<String, Artifact>> generateAppleDebugOutputsSkylarkProviderMap()
       throws Exception {
     scratch.file("examples/rule/BUILD");
     scratch.file(
@@ -1429,13 +1429,13 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
         "    name = 'my_target',",
         "    deps = [':bin'],",
         ")");
-    ConfiguredTarget starlarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
+    ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
 
     // This cast is safe: struct providers are represented as Dict.
     @SuppressWarnings("unchecked")
     Dict<String, Dict<String, Artifact>> outputMap =
         (Dict<String, Dict<String, Artifact>>)
-            getMyInfoFromTarget(starlarkTarget).getValue("outputs_map");
+            getMyInfoFromTarget(skylarkTarget).getValue("outputs_map");
     return outputMap;
   }
 
@@ -1478,15 +1478,15 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testAppleDebugSymbolProviderWithDsymsExposedToStarlark() throws Exception {
+  public void testAppleDebugSymbolProviderWithDsymsExposedToSkylark() throws Exception {
     useConfiguration(
         "--apple_bitcode=embedded", "--apple_generate_dsym", "--ios_multi_cpus=armv7,arm64,x86_64");
     checkAppleDebugSymbolProvider_DsymEntries(
-        generateAppleDebugOutputsStarlarkProviderMap(), CompilationMode.FASTBUILD);
+        generateAppleDebugOutputsSkylarkProviderMap(), CompilationMode.FASTBUILD);
   }
 
   @Test
-  public void testAppleDebugSymbolProviderWithAutoDsymDbgAndDsymsExposedToStarlark()
+  public void testAppleDebugSymbolProviderWithAutoDsymDbgAndDsymsExposedToSkylark()
       throws Exception {
     useConfiguration(
         "--apple_bitcode=embedded",
@@ -1494,27 +1494,27 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
         "--apple_enable_auto_dsym_dbg",
         "--ios_multi_cpus=armv7,arm64,x86_64");
     checkAppleDebugSymbolProvider_DsymEntries(
-        generateAppleDebugOutputsStarlarkProviderMap(), CompilationMode.DBG);
+        generateAppleDebugOutputsSkylarkProviderMap(), CompilationMode.DBG);
   }
 
   @Test
-  public void testAppleDebugSymbolProviderWithLinkMapsExposedToStarlark() throws Exception {
+  public void testAppleDebugSymbolProviderWithLinkMapsExposedToSkylark() throws Exception {
     useConfiguration(
         "--apple_bitcode=embedded",
         "--objc_generate_linkmap",
         "--ios_multi_cpus=armv7,arm64,x86_64");
-    checkAppleDebugSymbolProvider_LinkMapEntries(generateAppleDebugOutputsStarlarkProviderMap());
+    checkAppleDebugSymbolProvider_LinkMapEntries(generateAppleDebugOutputsSkylarkProviderMap());
   }
 
   @Test
-  public void testAppleDebugSymbolProviderWithDsymsAndLinkMapsExposedToStarlark() throws Exception {
+  public void testAppleDebugSymbolProviderWithDsymsAndLinkMapsExposedToSkylark() throws Exception {
     useConfiguration(
         "--apple_bitcode=embedded",
         "--objc_generate_linkmap",
         "--apple_generate_dsym",
         "--ios_multi_cpus=armv7,arm64,x86_64");
 
-    Dict<String, Dict<String, Artifact>> outputMap = generateAppleDebugOutputsStarlarkProviderMap();
+    Dict<String, Dict<String, Artifact>> outputMap = generateAppleDebugOutputsSkylarkProviderMap();
     checkAppleDebugSymbolProvider_DsymEntries(outputMap, CompilationMode.FASTBUILD);
     checkAppleDebugSymbolProvider_LinkMapEntries(outputMap);
   }
@@ -1654,7 +1654,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
         ")");
     ConfiguredTarget binTarget = getConfiguredTarget("//bin:bin");
     AppleExecutableBinaryInfo executableBinaryProvider =
-        binTarget.get(AppleExecutableBinaryInfo.STARLARK_CONSTRUCTOR);
+        binTarget.get(AppleExecutableBinaryInfo.SKYLARK_CONSTRUCTOR);
     assertThat(executableBinaryProvider).isNotNull();
 
     CommandAction testLinkAction = linkAction("//test:test");

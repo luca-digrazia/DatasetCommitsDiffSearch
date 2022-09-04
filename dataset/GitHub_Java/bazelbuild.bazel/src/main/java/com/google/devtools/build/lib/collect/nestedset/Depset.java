@@ -18,10 +18,10 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet.NestedSetDepthException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
 import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
 import com.google.devtools.build.lib.skylarkinterface.StarlarkInterfaceUtils;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkMethod;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
@@ -49,6 +49,7 @@ import javax.annotation.Nullable;
  *
  * <p>Every call to {@code depset} returns a distinct instance equal to no other.
  */
+// TODO(adonovan): move to lib.packages, as this is a Bazelism.
 @StarlarkBuiltin(
     name = "depset",
     category = StarlarkDocumentationCategory.BUILTIN,
@@ -325,12 +326,12 @@ public final class Depset implements StarlarkValue {
     Order order = getOrder();
     if (order != Order.STABLE_ORDER) {
       printer.append(", order = ");
-      printer.repr(order.getStarlarkName());
+      printer.repr(order.getSkylarkName());
     }
     printer.append(")");
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "to_list",
       doc =
           "Returns a list of the elements, without duplicates, in the depset's traversal order. "
@@ -389,7 +390,7 @@ public final class Depset implements StarlarkValue {
         if (!order.isCompatible(x.getOrder())) {
           throw Starlark.errorf(
               "Order '%s' is incompatible with order '%s'",
-              order.getStarlarkName(), x.getOrder().getStarlarkName());
+              order.getSkylarkName(), x.getOrder().getSkylarkName());
         }
         builder.addTransitive(x.getSet());
       }

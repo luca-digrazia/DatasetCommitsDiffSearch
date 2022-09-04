@@ -2465,7 +2465,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
   }
 
   @Test
-  public void starlarkJavaInfoToAndroidLibraryAttributes() throws Exception {
+  public void skylarkJavaInfoToAndroidLibraryAttributes() throws Exception {
     scratch.file(
         "foo/extension.bzl",
         "def _impl(ctx):",

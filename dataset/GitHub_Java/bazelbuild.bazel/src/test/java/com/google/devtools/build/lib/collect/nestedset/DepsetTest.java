@@ -32,21 +32,19 @@ import org.junit.runners.JUnit4;
 
 /** Tests for Depset. */
 @RunWith(JUnit4.class)
-public final class DepsetTest {
-
-  private final EvaluationTestCase ev = new EvaluationTestCase();
+public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testConstructor() throws Exception {
-    ev.exec("s = depset(order='default')");
-    assertThat(ev.lookup("s")).isInstanceOf(Depset.class);
+    exec("s = depset(order='default')");
+    assertThat(lookup("s")).isInstanceOf(Depset.class);
   }
 
   private static final ElementType TUPLE = ElementType.of(Tuple.class);
 
   @Test
   public void testTuples() throws Exception {
-    ev.exec(
+    exec(
         "s_one = depset([('1', '2'), ('3', '4')])",
         "s_two = depset(direct = [('1', '2'), ('3', '4'), ('5', '6')])",
         "s_three = depset(transitive = [s_one, s_two])",
@@ -73,7 +71,7 @@ public final class DepsetTest {
 
   @Test
   public void testGetSet() throws Exception {
-    ev.exec("s = depset(['a', 'b'])");
+    exec("s = depset(['a', 'b'])");
     assertThat(get("s").getSet(String.class).toList()).containsExactly("a", "b").inOrder();
     assertThat(get("s").getSet(Object.class).toList()).containsExactly("a", "b").inOrder();
     assertThrows(Depset.TypeException.class, () -> get("s").getSet(Integer.class));
@@ -89,7 +87,7 @@ public final class DepsetTest {
 
   @Test
   public void testGetSetDirect() throws Exception {
-    ev.exec("s = depset(direct = ['a', 'b'])");
+    exec("s = depset(direct = ['a', 'b'])");
     assertThat(get("s").getSet(String.class).toList()).containsExactly("a", "b").inOrder();
     assertThat(get("s").getSet(Object.class).toList()).containsExactly("a", "b").inOrder();
     assertThrows(Depset.TypeException.class, () -> get("s").getSet(Integer.class));
@@ -97,7 +95,7 @@ public final class DepsetTest {
 
   @Test
   public void testGetSetItems() throws Exception {
-    ev.exec("s = depset(items = ['a', 'b'])");
+    exec("s = depset(items = ['a', 'b'])");
     assertThat(get("s").getSet(String.class).toList()).containsExactly("a", "b").inOrder();
     assertThat(get("s").getSet(Object.class).toList()).containsExactly("a", "b").inOrder();
     assertThrows(Depset.TypeException.class, () -> get("s").getSet(Integer.class));
@@ -105,7 +103,7 @@ public final class DepsetTest {
 
   @Test
   public void testToList() throws Exception {
-    ev.exec("s = depset(['a', 'b'])");
+    exec("s = depset(['a', 'b'])");
     assertThat(get("s").toList(String.class)).containsExactly("a", "b").inOrder();
     assertThat(get("s").toList(Object.class)).containsExactly("a", "b").inOrder();
     assertThat(get("s").toList()).containsExactly("a", "b").inOrder();
@@ -114,7 +112,7 @@ public final class DepsetTest {
 
   @Test
   public void testToListDirect() throws Exception {
-    ev.exec("s = depset(direct = ['a', 'b'])");
+    exec("s = depset(direct = ['a', 'b'])");
     assertThat(get("s").toList(String.class)).containsExactly("a", "b").inOrder();
     assertThat(get("s").toList(Object.class)).containsExactly("a", "b").inOrder();
     assertThat(get("s").toList()).containsExactly("a", "b").inOrder();
@@ -123,7 +121,7 @@ public final class DepsetTest {
 
   @Test
   public void testToListItems() throws Exception {
-    ev.exec("s = depset(items = ['a', 'b'])");
+    exec("s = depset(items = ['a', 'b'])");
     assertThat(get("s").toList(String.class)).containsExactly("a", "b").inOrder();
     assertThat(get("s").toList(Object.class)).containsExactly("a", "b").inOrder();
     assertThat(get("s").toList()).containsExactly("a", "b").inOrder();
@@ -132,75 +130,75 @@ public final class DepsetTest {
 
   @Test
   public void testOrder() throws Exception {
-    ev.exec("s = depset(['a', 'b'], order='postorder')");
+    exec("s = depset(['a', 'b'], order='postorder')");
     assertThat(get("s").getSet(String.class).getOrder()).isEqualTo(Order.COMPILE_ORDER);
   }
 
   @Test
   public void testOrderDirect() throws Exception {
-    ev.exec("s = depset(direct = ['a', 'b'], order='postorder')");
+    exec("s = depset(direct = ['a', 'b'], order='postorder')");
     assertThat(get("s").getSet(String.class).getOrder()).isEqualTo(Order.COMPILE_ORDER);
   }
 
   @Test
   public void testOrderItems() throws Exception {
-    ev.exec("s = depset(items = ['a', 'b'], order='postorder')");
+    exec("s = depset(items = ['a', 'b'], order='postorder')");
     assertThat(get("s").getSet(String.class).getOrder()).isEqualTo(Order.COMPILE_ORDER);
   }
 
   @Test
   public void testBadOrder() throws Exception {
-    ev.new Scenario()
+    new Scenario()
         .testIfExactError("Invalid order: non_existing", "depset(['a'], order='non_existing')");
   }
 
   @Test
   public void testBadOrderDirect() throws Exception {
-    ev.new Scenario()
+    new Scenario()
         .testIfExactError(
             "Invalid order: non_existing", "depset(direct = ['a'], order='non_existing')");
   }
 
   @Test
   public void testBadOrderItems() throws Exception {
-    ev.new Scenario()
+    new Scenario()
         .testIfExactError(
             "Invalid order: non_existing", "depset(items = ['a'], order='non_existing')");
   }
 
   @Test
   public void testEmptyGenericType() throws Exception {
-    ev.exec("s = depset()");
+    exec("s = depset()");
     assertThat(get("s").getElementType()).isEqualTo(ElementType.EMPTY);
   }
 
   @Test
   public void testHomogeneousGenericType() throws Exception {
-    ev.exec("s = depset(['a', 'b', 'c'])");
+    exec("s = depset(['a', 'b', 'c'])");
     assertThat(get("s").getElementType()).isEqualTo(ElementType.STRING);
   }
 
   @Test
   public void testHomogeneousGenericTypeDirect() throws Exception {
-    ev.exec("s = depset(['a', 'b', 'c'], transitive = [])");
+    exec("s = depset(['a', 'b', 'c'], transitive = [])");
     assertThat(get("s").getElementType()).isEqualTo(ElementType.STRING);
   }
 
   @Test
   public void testHomogeneousGenericTypeItems() throws Exception {
-    ev.exec("s = depset(items = ['a', 'b', 'c'], transitive = [])");
+    exec("s = depset(items = ['a', 'b', 'c'], transitive = [])");
     assertThat(get("s").getElementType()).isEqualTo(ElementType.STRING);
   }
 
   @Test
   public void testHomogeneousGenericTypeTransitive() throws Exception {
-    ev.exec("s = depset(['a', 'b', 'c'], transitive = [depset(['x'])])");
+    exec("s = depset(['a', 'b', 'c'], transitive = [depset(['x'])])");
     assertThat(get("s").getElementType()).isEqualTo(ElementType.STRING);
   }
 
   @Test
   public void testTransitiveIncompatibleOrder() throws Exception {
-    ev.checkEvalError(
+    checkEvalError(
         "Order 'postorder' is incompatible with order 'topological'",
         "depset(['a', 'b'], order='postorder',",
         "       transitive = [depset(['c', 'd'], order='topological')])");
@@ -208,14 +206,14 @@ public final class DepsetTest {
 
   @Test
   public void testBadGenericType() throws Exception {
-    ev.new Scenario()
+    new Scenario()
         .testIfExactError(
             "cannot add an item of type 'int' to a depset of 'string'", "depset(['a', 5])");
   }
 
   @Test
   public void testBadGenericTypeDirect() throws Exception {
-    ev.new Scenario()
+    new Scenario()
         .testIfExactError(
             "cannot add an item of type 'int' to a depset of 'string'",
             "depset(direct = ['a', 5])");
@@ -223,14 +221,14 @@ public final class DepsetTest {
 
   @Test
   public void testBadGenericTypeItems() throws Exception {
-    ev.new Scenario()
+    new Scenario()
         .testIfExactError(
             "cannot add an item of type 'int' to a depset of 'string'", "depset(items = ['a', 5])");
   }
 
   @Test
   public void testBadGenericTypeTransitive() throws Exception {
-    ev.new Scenario()
+    new Scenario()
         .testIfExactError(
             "cannot add an item of type 'int' to a depset of 'string'",
             "depset(['a', 'b'], transitive=[depset([1])])");
@@ -238,7 +236,7 @@ public final class DepsetTest {
 
   @Test
   public void testLegacyAndNewApi() throws Exception {
-    ev.new Scenario()
+    new Scenario()
         .testIfExactError(
             "Do not pass both 'direct' and 'items' argument to depset constructor.",
             "depset(['a', 'b'], direct = ['c', 'd'])");
@@ -246,7 +244,7 @@ public final class DepsetTest {
 
   @Test
   public void testItemsAndTransitive() throws Exception {
-    ev.new Scenario()
+    new Scenario()
         .testIfExactError(
             "for items, got depset, want sequence",
             "depset(items = depset(), transitive = [depset()])");
@@ -254,7 +252,7 @@ public final class DepsetTest {
 
   @Test
   public void testTooManyPositionals() throws Exception {
-    ev.new Scenario()
+    new Scenario()
         .testIfErrorContains(
             "depset() accepts no more than 2 positional arguments but got 3",
             "depset([], 'default', [])");
@@ -289,41 +287,42 @@ public final class DepsetTest {
 
   @Test
   public void testIncompatibleUnion() throws Exception {
-    ev.new Scenario()
+    new Scenario()
         .testIfErrorContains("unsupported binary operation: depset + list", "depset([]) + ['a']");
 
-    ev.new Scenario()
+    new Scenario()
         .testIfErrorContains("unsupported binary operation: depset | list", "depset([]) | ['a']");
   }
 
   private void assertContainsInOrder(String statement, Object... expectedElements)
       throws Exception {
-    assertThat(((Depset) ev.eval(statement)).toList()).containsExactly(expectedElements).inOrder();
+    assertThat(((Depset) eval(statement)).toList()).containsExactly(expectedElements).inOrder();
   }
 
   @Test
   public void testToString() throws Exception {
-    ev.exec("s = depset([3, 4, 5], transitive = [depset([2, 4, 6])])", "x = str(s)");
-    assertThat(ev.lookup("x")).isEqualTo("depset([2, 4, 6, 3, 5])");
+    exec("s = depset([3, 4, 5], transitive = [depset([2, 4, 6])])", "x = str(s)");
+    assertThat(lookup("x")).isEqualTo("depset([2, 4, 6, 3, 5])");
   }
 
   @Test
   public void testToStringWithOrder() throws Exception {
-    ev.exec(
+    exec(
         "s = depset([3, 4, 5], transitive = [depset([2, 4, 6])], ",
         "           order = 'topological')",
         "x = str(s)");
-    assertThat(ev.lookup("x")).isEqualTo("depset([3, 5, 6, 4, 2], order = \"topological\")");
+    assertThat(lookup("x")).isEqualTo("depset([3, 5, 6, 4, 2], order = \"topological\")");
   }
 
   private Depset get(String varname) throws Exception {
-    return (Depset) ev.lookup(varname);
+    return (Depset) lookup(varname);
   }
 
   @Test
   public void testToListForStarlark() throws Exception {
-    ev.exec("s = depset([3, 4, 5], transitive = [depset([2, 4, 6])])", "x = s.to_list()");
-    Object value = ev.lookup("x");
+    setSemantics();
+    exec("s = depset([3, 4, 5], transitive = [depset([2, 4, 6])])", "x = s.to_list()");
+    Object value = lookup("x");
     assertThat(value).isInstanceOf(StarlarkList.class);
     assertThat((Iterable<?>) value).containsExactly(2, 4, 6, 3, 5).inOrder();
   }
@@ -365,91 +364,83 @@ public final class DepsetTest {
   @Test
   public void testMutableDepsetElementsLegacyBehavior() throws Exception {
     // See b/144992997 and github.com/bazelbuild/bazel/issues/10313.
-    ev.setSemantics("--incompatible_always_check_depset_elements=false");
+    setSemantics("--incompatible_always_check_depset_elements=false");
 
     // Test legacy depset(...) and new depset(direct=...) constructors.
 
     // mutable list should be an error
-    ev.checkEvalError("depset elements must not be mutable values", "depset([[1,2,3]])");
-    ev.checkEvalError("depsets cannot contain items of type 'list'", "depset(direct=[[1,2,3]])");
+    checkEvalError("depset elements must not be mutable values", "depset([[1,2,3]])");
+    checkEvalError("depsets cannot contain items of type 'list'", "depset(direct=[[1,2,3]])");
 
     // struct containing mutable list should be an error
-    ev.checkEvalError("depset elements must not be mutable values", "depset([struct(a=[])])");
-    ev.eval("depset(direct=[struct(a=[])])"); // no error (!)
+    checkEvalError("depset elements must not be mutable values", "depset([struct(a=[])])");
+    eval("depset(direct=[struct(a=[])])"); // no error (!)
 
     // tuple of frozen list currently gives no error (this may change)
-    ev.update("x", StarlarkList.empty());
-    ev.eval("depset([(x,)])");
-    ev.eval("depset(direct=[(x,)])");
+    update("x", StarlarkList.empty());
+    eval("depset([(x,)])");
+    eval("depset(direct=[(x,)])");
 
     // any list (even frozen) is an error, even with legacy constructor
-    ev.checkEvalError("depsets cannot contain items of type 'list'", "depset([x])");
-    ev.checkEvalError("depsets cannot contain items of type 'list'", "depset(direct=[x])");
+    checkEvalError("depsets cannot contain items of type 'list'", "depset([x])");
+    checkEvalError("depsets cannot contain items of type 'list'", "depset(direct=[x])");
 
     // toplevel dict is an error, even with legacy constructor
-    ev.checkEvalError("depset elements must not be mutable values", "depset([{}])");
-    ev.checkEvalError("depsets cannot contain items of type 'dict'", "depset(direct=[{}])");
+    checkEvalError("depset elements must not be mutable values", "depset([{}])");
+    checkEvalError("depsets cannot contain items of type 'dict'", "depset(direct=[{}])");
 
     // struct containing dict should be an error
-    ev.checkEvalError("depset elements must not be mutable values", "depset([struct(a={})])");
-    ev.eval("depset(direct=[struct(a={})])"); // no error (!)
+    checkEvalError("depset elements must not be mutable values", "depset([struct(a={})])");
+    eval("depset(direct=[struct(a={})])"); // no error (!)
   }
 
   @Test
   public void testMutableDepsetElementsDesiredBehavior() throws Exception {
     // See b/144992997 and github.com/bazelbuild/bazel/issues/10313.
-    ev.setSemantics("--incompatible_always_check_depset_elements=true");
+    setSemantics("--incompatible_always_check_depset_elements=true");
 
     // Test legacy depset(...) and new depset(direct=...) constructors.
 
     // mutable list should be an error
-    ev.checkEvalError("depset elements must not be mutable values", "depset([[1,2,3]])");
-    ev.checkEvalError("depset elements must not be mutable values", "depset(direct=[[1,2,3]])");
+    checkEvalError("depset elements must not be mutable values", "depset([[1,2,3]])");
+    checkEvalError("depset elements must not be mutable values", "depset(direct=[[1,2,3]])");
 
     // struct containing mutable list should be an error
-    ev.checkEvalError("depset elements must not be mutable values", "depset([struct(a=[])])");
-    ev.checkEvalError(
-        "depset elements must not be mutable values", "depset(direct=[struct(a=[])])");
+    checkEvalError("depset elements must not be mutable values", "depset([struct(a=[])])");
+    checkEvalError("depset elements must not be mutable values", "depset(direct=[struct(a=[])])");
 
     // tuple of frozen list currently gives no error (this may change)
-    ev.update("x", StarlarkList.empty());
-    ev.eval("depset([(x,)])");
-    ev.eval("depset(direct=[(x,)])");
+    update("x", StarlarkList.empty());
+    eval("depset([(x,)])");
+    eval("depset(direct=[(x,)])");
 
     // any list (even frozen) is an error, even with legacy constructor
-    ev.checkEvalError("depsets cannot contain items of type 'list'", "depset([x,])");
-    ev.checkEvalError("depsets cannot contain items of type 'list'", "depset(direct=[x,])");
+    checkEvalError("depsets cannot contain items of type 'list'", "depset([x,])");
+    checkEvalError("depsets cannot contain items of type 'list'", "depset(direct=[x,])");
 
     // toplevel dict is an error, even with legacy constructor
-    ev.checkEvalError("depset elements must not be mutable values", "depset([{}])");
-    ev.checkEvalError("depset elements must not be mutable values", "depset(direct=[{}])");
+    checkEvalError("depset elements must not be mutable values", "depset([{}])");
+    checkEvalError("depset elements must not be mutable values", "depset(direct=[{}])");
 
     // struct containing dict should be an error
-    ev.checkEvalError("depset elements must not be mutable values", "depset([struct(a={})])");
-    ev.checkEvalError(
-        "depset elements must not be mutable values", "depset(direct=[struct(a={})])");
+    checkEvalError("depset elements must not be mutable values", "depset([struct(a={})])");
+    checkEvalError("depset elements must not be mutable values", "depset(direct=[struct(a={})])");
   }
 
   @Test
-  public void testConstructorDepthLimit() throws Exception {
-    ev.new Scenario()
+  public void testDepthExceedsLimitDuringIteration() throws Exception {
+    NestedSet.setApplicationDepthLimit(2000);
+    new Scenario()
         .setUp(
             "def create_depset(depth):",
             "  x = depset([0])",
             "  for i in range(1, depth):",
-            "    x = depset([i], transitive = [x])")
-        .testEval("create_depset(3000)", "None") // succeeds
-        .testIfErrorContains("depset depth 3501 exceeds limit (3500)", "create_depset(4000)");
-
-    Depset.setDepthLimit(100);
-    ev.new Scenario()
-        .setUp(
-            "def create_depset(depth):",
-            "  x = depset([0])",
-            "  for i in range(1, depth):",
-            "    x = depset([i], transitive = [x])")
-        .testEval("create_depset(99)", "None") // succeeds
-        .testIfErrorContains("depset depth 101 exceeds limit (100)", "create_depset(1000)");
+            "    x = depset([i], transitive = [x])",
+            "  for element in x.to_list():",
+            "    str(x)",
+            "  return None")
+        .testEval("create_depset(1000)", "None")
+        .testIfErrorContains("depset exceeded maximum depth", "create_depset(3000)");
   }
 
   @Test
@@ -466,7 +457,7 @@ public final class DepsetTest {
     assertThat(ElementType.of(StarlarkList.class).toString()).isEqualTo("list");
     assertThat(ElementType.of(Tuple.class).toString()).isEqualTo("tuple");
     assertThat(ElementType.of(Dict.class).toString()).isEqualTo("dict");
-    class V implements StarlarkValue {} // no StarlarkModule annotation
+    class V implements StarlarkValue {} // no SkylarkModule annotation
     assertThat(ElementType.of(V.class).toString()).isEqualTo("V");
 
     // abstract classes that implement StarlarkValue
@@ -482,13 +473,13 @@ public final class DepsetTest {
 
   @Test
   public void testSetComparison() throws Exception {
-    ev.new Scenario()
+    new Scenario()
         .testIfExactError("Cannot compare depset with depset", "depset([1, 2]) < depset([3, 4])");
   }
 
   @Test
   public void testDepsetItemsKeywordAndPositional() throws Exception {
-    ev.new Scenario("--incompatible_disable_depset_items=false")
+    new Scenario("--incompatible_disable_depset_items=false")
         .testIfErrorContains(
             "parameter 'items' cannot be specified both positionally and by keyword",
             "depset([0, 1], 'default', items=[0,1])");
@@ -496,13 +487,13 @@ public final class DepsetTest {
 
   @Test
   public void testDepsetDirectInvalidType() throws Exception {
-    ev.new Scenario()
+    new Scenario()
         .testIfErrorContains("for direct, got string, want sequence", "depset(direct='hello')");
   }
 
   @Test
   public void testDisableDepsetItems() throws Exception {
-    ev.new Scenario("--incompatible_disable_depset_items")
+    new Scenario("--incompatible_disable_depset_items")
         .setUp("x = depset([0])", "y = depset(direct = [1])")
         .testEval("depset([2, 3], transitive = [x, y]).to_list()", "[0, 1, 2, 3]")
         .testIfErrorContains(
@@ -511,7 +502,40 @@ public final class DepsetTest {
         .testIfErrorContains(
             "in call to depset(), parameter 'items' is deprecated and will be removed soon. "
                 + "It may be temporarily re-enabled by setting "
-                + "--incompatible_disable_depset_items=false",
+                + "--incompatible_disable_depset_inputs=false",
             "depset(items=[0,1])");
+  }
+
+  @Test
+  public void testDepsetDepthLimit() throws Exception {
+    NestedSet.setApplicationDepthLimit(2000);
+    new Scenario()
+        .setUp(
+            "def create_depset(depth):",
+            "  x = depset([0])",
+            "  for i in range(1, depth):",
+            "    x = depset([i], transitive = [x])",
+            "  return x",
+            "too_deep_depset = create_depset(3000)",
+            "fine_depset = create_depset(900)")
+        .testEval("fine_depset.to_list()[0]", "0")
+        .testEval("str(fine_depset)[0:6]", "'depset'")
+        .testIfErrorContains("depset exceeded maximum depth", "print(too_deep_depset)")
+        .testIfErrorContains("depset exceeded maximum depth", "str(too_deep_depset)")
+        .testIfErrorContains("depset exceeded maximum depth", "too_deep_depset.to_list()");
+  }
+
+  @Test
+  public void testDepsetDebugDepth() throws Exception {
+    NestedSet.setApplicationDepthLimit(2000);
+    new Scenario("--debug_depset_depth=true")
+        .setUp(
+            "def create_depset(depth):",
+            "  x = depset([0])",
+            "  for i in range(1, depth):",
+            "    x = depset([i], transitive = [x])",
+            "  return x")
+        .testEval("str(create_depset(900))[0:6]", "'depset'")
+        .testIfErrorContains("depset exceeded maximum depth", "create_depset(3000)");
   }
 }
