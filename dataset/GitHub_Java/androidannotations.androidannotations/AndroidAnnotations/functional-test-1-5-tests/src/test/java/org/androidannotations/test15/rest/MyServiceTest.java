@@ -15,7 +15,17 @@
  */
 package org.androidannotations.test15.rest;
 
-import com.xtremelabs.robolectric.Robolectric;
+import static junit.framework.Assert.assertEquals;
+import static org.mockito.Matchers.argThat;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.startsWith;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.androidannotations.test15.AndroidAnnotationsTestRunner;
 import org.androidannotations.test15.rest.RequestTestBuilder.RequestTestBuilderExecutor;
 import org.apache.http.Header;
@@ -30,19 +40,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static junit.framework.Assert.assertEquals;
-import static org.mockito.Matchers.*;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
+import com.xtremelabs.robolectric.Robolectric;
 
 @RunWith(AndroidAnnotationsTestRunner.class)
 public class MyServiceTest {
 
-	private MyService_ myService = new MyService_(null);
+	private MyService_ myService = new MyService_();
 
 	private void addPendingResponse(String jsonResponse) {
 		addPendingResponse(jsonResponse, "_=_");
@@ -59,7 +62,7 @@ public class MyServiceTest {
 
 	@Test
 	public void can_override_root_url() {
-		MyService_ myService = new MyService_(null);
+		MyService_ myService = new MyService_();
 
 		RestTemplate restTemplate = mock(RestTemplate.class);
 		myService.setRestTemplate(restTemplate);
@@ -177,7 +180,8 @@ public class MyServiceTest {
 
 	@Test
 	public void manualFullUrl() {
-		MyService_ myService = new MyService_(null);
+
+		MyService_ myService = new MyService_();
 
 		RestTemplate restTemplate = mock(RestTemplate.class);
 		myService.setRestTemplate(restTemplate);
@@ -200,7 +204,7 @@ public class MyServiceTest {
 		final String locationValue = "somePlace";
 		final int yearValue = 2013;
 
-		MyService_ myService = new MyService_(null);
+		MyService_ myService = new MyService_();
 
 		RestTemplate restTemplate = mock(RestTemplate.class);
 		myService.setRestTemplate(restTemplate);
