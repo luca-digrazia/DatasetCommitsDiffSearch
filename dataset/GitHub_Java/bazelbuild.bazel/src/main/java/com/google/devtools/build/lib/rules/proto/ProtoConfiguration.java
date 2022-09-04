@@ -154,16 +154,16 @@ public class ProtoConfiguration extends Fragment {
     )
     public List<String> ccProtoLibrarySourceSuffixes;
 
-    // TODO(b/64032754): Remove once there's no 'correctRollupTransitiveProtoRuntimes' in the global
-    //     blazerc.
     @Option(
       name = "correctRollupTransitiveProtoRuntimes",
-      defaultValue = "true",
+      defaultValue = "false",
       category = "rollout",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.LOADING_AND_ANALYSIS},
       metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      help = "ignored"
+      help =
+          "Roll-out flag for changing behavior of proto runtime roll up. "
+              + "See commit description for details. DO NOT USE."
     )
     public boolean correctRollupTransitiveProtoRuntimes;
 
@@ -193,6 +193,7 @@ public class ProtoConfiguration extends Fragment {
       host.strictProtoDeps = strictProtoDeps;
       host.ccProtoLibraryHeaderSuffixes = ccProtoLibraryHeaderSuffixes;
       host.ccProtoLibrarySourceSuffixes = ccProtoLibrarySourceSuffixes;
+      host.correctRollupTransitiveProtoRuntimes = correctRollupTransitiveProtoRuntimes;
       host.jplNonStrictDepsLikePl = jplNonStrictDepsLikePl;
       return host;
     }
@@ -270,6 +271,10 @@ public class ProtoConfiguration extends Fragment {
 
   public List<String> ccProtoLibrarySourceSuffixes() {
     return ccProtoLibrarySourceSuffixes;
+  }
+
+  public boolean correctRollupTransitiveProtoRuntimes() {
+    return options.correctRollupTransitiveProtoRuntimes;
   }
 
   public boolean jplNonStrictDepsLikePl() {

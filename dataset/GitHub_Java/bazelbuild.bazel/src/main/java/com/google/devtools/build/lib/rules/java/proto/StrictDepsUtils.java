@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.analysis.WrappingProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgs;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
+import com.google.devtools.build.lib.rules.proto.ProtoConfiguration;
 
 public class StrictDepsUtils {
 
@@ -41,7 +42,10 @@ public class StrictDepsUtils {
                 javaProtoLibraryAspectProviders, JavaCompilationArgsProvider.class));
     if (StrictDepsUtils.isStrictDepsJavaProtoLibrary(ruleContext)) {
       return strictCompProvider;
-    } else {
+    } else if (ruleContext
+        .getConfiguration()
+        .getFragment(ProtoConfiguration.class)
+        .jplNonStrictDepsLikePl()) {
       JavaCompilationArgs.Builder nonStrictDirectJars = JavaCompilationArgs.builder();
       for (JavaProtoLibraryAspectProvider p : javaProtoLibraryAspectProviders) {
         nonStrictDirectJars.addTransitiveArgs(p.getNonStrictCompArgs(), BOTH);
@@ -51,6 +55,8 @@ public class StrictDepsUtils {
           strictCompProvider.getRecursiveJavaCompilationArgs(),
           strictCompProvider.getCompileTimeJavaDependencyArtifacts(),
           strictCompProvider.getRunTimeJavaDependencyArtifacts());
+    } else {
+      return StrictDepsUtils.makeNonStrict(strictCompProvider);
     }
   }
 
@@ -87,5 +93,21 @@ public class StrictDepsUtils {
       return true;
     }
     return (boolean) ruleContext.getRule().getAttributeContainer().getAttr("strict_deps");
+  }
+
+  /**
+   * Returns a new JavaCompilationArgsProvider whose direct-jars part is the union of both the
+   * direct and indirect jars of 'provider'.
+   */
+  public static JavaCompilationArgsProvider makeNonStrict(JavaCompilationArgsProvider provider) {
+    JavaCompilationArgs.Builder directCompilationArgs = JavaCompilationArgs.builder();
+    directCompilationArgs
+        .addTransitiveArgs(provider.getJavaCompilationArgs(), BOTH)
+        .addTransitiveArgs(provider.getRecursiveJavaCompilationArgs(), BOTH);
+    return JavaCompilationArgsProvider.create(
+        directCompilationArgs.build(),
+        provider.getRecursiveJavaCompilationArgs(),
+        provider.getCompileTimeJavaDependencyArtifacts(),
+        provider.getRunTimeJavaDependencyArtifacts());
   }
 }
