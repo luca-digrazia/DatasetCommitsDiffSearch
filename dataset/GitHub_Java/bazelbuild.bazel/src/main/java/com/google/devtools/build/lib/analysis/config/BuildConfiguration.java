@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.analysis.config;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
@@ -65,7 +63,6 @@ import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.TriState;
-import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -114,8 +111,8 @@ public class BuildConfiguration implements BuildConfigurationApi {
   private static final Interner<ImmutableSortedMap<Class<? extends Fragment>, Fragment>>
       fragmentsInterner = BlazeInterners.newWeakInterner();
 
-  private static final Interner<ImmutableSortedMap<String, String>> executionInfoInterner =
-      BlazeInterners.newWeakInterner();
+  private static final Interner<ImmutableMap<String, String>>
+      executionInfoInterner = BlazeInterners.newWeakInterner();
 
   /** Compute the default shell environment for actions from the command line options. */
   public interface ActionEnvironmentProvider {
@@ -311,7 +308,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
 
     @Option(
         name = "incompatible_merge_genfiles_directory",
-        defaultValue = "true",
+        defaultValue = "false",
         documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
         effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
         metadataTags = {
@@ -331,20 +328,6 @@ public class BuildConfiguration implements BuildConfigurationApi {
       help = "Each --define option specifies an assignment for a build variable."
     )
     public List<Map.Entry<String, String>> commandLineBuildVariables;
-
-    @Option(
-        name = "collapse_duplicate_defines",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
-        effectTags = {
-          OptionEffectTag.LOADING_AND_ANALYSIS,
-          OptionEffectTag.LOSES_INCREMENTAL_STATE,
-        },
-        help =
-            "When enabled, redundant --defines will be removed early in the build. This avoids"
-                + " unnecessary loss of the analysis cache for certain types of equivalent"
-                + " builds.")
-    public boolean collapseDuplicateDefines;
 
     @Option(
       name = "cpu",
@@ -974,30 +957,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
       return host;
     }
 
-    @Override
-    public Options getNormalized() {
-      Options result = (Options) super.getNormalized();
 
-      if (collapseDuplicateDefines) {
-        LinkedHashMap<String, String> flagValueByName = new LinkedHashMap<>();
-        for (Map.Entry<String, String> entry : result.commandLineBuildVariables) {
-          // If the same --define flag is passed multiple times we keep the last value.
-          flagValueByName.put(entry.getKey(), entry.getValue());
-        }
-
-        // This check is an optimization to avoid creating a new list if the normalization was a
-        // no-op.
-        if (flagValueByName.size() != result.commandLineBuildVariables.size()) {
-          result.commandLineBuildVariables =
-              flagValueByName.entrySet().stream()
-                  // The entries in the transformed list must be serializable.
-                  .map(SimpleEntry::new)
-                  .collect(toImmutableList());
-        }
-      }
-
-      return result;
-    }
   }
 
   private final String checksum;
@@ -1457,10 +1417,6 @@ public class BuildConfiguration implements BuildConfigurationApi {
 
   /** Returns the genfiles directory for this build configuration. */
   public ArtifactRoot getGenfilesDirectory() {
-    if (mergeGenfilesDirectory) {
-      return getBinDirectory();
-    }
-
     return getGenfilesDirectory(RepositoryName.MAIN);
   }
 
@@ -1867,9 +1823,9 @@ public class BuildConfiguration implements BuildConfigurationApi {
     if (!options.executionInfoModifier.matches(mnemonic)) {
       return executionInfo;
     }
-    Map<String, String> mutableCopy = new HashMap<>(executionInfo);
+    LinkedHashMap<String, String> mutableCopy = new LinkedHashMap<>(executionInfo);
     modifyExecutionInfo(mutableCopy, mnemonic);
-    return executionInfoInterner.intern(ImmutableSortedMap.copyOf(mutableCopy));
+    return executionInfoInterner.intern(ImmutableMap.copyOf(mutableCopy));
   }
 
   /** Applies {@code executionInfoModifiers} to the given {@code executionInfo}. */
