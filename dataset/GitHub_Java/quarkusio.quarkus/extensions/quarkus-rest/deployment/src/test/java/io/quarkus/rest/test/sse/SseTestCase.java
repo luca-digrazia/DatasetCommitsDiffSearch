@@ -2,8 +2,6 @@ package io.quarkus.rest.test.sse;
 
 import java.net.URI;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -42,23 +40,20 @@ public class SseTestCase {
         Client client = ClientBuilder.newBuilder().build();
         WebTarget target = client.target(uri.toString() + "sse");
         try (SseEventSource eventSource = SseEventSource.target(target).build()) {
-            CompletableFuture<List<String>> res = new CompletableFuture<>();
-            List<String> collect = new ArrayList<>();
+            CompletableFuture<String> res = new CompletableFuture<>();
             eventSource.register(new Consumer<InboundSseEvent>() {
                 @Override
                 public void accept(InboundSseEvent inboundSseEvent) {
-                    collect.add(inboundSseEvent.readData());
+                    res.complete(inboundSseEvent.readData());
                 }
             }, new Consumer<Throwable>() {
                 @Override
                 public void accept(Throwable throwable) {
                     res.completeExceptionally(throwable);
                 }
-            }, () -> {
-                res.complete(collect);
             });
             eventSource.open();
-            Assertions.assertEquals(Arrays.asList("hello", "stef"), res.get(5, TimeUnit.SECONDS));
+            Assertions.assertEquals("hello", res.get(5, TimeUnit.SECONDS));
         }
     }
 
@@ -67,9 +62,8 @@ public class SseTestCase {
         Client client = ClientBuilder.newBuilder().build();
         WebTarget target = client.target(uri.toString() + "sse/multi");
         Multi<String> multi = target.request().rx(QuarkusRestMultiInvoker.class).get(String.class);
-        List<String> list = multi.collectItems().asList().await().atMost(Duration.ofSeconds(10));
-        Assertions.assertEquals(2, list.size());
+        List<String> list = multi.collectItems().asList().await().atMost(Duration.ofSeconds(5));
+        Assertions.assertEquals(1, list.size());
         Assertions.assertEquals("hello", list.get(0));
-        Assertions.assertEquals("stef", list.get(1));
     }
 }

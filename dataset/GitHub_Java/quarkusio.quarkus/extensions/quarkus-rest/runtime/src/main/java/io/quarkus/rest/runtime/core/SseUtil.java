@@ -119,8 +119,7 @@ public class SseUtil {
         MediaType mediaType = event.getMediaType();
         // FIXME: this should belong somewhere else as it's generic
         @SuppressWarnings("unchecked")
-        MessageBodyWriter<Object>[] writers = (MessageBodyWriter<Object>[]) serialisers
-                .findWriters(null, entityClass, mediaType)
+        MessageBodyWriter<Object>[] writers = (MessageBodyWriter<Object>[]) serialisers.findWriters(entityClass, mediaType)
                 .toArray(Serialisers.NO_WRITER);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         boolean wrote = false;
