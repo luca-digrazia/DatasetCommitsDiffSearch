@@ -39,7 +39,7 @@ public class FlagList implements Serializable {
     private final String name;
     private final ImmutableList<String> flags;
 
-    @AutoCodec.Instantiator
+    @AutoCodec.Constructor
     OptionalFlag(String name, ImmutableList<String> flags) {
       this.name = name;
       this.flags = flags;
@@ -58,7 +58,7 @@ public class FlagList implements Serializable {
   private final ImmutableList<OptionalFlag> optionalFlags;
   private final ImmutableList<String> suffixFlags;
 
-  @AutoCodec.Instantiator
+  @AutoCodec.Constructor
   FlagList(
       ImmutableList<String> prefixFlags,
       ImmutableList<OptionalFlag> optionalFlags,

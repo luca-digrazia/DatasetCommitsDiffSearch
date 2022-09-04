@@ -80,9 +80,6 @@ import com.google.devtools.build.lib.rules.Alias.AliasRule;
 import com.google.devtools.build.lib.rules.android.AarImportBaseRule;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
 import com.google.devtools.build.lib.rules.android.AndroidDeviceRule;
-import com.google.devtools.build.lib.rules.android.AndroidDeviceScriptFixtureRule;
-import com.google.devtools.build.lib.rules.android.AndroidHostServiceFixtureRule;
-import com.google.devtools.build.lib.rules.android.AndroidInstrumentationTestRule;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryBaseRule;
 import com.google.devtools.build.lib.rules.android.AndroidLocalTestBaseRule;
 import com.google.devtools.build.lib.rules.android.AndroidNeverlinkAspect;
@@ -131,6 +128,7 @@ import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSkylarkCommon;
 import com.google.devtools.build.lib.rules.java.JavaToolchainAlias;
 import com.google.devtools.build.lib.rules.java.JavaToolchainRule;
+import com.google.devtools.build.lib.rules.java.JvmConfigurationLoader;
 import com.google.devtools.build.lib.rules.java.ProguardLibraryRule;
 import com.google.devtools.build.lib.rules.java.proto.JavaProtoSkylarkCommon;
 import com.google.devtools.build.lib.rules.objc.AppleBinaryRule;
@@ -138,6 +136,7 @@ import com.google.devtools.build.lib.rules.objc.AppleSkylarkCommon;
 import com.google.devtools.build.lib.rules.objc.AppleStaticLibraryRule;
 import com.google.devtools.build.lib.rules.objc.AppleStubBinaryRule;
 import com.google.devtools.build.lib.rules.objc.IosDeviceRule;
+import com.google.devtools.build.lib.rules.objc.IosTestRule;
 import com.google.devtools.build.lib.rules.objc.J2ObjcAspect;
 import com.google.devtools.build.lib.rules.objc.J2ObjcCommandLineOptions;
 import com.google.devtools.build.lib.rules.objc.J2ObjcConfiguration;
@@ -201,7 +200,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of();
+          return null;
         }
       };
 
@@ -394,6 +393,7 @@ public class BazelRuleClassProvider {
         @Override
         public void init(Builder builder) {
           builder.addConfigurationOptions(JavaOptions.class);
+          builder.addConfigurationFragment(new JvmConfigurationLoader());
           builder.addConfigurationFragment(new JavaConfigurationLoader());
 
           builder.addBuildInfoFactory(new BazelJavaBuildInfoFactory());
@@ -486,9 +486,6 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new AndroidDeviceRule());
           builder.addRuleDefinition(new AndroidLocalTestBaseRule());
           builder.addRuleDefinition(new BazelAndroidLocalTestRule());
-          builder.addRuleDefinition(new AndroidInstrumentationTestRule());
-          builder.addRuleDefinition(new AndroidDeviceScriptFixtureRule());
-          builder.addRuleDefinition(new AndroidHostServiceFixtureRule());
 
           builder.addSkylarkAccessibleTopLevels("android_common", new AndroidSkylarkCommon());
 
@@ -557,6 +554,7 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new AppleCcToolchainRule());
           builder.addRuleDefinition(new AppleToolchain.RequiresXcodeConfigRule(toolsRepository));
           builder.addRuleDefinition(new IosDeviceRule());
+          builder.addRuleDefinition(new IosTestRule());
           builder.addRuleDefinition(new ObjcBundleRule());
           builder.addRuleDefinition(new ObjcBundleLibraryRule());
           builder.addRuleDefinition(new ObjcFrameworkRule());
@@ -565,6 +563,8 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new ObjcRuleClasses.CoptsRule());
           builder.addRuleDefinition(new ObjcRuleClasses.BundlingRule());
           builder.addRuleDefinition(new ObjcRuleClasses.DylibDependingRule(objcProtoAspect));
+          builder.addRuleDefinition(new ObjcRuleClasses.ReleaseBundlingRule());
+          builder.addRuleDefinition(new ObjcRuleClasses.SimulatorRule());
           builder.addRuleDefinition(new ObjcRuleClasses.CompilingRule());
           builder.addRuleDefinition(new ObjcRuleClasses.LinkingRule(objcProtoAspect));
           builder.addRuleDefinition(new ObjcRuleClasses.PlatformRule());
@@ -576,6 +576,8 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new ObjcRuleClasses.ResourceToolsRule());
           builder.addRuleDefinition(new ObjcRuleClasses.XcrunRule());
           builder.addRuleDefinition(new ObjcRuleClasses.LibtoolRule());
+          builder.addRuleDefinition(new ObjcRuleClasses.IpaRule());
+          builder.addRuleDefinition(new ObjcRuleClasses.ReleaseBundlingToolsRule());
           builder.addRuleDefinition(new ObjcRuleClasses.CrosstoolRule());
           builder.addRuleDefinition(new XcodeConfigRule());
           builder.addRuleDefinition(new XcodeConfigAliasRule());

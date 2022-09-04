@@ -28,14 +28,11 @@ import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.Marshaller.Context;
 import com.google.devtools.build.lib.skyframe.serialization.strings.StringCodecs;
 import com.google.protobuf.AbstractMessage;
-import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.ProtocolMessageEnum;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.regex.Pattern;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
@@ -281,13 +278,15 @@ class Marshallers {
       new Marshaller() {
         @Override
         public boolean matches(DeclaredType type) {
-          return matchesErased(type, Map.class);
+          // TODO(shahan): refine as needed by splitting these into separate marshallers.
+          return matchesErased(type, Map.class)
+              || matchesErased(type, ImmutableMap.class)
+              || matchesErased(type, ImmutableSortedMap.class);
         }
 
         @Override
         public void addSerializationCode(Context context) {
           context.builder.addStatement("codedOut.writeInt32NoTag($L.size())", context.name);
-          String mapName = context.makeName("orderedMap");
           String entryName = context.makeName("entry");
           Context key =
               context.with(
@@ -295,20 +294,13 @@ class Marshallers {
           Context value =
               context.with(
                   (DeclaredType) context.type.getTypeArguments().get(1), entryName + ".getValue()");
-          context.builder.addStatement(
-              "$T<$T, $T> $L = null", Map.class, key.getTypeName(), value.getTypeName(), mapName);
-          context.builder.beginControlFlow("if ($L instanceof $T)", context.name, SortedMap.class);
-          context.builder.addStatement("$L = $L", mapName, context.name);
-          context.builder.nextControlFlow("else");
-          context.builder.addStatement("$L = new $T<>($L)", mapName, TreeMap.class, context.name);
-          context.builder.endControlFlow();
           context.builder.beginControlFlow(
               "for ($T<$T, $T> $L : $L.entrySet())",
               Map.Entry.class,
               key.getTypeName(),
               value.getTypeName(),
               entryName,
-              mapName);
+              context.name);
           writeSerializationCode(key);
           writeSerializationCode(value);
           context.builder.endControlFlow();
@@ -316,63 +308,33 @@ class Marshallers {
 
         @Override
         public void addDeserializationCode(Context context) {
-          addMapDeserializationCode(context, context.name, false);
-        }
-      };
-
-  private final Marshaller immutableMapMarshaller =
-      new Marshaller() {
-        @Override
-        public boolean matches(DeclaredType type) {
-          // TODO(shahan): refine as needed by splitting these into separate marshallers.
-          return matchesErased(type, ImmutableMap.class)
-              || matchesErased(type, ImmutableSortedMap.class);
-        }
-
-        @Override
-        public void addSerializationCode(Context context) {
-          mapMarshaller.addSerializationCode(context);
-        }
-
-        @Override
-        public void addDeserializationCode(Context context) {
-          String builderName = context.makeName("builder");
-          addMapDeserializationCode(context, builderName, true);
-          context.builder.addStatement("$L = $L.build()", context.name, builderName);
-        }
-      };
-
-  /** Helper for mapMarshaller and immutableMapMarshaller. */
-  private void addMapDeserializationCode(
-      Context context, String builderName, boolean isImmutableMap) {
           Context key =
               context.with(
                   (DeclaredType) context.type.getTypeArguments().get(0), context.makeName("key"));
           Context value =
               context.with(
                   (DeclaredType) context.type.getTypeArguments().get(1), context.makeName("value"));
-    if (isImmutableMap) {
-      context.builder.addStatement(
-          "$T<$T, $T> $L = new $T<>($T.naturalOrder())",
-          ImmutableSortedMap.Builder.class,
-          key.getTypeName(),
-          value.getTypeName(),
-          builderName,
-          ImmutableSortedMap.Builder.class,
-          Comparator.class);
-    } else {
-      context.builder.addStatement("$L = new $T<>()", builderName, TreeMap.class);
-    }
-    String lengthName = context.makeName("length");
-    context.builder.addStatement("int $L = codedIn.readInt32()", lengthName);
-    String indexName = context.makeName("i");
-    context.builder.beginControlFlow(
-        "for (int $L = 0; $L < $L; ++$L)", indexName, indexName, lengthName, indexName);
-    writeDeserializationCode(key);
-    writeDeserializationCode(value);
-    context.builder.addStatement("$L.put($L, $L)", builderName, key.name, value.name);
-    context.builder.endControlFlow();
-  }
+          String builderName = context.makeName("builder");
+          context.builder.addStatement(
+              "$T<$T, $T> $L = new $T<>($T.naturalOrder())",
+              ImmutableSortedMap.Builder.class,
+              key.getTypeName(),
+              value.getTypeName(),
+              builderName,
+              ImmutableSortedMap.Builder.class,
+              Comparator.class);
+          String lengthName = context.makeName("length");
+          context.builder.addStatement("int $L = codedIn.readInt32()", lengthName);
+          String indexName = context.makeName("i");
+          context.builder.beginControlFlow(
+              "for (int $L = 0; $L < $L; ++$L)", indexName, indexName, lengthName, indexName);
+          writeDeserializationCode(key);
+          writeDeserializationCode(value);
+          context.builder.addStatement("$L.put($L, $L)", builderName, key.name, value.name);
+          context.builder.endControlFlow();
+          context.builder.addStatement("$L = $L.build()", context.name, builderName);
+        }
+      };
 
   private final Marshaller multimapMarshaller =
       new Marshaller() {
@@ -489,22 +451,13 @@ class Marshallers {
 
         @Override
         public void addSerializationCode(Context context) {
-          context.builder.addStatement("codedOut.writeMessageNoTag($L)", context.name);
+          context.builder.addStatement("$L.writeTo(codedOut)", context.name);
         }
 
         @Override
         public void addDeserializationCode(Context context) {
-          String builderName = context.makeName("builder");
           context.builder.addStatement(
-              "$T.Builder $L = $T.newBuilder()",
-              context.getTypeName(),
-              builderName,
-              context.getTypeName());
-          context.builder.addStatement(
-              "codedIn.readMessage($L, $T.getEmptyRegistry())",
-              builderName,
-              ExtensionRegistryLite.class);
-          context.builder.addStatement("$L = $L.build()", context.name, builderName);
+              "$L = $T.parseFrom(codedIn)", context.name, context.getTypeName());
         }
       };
 
@@ -563,7 +516,6 @@ class Marshallers {
           listMarshaller,
           immutableSortedSetMarshaller,
           mapMarshaller,
-          immutableMapMarshaller,
           multimapMarshaller,
           patternMarshaller,
           hashCodeMarshaller,

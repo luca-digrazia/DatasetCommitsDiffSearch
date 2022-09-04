@@ -18,7 +18,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Functions;
 
 /** Catalog of possible cpu transformers. */
-// TODO(b/120060214): Remove CpuTransformer
 public enum CpuTransformer {
   IDENTITY {
     @Override

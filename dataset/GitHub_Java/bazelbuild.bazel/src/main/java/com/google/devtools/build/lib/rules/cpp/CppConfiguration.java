@@ -32,7 +32,7 @@ import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
-import com.google.devtools.build.lib.analysis.skylark.annotations.SkylarkConfigurationField;
+import com.google.devtools.build.lib.analysis.skylark.SkylarkConfigurationField;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
@@ -296,28 +296,32 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
             cppToolchainInfo.configureLinkerOptions(
                 compilationMode,
                 cppOptions.getLipoMode(),
-                LinkingMode.FULLY_STATIC),
+                LinkingMode.FULLY_STATIC,
+                cppToolchainInfo.getLdExecutable()),
             FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
             ImmutableList.<String>of()),
         new FlagList(
             cppToolchainInfo.configureLinkerOptions(
                 compilationMode,
                 cppOptions.getLipoMode(),
-                LinkingMode.MOSTLY_STATIC),
+                LinkingMode.MOSTLY_STATIC,
+                cppToolchainInfo.getLdExecutable()),
             FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
             ImmutableList.<String>of()),
         new FlagList(
             cppToolchainInfo.configureLinkerOptions(
                 compilationMode,
                 cppOptions.getLipoMode(),
-                LinkingMode.MOSTLY_STATIC_LIBRARIES),
+                LinkingMode.MOSTLY_STATIC_LIBRARIES,
+                cppToolchainInfo.getLdExecutable()),
             FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
             ImmutableList.<String>of()),
         new FlagList(
             cppToolchainInfo.configureLinkerOptions(
                 compilationMode,
                 cppOptions.getLipoMode(),
-                LinkingMode.DYNAMIC),
+                LinkingMode.DYNAMIC,
+                cppToolchainInfo.getLdExecutable()),
             FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
             ImmutableList.<String>of()),
         ImmutableList.copyOf(cppOptions.coptList),

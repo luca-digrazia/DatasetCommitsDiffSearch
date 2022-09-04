@@ -552,7 +552,8 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
             ccProviderA.configureLinkerOptions(
                 CompilationMode.FASTBUILD,
                 LipoMode.OFF,
-                LinkingMode.FULLY_STATIC))
+                LinkingMode.FULLY_STATIC,
+                PathFragment.create("hello-world/ld")))
         .containsExactly(
             "linker-flag-A-1",
             "linker-flag-A-2",
@@ -565,7 +566,8 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
             ccProviderA.configureLinkerOptions(
                 CompilationMode.DBG,
                 LipoMode.OFF,
-                LinkingMode.DYNAMIC))
+                LinkingMode.DYNAMIC,
+                PathFragment.create("hello-world/ld")))
         .containsExactly(
             "linker-flag-A-1", "linker-flag-A-2", "linker-dbg-flag-A-1", "linker-dbg-flag-A-2")
         .inOrder();
@@ -573,7 +575,8 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
             ccProviderA.configureLinkerOptions(
                 CompilationMode.OPT,
                 LipoMode.OFF,
-                LinkingMode.FULLY_STATIC))
+                LinkingMode.FULLY_STATIC,
+                PathFragment.create("hello-world/ld")))
         .containsExactly(
             "linker-flag-A-1", "linker-flag-A-2", "fully-static-flag-A-1", "fully-static-flag-A-2")
         .inOrder();
@@ -582,7 +585,8 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
             ccProviderA.configureLinkerOptions(
                 CompilationMode.OPT,
                 LipoMode.BINARY,
-                LinkingMode.FULLY_STATIC))
+                LinkingMode.FULLY_STATIC,
+                PathFragment.create("hello-world/ld")))
         .containsExactly(
             "linker-flag-A-1", "linker-flag-A-2", "fully-static-flag-A-1", "fully-static-flag-A-2")
         .inOrder();
@@ -654,19 +658,22 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
             ccProviderC.configureLinkerOptions(
                 CompilationMode.FASTBUILD,
                 LipoMode.OFF,
-                LinkingMode.FULLY_STATIC))
+                LinkingMode.FULLY_STATIC,
+                PathFragment.create("hello-world/ld")))
         .isEmpty();
     assertThat(
             ccProviderC.configureLinkerOptions(
                 CompilationMode.DBG,
                 LipoMode.OFF,
-                LinkingMode.DYNAMIC))
+                LinkingMode.DYNAMIC,
+                PathFragment.create("hello-world/ld")))
         .isEmpty();
     assertThat(
             ccProviderC.configureLinkerOptions(
                 CompilationMode.OPT,
                 LipoMode.OFF,
-                LinkingMode.FULLY_STATIC))
+                LinkingMode.FULLY_STATIC,
+                PathFragment.create("hello-world/ld")))
         .isEmpty();
     assertThat(ccProviderC.getObjCopyOptionsForEmbedding()).isEmpty();
     assertThat(ccProviderC.getLdOptionsForEmbedding()).isEmpty();
@@ -698,7 +705,8 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
             ccProviderB.configureLinkerOptions(
                 CompilationMode.DBG,
                 lipoMode,
-                LinkingMode.DYNAMIC))
+                LinkingMode.DYNAMIC,
+                PathFragment.create("hello-world/ld")))
         .containsExactly(
             "linker-flag-B-1",
             "linker-flag-B-2",

@@ -28,6 +28,9 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.InputFile;
+import com.google.devtools.build.lib.packages.NoSuchPackageException;
+import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
@@ -85,8 +88,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
     protected final Label crosstoolTop;
     protected final Label ccToolchainLabel;
     protected final Label stlLabel;
-    protected final Path fdoProfileAbsolutePath;
-    protected final Label fdoProfileLabel;
+    protected final Path fdoZip;
     protected final Label sysrootLabel;
     protected final CpuTransformer cpuTransformer;
 
@@ -95,8 +97,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
         CrosstoolConfigurationLoader.CrosstoolFile crosstoolFile,
         String cacheKeySuffix,
         BuildOptions buildOptions,
-        Path fdoProfileAbsolutePath,
-        Label fdoProfileLabel,
+        Path fdoZip,
         Label crosstoolTop,
         Label ccToolchainLabel,
         Label stlLabel,
@@ -107,8 +108,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
       this.cacheKeySuffix = cacheKeySuffix;
       this.commonOptions = buildOptions.get(BuildConfiguration.Options.class);
       this.cppOptions = buildOptions.get(CppOptions.class);
-      this.fdoProfileAbsolutePath = fdoProfileAbsolutePath;
-      this.fdoProfileLabel = fdoProfileLabel;
+      this.fdoZip = fdoZip;
       this.crosstoolTop = crosstoolTop;
       this.ccToolchainLabel = ccToolchainLabel;
       this.stlLabel = stlLabel;
@@ -151,25 +151,35 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
 
     // FDO
     // TODO(bazel-team): move this to CppConfiguration.prepareHook
-    Path fdoProfileAbsolutePath = null;
-    Label fdoProfileLabel = null;
-    if (cppOptions.getFdoOptimize() != null) {
-      if (cppOptions.getFdoOptimize().startsWith("//")) {
-        try {
-          fdoProfileLabel = Label.parseAbsolute(cppOptions.getFdoOptimize());
-        } catch (LabelSyntaxException e) {
-          env.getEventHandler().handle(Event.error(e.getMessage()));
-          throw new InvalidConfigurationException(e);
+    Path fdoZip;
+    if (cppOptions.getFdoOptimize() == null) {
+      fdoZip = null;
+    } else if (cppOptions.getFdoOptimize().startsWith("//")) {
+      try {
+        Target target = env.getTarget(Label.parseAbsolute(cppOptions.getFdoOptimize()));
+        if (target == null) {
+          return null;
         }
-      } else {
-        fdoProfileAbsolutePath =
-            directories.getWorkspace().getRelative(cppOptions.getFdoOptimize());
-        try {
-          // We don't check for file existence, but at least the filename should be well-formed.
-          FileSystemUtils.checkBaseName(fdoProfileAbsolutePath.getBaseName());
-        } catch (IllegalArgumentException e) {
-          throw new InvalidConfigurationException(e);
+        if (!(target instanceof InputFile)) {
+          throw new InvalidConfigurationException(
+              "--fdo_optimize cannot accept targets that do not refer to input files");
         }
+        fdoZip = env.getPath(target.getPackage(), target.getName());
+        if (fdoZip == null) {
+          throw new InvalidConfigurationException(
+              "The --fdo_optimize parameter you specified resolves to a file that does not exist");
+        }
+      } catch (NoSuchPackageException | NoSuchTargetException | LabelSyntaxException e) {
+        env.getEventHandler().handle(Event.error(e.getMessage()));
+        throw new InvalidConfigurationException(e);
+      }
+    } else {
+      fdoZip = directories.getWorkspace().getRelative(cppOptions.getFdoOptimize());
+      try {
+        // We don't check for file existence, but at least the filename should be well-formed.
+        FileSystemUtils.checkBaseName(fdoZip.getBaseName());
+      } catch (IllegalArgumentException e) {
+        throw new InvalidConfigurationException(e);
       }
     }
 
@@ -222,8 +232,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
         file,
         file.getMd5(),
         options,
-        fdoProfileAbsolutePath,
-        fdoProfileLabel,
+        fdoZip,
         crosstoolTopLabel,
         ccToolchainLabel,
         stlLabel,
