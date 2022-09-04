@@ -24,8 +24,6 @@ public class EXO2PlayerManager implements IPlayerManager {
 
     private IjkExo2MediaPlayer mediaPlayer;
 
-    private Surface surface;
-
     @Override
     public IMediaPlayer getMediaPlayer() {
         return mediaPlayer;
@@ -54,13 +52,8 @@ public class EXO2PlayerManager implements IPlayerManager {
         }
         if (msg.obj == null) {
             mediaPlayer.setSurface(null);
-            if (surface != null) {
-                surface.release();
-                surface = null;
-            }
         } else {
             Surface holder = (Surface) msg.obj;
-            surface = holder;
             mediaPlayer.setSurface(holder);
         }
     }
@@ -85,12 +78,6 @@ public class EXO2PlayerManager implements IPlayerManager {
                 mediaPlayer.setVolume(1, 1);
             }
         }
-    }
-
-
-    @Override
-    public void releaseSurface() {
-
     }
 
     @Override

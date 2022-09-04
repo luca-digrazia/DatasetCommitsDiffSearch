@@ -21,7 +21,6 @@ import com.shuyu.gsyvideoplayer.model.VideoOptionModel;
 import com.shuyu.gsyvideoplayer.player.EXO2PlayerManager;
 import com.shuyu.gsyvideoplayer.player.IJKPlayerManager;
 import com.shuyu.gsyvideoplayer.player.IPlayerManager;
-import com.shuyu.gsyvideoplayer.player.SystemPlayerManager;
 import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
@@ -407,9 +406,8 @@ public class GSYVideoManager implements IMediaPlayer.OnPreparedListener, IMediaP
 
     private void releaseSurface(Message msg) {
         if (msg.obj != null) {
-            if (playerManager != null) {
-                playerManager.releaseSurface();
-            }
+            Surface holder = (Surface) msg.obj;
+            holder.release();
         }
     }
 
@@ -627,8 +625,6 @@ public class GSYVideoManager implements IMediaPlayer.OnPreparedListener, IMediaP
         switch (videoType) {
             case GSYVideoType.IJKEXOPLAYER2:
                 return new EXO2PlayerManager();
-            case GSYVideoType.SYSTEMPLAYER:
-                return new SystemPlayerManager();
             case GSYVideoType.IJKPLAYER:
             default:
                 return new IJKPlayerManager();
