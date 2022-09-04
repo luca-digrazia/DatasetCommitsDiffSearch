@@ -44,6 +44,7 @@ import com.mongodb.connection.ConnectionPoolSettings;
 import com.mongodb.connection.ServerSettings;
 import com.mongodb.connection.SocketSettings;
 import com.mongodb.connection.SslSettings;
+import com.mongodb.event.ConnectionPoolListener;
 
 import io.quarkus.mongodb.impl.AxleReactiveMongoClientImpl;
 import io.quarkus.mongodb.impl.ReactiveMongoClientImpl;
@@ -57,6 +58,7 @@ public abstract class AbstractMongoClientProducer {
     private boolean disableSslSupport = false;
     private List<String> codecProviders;
     private List<String> bsonDiscriminators;
+    private List<ConnectionPoolListener> connectionPoolListeners;
     private Map<String, MongoClient> mongoclients = new HashMap<>();
     private Map<String, ReactiveMongoClient> reactiveMongoClients = new HashMap<>();
     private Map<String, io.quarkus.mongodb.ReactiveMongoClient> legacyReactiveMongoClients = new HashMap<>();
@@ -101,6 +103,9 @@ public abstract class AbstractMongoClientProducer {
     public io.quarkus.mongodb.ReactiveMongoClient createLegacyReactiveMongoClient(MongoClientConfig mongoClientConfig,
             String name)
             throws MongoException {
+        LOGGER.warn(
+                "`io.quarkus.mongodb.ReactiveMongoClient` is deprecated and will be removed in a future version - it is "
+                        + "recommended to switch to `io.quarkus.mongodb.reactive.ReactiveMongoClient`");
         MongoClientSettings mongoConfiguration = createMongoConfiguration(mongoClientConfig);
         com.mongodb.reactivestreams.client.MongoClient client = com.mongodb.reactivestreams.client.MongoClients
                 .create(mongoConfiguration);
@@ -144,11 +149,13 @@ public abstract class AbstractMongoClientProducer {
     }
 
     private static class ConnectionPoolSettingsBuilder implements Block<ConnectionPoolSettings.Builder> {
-        public ConnectionPoolSettingsBuilder(MongoClientConfig config) {
+        public ConnectionPoolSettingsBuilder(MongoClientConfig config, List<ConnectionPoolListener> connectionPoolListeners) {
             this.config = config;
+            this.connectionPoolListeners = connectionPoolListeners;
         }
 
         private MongoClientConfig config;
+        private List<ConnectionPoolListener> connectionPoolListeners;
 
         @Override
         public void apply(ConnectionPoolSettings.Builder builder) {
@@ -166,6 +173,9 @@ public abstract class AbstractMongoClientProducer {
             }
             if (config.maintenanceInitialDelay.isPresent()) {
                 builder.maintenanceInitialDelay(config.maintenanceInitialDelay.get().toMillis(), TimeUnit.MILLISECONDS);
+            }
+            for (ConnectionPoolListener connectionPoolListener : connectionPoolListeners) {
+                builder.addConnectionPoolListener(connectionPoolListener);
             }
         }
     }
@@ -196,6 +206,9 @@ public abstract class AbstractMongoClientProducer {
         public void apply(SocketSettings.Builder builder) {
             if (config.connectTimeout.isPresent()) {
                 builder.connectTimeout((int) config.connectTimeout.get().toMillis(), TimeUnit.MILLISECONDS);
+            }
+            if (config.readTimeout.isPresent()) {
+                builder.readTimeout((int) config.readTimeout.get().toMillis(), TimeUnit.MILLISECONDS);
             }
         }
     }
@@ -285,13 +298,14 @@ public abstract class AbstractMongoClientProducer {
             settings.applyToSslSettings(new SslSettingsBuilder(config, disableSslSupport));
         }
         settings.applyToClusterSettings(new ClusterSettingBuilder(config));
-        settings.applyToConnectionPoolSettings(new ConnectionPoolSettingsBuilder(config));
+        settings.applyToConnectionPoolSettings(new ConnectionPoolSettingsBuilder(config, connectionPoolListeners));
         settings.applyToServerSettings(new ServerSettingsBuilder(config));
         settings.applyToSocketSettings(new SocketSettingsBuilder(config));
 
         if (config.readPreference.isPresent()) {
             settings.readPreference(ReadPreference.valueOf(config.readPreference.get()));
         }
+
         return settings.build();
     }
 
@@ -399,6 +413,10 @@ public abstract class AbstractMongoClientProducer {
 
     public void setBsonDiscriminators(List<String> bsonDiscriminators) {
         this.bsonDiscriminators = bsonDiscriminators;
+    }
+
+    public void setConnectionPoolListeners(List<ConnectionPoolListener> connectionPoolListeners) {
+        this.connectionPoolListeners = connectionPoolListeners;
     }
 
     public void disableSslSupport() {
