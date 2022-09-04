@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.shamrock.deployment.steps;
 
 import static org.jboss.protean.gizmo.MethodDescriptor.ofMethod;
@@ -50,7 +34,6 @@ public class SubstrateAutoFeatureStep {
     @BuildStep
     SubstrateOutputBuildItem generateFeature(ClassOutputBuildItem output,
                                              List<RuntimeInitializedClassBuildItem> runtimeInitializedClassBuildItems,
-                                             List<RuntimeReinitializedClassBuildItem> runtimeReinitializedClassBuildItems,
                                              List<SubstrateProxyDefinitionBuildItem> proxies,
                                              List<SubstrateResourceBuildItem> resources,
                                              List<SubstrateResourceBundleBuildItem> resourceBundles,
@@ -87,7 +70,6 @@ public class SubstrateAutoFeatureStep {
             ResultHandle array = overallCatch.newArray(Class.class, overallCatch.load(1));
             ResultHandle thisClass = overallCatch.loadClass(GRAAL_AUTOFEATURE);
             ResultHandle cl = overallCatch.invokeVirtualMethod(ofMethod(Class.class, "getClassLoader", ClassLoader.class), thisClass);
-            // FIXME: probably those two hard-coded should be produced by some build step
             {
                 TryBlock tc = overallCatch.tryBlock();
                 ResultHandle clazz = tc.invokeStaticMethod(ofMethod(Class.class, "forName", Class.class, String.class, boolean.class, ClassLoader.class), tc.load("org.wildfly.common.net.HostName"), tc.load(false), cl);
@@ -100,15 +82,6 @@ public class SubstrateAutoFeatureStep {
             {
                 TryBlock tc = overallCatch.tryBlock();
                 ResultHandle clazz = tc.invokeStaticMethod(ofMethod(Class.class, "forName", Class.class, String.class, boolean.class, ClassLoader.class), tc.load("org.wildfly.common.os.Process"), tc.load(false), cl);
-                tc.writeArrayValue(array, 0, clazz);
-                tc.invokeStaticMethod(MethodDescriptor.ofMethod("org.graalvm.nativeimage.RuntimeClassInitialization", "rerunClassInitialization", void.class, Class[].class), array);
-
-                CatchBlockCreator cc = tc.addCatch(Throwable.class);
-                cc.invokeVirtualMethod(ofMethod(Throwable.class, "printStackTrace", void.class), cc.getCaughtException());
-            }
-            for (String i : runtimeReinitializedClassBuildItems.stream().map(RuntimeReinitializedClassBuildItem::getClassName).collect(Collectors.toList())) {
-                TryBlock tc = overallCatch.tryBlock();
-                ResultHandle clazz = tc.invokeStaticMethod(ofMethod(Class.class, "forName", Class.class, String.class, boolean.class, ClassLoader.class), tc.load(i), tc.load(false), cl);
                 tc.writeArrayValue(array, 0, clazz);
                 tc.invokeStaticMethod(MethodDescriptor.ofMethod("org.graalvm.nativeimage.RuntimeClassInitialization", "rerunClassInitialization", void.class, Class[].class), array);
 
