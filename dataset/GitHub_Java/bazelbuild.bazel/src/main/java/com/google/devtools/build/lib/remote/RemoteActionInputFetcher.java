@@ -17,7 +17,6 @@ import build.bazel.remote.execution.v2.Digest;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.flogger.GoogleLogger;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -32,6 +31,7 @@ import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.remote.common.CacheNotFoundException;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
+import com.google.devtools.build.lib.remote.util.Utils;
 import com.google.devtools.build.lib.vfs.Path;
 import io.grpc.Context;
 import java.io.IOException;
@@ -41,6 +41,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -51,7 +53,7 @@ import javax.annotation.concurrent.GuardedBy;
  */
 class RemoteActionInputFetcher implements ActionInputPrefetcher {
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger = Logger.getLogger(RemoteActionInputFetcher.class.getName());
 
   private final Object lock = new Object();
 
@@ -63,11 +65,11 @@ class RemoteActionInputFetcher implements ActionInputPrefetcher {
   @GuardedBy("lock")
   final Map<Path, ListenableFuture<Void>> downloadsInProgress = new HashMap<>();
 
-  private final RemoteCache remoteCache;
+  private final AbstractRemoteActionCache remoteCache;
   private final Path execRoot;
   private final Context ctx;
 
-  RemoteActionInputFetcher(RemoteCache remoteCache, Path execRoot, Context ctx) {
+  RemoteActionInputFetcher(AbstractRemoteActionCache remoteCache, Path execRoot, Context ctx) {
     this.remoteCache = Preconditions.checkNotNull(remoteCache);
     this.execRoot = Preconditions.checkNotNull(execRoot);
     this.ctx = Preconditions.checkNotNull(ctx);
@@ -114,25 +116,32 @@ class RemoteActionInputFetcher implements ActionInputPrefetcher {
         }
       }
 
-      try {
-        RemoteCache.waitForBulkTransfer(
-            downloadsToWaitFor.values(), /* cancelRemainingOnInterrupt=*/ true);
-      } catch (BulkTransferException e) {
-        if (e.onlyCausedByCacheNotFoundException()) {
-          BulkTransferException bulkAnnotatedException = new BulkTransferException();
-          for (Throwable t : e.getSuppressed()) {
-            IOException annotatedException =
+      IOException ioException = null;
+      InterruptedException interruptedException = null;
+      for (Map.Entry<Path, ListenableFuture<Void>> entry : downloadsToWaitFor.entrySet()) {
+        try {
+          Utils.getFromFuture(entry.getValue());
+        } catch (IOException e) {
+          if (e instanceof CacheNotFoundException) {
+            e =
                 new IOException(
                     String.format(
                         "Failed to fetch file with hash '%s' because it does not exist remotely."
                             + " --experimental_remote_outputs=minimal does not work if"
                             + " your remote cache evicts files during builds.",
-                        ((CacheNotFoundException) t).getMissingDigest().getHash()));
-            bulkAnnotatedException.add(annotatedException);
+                        ((CacheNotFoundException) e).getMissingDigest().getHash()));
           }
-          e = bulkAnnotatedException;
+          ioException = ioException == null ? e : ioException;
+        } catch (InterruptedException e) {
+          interruptedException = interruptedException == null ? e : interruptedException;
         }
-        throw e;
+      }
+
+      if (interruptedException != null) {
+        throw interruptedException;
+      }
+      if (ioException != null) {
+        throw ioException;
       }
     }
   }
@@ -182,7 +191,7 @@ class RemoteActionInputFetcher implements ActionInputPrefetcher {
                   try {
                     path.chmod(0755);
                   } catch (IOException e) {
-                    logger.atWarning().withCause(e).log("Failed to chmod 755 on %s", path);
+                    logger.log(Level.WARNING, "Failed to chmod 755 on " + path, e);
                   }
                 }
 
@@ -194,8 +203,10 @@ class RemoteActionInputFetcher implements ActionInputPrefetcher {
                   try {
                     path.delete();
                   } catch (IOException e) {
-                    logger.atWarning().withCause(e).log(
-                        "Failed to delete output file after incomplete download: %s", path);
+                    logger.log(
+                        Level.WARNING,
+                        "Failed to delete output file after incomplete download: " + path,
+                        e);
                   }
                 }
               },

@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,112 +16,135 @@ package com.google.devtools.build.lib.bazel.rules.workspace;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 
-import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
+import com.google.devtools.build.lib.rules.repository.WorkspaceConfiguredTargetFactory;
 
 /**
  * Rule definition for the maven_jar rule.
  */
-@BlazeRule(name = MavenJarRule.NAME,
-           type = RuleClassType.WORKSPACE,
-           ancestors = { WorkspaceBaseRule.class },
-           factoryClass = WorkspaceConfiguredTargetFactory.class)
 public class MavenJarRule implements RuleDefinition {
 
   public static final String NAME = "maven_jar";
 
   @Override
-  public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
+  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
     return builder
-        /* <!-- #BLAZE_RULE(maven_jar).ATTRIBUTE(artifact_id) -->
-        The artifactId of the Maven dependency.
+        /* <!-- #BLAZE_RULE(maven_jar).ATTRIBUTE(artifact) -->
+        A description of a Maven artifact using
+        <a href="https://maven.apache.org/pom.html#Maven_Coordinates">Maven coordinates</a>.
 
-        <p>Required.</p>
+        <p>These descriptions are of the form &lt;groupId&gt:&lt;artifactId&gt;:&lt;version&gt;,
+        see <a href="${link maven_jar_examples}">the documentation below</a> for an example.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("artifact_id", Type.STRING).mandatory())
-        /* <!-- #BLAZE_RULE(maven_jar).ATTRIBUTE(group_id) -->
-        The groupId of the Maven dependency.
+        .add(attr("artifact", Type.STRING))
+        /* <!-- #BLAZE_RULE(maven_jar).ATTRIBUTE(repository) -->
+        A URL for a Maven repository to fetch the jar from.
 
-        <p>Required.</p>
+        <p>Either this or <code>server</code> can be specified. Defaults to Maven Central
+         ("central.maven.org").</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("group_id", Type.STRING).mandatory())
-        /* <!-- #BLAZE_RULE(maven_jar).ATTRIBUTE(version) -->
-        The version of the Maven dependency.
+        .add(attr("repository", Type.STRING))
+        /* <!-- #BLAZE_RULE(maven_jar).ATTRIBUTE(server) -->
+        A maven_server to use for this artifact.
 
-        <p>Required.</p>
+        <p>Either this or <code>repository</code> can be specified.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("version", Type.STRING).mandatory())
-        /* <!-- #BLAZE_RULE(maven_jar).ATTRIBUTE(repositories) -->
-        A list of repositories to use to attempt to fetch the jar.
+        .add(attr("server", Type.STRING))
+        /* <!-- #BLAZE_RULE(maven_jar).ATTRIBUTE(sha256) -->
+        A SHA-256 hash of the desired jar.
 
-        <p>Defaults to Maven Central ("repo1.maven.org"). If repositories are specified, they will
-          be checked in the order listed here (Maven Central will not be checked in this case,
-          unless it is on the list).</p>
-
-        <p><b>To be implemented: add a maven_repositories rule that allows a list of repositories
-        to be labeled.</b></p>
+        <p>If the downloaded jar does not match this hash, Bazel will error out. It is a security
+        risk to download a file without verifying cryptographic secure hash.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("repositories", Type.STRING_LIST))
-        /* <!-- #BLAZE_RULE(maven_jar).ATTRIBUTE(exclusions) -->
-        Transitive dependencies of this dependency that should not be downloaded.
+        .add(attr("sha256", Type.STRING))
+        /* <!-- #BLAZE_RULE(maven_jar).ATTRIBUTE(sha256_src) -->
+        A SHA-256 hash of the desired jar source file.
 
-        <p>Defaults to None: Bazel will download all of the dependencies requested by the Maven
-          dependency.  If exclusions are specified, they will not be downloaded.</p>
-
-        <p>Exclusions are specified in the format "<group_id>:<artifact_id>", for example,
-          "com.google.guava:guava".</p>
-
-        <p><b>Not yet implemented.</b></p>
+        <p>If the downloaded source jar does not match this hash, Bazel will error out. It is a
+        security risk to download a file without verifying cryptographic secure hash.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("exclusions", Type.STRING_LIST))
+        .add(attr("sha256_src", Type.STRING))
+        /* <!-- #BLAZE_RULE(maven_jar).ATTRIBUTE(sha1) -->
+        A SHA-1 hash of the desired jar.
+
+        <p>If the downloaded jar does not match this hash, Bazel will error out. It is a security
+        risk to download a file without verifying cryptographic secure hash. <b>Note that SHA-1 is
+        no longer considered a secure cryptographic hash function</b>, but specifying the hash is
+        still marginally better than no check at all. This attribute is kept here for legacy support
+        purposes. Please either use the 'sha256' attribute or migrate to
+        <a href="https://github.com/bazelbuild/rules_jvm_external/"><code>rules_jvm_external</code>
+        </a> and pin your Maven artifacts with their SHA-256 checksums.</p>
+        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
+        .add(attr("sha1", Type.STRING))
+        /* <!-- #BLAZE_RULE(maven_jar).ATTRIBUTE(sha1_src) -->
+        A SHA-1 hash of the desired jar source file. Please consider using 'sha256_src' instead.
+
+        <p>If the downloaded source jar does not match this hash, Bazel will error out. It is a
+        security risk to download a file without verifying cryptographic secure hash.</p>
+        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
+        .add(attr("sha1_src", Type.STRING))
         .setWorkspaceOnly()
         .build();
   }
-}
-/*<!-- #BLAZE_RULE (NAME = maven_jar, TYPE = OTHER, FAMILY = General)[GENERIC_RULE] -->
 
-${ATTRIBUTE_SIGNATURE}
+  @Override
+  public Metadata getMetadata() {
+    return RuleDefinition.Metadata.builder()
+        .name(MavenJarRule.NAME)
+        .type(RuleClassType.WORKSPACE)
+        .ancestors(WorkspaceBaseRule.class)
+        .factoryClass(WorkspaceConfiguredTargetFactory.class)
+        .build();
+  }
+}
+/*<!-- #BLAZE_RULE (NAME = maven_jar, TYPE = OTHER, FAMILY = Workspace)[GENERIC_RULE] -->
+
+<p><b>This rule is DEPRECATED. Instead, use
+[rules_jvm_external](https://github.com/bazelbuild/rules_jvm_external) to manage your Maven
+dependencies.</b></p>
 
 <p>Downloads a jar from Maven and makes it available to be used as a Java dependency.</p>
 
-${ATTRIBUTE_DEFINITION}
+<h4 id="maven_jar_name">Naming</h4>
 
-<h4 id="http_jar_examples">Examples</h4>
+<p>Note that the maven_jar name is used as a repository name, so it is limited by the rules
+governing workspace names: it cannot contain dashes nor dots (see
+<a href="http://bazel.build/docs/skylark/lib/globals.html#workspace">the documentation on workspace
+names</a> for the exact specification). By convention, maven_jar names should match the artifact
+name, replacing illegal characters with underscores and leaving off the version.  For example, a
+rule with <code>artifact = "org.apache.commons:commons-lang3:3.4"</code> should have
+<code>name = "org_apache_commons_commons_lang3"</code>.</p>
+
+<h4 id="maven_jar_examples">Examples</h4>
 
 Suppose that the current repostory contains a java_library target that needs to depend on Guava.
 Using Maven, this dependency would be defined in the pom.xml file as:
 
 <pre>
-<dependency>
-    <groupId>com.google.guava</groupId>
-    <artifactId>guava</artifactId>
-    <version>18.0</version>
-</dependency>
+&lt;dependency>
+    &lt;groupId>com.google.guava&lt;/groupId>
+    &lt;artifactId>guava&lt;/artifactId>
+    &lt;version>18.0&lt;/version>
+&lt;/dependency>
 </pre>
 
-In Bazel, the following lines can be added to the WORKSPACE file:
+With Bazel, add the following lines to the WORKSPACE file:
 
 <pre>
 maven_jar(
-    name = "guava",
-    group_id = "com.google.guava",
-    artifact_id = "guava",
-    version = "18.0",
-)
-
-bind(
-    name = "guava-jar",
-    actual = "@guava//jar"
+    name = "com_google_guava_guava",
+    artifact = "com.google.guava:guava:18.0",
+    sha1 = "cce0823396aa693798f8882e64213b1772032b09",
+    sha1_src = "ad97fe8faaf01a3d3faacecd58e8fa6e78a973ca",
 )
 </pre>
 
-Then the java_library can depend on <code>//external:guava-jar</code>.
-
-<p>See <a href="#bind_examples">Bind</a> for how to use bound targets.</p>
+<p>Targets can specify <code>@com_google_guava_guava//jar</code> as a dependency to depend on this
+jar.</p>
 
 <!-- #END_BLAZE_RULE -->*/

@@ -19,9 +19,10 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
+import com.google.devtools.build.lib.rules.repository.WorkspaceConfiguredTargetFactory;
 
 /**
  * Rule definition for the maven_jar rule.
@@ -31,11 +32,10 @@ public class MavenServerRule implements RuleDefinition {
   public static final String NAME = "maven_server";
 
   @Override
-  public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
+  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
     return builder
         /* <!-- #BLAZE_RULE(maven_server).ATTRIBUTE(url) -->
         A URL for accessing the server.
-        ${SYNOPSIS}
 
         <p>For example, Maven Central (which is the default and does not need to be defined) would
         be specified as <code>url = "http://central.maven.org/maven2/"</code>.</p>
@@ -45,7 +45,6 @@ public class MavenServerRule implements RuleDefinition {
         A path to a settings.xml file.  Used for testing. If unspecified, this defaults to using
         <code>$M2_HOME/conf/settings.xml</code> for the global settings and
         <code>$HOME/.m2/settings.xml</code> for the user settings.
-        ${SYNOPSIS}
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("settings_file", Type.STRING))
         .setWorkspaceOnly()
@@ -64,14 +63,14 @@ public class MavenServerRule implements RuleDefinition {
 }
 /*<!-- #BLAZE_RULE (NAME = maven_server, TYPE = OTHER, FAMILY = Workspace)[GENERIC_RULE] -->
 
-${ATTRIBUTE_SIGNATURE}
+<p><b>This rule is DEPRECATED. Instead, use
+[rules_jvm_external](https://github.com/bazelbuild/rules_jvm_external) to manage your Maven
+dependencies.</b></p>
 
 <p>How to access a Maven repository.</p>
 
-${ATTRIBUTE_DEFINITION}
-
 <p>This is a combination of a &lt;repository&gt; definition from a pom.xml file and a
-&lt;server&lt; definition from a settings.xml file.</p>
+&lt;server&gt; definition from a settings.xml file.</p>
 
 <h4>Using <code>maven_server</code></h4>
 
@@ -82,18 +81,18 @@ ${ATTRIBUTE_DEFINITION}
 maven_jar(
     name = "junit",
     artifact = "junit:junit-dep:4.10",
-    server = "my-server",
+    server = "my_server",
 )
 
 maven_server(
-    name = "my-server",
+    name = "my_server",
     url = "http://intranet.mycorp.net",
 )
 </pre>
 
 This specifies that junit should be downloaded from http://intranet.mycorp.net using the
 authentication information found in ~/.m2/settings.xml (specifically, the settings
-for the server with the id <code>my-server</code>).
+for the server with the id <code>my_server</code>).
 
 <h4>Specifying a default server</h4>
 
