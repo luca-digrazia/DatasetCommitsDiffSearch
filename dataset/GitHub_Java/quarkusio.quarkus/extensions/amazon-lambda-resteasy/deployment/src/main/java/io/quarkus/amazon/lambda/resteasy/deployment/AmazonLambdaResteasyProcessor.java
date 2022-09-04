@@ -7,7 +7,7 @@ import io.quarkus.amazon.lambda.resteasy.runtime.AmazonLambdaResteasyRecorder;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.resteasy.server.common.deployment.ResteasyInjectionReadyBuildItem;
+import io.quarkus.resteasy.common.deployment.ResteasyInjectionReadyBuildItem;
 import io.quarkus.resteasy.server.common.deployment.ResteasyServerConfigBuildItem;
 
 public class AmazonLambdaResteasyProcessor {
@@ -16,10 +16,10 @@ public class AmazonLambdaResteasyProcessor {
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    void setup(AmazonLambdaResteasyRecorder template, Optional<ResteasyServerConfigBuildItem> resteasyServerConfig,
+    void setup(AmazonLambdaResteasyRecorder recorder, Optional<ResteasyServerConfigBuildItem> resteasyServerConfig,
             ResteasyInjectionReadyBuildItem resteasyInjectionReady) {
         if (resteasyServerConfig.isPresent()) {
-            template.initHandler(resteasyServerConfig.get().getInitParameters(), config);
+            recorder.initHandler(resteasyServerConfig.get().getInitParameters(), config);
         }
     }
 }

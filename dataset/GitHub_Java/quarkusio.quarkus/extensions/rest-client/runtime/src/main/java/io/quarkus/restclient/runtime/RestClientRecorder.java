@@ -18,15 +18,11 @@ import io.quarkus.runtime.annotations.Recorder;
 
 @Recorder
 public class RestClientRecorder {
-
-    public static ResteasyProviderFactory providerFactory;
-
     public void setRestClientBuilderResolver() {
         RestClientBuilderResolver.setInstance(new BuilderResolver());
     }
 
     public void setSslEnabled(boolean sslEnabled) {
-        SSL_ENABLED = sslEnabled;
         RestClientBuilderImpl.setSslEnabled(sslEnabled);
     }
 
@@ -53,24 +49,19 @@ public class RestClientRecorder {
 
         if (useBuiltIn) {
             RegisterBuiltin.register(clientProviderFactory);
-            registerProviders(clientProviderFactory, contributedProviders, false);
+            registerProviders(clientProviderFactory, contributedProviders);
         } else {
-            providersToRegister.removeAll(contributedProviders);
-            registerProviders(clientProviderFactory, providersToRegister, true);
-            registerProviders(clientProviderFactory, contributedProviders, false);
+            registerProviders(clientProviderFactory, providersToRegister);
         }
 
         RestClientBuilderImpl.setProviderFactory(clientProviderFactory);
-        providerFactory = clientProviderFactory;
     }
 
-    private static void registerProviders(ResteasyProviderFactory clientProviderFactory, Set<String> providersToRegister,
-            Boolean isBuiltIn) {
+    private static void registerProviders(ResteasyProviderFactory clientProviderFactory, Set<String> providersToRegister) {
         for (String providerToRegister : providersToRegister) {
             try {
                 clientProviderFactory
-                        .registerProvider(Thread.currentThread().getContextClassLoader().loadClass(providerToRegister.trim()),
-                                isBuiltIn);
+                        .registerProvider(Thread.currentThread().getContextClassLoader().loadClass(providerToRegister.trim()));
             } catch (ClassNotFoundException e) {
                 throw new RuntimeException("Unable to find class for provider " + providerToRegister, e);
             }

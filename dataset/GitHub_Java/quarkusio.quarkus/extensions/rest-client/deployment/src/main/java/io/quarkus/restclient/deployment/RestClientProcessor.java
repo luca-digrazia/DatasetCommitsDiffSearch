@@ -11,12 +11,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import javax.enterprise.context.SessionScoped;
 import javax.ws.rs.Path;
 import javax.ws.rs.client.ClientRequestFilter;
 import javax.ws.rs.client.ClientResponseFilter;
 import javax.ws.rs.ext.Providers;
 
+import org.apache.commons.logging.impl.Jdk14Logger;
+import org.apache.commons.logging.impl.LogFactoryImpl;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.rest.client.annotation.RegisterProvider;
@@ -48,7 +49,6 @@ import io.quarkus.arc.processor.BeanConfigurator;
 import io.quarkus.arc.processor.BeanRegistrar;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.ScopeInfo;
-import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -57,11 +57,11 @@ import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.SslNativeConfigBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageProxyDefinitionBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveHierarchyBuildItem;
+import io.quarkus.deployment.builditem.substrate.ServiceProviderBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateProxyDefinitionBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.restclient.runtime.IncomingHeadersProvider;
@@ -77,8 +77,6 @@ class RestClientProcessor {
     private static final DotName REST_CLIENT = DotName.createSimple(RestClient.class.getName());
     private static final DotName REGISTER_REST_CLIENT = DotName.createSimple(RegisterRestClient.class.getName());
 
-    private static final DotName SESSION_SCOPED = DotName.createSimple(SessionScoped.class.getName());
-
     private static final DotName PATH = DotName.createSimple(Path.class.getName());
 
     private static final DotName REGISTER_PROVIDER = DotName.createSimple(RegisterProvider.class.getName());
@@ -87,16 +85,16 @@ class RestClientProcessor {
     private static final String PROVIDERS_SERVICE_FILE = "META-INF/services/" + Providers.class.getName();
 
     @BuildStep
-    void setupProviders(BuildProducer<NativeImageResourceBuildItem> resources,
-            BuildProducer<NativeImageProxyDefinitionBuildItem> proxyDefinition) {
+    void setupProviders(BuildProducer<SubstrateResourceBuildItem> resources,
+            BuildProducer<SubstrateProxyDefinitionBuildItem> proxyDefinition) {
 
-        proxyDefinition.produce(new NativeImageProxyDefinitionBuildItem("javax.ws.rs.ext.Providers"));
-        resources.produce(new NativeImageResourceBuildItem(PROVIDERS_SERVICE_FILE));
+        proxyDefinition.produce(new SubstrateProxyDefinitionBuildItem("javax.ws.rs.ext.Providers"));
+        resources.produce(new SubstrateResourceBuildItem(PROVIDERS_SERVICE_FILE));
     }
 
     @BuildStep
-    NativeImageProxyDefinitionBuildItem addProxy() {
-        return new NativeImageProxyDefinitionBuildItem(ResteasyConfiguration.class.getName());
+    SubstrateProxyDefinitionBuildItem addProxy() {
+        return new SubstrateProxyDefinitionBuildItem(ResteasyConfiguration.class.getName());
     }
 
     @BuildStep
@@ -113,6 +111,8 @@ class RestClientProcessor {
         additionalBeans.produce(new AdditionalBeanBuildItem(RestClient.class));
 
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false,
+                LogFactoryImpl.class.getName(),
+                Jdk14Logger.class.getName(),
                 DefaultResponseExceptionMapper.class.getName(),
                 AsyncInterceptorRxInvokerProvider.class.getName(),
                 ResteasyProviderFactoryImpl.class.getName(),
@@ -129,8 +129,7 @@ class RestClientProcessor {
     @Record(ExecutionTime.STATIC_INIT)
     void processInterfaces(CombinedIndexBuildItem combinedIndexBuildItem,
             SslNativeConfigBuildItem sslNativeConfig,
-            Capabilities capabilities,
-            BuildProducer<NativeImageProxyDefinitionBuildItem> proxyDefinition,
+            BuildProducer<SubstrateProxyDefinitionBuildItem> proxyDefinition,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
             BuildProducer<BeanRegistrarBuildItem> beanRegistrars,
@@ -143,9 +142,33 @@ class RestClientProcessor {
         Set<Type> returnTypes = new HashSet<>();
 
         IndexView index = combinedIndexBuildItem.getIndex();
+        for (AnnotationInstance annotation : index.getAnnotations(PATH)) {
+            AnnotationTarget target = annotation.target();
+            ClassInfo theInfo;
+            if (target.kind() == AnnotationTarget.Kind.CLASS) {
+                theInfo = target.asClass();
+            } else if (target.kind() == AnnotationTarget.Kind.METHOD) {
+                theInfo = target.asMethod().declaringClass();
+            } else {
+                continue;
+            }
 
-        findInterfaces(index, interfaces, returnTypes, REGISTER_REST_CLIENT);
-        findInterfaces(index, interfaces, returnTypes, PATH);
+            if (!isRestClientInterface(index, theInfo)) {
+                continue;
+            }
+
+            interfaces.put(theInfo.name(), theInfo);
+
+            // Find Return types
+            for (MethodInfo method : theInfo.methods()) {
+                Type type = method.returnType();
+                if (!type.name().toString().contains("java.lang")) {
+                    if (!returnTypes.contains(type)) {
+                        returnTypes.add(type);
+                    }
+                }
+            }
+        }
 
         if (interfaces.isEmpty()) {
             return;
@@ -153,11 +176,11 @@ class RestClientProcessor {
 
         for (Map.Entry<DotName, ClassInfo> entry : interfaces.entrySet()) {
             String iName = entry.getKey().toString();
-            // the native image proxy definitions have to be separate because
+            // the SubstrateProxyDefinitions have to be separate because
             // MP REST Client impl creates a JDK proxy that delegates to a resteasy JDK proxy
-            proxyDefinition.produce(new NativeImageProxyDefinitionBuildItem(iName, ResteasyClientProxy.class.getName()));
+            proxyDefinition.produce(new SubstrateProxyDefinitionBuildItem(iName, ResteasyClientProxy.class.getName()));
             proxyDefinition.produce(
-                    new NativeImageProxyDefinitionBuildItem(iName, RestClientProxy.class.getName(), Closeable.class.getName()));
+                    new SubstrateProxyDefinitionBuildItem(iName, RestClientProxy.class.getName(), Closeable.class.getName()));
             reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, iName));
         }
 
@@ -188,17 +211,15 @@ class RestClientProcessor {
                     // The spec is not clear whether we should add superinterfaces too - let's keep aligned with SmallRye for now
                     configurator.addType(restClientName);
                     configurator.addQualifier(REST_CLIENT);
-                    final String configPrefix = computeConfigPrefix(restClientName.toString(), entry.getValue());
-                    final ScopeInfo scope = computeDefaultScope(capabilities, config, entry, configPrefix);
+                    final ScopeInfo scope = computeDefaultScope(config, entry);
                     configurator.scope(scope);
                     configurator.creator(m -> {
                         // return new RestClientBase(proxyType, baseUri).create();
                         ResultHandle interfaceHandle = m.loadClass(restClientName.toString());
-                        ResultHandle baseUriHandle = m.load(getAnnotationParameter(entry.getValue(), "baseUri"));
-                        ResultHandle configPrefixHandle = m.load(configPrefix);
+                        ResultHandle baseUriHandle = m.load(getBaseUri(entry.getValue()));
                         ResultHandle baseHandle = m.newInstance(
-                                MethodDescriptor.ofConstructor(RestClientBase.class, Class.class, String.class, String.class),
-                                interfaceHandle, baseUriHandle, configPrefixHandle);
+                                MethodDescriptor.ofConstructor(RestClientBase.class, Class.class, String.class),
+                                interfaceHandle, baseUriHandle);
                         ResultHandle ret = m.invokeVirtualMethod(
                                 MethodDescriptor.ofMethod(RestClientBase.class, "create", Object.class), baseHandle);
                         m.returnValue(ret);
@@ -214,104 +235,44 @@ class RestClientProcessor {
         restClientRecorder.setSslEnabled(sslNativeConfig.isEnabled());
     }
 
-    private void findInterfaces(IndexView index, Map<DotName, ClassInfo> interfaces, Set<Type> returnTypes,
-            DotName annotationToFind) {
-        for (AnnotationInstance annotation : index.getAnnotations(annotationToFind)) {
-            AnnotationTarget target = annotation.target();
-            ClassInfo theInfo;
-            if (target.kind() == AnnotationTarget.Kind.CLASS) {
-                theInfo = target.asClass();
-            } else if (target.kind() == AnnotationTarget.Kind.METHOD) {
-                theInfo = target.asMethod().declaringClass();
-            } else {
-                continue;
-            }
-
-            if (!isRestClientInterface(index, theInfo)) {
-                continue;
-            }
-
-            interfaces.put(theInfo.name(), theInfo);
-
-            // Find Return types
-            processInterfaceReturnTypes(theInfo, returnTypes);
-            for (Type interfaceType : theInfo.interfaceTypes()) {
-                ClassInfo interfaceClassInfo = index.getClassByName(interfaceType.name());
-                if (interfaceClassInfo != null) {
-                    processInterfaceReturnTypes(interfaceClassInfo, returnTypes);
-                }
-            }
-        }
-    }
-
-    private void processInterfaceReturnTypes(ClassInfo classInfo, Set<Type> returnTypes) {
-        for (MethodInfo method : classInfo.methods()) {
-            Type type = method.returnType();
-            if (!type.name().toString().startsWith("java.lang")) {
-                returnTypes.add(type);
-            }
-        }
-    }
-
-    private String computeConfigPrefix(String interfaceName, ClassInfo classInfo) {
-        String propertyPrefixFromAnnotation = getAnnotationParameter(classInfo, "configKey");
-
-        if (propertyPrefixFromAnnotation != null && !propertyPrefixFromAnnotation.isEmpty()) {
-            return propertyPrefixFromAnnotation;
-        }
-
-        return interfaceName;
-    }
-
-    private ScopeInfo computeDefaultScope(Capabilities capabilities, Config config, Map.Entry<DotName, ClassInfo> entry,
-            String configPrefix) {
-        ScopeInfo scopeToUse = null;
+    private ScopeInfo computeDefaultScope(Config config, Map.Entry<DotName, ClassInfo> entry) {
+        DotName restClientName = entry.getKey();
+        // Initialize a default @Dependent scope as per the spec
+        ScopeInfo scopeInfo = BuiltinScope.DEPENDENT.getInfo();
+        final String REST_SCOPE_FORMAT = "%s/" + RestClientBase.MP_REST + "/scope";
         final Optional<String> scopeConfig = config
-                .getOptionalValue(String.format(RestClientBase.REST_SCOPE_FORMAT, configPrefix), String.class);
-
+                .getOptionalValue(String.format(REST_SCOPE_FORMAT, restClientName.toString()), String.class);
         if (scopeConfig.isPresent()) {
             final DotName scope = DotName.createSimple(scopeConfig.get());
             final BuiltinScope builtinScope = BuiltinScope.from(scope);
             if (builtinScope != null) { // override default @Dependent scope with user defined one.
-                scopeToUse = builtinScope.getInfo();
-            } else if (capabilities.isCapabilityPresent(Capabilities.SERVLET)) {
-                if (scope.equals(SESSION_SCOPED)) {
-                    scopeToUse = new ScopeInfo(SessionScoped.class, true);
-                }
-            }
-
-            if (scopeToUse == null) {
+                scopeInfo = builtinScope.getInfo();
+            } else {
                 log.warn(String.format(
                         "Unsupported default scope %s provided for rest client %s. Defaulting to @Dependent.",
-                        scope, entry.getKey()));
-                scopeToUse = BuiltinScope.DEPENDENT.getInfo();
+                        scope, restClientName));
             }
         } else {
             final Set<DotName> annotations = entry.getValue().annotations().keySet();
             for (final DotName annotationName : annotations) {
                 final BuiltinScope builtinScope = BuiltinScope.from(annotationName);
                 if (builtinScope != null) {
-                    scopeToUse = builtinScope.getInfo();
-                    break;
-                }
-                if (annotationName.equals(SESSION_SCOPED)) {
-                    scopeToUse = new ScopeInfo(SessionScoped.class, true);
+                    scopeInfo = builtinScope.getInfo();
                     break;
                 }
             }
         }
 
-        // Initialize a default @Dependent scope as per the spec
-        return scopeToUse != null ? scopeToUse : BuiltinScope.DEPENDENT.getInfo();
+        return scopeInfo;
     }
 
-    private String getAnnotationParameter(ClassInfo classInfo, String parameterName) {
+    private String getBaseUri(ClassInfo classInfo) {
         AnnotationInstance instance = classInfo.classAnnotation(REGISTER_REST_CLIENT);
         if (instance == null) {
             return "";
         }
 
-        AnnotationValue value = instance.value(parameterName);
+        AnnotationValue value = instance.value("baseUri");
         if (value == null) {
             return "";
         }
