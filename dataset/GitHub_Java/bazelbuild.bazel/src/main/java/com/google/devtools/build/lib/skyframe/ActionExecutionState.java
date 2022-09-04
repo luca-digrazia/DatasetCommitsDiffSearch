@@ -18,6 +18,7 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionLookupData;
+import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompletedReceiver;
 import com.google.devtools.build.skyframe.SkyFunction;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
@@ -69,7 +70,7 @@ final class ActionExecutionState {
       SkyFunction.Environment env,
       ActionLookupData actionLookupData,
       Action action,
-      SharedActionCallback sharedActionCallback)
+      ActionCompletedReceiver actionCompletedReceiver)
       throws ActionExecutionException, InterruptedException {
     if (this.actionLookupData.equals(actionLookupData)) {
       // This continuation is owned by the Skyframe node executed by the current thread, so we use
@@ -86,9 +87,6 @@ final class ActionExecutionState {
         if (completionFuture == null) {
           completionFuture = SettableFuture.create();
         }
-        // We expect to only call this once per shared action; this method should only be called
-        // again after the future is completed.
-        sharedActionCallback.actionStarted();
         env.dependOnFuture(completionFuture);
         // No other thread can access completionFuture until we exit the synchronized block.
         Preconditions.checkState(!completionFuture.isDone(), state);
@@ -97,7 +95,7 @@ final class ActionExecutionState {
       }
       result = state.get();
     }
-    sharedActionCallback.actionCompleted();
+    actionCompletedReceiver.actionCompleted(actionLookupData);
     return result.transformForSharedAction(action.getOutputs());
   }
 
@@ -134,18 +132,6 @@ final class ActionExecutionState {
     }
     // We're done, return the value to the caller (or throw an exception).
     return current.get();
-  }
-
-  /** A callback to receive events for shared actions that are not executed. */
-  public interface SharedActionCallback {
-    /** Called if the action is shared and the primary action is already executing. */
-    void actionStarted();
-
-    /**
-     * Called when the primary action is done (on the next call to {@link
-     * #getResultOrDependOnFuture}.
-     */
-    void actionCompleted();
   }
 
   /**
