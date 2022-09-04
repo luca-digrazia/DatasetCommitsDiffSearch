@@ -3,6 +3,7 @@ package com.yammer.dropwizard.db;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.yammer.dropwizard.util.Duration;
+import org.hibernate.validator.constraints.URL;
 
 import javax.validation.Valid;
 import javax.validation.constraints.Max;
