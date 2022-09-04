@@ -20,44 +20,51 @@ public final class ViewUtil {
   private ViewUtil() {
   }
 
-  private static boolean isHittable(View view) {
+  private static boolean isTouchable(View view) {
     if (view.getVisibility() != View.VISIBLE) {
       return false;
     }
 
-    if (ViewCompat.getInstance().getAlpha(view) < 0.001f) {
-      return false;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
+      if (getAlphaHoneycomb(view) < 0.001f) {
+        return false;
+      }
     }
 
     return true;
   }
 
+  @TargetApi(Build.VERSION_CODES.HONEYCOMB)
+  private static float getAlphaHoneycomb(View view) {
+    return view.getAlpha();
+  }
+
   @Nullable
-  public static View hitTest(View view, float x, float y) {
-    return hitTest(view, x, y, null /* viewSelector */);
+  public static View hitTestTouch(View view, float x, float y) {
+    return hitTestTouch(view, x, y, null /* viewSelector */);
   }
 
   // x,y are in view's local coordinate space (relative to its own top/left)
   @Nullable
-  public static View hitTest(
+  public static View hitTestTouch(
       View view,
       float x,
       float y,
       @Nullable Predicate<View> viewSelector) {
-    View result = hitTestImpl(view, x, y, viewSelector, false);
+    View result = hitTestTouchImpl(view, x, y, viewSelector, false);
     if (result == null) {
-      result = hitTestImpl(view, x, y, viewSelector, true);
+      result = hitTestTouchImpl(view, x, y, viewSelector, true);
     }
     return result;
   }
 
-  private static View hitTestImpl(
+  private static View hitTestTouchImpl(
       View view,
       float x,
       float y,
       @Nullable Predicate<View> viewSelector,
       boolean allowViewGroupResult) {
-    if (!isHittable(view)) {
+    if (!isTouchable(view)) {
       return null;
     }
 
@@ -83,7 +90,7 @@ public final class ViewUtil {
         final View child = viewGroup.getChildAt(i);
 
         if (ViewUtil.isTransformedPointInView(viewGroup, child, x, y, localPoint)) {
-          View childResult = hitTest(child, localPoint.x, localPoint.y, viewSelector);
+          View childResult = hitTestTouch(child, localPoint.x, localPoint.y, viewSelector);
           if (childResult != null) {
             return childResult;
           }
@@ -146,35 +153,5 @@ public final class ViewUtil {
     }
 
     return null;
-  }
-
-  private static class ViewCompat {
-    private static final ViewCompat sInstance;
-    static {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
-        sInstance = new ViewCompatHoneycomb();
-      } else {
-        sInstance = new ViewCompat();
-      }
-    }
-
-    public static ViewCompat getInstance() {
-      return sInstance;
-    }
-
-    protected ViewCompat() {
-    }
-
-    public float getAlpha(View view) {
-      return 1.0f;
-    }
-
-    @TargetApi(Build.VERSION_CODES.HONEYCOMB)
-    private static class ViewCompatHoneycomb extends ViewCompat {
-      @Override
-      public float getAlpha(View view) {
-        return view.getAlpha();
-      }
-    }
   }
 }
