@@ -43,6 +43,7 @@ import org.androidannotations.helper.AndroidManifestFinder;
 import org.androidannotations.helper.ErrorHelper;
 import org.androidannotations.helper.ModelConstants;
 import org.androidannotations.helper.Option;
+import org.androidannotations.helper.OptionsHelper;
 import org.androidannotations.logger.Level;
 import org.androidannotations.logger.Logger;
 import org.androidannotations.logger.LoggerContext;
@@ -75,11 +76,11 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		super.init(processingEnv);
 		androidAnnotationsEnv = new AndroidAnnotationsEnvironment(processingEnv);
 
-		ModelConstants.init(androidAnnotationsEnv);
+		ModelConstants.init(processingEnv);
 
 		// Configure Logger
 		LoggerContext loggerContext = LoggerContext.getInstance();
-		loggerContext.setEnvironment(androidAnnotationsEnv);
+		loggerContext.setProcessingEnv(processingEnv);
 
 		try {
 			loadPropertyFile();
@@ -224,7 +225,7 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 
 	private Option<AndroidManifest> extractAndroidManifest() {
 		timeStats.start("Extract Manifest");
-		AndroidManifestFinder finder = new AndroidManifestFinder(androidAnnotationsEnv);
+		AndroidManifestFinder finder = new AndroidManifestFinder(processingEnv);
 		Option<AndroidManifest> manifest = finder.extractAndroidManifest();
 		timeStats.stop("Extract Manifest");
 		return manifest;
@@ -232,7 +233,7 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 
 	private Option<IRClass> findRClasses(AndroidManifest androidManifest) throws IOException {
 		timeStats.start("Find R Classes");
-		ProjectRClassFinder rClassFinder = new ProjectRClassFinder(androidAnnotationsEnv);
+		ProjectRClassFinder rClassFinder = new ProjectRClassFinder(processingEnv);
 
 		Option<IRClass> rClass = rClassFinder.find(androidManifest);
 
@@ -300,7 +301,7 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 
 	@Override
 	public Set<String> getSupportedOptions() {
-		return androidAnnotationsEnv.getSupportedOptions();
+		return OptionsHelper.getOptionsConstants();
 	}
 
 	@Override
