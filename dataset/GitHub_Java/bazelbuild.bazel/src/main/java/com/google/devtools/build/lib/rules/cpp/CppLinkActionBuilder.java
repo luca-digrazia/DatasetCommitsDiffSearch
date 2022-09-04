@@ -218,16 +218,14 @@ public class CppLinkActionBuilder {
       RuleContext ruleContext,
       Artifact output,
       CcToolchainProvider toolchain,
-      FdoSupportProvider fdoSupport,
-      FeatureConfiguration featureConfiguration) {
+      FdoSupportProvider fdoSupport) {
     this(
         ruleContext,
         output,
         ruleContext.getConfiguration(),
         ruleContext.getAnalysisEnvironment(),
         toolchain,
-        fdoSupport,
-        featureConfiguration);
+        fdoSupport);
   }
 
   /**
@@ -244,16 +242,9 @@ public class CppLinkActionBuilder {
       Artifact output,
       BuildConfiguration configuration,
       CcToolchainProvider toolchain,
-      FdoSupportProvider fdoSupport,
-      FeatureConfiguration featureConfiguration) {
-    this(
-        ruleContext,
-        output,
-        configuration,
-        ruleContext.getAnalysisEnvironment(),
-        toolchain,
-        fdoSupport,
-        featureConfiguration);
+      FdoSupportProvider fdoSupport) {
+    this(ruleContext, output, configuration, ruleContext.getAnalysisEnvironment(), toolchain,
+        fdoSupport);
   }
 
   /**
@@ -272,8 +263,7 @@ public class CppLinkActionBuilder {
       BuildConfiguration configuration,
       AnalysisEnvironment analysisEnvironment,
       CcToolchainProvider toolchain,
-      FdoSupportProvider fdoSupport,
-      FeatureConfiguration featureConfiguration) {
+      FdoSupportProvider fdoSupport) {
     this.ruleContext = ruleContext;
     this.analysisEnvironment = Preconditions.checkNotNull(analysisEnvironment);
     this.output = Preconditions.checkNotNull(output);
@@ -284,7 +274,6 @@ public class CppLinkActionBuilder {
     if (cppConfiguration.supportsEmbeddedRuntimes() && toolchain != null) {
       runtimeSolibDir = toolchain.getDynamicRuntimeSolibDir();
     }
-    this.featureConfiguration = featureConfiguration;
   }
 
   /**
@@ -304,8 +293,7 @@ public class CppLinkActionBuilder {
       Context linkContext,
       BuildConfiguration configuration,
       CcToolchainProvider toolchain,
-      FdoSupportProvider fdoSupport,
-      FeatureConfiguration featureConfiguration) {
+      FdoSupportProvider fdoSupport) {
     // These Builder-only fields get set in the constructor:
     //   ruleContext, analysisEnvironment, outputPath, configuration, runtimeSolibDir
     this(
@@ -314,8 +302,7 @@ public class CppLinkActionBuilder {
         configuration,
         ruleContext.getAnalysisEnvironment(),
         toolchain,
-        fdoSupport,
-        featureConfiguration);
+        fdoSupport);
     Preconditions.checkNotNull(linkContext);
 
     // All linkContext fields should be transferred to this Builder.
@@ -567,18 +554,11 @@ public class CppLinkActionBuilder {
     // Executable links do not have library identifiers.
     boolean hasIdentifier = (libraryIdentifier != null);
     boolean isExecutable = linkType.isExecutable();
-    Preconditions.checkState(hasIdentifier != isExecutable);
-    Preconditions.checkNotNull(featureConfiguration);
+    Preconditions.checkState(hasIdentifier != isExecutable);    
 
     if (interfaceOutput != null && (fake || linkType != LinkTargetType.DYNAMIC_LIBRARY)) {
       throw new RuntimeException(
           "Interface output can only be used " + "with non-fake DYNAMIC_LIBRARY targets");
-    }
-
-    if (!featureConfiguration.actionIsConfigured(linkType.getActionName())) {
-      ruleContext.ruleError(
-          String.format(
-              "Expected action_config for '%s' to be configured", linkType.getActionName()));
     }
 
     final ImmutableList<Artifact> buildInfoHeaderArtifacts =
@@ -618,6 +598,17 @@ public class CppLinkActionBuilder {
     // ruleContext can only be null during testing. This is kind of ugly.
     final ImmutableSet<String> features =
         (ruleContext == null) ? ImmutableSet.<String>of() : ruleContext.getFeatures();
+
+    // For backwards compatibility, and for tests, we permit the link action to be
+    // instantiated without a feature configuration.
+    if (featureConfiguration == null) {
+      if (toolchain != null) {
+        featureConfiguration =
+            CcCommon.configureFeatures(ruleContext, toolchain, CcLibraryHelper.SourceCategory.CC);
+      } else {
+        featureConfiguration = CcCommon.configureFeatures(ruleContext, toolchain);
+      }
+    }
 
     final LibraryToLink outputLibrary = linkType.isExecutable()
         ? null
@@ -991,6 +982,12 @@ public class CppLinkActionBuilder {
   /** Set the crosstool inputs required for the action. */
   public CppLinkActionBuilder setCrosstoolInputs(NestedSet<Artifact> inputs) {
     this.crosstoolInputs = inputs;
+    return this;
+  }
+
+  /** Sets the feature configuration for the action. */
+  public CppLinkActionBuilder setFeatureConfiguration(FeatureConfiguration featureConfiguration) {
+    this.featureConfiguration = featureConfiguration;
     return this;
   }
 

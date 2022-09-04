@@ -111,7 +111,11 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       return profileArtifact;
     }
 
-    Artifact rawProfileArtifact;
+    Artifact rawProfileArtifact =
+        ruleContext.getUniqueDirectoryArtifact(
+            "fdo",
+            getLLVMProfileFileName(fdoProfile, CppFileTypes.LLVM_PROFILE_RAW),
+            ruleContext.getBinOrGenfilesDirectory());
 
     if (fdoProfile.getBaseName().endsWith(".zip")) {
       // Get the zipper binary for unzipping the profile.
@@ -120,11 +124,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
         ruleContext.ruleError("Cannot find zipper binary to unzip the profile");
         return null;
       }
-
-      String rawProfileFileName = "fdocontrolz_profile.profraw";
-      rawProfileArtifact =
-          ruleContext.getUniqueDirectoryArtifact(
-              "fdo", rawProfileFileName, ruleContext.getBinOrGenfilesDirectory());
 
       // Symlink to the zipped profile file to extract the contents.
       Artifact zipProfileArtifact =
@@ -153,11 +152,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
               .setMnemonic("LLVMUnzipProfileAction")
               .build(ruleContext));
     } else {
-      rawProfileArtifact =
-          ruleContext.getUniqueDirectoryArtifact(
-              "fdo",
-              getLLVMProfileFileName(fdoProfile, CppFileTypes.LLVM_PROFILE_RAW),
-              ruleContext.getBinOrGenfilesDirectory());
       ruleContext.registerAction(
           new SymlinkAction(
               ruleContext.getActionOwner(),

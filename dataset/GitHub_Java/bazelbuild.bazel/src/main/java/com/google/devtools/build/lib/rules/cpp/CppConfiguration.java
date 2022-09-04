@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Predicate;
 import com.google.common.base.Verify;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
@@ -51,6 +52,7 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain.ActionConfig;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain.ArtifactNamePattern;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LinkingModeFlags;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
@@ -403,19 +405,22 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
       Iterable<Tool> neededTools =
           Iterables.filter(
               EnumSet.allOf(Tool.class),
-              tool -> {
-                if (tool == Tool.DWP) {
-                  // When fission is unsupported, don't check for the dwp tool.
-                  return supportsFission();
-                } else if (tool == Tool.LLVM_PROFDATA) {
-                  // TODO(tmsriram): Fix this to check if this is a llvm crosstool
-                  // and return true.  This needs changes to crosstool_config.proto.
-                  return false;
-                } else if (tool == Tool.GCOVTOOL || tool == Tool.OBJCOPY) {
-                  // gcov-tool and objcopy are optional, don't check whether they're present
-                  return false;
-                } else {
-                  return true;
+              new Predicate<Tool>() {
+                @Override
+                public boolean apply(Tool tool) {
+                  if (tool == Tool.DWP) {
+                    // When fission is unsupported, don't check for the dwp tool.
+                    return supportsFission();
+                  } else if (tool == Tool.LLVM_PROFDATA) {
+                    // TODO(tmsriram): Fix this to check if this is a llvm crosstool
+                    // and return true.  This needs changes to crosstool_config.proto.
+                    return false;
+                  } else if (tool == Tool.GCOVTOOL || tool == Tool.OBJCOPY) {
+                    // gcov-tool and objcopy are optional, don't check whether they're present
+                    return false;
+                  } else {
+                    return true;
+                  }
                 }
               });
       for (Tool tool : neededTools) {
@@ -595,10 +600,17 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   private static boolean actionsAreConfigured(CToolchain toolchain) {
-    return toolchain
-        .getActionConfigList()
-        .stream()
-        .anyMatch(actionConfig -> actionConfig.getActionName().contains("c++"));
+    return Iterables.any(
+        toolchain.getActionConfigList(),
+        new Predicate<ActionConfig>() {
+          @Override
+          public boolean apply(@Nullable ActionConfig actionConfig) {
+            // We cannot assume actions are configured just by presence of any action_config. Some
+            // crosstools specify unrelated action_configs (e.g. clif_match), but C/C++ part is
+            // in fact not configured.
+            return actionConfig.getActionName().contains("c++");
+          }
+        });
   }
 
   // TODO(bazel-team): Remove this once bazel supports all crosstool flags through
