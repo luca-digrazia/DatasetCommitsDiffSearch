@@ -566,11 +566,10 @@ public abstract class AbstractAction implements Action, SkylarkValue {
 
   @SkylarkCallable(
       name = "argv",
-      doc = "For actions created by <a href=\"actions.html#run\">ctx.actions.run()</a> "
-          + "or <a href=\"actions.html#run_shell\">ctx.actions.run_shell()</a>  an immutable "
-          + "list of the arguments for the command line to be executed. Note that "
-          + "for shell actions the first two arguments will be the shell path "
-          + "and <code>\"-c\"</code>.",
+      doc = "For actions created by <a href=\"ctx.html#action\">ctx.action()</a>, an immutable "
+          + "list of the arguments for the command line to be executed. Note that when using the "
+          + "shell (i.e., when <a href=\"ctx.html#action.executable\">executable</a> is not set), "
+          + "the first two arguments will be the shell path and <code>\"-c\"</code>.",
       structField = true,
       allowReturnNones = true)
   public SkylarkList<String> getSkylarkArgv() {
@@ -580,8 +579,8 @@ public abstract class AbstractAction implements Action, SkylarkValue {
   @SkylarkCallable(
       name = "content",
       doc = "For actions created by <a href=\"actions.html#write\">ctx.actions.write()</a> or "
-          + "<a href=\"actions.html#expand_template\">ctx.actions.expand_template()</a>,"
-          + " the contents of the file to be written.",
+          + "<a href=\"ctx.html#template_action\">ctx.template_action()</a>, the contents of the "
+          + "file to be written.",
       structField = true,
       allowReturnNones = true)
   public String getSkylarkContent() throws IOException {
@@ -590,9 +589,8 @@ public abstract class AbstractAction implements Action, SkylarkValue {
 
   @SkylarkCallable(
       name = "substitutions",
-      doc = "For actions created by "
-          + "<a href=\"actions.html#expand_template\">ctx.actions.expand_template()</a>,"
-          + " an immutable dict holding the substitution mapping.",
+      doc = "For actions created by <a href=\"ctx.html#template_action\">"
+          + "ctx.template_action()</a>, an immutable dict holding the substitution mapping.",
       structField = true,
       allowReturnNones = true)
   public SkylarkDict<String, String> getSkylarkSubstitutions() {

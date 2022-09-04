@@ -155,4 +155,9 @@ public final class SelectorList implements SkylarkValue {
   public void repr(SkylarkPrinter printer) {
     printer.printList(elements, "", " + ", "", null);
   }
+
+  @Override
+  public boolean isImmutable() {
+    return false;
+  }
 }

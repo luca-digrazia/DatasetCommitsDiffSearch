@@ -27,9 +27,7 @@ public interface SkylarkValue {
    * <p>Immutability is deep, i.e. in order for a value to be immutable, all values it is composed
    * of must be immutable, too.
    */
-  default boolean isImmutable() {
-      return false;
-  }
+  boolean isImmutable();
 
   /**
    * Print an official representation of object x.
@@ -39,38 +37,4 @@ public interface SkylarkValue {
    * @param printer a printer to be used for formatting nested values.
    */
   void repr(SkylarkPrinter printer);
-
-  /**
-   * Print a legacy representation of object x.
-   *
-   * <p>By default dispatches to the {@code repr} method. Should be called instead of {@code repr}
-   * if --incompatible_descriptive_string_representations=false is used.
-   *
-   * @param printer an instance of a printer to be used for formatting nested values
-   */
-  default void reprLegacy(SkylarkPrinter printer) {
-    repr(printer);
-  }
-
-  /**
-   * Print an informal, human-readable representation of the value.
-   *
-   * <p>By default dispatches to the {@code repr} method.
-   *
-   * @param printer a printer to be used for formatting nested values.
-   */
-  default void str(SkylarkPrinter printer) {
-    repr(printer);
-  }
-
-  /**
-   * Print a legacy informal, human-readable representation of the value.
-   *
-   * <p>By default dispatches to the {@code reprLegacy} method.
-   *
-   * @param printer a printer to be used for formatting nested values.
-   */
-  default void strLegacy(SkylarkPrinter printer) {
-    reprLegacy(printer);
-  }
 }

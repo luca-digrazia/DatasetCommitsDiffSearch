@@ -43,9 +43,6 @@ public class ConfigFeatureFlag implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
-    ConfigFeatureFlagFeatureVisibility.checkAvailable(
-        ruleContext, "the " + ruleContext.getRuleClassNameForLogging() + " rule");
-
     List<String> specifiedValues = ruleContext.attributes().get("allowed_values", STRING_LIST);
     ImmutableSet<String> values = ImmutableSet.copyOf(specifiedValues);
     Predicate<String> isValidValue = Predicates.in(values);
@@ -100,6 +97,7 @@ public class ConfigFeatureFlag implements RuleConfiguredTargetFactory {
     return new RuleConfiguredTargetBuilder(ruleContext)
         .setFilesToBuild(NestedSetBuilder.<Artifact>emptySet(STABLE_ORDER))
         .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
+        .addProvider(ConfigFeatureFlagProvider.class, provider)
         .addNativeDeclaredProvider(provider)
         .build();
   }

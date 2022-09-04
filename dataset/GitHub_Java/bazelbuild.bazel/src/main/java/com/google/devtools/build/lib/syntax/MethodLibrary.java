@@ -395,7 +395,7 @@ public class MethodLibrary {
       result.addFirst(input.substring(0, remainingLength));
     }
 
-    return new MutableList<>(result, env);
+    return new MutableList(result, env);
   }
 
   @SkylarkSignature(name = "partition", objectType = StringModule.class,
@@ -963,7 +963,7 @@ public class MethodLibrary {
             Location loc,
             Environment env)
             throws EvalException {
-          return new FormatParser(env, loc)
+          return new FormatParser(loc)
               .format(
                   self,
                   args.getImmutableList(),
@@ -1114,10 +1114,10 @@ public class MethodLibrary {
   )
   private static final BuiltinFunction sorted =
       new BuiltinFunction("sorted") {
-        public MutableList<?> invoke(Object self, Location loc, Environment env)
+        public <E> MutableList<E> invoke(Object self, Location loc, Environment env)
             throws EvalException {
           try {
-            return new MutableList<>(
+            return new MutableList(
                 EvalUtils.SKYLARK_COMPARATOR.sortedCopy(EvalUtils.toCollection(self, loc, env)),
                 env);
           } catch (EvalUtils.ComparisonException e) {
@@ -1157,7 +1157,7 @@ public class MethodLibrary {
           for (Object element : EvalUtils.toIterable(sequence, loc, env)) {
             tmpList.addFirst(element);
           }
-          return new MutableList<>(tmpList, env);
+          return new MutableList(tmpList, env);
         }
       };
 
@@ -1377,7 +1377,7 @@ public class MethodLibrary {
           Object key = self.firstKey();
           Object value = self.get(key);
           self.remove(key, loc, env);
-          return Tuple.of(key, value);
+          return Tuple.<Object>of(key, value);
         }
       };
 
@@ -1481,7 +1481,7 @@ public class MethodLibrary {
   private static final BuiltinFunction values =
       new BuiltinFunction("values") {
         public MutableList<?> invoke(SkylarkDict<?, ?> self, Environment env) throws EvalException {
-          return new MutableList<>(self.values(), env);
+          return new MutableList(self.values(), env);
         }
       };
 
@@ -1504,7 +1504,7 @@ public class MethodLibrary {
           for (Map.Entry<?, ?> entries : self.entrySet()) {
             list.add(Tuple.of(entries.getKey(), entries.getValue()));
           }
-          return new MutableList<>(list, env);
+          return new MutableList(list, env);
         }
       };
 
@@ -1582,7 +1582,7 @@ public class MethodLibrary {
   private static final BuiltinFunction list =
       new BuiltinFunction("list") {
         public MutableList<?> invoke(Object x, Location loc, Environment env) throws EvalException {
-          return new MutableList<>(EvalUtils.toCollection(x, loc, env), env);
+          return new MutableList(EvalUtils.toCollection(x, loc, env), env);
         }
       };
 
@@ -1619,13 +1619,12 @@ public class MethodLibrary {
     doc =
         "Converts any object to string. This is useful for debugging."
             + "<pre class=\"language-python\">str(\"ab\") == \"ab\"</pre>",
-    parameters = {@Param(name = "x", doc = "The object to convert.")},
-    useEnvironment = true
+    parameters = {@Param(name = "x", doc = "The object to convert.")}
   )
   private static final BuiltinFunction str =
       new BuiltinFunction("str") {
-        public String invoke(Object x, Environment env) {
-          return Printer.getPrinter(env).str(x).toString();
+        public String invoke(Object x) {
+          return Printer.getPrinter().str(x).toString();
         }
       };
 
@@ -1635,13 +1634,12 @@ public class MethodLibrary {
     doc =
         "Converts any object to a string representation. This is useful for debugging.<br>"
             + "<pre class=\"language-python\">str(\"ab\") == \\\"ab\\\"</pre>",
-    parameters = {@Param(name = "x", doc = "The object to convert.")},
-    useEnvironment = true
+    parameters = {@Param(name = "x", doc = "The object to convert.")}
   )
   private static final BuiltinFunction repr =
       new BuiltinFunction("repr") {
-        public String invoke(Object x, Environment env) {
-          return Printer.getPrinter(env).repr(x).toString();
+        public String invoke(Object x) {
+          return Printer.getPrinter().repr(x).toString();
         }
       };
 
@@ -1770,12 +1768,12 @@ public class MethodLibrary {
   )
   private static final BuiltinFunction dict =
       new BuiltinFunction("dict") {
-        public SkylarkDict<?, ?> invoke(
+        public SkylarkDict invoke(
             Object args, SkylarkDict<String, Object> kwargs, Location loc, Environment env)
             throws EvalException {
-          SkylarkDict<?, ?> argsDict =
+          SkylarkDict<Object, Object> argsDict =
               (args instanceof SkylarkDict)
-                  ? (SkylarkDict<?, ?>) args
+                  ? (SkylarkDict<Object, Object>) args
                   : getDictFromArgs(args, loc, env);
           return SkylarkDict.plus(argsDict, kwargs, env);
         }
@@ -1831,7 +1829,7 @@ public class MethodLibrary {
             result.add(Tuple.of(count, obj));
             count++;
           }
-          return new MutableList<>(result, env);
+          return new MutableList(result, env);
         }
       };
 
@@ -1925,7 +1923,7 @@ public class MethodLibrary {
               start += step;
             }
           }
-          return new MutableList<>(result, env);
+          return new MutableList(result, env);
         }
       };
 
@@ -2037,7 +2035,7 @@ public class MethodLibrary {
           }
           fields.addAll(Runtime.getFunctionNames(object.getClass()));
           fields.addAll(FuncallExpression.getMethodNames(object.getClass()));
-          return new MutableList<>(fields, env);
+          return new MutableList(fields, env);
         }
       };
 
@@ -2106,14 +2104,11 @@ public class MethodLibrary {
         public Runtime.NoneType invoke(
             String sep, SkylarkList<?> starargs, Location loc, Environment env)
             throws EvalException {
-          String msg =
-              starargs
-                  .stream()
-                  .map((Object o) -> Printer.getPrinter(env).str(o).toString())
-                  .collect(joining(sep));
+          String msg = starargs.stream().map(Printer::str).collect(joining(sep));
           // As part of the integration test "skylark_flag_test.sh", if the
           // "--internal_skylark_flag_test_canary" flag is enabled, append an extra marker string to
-          // the output.
+          // the
+          // output.
           if (env.getSemantics().skylarkFlagTestCanary) {
             msg += "<== skylark flag test ==>";
           }
@@ -2163,7 +2158,7 @@ public class MethodLibrary {
               result.add(Tuple.copyOf(elem));
             }
           } while (allHasNext);
-          return new MutableList<>(result, env);
+          return new MutableList(result, env);
         }
       };
 
@@ -2227,7 +2222,7 @@ public class MethodLibrary {
   public static final class BoolModule {}
 
   static final List<BaseFunction> defaultGlobalFunctions =
-      ImmutableList.of(
+      ImmutableList.<BaseFunction>of(
           all, any, bool, dict, dir, fail, getattr, hasattr, hash, enumerate, int_, len, list, max,
           min, print, range, repr, reversed, sorted, str, tuple, zip);
 

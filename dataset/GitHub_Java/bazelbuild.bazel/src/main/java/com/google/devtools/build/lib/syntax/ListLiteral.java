@@ -32,28 +32,28 @@ public final class ListLiteral extends Expression {
   /**
    * Types of the ListLiteral.
    */
-  public enum Kind {LIST, TUPLE}
+  public static enum Kind {LIST, TUPLE}
 
   private final Kind kind;
 
-  private final List<Expression> elements;
+  private final List<Expression> exprs;
 
-  public ListLiteral(Kind kind, List<Expression> elements) {
+  public ListLiteral(Kind kind, List<Expression> exprs) {
     this.kind = kind;
-    this.elements = elements;
+    this.exprs = exprs;
   }
 
-  public static ListLiteral makeList(List<Expression> elements) {
-    return new ListLiteral(Kind.LIST, elements);
+  public static ListLiteral makeList(List<Expression> exprs) {
+    return new ListLiteral(Kind.LIST, exprs);
   }
 
-  public static ListLiteral makeTuple(List<Expression> elements) {
-    return new ListLiteral(Kind.TUPLE, elements);
+  public static ListLiteral makeTuple(List<Expression> exprs) {
+    return new ListLiteral(Kind.TUPLE, exprs);
   }
 
   /** A new literal for an empty list, onto which a new location can be specified */
   public static ListLiteral emptyList() {
-    return makeList(Collections.emptyList());
+    return makeList(Collections.<Expression>emptyList());
   }
 
   public Kind getKind() {
@@ -61,7 +61,7 @@ public final class ListLiteral extends Expression {
   }
 
   public List<Expression> getElements() {
-    return elements;
+    return exprs;
   }
 
   /**
@@ -75,12 +75,12 @@ public final class ListLiteral extends Expression {
   public void prettyPrint(Appendable buffer) throws IOException {
     buffer.append(isTuple() ? '(' : '[');
     String sep = "";
-    for (Expression e : elements) {
+    for (Expression e : exprs) {
       buffer.append(sep);
       e.prettyPrint(buffer);
       sep = ", ";
     }
-    if (isTuple() && elements.size() == 1) {
+    if (isTuple() && exprs.size() == 1) {
       buffer.append(',');
     }
     buffer.append(isTuple() ? ')' : ']');
@@ -89,7 +89,7 @@ public final class ListLiteral extends Expression {
   @Override
   public String toString() {
     return Printer.printAbbreviatedList(
-        elements,
+        exprs,
         isTuple(),
         Printer.SUGGESTED_CRITICAL_LIST_ELEMENTS_COUNT,
         Printer.SUGGESTED_CRITICAL_LIST_ELEMENTS_STRING_LENGTH);
@@ -97,15 +97,15 @@ public final class ListLiteral extends Expression {
 
   @Override
   Object doEval(Environment env) throws EvalException, InterruptedException {
-    List<Object> result = new ArrayList<>(elements.size());
-    for (Expression element : elements) {
+    List<Object> result = new ArrayList<>(exprs.size());
+    for (Expression expr : exprs) {
       // Convert NPEs to EvalExceptions.
-      if (element == null) {
+      if (expr == null) {
         throw new EvalException(getLocation(), "null expression in " + this);
       }
-      result.add(element.eval(env));
+      result.add(expr.eval(env));
     }
-    return isTuple() ? Tuple.copyOf(result) : MutableList.copyOf(env, result);
+    return isTuple() ? Tuple.copyOf(result) : new MutableList(result, env);
   }
 
   @Override
@@ -115,8 +115,8 @@ public final class ListLiteral extends Expression {
 
   @Override
   void validate(ValidationEnvironment env) throws EvalException {
-    for (Expression element : elements) {
-      element.validate(env);
+    for (Expression expr : exprs) {
+      expr.validate(env);
     }
   }
 }

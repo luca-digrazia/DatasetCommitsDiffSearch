@@ -216,7 +216,7 @@ public final class Runtime {
    */
   public static Set<String> getFunctionNames(Class<?> nameSpace) {
     Map<String, BaseFunction> nameSpaceFunctions = getNamespaceFunctions(nameSpace);
-    return nameSpaceFunctions != null ? nameSpaceFunctions.keySet() : ImmutableSet.of();
+    return nameSpaceFunctions != null ? nameSpaceFunctions.keySet() : ImmutableSet.<String>of();
   }
 
   static void setupMethodEnvironment(

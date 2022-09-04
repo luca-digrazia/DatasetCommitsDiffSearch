@@ -17,23 +17,23 @@ import com.google.devtools.build.lib.events.Location;
 import java.io.IOException;
 import java.util.List;
 
-/** Syntax node for a slice expression, e.g. obj[:len(obj):2]. */
+/** Syntax node for an index expression. e.g. obj[field], but not obj[from:to] */
 public final class SliceExpression extends Expression {
 
-  private final Expression object;
+  private final Expression obj;
   private final Expression start;
   private final Expression end;
   private final Expression step;
 
-  public SliceExpression(Expression object, Expression start, Expression end, Expression step) {
-    this.object = object;
+  public SliceExpression(Expression obj, Expression start, Expression end, Expression step) {
+    this.obj = obj;
     this.start = start;
     this.end = end;
     this.step = step;
   }
 
   public Expression getObject() {
-    return object;
+    return obj;
   }
 
   public Expression getStart() {
@@ -57,7 +57,7 @@ public final class SliceExpression extends Expression {
     boolean stepIsDefault =
         (step instanceof IntegerLiteral) && ((IntegerLiteral) step).getValue().equals(1);
 
-    object.prettyPrint(buffer);
+    obj.prettyPrint(buffer);
     buffer.append('[');
     // Start and end are omitted if they are the literal identifier None, which is the default value
     // inserted by the parser if no bound is given. Likewise, step is omitted if it is the literal
@@ -81,15 +81,16 @@ public final class SliceExpression extends Expression {
 
   @Override
   Object doEval(Environment env) throws EvalException, InterruptedException {
-    Object objValue = object.eval(env);
+    Object objValue = obj.eval(env);
     Object startValue = start.eval(env);
     Object endValue = end.eval(env);
     Object stepValue = step.eval(env);
     Location loc = getLocation();
 
     if (objValue instanceof SkylarkList) {
-      return ((SkylarkList<?>) objValue).getSlice(
-          startValue, endValue, stepValue, loc, env.mutability());
+      SkylarkList<Object> list = (SkylarkList<Object>) objValue;
+      Object slice = list.getSlice(startValue, endValue, stepValue, loc);
+      return SkylarkType.convertToSkylark(slice, env);
     } else if (objValue instanceof String) {
       String string = (String) objValue;
       List<Integer> indices = EvalUtils.getSliceIndices(startValue, endValue, stepValue,
@@ -121,6 +122,6 @@ public final class SliceExpression extends Expression {
 
   @Override
   void validate(ValidationEnvironment env) throws EvalException {
-    object.validate(env);
+    obj.validate(env);
   }
 }

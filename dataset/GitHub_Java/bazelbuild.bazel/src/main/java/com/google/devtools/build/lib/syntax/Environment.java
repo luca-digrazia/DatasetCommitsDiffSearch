@@ -262,22 +262,22 @@ public final class Environment implements Freezable {
    */
   private static final class Continuation {
     /** The {@link BaseFunction} being evaluated that will return into this Continuation. */
-    final BaseFunction function;
+    BaseFunction function;
 
     /** The {@link FuncallExpression} to which this Continuation will return. */
-    final FuncallExpression caller;
+    FuncallExpression caller;
 
     /** The next Continuation after this Continuation. */
-    @Nullable final Continuation continuation;
+    @Nullable Continuation continuation;
 
     /** The lexical Frame of the caller. */
-    final Frame lexicalFrame;
+    Frame lexicalFrame;
 
     /** The global Frame of the caller. */
-    final Frame globalFrame;
+    Frame globalFrame;
 
     /** The set of known global variables of the caller. */
-    @Nullable final Set<String> knownGlobalVariables;
+    @Nullable Set<String> knownGlobalVariables;
 
     Continuation(
         Continuation continuation,

@@ -878,15 +878,6 @@ public class Artifact
 
   @Override
   public void repr(SkylarkPrinter printer) {
-    if (isSourceArtifact()) {
-      printer.append("<source file " + rootRelativePath + ">");
-    } else {
-      printer.append("<generated file " + rootRelativePath + ">");
-    }
-  }
-
-  @Override
-  public void reprLegacy(SkylarkPrinter printer) {
-    printer.append(toString());
+    printer.append(toString()); // TODO(bazel-team): implement a readable representation
   }
 }

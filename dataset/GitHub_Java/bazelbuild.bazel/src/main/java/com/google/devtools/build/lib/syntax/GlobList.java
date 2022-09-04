@@ -127,6 +127,11 @@ public final class GlobList<E> extends ForwardingList<E> implements SkylarkValue
   }
 
   @Override
+  public boolean isImmutable() {
+    return false;
+  }
+
+  @Override
   public void repr(SkylarkPrinter printer) {
     printer.printList(this, false);
   }

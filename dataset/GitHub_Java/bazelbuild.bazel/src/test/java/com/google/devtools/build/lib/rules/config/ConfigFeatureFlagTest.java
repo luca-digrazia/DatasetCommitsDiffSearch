@@ -111,8 +111,7 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
     ConfiguredTarget top = getConfiguredTarget("//test:top");
     ConfiguredTarget wrapper =
         (ConfiguredTarget) Iterables.getOnlyElement(getPrerequisites(top, "deps"));
-    SkylarkRuleContext ctx = new SkylarkRuleContext(getRuleContextForSkylark(wrapper), null,
-        getSkylarkSemantics());
+    SkylarkRuleContext ctx = new SkylarkRuleContext(getRuleContextForSkylark(wrapper), null);
     update("ruleContext", ctx);
     update("config_common", new ConfigSkylarkCommon());
     String value = (String) eval("ruleContext.attr.flag[config_common.FeatureFlagInfo].value");
@@ -286,47 +285,6 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
     assertContainsEvent(
         "in config_feature_flag rule //test:flag: "
             + "value must be one of [\"configured\", \"default\", \"other\"], but was \"invalid\"");
-  }
-
-  @Test
-  public void policy_mustContainRulesPackage() throws Exception {
-    reporter.removeHandler(failFastHandler); // expecting an error
-    scratch.file(
-        "policy/BUILD",
-        "package_group(name = 'feature_flag_users', packages = ['//some/other'])");
-    scratch.file(
-        "test/BUILD",
-        "config_feature_flag(",
-        "    name = 'flag',",
-        "    allowed_values = ['default', 'configured', 'other'],",
-        "    default_value = 'default',",
-        ")");
-    useConfiguration(
-        "--experimental_dynamic_configs=on",
-        "--feature_control_policy=config_feature_flag=//policy:feature_flag_users");
-    assertThat(getConfiguredTarget("//test:flag")).isNull();
-    assertContainsEvent(
-        "in config_feature_flag rule //test:flag: the config_feature_flag rule is not available in "
-        + "package 'test' according to policy '//policy:feature_flag_users'");
-  }
-
-  @Test
-  public void policy_doesNotBlockRuleIfInPackageGroup() throws Exception {
-    scratch.file(
-        "policy/BUILD",
-        "package_group(name = 'feature_flag_users', packages = ['//test'])");
-    scratch.file(
-        "test/BUILD",
-        "config_feature_flag(",
-        "    name = 'flag',",
-        "    allowed_values = ['default', 'configured', 'other'],",
-        "    default_value = 'default',",
-        ")");
-    useConfiguration(
-        "--experimental_dynamic_configs=on",
-        "--feature_control_policy=config_feature_flag=//policy:feature_flag_users");
-    assertThat(getConfiguredTarget("//test:flag")).isNotNull();
-    assertNoEvents();
   }
 
   @Test

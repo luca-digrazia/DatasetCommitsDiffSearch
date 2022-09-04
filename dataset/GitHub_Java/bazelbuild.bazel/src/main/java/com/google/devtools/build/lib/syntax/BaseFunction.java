@@ -508,13 +508,14 @@ public abstract class BaseFunction implements SkylarkValue {
 
   /**
    * Returns the signature as "[className.]methodName(name1: paramType1, name2: paramType2, ...)"
+   * or "[className.]methodName(paramType1, paramType2, ...)", depending on the value of showNames.
    */
-  public String getShortSignature() {
+  public String getShortSignature(boolean showNames) {
     StringBuilder builder = new StringBuilder();
     boolean hasSelf = hasSelfArgument();
 
     builder.append(getFullName()).append("(");
-    signature.toStringBuilder(builder, false, false, hasSelf);
+    signature.toStringBuilder(builder, showNames, false, false, hasSelf);
     builder.append(")");
 
     return builder.toString();

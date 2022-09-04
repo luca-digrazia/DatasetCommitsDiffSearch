@@ -55,14 +55,6 @@ public class SkylarkClassObject implements ClassObject, SkylarkValue, Concatable
   private final Location creationLoc;
   private final String errorMessage;
 
-  /** Creates an empty struct with a given location. */
-  public SkylarkClassObject(ClassObjectConstructor constructor, Location location) {
-    this.constructor = constructor;
-    this.values = ImmutableMap.of();
-    this.creationLoc = location;
-    this.errorMessage = constructor.getErrorMessageFormatForInstances();
-  }
-
   /**
    * Creates a built-in struct (i.e. without creation loc).
    */
@@ -111,10 +103,6 @@ public class SkylarkClassObject implements ClassObject, SkylarkValue, Concatable
   @Override
   public Object getValue(String name) {
     return values.get(name);
-  }
-
-  public boolean hasKey(String name) {
-    return values.containsKey(name);
   }
 
   /**
@@ -249,23 +237,6 @@ public class SkylarkClassObject implements ClassObject, SkylarkValue, Concatable
    */
   @Override
   public void repr(SkylarkPrinter printer) {
-    boolean first = true;
-    printer.append("struct(");
-    // Sort by key to ensure deterministic output.
-    for (String key : Ordering.natural().sortedCopy(values.keySet())) {
-      if (!first) {
-        printer.append(", ");
-      }
-      first = false;
-      printer.append(key);
-      printer.append(" = ");
-      printer.repr(values.get(key));
-    }
-    printer.append(")");
-  }
-
-  @Override
-  public void reprLegacy(SkylarkPrinter printer) {
     boolean first = true;
     printer.append(constructor.getPrintableName());
     printer.append("(");

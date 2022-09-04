@@ -46,7 +46,7 @@ public class SkylarkAspect implements SkylarkExportable {
   private final ImmutableSet<String> paramAttributes;
   private final ImmutableSet<String> fragments;
   private final ImmutableSet<String> hostFragments;
-  private final ImmutableList<Label> requiredToolchains;
+  private final ImmutableList<ClassObjectConstructor.Key> requiredToolchains;
 
   private final Environment funcallEnv;
   private SkylarkAspectClass aspectClass;
@@ -60,7 +60,7 @@ public class SkylarkAspect implements SkylarkExportable {
       ImmutableSet<String> paramAttributes,
       ImmutableSet<String> fragments,
       ImmutableSet<String> hostFragments,
-      ImmutableList<Label> requiredToolchains,
+      ImmutableList<ClassObjectConstructor.Key> requiredToolchains,
       Environment funcallEnv) {
     this.implementation = implementation;
     this.attributeAspects = attributeAspects;
@@ -196,7 +196,7 @@ public class SkylarkAspect implements SkylarkExportable {
     };
   }
 
-  public ImmutableList<Label> getRequiredToolchains() {
+  public ImmutableList<ClassObjectConstructor.Key> getRequiredToolchains() {
     return requiredToolchains;
   }
 }

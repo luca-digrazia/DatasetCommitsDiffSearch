@@ -375,23 +375,22 @@ public abstract class FunctionSignature implements Serializable {
     }
 
     public StringBuilder toStringBuilder(final StringBuilder sb) {
-      return toStringBuilder(sb, true, true, false);
+      return toStringBuilder(sb, true, true, true, false);
     }
 
     /**
      * Appends a representation of this signature to a string buffer.
-     *
      * @param sb Output StringBuffer
+     * @param showNames Determines whether the names of arguments should be printed
      * @param showDefaults Determines whether the default values of arguments should be printed (if
-     *     present)
+     * present)
      * @param skipMissingTypeNames Determines whether missing type names should be omitted (true) or
-     *     replaced with "object" (false).
+     * replaced with "object" (false). If showNames is false, "object" is always used as a type name
+     * to prevent blank spaces.
      * @param skipFirstMandatory Determines whether the first mandatory parameter should be omitted.
      */
-    public StringBuilder toStringBuilder(
-        final StringBuilder sb,
-        final boolean showDefaults,
-        final boolean skipMissingTypeNames,
+    public StringBuilder toStringBuilder(final StringBuilder sb, final boolean showNames,
+        final boolean showDefaults, final boolean skipMissingTypeNames,
         final boolean skipFirstMandatory) {
       FunctionSignature signature = getSignature();
       Shape shape = signature.getShape();
@@ -430,15 +429,25 @@ public abstract class FunctionSignature implements Serializable {
           // This happens when either
           // a) there is no type defined (such as in user-defined functions) or
           // b) the type is java.lang.Object.
-          boolean typeDefined = types != null && types.get(i) != null;
-          if (typeDefined || !skipMissingTypeNames) {
-            printer.append(": ");
-            printer.append(typeDefined ? types.get(i).toString() : "object");
+          boolean noTypeDefined = (types == null || types.get(i) == null);
+          String typeString = noTypeDefined ? "object" : types.get(i).toString();
+          if (noTypeDefined && showNames && skipMissingTypeNames) {
+            // This is the only case where we don't want to append typeString.
+            // If showNames = false, we ignore skipMissingTypeNames = true and append "object"
+            // in order to prevent blank spaces.
+          } else {
+            // We only append colons when there is a name.
+            if (showNames) {
+              printer.append(": ");
+            }
+            printer.append(typeString);
           }
         }
         public void mandatory(int i) {
           comma();
-          printer.append(names.get(i));
+          if (showNames) {
+            printer.append(names.get(i));
+          }
           type(i);
         }
         public void optional(int i) {
@@ -466,7 +475,7 @@ public abstract class FunctionSignature implements Serializable {
       if (hasStar) {
         show.comma();
         printer.append("*");
-        if (starArg) {
+        if (starArg && showNames) {
           printer.append(names.get(iStarArg));
         }
       }
@@ -479,7 +488,9 @@ public abstract class FunctionSignature implements Serializable {
       if (kwArg) {
         show.comma();
         printer.append("**");
-        printer.append(names.get(iKwArg));
+        if (showNames) {
+          printer.append(names.get(iKwArg));
+        }
       }
 
       return sb;
