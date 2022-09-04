@@ -263,8 +263,7 @@ public class CppCompileActionBuilder {
 
     configuration.modifyExecutionInfo(
         executionInfo,
-        CppCompileAction.actionNameToMnemonic(
-            getActionName(), featureConfiguration, cppConfiguration.useCppCompileHeaderMnemonic()));
+        CppCompileAction.actionNameToMnemonic(getActionName(), featureConfiguration));
 
     // Copying the collections is needed to make the builder reusable.
     CppCompileAction action;
