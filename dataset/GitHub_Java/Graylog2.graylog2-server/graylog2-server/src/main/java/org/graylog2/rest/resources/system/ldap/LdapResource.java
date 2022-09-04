@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 TORCH GmbH
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.rest.resources.system.ldap;
 
 import com.codahale.metrics.annotation.Timed;
@@ -27,7 +26,6 @@ import org.apache.directory.ldap.client.api.LdapConnectionConfig;
 import org.apache.directory.ldap.client.api.LdapNetworkConnection;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog2.Core;
 import org.graylog2.database.ValidationException;
 import org.graylog2.rest.documentation.annotations.Api;
 import org.graylog2.rest.documentation.annotations.ApiOperation;
@@ -38,12 +36,12 @@ import org.graylog2.rest.resources.system.ldap.requests.LdapTestConfigRequest;
 import org.graylog2.rest.resources.system.ldap.responses.LdapTestConfigResponse;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.security.TrustAllX509TrustManager;
-import org.graylog2.security.ldap.*;
-import org.graylog2.security.realm.LdapUserAuthenticator;
+import org.graylog2.security.ldap.LdapConnector;
+import org.graylog2.security.ldap.LdapEntry;
+import org.graylog2.security.ldap.LdapSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -62,25 +60,13 @@ public class LdapResource extends RestResource {
 
     private static final Logger log = LoggerFactory.getLogger(LdapResource.class);
 
-    @Inject
-    private Core core;
-
-    @Inject
-    private LdapSettingsService ldapSettingsService;
-
-    @Inject
-    private LdapConnector ldapConnector;
-
-    @Inject
-    private LdapUserAuthenticator ldapAuthenticator;
-
     @GET
     @Timed
     @ApiOperation("Get the LDAP configuration if it is configured")
     @Path("/settings")
     @Produces(MediaType.APPLICATION_JSON)
     public Response getLdapSettings() {
-        final LdapSettings ldapSettings = ldapSettingsService.load();
+        final LdapSettings ldapSettings = LdapSettings.load(core);
         if (ldapSettings == null) {
             return noContent().build();
         }
@@ -109,6 +95,8 @@ public class LdapResource extends RestResource {
     public LdapTestConfigResponse testLdapConfiguration(@ApiParam(title = "Configuration to test", required = true) LdapTestConfigRequest request) {
         LdapTestConfigResponse response = new LdapTestConfigResponse();
 
+
+        final LdapConnector ldapConnector = core.getLdapConnector();
 
         final LdapConnectionConfig config = new LdapConnectionConfig();
         final URI ldapUri = request.ldapUri;
@@ -195,9 +183,9 @@ public class LdapResource extends RestResource {
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
         // load the existing config, or create a new one. we only support having one, currently
-        LdapSettings ldapSettings = ldapSettingsService.load();
+        LdapSettings ldapSettings = LdapSettings.load(core);
         if (ldapSettings == null) {
-            ldapSettings = new LdapSettingsImpl();
+            ldapSettings = new LdapSettings(core);
         }
         ldapSettings.setSystemUsername(request.systemUsername);
         ldapSettings.setSystemPassword(request.systemPassword);
@@ -212,12 +200,12 @@ public class LdapResource extends RestResource {
         ldapSettings.setDefaultGroup(request.defaultGroup);
 
         try {
-            ldapSettingsService.save(ldapSettings);
+            ldapSettings.save();
         } catch (ValidationException e) {
             log.error("Invalid LDAP settings, not updated!", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
-        ldapAuthenticator.applySettings(ldapSettings);
+        core.getLdapAuthenticator().applySettings(ldapSettings);
 
         return noContent().build();
     }
@@ -227,8 +215,8 @@ public class LdapResource extends RestResource {
     @ApiOperation("Remove the LDAP configuration")
     @Path("/settings")
     public Response deleteLdapSettings() {
-        ldapSettingsService.delete();
-        ldapAuthenticator.applySettings(null);
+        LdapSettings.delete(core);
+        core.getLdapAuthenticator().applySettings(null);
         return noContent().build();
     }
 
