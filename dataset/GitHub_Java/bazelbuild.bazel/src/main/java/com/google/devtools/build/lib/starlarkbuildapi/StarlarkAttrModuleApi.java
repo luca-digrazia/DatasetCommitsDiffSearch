@@ -14,19 +14,17 @@
 
 package com.google.devtools.build.lib.starlarkbuildapi;
 
-import com.google.devtools.build.docgen.annot.DocCategory;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import net.starlark.java.annot.Param;
 import net.starlark.java.annot.ParamType;
 import net.starlark.java.annot.StarlarkBuiltin;
+import net.starlark.java.annot.StarlarkDocumentationCategory;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.NoneType;
 import net.starlark.java.eval.Sequence;
 import net.starlark.java.eval.StarlarkFunction;
-import net.starlark.java.eval.StarlarkInt;
 import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.eval.StarlarkValue;
 
@@ -38,7 +36,7 @@ import net.starlark.java.eval.StarlarkValue;
  */
 @StarlarkBuiltin(
     name = "attr",
-    category = DocCategory.TOP_LEVEL_TYPE,
+    category = StarlarkDocumentationCategory.TOP_LEVEL_TYPE,
     doc =
         "This is a top-level module for defining the attribute schemas of a rule or aspect. Each "
             + "function returns an object representing the schema of a single attribute. These "
@@ -141,31 +139,33 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
 
   @StarlarkMethod(
       name = "int",
-      doc =
-          "Creates a schema for an integer attribute. The value must be in the signed 32-bit"
-              + " range.",
+      doc = "Creates a schema for an integer attribute.",
       parameters = {
         @Param(
             name = DEFAULT_ARG,
+            type = Integer.class,
             defaultValue = "0",
             doc = DEFAULT_DOC,
             named = true,
             positional = false),
         @Param(
             name = DOC_ARG,
+            type = String.class,
             defaultValue = "''",
             doc = DOC_DOC,
             named = true,
             positional = false),
         @Param(
             name = MANDATORY_ARG,
+            type = Boolean.class,
             defaultValue = "False",
             doc = MANDATORY_DOC,
             named = true,
             positional = false),
         @Param(
             name = VALUES_ARG,
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = StarlarkInt.class)},
+            type = Sequence.class,
+            generic1 = Integer.class,
             defaultValue = "[]",
             doc = VALUES_DOC,
             named = true,
@@ -173,7 +173,7 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
       },
       useStarlarkThread = true)
   Descriptor intAttribute(
-      StarlarkInt defaultValue,
+      Integer defaultValue,
       String doc,
       Boolean mandatory,
       Sequence<?> values,
@@ -186,27 +186,29 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
       parameters = {
         @Param(
             name = DEFAULT_ARG,
+            type = String.class,
             defaultValue = "''",
             doc = DEFAULT_DOC,
             named = true,
             positional = false),
         @Param(
             name = DOC_ARG,
+            type = String.class,
             defaultValue = "''",
             doc = DOC_DOC,
             named = true,
             positional = false),
         @Param(
             name = MANDATORY_ARG,
+            type = Boolean.class,
             defaultValue = "False",
             doc = MANDATORY_DOC,
             named = true,
             positional = false),
         @Param(
             name = VALUES_ARG,
-            allowedTypes = {
-              @ParamType(type = Sequence.class, generic1 = String.class),
-            },
+            type = Sequence.class,
+            generic1 = String.class,
             defaultValue = "[]",
             doc = VALUES_DOC,
             named = true,
@@ -243,9 +245,9 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
               // I suspect it is a vestige of a "computed defaults" feature
               // that was never fully exposed to Starlark (or was since
               // withdrawn).
-              @ParamType(type = StarlarkFunction.class),
-              @ParamType(type = NoneType.class),
+              @ParamType(type = StarlarkFunction.class)
             },
+            noneable = true,
             defaultValue = "None",
             named = true,
             positional = false,
@@ -256,60 +258,62 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
                     + "<code>attr.label(default = \"//a:b\")</code>."),
         @Param(
             name = DOC_ARG,
+            type = String.class,
             defaultValue = "''",
             doc = DOC_DOC,
             named = true,
             positional = false),
         @Param(
             name = EXECUTABLE_ARG,
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             positional = false,
             doc = EXECUTABLE_DOC),
         @Param(
             name = ALLOW_FILES_ARG,
-            allowedTypes = {
-              @ParamType(type = Boolean.class),
-              @ParamType(type = Sequence.class, generic1 = String.class),
-              @ParamType(type = NoneType.class),
-            },
             defaultValue = "None",
             named = true,
             positional = false,
+            noneable = true,
             doc = ALLOW_FILES_DOC),
         @Param(
             name = ALLOW_SINGLE_FILE_ARG,
             defaultValue = "None",
             named = true,
             positional = false,
+            noneable = true,
             doc =
                 "This is similar to <code>allow_files</code>, with the restriction that the label "
                     + "must correspond to a single <a href=\"File.html\">File</a>. "
                     + "Access it through <code>ctx.file.&lt;attribute_name&gt;</code>."),
         @Param(
             name = MANDATORY_ARG,
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             positional = false,
             doc = MANDATORY_DOC),
         @Param(
             name = PROVIDERS_ARG,
+            type = Sequence.class,
             defaultValue = "[]",
             named = true,
             positional = false,
             doc = PROVIDERS_DOC),
         @Param(
             name = ALLOW_RULES_ARG,
-            allowedTypes = {
-              @ParamType(type = Sequence.class, generic1 = String.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = Sequence.class,
+            generic1 = String.class,
+            noneable = true,
             defaultValue = "None",
             named = true,
             positional = false,
             doc = ALLOW_RULES_DOC),
         @Param(
             name = CONFIGURATION_ARG,
+            type = Object.class,
+            noneable = true,
             defaultValue = "None",
             named = true,
             positional = false,
@@ -322,7 +326,8 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
                     + "unless it really helps clarify your intentions."),
         @Param(
             name = ASPECTS_ARG,
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = StarlarkAspectApi.class)},
+            type = Sequence.class,
+            generic1 = StarlarkAspectApi.class,
             defaultValue = "[]",
             named = true,
             positional = false,
@@ -347,16 +352,33 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
       name = "string_list",
       doc = "Creates a schema for a list-of-strings attribute.",
       parameters = {
-        @Param(name = MANDATORY_ARG, defaultValue = "False", doc = MANDATORY_DOC, named = true),
-        @Param(name = ALLOW_EMPTY_ARG, defaultValue = "True", doc = ALLOW_EMPTY_DOC, named = true),
+        @Param(
+            name = MANDATORY_ARG,
+            type = Boolean.class,
+            defaultValue = "False",
+            doc = MANDATORY_DOC,
+            named = true),
+        @Param(
+            name = ALLOW_EMPTY_ARG,
+            type = Boolean.class,
+            defaultValue = "True",
+            doc = ALLOW_EMPTY_DOC,
+            named = true),
         @Param(
             name = DEFAULT_ARG,
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
+            type = Sequence.class,
+            generic1 = String.class,
             defaultValue = "[]",
             doc = DEFAULT_DOC,
             named = true,
             positional = false),
-        @Param(name = DOC_ARG, defaultValue = "''", doc = DOC_DOC, named = true, positional = false)
+        @Param(
+            name = DOC_ARG,
+            type = String.class,
+            defaultValue = "''",
+            doc = DOC_DOC,
+            named = true,
+            positional = false)
       },
       useStarlarkThread = true)
   Descriptor stringListAttribute(
@@ -369,20 +391,35 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
 
   @StarlarkMethod(
       name = "int_list",
-      doc =
-          "Creates a schema for a list-of-integers attribute. Each element must be in the signed"
-              + " 32-bit range.",
+      doc = "Creates a schema for a list-of-integers attribute.",
       parameters = {
-        @Param(name = MANDATORY_ARG, defaultValue = "False", doc = MANDATORY_DOC, named = true),
-        @Param(name = ALLOW_EMPTY_ARG, defaultValue = "True", doc = ALLOW_EMPTY_DOC, named = true),
+        @Param(
+            name = MANDATORY_ARG,
+            type = Boolean.class,
+            defaultValue = "False",
+            doc = MANDATORY_DOC,
+            named = true),
+        @Param(
+            name = ALLOW_EMPTY_ARG,
+            type = Boolean.class,
+            defaultValue = "True",
+            doc = ALLOW_EMPTY_DOC,
+            named = true),
         @Param(
             name = DEFAULT_ARG,
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = StarlarkInt.class)},
+            type = Sequence.class,
+            generic1 = Integer.class,
             defaultValue = "[]",
             doc = DEFAULT_DOC,
             named = true,
             positional = false),
-        @Param(name = DOC_ARG, defaultValue = "''", doc = DOC_DOC, named = true, positional = false)
+        @Param(
+            name = DOC_ARG,
+            type = String.class,
+            defaultValue = "''",
+            doc = DOC_DOC,
+            named = true,
+            positional = false)
       },
       useStarlarkThread = true)
   Descriptor intListAttribute(
@@ -399,7 +436,12 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
           "Creates a schema for a list-of-labels attribute. This is a dependency attribute."
               + DEPENDENCY_ATTR_TEXT,
       parameters = {
-        @Param(name = ALLOW_EMPTY_ARG, defaultValue = "True", doc = ALLOW_EMPTY_DOC, named = true),
+        @Param(
+            name = ALLOW_EMPTY_ARG,
+            type = Boolean.class,
+            defaultValue = "True",
+            doc = ALLOW_EMPTY_DOC,
+            named = true),
         @Param(
             name = DEFAULT_ARG,
             allowedTypes = {
@@ -416,59 +458,61 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
                     + "<code>attr.label_list(default = [\"//a:b\", \"//a:c\"])</code>."),
         @Param(
             name = DOC_ARG,
+            type = String.class,
             defaultValue = "''",
             doc = DOC_DOC,
             named = true,
             positional = false),
         @Param(
-            name = ALLOW_FILES_ARG,
-            allowedTypes = {
-              @ParamType(type = Boolean.class),
-              @ParamType(type = Sequence.class, generic1 = String.class),
-              @ParamType(type = NoneType.class),
-            },
+            name = ALLOW_FILES_ARG, // bool or FileType filter
             defaultValue = "None",
             named = true,
             positional = false,
+            noneable = true,
             doc = ALLOW_FILES_DOC),
         @Param(
             name = ALLOW_RULES_ARG,
-            allowedTypes = {
-              @ParamType(type = Sequence.class, generic1 = String.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = Sequence.class,
+            generic1 = String.class,
+            noneable = true,
             defaultValue = "None",
             named = true,
             positional = false,
             doc = ALLOW_RULES_DOC),
         @Param(
             name = PROVIDERS_ARG,
+            type = Sequence.class,
             defaultValue = "[]",
             named = true,
             positional = false,
             doc = PROVIDERS_DOC),
         @Param(
             name = FLAGS_ARG,
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
+            type = Sequence.class,
+            generic1 = String.class,
             defaultValue = "[]",
             named = true,
             positional = false,
             doc = FLAGS_DOC),
         @Param(
             name = MANDATORY_ARG,
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             positional = false,
             doc = MANDATORY_DOC),
         @Param(
             name = CONFIGURATION_ARG,
+            type = Object.class,
+            noneable = true,
             defaultValue = "None",
             named = true,
             positional = false,
             doc = CONFIGURATION_DOC),
         @Param(
             name = ASPECTS_ARG,
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = StarlarkAspectApi.class)},
+            type = Sequence.class,
+            generic1 = StarlarkAspectApi.class,
             defaultValue = "[]",
             named = true,
             positional = false,
@@ -496,7 +540,12 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
               + "the values are strings. This is a dependency attribute."
               + DEPENDENCY_ATTR_TEXT,
       parameters = {
-        @Param(name = ALLOW_EMPTY_ARG, defaultValue = "True", doc = ALLOW_EMPTY_DOC, named = true),
+        @Param(
+            name = ALLOW_EMPTY_ARG,
+            type = Boolean.class,
+            defaultValue = "True",
+            doc = ALLOW_EMPTY_DOC,
+            named = true),
         @Param(
             name = DEFAULT_ARG,
             allowedTypes = {
@@ -514,59 +563,61 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
                     + "{\"//a:b\": \"value\", \"//a:c\": \"string\"})</code>."),
         @Param(
             name = DOC_ARG,
+            type = String.class,
             defaultValue = "''",
             doc = DOC_DOC,
             named = true,
             positional = false),
         @Param(
-            name = ALLOW_FILES_ARG,
-            allowedTypes = {
-              @ParamType(type = Boolean.class),
-              @ParamType(type = Sequence.class, generic1 = String.class),
-              @ParamType(type = NoneType.class),
-            },
+            name = ALLOW_FILES_ARG, // bool or FileType filter
             defaultValue = "None",
             named = true,
             positional = false,
+            noneable = true,
             doc = ALLOW_FILES_DOC),
         @Param(
             name = ALLOW_RULES_ARG,
-            allowedTypes = {
-              @ParamType(type = Sequence.class, generic1 = String.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = Sequence.class,
+            generic1 = String.class,
+            noneable = true,
             defaultValue = "None",
             named = true,
             positional = false,
             doc = ALLOW_RULES_DOC),
         @Param(
             name = PROVIDERS_ARG,
+            type = Sequence.class,
             defaultValue = "[]",
             named = true,
             positional = false,
             doc = PROVIDERS_DOC),
         @Param(
             name = FLAGS_ARG,
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
+            type = Sequence.class,
+            generic1 = String.class,
             defaultValue = "[]",
             named = true,
             positional = false,
             doc = FLAGS_DOC),
         @Param(
             name = MANDATORY_ARG,
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             positional = false,
             doc = MANDATORY_DOC),
         @Param(
             name = CONFIGURATION_ARG,
+            type = Object.class,
+            noneable = true,
             defaultValue = "None",
             named = true,
             positional = false,
             doc = CONFIGURATION_DOC),
         @Param(
             name = ASPECTS_ARG,
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = StarlarkAspectApi.class)},
+            type = Sequence.class,
+            generic1 = StarlarkAspectApi.class,
             defaultValue = "[]",
             named = true,
             positional = false,
@@ -593,18 +644,21 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
       parameters = {
         @Param(
             name = DEFAULT_ARG,
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             positional = false,
             doc = DEFAULT_DOC),
         @Param(
             name = DOC_ARG,
+            type = String.class,
             defaultValue = "''",
             doc = DOC_DOC,
             named = true,
             positional = false),
         @Param(
             name = MANDATORY_ARG,
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             positional = false,
@@ -621,12 +675,14 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
       parameters = {
         @Param(
             name = DOC_ARG,
+            type = String.class,
             defaultValue = "''",
             doc = DOC_DOC,
             named = true,
             positional = false),
         @Param(
             name = MANDATORY_ARG,
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             positional = false,
@@ -642,17 +698,20 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
       parameters = {
         @Param(
             name = ALLOW_EMPTY_ARG,
+            type = Boolean.class,
             defaultValue = "True",
             doc = ALLOW_EMPTY_DOC,
             named = true),
         @Param(
             name = DOC_ARG,
+            type = String.class,
             defaultValue = "''",
             doc = DOC_DOC,
             named = true,
             positional = false),
         @Param(
             name = MANDATORY_ARG,
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             positional = false,
@@ -671,23 +730,27 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
       parameters = {
         @Param(
             name = ALLOW_EMPTY_ARG,
+            type = Boolean.class,
             defaultValue = "True",
             doc = ALLOW_EMPTY_DOC,
             named = true),
         @Param(
             name = DEFAULT_ARG,
+            type = Dict.class,
             named = true,
             positional = false,
             defaultValue = "{}",
             doc = DEFAULT_DOC),
         @Param(
             name = DOC_ARG,
+            type = String.class,
             defaultValue = "''",
             doc = DOC_DOC,
             named = true,
             positional = false),
         @Param(
             name = MANDATORY_ARG,
+            type = Boolean.class,
             named = true,
             positional = false,
             defaultValue = "False",
@@ -710,23 +773,27 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
       parameters = {
         @Param(
             name = ALLOW_EMPTY_ARG,
+            type = Boolean.class,
             defaultValue = "True",
             doc = ALLOW_EMPTY_DOC,
             named = true),
         @Param(
             name = DEFAULT_ARG,
+            type = Dict.class,
             defaultValue = "{}",
             named = true,
             positional = false,
             doc = DEFAULT_DOC),
         @Param(
             name = DOC_ARG,
+            type = String.class,
             defaultValue = "''",
             doc = DOC_DOC,
             named = true,
             positional = false),
         @Param(
             name = MANDATORY_ARG,
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             positional = false,
@@ -750,17 +817,20 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
         @Param(
             name = DEFAULT_ARG,
             defaultValue = "None",
+            noneable = true,
             named = true,
             positional = false,
             doc = DEFAULT_DOC),
         @Param(
             name = DOC_ARG,
+            type = String.class,
             defaultValue = "''",
             doc = DOC_DOC,
             named = true,
             positional = false),
         @Param(
             name = MANDATORY_ARG,
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             positional = false,
@@ -775,7 +845,7 @@ public interface StarlarkAttrModuleApi extends StarlarkValue {
   /** An attribute descriptor. */
   @StarlarkBuiltin(
       name = "Attribute",
-      category = DocCategory.BUILTIN,
+      category = StarlarkDocumentationCategory.BUILTIN,
       doc =
           "Representation of a definition of an attribute. Use the <a href=\"attr.html\">attr</a> "
               + "module to create an Attribute. They are only for use with a "
