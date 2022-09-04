@@ -19,8 +19,6 @@ import com.google.devtools.build.lib.analysis.ConfigurationCollectionFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
-import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryFunction;
-import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidSdkRepositoryFunction;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidSdkRepositoryRule;
 import com.google.devtools.build.lib.flags.InvocationPolicyEnforcer;
@@ -125,8 +123,7 @@ public abstract class AnalysisMock extends LoadingMock {
     RepositoryFunction localRepositoryFunction = new LocalRepositoryFunction();
     ImmutableMap<String, RepositoryFunction> repositoryHandlers = ImmutableMap.of(
         LocalRepositoryRule.NAME, localRepositoryFunction,
-        AndroidSdkRepositoryRule.NAME, new AndroidSdkRepositoryFunction(),
-        AndroidNdkRepositoryRule.NAME, new AndroidNdkRepositoryFunction());
+        AndroidSdkRepositoryRule.NAME, new AndroidSdkRepositoryFunction());
 
     return ImmutableMap.of(
         SkyFunctions.REPOSITORY_DIRECTORY,

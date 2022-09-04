@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.testutil;
 
 import com.google.common.io.ByteStreams;
-import com.google.devtools.build.lib.clock.BlazeClock;
+import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -30,7 +30,7 @@ import java.util.Collection;
  * Allow tests to easily manage scratch files in a FileSystem.
  */
 public final class Scratch {
-
+  
   private static final Charset DEFAULT_CHARSET = StandardCharsets.ISO_8859_1;
 
   private final FileSystem fileSystem;
@@ -119,7 +119,7 @@ public final class Scratch {
   public Path file(String pathName, String... lines) throws IOException {
     return file(pathName, DEFAULT_CHARSET, lines);
   }
-
+  
   /**
    * Create a scratch file in the scratch filesystem, with the given pathName,
    * consisting of a set of lines. The method returns a Path instance for the
@@ -136,30 +136,6 @@ public final class Scratch {
     return new String(
         ByteStreams.toByteArray(resolve(pathName).getInputStream()),
         DEFAULT_CHARSET);
-  }
-
-  /** Like {@code scratch.file}, but the lines are added to the end if the file already exists. */
-  public Path appendFile(String pathName, Collection<String> lines) throws IOException {
-    return appendFile(pathName, lines.toArray(new String[lines.size()]));
-  }
-
-  /** Like {@code scratch.file}, but the lines are added to the end if the file already exists. */
-  public Path appendFile(String pathName, String... lines) throws IOException {
-    return appendFile(pathName, DEFAULT_CHARSET, lines);
-  }
-
-  /** Like {@code scratch.file}, but the lines are added to the end if the file already exists. */
-  public Path appendFile(String pathName, Charset charset, String... lines) throws IOException {
-    Path path = resolve(pathName);
-
-    StringBuilder content = new StringBuilder();
-    if (path.exists()) {
-      content.append(readFile(pathName));
-      content.append("\n");
-    }
-    content.append(linesAsString(lines));
-
-    return overwriteFile(pathName, content.toString());
   }
 
   /**
