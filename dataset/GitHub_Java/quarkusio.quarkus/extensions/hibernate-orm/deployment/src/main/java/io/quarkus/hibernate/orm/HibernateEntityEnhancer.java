@@ -20,7 +20,6 @@ import java.util.function.BiFunction;
 
 import org.hibernate.bytecode.enhance.spi.DefaultEnhancementContext;
 import org.hibernate.bytecode.enhance.spi.Enhancer;
-import org.hibernate.bytecode.enhance.spi.UnloadedClass;
 import org.hibernate.bytecode.spi.BytecodeProvider;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -28,7 +27,8 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 
 /**
- * Used to transform bytecode by registering to io.quarkus.deployment.ProcessorContext#addByteCodeTransformer(java.util.function.Function).
+ * Used to transform bytecode by registering to
+ * io.quarkus.deployment.ProcessorContext#addByteCodeTransformer(java.util.function.Function).
  * This function adapts the Quarkus bytecode transformer API - which uses ASM - to use the Entity Enhancement API of
  * Hibernate ORM, which exposes a simple byte array.
  *
@@ -36,7 +36,7 @@ import org.objectweb.asm.Opcodes;
  * This is not configurable, and we enforce the ORM environment to use the "noop" enhancer as we require all
  * entities to be enhanced at build time.
  *
- * @author Sanne Grinovero  <sanne@hibernate.org>
+ * @author Sanne Grinovero <sanne@hibernate.org>
  */
 public final class HibernateEntityEnhancer implements BiFunction<String, ClassVisitor, ClassVisitor> {
 
@@ -48,12 +48,6 @@ public final class HibernateEntityEnhancer implements BiFunction<String, ClassVi
             @Override
             public ClassLoader getLoadingClassLoader() {
                 return Thread.currentThread().getContextClassLoader();
-            }
-
-            @Override
-            public boolean doDirtyCheckingInline(UnloadedClass classDescriptor) {
-                // perhaps only for subtypes of Model/RxModel?
-                return false;
             }
         };
         this.enhancer = provider.getEnhancer(enhancementContext);
