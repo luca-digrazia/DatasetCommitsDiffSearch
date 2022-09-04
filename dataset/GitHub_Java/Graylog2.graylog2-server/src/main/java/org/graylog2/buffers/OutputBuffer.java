@@ -20,31 +20,44 @@
 
 package org.graylog2.buffers;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.lmax.disruptor.MultiThreadedClaimStrategy;
 import com.lmax.disruptor.RingBuffer;
-import com.lmax.disruptor.SleepingWaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Meter;
+import org.graylog2.Core;
+import org.graylog2.buffers.processors.OutputBufferProcessor;
+import org.graylog2.plugin.buffers.Buffer;
+import org.graylog2.plugin.logmessage.LogMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import org.graylog2.GraylogServer;
-import org.graylog2.buffers.processors.OutputBufferProcessor;
-import org.graylog2.logmessage.LogMessage;
+import java.util.concurrent.TimeUnit;
 
 /**
- * OutputBuffer.java: 26.04.2012 17:56:24
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class OutputBuffer {
+public class OutputBuffer implements Buffer {
 
-    protected static final int RING_SIZE = 8192;
-    protected RingBuffer<LogMessageEvent> ringBuffer;
+    private static final Logger LOG = LoggerFactory.getLogger(OutputBuffer.class);
+    
+    protected static RingBuffer<LogMessageEvent> ringBuffer;
 
-    protected ExecutorService executor = Executors.newCachedThreadPool();
+    protected ExecutorService executor = Executors.newCachedThreadPool(
+            new ThreadFactoryBuilder()
+                .setNameFormat("outputbufferprocessor-%d")
+                .build()
+    );
+    
+    Core server;
+    
+    private final Meter incomingMessages = Metrics.newMeter(OutputBuffer.class, "InsertedMessages", "messages", TimeUnit.SECONDS);
+    private final Meter rejectedMessages = Metrics.newMeter(OutputBuffer.class, "RejectedMessages", "messages", TimeUnit.SECONDS);
 
-    GraylogServer server;
-
-    public OutputBuffer(GraylogServer server) {
+    public OutputBuffer(Core server) {
         this.server = server;
     }
 
@@ -52,21 +65,39 @@ public class OutputBuffer {
         Disruptor disruptor = new Disruptor<LogMessageEvent>(
                 LogMessageEvent.EVENT_FACTORY,
                 executor,
-                new MultiThreadedClaimStrategy(RING_SIZE),
-                new SleepingWaitStrategy()
+                new MultiThreadedClaimStrategy(server.getConfiguration().getRingSize()),
+                server.getConfiguration().getProcessorWaitStrategy()
         );
+        
+        LOG.info("Initialized OutputBuffer with ring size <{}> "
+                + "and wait strategy <{}>.", server.getConfiguration().getRingSize(),
+                server.getConfiguration().getProcessorWaitStrategy().getClass().getSimpleName());
 
-        OutputBufferProcessor processor = new OutputBufferProcessor(this.server);
-
-        disruptor.handleEventsWith(processor);
+        OutputBufferProcessor[] processors = new OutputBufferProcessor[server.getConfiguration().getOutputBufferProcessors()];
+        
+        for (int i = 0; i < server.getConfiguration().getOutputBufferProcessors(); i++) {
+            processors[i] = new OutputBufferProcessor(this.server, i, server.getConfiguration().getOutputBufferProcessors());
+        }
+        
+        disruptor.handleEventsWith(processors);
+        
         ringBuffer = disruptor.start();
     }
 
+    @Override
     public void insert(LogMessage message) {
-        long sequence = ringBuffer.next();
-        LogMessageEvent event = ringBuffer.get(sequence);
-        event.setMessage(message);
-        ringBuffer.publish(sequence);
+        if (ringBuffer.remainingCapacity() > 0) {
+            long sequence = ringBuffer.next();
+            LogMessageEvent event = ringBuffer.get(sequence);
+            event.setMessage(message);
+            ringBuffer.publish(sequence);
+
+            server.outputBufferWatermark().incrementAndGet();
+            incomingMessages.mark();
+        } else {
+            LOG.error("OutputBuffer is out of capacity. Raise the ring_size configuration parameter. DROPPING MESSAGE!");
+            rejectedMessages.mark();
+        }
     }
 
 }
