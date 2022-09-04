@@ -1,6 +1,6 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2018 the AndroidAnnotations project
+ * Copyright (C) 2016 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -36,8 +36,6 @@ import org.androidannotations.annotations.Receiver;
 import org.androidannotations.handler.AnnotationHandler;
 import org.androidannotations.handler.HasParameterHandlers;
 import org.androidannotations.helper.CanonicalNameConstants;
-import org.androidannotations.holder.EFragmentHolder;
-import org.androidannotations.holder.HasActivityLifecycleMethods;
 import org.androidannotations.holder.HasReceiverRegistration;
 import org.androidannotations.holder.ReceiverRegistrationDelegate.IntentFilterData;
 
@@ -140,44 +138,27 @@ public class ReceiverHandler extends CoreBaseAnnotationHandler<HasReceiverRegist
 	private void registerAndUnregisterReceiver(HasReceiverRegistration holder, Receiver.RegisterAt registerAt, JFieldVar intentFilterField, JFieldVar receiverField, boolean local) {
 		JBlock registerBlock = null;
 		JBlock unregisterBlock = null;
-
-		if (holder instanceof HasActivityLifecycleMethods) {
-			HasActivityLifecycleMethods activityLifecycleMethods = (HasActivityLifecycleMethods) holder;
-
-			switch (registerAt) {
-			case OnCreateOnDestroy:
-				registerBlock = activityLifecycleMethods.getOnCreateAfterSuperBlock();
-				unregisterBlock = activityLifecycleMethods.getOnDestroyBeforeSuperBlock();
-				break;
-			case OnStartOnStop:
-				registerBlock = activityLifecycleMethods.getOnStartAfterSuperBlock();
-				unregisterBlock = activityLifecycleMethods.getOnStopBeforeSuperBlock();
-				break;
-			case OnResumeOnPause:
-				registerBlock = activityLifecycleMethods.getOnResumeAfterSuperBlock();
-				unregisterBlock = activityLifecycleMethods.getOnPauseBeforeSuperBlock();
-				break;
-			}
-
-			if (holder instanceof EFragmentHolder && registerAt == Receiver.RegisterAt.OnAttachOnDetach) {
-				EFragmentHolder fragmentHolder = (EFragmentHolder) holder;
-
-				registerBlock = fragmentHolder.getOnAttachAfterSuperBlock();
-				unregisterBlock = fragmentHolder.getOnDetachBeforeSuperBlock();
-			}
-
-		} else {
-			registerBlock = holder.getStartLifecycleAfterSuperBlock();
-			unregisterBlock = holder.getEndLifecycleBeforeSuperBlock();
+		switch (registerAt) {
+		case OnCreateOnDestroy:
+			registerBlock = holder.getOnCreateAfterSuperBlock();
+			unregisterBlock = holder.getOnDestroyBeforeSuperBlock();
+			break;
+		case OnStartOnStop:
+			registerBlock = holder.getOnStartAfterSuperBlock();
+			unregisterBlock = holder.getOnStopBeforeSuperBlock();
+			break;
+		case OnResumeOnPause:
+			registerBlock = holder.getOnResumeAfterSuperBlock();
+			unregisterBlock = holder.getOnPauseBeforeSuperBlock();
+			break;
+		case OnAttachOnDetach:
+			registerBlock = holder.getOnAttachAfterSuperBlock();
+			unregisterBlock = holder.getOnDetachBeforeSuperBlock();
 		}
 
 		IJExpression broadcastManager;
 		if (local) {
-			if (getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.LOCAL_BROADCAST_MANAGER) == null) {
-				broadcastManager = getClasses().ANDROIDX_LOCAL_BROADCAST_MANAGER.staticInvoke("getInstance").arg(holder.getContextRef());
-			} else {
-				broadcastManager = getClasses().LOCAL_BROADCAST_MANAGER.staticInvoke("getInstance").arg(holder.getContextRef());
-			}
+			broadcastManager = getClasses().LOCAL_BROADCAST_MANAGER.staticInvoke("getInstance").arg(holder.getContextRef());
 		} else {
 			broadcastManager = holder.getContextRef();
 		}
