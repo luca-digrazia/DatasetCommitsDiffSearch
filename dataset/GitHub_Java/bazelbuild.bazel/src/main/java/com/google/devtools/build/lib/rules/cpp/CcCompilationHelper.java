@@ -128,11 +128,8 @@ public final class CcCompilationHelper {
   /** Function for extracting module maps from CppCompilationDependencies. */
   private static final Function<TransitiveInfoCollection, CppModuleMap> CPP_DEPS_TO_MODULES =
       dep -> {
-        CcCompilationInfo ccCompilationInfo = dep.get(CcCompilationInfo.PROVIDER);
-        CcCompilationContextInfo ccCompilationContextInfo = null;
-        if (ccCompilationInfo != null) {
-          ccCompilationContextInfo = ccCompilationInfo.getCcCompilationContextInfo();
-        }
+        CcCompilationContextInfo ccCompilationContextInfo =
+            dep.get(CcCompilationContextInfo.PROVIDER);
         return ccCompilationContextInfo == null ? null : ccCompilationContextInfo.getCppModuleMap();
       };
 
@@ -153,14 +150,17 @@ public final class CcCompilationHelper {
     private final TransitiveInfoProviderMap providers;
     private final Map<String, NestedSet<Artifact>> outputGroups;
     private final CcCompilationOutputs compilationOutputs;
+    private final CcCompilationContextInfo ccCompilationContextInfo;
 
     private CompilationInfo(
         TransitiveInfoProviderMap providers,
         Map<String, NestedSet<Artifact>> outputGroups,
-        CcCompilationOutputs compilationOutputs) {
+        CcCompilationOutputs compilationOutputs,
+        CcCompilationContextInfo ccCompilationContextInfo) {
       this.providers = providers;
       this.outputGroups = outputGroups;
       this.compilationOutputs = compilationOutputs;
+      this.ccCompilationContextInfo = ccCompilationContextInfo;
     }
 
     public TransitiveInfoProviderMap getProviders() {
@@ -177,13 +177,8 @@ public final class CcCompilationHelper {
     }
 
     @SkylarkCallable(name = "cc_compilation_info", documented = false)
-    public CcCompilationInfo getCcCompilationInfo() {
-      return (CcCompilationInfo) providers.getProvider(CcCompilationInfo.PROVIDER.getKey());
-    }
-
     public CcCompilationContextInfo getCcCompilationContextInfo() {
-      return ((CcCompilationInfo) providers.getProvider(CcCompilationInfo.PROVIDER.getKey()))
-          .getCcCompilationContextInfo();
+      return ccCompilationContextInfo;
     }
   }
 
@@ -736,9 +731,7 @@ public final class CcCompilationHelper {
                 new CppDebugFileProvider(
                     dwoArtifacts.getDwoArtifacts(), dwoArtifacts.getPicDwoArtifacts()),
                 collectTransitiveLipoInfo(ccOutputs));
-    CcCompilationInfo.Builder ccCompilationInfoBuilder = CcCompilationInfo.Builder.create();
-    ccCompilationInfoBuilder.setCcCompilationContextInfo(ccCompilationContextInfo);
-    providers.put(ccCompilationInfoBuilder.build());
+    providers.put(ccCompilationContextInfo);
 
     Map<String, NestedSet<Artifact>> outputGroups = new TreeMap<>();
     outputGroups.put(OutputGroupInfo.TEMP_FILES, getTemps(ccOutputs));
@@ -754,7 +747,8 @@ public final class CcCompilationHelper {
           CcCommon.collectCompilationPrerequisites(ruleContext, ccCompilationContextInfo));
     }
 
-    return new CompilationInfo(providers.build(), outputGroups, ccOutputs);
+    return new CompilationInfo(
+        providers.build(), outputGroups, ccOutputs, ccCompilationContextInfo);
   }
 
   @Immutable
@@ -928,7 +922,7 @@ public final class CcCompilationHelper {
 
     if (useDeps) {
       ccCompilationContextInfoBuilder.mergeDependentCcCompilationContextInfos(
-          CcCompilationInfo.getCcCompilationContextInfos(deps));
+          AnalysisUtils.getProviders(deps, CcCompilationContextInfo.PROVIDER));
       ccCompilationContextInfoBuilder.mergeDependentCcCompilationContextInfos(
           depCcCompilationContextInfos);
     }
@@ -1103,10 +1097,10 @@ public final class CcCompilationHelper {
     List<CppModuleMap> result =
         deps.stream().map(CPP_DEPS_TO_MODULES).collect(toCollection(ArrayList::new));
     if (ruleContext.getRule().getAttributeDefinition(":stl") != null) {
-      CcCompilationInfo stl =
-          ruleContext.getPrerequisite(":stl", Mode.TARGET, CcCompilationInfo.PROVIDER);
+      CcCompilationContextInfo stl =
+          ruleContext.getPrerequisite(":stl", Mode.TARGET, CcCompilationContextInfo.PROVIDER);
       if (stl != null) {
-        result.add(stl.getCcCompilationContextInfo().getCppModuleMap());
+        result.add(stl.getCppModuleMap());
       }
     }
 
@@ -1986,9 +1980,7 @@ public final class CcCompilationHelper {
       //    implementation (with caching results of this method) to avoid O(N^2) slowdown.
       if (ruleContext.getRule().isAttrDefined("deps", BuildType.LABEL_LIST)) {
         for (TransitiveInfoCollection dep : ruleContext.getPrerequisites("deps", Mode.TARGET)) {
-          CcCompilationInfo ccCompilationInfo = dep.get(CcCompilationInfo.PROVIDER);
-          if (ccCompilationInfo != null
-              && ccCompilationInfo.getCcCompilationContextInfo() != null
+          if (dep.get(CcCompilationContextInfo.PROVIDER) != null
               && InstrumentedFilesCollector.shouldIncludeLocalSources(configuration, dep)) {
             return true;
           }
