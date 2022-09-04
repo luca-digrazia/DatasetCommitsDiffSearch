@@ -67,16 +67,6 @@ public @interface AutoCodec {
      * uses its codec to serialize the data.
      */
     POLYMORPHIC,
-    /**
-     * For use with classes that are singleton.
-     *
-     * <p>Commonly used with the POLYMORPHIC strategy.
-     *
-     * <p>The serialized class must have a codec accessible, static INSTANCE field.
-     *
-     * <p>Illegal to use with a non-Void dependency.
-     */
-    SINGLETON
   }
 
   /**

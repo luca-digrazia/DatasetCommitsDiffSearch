@@ -15,9 +15,11 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
@@ -33,29 +35,39 @@ import java.util.List;
   category = SkylarkModuleCategory.CONFIGURATION_FRAGMENT
 )
 public class PlatformConfiguration extends BuildConfiguration.Fragment {
-  private final Label hostPlatform;
+  public static final ObjectCodec<PlatformConfiguration> CODEC =
+      new PlatformConfiguration_AutoCodec();
+
+  private final Label executionPlatform;
   private final ImmutableList<Label> extraExecutionPlatforms;
   private final ImmutableList<Label> targetPlatforms;
   private final ImmutableList<Label> extraToolchains;
+  private final ImmutableMap<Label, Label> toolchainResolutionOverrides;
   private final ImmutableList<Label> enabledToolchainTypes;
 
   @AutoCodec.Instantiator
   PlatformConfiguration(
-      Label hostPlatform,
+      Label executionPlatform,
       ImmutableList<Label> extraExecutionPlatforms,
       ImmutableList<Label> targetPlatforms,
       ImmutableList<Label> extraToolchains,
+      ImmutableMap<Label, Label> toolchainResolutionOverrides,
       ImmutableList<Label> enabledToolchainTypes) {
-    this.hostPlatform = hostPlatform;
+    this.executionPlatform = executionPlatform;
     this.extraExecutionPlatforms = extraExecutionPlatforms;
     this.targetPlatforms = targetPlatforms;
     this.extraToolchains = extraToolchains;
+    this.toolchainResolutionOverrides = toolchainResolutionOverrides;
     this.enabledToolchainTypes = enabledToolchainTypes;
   }
 
-  @SkylarkCallable(name = "host_platform", structField = true, doc = "The current host platform")
-  public Label getHostPlatform() {
-    return hostPlatform;
+  @SkylarkCallable(
+    name = "execution_platform",
+    structField = true,
+    doc = "The current execution platform"
+  )
+  public Label getExecutionPlatform() {
+    return executionPlatform;
   }
 
   /** Additional platforms that are available for action execution. */
@@ -71,6 +83,16 @@ public class PlatformConfiguration extends BuildConfiguration.Fragment {
   /** Additional toolchains that should be considered during toolchain resolution. */
   public ImmutableList<Label> getExtraToolchains() {
     return extraToolchains;
+  }
+
+  /** Returns {@code true} if the given toolchain type has a manual override set. */
+  public boolean hasToolchainOverride(Label toolchainType) {
+    return toolchainResolutionOverrides.containsKey(toolchainType);
+  }
+
+  /** Returns the {@link Label} of the toolchain to use for the given toolchain type. */
+  public Label getToolchainOverride(Label toolchainType) {
+    return toolchainResolutionOverrides.get(toolchainType);
   }
 
   @SkylarkCallable(

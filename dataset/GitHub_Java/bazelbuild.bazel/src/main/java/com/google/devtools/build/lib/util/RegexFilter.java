@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.util;
 
 import com.google.common.base.Joiner;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -36,14 +37,16 @@ import javax.annotation.Nullable;
 @AutoCodec
 @Immutable
 public final class RegexFilter {
+  public static final ObjectCodec<RegexFilter> CODEC = new RegexFilter_AutoCodec();
+
   // Null inclusion or exclusion pattern means those patterns are not used.
   @Nullable private final Pattern inclusionPattern;
   @Nullable private final Pattern exclusionPattern;
   private final int hashCode;
 
   /**
-   * Converts from a comma-separated list of regex expressions with optional -/+ prefix into the
-   * RegexFilter. Commas prefixed with backslash are considered to be part of regex definition and
+   * Converts from a colon-separated list of regex expressions with optional -/+ prefix into the
+   * RegexFilter. Colons prefixed with backslash are considered to be part of regex definition and
    * not a delimiter between separate regex expressions.
    *
    * <p>Order of expressions is not important. Empty entries are ignored. '-' marks an excluded

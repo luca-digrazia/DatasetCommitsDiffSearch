@@ -80,7 +80,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   private final int objcHeaderThinningPartitionSize;
   private final Label objcHeaderScannerTool;
   private final Label appleSdk;
-  private final boolean strictObjcModuleMaps;
 
   ObjcConfiguration(ObjcCommandLineOptions objcOptions, BuildConfiguration.Options options) {
     this.iosSimulatorDevice =
@@ -116,7 +115,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     this.objcHeaderThinningPartitionSize = objcOptions.objcHeaderThinningPartitionSize;
     this.objcHeaderScannerTool = objcOptions.objcHeaderScannerTool;
     this.appleSdk = objcOptions.appleSdk;
-    this.strictObjcModuleMaps = objcOptions.strictObjcModuleMaps;
   }
 
   @AutoCodec.Instantiator
@@ -144,8 +142,7 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
       boolean experimentalHeaderThinning,
       int objcHeaderThinningPartitionSize,
       Label objcHeaderScannerTool,
-      Label appleSdk,
-      boolean strictObjcModuleMaps) {
+      Label appleSdk) {
     this.iosSimulatorVersion = iosSimulatorVersion;
     this.iosSimulatorDevice = iosSimulatorDevice;
     this.watchosSimulatorVersion = watchosSimulatorVersion;
@@ -170,7 +167,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     this.objcHeaderThinningPartitionSize = objcHeaderThinningPartitionSize;
     this.objcHeaderScannerTool = objcHeaderScannerTool;
     this.appleSdk = appleSdk;
-    this.strictObjcModuleMaps = strictObjcModuleMaps;
   }
 
   /**
@@ -378,10 +374,5 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   /** Returns the label for the Apple SDK for current build configuration. */
   public Label getAppleSdk() {
     return appleSdk;
-  }
-
-  /** Returns true if Objective-C module maps should only be propagated to direct dependencies. */
-  public boolean useStrictObjcModuleMaps() {
-    return strictObjcModuleMaps;
   }
 }

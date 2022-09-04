@@ -168,8 +168,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
   private final boolean convertLipoToThinLto;
   private final PathFragment crosstoolTopPathFragment;
 
-  private final Path fdoProfileAbsolutePath;
-  private final Label fdoProfileLabel;
+  private final Path fdoZip;
 
   // TODO(bazel-team): All these labels (except for ccCompilerRuleLabel) can be removed once the
   // transition to the cc_compiler rule is complete.
@@ -273,8 +272,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
         Preconditions.checkNotNull(params.commonOptions.cpu),
         cppOptions.convertLipoToThinLto,
         crosstoolTopPathFragment,
-        params.fdoProfileAbsolutePath,
-        params.fdoProfileLabel,
+        params.fdoZip,
         params.ccToolchainLabel,
         params.stlLabel,
         params.sysrootLabel == null
@@ -296,22 +294,30 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
         ImmutableList.copyOf(cppOptions.conlyoptList),
         new FlagList(
             cppToolchainInfo.configureLinkerOptions(
-                compilationMode, cppOptions.getLipoMode(), LinkingMode.FULLY_STATIC),
+                compilationMode,
+                cppOptions.getLipoMode(),
+                LinkingMode.FULLY_STATIC),
             FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
             ImmutableList.<String>of()),
         new FlagList(
             cppToolchainInfo.configureLinkerOptions(
-                compilationMode, cppOptions.getLipoMode(), LinkingMode.MOSTLY_STATIC),
+                compilationMode,
+                cppOptions.getLipoMode(),
+                LinkingMode.MOSTLY_STATIC),
             FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
             ImmutableList.<String>of()),
         new FlagList(
             cppToolchainInfo.configureLinkerOptions(
-                compilationMode, cppOptions.getLipoMode(), LinkingMode.MOSTLY_STATIC_LIBRARIES),
+                compilationMode,
+                cppOptions.getLipoMode(),
+                LinkingMode.MOSTLY_STATIC_LIBRARIES),
             FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
             ImmutableList.<String>of()),
         new FlagList(
             cppToolchainInfo.configureLinkerOptions(
-                compilationMode, cppOptions.getLipoMode(), LinkingMode.DYNAMIC),
+                compilationMode,
+                cppOptions.getLipoMode(),
+                LinkingMode.DYNAMIC),
             FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
             ImmutableList.<String>of()),
         ImmutableList.copyOf(cppOptions.coptList),
@@ -337,8 +343,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
       String desiredCpu,
       boolean convertLipoToThinLto,
       PathFragment crosstoolTopPathFragment,
-      Path fdoProfileAbsolutePath,
-      Label fdoProfileLabel,
+      Path fdoZip,
       Label ccToolchainLabel,
       Label stlLabel,
       PathFragment nonConfiguredSysroot,
@@ -368,8 +373,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
     this.desiredCpu = desiredCpu;
     this.convertLipoToThinLto = convertLipoToThinLto;
     this.crosstoolTopPathFragment = crosstoolTopPathFragment;
-    this.fdoProfileAbsolutePath = fdoProfileAbsolutePath;
-    this.fdoProfileLabel = fdoProfileLabel;
+    this.fdoZip = fdoZip;
     this.ccToolchainLabel = ccToolchainLabel;
     this.stlLabel = stlLabel;
     this.nonConfiguredSysroot = nonConfiguredSysroot;
@@ -1329,12 +1333,8 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
     return cppOptions.getFdoInstrument();
   }
 
-  public Path getFdoProfileAbsolutePath() {
-    return fdoProfileAbsolutePath;
-  }
-
-  public Label getFdoProfileLabel() {
-    return fdoProfileLabel;
+  public Path getFdoZip() {
+    return fdoZip;
   }
 
   /**
@@ -1349,12 +1349,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
       requestedFeatures.add(CppRuleClasses.FDO_INSTRUMENT);
     }
 
-    String fdoZip = null;
-    if (fdoProfileAbsolutePath != null) {
-      fdoZip = fdoProfileAbsolutePath.getPathString();
-    } else if (fdoProfileLabel != null) {
-      fdoZip = fdoProfileLabel.getName();
-    }
     boolean isFdo = fdoZip != null && compilationMode == CompilationMode.OPT;
     if (isFdo && !CppFileTypes.GCC_AUTO_PROFILE.matches(fdoZip)) {
       requestedFeatures.add(CppRuleClasses.FDO_OPTIMIZE);
@@ -1387,15 +1381,15 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   public static PathFragment computeDefaultSysroot(CToolchain toolchain) {
-    String builtInSysroot = toolchain.getBuiltinSysroot();
-    if (builtInSysroot.isEmpty()) {
-      return null;
-    }
-    if (!PathFragment.isNormalized(builtInSysroot)) {
+    PathFragment defaultSysroot =
+        toolchain.getBuiltinSysroot().length() == 0
+            ? null
+            : PathFragment.create(toolchain.getBuiltinSysroot());
+    if ((defaultSysroot != null) && !defaultSysroot.isNormalized()) {
       throw new IllegalArgumentException(
-          "The built-in sysroot '" + builtInSysroot + "' is not normalized.");
+          "The built-in sysroot '" + defaultSysroot + "' is not normalized.");
     }
-    return PathFragment.create(builtInSysroot);
+    return defaultSysroot;
   }
 
   @Override

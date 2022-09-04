@@ -17,14 +17,12 @@ package com.google.devtools.build.lib.skyframe.serialization.autocodec;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 
 import com.google.auto.service.AutoService;
-import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.PolymorphicHelper;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationCodeGenerator.Marshaller;
-import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.TypeName;
@@ -167,13 +165,9 @@ public class AutoCodecProcessor extends AbstractProcessor {
     TypeSpec.Builder codecClassBuilder =
         AutoCodecUtil.initializeCodecClassBuilder(encodedType, parameters.dependency);
 
-    if (encodedType.getAnnotation(AutoValue.class) == null) {
-      initializeUnsafeOffsets(codecClassBuilder, encodedType, parameters.fields);
-      codecClassBuilder.addMethod(buildSerializeMethodWithInstantiator(encodedType, parameters));
-    } else {
-      codecClassBuilder.addMethod(
-          buildSerializeMethodWithInstantiatorForAutoValue(encodedType, parameters));
-    }
+    initializeUnsafeOffsets(codecClassBuilder, encodedType, parameters.fields);
+
+    codecClassBuilder.addMethod(buildSerializeMethodWithInstantiator(encodedType, parameters));
 
     MethodSpec.Builder deserializeBuilder =
         AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, parameters.dependency);
@@ -264,7 +258,9 @@ public class AutoCodecProcessor extends AbstractProcessor {
     MethodSpec.Builder serializeBuilder =
         AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, parameters.dependency);
     for (VariableElement parameter : parameters.fields) {
-      TypeKind typeKind = parameter.asType().getKind();
+      VariableElement field =
+          getFieldByName(encodedType, parameter.getSimpleName().toString()).value;
+      TypeKind typeKind = field.asType().getKind();
       switch (typeKind) {
         case BOOLEAN:
           serializeBuilder.addStatement(
@@ -279,45 +275,30 @@ public class AutoCodecProcessor extends AbstractProcessor {
               parameter.getSimpleName());
           break;
         case ARRAY:
-          // fall through
-        case DECLARED:
           serializeBuilder.addStatement(
-              "$T unsafe_$L = ($T) $T.getInstance().getObject(input, $L_offset)",
-              parameter.asType(),
+              "$T unsafe_$L = ($T)$T.getInstance().getObject(input, $L_offset)",
+              field.asType(),
               parameter.getSimpleName(),
-              parameter.asType(),
+              field.asType(),
               UnsafeProvider.class,
               parameter.getSimpleName());
           marshallers.writeSerializationCode(
               new Marshaller.Context(
                   serializeBuilder, parameter.asType(), "unsafe_" + parameter.getSimpleName()));
           break;
-        default:
-          throw new UnsupportedOperationException("Unimplemented or invalid kind: " + typeKind);
-      }
-    }
-    return serializeBuilder.build();
-  }
-
-  private MethodSpec buildSerializeMethodWithInstantiatorForAutoValue(
-      TypeElement encodedType, PartitionedParameters parameters) {
-    MethodSpec.Builder serializeBuilder =
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, parameters.dependency);
-    for (VariableElement parameter : parameters.fields) {
-      TypeKind typeKind = parameter.asType().getKind();
-      String getter = "input." + parameter.getSimpleName() + "()";
-      switch (typeKind) {
-        case BOOLEAN:
-          serializeBuilder.addStatement("codedOut.writeBoolNoTag($L)", getter);
-          break;
-        case INT:
-          serializeBuilder.addStatement("codedOut.writeInt32NoTag($L)", getter);
-          break;
-        case ARRAY:
-          // fall through
         case DECLARED:
+          serializeBuilder.addStatement(
+              "$T unsafe_$L = ($T)$T.getInstance().getObject(input, $L_offset)",
+              field.asType(),
+              parameter.getSimpleName(),
+              field.asType(),
+              UnsafeProvider.class,
+              parameter.getSimpleName());
           marshallers.writeSerializationCode(
-              new Marshaller.Context(serializeBuilder, parameter.asType(), getter));
+              new Marshaller.Context(
+                  serializeBuilder,
+                  (DeclaredType) parameter.asType(),
+                  "unsafe_" + parameter.getSimpleName()));
           break;
         default:
           throw new UnsupportedOperationException("Unimplemented or invalid kind: " + typeKind);
@@ -500,6 +481,13 @@ public class AutoCodecProcessor extends AbstractProcessor {
     MethodSpec.Builder constructor = MethodSpec.constructorBuilder();
     for (VariableElement param : parameters) {
       FieldValueAndClass field = getFieldByName(encodedType, param.getSimpleName().toString());
+      if (!env.getTypeUtils().isSameType(field.value.asType(), param.asType())) {
+        throw new IllegalArgumentException(
+            encodedType.getQualifiedName()
+                + " field "
+                + field.value.getSimpleName()
+                + " has mismatching type.");
+      }
       builder.addField(
           TypeName.LONG, param.getSimpleName() + "_offset", Modifier.PRIVATE, Modifier.FINAL);
       constructor.beginControlFlow("try");
@@ -507,7 +495,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
           "this.$L_offset = $T.getInstance().objectFieldOffset($T.class.getDeclaredField(\"$L\"))",
           param.getSimpleName(),
           UnsafeProvider.class,
-          ClassName.get(field.declaringClassType),
+          field.declaringClassType,
           param.getSimpleName());
       constructor.nextControlFlow("catch ($T e)", NoSuchFieldException.class);
       constructor.addStatement("throw new $T(e)", IllegalStateException.class);
@@ -551,11 +539,8 @@ public class AutoCodecProcessor extends AbstractProcessor {
       return Optional.of(new FieldValueAndClass(field.get(), type));
     }
     if (type.getSuperclass().getKind() != TypeKind.NONE) {
-      // Applies the erased superclass type so that it can be used in `T.class`.
       return getFieldByNameRecursive(
-          (TypeElement)
-              env.getTypeUtils().asElement(env.getTypeUtils().erasure(type.getSuperclass())),
-          name);
+          env.getElementUtils().getTypeElement(type.getSuperclass().toString()), name);
     }
     return Optional.empty();
   }

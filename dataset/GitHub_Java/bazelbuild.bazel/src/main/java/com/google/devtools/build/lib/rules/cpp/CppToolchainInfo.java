@@ -28,6 +28,8 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.CppActionConfigs.CppPlatform;
+import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
@@ -47,7 +49,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import javax.annotation.Nullable;
 
 /**
  * Information describing the C++ compiler derived from the CToolchain proto.
@@ -58,6 +59,8 @@ import javax.annotation.Nullable;
 @AutoCodec
 @Immutable
 public final class CppToolchainInfo {
+  public static final ObjectCodec<CppToolchainInfo> CODEC = new CppToolchainInfo_AutoCodec();
+
   private CToolchain toolchain;
   private final PathFragment crosstoolTopPathFragment;
   private final String toolchainIdentifier;
@@ -102,8 +105,6 @@ public final class CppToolchainInfo {
   private final ImmutableListMultimap<CompilationMode, String> cxxFlagsByCompilationMode;
   private final ImmutableListMultimap<LipoMode, String> lipoCFlags;
   private final ImmutableListMultimap<LipoMode, String> lipoCxxFlags;
-
-  private final FlagList unfilteredCompilerFlags;
 
   private final boolean supportsFission;
   private final boolean supportsStartEndLib;
@@ -213,10 +214,6 @@ public final class CppToolchainInfo {
           cxxFlagsBuilder.build(),
           lipoCFlagsBuilder.build(),
           lipoCxxFlagsBuilder.build(),
-          new FlagList(
-              ImmutableList.copyOf(toolchain.getUnfilteredCxxFlagList()),
-              FlagList.convertOptionalOptions(toolchain.getOptionalUnfilteredCxxFlagList()),
-              ImmutableList.<String>of()),
           toolchain.getSupportsFission(),
           toolchain.getSupportsStartEndLib(),
           toolchain.getSupportsEmbeddedRuntimes(),
@@ -270,7 +267,6 @@ public final class CppToolchainInfo {
       ImmutableListMultimap<CompilationMode, String> cxxFlagsByCompilationMode,
       ImmutableListMultimap<LipoMode, String> lipoCFlags,
       ImmutableListMultimap<LipoMode, String> lipoCxxFlags,
-      FlagList unfilteredCompilerFlags,
       boolean supportsFission,
       boolean supportsStartEndLib,
       boolean supportsEmbeddedRuntimes,
@@ -316,7 +312,6 @@ public final class CppToolchainInfo {
     this.cxxFlagsByCompilationMode = cxxFlagsByCompilationMode;
     this.lipoCFlags = lipoCFlags;
     this.lipoCxxFlags = lipoCxxFlags;
-    this.unfilteredCompilerFlags = unfilteredCompilerFlags;
     this.supportsFission = supportsFission;
     this.supportsStartEndLib = supportsStartEndLib;
     this.supportsEmbeddedRuntimes = supportsEmbeddedRuntimes;
@@ -370,17 +365,17 @@ public final class CppToolchainInfo {
         String arToolPath = "DUMMY_AR_TOOL";
         String stripToolPath = "DUMMY_STRIP_TOOL";
         for (ToolPath tool : toolchain.getToolPathList()) {
-          if (tool.getName().equals(CppConfiguration.Tool.GCC.getNamePart())) {
+          if (tool.getName().equals(Tool.GCC.getNamePart())) {
             gccToolPath = tool.getPath();
             linkerToolPath =
                 crosstoolTopPathFragment
                     .getRelative(PathFragment.create(tool.getPath()))
                     .getPathString();
           }
-          if (tool.getName().equals(CppConfiguration.Tool.AR.getNamePart())) {
+          if (tool.getName().equals(Tool.AR.getNamePart())) {
             arToolPath = tool.getPath();
           }
-          if (tool.getName().equals(CppConfiguration.Tool.STRIP.getNamePart())) {
+          if (tool.getName().equals(Tool.STRIP.getNamePart())) {
             stripToolPath = tool.getPath();
           }
         }
@@ -757,18 +752,6 @@ public final class CppToolchainInfo {
     return crosstoolOptionalCxxFlags;
   }
 
-  /** Returns unfiltered compiler options for C++ from this toolchain. */
-  public ImmutableList<String> getUnfilteredCompilerOptions(
-      Iterable<String> features, @Nullable PathFragment sysroot) {
-    if (sysroot == null) {
-      return unfilteredCompilerFlags.evaluate(features);
-    }
-    return ImmutableList.<String>builder()
-        .add("--sysroot=" + sysroot)
-        .addAll(unfilteredCompilerFlags.evaluate(features))
-        .build();
-  }
-
   private static ImmutableMap<String, String> computeAdditionalMakeVariables(CToolchain toolchain) {
     Map<String, String> makeVariablesBuilder = new HashMap<>();
     // The following are to be used to allow some build rules to avoid the limits on stack frame
@@ -811,41 +794,40 @@ public final class CppToolchainInfo {
       CToolchain toolchain, PathFragment crosstoolTopPathFragment) {
     Map<String, PathFragment> toolPathsCollector = Maps.newHashMap();
     for (CrosstoolConfig.ToolPath tool : toolchain.getToolPathList()) {
-      String pathStr = tool.getPath();
-      if (!PathFragment.isNormalized(pathStr)) {
-        throw new IllegalArgumentException("The include path '" + pathStr + "' is not normalized.");
+      PathFragment path = PathFragment.create(tool.getPath());
+      if (!path.isNormalized()) {
+        throw new IllegalArgumentException(
+            "The include path '" + tool.getPath() + "' is not normalized.");
       }
-      PathFragment path = PathFragment.create(pathStr);
       toolPathsCollector.put(tool.getName(), crosstoolTopPathFragment.getRelative(path));
     }
 
     if (toolPathsCollector.isEmpty()) {
       // If no paths are specified, we just use the names of the tools as the path.
-      for (CppConfiguration.Tool tool : CppConfiguration.Tool.values()) {
+      for (Tool tool : Tool.values()) {
         toolPathsCollector.put(
             tool.getNamePart(), crosstoolTopPathFragment.getRelative(tool.getNamePart()));
       }
     } else {
-      Iterable<CppConfiguration.Tool> neededTools =
+      Iterable<Tool> neededTools =
           Iterables.filter(
-              EnumSet.allOf(CppConfiguration.Tool.class),
+              EnumSet.allOf(Tool.class),
               tool -> {
-                if (tool == CppConfiguration.Tool.DWP) {
+                if (tool == Tool.DWP) {
                   // When fission is unsupported, don't check for the dwp tool.
                   return toolchain.getSupportsFission();
-                } else if (tool == CppConfiguration.Tool.LLVM_PROFDATA) {
+                } else if (tool == Tool.LLVM_PROFDATA) {
                   // TODO(tmsriram): Fix this to check if this is a llvm crosstool
                   // and return true.  This needs changes to crosstool_config.proto.
                   return false;
-                } else if (tool == CppConfiguration.Tool.GCOVTOOL
-                    || tool == CppConfiguration.Tool.OBJCOPY) {
+                } else if (tool == Tool.GCOVTOOL || tool == Tool.OBJCOPY) {
                   // gcov-tool and objcopy are optional, don't check whether they're present
                   return false;
                 } else {
                   return true;
                 }
               });
-      for (CppConfiguration.Tool tool : neededTools) {
+      for (Tool tool : neededTools) {
         if (!toolPathsCollector.containsKey(tool.getNamePart())) {
           throw new IllegalArgumentException(
               "Tool path for '" + tool.getNamePart() + "' is missing");
