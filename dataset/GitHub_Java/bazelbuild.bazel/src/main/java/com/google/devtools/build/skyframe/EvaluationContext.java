@@ -126,7 +126,7 @@ public class EvaluationContext {
       return this;
     }
 
-    public Builder setEventHandler(ExtendedEventHandler eventHandler) {
+    public Builder setEventHander(ExtendedEventHandler eventHandler) {
       this.eventHandler = eventHandler;
       return this;
     }
