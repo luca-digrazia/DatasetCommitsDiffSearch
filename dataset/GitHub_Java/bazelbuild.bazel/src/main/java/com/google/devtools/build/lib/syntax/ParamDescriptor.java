@@ -15,13 +15,13 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.skylarkinterface.Param;
+import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
-import net.starlark.java.annot.Param;
-import net.starlark.java.annot.ParamType;
 
 /** A value class for storing {@link Param} metadata to avoid using Java proxies. */
 final class ParamDescriptor {
@@ -146,14 +146,7 @@ final class ParamDescriptor {
 
   // Evaluates the default value expression for a parameter.
   private static Object evalDefault(String name, String expr) {
-    // Values required by defaults of functions in UNIVERSE must
-    // be handled without depending on the evaluator, or even
-    // on defaultValueCache, because JVM global variable initialization
-    // is such a mess. (Specifically, it's completely dynamic,
-    // so if two or more variables are mutually dependent, like
-    // defaultValueCache and UNIVERSE would be, you have to write
-    // code that works in all possible dynamic initialization orders.)
-    // Better not to go there.
+    // Common cases; also needed for bootstrapping UNIVERSE.
     if (expr.equals("None")) {
       return Starlark.NONE;
     } else if (expr.equals("True")) {
@@ -162,32 +155,20 @@ final class ParamDescriptor {
       return false;
     } else if (expr.equals("unbound")) {
       return Starlark.UNBOUND;
-    } else if (expr.equals("0")) {
-      return 0;
-    } else if (expr.equals("1")) {
-      return 1;
-    } else if (expr.equals("[]")) {
-      return StarlarkList.empty();
-    } else if (expr.equals("()")) {
-      return Tuple.empty();
-    } else if (expr.equals("\" \"")) {
-      return " ";
     }
 
     Object x = defaultValueCache.get(expr);
     if (x != null) {
       return x;
     }
-
-    // We can't evaluate Starlark code until UNIVERSE is bootstrapped.
-    if (Starlark.UNIVERSE == null) {
-      throw new IllegalStateException("no bootstrap value for " + name + "=" + expr);
-    }
-
-    Module module = Module.create();
-    try (Mutability mu = Mutability.create("Builtin param default init")) {
+    try (Mutability mutability = Mutability.create("initialization")) {
       // Note that this Starlark thread ignores command line flags.
-      StarlarkThread thread = new StarlarkThread(mu, StarlarkSemantics.DEFAULT);
+      StarlarkThread thread =
+          StarlarkThread.builder(mutability)
+              .useDefaultSemantics()
+              .setGlobals(Module.createForBuiltins(Starlark.UNIVERSE))
+              .build();
+      Module module = thread.getGlobals();
 
       // Disable polling of the java.lang.Thread.interrupt flag during
       // Starlark evaluation. Assuming the expression does not call a
@@ -211,7 +192,7 @@ final class ParamDescriptor {
       // See https://docs.oracle.com/javase/specs/jls/se12/html/jls-12.html#jls-12.4
       thread.ignoreThreadInterrupts();
 
-      x = Starlark.eval(ParserInput.fromLines(expr), FileOptions.DEFAULT, module, thread);
+      x = EvalUtils.eval(ParserInput.fromLines(expr), FileOptions.DEFAULT, module, thread);
     } catch (InterruptedException ex) {
       throw new IllegalStateException(ex); // can't happen
     } catch (SyntaxError.Exception | EvalException ex) {

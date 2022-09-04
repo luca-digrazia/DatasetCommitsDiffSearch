@@ -27,6 +27,7 @@ import com.google.devtools.build.lib.packages.BuildType.LabelConversionContext;
 import com.google.devtools.build.lib.packages.BuildType.Selector;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Starlark;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -714,7 +715,7 @@ public class BuildTypeTest {
   @Test
   public void testFilesetTypeDefinition() throws Exception {
     assertThat(Starlark.type(makeFilesetEntry())).isEqualTo("FilesetEntry");
-    assertThat(Starlark.isImmutable(makeFilesetEntry())).isTrue();
+    assertThat(EvalUtils.isImmutable(makeFilesetEntry())).isFalse();
   }
 
   private static ImmutableList<Label> collectLabels(Type<?> type, Object value) {

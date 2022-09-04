@@ -19,10 +19,10 @@ import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.packages.StructProvider;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.EvalUtils.ComparisonException;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import javax.annotation.Nullable;
-import net.starlark.java.annot.StarlarkBuiltin;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -43,7 +43,7 @@ public final class EvalUtilsTest extends EvaluationTestCase {
   }
 
   /** MockClassA */
-  @StarlarkBuiltin(name = "MockClassA", doc = "MockClassA")
+  @SkylarkModule(name = "MockClassA", doc = "MockClassA")
   public static class MockClassA implements StarlarkValue {}
 
   /** MockClassB */
@@ -110,8 +110,7 @@ public final class EvalUtilsTest extends EvaluationTestCase {
           Object first = objects[i];
           Object second = objects[j];
           assertThrows(
-              ComparisonException.class,
-              () -> EvalUtils.STARLARK_COMPARATOR.compare(first, second));
+              ComparisonException.class, () -> EvalUtils.SKYLARK_COMPARATOR.compare(first, second));
         }
       }
     }
@@ -121,7 +120,7 @@ public final class EvalUtilsTest extends EvaluationTestCase {
   public void testComparatorWithNones() throws Exception {
     assertThrows(
         ComparisonException.class,
-        () -> EvalUtils.STARLARK_COMPARATOR.compare(Starlark.NONE, Starlark.NONE));
+        () -> EvalUtils.SKYLARK_COMPARATOR.compare(Starlark.NONE, Starlark.NONE));
   }
 
   @Test

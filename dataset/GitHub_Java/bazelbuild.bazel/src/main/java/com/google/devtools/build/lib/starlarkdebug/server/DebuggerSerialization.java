@@ -16,12 +16,12 @@ package com.google.devtools.build.lib.starlarkdebug.server;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Ordering;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
 import com.google.devtools.build.lib.starlarkdebugging.StarlarkDebuggingProtos;
 import com.google.devtools.build.lib.starlarkdebugging.StarlarkDebuggingProtos.Value;
 import com.google.devtools.build.lib.syntax.CallUtils;
 import com.google.devtools.build.lib.syntax.ClassObject;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
@@ -129,7 +129,8 @@ final class DebuggerSerialization {
 
   private static ImmutableList<Value> getChildren(
       ThreadObjectMap objectMap, StarlarkValue skylarkValue) {
-    StarlarkSemantics semantics = StarlarkSemantics.DEFAULT; // TODO(adonovan): obtain from thread.
+    StarlarkSemantics semantics =
+        StarlarkSemantics.DEFAULT_SEMANTICS; // TODO(adonovan): obtain from thread.
     Set<String> fieldNames;
     try {
       fieldNames = CallUtils.getFieldNames(semantics, skylarkValue);

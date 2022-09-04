@@ -16,8 +16,8 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkInterfaceUtils;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.errorprone.annotations.CheckReturnValue;
 import com.google.errorprone.annotations.FormatMethod;
 import java.io.IOException;
@@ -237,7 +237,7 @@ public final class Starlark {
       return "bool";
     }
 
-    StarlarkBuiltin module = StarlarkInterfaceUtils.getStarlarkBuiltin(c);
+    SkylarkModule module = SkylarkInterfaceUtils.getSkylarkModule(c);
     if (module != null) {
       String name = module.name();
       return module.namespace() ? name + " (a language module)" : name;
@@ -444,28 +444,28 @@ public final class Starlark {
     return new EvalException(null, String.format(format, args));
   }
 
-  /** Equivalent to {@code addMethods(env, v, StarlarkSemantics.DEFAULT)}. */
+  /** Equivalent to {@code addMethods(env, v, DEFAULT_SEMANTICS)}. */
   public static void addMethods(ImmutableMap.Builder<String, Object> env, Object v) {
-    addMethods(env, v, StarlarkSemantics.DEFAULT);
+    addMethods(env, v, StarlarkSemantics.DEFAULT_SEMANTICS);
   }
 
   /**
    * Adds to the environment {@code env} all {@code StarlarkCallable}-annotated fields and methods
    * of value {@code v}, filtered by the given semantics. The class of {@code v} must have or
-   * inherit a {@link StarlarkBuiltin} or {@code SkylarkGlobalLibrary} annotation.
+   * inherit a {@code SkylarkModule} or {@code SkylarkGlobalLibrary} annotation.
    */
   public static void addMethods(
       ImmutableMap.Builder<String, Object> env, Object v, StarlarkSemantics semantics) {
     Class<?> cls = v.getClass();
-    if (!StarlarkInterfaceUtils.hasSkylarkGlobalLibrary(cls)
-        && StarlarkInterfaceUtils.getStarlarkBuiltin(cls) == null) {
+    if (!SkylarkInterfaceUtils.hasSkylarkGlobalLibrary(cls)
+        && SkylarkInterfaceUtils.getSkylarkModule(cls) == null) {
       throw new IllegalArgumentException(
-          cls.getName() + " is annotated with neither @SkylarkGlobalLibrary nor @StarlarkBuiltin");
+          cls.getName() + " is annotated with neither @SkylarkGlobalLibrary nor @SkylarkModule");
     }
     for (String name : CallUtils.getMethodNames(semantics, v.getClass())) {
       // We use the 2-arg (desc=null) BuiltinCallable constructor instead of passing
       // the descriptor that CallUtils.getMethod would return,
-      // because most calls to addMethods pass StarlarkSemantics.DEFAULT,
+      // because most calls to addMethods pass DEFAULT_SEMANTICS,
       // which is probably incorrect for the call.
       // The effect is that the default semantics determine which methods appear in
       // env, but the thread's semantics determine which method calls succeed.
@@ -475,13 +475,13 @@ public final class Starlark {
 
   /**
    * Adds to the environment {@code env} the value {@code v}, under its annotated name. The class of
-   * {@code v} must have or inherit a {@link StarlarkBuiltin} annotation.
+   * {@code v} must have or inherit a {@code SkylarkModule} annotation.
    */
   public static void addModule(ImmutableMap.Builder<String, Object> env, Object v) {
     Class<?> cls = v.getClass();
-    StarlarkBuiltin annot = StarlarkInterfaceUtils.getStarlarkBuiltin(cls);
+    SkylarkModule annot = SkylarkInterfaceUtils.getSkylarkModule(cls);
     if (annot == null) {
-      throw new IllegalArgumentException(cls.getName() + " is not annotated with @StarlarkBuiltin");
+      throw new IllegalArgumentException(cls.getName() + " is not annotated with @SkylarkModule");
     }
     env.put(annot.name(), v);
   }

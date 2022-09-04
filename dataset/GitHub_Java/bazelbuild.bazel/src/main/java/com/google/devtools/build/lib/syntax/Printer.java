@@ -219,7 +219,6 @@ public abstract class Printer {
      * @param o the object
      * @return the buffer, in fluent style
      */
-    @Override
     public BasePrinter debugPrint(Object o) {
       if (o instanceof StarlarkValue) {
         ((StarlarkValue) o).debugPrint(this);
@@ -236,7 +235,6 @@ public abstract class Printer {
      *
      * <p>Implementations of StarlarkValue may define their own behavior of {@code str}.
      */
-    @Override
     public BasePrinter str(Object o) {
       if (o instanceof StarlarkValue) {
         ((StarlarkValue) o).str(this);
@@ -262,7 +260,7 @@ public abstract class Printer {
     @Override
     public BasePrinter repr(Object o) {
       if (o == null) {
-        // Java null is not a valid Starlark value, but sometimes printers are used on non-Starlark
+        // Java null is not a valid Starlark value, but sometimes printers are used on non-Skylark
         // values such as Locations or ASTs.
         this.append("null");
 
@@ -311,7 +309,7 @@ public abstract class Printer {
         // but Starlark code cannot access values of o that would reach here,
         // and native code is already trusted to be deterministic.
         // TODO(adonovan): replace this with a default behavior of this.append(o),
-        // once we require that all @Starlark-annotated classes implement StarlarkValue.
+        // once we require that all @Skylark-annotated classes implement StarlarkValue.
         // (After all, Java code can call String.format, which also calls toString.)
         this.append("<unknown object " + o.getClass().getName() + ">");
       }

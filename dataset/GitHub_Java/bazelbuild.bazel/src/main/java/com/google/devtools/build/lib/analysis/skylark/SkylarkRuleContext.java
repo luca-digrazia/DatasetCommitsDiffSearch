@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.analysis.skylark;
 
-import static com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition.PATCH_TRANSITION_KEY;
 import static com.google.devtools.build.lib.packages.RuleClass.Builder.STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME;
 
 import com.google.common.base.Function;
@@ -57,7 +56,6 @@ import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -79,6 +77,7 @@ import com.google.devtools.build.lib.shell.ShellUtils.TokenizationException;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
 import com.google.devtools.build.lib.syntax.ClassObject;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
@@ -429,7 +428,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
 
     ImmutableMap.Builder<String, Object> splitAttrInfos = ImmutableMap.builder();
     for (Attribute attr : attributes) {
-      if (!attr.getTransitionFactory().isSplit()) {
+      if (!attr.getTransitionFactory().isSplit() || attr.hasStarlarkDefinedTransition()) {
         continue;
       }
       Map<Optional<String>, ? extends List<? extends TransitiveInfoCollection>> splitPrereqs =
@@ -438,13 +437,6 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
       Map<Object, Object> splitPrereqsMap = new LinkedHashMap<>();
       for (Map.Entry<Optional<String>, ? extends List<? extends TransitiveInfoCollection>>
           splitPrereq : splitPrereqs.entrySet()) {
-
-        // Skip a split with an empty dependency list.
-        // TODO(jungjw): Figure out exactly which cases trigger this and see if this can be made
-        // more error-proof.
-        if (splitPrereq.getValue().isEmpty()) {
-          continue;
-        }
 
         Object value;
         if (attr.getType() == BuildType.LABEL) {
@@ -455,8 +447,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
           value = StarlarkList.immutableCopyOf(splitPrereq.getValue());
         }
 
-        if (splitPrereq.getKey().isPresent()
-            && !splitPrereq.getKey().get().equals(PATCH_TRANSITION_KEY)) {
+        if (splitPrereq.getKey().isPresent()) {
           splitPrereqsMap.put(splitPrereq.getKey().get(), value);
         } else {
           // If the split transition is not in effect, then the key will be missing since there's
@@ -473,8 +464,9 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
 
     return StructProvider.STRUCT.create(
         splitAttrInfos.build(),
-        "No attribute '%s' in split_attr."
-            + " This attribute is not defined with a split configuration.");
+        "No attribute '%s' in split_attr. This attribute is either not defined with a split"
+            + " configuration OR is defined with a Starlark split transition, the results of which"
+            + " cannot be accessed from split_attr.");
   }
 
   @Override
@@ -924,8 +916,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
               useDefaultShellEnv,
               envUnchecked,
               executionRequirementsUnchecked,
-              inputManifestsUnchecked,
-              /* execGroupUnchecked= */ Starlark.NONE);
+              inputManifestsUnchecked);
 
     } else {
       actions()
@@ -941,7 +932,6 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
               envUnchecked,
               executionRequirementsUnchecked,
               inputManifestsUnchecked,
-              /* execGroupUnchecked= */ Starlark.NONE,
               thread);
     }
     return Starlark.NONE;

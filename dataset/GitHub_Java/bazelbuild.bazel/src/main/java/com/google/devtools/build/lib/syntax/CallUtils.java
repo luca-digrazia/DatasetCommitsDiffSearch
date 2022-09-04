@@ -20,7 +20,7 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkInterfaceUtils;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -101,7 +101,7 @@ public final class CallUtils {
                     }
 
                     // annotated?
-                    SkylarkCallable callable = StarlarkInterfaceUtils.getSkylarkCallable(method);
+                    SkylarkCallable callable = SkylarkInterfaceUtils.getSkylarkCallable(method);
                     if (callable == null) {
                       continue;
                     }
@@ -158,7 +158,7 @@ public final class CallUtils {
       Class<?> objClass) {
     ImmutableMap.Builder<Method, SkylarkCallable> result = ImmutableMap.builder();
     for (MethodDescriptor desc :
-        getCacheValue(objClass, StarlarkSemantics.DEFAULT).methods.values()) {
+        getCacheValue(objClass, StarlarkSemantics.DEFAULT_SEMANTICS).methods.values()) {
       result.put(desc.getMethod(), desc.getAnnotation());
     }
     return result.build();

@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.SkylarkInfo;
@@ -32,6 +31,7 @@ import com.google.devtools.build.lib.packages.StarlarkProvider;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
 import java.util.Map;
@@ -1400,7 +1400,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
         ")");
     ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
     Depset emptyValue = (Depset) getMyInfoFromTarget(skylarkTarget).getValue("empty_value");
-    assertThat(emptyValue.toList()).isEmpty();
+    assertThat(emptyValue.toCollection()).isEmpty();
   }
 
   @Test
@@ -1437,7 +1437,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
 
     Depset sdkFrameworks = (Depset) getMyInfoFromTarget(skylarkTarget).getValue("sdk_frameworks");
-    assertThat(sdkFrameworks.toList()).containsAtLeast("Accelerate", "GLKit");
+    assertThat(sdkFrameworks.toCollection()).containsAtLeast("Accelerate", "GLKit");
   }
 
   @Test
