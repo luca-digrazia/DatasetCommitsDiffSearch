@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -228,19 +228,6 @@ public class APTCodeModelHelper {
 		throw new IllegalStateException("Unable to extract target name from JFieldRef");
 	}
 
-	public JDefinedClass createAnonymousRunnableClass(EBeanHolder holder, JStatement block) {
-		JCodeModel codeModel = holder.codeModel();
-		JDefinedClass anonymousRunnableClass = codeModel.anonymousClass(Runnable.class);
-
-		JMethod runMethod = anonymousRunnableClass.method(JMod.PUBLIC, codeModel.VOID, "run");
-		runMethod.annotate(Override.class);
-
-		JBlock runMethodBody = runMethod.body();
-		runMethodBody.add(block);
-
-		return anonymousRunnableClass;
-	}
-
 	public JDefinedClass createDelegatingAnonymousRunnableClass(EBeanHolder holder, JMethod delegatedMethod) {
 
 		JCodeModel codeModel = holder.codeModel();
@@ -281,7 +268,7 @@ public class APTCodeModelHelper {
 		return methodBody._if(holder.contextRef._instanceof(holder.classes().ACTIVITY))._then();
 	}
 
-	public void copyConstructorsAndAddStaticEViewBuilders(Element element, JCodeModel codeModel, JClass eBeanClass, EBeanHolder holder, JMethod setContentViewMethod, JMethod init) {
+	public void copyConstructorsAndAddStaticEViewBuilders(Element element, JCodeModel codeModel, JClass eBeanClass, EBeanHolder holder, JMethod setContentViewMethod) {
 		List<ExecutableElement> constructors = new ArrayList<ExecutableElement>();
 		for (Element e : element.getEnclosedElements()) {
 			if (e.getKind() == CONSTRUCTOR) {
@@ -307,7 +294,7 @@ public class APTCodeModelHelper {
 			JVar newCall = staticHelper.body().decl(holder.generatedClass, "instance", newInvocation);
 			staticHelper.body().invoke(newCall, "onFinishInflate");
 			staticHelper.body()._return(newCall);
-			body.invoke(init);
+			body.invoke(holder.init);
 		}
 	}
 

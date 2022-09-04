@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -107,11 +107,6 @@ public final class CanonicalNameConstants {
 	public static final String SHERLOCK_MENU_INFLATER = "com.actionbarsherlock.view.MenuInflater";
 
 	/*
-	 * HoloEverywhere
-	 */
-	public static final String HOLO_EVERYWHERE_LAYOUT_INFLATER = "org.holoeverywhere.LayoutInflater";
-
-	/*
 	 * SpringFramework
 	 */
 	public static final String RESPONSE_ENTITY = "org.springframework.http.ResponseEntity";
@@ -161,12 +156,6 @@ public final class CanonicalNameConstants {
 	public static final String SCHEME = "org.apache.http.conn.scheme.Scheme";
 	public static final String SCHEME_REGISTRY = "org.apache.http.conn.scheme.SchemeRegistry";
 	public static final String SINGLE_CLIENT_CONN_MANAGER = "org.apache.http.impl.conn.SingleClientConnManager";
-
-	/*
-	 * Otto
-	 */
-	public static final String SUBSCRIBE = "com.squareup.otto.Subscribe";
-	public static final String PRODUCE = "com.squareup.otto.Produce";
 
 	private CanonicalNameConstants() {
 	}
