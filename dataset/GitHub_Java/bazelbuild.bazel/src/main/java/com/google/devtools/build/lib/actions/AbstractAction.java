@@ -21,7 +21,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -33,6 +32,7 @@ import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.ActionApi;
 import com.google.devtools.build.lib.skylarkbuildapi.CommandLineArgsApi;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Printer;
@@ -54,12 +54,6 @@ import javax.annotation.concurrent.GuardedBy;
 @Immutable
 @ThreadSafe
 public abstract class AbstractAction extends ActionKeyCacher implements Action, ActionApi {
-
-  @Override
-  public boolean isImmutable() {
-    return true; // immutable and Starlark-hashable
-  }
-
   /**
    * An arbitrary default resource set. We assume that a typical subprocess is single-threaded
    * (i.e., uses one CPU core) and CPU-bound, and uses a small-ish amount of memory. In the past,
@@ -523,17 +517,17 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
   }
 
   @Override
-  public Depset getStarlarkInputs() {
+  public Depset getSkylarkInputs() {
     return Depset.of(Artifact.TYPE, getInputs());
   }
 
   @Override
-  public Depset getStarlarkOutputs() {
+  public Depset getSkylarkOutputs() {
     return Depset.of(Artifact.TYPE, NestedSetBuilder.wrap(Order.STABLE_ORDER, getOutputs()));
   }
 
   @Override
-  public Sequence<String> getStarlarkArgv() throws EvalException {
+  public Sequence<String> getSkylarkArgv() throws EvalException {
     return null;
   }
 
@@ -544,12 +538,12 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
   }
 
   @Override
-  public String getStarlarkContent() throws IOException, EvalException {
+  public String getSkylarkContent() throws IOException, EvalException {
     return null;
   }
 
   @Override
-  public Dict<String, String> getStarlarkSubstitutions() {
+  public Dict<String, String> getSkylarkSubstitutions() {
     return null;
   }
 

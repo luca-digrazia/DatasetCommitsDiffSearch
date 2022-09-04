@@ -14,10 +14,10 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi;
 
-import com.google.devtools.build.lib.collect.nestedset.Depset;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkMethod;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
@@ -26,10 +26,10 @@ import com.google.devtools.build.lib.syntax.StarlarkValue;
 import java.io.IOException;
 import javax.annotation.Nullable;
 
-/** Interface for actions in Starlark. */
-@StarlarkBuiltin(
+/** Interface for actions in Skylark. */
+@SkylarkModule(
     name = "Action",
-    category = StarlarkDocumentationCategory.BUILTIN,
+    category = SkylarkModuleCategory.BUILTIN,
     doc =
         "An action created during rule analysis."
             + "<p>This object is visible for the purpose of testing, and may be obtained from an "
@@ -43,22 +43,22 @@ import javax.annotation.Nullable;
             + "Fields that are inapplicable are set to <code>None</code>.")
 public interface ActionApi extends StarlarkValue {
 
-  @StarlarkMethod(name = "mnemonic", structField = true, doc = "The mnemonic for this action.")
+  @SkylarkCallable(name = "mnemonic", structField = true, doc = "The mnemonic for this action.")
   String getMnemonic();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "inputs",
       doc = "A set of the input files of this action.",
       structField = true)
-  Depset getStarlarkInputs();
+  Depset getSkylarkInputs();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "outputs",
       doc = "A set of the output files of this action.",
       structField = true)
-  Depset getStarlarkOutputs();
+  Depset getSkylarkOutputs();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "argv",
       doc =
           "For actions created by <a href=\"actions.html#run\">ctx.actions.run()</a> "
@@ -68,9 +68,9 @@ public interface ActionApi extends StarlarkValue {
               + "and <code>\"-c\"</code>.",
       structField = true,
       allowReturnNones = true)
-  Sequence<String> getStarlarkArgv() throws EvalException;
+  Sequence<String> getSkylarkArgv() throws EvalException;
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "args",
       doc =
           "A list of frozen <a href=\"Args.html\">Args</a> objects containing information about"
@@ -97,21 +97,21 @@ public interface ActionApi extends StarlarkValue {
    *     call to a {@code map_each} callback.
    * @throws IOException if there is a non-Starlark error in expanding an {@code Args} object.
    */
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "content",
       doc =
           "For actions created by <a href=\"actions.html#write\">ctx.actions.write()</a> or "
               + "<a href=\"actions.html#expand_template\">ctx.actions.expand_template()</a>,"
               + " the contents of the file to be written, if those contents can be computed during "
-              + " the analysis phase. The value is <code>None</code> if the contents cannot be "
-              + "determined until the execution phase, such as when a directory in an {@code Args} "
-              + "object needs to be expanded.",
+              + " the analysis phase. None if the contents cannot be determined until the "
+              + " execution phase, such as when a directory in an {@code Args} object needs to be "
+              + " expanded.",
       structField = true,
       allowReturnNones = true)
   @Nullable
-  String getStarlarkContent() throws IOException, EvalException;
+  String getSkylarkContent() throws IOException, EvalException;
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "substitutions",
       doc =
           "For actions created by "
@@ -119,9 +119,9 @@ public interface ActionApi extends StarlarkValue {
               + " an immutable dict holding the substitution mapping.",
       structField = true,
       allowReturnNones = true)
-  Dict<String, String> getStarlarkSubstitutions();
+  Dict<String, String> getSkylarkSubstitutions();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "env",
       structField = true,
       doc =
@@ -130,7 +130,7 @@ public interface ActionApi extends StarlarkValue {
               + " settings which are only pre-set in the execution environment.")
   Dict<String, String> getEnv();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "execution_info",
       structField = true,
       doc =
