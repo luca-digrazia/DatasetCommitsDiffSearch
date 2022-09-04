@@ -17,10 +17,8 @@ import com.arjuna.common.util.propertyservice.PropertiesFactory;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.ContextRegistrarBuildItem;
-import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.processor.ContextRegistrar;
-import io.quarkus.deployment.Capability;
-import io.quarkus.deployment.Feature;
+import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
@@ -40,7 +38,6 @@ import io.quarkus.narayana.jta.runtime.interceptor.TransactionalInterceptorNotSu
 import io.quarkus.narayana.jta.runtime.interceptor.TransactionalInterceptorRequired;
 import io.quarkus.narayana.jta.runtime.interceptor.TransactionalInterceptorRequiresNew;
 import io.quarkus.narayana.jta.runtime.interceptor.TransactionalInterceptorSupports;
-import io.smallrye.context.jta.context.propagation.JtaContextProvider;
 
 class NarayanaJtaProcessor {
 
@@ -51,7 +48,7 @@ class NarayanaJtaProcessor {
 
     @BuildStep
     CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.TRANSACTIONS);
+        return new CapabilityBuildItem(Capabilities.TRANSACTIONS);
     }
 
     @BuildStep
@@ -62,7 +59,7 @@ class NarayanaJtaProcessor {
             BuildProducer<RuntimeInitializedClassBuildItem> runtimeInit,
             BuildProducer<FeatureBuildItem> feature,
             TransactionManagerConfiguration transactions) {
-        feature.produce(new FeatureBuildItem(Feature.NARAYANA_JTA));
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.NARAYANA_JTA));
         additionalBeans.produce(new AdditionalBeanBuildItem(NarayanaJtaProducers.class));
         additionalBeans.produce(new AdditionalBeanBuildItem(CDIDelegatingTransactionManager.class));
         runtimeInit.produce(new RuntimeInitializedClassBuildItem(
@@ -108,12 +105,6 @@ class NarayanaJtaProcessor {
                 registrationContext.configure(TransactionScoped.class).normal().contextClass(TransactionContext.class).done();
             }
         }, TransactionScoped.class));
-    }
-
-    @BuildStep
-    UnremovableBeanBuildItem unremovableBean() {
-        // LifecycleManager comes from smallrye-context-propagation-jta and is only used via programmatic lookup in JtaContextProvider
-        return UnremovableBeanBuildItem.beanClassNames(JtaContextProvider.LifecycleManager.class.getName());
     }
 
 }
