@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.Deb
 import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.DebugRequest;
 import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.StartDebuggingRequest;
 import java.io.IOException;
+import java.net.BindException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -34,7 +35,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -83,17 +83,26 @@ public class DebugServerTransportTest {
     }
   }
 
-  @Before
-  public void setup() {
-    events.setFailFast(true);
+  private static ServerSocket getServerSocket() throws IOException {
+    // For reasons only Apple knows, you cannot bind to IPv4-localhost when you run in a sandbox
+    // that only allows loopback traffic, but binding to IPv6-localhost works fine. This would
+    // however break on systems that don't support IPv6. So what we'll do is to try to bind to IPv6
+    // and if that fails, try again with IPv4.
+    try {
+      return new ServerSocket(0, 1, InetAddress.getByName("[::1]"));
+    } catch (BindException e) {
+      return new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
+    }
   }
 
   @Test
   public void testConnectAndReceiveRequest() throws Exception {
-    ServerSocket serverSocket = new ServerSocket(0, 1, InetAddress.getByName(null));
+    ServerSocket serverSocket = getServerSocket();
     Future<DebugServerTransport> future =
         executor.submit(
-            () -> DebugServerTransport.createAndWaitForClient(events.reporter(), serverSocket));
+            () ->
+                DebugServerTransport.createAndWaitForClient(
+                    events.reporter(), serverSocket, false));
     MockDebugClient client = new MockDebugClient();
     client.connect(Duration.ofSeconds(10), serverSocket);
 
@@ -112,10 +121,12 @@ public class DebugServerTransportTest {
 
   @Test
   public void testConnectAndPostEvent() throws Exception {
-    ServerSocket serverSocket = new ServerSocket(0, 1, InetAddress.getByName(null));
+    ServerSocket serverSocket = getServerSocket();
     Future<DebugServerTransport> future =
         executor.submit(
-            () -> DebugServerTransport.createAndWaitForClient(events.reporter(), serverSocket));
+            () ->
+                DebugServerTransport.createAndWaitForClient(
+                    events.reporter(), serverSocket, false));
     MockDebugClient client = new MockDebugClient();
     client.connect(Duration.ofSeconds(10), serverSocket);
 
