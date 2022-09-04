@@ -69,7 +69,7 @@ public class SymlinkTreeActionTest extends BuildViewTestCase {
                         ? new Runfiles.Builder("TESTING", false).addArtifact(runfile).build()
                         : new Runfiles.Builder("TESTING", false).addArtifact(runfile2).build(),
                     outputManifest,
-                    /*filesetRoot=*/ null,
+                    /*filesetTree=*/ false,
                     createActionEnvironment(
                         attributesToFlip.contains(RunfilesActionAttributes.FIXED_ENVIRONMENT),
                         attributesToFlip.contains(RunfilesActionAttributes.VARIABLE_ENVIRONMENT)),
@@ -84,7 +84,7 @@ public class SymlinkTreeActionTest extends BuildViewTestCase {
                     inputManifest,
                     /*runfiles=*/ null,
                     outputManifest,
-                    /*filesetRoot=*/ "root",
+                    /*filesetTree=*/ true,
                     createActionEnvironment(
                         attributesToFlip.contains(FilesetActionAttributes.FIXED_ENVIRONMENT),
                         attributesToFlip.contains(FilesetActionAttributes.VARIABLE_ENVIRONMENT)),
@@ -102,7 +102,7 @@ public class SymlinkTreeActionTest extends BuildViewTestCase {
                         ? new Runfiles.Builder("TESTING", false).addArtifact(runfile).build()
                         : new Runfiles.Builder("TESTING", false).addArtifact(runfile2).build(),
                     outputManifest,
-                    /*filesetRoot=*/ null,
+                    /*filesetTree=*/ false,
                     createActionEnvironment(
                         attributesToFlip.contains(SkipManifestAttributes.FIXED_ENVIRONMENT),
                         attributesToFlip.contains(SkipManifestAttributes.VARIABLE_ENVIRONMENT)),
@@ -130,7 +130,7 @@ public class SymlinkTreeActionTest extends BuildViewTestCase {
                 inputManifest,
                 /*runfiles=*/ null,
                 outputManifest,
-                /*filesetRoot=*/ null,
+                /*filesetTree=*/ false,
                 createActionEnvironment(false, false),
                 /*enableRunfiles=*/ true,
                 /*inprocessSymlinkCreation=*/ false,
