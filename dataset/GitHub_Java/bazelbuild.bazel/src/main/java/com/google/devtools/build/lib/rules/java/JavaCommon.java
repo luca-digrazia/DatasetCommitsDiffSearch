@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.java;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
-import static com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions.INCOMPATIBLE_ENABLE_EXPORTS_PROVIDER;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -46,6 +45,7 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
+import com.google.devtools.build.lib.rules.cpp.CcNativeLibraryInfo;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.ClasspathType;
 import com.google.devtools.build.lib.rules.java.JavaPluginInfo.JavaPluginData;
 import com.google.devtools.build.lib.util.FileTypeSet;
@@ -58,6 +58,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Stream;
 import javax.annotation.Nullable;
 
 /** A helper class to create configured targets for Java rules. */
@@ -665,7 +666,7 @@ public class JavaCommon {
       NestedSet<Artifact> coverageSupportFiles) {
 
     JavaCompilationInfoProvider compilationInfoProvider = createCompilationInfoProvider();
-
+    JavaExportsProvider exportsProvider = collectTransitiveExports();
 
     builder
         .addNativeDeclaredProvider(
@@ -677,10 +678,7 @@ public class JavaCommon {
                 coverageSupportFiles))
         .addOutputGroup(OutputGroupInfo.FILES_TO_COMPILE, getFilesToCompile(classJar));
 
-    if (ruleContext.getStarlarkSemantics().getBool(INCOMPATIBLE_ENABLE_EXPORTS_PROVIDER)) {
-      JavaExportsProvider exportsProvider = collectTransitiveExports();
-      javaInfoBuilder.addProvider(JavaExportsProvider.class, exportsProvider);
-    }
+    javaInfoBuilder.addProvider(JavaExportsProvider.class, exportsProvider);
     javaInfoBuilder.addProvider(JavaCompilationInfoProvider.class, compilationInfoProvider);
 
     addCcRelatedProviders(javaInfoBuilder);
@@ -699,7 +697,32 @@ public class JavaCommon {
 
     CcInfo mergedCcInfo = CcInfo.merge(ccInfos);
 
-    javaInfoBuilder.addProvider(JavaCcInfoProvider.class, new JavaCcInfoProvider(mergedCcInfo));
+    // Collect library paths from all attributes (including data)
+    Iterable<? extends TransitiveInfoCollection> data;
+    if (ruleContext.getRule().isAttrDefined("data", BuildType.LABEL_LIST)
+        && !ruleContext.getFragment(JavaConfiguration.class).dontCollectDataLibraries()) {
+      data = ruleContext.getPrerequisites("data");
+    } else {
+      data = ImmutableList.of();
+    }
+    CcNativeLibraryInfo mergedCcNativeLibraryInfo =
+        CcNativeLibraryInfo.merge(
+            Streams.concat(
+                    Stream.of(mergedCcInfo.getCcNativeLibraryInfo()),
+                    JavaInfo.getProvidersFromListOfTargets(JavaCcInfoProvider.class, data).stream()
+                        .map(JavaCcInfoProvider::getCcInfo)
+                        .map(CcInfo::getCcNativeLibraryInfo),
+                    AnalysisUtils.getProviders(data, CcInfo.PROVIDER).stream()
+                        .map(CcInfo::getCcNativeLibraryInfo))
+                .collect(toImmutableList()));
+
+    CcInfo filteredCcInfo =
+        CcInfo.builder()
+            .setCcLinkingContext(mergedCcInfo.getCcLinkingContext())
+            .setCcNativeLibraryInfo(mergedCcNativeLibraryInfo)
+            .build();
+
+    javaInfoBuilder.addProvider(JavaCcInfoProvider.class, new JavaCcInfoProvider(filteredCcInfo));
   }
 
   private InstrumentedFilesInfo getInstrumentationFilesProvider(
