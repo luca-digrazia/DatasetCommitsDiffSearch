@@ -17,6 +17,7 @@
 package org.graylog2.plugin.inputs.transports;
 
 import com.codahale.metrics.Gauge;
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import io.netty.bootstrap.ServerBootstrap;
@@ -33,17 +34,16 @@ import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.channel.socket.ServerSocketChannelConfig;
 import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import org.graylog2.inputs.transports.NettyTransportConfiguration;
-import org.graylog2.inputs.transports.netty.ByteBufMessageAggregationHandler;
 import org.graylog2.inputs.transports.netty.ChannelRegistrationHandler;
 import org.graylog2.inputs.transports.netty.EventLoopGroupFactory;
 import org.graylog2.inputs.transports.netty.ExceptionLoggingChannelHandler;
-import org.graylog2.inputs.transports.netty.RawMessageHandler;
 import org.graylog2.inputs.transports.netty.ServerSocketChannelFactory;
 import org.graylog2.plugin.LocalMetricRegistry;
 import org.graylog2.plugin.configuration.Configuration;
@@ -55,7 +55,6 @@ import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.MisfireException;
 import org.graylog2.plugin.inputs.annotations.ConfigClass;
-import org.graylog2.plugin.inputs.codecs.CodecAggregator;
 import org.graylog2.plugin.inputs.transports.util.KeyUtil;
 import org.graylog2.plugin.inputs.util.ConnectionCounter;
 import org.graylog2.plugin.inputs.util.ThroughputCounter;
@@ -76,6 +75,7 @@ import java.security.cert.X509Certificate;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -109,7 +109,6 @@ public abstract class AbstractTcpTransport extends NettyTransport {
     protected final Configuration configuration;
     protected final EventLoopGroup parentEventLoopGroup;
     private final NettyTransportConfiguration nettyTransportConfiguration;
-    private final org.graylog2.Configuration graylogConfiguration;
     private final AtomicReference<Channel> channelReference;
 
     private final boolean tlsEnable;
@@ -130,13 +129,11 @@ public abstract class AbstractTcpTransport extends NettyTransport {
             LocalMetricRegistry localRegistry,
             EventLoopGroup parentEventLoopGroup,
             EventLoopGroupFactory eventLoopGroupFactory,
-            NettyTransportConfiguration nettyTransportConfiguration,
-            org.graylog2.Configuration graylogConfiguration) {
+            NettyTransportConfiguration nettyTransportConfiguration) {
         super(configuration, eventLoopGroupFactory, throughputCounter, localRegistry);
         this.configuration = configuration;
         this.parentEventLoopGroup = parentEventLoopGroup;
         this.nettyTransportConfiguration = nettyTransportConfiguration;
-        this.graylogConfiguration = graylogConfiguration;
         this.channelReference = new AtomicReference<>();
         this.childChannels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
 
@@ -230,7 +227,6 @@ public abstract class AbstractTcpTransport extends NettyTransport {
     @Override
     protected LinkedHashMap<String, Callable<? extends ChannelHandler>> getChildChannelHandlers(MessageInput input) {
         final LinkedHashMap<String, Callable<? extends ChannelHandler>> handlers = new LinkedHashMap<>();
-        final CodecAggregator aggregator = getAggregator();
 
         handlers.put("channel-registration", () -> new ChannelRegistrationHandler(childChannels));
         handlers.put("traffic-counter", () -> throughputCounter);
@@ -239,13 +235,8 @@ public abstract class AbstractTcpTransport extends NettyTransport {
             LOG.info("Enabled TLS for input [{}/{}]. key-file=\"{}\" cert-file=\"{}\"", input.getName(), input.getId(), tlsKeyFile, tlsCertFile);
             handlers.put("tls", getSslHandlerCallable(input));
         }
-        handlers.putAll(getCustomChildChannelHandlers(input));
-        if (aggregator != null) {
-            LOG.debug("Adding codec aggregator {} to channel pipeline", aggregator);
-            handlers.put("codec-aggregator", () -> new ByteBufMessageAggregationHandler(aggregator, localRegistry));
-        }
-        handlers.put("rawmessage-handler", () -> new RawMessageHandler(input));
-        handlers.put("exception-logger", () -> new ExceptionLoggingChannelHandler(input, LOG, this.tcpKeepalive));
+        handlers.putAll(super.getChildChannelHandlers(input));
+        handlers.put("exception-logger", () -> new ExceptionLoggingChannelHandler(input, LOG));
 
         return handlers;
     }
@@ -326,16 +317,14 @@ public abstract class AbstractTcpTransport extends NettyTransport {
                     clientAuthCerts = null;
                 }
 
-                final SslContextBuilder sslContext = SslContextBuilder.forServer(certFile, keyFile, Strings.emptyToNull(password))
+                final SslContext sslContext = SslContextBuilder.forServer(certFile, keyFile, Strings.emptyToNull(password))
                         .sslProvider(tlsProvider)
                         .clientAuth(clientAuth)
-                        .trustManager(clientAuthCerts);
-                if (!graylogConfiguration.getEnabledTlsProtocols().isEmpty()) {
-                    sslContext.protocols(graylogConfiguration.getEnabledTlsProtocols());
-                }
+                        .trustManager(clientAuthCerts)
+                        .build();
 
                 // TODO: Use byte buffer allocator of channel
-                return sslContext.build().newEngine(ByteBufAllocator.DEFAULT);
+                return sslContext.newEngine(ByteBufAllocator.DEFAULT);
             }
         };
     }
