@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -367,19 +367,9 @@ public class RestAnnotationHelper extends TargetAnnotationHelper {
 		IJExpression responseClassExpr = nullCastedToNarrowedClass(holder);
 		TypeMirror returnType = executableElement.getReturnType();
 		if (returnType.getKind() != TypeKind.VOID) {
-			if (getElementUtils().getTypeElement(RestSpringClasses.PARAMETERIZED_TYPE_REFERENCE) != null) {
-				if (returnType.toString().startsWith(RestSpringClasses.RESPONSE_ENTITY)) {
-
-					List<? extends TypeMirror> typeArguments = ((DeclaredType) returnType).getTypeArguments();
-
-					if (!typeArguments.isEmpty()) {
-						returnType = typeArguments.get(0);
-					}
-				}
-
-				if (checkIfParameterizedTypeReferenceShouldBeUsed(returnType)) {
-					return createParameterizedTypeReferenceAnonymousSubclassInstance(returnType);
-				}
+			if (getElementUtils().getTypeElement(RestSpringClasses.PARAMETERIZED_TYPE_REFERENCE) != null && !returnType.toString().startsWith(RestSpringClasses.RESPONSE_ENTITY)
+					&& checkIfParameterizedTypeReferenceShouldBeUsed(returnType)) {
+				return createParameterizedTypeReferenceAnonymousSubclassInstance(returnType);
 			}
 
 			AbstractJClass responseClass = retrieveResponseClass(returnType, holder);
