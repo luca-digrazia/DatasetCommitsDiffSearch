@@ -2,6 +2,7 @@ package org.jboss.protean.gizmo;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -32,6 +33,9 @@ public class FunctionCreatorImpl implements FunctionCreator {
         return instance;
     }
 
+    Set<ResultHandle> getCapturedResultHandles() {
+        return capturedResultHandles.keySet();
+    }
 
     @Override
     public BytecodeCreator getBytecode() {
@@ -78,11 +82,6 @@ public class FunctionCreatorImpl implements FunctionCreator {
             this.owner = owner;
         }
 
-        public <T> T createRecordingProxy(Class<T> proxyType) {
-            return delegate.createRecordingProxy(proxyType);
-        }
-
-
         /**
          * Turns a parent result handle into a local result handle.
          * <p>
@@ -93,9 +92,6 @@ public class FunctionCreatorImpl implements FunctionCreator {
          */
         ResultHandle apply(ResultHandle handle) {
             if (handle.getOwner() == functionCreator.owner) {
-                if (!handle.isConstant() && handle.getNo() > functionCreator.instance.getNo()) {
-                    throw new IllegalArgumentException("Attempted to use a ResultHandle in a function that was returned after the function was defined");
-                }
                 CapturedResultHandle capture = functionCreator.capturedResultHandles.get(handle);
                 if (capture != null) {
                     return capture.substitute;
@@ -267,17 +263,7 @@ public class FunctionCreatorImpl implements FunctionCreator {
             BranchResult delegate = this.delegate.ifNonZero(resultHandle);
             BytecodeCreator trueBranch = new FunctionBytecodeCreator(functionCreator, delegate.trueBranch(), owner);
             BytecodeCreator falseBranch = new FunctionBytecodeCreator(functionCreator, delegate.falseBranch(), owner);
-            return new BranchResult() {
-                @Override
-                public BytecodeCreator trueBranch() {
-                    return trueBranch;
-                }
-
-                @Override
-                public BytecodeCreator falseBranch() {
-                    return falseBranch;
-                }
-            };
+            return new BranchResultImpl(owner, trueBranch, falseBranch, (BytecodeCreatorImpl) delegate.trueBranch(), (BytecodeCreatorImpl)delegate.falseBranch());
         }
 
         @Override
@@ -286,7 +272,7 @@ public class FunctionCreatorImpl implements FunctionCreator {
             BranchResult delegate = this.delegate.ifNull(resultHandle);
             BytecodeCreator trueBranch = new FunctionBytecodeCreator(functionCreator, delegate.trueBranch(), owner);
             BytecodeCreator falseBranch = new FunctionBytecodeCreator(functionCreator, delegate.falseBranch(), owner);
-            return new BranchResultImpl(trueBranch, falseBranch);
+            return new BranchResultImpl(owner, trueBranch, falseBranch, (BytecodeCreatorImpl) delegate.trueBranch(), (BytecodeCreatorImpl)delegate.falseBranch());
         }
 
         public ResultHandle getMethodParam(int methodNo) {
