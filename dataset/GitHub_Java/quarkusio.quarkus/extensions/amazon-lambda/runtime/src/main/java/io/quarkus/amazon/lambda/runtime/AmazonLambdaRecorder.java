@@ -22,8 +22,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.InstanceHandle;
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.runtime.Application;
 import io.quarkus.runtime.ShutdownContext;
@@ -47,20 +45,12 @@ public class AmazonLambdaRecorder {
     public void setHandlerClass(Class<? extends RequestHandler<?, ?>> handler, BeanContainer container) {
         handlerClass = handler;
         beanContainer = container;
-        AmazonLambdaRecorder.objectMapper = getObjectMapper()
+        objectMapper = new ObjectMapper()
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
                 .configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true);
         Method handlerMethod = discoverHandlerMethod(handlerClass);
         objectReader = objectMapper.readerFor(handlerMethod.getParameterTypes()[0]);
         objectWriter = objectMapper.writerFor(handlerMethod.getReturnType());
-    }
-
-    private ObjectMapper getObjectMapper() {
-        InstanceHandle<ObjectMapper> instance = Arc.container().instance(ObjectMapper.class);
-        if (instance.isAvailable()) {
-            return instance.get().copy();
-        }
-        return new ObjectMapper();
     }
 
     /**
@@ -103,26 +93,23 @@ public class AmazonLambdaRecorder {
         if (config.handler.isPresent()) {
             handlerClass = namedHandlerClasses.get(config.handler.get());
             if (handlerClass == null) {
-                String errorMessage = "Unable to find handler class with name " + config.handler.get()
-                        + " make sure there is a handler class in the deployment with the correct @Named annotation";
-                throw new RuntimeException(errorMessage);
+                throw new RuntimeException("Unable to find handler class with name " + config.handler.get()
+                        + " make sure there is a handler class in the deployment with the correct @Named annotation");
             }
         } else {
-            if (unamedHandlerClasses.size() > 1 || namedHandlerClasses.size() > 1
-                    || (unamedHandlerClasses.size() > 0 && namedHandlerClasses.size() > 0)) {
-                String errorMessage = "Multiple handler classes, either specify the quarkus.lambda.handler property, or make sure there is only a single "
-                        + RequestHandler.class.getName() + " implementation in the deployment";
-                throw new RuntimeException(errorMessage);
-            }
-            if (unamedHandlerClasses.isEmpty() && namedHandlerClasses.isEmpty()) {
-                String errorMessage = "Unable to find handler class, make sure your deployment includes a "
-                        + RequestHandler.class.getName() + " implementation";
-                throw new RuntimeException(errorMessage);
-            }
-            if (!unamedHandlerClasses.isEmpty()) {
-                handlerClass = unamedHandlerClasses.get(0);
+            if (unamedHandlerClasses.isEmpty()) {
+                if (namedHandlerClasses.size() == 1) {
+                    handlerClass = namedHandlerClasses.values().iterator().next();
+                } else {
+                    throw new RuntimeException("Unable to find handler class, make sure your deployment includes a "
+                            + RequestHandler.class.getName() + " implementation");
+                }
+            } else if (unamedHandlerClasses.size() > 1) {
+                throw new RuntimeException(
+                        "Multiple handler classes, either specify the quarkus.lambda.handler property, or make sure there is only a single "
+                                + RequestHandler.class.getName() + " implementation in the deployment");
             } else {
-                handlerClass = namedHandlerClasses.values().iterator().next();
+                handlerClass = unamedHandlerClasses.get(0);
             }
         }
         setHandlerClass(handlerClass, container);
@@ -157,12 +144,6 @@ public class AmazonLambdaRecorder {
                             String requestId = requestConnection.getHeaderField(AmazonLambdaApi.LAMBDA_RUNTIME_AWS_REQUEST_ID);
                             Object response;
                             try {
-                                // todo custom runtime requires the setting of an ENV Var
-                                // Should we override getenv?  If we do that,
-                                // then this will never be able to process multiple requests at the same time
-                                String traceId = requestConnection.getHeaderField(AmazonLambdaApi.LAMBDA_TRACE_HEADER_KEY);
-                                TraceId.setTraceId(traceId);
-
                                 Object val = objectReader.readValue(requestConnection.getInputStream());
                                 RequestHandler handler = beanContainer.instance(handlerClass);
                                 response = handler.handleRequest(val,
