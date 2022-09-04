@@ -55,6 +55,8 @@ public class TvShowCatalogFragment extends BaseFragment implements TvShowCatalog
   private RendererAdapter<TvShow> adapter;
   private TvShowCollection tvShows = new TvShowCollection();
 
+  private Listener listener;
+
   @InjectView(R.id.pb_loading) ProgressBar pb_loading;
   @InjectView(R.id.gv_tv_shows) GridView gv_tv_shows;
   @InjectView(R.id.v_empty_case) View v_empty_case;
@@ -68,6 +70,9 @@ public class TvShowCatalogFragment extends BaseFragment implements TvShowCatalog
 
   @Override public void onAttach(Activity activity) {
     super.onAttach(activity);
+    if (activity instanceof Listener) {
+      this.listener = (Listener) activity;
+    }
   }
 
   @Override public void onResume() {
@@ -114,7 +119,7 @@ public class TvShowCatalogFragment extends BaseFragment implements TvShowCatalog
     refreshAdapter();
   }
 
-  @Override public void updateTitleWithCountOfTvShows(final int counter) {
+  @Override public void updateTitleWithCountOfVideow(final int counter) {
     String actionBarTitle = getString(R.string.app_name_with_chapter_counter, counter);
     getActivity().setTitle(actionBarTitle);
   }
@@ -132,8 +137,14 @@ public class TvShowCatalogFragment extends BaseFragment implements TvShowCatalog
     getActivity().setTitle(R.string.app_name);
   }
 
-  @Override public void showTvShowTitleAsMessage(TvShow tvShow) {
-    ToastUtils.showShortMessage(tvShow.getTitle(), getActivity());
+  @Override public void showTvShowInfo(TvShow tvShow) {
+    ToastUtils.showError(tvShow.getTitle(), getActivity());
+  }
+
+  @Override public void showTvShow(final TvShow tvShow) {
+    if (listener != null) {
+      listener.onTvShowClicked(tvShow);
+    }
   }
 
   @Override public boolean isReady() {
@@ -161,5 +172,10 @@ public class TvShowCatalogFragment extends BaseFragment implements TvShowCatalog
 
   private void refreshAdapter() {
     adapter.notifyDataSetChanged();
+  }
+
+  public interface Listener {
+
+    void onTvShowClicked(final TvShow tvShow);
   }
 }

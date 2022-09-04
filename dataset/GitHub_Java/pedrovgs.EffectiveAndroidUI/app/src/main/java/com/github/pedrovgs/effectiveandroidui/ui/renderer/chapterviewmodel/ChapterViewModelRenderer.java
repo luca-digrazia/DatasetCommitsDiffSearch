@@ -1,3 +1,18 @@
+/*
+ * Copyright (C) 2014 Pedro Vicente Gómez Sánchez.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.github.pedrovgs.effectiveandroidui.ui.renderer.chapterviewmodel;
 
 import android.content.Context;
@@ -16,7 +31,11 @@ import javax.inject.Inject;
  * Renderer implementation for ChapterViewModel objects.
  *
  * If you want to lear more about how to use Renderers take a look to this project:
- * https://github.com/pedrovgs/Renderers
+ * https://github.com/pedrovgs/Renderers.
+ *
+ * Review how this renderer register and unregister a view model listener while the recycle process
+ * in order to update the UI without use an adapter.notifyDataSetChanged(). This is a nice
+ * implementation not really common in Android applications. It has a little bug...can you find it?
  *
  * @author Pedro Vicente Gómez Sánchez
  */
@@ -87,6 +106,10 @@ public class ChapterViewModelRenderer extends Renderer<ChapterViewModel>
     tv_chapter_publish_date.setText(chapter.getPublishDate());
   }
 
+  /**
+   * This method is going to be called some seconds after the onCreate onRecycle and will update the
+   * view without use a notifyDataSetChanged().
+   */
   @Override public void onRateChanged(int rate) {
     ChapterViewModel chapter = getContent();
     String rateMessage = context.getString(R.string.tv_show_rate, rate);

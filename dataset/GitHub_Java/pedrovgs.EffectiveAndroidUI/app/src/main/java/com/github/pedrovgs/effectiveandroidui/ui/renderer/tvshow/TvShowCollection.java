@@ -65,7 +65,7 @@ public class TvShowCollection implements AdapteeCollection<TvShow>, Serializable
   }
 
   @Override public void removeAll(Collection<TvShow> tvShows) {
-    this.tvShows.removeAll(tvShows);
+    this.tvShows.addAll(tvShows);
   }
 
   public void clear() {

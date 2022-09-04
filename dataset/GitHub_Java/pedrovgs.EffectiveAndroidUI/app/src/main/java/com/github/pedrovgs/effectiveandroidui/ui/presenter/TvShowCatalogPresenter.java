@@ -17,7 +17,6 @@ package com.github.pedrovgs.effectiveandroidui.ui.presenter;
 
 import com.github.pedrovgs.effectiveandroidui.domain.GetTvShows;
 import com.github.pedrovgs.effectiveandroidui.domain.tvshow.TvShow;
-import com.github.pedrovgs.effectiveandroidui.ui.activity.Navigator;
 import com.github.pedrovgs.effectiveandroidui.ui.renderer.tvshow.TvShowCollection;
 import java.util.Collection;
 import javax.inject.Inject;
@@ -38,15 +37,13 @@ import javax.inject.Singleton;
 public class TvShowCatalogPresenter extends Presenter {
 
   private GetTvShows getTvShowsInteractor;
-  private Navigator navigator;
 
   private View view;
   private TvShowCollection currentTvShowCollection;
 
   @Inject
-  public TvShowCatalogPresenter(GetTvShows getTvShowsInteractor, Navigator navigator) {
+  public TvShowCatalogPresenter(GetTvShows getTvShowsInteractor) {
     this.getTvShowsInteractor = getTvShowsInteractor;
-    this.navigator = navigator;
   }
 
   public void setView(View view) {
@@ -83,11 +80,11 @@ public class TvShowCatalogPresenter extends Presenter {
   }
 
   public void onTvShowThumbnailClicked(final TvShow tvShow) {
-      navigator.openTvShowDetails(tvShow);
+    view.showTvShow(tvShow);
   }
 
   public void onTvShowClicked(final TvShow tvShow) {
-    view.showTvShowTitleAsMessage(tvShow);
+    view.showTvShowInfo(tvShow);
   }
 
   public TvShowCollection getCurrentTvShows() {
@@ -128,7 +125,7 @@ public class TvShowCatalogPresenter extends Presenter {
     if (view.isReady()) {
       view.renderVideos(tvShows);
       view.hideLoading();
-      view.updateTitleWithCountOfTvShows(tvShows.size());
+      view.updateTitleWithCountOfVideow(tvShows.size());
     }
   }
 
@@ -139,8 +136,7 @@ public class TvShowCatalogPresenter extends Presenter {
   }
 
   /**
-   * View interface created to abstract the view
-   * implementation used in this presenter.
+   * View interface created to abstract the view implementation used in this presenter.
    */
   public interface View {
 
@@ -150,7 +146,7 @@ public class TvShowCatalogPresenter extends Presenter {
 
     void renderVideos(final Collection<TvShow> tvShows);
 
-    void updateTitleWithCountOfTvShows(final int counter);
+    void updateTitleWithCountOfVideow(final int counter);
 
     void showConnectionErrorMessage();
 
@@ -158,7 +154,9 @@ public class TvShowCatalogPresenter extends Presenter {
 
     void showDefaultTitle();
 
-    void showTvShowTitleAsMessage(TvShow tvShow);
+    void showTvShowInfo(TvShow tvShow);
+
+    void showTvShow(TvShow tvShow);
 
     boolean isReady();
 

@@ -1,3 +1,18 @@
+/*
+ * Copyright (C) 2014 Pedro Vicente Gómez Sánchez.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.github.pedrovgs.effectiveandroidui;
 
 import android.app.Application;
@@ -10,7 +25,8 @@ import java.util.List;
  * <p/>
  * This project is using Dependency Injection based on Dagger as dependency injector. The
  * ObjectGraph field used in this class is the dependency container that is going to provide every
- * dependency declared in Dagger modules.
+ * dependency declared in Dagger modules. Take a look to BaseActivit to see how the Activity scope
+ * injection works using the plus method implemented here.
  *
  * @author Pedro Vicente Gómez Sánchez
  */
@@ -22,6 +38,23 @@ public class TvShowsApplication extends Application {
   public void onCreate() {
     super.onCreate();
     initializeDependencyInjector();
+  }
+
+  /*
+   * We could use this code to enable or disable night mode or eve use a auto night mode.
+   * But to use this feature we have to enable car mode and the UX is not the expected :S
+   * If you enable car mode the application is going to show a persistent notification!
+   *
+   * Use this method inside the onCreate and create a new "values-night" directory with some
+   * color changes to show how it works.
+   *
+   */
+  private void initializeUiManager() {
+    /*
+     * UiModeManager uiModeManager = (UiModeManager) getSystemService(UI_MODE_SERVICE);
+     * uiModeManager.enableCarMode(0);
+     * uiModeManager.setNightMode(UiModeManager.MODE_NIGHT_AUTO);
+    */
   }
 
   /**
