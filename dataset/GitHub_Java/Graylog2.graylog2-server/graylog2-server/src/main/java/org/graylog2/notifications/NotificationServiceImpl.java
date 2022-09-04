@@ -17,21 +17,20 @@
 package org.graylog2.notifications;
 
 import com.google.common.collect.Lists;
+import javax.inject.Inject;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.cluster.Node;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.PersistedServiceImpl;
-import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.database.ValidationException;
+import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.system.NodeId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import java.util.List;
-import java.util.Locale;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -67,7 +66,7 @@ public class NotificationServiceImpl extends PersistedServiceImpl implements Not
     @Override
     public boolean fixed(NotificationImpl.Type type, Node node) {
         BasicDBObject qry = new BasicDBObject();
-        qry.put("type", type.toString().toLowerCase(Locale.ENGLISH));
+        qry.put("type", type.toString().toLowerCase());
         if (node != null) {
             qry.put("node_id", node.getNodeId());
         }
@@ -77,7 +76,7 @@ public class NotificationServiceImpl extends PersistedServiceImpl implements Not
 
     @Override
     public boolean isFirst(NotificationImpl.Type type) {
-        return (findOne(NotificationImpl.class, new BasicDBObject("type", type.toString().toLowerCase(Locale.ENGLISH))) == null);
+        return (findOne(NotificationImpl.class, new BasicDBObject("type", type.toString().toLowerCase())) == null);
     }
 
     @Override
@@ -129,6 +128,6 @@ public class NotificationServiceImpl extends PersistedServiceImpl implements Not
 
     @Override
     public int destroyAllByType(Notification.Type type) {
-        return destroyAll(NotificationImpl.class, new BasicDBObject("type", type.toString().toLowerCase(Locale.ENGLISH)));
+        return destroyAll(NotificationImpl.class, new BasicDBObject("type", type.toString().toLowerCase()));
     }
 }
