@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.Dependency;
 import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAspectOrderException;
-import com.google.devtools.build.lib.analysis.PlatformSemantics;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.ToolchainContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -58,11 +57,9 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
-import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.RuleClass.ExecutionPlatformConstraintsAllowed;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.packages.Target;
@@ -275,15 +272,11 @@ public final class ConfiguredTargetFunction implements SkyFunction {
         if (rule.getRuleClassObject().supportsPlatforms()) {
           ImmutableSet<Label> requiredToolchains =
               rule.getRuleClassObject().getRequiredToolchains();
-
-          // Collect local (target, rule) constraints for filtering out execution platforms.
-          ImmutableSet<Label> execConstraintLabels = getExecutionPlatformConstraints(rule);
           toolchainContext =
               ToolchainUtil.createToolchainContext(
                   env,
                   rule.toString(),
                   requiredToolchains,
-                  execConstraintLabels,
                   configuredTargetKey.getConfigurationKey());
           if (env.valuesMissing()) {
             return null;
@@ -388,25 +381,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     } finally {
       cpuBoundSemaphore.release();
     }
-  }
-
-  /**
-   * Returns the target-specific execution platform constraints, based on the rule definition and
-   * any constraints added by the target.
-   */
-  private static ImmutableSet<Label> getExecutionPlatformConstraints(Rule rule) {
-    NonconfigurableAttributeMapper mapper = NonconfigurableAttributeMapper.of(rule);
-    ImmutableSet.Builder<Label> execConstraintLabels = new ImmutableSet.Builder<>();
-
-    execConstraintLabels.addAll(rule.getRuleClassObject().getExecutionPlatformConstraints());
-
-    if (rule.getRuleClassObject().executionPlatformConstraintsAllowed()
-        == ExecutionPlatformConstraintsAllowed.PER_TARGET) {
-      execConstraintLabels.addAll(
-          mapper.get(PlatformSemantics.EXEC_COMPATIBLE_WITH_ATTR, BuildType.LABEL_LIST));
-    }
-
-    return execConstraintLabels.build();
   }
 
   /**
