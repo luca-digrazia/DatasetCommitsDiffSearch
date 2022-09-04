@@ -19,15 +19,14 @@ package org.graylog2.rest.resources.system.indices;
 import com.codahale.metrics.annotation.Timed;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.module.jsonSchema.factories.SchemaFactoryWrapper;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.indexer.management.IndexManagementConfig;
+import org.graylog2.plugin.indexer.rotation.RotationStrategyConfig;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.indexer.rotation.RotationStrategy;
-import org.graylog2.plugin.indexer.rotation.RotationStrategyConfig;
 import org.graylog2.rest.models.system.indices.RotationStrategies;
 import org.graylog2.rest.models.system.indices.RotationStrategyDescription;
 import org.graylog2.rest.models.system.indices.RotationStrategySummary;
@@ -99,7 +98,6 @@ public class RotationStrategyResource extends RestResource {
     @Timed
     @ApiOperation(value = "Configuration of the current rotation strategy",
             notes = "This resource stores the configuration of the currently used rotation strategy.")
-    @AuditLog(object = "rotation strategy configuration", captureRequestEntity = true, captureResponseEntity = true)
     public RotationStrategySummary config(@ApiParam(value = "The description of the rotation strategy and its configuration", required = true)
                        @Valid @NotNull RotationStrategySummary rotationStrategySummary) {
         if (!rotationStrategies.containsKey(rotationStrategySummary.strategy())) {
