@@ -27,13 +27,12 @@ import com.google.devtools.build.docgen.skylark.SkylarkParamDoc;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.BaseFunction;
-import com.google.devtools.build.lib.syntax.BuiltinCallable;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.MethodDescriptor;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 import com.google.devtools.build.lib.syntax.SkylarkType;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.common.options.OptionsParser;
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
@@ -94,15 +93,6 @@ public class ApiExporter {
       Value.Builder value = Value.newBuilder();
       if (obj instanceof BaseFunction) {
         value = collectFunctionInfo((BaseFunction) obj);
-      } else if (obj instanceof BuiltinCallable) {
-        BuiltinCallable builtinCallable = (BuiltinCallable) obj;
-        MethodDescriptor descriptor =
-            builtinCallable.getMethodDescriptor(StarlarkSemantics.DEFAULT_SEMANTICS);
-        value =
-            collectFunctionInfo(
-                descriptor.getName(),
-                SkylarkSignatureProcessor.getSignatureForCallable(
-                    descriptor.getName(), descriptor, null, null));
       } else {
         value.setName(entry.getKey());
       }
@@ -123,10 +113,10 @@ public class ApiExporter {
         SkylarkModule typeModule = SkylarkInterfaceUtils.getSkylarkModule(obj.getClass());
         if (typeModule != null) {
           if (FuncallExpression.hasSelfCallMethod(
-              StarlarkSemantics.DEFAULT_SEMANTICS, obj.getClass())) {
+              SkylarkSemantics.DEFAULT_SEMANTICS, obj.getClass())) {
             MethodDescriptor descriptor =
                 FuncallExpression.getSelfCallMethodDescriptor(
-                    StarlarkSemantics.DEFAULT_SEMANTICS, obj);
+                    SkylarkSemantics.DEFAULT_SEMANTICS, obj);
 
             value = collectFunctionInfo(
                 descriptor.getName(),
@@ -271,8 +261,7 @@ public class ApiExporter {
   }
 
   public static void main(String[] args) {
-    OptionsParser parser =
-        OptionsParser.builder().optionsClasses(BuildEncyclopediaOptions.class).build();
+    OptionsParser parser = OptionsParser.newOptionsParser(BuildEncyclopediaOptions.class);
     parser.parseAndExitUponError(args);
     BuildEncyclopediaOptions options = parser.getOptions(BuildEncyclopediaOptions.class);
 
