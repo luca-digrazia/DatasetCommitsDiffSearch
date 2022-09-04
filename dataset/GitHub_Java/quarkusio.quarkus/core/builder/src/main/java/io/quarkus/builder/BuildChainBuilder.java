@@ -22,8 +22,6 @@ import java.util.regex.Pattern;
 import org.wildfly.common.Assert;
 
 import io.quarkus.builder.item.BuildItem;
-import io.quarkus.builder.item.NamedBuildItem;
-import io.quarkus.builder.item.SymbolicBuildItem;
 
 /**
  * A build chain builder.
@@ -39,6 +37,7 @@ public final class BuildChainBuilder {
     private final Map<BuildStepBuilder, StackTraceElement[]> steps = new HashMap<BuildStepBuilder, StackTraceElement[]>();
     private final Set<ItemId> initialIds = new HashSet<>();
     private final Set<ItemId> finalIds = new HashSet<>();
+    private ClassLoader classLoader = BuildChainBuilder.class.getClassLoader();
 
     BuildChainBuilder() {
         finalStep = addBuildStep(new FinalStep());
@@ -105,23 +104,7 @@ public final class BuildChainBuilder {
      */
     public BuildChainBuilder addInitial(Class<? extends BuildItem> type) {
         Assert.checkNotNullParam("type", type);
-        if (NamedBuildItem.class.isAssignableFrom(type)) {
-            throw new IllegalArgumentException("Cannot produce a named build item without a name");
-        }
-        initialIds.add(new ItemId(type, null));
-        return this;
-    }
-
-    public BuildChainBuilder addInitial(Enum<?> symbolic) {
-        Assert.checkNotNullParam("symbolic", symbolic);
-        initialIds.add(new ItemId(SymbolicBuildItem.class, symbolic));
-        return this;
-    }
-
-    public <N> BuildChainBuilder addInitial(Class<? extends NamedBuildItem<N>> type, N name) {
-        Assert.checkNotNullParam("type", type);
-        Assert.checkNotNullParam("name", name);
-        initialIds.add(new ItemId(type, name));
+        initialIds.add(new ItemId(type));
         return this;
     }
 
@@ -143,24 +126,21 @@ public final class BuildChainBuilder {
      */
     public BuildChainBuilder addFinal(Class<? extends BuildItem> type) {
         Assert.checkNotNullParam("type", type);
-        if (NamedBuildItem.class.isAssignableFrom(type)) {
-            throw new IllegalArgumentException("Cannot consume a named build item without a name");
-        }
-        finalIds.add(new ItemId(type, null));
+        finalIds.add(new ItemId(type));
         return this;
     }
 
-    public BuildChainBuilder addFinal(Enum<?> symbolic) {
-        Assert.checkNotNullParam("symbolic", symbolic);
-        finalIds.add(new ItemId(SymbolicBuildItem.class, symbolic));
-        return this;
+    ClassLoader getClassLoader() {
+        return classLoader;
     }
 
-    public <N> BuildChainBuilder addFinal(Class<? extends NamedBuildItem<N>> type, N name) {
-        Assert.checkNotNullParam("type", type);
-        Assert.checkNotNullParam("name", name);
-        finalIds.add(new ItemId(type, name));
-        return this;
+    /**
+     * Sets the ClassLoader for the build. Every build step will be run with this as the TCCL.
+     *
+     * @param classLoader The ClassLoader
+     */
+    public void setClassLoader(ClassLoader classLoader) {
+        this.classLoader = classLoader;
     }
 
     /**

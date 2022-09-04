@@ -1,23 +1,21 @@
 package io.quarkus.deployment.steps;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.eclipse.microprofile.config.spi.ConfigSourceProvider;
 import org.eclipse.microprofile.config.spi.Converter;
 
+import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.DeploymentClassLoaderBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
-import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigurationSourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
@@ -38,14 +36,8 @@ class ConfigBuildSteps {
 
     @BuildStep
     void generateConfigSources(List<RunTimeConfigurationSourceBuildItem> runTimeSources,
-            final BuildProducer<GeneratedClassBuildItem> generatedClass,
-            final BuildProducer<GeneratedResourceBuildItem> generatedResource) {
-        ClassOutput classOutput = new ClassOutput() {
-            @Override
-            public void write(String name, byte[] data) {
-                generatedClass.produce(new GeneratedClassBuildItem(true, name, data));
-            }
-        };
+            final BuildProducer<GeneratedClassBuildItem> generatedClass) {
+        ClassOutput classOutput = new GeneratedClassGizmoAdaptor(generatedClass, true);
 
         try (ClassCreator cc = ClassCreator.builder().interfaces(ConfigSourceProvider.class).setFinal(true)
                 .className(PROVIDER_CLASS_NAME)
@@ -72,21 +64,15 @@ class ConfigBuildSteps {
                 mc.returnValue(list);
             }
         }
-
-        generatedResource.produce(new GeneratedResourceBuildItem(
-                SERVICES_PREFIX + ConfigSourceProvider.class.getName(),
-                PROVIDER_CLASS_NAME.getBytes(StandardCharsets.UTF_8)));
     }
 
     // XXX replace this with constant-folded service loader impl
     @BuildStep
     void nativeServiceProviders(
-            final DeploymentClassLoaderBuildItem classLoaderItem,
             final BuildProducer<ServiceProviderBuildItem> providerProducer) throws IOException {
-        providerProducer.produce(new ServiceProviderBuildItem(ConfigSourceProvider.class.getName(), PROVIDER_CLASS_NAME));
         providerProducer.produce(new ServiceProviderBuildItem(ConfigProviderResolver.class.getName(),
                 SmallRyeConfigProviderResolver.class.getName()));
-        final ClassLoader classLoader = classLoaderItem.getClassLoader();
+        final ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
         classLoader.getResources(SERVICES_PREFIX + ConfigSourceProvider.class.getName());
         for (Class<?> serviceClass : Arrays.asList(
                 ConfigSource.class,
@@ -94,8 +80,11 @@ class ConfigBuildSteps {
                 Converter.class)) {
             final String serviceName = serviceClass.getName();
             final Set<String> names = ServiceUtil.classNamesNamedIn(classLoader, SERVICES_PREFIX + serviceName);
-            if (!names.isEmpty()) {
-                providerProducer.produce(new ServiceProviderBuildItem(serviceName, new ArrayList<>(names)));
+            final List<String> list = names.stream()
+                    // todo: see https://github.com/quarkusio/quarkus/issues/5492
+                    .filter(s -> !s.startsWith("org.jboss.resteasy.microprofile.config.")).collect(Collectors.toList());
+            if (!list.isEmpty()) {
+                providerProducer.produce(new ServiceProviderBuildItem(serviceName, list));
             }
         }
     }

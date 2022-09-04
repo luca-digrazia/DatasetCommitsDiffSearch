@@ -61,7 +61,7 @@ public class AugmentActionImpl implements AugmentAction {
     /**
      * A map that is shared between all re-runs of the same augment instance. This is
      * only really relevant in dev mode, however it is present in all modes for consistency.
-     *
+     * 
      */
     private final Map<Class<?>, Object> reloadContext = new ConcurrentHashMap<>();
 
@@ -134,12 +134,12 @@ public class AugmentActionImpl implements AugmentAction {
     }
 
     @Override
-    public StartupActionImpl reloadExistingApplication(boolean hasStartedSuccessfully, Set<String> changedResources) {
+    public StartupActionImpl reloadExistingApplication(Set<String> changedResources) {
         if (launchMode != LaunchMode.DEVELOPMENT) {
             throw new IllegalStateException("Only application with launch mode DEVELOPMENT can restart");
         }
         ClassLoader classLoader = curatedApplication.createDeploymentClassLoader();
-        BuildResult result = runAugment(!hasStartedSuccessfully, changedResources, classLoader, GeneratedClassBuildItem.class,
+        BuildResult result = runAugment(false, changedResources, classLoader, GeneratedClassBuildItem.class,
                 GeneratedResourceBuildItem.class, BytecodeTransformerBuildItem.class, ApplicationClassNameBuildItem.class);
         return new StartupActionImpl(curatedApplication, result, classLoader);
     }
@@ -220,7 +220,6 @@ public class AugmentActionImpl implements AugmentAction {
             }
 
             builder.setLaunchMode(launchMode);
-            builder.setRebuild(quarkusBootstrap.isRebuild());
             if (firstRun) {
                 builder.setLiveReloadState(new LiveReloadBuildItem(false, Collections.emptySet(), reloadContext));
             } else {

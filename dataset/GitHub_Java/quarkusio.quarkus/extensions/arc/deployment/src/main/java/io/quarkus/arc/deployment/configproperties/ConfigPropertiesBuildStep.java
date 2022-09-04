@@ -1,22 +1,16 @@
 package io.quarkus.arc.deployment.configproperties;
 
 import java.lang.reflect.Modifier;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import javax.inject.Singleton;
 
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationTarget;
-import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
-import org.jboss.jandex.IndexView;
 
-import io.quarkus.arc.config.ConfigProperties;
 import io.quarkus.arc.deployment.ArcConfig;
 import io.quarkus.arc.deployment.ConfigPropertyBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
@@ -35,66 +29,11 @@ public class ConfigPropertiesBuildStep {
     @BuildStep
     void produceConfigPropertiesMetadata(CombinedIndexBuildItem combinedIndex, ArcConfig arcConfig,
             BuildProducer<ConfigPropertiesMetadataBuildItem> configPropertiesMetadataProducer) {
-
-        IndexView index = combinedIndex.getIndex();
-
-        Map<DotName, ConfigProperties.NamingStrategy> namingStrategies = new HashMap<>();
-        Map<DotName, Boolean> failOnMismatchingMembers = new HashMap<>();
-
-        // handle @ConfigProperties
-        for (AnnotationInstance instance : index.getAnnotations(DotNames.CONFIG_PROPERTIES)) {
-            ClassInfo classInfo = instance.target().asClass();
-
-            ConfigProperties.NamingStrategy namingStrategy = getNamingStrategy(arcConfig, instance.value("namingStrategy"));
-            namingStrategies.put(classInfo.name(), namingStrategy);
-
-            boolean failOnMismatchingMember = isFailOnMissingMember(instance);
-            failOnMismatchingMembers.put(classInfo.name(), failOnMismatchingMember);
-
+        for (AnnotationInstance annotation : combinedIndex.getIndex().getAnnotations(DotNames.CONFIG_PROPERTIES)) {
             configPropertiesMetadataProducer
-                    .produce(new ConfigPropertiesMetadataBuildItem(classInfo, getPrefix(instance), namingStrategy,
-                            failOnMismatchingMember, false));
+                    .produce(
+                            new ConfigPropertiesMetadataBuildItem(annotation, arcConfig.configPropertiesDefaultNamingStrategy));
         }
-
-        // handle @ConfigPrefix
-        for (AnnotationInstance instance : index.getAnnotations(DotNames.CONFIG_PREFIX)) {
-            ClassInfo classInfo;
-            if (instance.target().kind() == AnnotationTarget.Kind.FIELD) {
-                classInfo = index.getClassByName(instance.target().asField().type().name());
-            } else if (instance.target().kind() == AnnotationTarget.Kind.METHOD_PARAMETER) {
-                short position = instance.target().asMethodParameter().position();
-                classInfo = index
-                        .getClassByName(instance.target().asMethodParameter().method().parameters().get(position).name());
-            } else {
-                break;
-            }
-
-            // if the class was annotated with @ConfigProperties, use the strategy that was defined there, otherwise fallback to the default
-            ConfigProperties.NamingStrategy namingStrategy = namingStrategies.getOrDefault(classInfo.name(),
-                    arcConfig.configPropertiesDefaultNamingStrategy);
-
-            configPropertiesMetadataProducer
-                    .produce(new ConfigPropertiesMetadataBuildItem(classInfo, instance.value().asString(),
-                            namingStrategy, failOnMismatchingMembers.getOrDefault(classInfo.name(),
-                                    ConfigProperties.DEFAULT_FAIL_ON_MISMATCHING_MEMBER),
-                            true));
-        }
-    }
-
-    private boolean isFailOnMissingMember(AnnotationInstance instance) {
-        AnnotationValue failOnMissingMemberValue = instance.value("failOnMismatchingMember");
-        return failOnMissingMemberValue != null ? failOnMissingMemberValue.asBoolean()
-                : ConfigProperties.DEFAULT_FAIL_ON_MISMATCHING_MEMBER;
-    }
-
-    private ConfigProperties.NamingStrategy getNamingStrategy(ArcConfig arcConfig, AnnotationValue namingStrategyValue) {
-        return namingStrategyValue == null ? arcConfig.configPropertiesDefaultNamingStrategy
-                : ConfigProperties.NamingStrategy.valueOf(namingStrategyValue.asEnum());
-    }
-
-    private String getPrefix(AnnotationInstance annotationInstance) {
-        AnnotationValue value = annotationInstance.value("prefix");
-        return value == null ? null : value.asString();
     }
 
     @BuildStep
@@ -136,8 +75,7 @@ public class ConfigPropertiesBuildStep {
                         classInfo, nonBeansClassOutput, combinedIndex.getIndex(), configPropertiesMetadata.getPrefix(),
                         configPropertiesMetadata.getNamingStrategy(), defaultConfigValues, configProperties);
                 InterfaceConfigPropertiesUtil.addProducerMethodForInterfaceConfigProperties(producerClassCreator,
-                        classInfo.name(), configPropertiesMetadata.getPrefix(), configPropertiesMetadata.isNeedsQualifier(),
-                        generatedClassName);
+                        classInfo.name(), generatedClassName);
 
             } else {
                 /*
@@ -147,7 +85,6 @@ public class ConfigPropertiesBuildStep {
                 boolean needsValidation = ClassConfigPropertiesUtil.addProducerMethodForClassConfigProperties(
                         Thread.currentThread().getContextClassLoader(), classInfo, producerClassCreator,
                         configPropertiesMetadata.getPrefix(), configPropertiesMetadata.getNamingStrategy(),
-                        configPropertiesMetadata.isFailOnMismatchingMember(), configPropertiesMetadata.isNeedsQualifier(),
                         combinedIndex.getIndex(), configProperties);
                 if (needsValidation) {
                     configClassesThatNeedValidation.add(classInfo.name());
