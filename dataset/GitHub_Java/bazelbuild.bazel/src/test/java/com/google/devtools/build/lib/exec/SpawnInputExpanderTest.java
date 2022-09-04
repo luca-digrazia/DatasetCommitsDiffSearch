@@ -48,15 +48,13 @@ public class SpawnInputExpanderTest {
   private static final byte[] FAKE_DIGEST = new byte[] {1, 2, 3, 4};
 
   private FileSystem fs;
-  private Path execRoot;
   private SpawnInputExpander expander;
   private Map<PathFragment, ActionInput> inputMappings;
 
   @Before
   public final void createSpawnInputExpander() throws Exception  {
     fs = new InMemoryFileSystem();
-    execRoot = fs.getPath("/root");
-    expander = new SpawnInputExpander(execRoot, /*strict=*/ true);
+    expander = new SpawnInputExpander(/*strict=*/true);
     inputMappings = Maps.newHashMap();
   }
 
@@ -114,7 +112,7 @@ public class SpawnInputExpanderTest {
     FakeActionInputFileCache mockCache = new FakeActionInputFileCache();
     mockCache.put(artifact, FileArtifactValue.createDirectory(-1));
 
-    expander = new SpawnInputExpander(execRoot, /*strict=*/ false);
+    expander = new SpawnInputExpander(/*strict=*/false);
     expander.addRunfilesToInputs(inputMappings, supplier, mockCache);
     assertThat(inputMappings).hasSize(1);
     assertThat(inputMappings)

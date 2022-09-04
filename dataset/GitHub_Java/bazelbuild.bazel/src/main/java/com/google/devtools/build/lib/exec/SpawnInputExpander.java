@@ -24,8 +24,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
-import com.google.devtools.build.lib.actions.cache.VirtualActionInput.EmptyActionInput;
 import com.google.devtools.build.lib.rules.fileset.FilesetActionContext;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
@@ -41,8 +39,7 @@ import java.util.TreeMap;
  * laid out.
  */
 public class SpawnInputExpander {
-  @VisibleForTesting
-  static final ActionInput EMPTY_FILE = new EmptyActionInput("/dev/null");
+  public static final ActionInput EMPTY_FILE = null;
 
   private final boolean strict;
 
@@ -132,8 +129,7 @@ public class SpawnInputExpander {
 
   /**
    * Convert the inputs of the given spawn to a map from exec-root relative paths to action inputs.
-   * The returned map never contains {@code null} values; it uses {@link #EMPTY_FILE} for empty
-   * files, which is an instance of {@link VirtualActionInput}.
+   * In some cases, this generates empty files, for which it uses {@code null}.
    */
   public SortedMap<PathFragment, ActionInput> getInputMapping(
       Spawn spawn, ArtifactExpander artifactExpander, ActionInputFileCache actionInputFileCache,
