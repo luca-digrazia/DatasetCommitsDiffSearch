@@ -36,11 +36,10 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
 import com.google.devtools.build.lib.events.StoredEventHandler;
-import com.google.devtools.build.lib.packages.BazelModuleContext;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
-import com.google.devtools.build.lib.packages.StarlarkExportable;
+import com.google.devtools.build.lib.packages.SkylarkExportable;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
@@ -684,15 +683,14 @@ public class StarlarkImportLookupFunction implements SkyFunction {
     try (Mutability mu = Mutability.create("importing", moduleLabel)) {
       StarlarkThread thread =
           StarlarkThread.builder(mu)
-              .setGlobals(
-                  Module.createForBuiltins(predeclared)
-                      .withClientData(BazelModuleContext.create(moduleLabel, transitiveDigest)))
+              .setGlobals(Module.createForBuiltins(predeclared).withLabel(moduleLabel))
               .setSemantics(starlarkSemantics)
               .build();
       thread.setLoader(loadedModules::get);
       StoredEventHandler eventHandler = new StoredEventHandler();
       thread.setPrintHandler(Event.makeDebugPrintHandler(eventHandler));
-      ruleClassProvider.setStarlarkThreadContext(thread, moduleLabel, repositoryMapping);
+      ruleClassProvider.setStarlarkThreadContext(
+          thread, moduleLabel, transitiveDigest, repositoryMapping);
       Module module = thread.getGlobals();
       execAndExport(file, moduleLabel, eventHandler, thread);
 
@@ -719,8 +717,8 @@ public class StarlarkImportLookupFunction implements SkyFunction {
     // TODO(adonovan): change the semantics; see b/65374671.
     thread.setPostAssignHook(
         (name, value) -> {
-          if (value instanceof StarlarkExportable) {
-            StarlarkExportable exp = (StarlarkExportable) value;
+          if (value instanceof SkylarkExportable) {
+            SkylarkExportable exp = (SkylarkExportable) value;
             if (!exp.isExported()) {
               try {
                 exp.export(extensionLabel, name);
