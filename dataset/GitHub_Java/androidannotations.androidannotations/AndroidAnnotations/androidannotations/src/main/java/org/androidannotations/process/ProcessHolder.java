@@ -123,8 +123,6 @@ public class ProcessHolder {
 		public final JClass BUILD_VERSION_CODES = refClass(CanonicalNameConstants.BUILD_VERSION_CODES);
 		public final JClass ACTIVITY_COMPAT = refClass(CanonicalNameConstants.ACTIVITY_COMPAT);
 
-		public final JClass PREFERENCE = refClass(CanonicalNameConstants.PREFERENCE);
-
 		/*
 		 * Sherlock
 		 */
