@@ -93,8 +93,6 @@ public interface InputService extends PersistedService {
 
     Extractor getExtractor(Input input, String extractorId) throws NotFoundException;
 
-    void updateExtractor(Input input, Extractor extractor) throws ValidationException;
-
     void removeExtractor(Input input, String extractorId);
 
     void removeStaticField(Input input, String key);
