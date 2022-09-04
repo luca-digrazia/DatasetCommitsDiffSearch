@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.rules.apple;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -27,7 +27,8 @@ import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.packages.StarlarkProvider;
+import com.google.devtools.build.lib.packages.SkylarkProvider;
+import com.google.devtools.build.lib.packages.SkylarkProvider.SkylarkKey;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
@@ -370,7 +371,7 @@ public class XcodeConfigTest extends BuildViewTestCase {
     StructImpl info =
         (StructImpl)
             myRuleTarget.get(
-                new StarlarkProvider.Key(
+                new SkylarkKey(
                     Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
     assertThat(info.getValue("xcode_version"))
         .isEqualTo(
@@ -438,7 +439,7 @@ public class XcodeConfigTest extends BuildViewTestCase {
     StructImpl info =
         (StructImpl)
             myRuleTarget.get(
-                new StarlarkProvider.Key(
+                new SkylarkKey(
                     Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
     assertThat(info.getValue("xcode_version").toString()).isEqualTo("1.9");
     assertThat(info.getValue("min_os").toString()).isEqualTo("1.8");
@@ -446,9 +447,9 @@ public class XcodeConfigTest extends BuildViewTestCase {
 
   @Test
   public void testConfigAlias_configSetting() throws Exception {
-    scratch.file("starlark/BUILD");
+    scratch.file("skylark/BUILD");
     scratch.file(
-        "starlark/version_retriever.bzl",
+        "skylark/version_retriever.bzl",
         "def _version_retriever_impl(ctx):",
         "  xcode_properties = ctx.attr.dep[apple_common.XcodeProperties]",
         "  version = xcode_properties.xcode_version",
@@ -461,7 +462,7 @@ public class XcodeConfigTest extends BuildViewTestCase {
 
     scratch.file(
         "xcode/BUILD",
-        "load('//starlark:version_retriever.bzl', 'version_retriever')",
+        "load('//skylark:version_retriever.bzl', 'version_retriever')",
         "version_retriever(",
         "    name = 'flag_propagator',",
         "    dep = ':alias',",
@@ -522,9 +523,9 @@ public class XcodeConfigTest extends BuildViewTestCase {
 
   @Test
   public void testDefaultVersion_configSetting() throws Exception {
-    scratch.file("starlark/BUILD");
+    scratch.file("skylark/BUILD");
     scratch.file(
-        "starlark/version_retriever.bzl",
+        "skylark/version_retriever.bzl",
         "def _version_retriever_impl(ctx):",
         "  xcode_properties = ctx.attr.dep[apple_common.XcodeProperties]",
         "  version = xcode_properties.xcode_version",
@@ -537,7 +538,7 @@ public class XcodeConfigTest extends BuildViewTestCase {
 
     scratch.file(
         "xcode/BUILD",
-        "load('//starlark:version_retriever.bzl', 'version_retriever')",
+        "load('//skylark:version_retriever.bzl', 'version_retriever')",
         "version_retriever(",
         "    name = 'flag_propagator',",
         "    dep = ':alias',",
@@ -904,7 +905,7 @@ public class XcodeConfigTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testXcodeVersionFromStarlarkByAlias() throws Exception {
+  public void testXcodeVersionFromSkylarkByAlias() throws Exception {
     scratch.file("x/BUILD",
         "load('//x:r.bzl', 'r')",
         "xcode_config_alias(name='a')",
@@ -945,7 +946,8 @@ public class XcodeConfigTest extends BuildViewTestCase {
         "--watchos_minimum_os=4.5");
     ConfiguredTarget r = getConfiguredTarget("//x:r");
     Provider.Key key =
-        new StarlarkProvider.Key(Label.parseAbsolute("//x:r.bzl", ImmutableMap.of()), "MyInfo");
+        new SkylarkProvider.SkylarkKey(
+            Label.parseAbsolute("//x:r.bzl", ImmutableMap.of()), "MyInfo");
     StructImpl info = (StructImpl) r.get(key);
 
     assertThat(info.getValue("xcode").toString()).isEqualTo("0.0");
@@ -961,7 +963,7 @@ public class XcodeConfigTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testMutualXcodeFromStarlarkByAlias() throws Exception {
+  public void testMutualXcodeFromSkylarkByAlias() throws Exception {
     scratch.file(
         "x/BUILD",
         "load('//x:r.bzl', 'r')",
@@ -1015,7 +1017,8 @@ public class XcodeConfigTest extends BuildViewTestCase {
     useConfiguration("--xcode_version_config=//x:c");
     ConfiguredTarget r = getConfiguredTarget("//x:r");
     Provider.Key key =
-        new StarlarkProvider.Key(Label.parseAbsolute("//x:r.bzl", ImmutableMap.of()), "MyInfo");
+        new SkylarkProvider.SkylarkKey(
+            Label.parseAbsolute("//x:r.bzl", ImmutableMap.of()), "MyInfo");
     StructImpl info = (StructImpl) r.get(key);
     assertThat((Map<?, ?>) info.getValue("execution_info"))
         .containsKey(ExecutionRequirements.REQUIRES_DARWIN);
@@ -1024,7 +1027,7 @@ public class XcodeConfigTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testLocalXcodeFromStarlarkByAlias() throws Exception {
+  public void testLocalXcodeFromSkylarkByAlias() throws Exception {
     scratch.file(
         "x/BUILD",
         "load('//x:r.bzl', 'r')",
@@ -1077,7 +1080,8 @@ public class XcodeConfigTest extends BuildViewTestCase {
     useConfiguration("--xcode_version_config=//x:c");
     ConfiguredTarget r = getConfiguredTarget("//x:r");
     Provider.Key key =
-        new StarlarkProvider.Key(Label.parseAbsolute("//x:r.bzl", ImmutableMap.of()), "MyInfo");
+        new SkylarkProvider.SkylarkKey(
+            Label.parseAbsolute("//x:r.bzl", ImmutableMap.of()), "MyInfo");
     StructImpl info = (StructImpl) r.get(key);
 
     assertThat(info.getValue("xcode").toString()).isEqualTo("8.4");
@@ -1144,7 +1148,7 @@ public class XcodeConfigTest extends BuildViewTestCase {
   }
 
   // Verifies that the --xcode_version_config configuration value can be accessed via the
-  // configuration_field() Starlark method and used in a Starlark rule.
+  // configuration_field() skylark method and used in a skylark rule.
   @Test
   public void testConfigurationFieldForRule() throws Exception {
     scratch.file(
@@ -1176,7 +1180,7 @@ public class XcodeConfigTest extends BuildViewTestCase {
   }
 
   // Verifies that the --xcode_version_config configuration value can be accessed via the
-  // configuration_field() Starlark method and used in a Starlark aspect.
+  // configuration_field() skylark method and used in a skylark aspect.
   @Test
   public void testConfigurationFieldForAspect() throws Exception {
     scratch.file(
