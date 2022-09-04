@@ -93,7 +93,6 @@ public class QuarkusBootstrap implements Serializable {
     private final boolean hostApplicationIsTestOnly;
     private final boolean flatClassPath;
     private final ConfiguredClassLoading classLoadingConfig;
-    private final boolean assertionsEnabled;
 
     private QuarkusBootstrap(Builder builder, ConfiguredClassLoading classLoadingConfig) {
         this.applicationRoot = builder.applicationRoot;
@@ -109,7 +108,6 @@ public class QuarkusBootstrap implements Serializable {
         this.baseClassLoader = builder.baseClassLoader;
         this.targetDirectory = builder.targetDirectory;
         this.appModelResolver = builder.appModelResolver;
-        this.assertionsEnabled = builder.assertionsEnabled;
         this.versionUpdate = builder.versionUpdate;
         this.versionUpdateNumber = builder.versionUpdateNumber;
         this.dependenciesOrigin = builder.dependenciesOrigin;
@@ -285,10 +283,6 @@ public class QuarkusBootstrap implements Serializable {
         return rebuild;
     }
 
-    public boolean isAssertionsEnabled() {
-        return assertionsEnabled;
-    }
-
     public List<ClassLoaderEventListener> getClassLoaderEventListeners() {
         return this.classLoadListeners;
     }
@@ -304,7 +298,6 @@ public class QuarkusBootstrap implements Serializable {
                 .setLocalProjectDiscovery(localProjectDiscovery)
                 .setTargetDirectory(targetDirectory)
                 .setAppModelResolver(appModelResolver)
-                .setAssertionsEnabled(assertionsEnabled)
                 .setVersionUpdateNumber(versionUpdateNumber)
                 .setVersionUpdate(versionUpdate)
                 .setDependenciesOrigin(dependenciesOrigin)
@@ -353,7 +346,6 @@ public class QuarkusBootstrap implements Serializable {
         Boolean localProjectDiscovery;
         Path targetDirectory;
         AppModelResolver appModelResolver;
-        boolean assertionsEnabled = inheritedAssertionsEnabled();
         VersionUpdateNumber versionUpdateNumber = VersionUpdateNumber.MICRO;
         VersionUpdate versionUpdate = VersionUpdate.NONE;
         DependenciesOrigin dependenciesOrigin;
@@ -564,18 +556,6 @@ public class QuarkusBootstrap implements Serializable {
         public Builder addClassLoaderEventListeners(List<ClassLoaderEventListener> classLoadListeners) {
             this.classLoadListeners.addAll(classLoadListeners);
             return this;
-        }
-
-        public Builder setAssertionsEnabled(boolean assertionsEnabled) {
-            this.assertionsEnabled = assertionsEnabled;
-            return this;
-        }
-
-        @SuppressWarnings("AssertWithSideEffects")
-        private boolean inheritedAssertionsEnabled() {
-            boolean result = false;
-            assert result = true;
-            return result;
         }
 
         public QuarkusBootstrap build() {
