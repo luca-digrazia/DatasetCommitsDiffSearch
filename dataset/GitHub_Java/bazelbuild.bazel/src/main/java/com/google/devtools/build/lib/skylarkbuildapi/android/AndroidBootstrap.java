@@ -54,13 +54,10 @@ public class AndroidBootstrap implements Bootstrap {
 
   @Override
   public void addBindingsToBuilder(ImmutableMap.Builder<String, Object> builder) {
-    // TODO: Make an incompatible change flag to hide android_common behind
-    // --experimental_google_legacy_api.
-    // Rationale: android_common module contains commonly used functions used outside of
-    // the Android Starlark migration. Let's not break them without an incompatible
-    // change process.
-    builder.put("android_common", androidCommon);
-
+    builder.put(
+        "android_common",
+        FlagGuardedValue.onlyWhenExperimentalFlagIsTrue(
+            FlagIdentifier.EXPERIMENTAL_GOOGLE_LEGACY_API, androidCommon));
     builder.put(
         ApkInfoApi.NAME,
         FlagGuardedValue.onlyWhenExperimentalFlagIsTrue(

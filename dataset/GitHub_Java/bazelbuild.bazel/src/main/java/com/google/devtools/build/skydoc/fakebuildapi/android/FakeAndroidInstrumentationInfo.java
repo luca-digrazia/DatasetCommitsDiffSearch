@@ -14,10 +14,11 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi.android;
 
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidInstrumentationInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.android.ApkInfoApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Printer;
 
 /** Fake implementation of {@link AndroidInstrumentationInfoApi}. */
 public class FakeAndroidInstrumentationInfo
@@ -29,17 +30,17 @@ public class FakeAndroidInstrumentationInfo
   }
 
   @Override
-  public String toProto() throws EvalException {
+  public String toProto(Location loc) throws EvalException {
     return "";
   }
 
   @Override
-  public String toJson() throws EvalException {
+  public String toJson(Location loc) throws EvalException {
     return "";
   }
 
   @Override
-  public void repr(Printer printer) {}
+  public void repr(SkylarkPrinter printer) {}
 
   /** Fake implementation of {@link AndroidInstrumentationInfoApiProvider}. */
   public static class FakeAndroidInstrumentationInfoProvider
@@ -52,6 +53,6 @@ public class FakeAndroidInstrumentationInfo
     }
 
     @Override
-    public void repr(Printer printer) {}
+    public void repr(SkylarkPrinter printer) {}
   }
 }

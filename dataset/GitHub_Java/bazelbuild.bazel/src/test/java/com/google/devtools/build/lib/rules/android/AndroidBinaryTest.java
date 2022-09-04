@@ -3580,7 +3580,6 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
   @Test
   public void testAapt2WithoutAndroidSdk() throws Exception {
-    useConfiguration("--android_aapt=aapt2");
     checkError(
         "java/a",
         "a",
@@ -4492,7 +4491,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     List<String> resourceMergingArgs =
         getGeneratingSpawnActionArgs(getValidatedResources(b).getJavaClassJar());
 
-    assertThat(resourceMergingArgs).contains("MERGE_COMPILED");
+    assertThat(resourceMergingArgs).contains("MERGE");
   }
 
   @Test
