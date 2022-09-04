@@ -26,7 +26,7 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
-import com.google.devtools.build.lib.analysis.AspectValue;
+import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.TargetAccessor;
+import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetValue;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.CommandDescriptionForm;
@@ -43,6 +44,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -79,14 +81,15 @@ class ActionGraphTextOutputFormatterCallback extends AqueryThreadsafeCallback {
       options.includeCommandline |= options.includeParamFiles;
 
       for (ConfiguredTargetValue configuredTargetValue : partialResult) {
-        for (ActionAnalysisMetadata action : configuredTargetValue.getActions()) {
+        List<ActionAnalysisMetadata> actions = configuredTargetValue.getActions();
+        for (ActionAnalysisMetadata action : actions) {
           writeAction(action, printStream);
         }
         if (options.useAspects) {
           if (configuredTargetValue.getConfiguredTarget() instanceof RuleConfiguredTarget) {
             for (AspectValue aspectValue : accessor.getAspectValues(configuredTargetValue)) {
-              for (ActionAnalysisMetadata action : aspectValue.getActions()) {
-                writeAction(action, printStream);
+              for (int i = 0; i < aspectValue.getNumActions(); i++) {
+                writeAction(aspectValue.getAction(i), printStream);
               }
             }
           }
@@ -180,25 +183,25 @@ class ActionGraphTextOutputFormatterCallback extends AqueryThreadsafeCallback {
     }
 
     if (options.includeArtifacts) {
-      stringBuilder
-          .append("  Inputs: [")
-          .append(
-              action.getInputs().toList().stream()
-                  .map(input -> input.getExecPathString())
-                  .sorted()
-                  .collect(Collectors.joining(", ")))
-          .append("]\n")
-          .append("  Outputs: [")
-          .append(
-              Streams.stream(action.getOutputs())
-                  .map(
-                      output ->
-                          output.isTreeArtifact()
-                              ? output.getExecPathString() + " (TreeArtifact)"
-                              : output.getExecPathString())
-                  .sorted()
-                  .collect(Collectors.joining(", ")))
-          .append("]\n");
+    stringBuilder
+        .append("  Inputs: [")
+        .append(
+            Streams.stream(action.getInputs())
+                .map(input -> input.getExecPathString())
+                .sorted()
+                .collect(Collectors.joining(", ")))
+        .append("]\n")
+        .append("  Outputs: [")
+        .append(
+            Streams.stream(action.getOutputs())
+                .map(
+                    output ->
+                        output.isTreeArtifact()
+                            ? output.getExecPathString() + " (TreeArtifact)"
+                            : output.getExecPathString())
+                .sorted()
+                .collect(Collectors.joining(", ")))
+        .append("]\n");
     }
 
     if (action instanceof AbstractAction) {
@@ -219,25 +222,6 @@ class ActionGraphTextOutputFormatterCallback extends AqueryThreadsafeCallback {
                     .collect(Collectors.joining(", ")))
             .append("]\n");
       }
-      if (abstractAction.getExecutionInfo() != null) {
-        Set<Entry<String, String>> executionInfoSpecifiers =
-            abstractAction.getExecutionInfo().entrySet();
-        if (!executionInfoSpecifiers.isEmpty()) {
-          stringBuilder
-              .append("  ExecutionInfo: {")
-              .append(
-                  executionInfoSpecifiers.stream()
-                      .sorted(Map.Entry.comparingByKey())
-                      .map(
-                          e ->
-                              String.format(
-                                  "%s: %s",
-                                  ShellEscaper.escapeString(e.getKey()),
-                                  ShellEscaper.escapeString(e.getValue())))
-                      .collect(Collectors.joining(", ")))
-              .append("}\n");
-        }
-      }
     }
     if (options.includeCommandline && action instanceof CommandAction) {
       stringBuilder
@@ -255,7 +239,7 @@ class ActionGraphTextOutputFormatterCallback extends AqueryThreadsafeCallback {
     if (options.includeParamFiles) {
       // Assumption: if an Action takes a param file as an input, it will be used
       // to provide params to the command.
-      for (Artifact input : action.getInputs().toList()) {
+      for (Artifact input : action.getInputs()) {
         String inputFileName = input.getExecPathString();
         if (getParamFileNameToContentMap().containsKey(inputFileName)) {
           stringBuilder
@@ -267,21 +251,25 @@ class ActionGraphTextOutputFormatterCallback extends AqueryThreadsafeCallback {
         }
       }
     }
-    Map<String, String> executionInfo = action.getExecutionInfo();
-    if (executionInfo != null && !executionInfo.isEmpty()) {
-      stringBuilder
-          .append("  ExecutionInfo: {")
-          .append(
-              executionInfo.entrySet().stream()
-                  .sorted(Map.Entry.comparingByKey())
-                  .map(
-                      e ->
-                          String.format(
-                              "%s: %s",
-                              ShellEscaper.escapeString(e.getKey()),
-                              ShellEscaper.escapeString(e.getValue())))
-                  .collect(Collectors.joining(", ")))
-          .append("}\n");
+
+    if (action instanceof ExecutionInfoSpecifier) {
+      Set<Entry<String, String>> executionInfoSpecifiers =
+          ((ExecutionInfoSpecifier) action).getExecutionInfo().entrySet();
+      if (!executionInfoSpecifiers.isEmpty()) {
+        stringBuilder
+            .append("  ExecutionInfo: {")
+            .append(
+                executionInfoSpecifiers.stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(
+                        e ->
+                            String.format(
+                                "%s: %s",
+                                ShellEscaper.escapeString(e.getKey()),
+                                ShellEscaper.escapeString(e.getValue())))
+                    .collect(Collectors.joining(", ")))
+            .append("}\n");
+      }
     }
 
     stringBuilder.append('\n');

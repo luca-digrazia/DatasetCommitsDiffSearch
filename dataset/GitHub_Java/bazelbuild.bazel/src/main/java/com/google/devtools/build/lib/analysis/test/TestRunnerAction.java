@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactPathResolver;
-import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
@@ -52,7 +51,6 @@ import com.google.devtools.build.lib.analysis.test.TestActionContext.TestRunnerS
 import com.google.devtools.build.lib.buildeventstream.TestFileNameConstants;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.ImmutableIterable;
-import com.google.devtools.build.lib.exec.TestStrategy;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.Pair;
@@ -78,7 +76,7 @@ import javax.annotation.Nullable;
  */
 // Not final so that we can mock it in tests.
 public class TestRunnerAction extends AbstractAction
-    implements NotifyOnActionCacheHit, ExecutionInfoSpecifier, CommandAction {
+    implements NotifyOnActionCacheHit, ExecutionInfoSpecifier {
   public static final PathFragment COVERAGE_TMP_ROOT = PathFragment.create("_coverage");
 
   // Used for selecting subset of testcase / testmethods.
@@ -870,22 +868,6 @@ public class TestRunnerAction extends AbstractAction
 
   public boolean isEnableRunfiles() {
     return configuration.runfilesEnabled();
-  }
-
-  @Override
-  public List<String> getArguments() throws CommandLineExpansionException {
-    return TestStrategy.expandedArgsFromAction(this);
-  }
-
-  @Override
-  public ImmutableMap<String, String> getIncompleteEnvironmentForTesting()
-      throws ActionExecutionException {
-    return getEnvironment().getFixedEnv().toMap();
-  }
-
-  @Override
-  public Iterable<Artifact> getPossibleInputsForTesting() {
-    return getInputs();
   }
 
   /** The same set of paths as the parent test action, resolved against a given exec root. */
