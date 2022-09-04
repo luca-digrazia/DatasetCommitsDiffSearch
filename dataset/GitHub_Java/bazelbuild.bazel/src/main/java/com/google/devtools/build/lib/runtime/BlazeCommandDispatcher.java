@@ -193,7 +193,7 @@ public class BlazeCommandDispatcher {
     return ExitCode.SUCCESS;
   }
 
-  private ExitCode parseArgsAndConfigs(CommandEnvironment env, OptionsParser optionsParser,
+  private void parseArgsAndConfigs(CommandEnvironment env, OptionsParser optionsParser,
       Command commandAnnotation, List<String> args, List<String> rcfileNotes, OutErr outErr)
       throws OptionsParsingException {
 
@@ -239,17 +239,9 @@ public class BlazeCommandDispatcher {
       commonOptions = optionsParser.getOptions(CommonCommandOptions.class);
     }
     if (!unknownConfigs.isEmpty()) {
-      if (commonOptions.allowUndefinedConfigs) {
-        outErr.printErrLn("WARNING: Config values are not defined in any .rc file: "
-            + Joiner.on(", ").join(unknownConfigs));
-      } else {
-        outErr.printErrLn("ERROR: Config values are not defined in any .rc file: "
-            + Joiner.on(", ").join(unknownConfigs));
-        return ExitCode.COMMAND_LINE_ERROR;
-      }
+      outErr.printErrLn("WARNING: Config values are not defined in any .rc file: "
+          + Joiner.on(", ").join(unknownConfigs));
     }
-
-    return ExitCode.SUCCESS;
   }
 
   /**
@@ -411,11 +403,8 @@ public class BlazeCommandDispatcher {
       return ExitCode.BLAZE_INTERNAL_ERROR.getNumericExitCode();
     }
     try {
-      ExitCode parseResult =
-          parseArgsAndConfigs(env, optionsParser, commandAnnotation, args, rcfileNotes, outErr);
-      if (!parseResult.equals(ExitCode.SUCCESS)) {
-        return parseResult.getNumericExitCode();
-      }
+      parseArgsAndConfigs(env, optionsParser, commandAnnotation, args, rcfileNotes, outErr);
+
       // Merge the invocation policy that is user-supplied, from the command line, and any
       // invocation policy that was added by a module. The module one goes 'first,' so the user
       // one has priority.

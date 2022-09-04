@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.runtime;
 import static com.google.devtools.build.lib.profiler.AutoProfiler.profiled;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
@@ -50,6 +51,7 @@ import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.common.options.OptionPriority;
 import com.google.devtools.common.options.OptionsClassProvider;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -80,8 +82,7 @@ public final class CommandEnvironment {
   private final EventBus eventBus;
   private final BlazeModule.ModuleEnvironment blazeModuleEnvironment;
   private final Map<String, String> clientEnv = new TreeMap<>();
-  private final Set<String> visibleActionEnv = new TreeSet<>();
-  private final Set<String> visibleTestEnv = new TreeSet<>();
+  private final Set<String> visibleClientEnv = new TreeSet<>();
   private final Map<String, String> actionClientEnv = new TreeMap<>();
   private final TimestampGranularityMonitor timestampGranularityMonitor;
   private final Thread commandThread;
@@ -92,7 +93,6 @@ public final class CommandEnvironment {
   private long commandStartTime;
   private OutputService outputService;
   private Path workingDirectory;
-  private String workspaceName;
 
   private String commandName;
   private OptionsProvider options;
@@ -145,7 +145,6 @@ public final class CommandEnvironment {
     // TODO(ulfjack): We don't call beforeCommand() in tests, but rely on workingDirectory being set
     // in setupPackageCache(). This leads to NPE if we don't set it here.
     this.workingDirectory = directories.getWorkspace();
-    this.workspaceName = null;
 
     workspace.getSkyframeExecutor().setEventBus(eventBus);
   }
@@ -215,27 +214,15 @@ public final class CommandEnvironment {
    * Return an ordered version of the client environment restricted to those variables whitelisted
    * by the command-line options to be inheritable by actions.
    */
-  public Map<String, String> getWhitelistedActionEnv() {
-    return filterClientEnv(visibleActionEnv);
-  }
-
-  /**
-   * Return an ordered version of the client environment restricted to those variables whitelisted
-   * by the command-line options to be inheritable by actions.
-   */
-  public Map<String, String> getWhitelistedTestEnv() {
-    return filterClientEnv(visibleTestEnv);
-  }
-
-  private Map<String, String> filterClientEnv(Set<String> vars) {
-    Map<String, String> result = new TreeMap<>();
-    for (String var : vars) {
+  public Map<String, String> getWhitelistedClientEnv() {
+    Map<String, String> visibleEnv = new TreeMap<>();
+    for (String var : visibleClientEnv) {
       String value = clientEnv.get(var);
       if (value != null) {
-        result.put(var, value);
+        visibleEnv.put(var, value);
       }
     }
-    return Collections.unmodifiableMap(result);
+    return Collections.unmodifiableMap(visibleEnv);
   }
 
   @VisibleForTesting
@@ -325,14 +312,13 @@ public final class CommandEnvironment {
   }
 
   public String getWorkspaceName() {
-    Preconditions.checkNotNull(workspaceName);
-    return workspaceName;
+    Path workspace = getDirectories().getWorkspace();
+    if (workspace == null) {
+      return "";
+    }
+    return workspace.getBaseName();
   }
 
-  public void setWorkspaceName(String workspaceName) {
-    Preconditions.checkState(this.workspaceName == null, "workspace name can only be set once");
-    this.workspaceName = workspaceName;
-  }
   /**
    * Returns if the client passed a valid workspace to be used for the build.
    */
@@ -355,8 +341,7 @@ public final class CommandEnvironment {
    * build reside.
    */
   public Path getExecRoot() {
-    Preconditions.checkNotNull(workspaceName);
-    return getDirectories().getExecRoot(workspaceName);
+    return getDirectories().getExecRoot();
   }
 
   /**
@@ -622,26 +607,44 @@ public final class CommandEnvironment {
     // Start the performance and memory profilers.
     runtime.beforeCommand(this, options, execStartTimeNanos);
 
-    // actionClientEnv contains the environment where values from actionEnvironment are overridden.
+    // actionClientEnv contains the environment where values from actionEnvironment are
+    // overridden.
+    actionClientEnv.clear();
     actionClientEnv.putAll(clientEnv);
 
     if (command.builds()) {
-      // Compute the set of environment variables that are whitelisted on the commandline
-      // for inheritance.
+      Map<String, String> testEnv = new TreeMap<>();
       for (Map.Entry<String, String> entry :
-          optionsParser.getOptions(BuildConfiguration.Options.class).actionEnvironment) {
+          optionsParser.getOptions(BuildConfiguration.Options.class).testEnvironment) {
+        testEnv.put(entry.getKey(), entry.getValue());
+      }
+
+      // Compute the set of environment variables that are whitelisted on the commandline
+      // for inheritence.
+      for (Map.Entry<String, String> entry :
+             optionsParser.getOptions(BuildConfiguration.Options.class).actionEnvironment) {
         if (entry.getValue() == null) {
-          visibleActionEnv.add(entry.getKey());
+          visibleClientEnv.add(entry.getKey());
         } else {
-          visibleActionEnv.remove(entry.getKey());
+          visibleClientEnv.remove(entry.getKey());
           actionClientEnv.put(entry.getKey(), entry.getValue());
         }
       }
-      for (Map.Entry<String, String> entry :
-          optionsParser.getOptions(BuildConfiguration.Options.class).testEnvironment) {
-        if (entry.getValue() == null) {
-          visibleTestEnv.add(entry.getKey());
+
+      try {
+        for (Map.Entry<String, String> entry : testEnv.entrySet()) {
+          if (entry.getValue() == null) {
+            String clientValue = clientEnv.get(entry.getKey());
+            if (clientValue != null) {
+              optionsParser.parse(OptionPriority.SOFTWARE_REQUIREMENT,
+                  "test environment variable from client environment",
+                  ImmutableList.of(
+                      "--test_env=" + entry.getKey() + "=" + clientEnv.get(entry.getKey())));
+            }
+          }
         }
+      } catch (OptionsParsingException e) {
+        throw new IllegalStateException(e);
       }
     }
 
@@ -664,7 +667,8 @@ public final class CommandEnvironment {
   }
 
   /**
-   * Returns the client environment combined with all fixed env var settings from --action_env.
+   * Returns the client environment for which value specified in the command line with the flag
+   * --action_env have been enforced.
    */
   public Map<String, String> getActionClientEnv() {
     return Collections.unmodifiableMap(actionClientEnv);
