@@ -597,8 +597,4 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   public boolean disableCrosstool() {
     return cppOptions.disableCrosstool;
   }
-
-  public boolean dontEnableHostNonhost() {
-    return cppOptions.dontEnableHostNonhost;
-  }
 }
