@@ -53,12 +53,6 @@ public abstract class BaseConfiguration {
     @Parameter(value = "ring_size", required = true, validator = PositiveIntegerValidator.class)
     private int ringSize = 1024;
 
-    @Parameter(value = "inputbuffer_ring_size", required = true, validator = PositiveIntegerValidator.class)
-    private int inputBufferRingSize = 8192;
-
-    @Parameter(value = "inputbuffer_wait_strategy", required = true)
-    private String inputBufferWaitStrategy = "blocking";
-
     @Parameter(value = "rest_enable_cors")
     private boolean restEnableCors = false;
 
@@ -153,8 +147,8 @@ public abstract class BaseConfiguration {
         return processBufferProcessors;
     }
 
-    private WaitStrategy getWaitStrategy(String waitStrategyName, String configOptionName) {
-        switch (waitStrategyName) {
+    public WaitStrategy getProcessorWaitStrategy() {
+        switch (processorWaitStrategy) {
             case "sleeping":
                 return new SleepingWaitStrategy();
             case "yielding":
@@ -164,26 +158,14 @@ public abstract class BaseConfiguration {
             case "busy_spinning":
                 return new BusySpinWaitStrategy();
             default:
-                LOG.warn("Invalid setting for [{}]:"
-                        + " Falling back to default: BlockingWaitStrategy.", configOptionName);
+                LOG.warn("Invalid setting for [processor_wait_strategy]:"
+                        + " Falling back to default: BlockingWaitStrategy.");
                 return new BlockingWaitStrategy();
         }
     }
 
-    public WaitStrategy getProcessorWaitStrategy() {
-        return getWaitStrategy(processorWaitStrategy, "processbuffer_wait_strategy");
-    }
-
     public int getRingSize() {
         return ringSize;
-    }
-
-    public int getInputBufferRingSize() {
-        return inputBufferRingSize;
-    }
-
-    public WaitStrategy getInputBufferWaitStrategy() {
-        return getWaitStrategy(inputBufferWaitStrategy, "inputbuffer_wait_strategy");
     }
 
     public boolean isRestEnableCors() {
