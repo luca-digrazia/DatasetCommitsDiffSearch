@@ -16,14 +16,13 @@
 
 package org.jboss.shamrock.undertow.runtime;
 
+import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.EventListener;
 import java.util.List;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import javax.servlet.DispatcherType;
 import javax.servlet.Filter;
@@ -32,10 +31,10 @@ import javax.servlet.Servlet;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 
+import org.jboss.logging.Logger;
 import org.jboss.protean.arc.ManagedContext;
 import org.jboss.shamrock.arc.runtime.BeanContainer;
-import org.jboss.shamrock.runtime.InjectionFactory;
-import org.jboss.shamrock.runtime.InjectionInstance;
+import org.jboss.shamrock.runtime.LaunchMode;
 import org.jboss.shamrock.runtime.RuntimeValue;
 import org.jboss.shamrock.runtime.ShutdownContext;
 import org.jboss.shamrock.runtime.annotations.Template;
@@ -49,11 +48,11 @@ import io.undertow.server.handlers.ResponseCodeHandler;
 import io.undertow.server.handlers.resource.CachingResourceManager;
 import io.undertow.server.handlers.resource.ClassPathResourceManager;
 import io.undertow.server.handlers.resource.PathResourceManager;
+import io.undertow.server.handlers.resource.ResourceManager;
 import io.undertow.server.session.SessionIdGenerator;
 import io.undertow.servlet.ServletExtension;
 import io.undertow.servlet.Servlets;
 import io.undertow.servlet.api.ClassIntrospecter;
-import io.undertow.servlet.api.Deployment;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
 import io.undertow.servlet.api.FilterInfo;
@@ -63,6 +62,7 @@ import io.undertow.servlet.api.ListenerInfo;
 import io.undertow.servlet.api.ServletContainer;
 import io.undertow.servlet.api.ServletInfo;
 import io.undertow.servlet.api.ServletSecurityInfo;
+import io.undertow.servlet.api.ServletStackTraces;
 import io.undertow.servlet.api.ThreadSetupHandler;
 import io.undertow.servlet.handlers.DefaultServlet;
 import io.undertow.servlet.handlers.ServletPathMatches;
@@ -74,7 +74,7 @@ import io.undertow.servlet.handlers.ServletPathMatches;
 @Template
 public class UndertowDeploymentTemplate {
 
-    private static final Logger log = Logger.getLogger(UndertowDeploymentTemplate.class.getName());
+    private static final Logger log = Logger.getLogger("org.jboss.shamrock.undertow");
 
     public static final HttpHandler ROOT_HANDLER = new HttpHandler() {
         @Override
@@ -87,7 +87,7 @@ public class UndertowDeploymentTemplate {
     private static volatile Undertow undertow;
     private static volatile HttpHandler currentRoot = ResponseCodeHandler.HANDLE_404;
 
-    public RuntimeValue<DeploymentInfo> createDeployment(String name, Set<String> knownFile, Set<String> knownDirectories) {
+    public RuntimeValue<DeploymentInfo> createDeployment(String name, Set<String> knownFile, Set<String> knownDirectories, LaunchMode launchMode, ShutdownContext context) {
         DeploymentInfo d = new DeploymentInfo();
         d.setSessionIdGenerator(new ShamrockSessionIdGenerator());
         d.setClassLoader(getClass().getClassLoader());
@@ -100,18 +100,40 @@ public class UndertowDeploymentTemplate {
             };
         }
         d.setClassLoader(cl);
-        //TODO: this is a big hack
-        //TODO: caching configuration once the new config model is in place
+        //TODO: we need better handling of static resources
         String resourcesDir = System.getProperty(RESOURCES_PROP);
+        ResourceManager resourceManager;
         if (resourcesDir == null) {
-            d.setResourceManager(new CachingResourceManager(1000, 0, null, new KnownPathResourceManager(knownFile, knownDirectories, new ClassPathResourceManager(d.getClassLoader(), "META-INF/resources")), 2000));
+            resourceManager = new KnownPathResourceManager(knownFile, knownDirectories, new ClassPathResourceManager(d.getClassLoader(), "META-INF/resources"));
         } else {
-            d.setResourceManager(new CachingResourceManager(1000, 0, null, new PathResourceManager(Paths.get(resourcesDir)), 2000));
+            resourceManager = new PathResourceManager(Paths.get(resourcesDir));
+        }
+        if(launchMode == LaunchMode.NORMAL) {
+            //todo: cache configuration
+            resourceManager = new CachingResourceManager(1000, 0, null, resourceManager, 2000);
+        }
+        d.setResourceManager(resourceManager);
+
+        if(launchMode == LaunchMode.DEVELOPMENT) {
+            d.setServletStackTraces(ServletStackTraces.LOCAL_ONLY);
+        } else {
+            d.setServletStackTraces(ServletStackTraces.NONE);
         }
         d.addWelcomePages("index.html", "index.htm");
 
+
         d.addServlet(new ServletInfo(ServletPathMatches.DEFAULT_SERVLET_NAME, DefaultServlet.class).setAsyncSupported(true));
 
+        context.addShutdownTask(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    d.getResourceManager().close();
+                } catch (IOException e) {
+                    log.error("Failed to close Servlet ResourceManager", e);
+                }
+            }
+        });
         return new RuntimeValue<>(d);
     }
 
@@ -124,17 +146,13 @@ public class UndertowDeploymentTemplate {
         return null;
     }
 
-    public <T> InstanceFactory<T> createInstanceFactory(InjectionInstance<T> injectionInstance) {
-        return new ShamrockInstanceFactory<T>(injectionInstance);
-    }
-
     public RuntimeValue<ServletInfo> registerServlet(RuntimeValue<DeploymentInfo> deploymentInfo,
                                                      String name,
                                                      Class<?> servletClass,
                                                      boolean asyncSupported,
                                                      int loadOnStartup,
-                                                     InjectionFactory instanceFactory) throws Exception {
-        ServletInfo servletInfo = new ServletInfo(name, (Class<? extends Servlet>) servletClass, new ShamrockInstanceFactory(instanceFactory.create(servletClass)));
+                                                     BeanContainer beanContainer) throws Exception {
+        ServletInfo servletInfo = new ServletInfo(name, (Class<? extends Servlet>) servletClass, new ShamrockInstanceFactory(beanContainer.instanceFactory(servletClass)));
         deploymentInfo.getValue().addServlet(servletInfo);
         servletInfo.setAsyncSupported(asyncSupported);
         if (loadOnStartup > 0) {
@@ -177,8 +195,8 @@ public class UndertowDeploymentTemplate {
     public RuntimeValue<FilterInfo> registerFilter(RuntimeValue<DeploymentInfo> info,
                                                    String name, Class<?> filterClass,
                                                    boolean asyncSupported,
-                                                   InjectionFactory instanceFactory) throws Exception {
-        FilterInfo filterInfo = new FilterInfo(name, (Class<? extends Filter>) filterClass, new ShamrockInstanceFactory(instanceFactory.create(filterClass)));
+                                                   BeanContainer beanContainer) throws Exception {
+        FilterInfo filterInfo = new FilterInfo(name, (Class<? extends Filter>) filterClass, new ShamrockInstanceFactory(beanContainer.instanceFactory(filterClass)));
         info.getValue().addFilter(filterInfo);
         filterInfo.setAsyncSupported(asyncSupported);
         return new RuntimeValue<>(filterInfo);
@@ -196,17 +214,18 @@ public class UndertowDeploymentTemplate {
         info.getValue().addFilterServletNameMapping(name, mapping, dispatcherType);
     }
 
-    public void registerListener(RuntimeValue<DeploymentInfo> info, Class<?> listenerClass, InjectionFactory factory) {
-        info.getValue().addListener(new ListenerInfo((Class<? extends EventListener>) listenerClass, (InstanceFactory<? extends EventListener>) new ShamrockInstanceFactory<>(factory.create(listenerClass))));
+    public void registerListener(RuntimeValue<DeploymentInfo> info, Class<?> listenerClass, BeanContainer factory) {
+        info.getValue().addListener(new ListenerInfo((Class<? extends EventListener>) listenerClass, (InstanceFactory<? extends EventListener>) new ShamrockInstanceFactory<>(factory.instanceFactory(listenerClass))));
     }
 
     public void addServltInitParameter(RuntimeValue<DeploymentInfo> info, String name, String value) {
         info.getValue().addInitParameter(name, value);
     }
 
-    public RuntimeValue<Undertow> startUndertow(ShutdownContext shutdown, Deployment deployment, HttpConfig config, List<HandlerWrapper> wrappers) throws ServletException {
+    public RuntimeValue<Undertow> startUndertow(ShutdownContext shutdown, DeploymentManager manager, HttpConfig config, List<HandlerWrapper> wrappers, LaunchMode launchMode) throws ServletException {
+
         if (undertow == null) {
-            startUndertowEagerly(config, null);
+            startUndertowEagerly(config, null, launchMode);
 
             //in development mode undertow is started eagerly
             shutdown.addShutdownTask(new Runnable() {
@@ -217,7 +236,18 @@ public class UndertowDeploymentTemplate {
                 }
             });
         }
-        HttpHandler main = deployment.getHandler();
+        shutdown.addShutdownTask(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    manager.stop();
+                } catch (ServletException e) {
+                    log.error("Failed to stop deployment", e);
+                }
+                manager.undeploy();
+            }
+        });
+        HttpHandler main = manager.getDeployment().getHandler();
         for (HandlerWrapper i : wrappers) {
             main = i.wrap(main);
         }
@@ -233,22 +263,28 @@ public class UndertowDeploymentTemplate {
      * be no chance to use hot deployment to fix the error. In development mode we start Undertow early, so any error
      * on boot can be corrected via the hot deployment handler
      */
-    public static void startUndertowEagerly(HttpConfig config, HandlerWrapper hotDeploymentWrapper) throws ServletException {
+    public static void startUndertowEagerly(HttpConfig config, HandlerWrapper hotDeploymentWrapper, LaunchMode launchMode) throws ServletException {
         if (undertow == null) {
-            log.log(Level.FINE, "Starting Undertow on port " + config.port);
+            int port = config.determinePort(launchMode);
+            log.debugf("Starting Undertow on port %d", port);
             HttpHandler rootHandler = new CanonicalPathHandler(ROOT_HANDLER);
             if (hotDeploymentWrapper != null) {
                 rootHandler = hotDeploymentWrapper.wrap(rootHandler);
             }
 
             Undertow.Builder builder = Undertow.builder()
-                    .addHttpListener(config.port, config.host)
+                    .addHttpListener(port, config.host)
                     .setHandler(rootHandler);
             if (config.ioThreads.isPresent()) {
                 builder.setIoThreads(config.ioThreads.getAsInt());
+            } else if(launchMode.isDevOrTest()) {
+                //we limit the number of IO and worker threads in development and testing mode
+                builder.setIoThreads(2);
             }
             if (config.workerThreads.isPresent()) {
                 builder.setWorkerThreads(config.workerThreads.getAsInt());
+            } else if(launchMode.isDevOrTest()) {
+                builder.setWorkerThreads(6);
             }
             undertow = builder
                     .build();
@@ -256,29 +292,29 @@ public class UndertowDeploymentTemplate {
         }
     }
 
-    public Deployment bootServletContainer(RuntimeValue<DeploymentInfo> info, InjectionFactory injectionFactory) {
+    public DeploymentManager bootServletContainer(RuntimeValue<DeploymentInfo> info, BeanContainer beanContainer) {
         try {
             ClassIntrospecter defaultVal = info.getValue().getClassIntrospecter();
             info.getValue().setClassIntrospecter(new ClassIntrospecter() {
                 @Override
                 public <T> InstanceFactory<T> createInstanceFactory(Class<T> clazz) throws NoSuchMethodException {
-                    InjectionInstance<T> res = injectionFactory.create(clazz);
+                    BeanContainer.Factory<T> res = beanContainer.instanceFactory(clazz);
                     if (res == null) {
                         return defaultVal.createInstanceFactory(clazz);
                     }
                     return new InstanceFactory<T>() {
                         @Override
                         public InstanceHandle<T> createInstance() throws InstantiationException {
-                            T ih = res.newInstance();
+                            BeanContainer.Instance<T> ih = res.create();
                             return new InstanceHandle<T>() {
                                 @Override
                                 public T getInstance() {
-                                    return ih;
+                                    return ih.get();
                                 }
 
                                 @Override
                                 public void release() {
-
+                                    ih.close();
                                 }
                             };
                         }
@@ -289,7 +325,7 @@ public class UndertowDeploymentTemplate {
             DeploymentManager manager = servletContainer.addDeployment(info.getValue());
             manager.deploy();
             manager.start();
-            return manager.getDeployment();
+            return manager;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
