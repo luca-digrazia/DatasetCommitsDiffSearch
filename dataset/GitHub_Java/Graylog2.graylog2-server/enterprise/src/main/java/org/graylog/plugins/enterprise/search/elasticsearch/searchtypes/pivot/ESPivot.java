@@ -6,7 +6,9 @@ import io.searchbox.core.SearchResult;
 import io.searchbox.core.search.aggregation.Aggregation;
 import io.searchbox.core.search.aggregation.MetricAggregation;
 import one.util.streamex.EntryStream;
+import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
+import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.graylog.plugins.enterprise.search.Query;
 import org.graylog.plugins.enterprise.search.SearchJob;
@@ -47,7 +49,7 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
     @Override
     public void doGenerateQueryPart(SearchJob job, Query query, Pivot pivot, ESGeneratedQueryContext queryContext) {
         LOG.debug("Generating aggregation for {}", pivot);
-        final SearchSourceBuilder searchSourceBuilder = queryContext.searchSourceBuilder(pivot);
+        final SearchSourceBuilder searchSourceBuilder = queryContext.searchSourceBuilder(pivot.id());
 
         final Map<Object, Object> contextMap = queryContext.contextMap();
         final AggTypes aggTypes = new AggTypes();
@@ -57,6 +59,17 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
         AggregationBuilder topLevelAggregation = null;
         // holds the last complete bucket aggregation into which subsequent buckets get added
         AggregationBuilder previousAggregation = null;
+
+        // if there is a filter, we'll add it as the top level aggregation.
+        // the surrounding backend code will take care of removing it before passing the result into this handler
+        if (pivot.filter() != null) {
+            final Optional<QueryBuilder> queryBuilder = queryContext.generateFilterClause(pivot.filter());
+            if (queryBuilder.isPresent()) {
+                final QueryBuilder filterClause = queryBuilder.get();
+                previousAggregation = AggregationBuilders.filter("filtered-" + pivot.id(), filterClause);
+                searchSourceBuilder.aggregation(previousAggregation);
+            }
+        }
 
         // add global rollup series if those were requested
         if (pivot.rollup()) {
@@ -93,30 +106,30 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
                 previousAggregation = aggregationBuilder;
             }
         }
-        final Iterator<BucketSpec> colBuckets = pivot.columnGroups().iterator();
-        while (colBuckets.hasNext()) {
-            final BucketSpec bucketSpec = colBuckets.next();
+        if (previousAggregation == null) {
+            LOG.debug("No row aggregations were generated, cannot generate column groups.");
+        } else {
+            final Iterator<BucketSpec> colBuckets = pivot.columnGroups().iterator();
+            while (colBuckets.hasNext()) {
+                final BucketSpec bucketSpec = colBuckets.next();
 
-            final String name = queryContext.nextName();
-            LOG.debug("Creating column group aggregation '{}' as {}", bucketSpec.type(), name);
-            final ESPivotBucketSpecHandler<? extends PivotSpec, ? extends Aggregation> handler = bucketHandlers.get(bucketSpec.type());
-            if (handler == null) {
-                throw new IllegalArgumentException("Unknown column_group type " + bucketSpec.type());
-            }
-            final Optional<AggregationBuilder> generatedAggregation = handler.createAggregation(name, pivot, bucketSpec, this, queryContext, query);
-            if (generatedAggregation.isPresent()) {
-                final AggregationBuilder aggregationBuilder = generatedAggregation.get();
-                // always insert the series for the final row group, or for each one if explicit rollup was requested
-                if (!colBuckets.hasNext() || pivot.rollup()) {
-                    seriesStream(pivot, queryContext, !colBuckets.hasNext() ? "leaf column" : "column rollup")
-                            .forEach(aggregationBuilder::subAggregation);
+                final String name = queryContext.nextName();
+                LOG.debug("Creating column group aggregation '{}' as {}", bucketSpec.type(), name);
+                final ESPivotBucketSpecHandler<? extends PivotSpec, ? extends Aggregation> handler = bucketHandlers.get(bucketSpec.type());
+                if (handler == null) {
+                    throw new IllegalArgumentException("Unknown column_group type " + bucketSpec.type());
                 }
-                if (previousAggregation != null) {
+                final Optional<AggregationBuilder> generatedAggregation = handler.createAggregation(name, pivot, bucketSpec, this, queryContext, query);
+                if (generatedAggregation.isPresent()) {
+                    final AggregationBuilder aggregationBuilder = generatedAggregation.get();
+                    // always insert the series for the final row group, or for each one if explicit rollup was requested
+                    if (!colBuckets.hasNext() || pivot.rollup()) {
+                        seriesStream(pivot, queryContext, !colBuckets.hasNext() ? "leaf column" : "column rollup")
+                                .forEach(aggregationBuilder::subAggregation);
+                    }
                     previousAggregation.subAggregation(aggregationBuilder);
-                } else {
-                    searchSourceBuilder.aggregation(aggregationBuilder);
+                    previousAggregation = aggregationBuilder;
                 }
-                previousAggregation = aggregationBuilder;
             }
         }
 
@@ -138,9 +151,7 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
 
     @Override
     public SearchType.Result doExtractResult(SearchJob job, Query query, Pivot pivot, SearchResult queryResult, MetricAggregation aggregations, ESGeneratedQueryContext queryContext) {
-        final PivotResult.Builder resultBuilder = PivotResult.builder()
-                .id(pivot.id())
-                .total(extractDocumentCount(queryResult, pivot, queryContext));
+        final PivotResult.Builder resultBuilder = PivotResult.builder().id(pivot.id());
 
         // pivot results are a table where cells can contain multiple "values" and not only scalars:
         // each combination of row and column groups can contain all series (if rollup is true)
@@ -154,10 +165,6 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
         processRows(resultBuilder, queryResult, queryContext, pivot, pivot.rowGroups(), new ArrayDeque<>(), aggregations);
 
         return resultBuilder.build();
-    }
-
-    private long extractDocumentCount(SearchResult queryResult, Pivot pivot, ESGeneratedQueryContext queryContext) {
-        return queryResult.getTotal();
     }
 
 
@@ -183,9 +190,7 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
 
             // also add the series for the entire row
             // columnKeys is empty, because this is a rollup per row bucket, thus for all columns in that bucket (IOW it's not a leaf!)
-            if (pivot.rollup()) {
-                processSeries(rowBuilder, searchResult, queryContext, pivot, new ArrayDeque<>(), aggregation, true, "row-leaf");
-            }
+            processSeries(rowBuilder, searchResult, queryContext, pivot, new ArrayDeque<>(), aggregation, true, "row-leaf");
             resultBuilder.addRow(rowBuilder.source("leaf").build());
         } else {
             // this is not a leaf for the rows, so we add its key to the rowKeys and descend into the aggregation tree
