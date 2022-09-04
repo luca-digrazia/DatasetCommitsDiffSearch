@@ -247,14 +247,35 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     analysisMock = getAnalysisMock();
     directories =
         new BlazeDirectories(
-            new ServerDirectories(rootDirectory, outputBase, outputBase),
+            new ServerDirectories(outputBase, outputBase, outputBase),
             rootDirectory,
             /* defaultSystemJavabase= */ null,
             analysisMock.getProductName());
 
     actionKeyContext = new ActionKeyContext();
     mockToolsConfig = new MockToolsConfig(rootDirectory, false);
-    analysisMock.setupMockToolsRepository(mockToolsConfig);
+    mockToolsConfig.create("bazel_tools_workspace/WORKSPACE", "workspace(name = 'bazel_tools')");
+    mockToolsConfig.create("bazel_tools_workspace/tools/build_defs/repo/BUILD");
+    mockToolsConfig.create(
+        "bazel_tools_workspace/tools/build_defs/repo/utils.bzl",
+        "def maybe(repo_rule, name, **kwargs):",
+        "  if name not in native.existing_rules():",
+        "    repo_rule(name = name, **kwargs)");
+    mockToolsConfig.create(
+        "bazel_tools_workspace/tools/build_defs/repo/http.bzl",
+        "def http_archive(**kwargs):",
+        "  pass",
+        "",
+        "def http_file(**kwargs):",
+        "  pass");
+    mockToolsConfig.create(
+        "bazel_tools_workspace/tools/jdk/local_java_repository.bzl",
+        "def local_java_repository(**kwargs):",
+        "  pass");
+    mockToolsConfig.create(
+        "bazel_tools_workspace/tools/jdk/remote_java_repository.bzl",
+        "def remote_java_repository(**kwargs):",
+        "  pass");
     initializeMockClient();
 
     packageOptions = parsePackageOptions();
@@ -264,31 +285,21 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     ruleClassProvider = createRuleClassProvider();
     getOutputPath().createDirectoryAndParents();
     ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues =
-        ImmutableList.<PrecomputedValue.Injected>builder()
-            .add(
-                PrecomputedValue.injected(
-                    PrecomputedValue.STARLARK_SEMANTICS, StarlarkSemantics.DEFAULT))
-            .add(PrecomputedValue.injected(PrecomputedValue.REPO_ENV, ImmutableMap.of()))
-            .add(
-                PrecomputedValue.injected(
-                    RepositoryDelegatorFunction.REPOSITORY_OVERRIDES, ImmutableMap.of()))
-            .add(
-                PrecomputedValue.injected(
-                    RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE,
-                    Optional.empty()))
-            .add(
-                PrecomputedValue.injected(
-                    RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
-                    RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY))
-            .add(
-                PrecomputedValue.injected(
-                    RepositoryDelegatorFunction.ENABLE_BZLMOD, enableBzlmod()))
-            .add(
-                PrecomputedValue.injected(
-                    BuildInfoCollectionFunction.BUILD_INFO_FACTORIES,
-                    ruleClassProvider.getBuildInfoFactoriesAsMap()))
-            .addAll(extraPrecomputedValues())
-            .build();
+        ImmutableList.of(
+            PrecomputedValue.injected(
+                PrecomputedValue.STARLARK_SEMANTICS, StarlarkSemantics.DEFAULT),
+            PrecomputedValue.injected(PrecomputedValue.REPO_ENV, ImmutableMap.of()),
+            PrecomputedValue.injected(
+                RepositoryDelegatorFunction.REPOSITORY_OVERRIDES, ImmutableMap.of()),
+            PrecomputedValue.injected(
+                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.empty()),
+            PrecomputedValue.injected(
+                RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
+                RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY),
+            PrecomputedValue.injected(RepositoryDelegatorFunction.ENABLE_BZLMOD, enableBzlmod()),
+            PrecomputedValue.injected(
+                BuildInfoCollectionFunction.BUILD_INFO_FACTORIES,
+                ruleClassProvider.getBuildInfoFactoriesAsMap()));
     PackageFactory.BuilderForTesting pkgFactoryBuilder =
         analysisMock
             .getPackageFactoryBuilderForTesting(directories)
@@ -371,13 +382,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   /** Returns whether or not to enable Bzlmod in this test. */
   protected boolean enableBzlmod() {
     return false;
-  }
-
-  /**
-   * Returns extra precomputed values to inject, both into Skyframe and the testing package loaders.
-   */
-  protected ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues() {
-    return ImmutableList.of();
   }
 
   protected void initializeMockClient() throws IOException {
