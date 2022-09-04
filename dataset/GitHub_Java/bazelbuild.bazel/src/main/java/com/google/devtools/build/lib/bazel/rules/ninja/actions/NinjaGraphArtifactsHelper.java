@@ -108,13 +108,7 @@ class NinjaGraphArtifactsHelper {
 
     PathFragment execPath = workingDirectory.getRelative(workingDirectoryPath);
     if (execPath.startsWith(outputRootPath)) {
-      // In the output directory, so it is either specified via output_root_symlinks, or
-      // it is a derived artifact.
-      if (outputRootSymlinks.contains(execPath.relativeTo(outputRootPath))) {
-        return ruleContext
-            .getAnalysisEnvironment()
-            .getSymlinkArtifact(execPath.relativeTo(outputRootPath), derivedOutputRoot);
-      }
+      // In the output directory, so it must be a derived artifact.
       return ruleContext.getDerivedArtifact(execPath.relativeTo(outputRootPath), derivedOutputRoot);
     }
 
