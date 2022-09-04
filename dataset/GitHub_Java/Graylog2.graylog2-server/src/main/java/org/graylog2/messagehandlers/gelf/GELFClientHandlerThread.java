@@ -52,10 +52,10 @@ public class GELFClientHandlerThread extends Thread {
             GELFClientHandlerIF client = null;
             if (GELF.isChunkedMessage(this.receivedGelfSentence)) {
                 System.out.println("RECEIVED CHUNKED MESSAGE");
-                client = new ChunkedGELFClientHandler(this.receivedGelfSentence);
+                client = new ChunkedGELFClientHandler(this.receivedGelfSentence, this.getName());
             } else {
                 System.out.println("RECEIVED SIMPLE MESSAGE");
-                client = new SimpleGELFClientHandler(this.receivedGelfSentence);
+                client = new SimpleGELFClientHandler(this.receivedGelfSentence, this.getName());
             }
             client.handle();
         } catch (InvalidGELFTypeException e) {
