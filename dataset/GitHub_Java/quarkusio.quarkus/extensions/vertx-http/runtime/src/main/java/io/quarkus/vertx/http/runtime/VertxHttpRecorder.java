@@ -74,12 +74,6 @@ public class VertxHttpRecorder {
     private static final Handler<HttpServerRequest> ACTUAL_ROOT = new Handler<HttpServerRequest>() {
         @Override
         public void handle(HttpServerRequest httpServerRequest) {
-            //we need to pause the request to make sure that data does
-            //not arrive before handlers have a chance to install a read handler
-            //as it is possible filters such as the auth filter can do blocking tasks
-            //as the underlying handler has not had a chance to install a read handler yet
-            //and data that arrives while the blocking task is being processed will be lost
-            httpServerRequest.pause();
             rootHandler.handle(httpServerRequest);
         }
     };
@@ -407,11 +401,11 @@ public class VertxHttpRecorder {
         Route vr = route.apply(router.getValue());
 
         if (blocking == HandlerType.BLOCKING) {
-            vr.blockingHandler(new ResumeHandler(handler));
+            vr.blockingHandler(handler);
         } else if (blocking == HandlerType.FAILURE) {
-            vr.failureHandler(new ResumeHandler(handler));
+            vr.failureHandler(handler);
         } else {
-            vr.handler(new ResumeHandler(handler));
+            vr.handler(handler);
         }
     }
 
@@ -554,23 +548,6 @@ public class VertxHttpRecorder {
 
     public static Handler<HttpServerRequest> getRootHandler() {
         return ACTUAL_ROOT;
-    }
-
-    private static class ResumeHandler implements Handler<RoutingContext> {
-
-        final Handler<RoutingContext> next;
-
-        private ResumeHandler(Handler<RoutingContext> next) {
-            this.next = next;
-        }
-
-        @Override
-        public void handle(RoutingContext event) {
-            //we resume the request to make up for the pause that was done in the root handler
-            //this maintains normal vert.x semantics in the handlers
-            event.request().resume();
-            next.handle(event);
-        }
     }
 
 }
