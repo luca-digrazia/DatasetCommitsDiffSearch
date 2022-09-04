@@ -377,21 +377,12 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
       localVersion =
           remoteAliasesToVersionMap.get(localVersions.getDefaultVersion().getVersion().toString());
     } else {
-      for (String versionNumber : localVersions.getDefaultVersion().getAliases()) {
-        if (remoteAliasesToVersionMap.containsKey(versionNumber)) {
-          availability = Availability.BOTH;
-          localVersion = remoteAliasesToVersionMap.get(versionNumber);
-          break;
-        }
-      }
-      if (localVersion == null) {
-        ruleContext.ruleWarning(
-            "You passed --experimental_prefer_mutual_xcode=false, which prevents Bazel from"
-                + " selecting an Xcode version that optimizes your performance. Please consider"
-                + " using --experimental_prefer_mutual_xcode=true.");
-        availability = Availability.LOCAL;
-        localVersion = localVersions.getDefaultVersion();
-      }
+      ruleContext.ruleWarning(
+          "You passed --experimental_prefer_mutual_xcode=false, which prevents Bazel from"
+              + " selecting an Xcode version that optimizes your performance. Please consider"
+              + " using --experimental_prefer_mutual_xcode=true.");
+      availability = Availability.LOCAL;
+      localVersion = localVersions.getDefaultVersion();
     }
     return Maps.immutableEntry(localVersion, availability);
   }
