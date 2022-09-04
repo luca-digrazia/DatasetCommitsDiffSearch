@@ -55,13 +55,11 @@ public class BackgroundExecutor {
 			if (!(executor instanceof ScheduledExecutorService)) {
 				throw new IllegalArgumentException("The executor set does not support scheduling");
 			}
-			ScheduledExecutorService scheduledExecutorService = (ScheduledExecutorService) executor;
-			future = scheduledExecutorService.schedule(runnable, delay, TimeUnit.MILLISECONDS);
+			future = ((ScheduledExecutorService) executor).schedule(runnable, delay, TimeUnit.MILLISECONDS);
 		} else {
 			/* no serial, no delay: execute now */
 			if (executor instanceof ExecutorService) {
-				ExecutorService executorService = (ExecutorService) executor;
-				future = executorService.submit(runnable);
+				future = ((ExecutorService) executor).submit(runnable);
 			} else {
 				/* non-cancellable task */
 				executor.execute(runnable);
