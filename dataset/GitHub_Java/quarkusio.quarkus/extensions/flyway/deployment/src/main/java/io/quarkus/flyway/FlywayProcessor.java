@@ -1,6 +1,7 @@
 package io.quarkus.flyway;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
+import static java.nio.file.Files.walk;
 
 import java.io.IOException;
 import java.net.URI;
@@ -10,7 +11,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.jboss.logging.Logger;
 
@@ -167,12 +166,11 @@ class FlywayProcessor {
 
     private Set<String> getApplicationMigrationsFromPath(final String location, final URL path)
             throws IOException, URISyntaxException {
-        try (final Stream<Path> pathStream = Files.walk(Paths.get(path.toURI()))) {
-            return pathStream.filter(Files::isRegularFile)
-                    .map(it -> Paths.get(location, it.getFileName().toString()).toString())
-                    .peek(it -> LOGGER.debug("Discovered: " + it))
-                    .collect(Collectors.toSet());
-        }
+        return walk(Paths.get(path.toURI()))
+                .filter(Files::isRegularFile)
+                .map(it -> Paths.get(location, it.getFileName().toString()).toString())
+                .peek(it -> LOGGER.debug("Discovered: " + it))
+                .collect(Collectors.toSet());
     }
 
     private FileSystem initFileSystem(final URI uri) throws IOException {
