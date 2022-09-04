@@ -1,7 +1,6 @@
 package io.dropwizard.configuration;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.cache.CacheBuilderSpec;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
@@ -13,7 +12,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import javax.validation.Valid;
 import javax.validation.Validator;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Pattern;
@@ -113,10 +111,6 @@ public class ConfigurationFactoryTest {
         @JsonProperty
         List<ExampleServer> servers = ImmutableList.of(
                 ExampleServer.create(8080), ExampleServer.create(8081), ExampleServer.create(8082));
-
-        @JsonProperty
-        @Valid
-        CacheBuilderSpec cacheBuilderSpec = CacheBuilderSpec.disableCaching();
     }
 
     static class NonInsatiableExample {
@@ -157,17 +151,6 @@ public class ConfigurationFactoryTest {
         this.emptyFile = resourceFileName("factory-test-empty.yml");
         this.invalidFile = resourceFileName("factory-test-invalid.yml");
         this.validFile = resourceFileName("factory-test-valid.yml");
-    }
-
-    @Test
-    public void usesDefaultedCacheBuilderSpec() throws Exception {
-        final ExampleWithDefaults example =
-            new YamlConfigurationFactory<>(ExampleWithDefaults.class, validator, Jackson.newObjectMapper(), "dw")
-                .build();
-        assertThat(example.cacheBuilderSpec)
-            .isNotNull();
-        assertThat(example.cacheBuilderSpec)
-            .isEqualTo(CacheBuilderSpec.disableCaching());
     }
 
     @Test
