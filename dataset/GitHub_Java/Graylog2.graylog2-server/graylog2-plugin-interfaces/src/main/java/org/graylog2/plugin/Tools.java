@@ -22,22 +22,24 @@
 
 package org.graylog2.plugin;
 
+import java.io.*;
+import java.lang.management.ManagementFactory;
+import java.net.*;
+import java.text.DecimalFormat;
+import java.util.*;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.InflaterInputStream;
+
 import com.google.common.primitives.Ints;
+import org.apache.commons.io.IOUtils;
 import org.drools.util.codec.Base64;
 import org.elasticsearch.search.SearchHit;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
+import org.joda.time.Instant;
 import org.joda.time.format.*;
 
 import javax.ws.rs.core.UriBuilder;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.lang.management.ManagementFactory;
-import java.net.*;
-import java.util.*;
-import java.util.zip.GZIPInputStream;
-import java.util.zip.InflaterInputStream;
 
 /**
  * Utilty class for various tool/helper functions.
@@ -245,7 +247,7 @@ public final class Tools {
     }
 
     public static String buildElasticSearchTimeFormat(DateTime timestamp) {
-        return timestamp.toString(DateTimeFormat.forPattern(ES_DATE_FORMAT).withZoneUTC());
+        return timestamp.toString(DateTimeFormat.forPattern(ES_DATE_FORMAT));
     }
 
     /*
@@ -254,7 +256,7 @@ public final class Tools {
      * This sucks and no format should use the double representation. Change GELF to use long. (zomg)
      */
     public static DateTime dateTimeFromDouble(double x) {
-        return new DateTime(Math.round(x*1000), DateTimeZone.UTC);
+        return new DateTime(Math.round(x*1000));
     }
 
     /**
@@ -271,7 +273,7 @@ public final class Tools {
                 .toParser();
 
         return new DateTimeFormatterBuilder()
-                .append(DateTimeFormat.forPattern(ES_DATE_FORMAT_NO_MS).withZoneUTC())
+                .append(DateTimeFormat.forPattern(ES_DATE_FORMAT_NO_MS))
                 .appendOptional(ms)
                 .toFormatter();
     }
@@ -282,7 +284,7 @@ public final class Tools {
             throw new RuntimeException("Document has no field timestamp.");
         }
 
-        DateTimeFormatter formatter = DateTimeFormat.forPattern(ES_DATE_FORMAT).withZoneUTC();
+        DateTimeFormatter formatter = DateTimeFormat.forPattern(ES_DATE_FORMAT);
         DateTime dt = formatter.parseDateTime(field.toString());
 
         return (int) (dt.getMillis()/1000);
@@ -381,15 +383,6 @@ public final class Tools {
         } catch (URISyntaxException e) {
             throw new RuntimeException("Could not parse REST listen URI.", e);
         }
-    }
-
-    public static <T, E> T getKeyByValue(Map<T, E> map, E value) {
-        for (Map.Entry<T, E> entry : map.entrySet()) {
-            if (value.equals(entry.getValue())) {
-                return entry.getKey();
-            }
-        }
-        return null;
     }
 
     public static class NoInterfaceFoundException extends Exception {
