@@ -35,7 +35,7 @@ public final class CppFileTypes {
       FileTypeSet.of(CppFileTypes.CPP_SOURCE, CppFileTypes.C_SOURCE);
 
   public static final FileType CPP_HEADER =
-      FileType.of(".h", ".hh", ".hpp", ".ipp", ".hxx", ".inc", ".inl");
+      FileType.of(".h", ".hh", ".hpp", ".ipp", ".hxx", ".inc");
   public static final FileType PCH = FileType.of(".pch");
   public static final FileTypeSet OBJC_HEADER = FileTypeSet.of(CPP_HEADER, PCH);
   
@@ -184,7 +184,6 @@ public final class CppFileTypes {
   public static final FileType XBINARY_PROFILE = FileType.of(".xfdo");
   public static final FileType LLVM_PROFILE = FileType.of(".profdata");
   public static final FileType LLVM_PROFILE_RAW = FileType.of(".profraw");
-  public static final FileType LLVM_PROFILE_ZIP = FileType.of(".zip");
 
   public static final FileType CPP_MODULE_MAP = FileType.of(".cppmap");
   public static final FileType CPP_MODULE = FileType.of(".pcm");

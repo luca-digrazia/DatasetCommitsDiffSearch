@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
 /** {@code fdo_profile} rule class. */
@@ -41,9 +42,9 @@ public final class FdoProfileRule implements RuleDefinition {
                     FileTypeSet.of(
                         CppFileTypes.LLVM_PROFILE_RAW,
                         CppFileTypes.LLVM_PROFILE,
-                        CppFileTypes.LLVM_PROFILE_ZIP,
                         CppFileTypes.GCC_AUTO_PROFILE,
-                        CppFileTypes.XBINARY_PROFILE))
+                        CppFileTypes.XBINARY_PROFILE,
+                        FileType.of(".zip")))
                 .singleArtifact())
         /* <!-- #BLAZE_RULE(fdo_profile).ATTRIBUTE(absolute_path_profile) -->
         Absolute path to the FDO profile. The FDO file can have one of the following extensions:
@@ -51,12 +52,6 @@ public final class FdoProfileRule implements RuleDefinition {
         that holds an LLVM profraw profile, or .afdo for AutoFDO profile.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("absolute_path_profile", Type.STRING))
-        /* <!-- #BLAZE_RULE(fdo_profile).ATTRIBUTE(proto_profile) -->
-        Label of the protobuf profile.
-        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("proto_profile", LABEL)
-            .allowedFileTypes(FileTypeSet.ANY_FILE)
-            .singleArtifact())
         .advertiseProvider(FdoProfileProvider.class)
         .build();
   }

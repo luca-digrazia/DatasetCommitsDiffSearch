@@ -1469,7 +1469,11 @@ public final class CcCompilationHelper {
       allAdditionalBuildVariables.putAll(
           fdoSupport
               .getFdoSupport()
-              .configureCompilation(builder, featureConfiguration, fdoSupport));
+              .configureCompilation(
+                  builder,
+                  ruleContext,
+                  featureConfiguration,
+                  fdoSupport));
     }
     return CompileBuildVariables.setupVariablesOrReportRuleError(
         ruleContext,

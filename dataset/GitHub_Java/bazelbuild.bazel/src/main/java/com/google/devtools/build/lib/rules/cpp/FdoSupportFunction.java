@@ -15,22 +15,18 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
+import com.google.devtools.build.lib.skyframe.WorkspaceNameValue;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction;
+import com.google.devtools.build.skyframe.SkyFunctionException;
+import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+import java.io.IOException;
 import javax.annotation.Nullable;
 
 /**
  * Wrapper for {@link FdoSupport} that turns it into a {@link SkyFunction}.
- *
- * <p>This only exists because the value of {@code --fdo_optimize} can be a workspace-relative path
- * and thus we need to depend on {@link BlazeDirectories} somehow, which neither the configuration
- * nor the analysis phase can "officially" do.
- *
- * <p>The fix is probably to make it possible for
- * {@link com.google.devtools.build.lib.analysis.actions.SymlinkAction} to create workspace-relative
- * symlinks because action execution can hopefully depend on {@link BlazeDirectories}.
  */
 public class FdoSupportFunction implements SkyFunction {
   private final BlazeDirectories directories;
@@ -39,13 +35,47 @@ public class FdoSupportFunction implements SkyFunction {
     this.directories = Preconditions.checkNotNull(directories);
   }
 
+  /**
+   * Wrapper for FDO exceptions.
+   */
+  public static class FdoSkyException extends SkyFunctionException {
+    public FdoSkyException(Exception cause, Transience transience) {
+      super(cause, transience);
+    }
+  }
+
   @Nullable
   @Override
-  public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
+  public SkyValue compute(SkyKey skyKey, Environment env)
+      throws FdoSkyException, InterruptedException {
+    WorkspaceNameValue workspaceNameValue = (WorkspaceNameValue) env.getValue(
+        WorkspaceNameValue.key());
+    if (env.valuesMissing()) {
+      return null;
+    }
+
+    Path execRoot = directories.getExecRoot(workspaceNameValue.getName());
     FdoSupportValue.Key key = (FdoSupportValue.Key) skyKey.argument();
     Path fdoZip =
         key.getFdoZip() == null ? null : directories.getWorkspace().getRelative(key.getFdoZip());
-    FdoSupport fdoSupport = new FdoSupport(key.getFdoMode(), key.getFdoInstrument(), fdoZip);
+    FdoSupport fdoSupport;
+
+    try {
+      fdoSupport =
+          FdoSupport.create(
+              env,
+              key.getFdoInstrument(),
+              fdoZip,
+              execRoot,
+              directories.getProductName(),
+              key.getFdoMode());
+      if (env.valuesMissing()) {
+        return null;
+      }
+    } catch (IOException e) {
+      throw new FdoSkyException(e, Transience.TRANSIENT);
+    }
+
     return new FdoSupportValue(fdoSupport);
   }
 
