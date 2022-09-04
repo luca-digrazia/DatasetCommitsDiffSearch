@@ -69,15 +69,9 @@ public class PlatformLookupUtilTest extends ToolchainTestCase {
   @Test
   public void testPlatformLookup() throws Exception {
     ConfiguredTargetKey linuxKey =
-        ConfiguredTargetKey.builder()
-            .setLabel(makeLabel("//platforms:linux"))
-            .setConfigurationKey(targetConfigKey)
-            .build();
+        ConfiguredTargetKey.of(makeLabel("//platforms:linux"), targetConfigKey, false);
     ConfiguredTargetKey macKey =
-        ConfiguredTargetKey.builder()
-            .setLabel(makeLabel("//platforms:mac"))
-            .setConfigurationKey(targetConfigKey)
-            .build();
+        ConfiguredTargetKey.of(makeLabel("//platforms:mac"), targetConfigKey, false);
     GetPlatformInfoKey key = GetPlatformInfoKey.create(ImmutableList.of(linuxKey, macKey));
 
     EvaluationResult<GetPlatformInfoValue> result = getPlatformInfo(key);
@@ -96,10 +90,7 @@ public class PlatformLookupUtilTest extends ToolchainTestCase {
     scratch.file("invalid/BUILD", "filegroup(name = 'not_a_platform')");
 
     ConfiguredTargetKey targetKey =
-        ConfiguredTargetKey.builder()
-            .setLabel(makeLabel("//invalid:not_a_platform"))
-            .setConfigurationKey(targetConfigKey)
-            .build();
+        ConfiguredTargetKey.of(makeLabel("//invalid:not_a_platform"), targetConfigKey, false);
     GetPlatformInfoKey key = GetPlatformInfoKey.create(ImmutableList.of(targetKey));
 
     EvaluationResult<GetPlatformInfoValue> result = getPlatformInfo(key);
@@ -119,10 +110,7 @@ public class PlatformLookupUtilTest extends ToolchainTestCase {
   @Test
   public void testPlatformLookup_targetDoesNotExist() throws Exception {
     ConfiguredTargetKey targetKey =
-        ConfiguredTargetKey.builder()
-            .setLabel(makeLabel("//fake:missing"))
-            .setConfigurationKey(targetConfigKey)
-            .build();
+        ConfiguredTargetKey.of(makeLabel("//fake:missing"), targetConfigKey, false);
     GetPlatformInfoKey key = GetPlatformInfoKey.create(ImmutableList.of(targetKey));
 
     EvaluationResult<GetPlatformInfoValue> result = getPlatformInfo(key);
@@ -136,7 +124,7 @@ public class PlatformLookupUtilTest extends ToolchainTestCase {
         .hasErrorEntryForKeyThat(key)
         .hasExceptionThat()
         .hasMessageThat()
-        .contains("no such package 'fake': BUILD file not found");
+        .contains("no such package 'fake': BUILD file not found on package path");
   }
 
   // Calls PlatformLookupUtil.getPlatformInfo.
@@ -150,9 +138,9 @@ public class PlatformLookupUtilTest extends ToolchainTestCase {
       return GET_PLATFORM_INFO_FUNCTION;
     }
 
-    abstract ImmutableList<ConfiguredTargetKey> platformKeys();
+    abstract Iterable<ConfiguredTargetKey> platformKeys();
 
-    public static GetPlatformInfoKey create(ImmutableList<ConfiguredTargetKey> platformKeys) {
+    public static GetPlatformInfoKey create(Iterable<ConfiguredTargetKey> platformKeys) {
       return new AutoValue_PlatformLookupUtilTest_GetPlatformInfoKey(platformKeys);
     }
   }
@@ -187,7 +175,7 @@ public class PlatformLookupUtilTest extends ToolchainTestCase {
       GetPlatformInfoKey key = (GetPlatformInfoKey) skyKey;
       try {
         Map<ConfiguredTargetKey, PlatformInfo> platforms =
-            PlatformLookupUtil.getPlatformInfo(key.platformKeys(), env, false);
+            PlatformLookupUtil.getPlatformInfo(key.platformKeys(), env);
         if (env.valuesMissing()) {
           return null;
         }

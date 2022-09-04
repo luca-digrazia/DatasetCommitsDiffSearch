@@ -69,12 +69,12 @@ public class RegisteredExecutionPlatformsFunction implements SkyFunction {
     ImmutableList<Label> platformLabels;
     try {
       platformLabels =
-          TargetPatternUtil.expandTargetPatterns(
+          ToolchainUtil.expandTargetPatterns(
               env, targetPatterns.build(), FilteringPolicies.ruleType("platform", true));
       if (env.valuesMissing()) {
         return null;
       }
-    } catch (TargetPatternUtil.InvalidTargetPatternException e) {
+    } catch (ToolchainUtil.InvalidTargetPatternException e) {
       throw new RegisteredExecutionPlatformsFunctionException(
           new InvalidExecutionPlatformLabelException(e), Transience.PERSISTENT);
     }
@@ -144,8 +144,7 @@ public class RegisteredExecutionPlatformsFunction implements SkyFunction {
    */
   static final class InvalidExecutionPlatformLabelException extends Exception {
 
-    public InvalidExecutionPlatformLabelException(
-        TargetPatternUtil.InvalidTargetPatternException e) {
+    public InvalidExecutionPlatformLabelException(ToolchainUtil.InvalidTargetPatternException e) {
       this(e.getInvalidPattern(), e.getTpe());
     }
 

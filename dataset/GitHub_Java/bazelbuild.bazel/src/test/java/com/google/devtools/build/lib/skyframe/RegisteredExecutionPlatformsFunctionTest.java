@@ -212,21 +212,14 @@ public class RegisteredExecutionPlatformsFunctionTest extends ToolchainTestCase 
 
     new EqualsTester()
         .addEqualityGroup(
-            // Two platforms registered.
             RegisteredExecutionPlatformsValue.create(
                 ImmutableList.of(executionPlatformKey1, executionPlatformKey2)),
             RegisteredExecutionPlatformsValue.create(
                 ImmutableList.of(executionPlatformKey1, executionPlatformKey2)))
         .addEqualityGroup(
-            // A single platform registered.
-            RegisteredExecutionPlatformsValue.create(ImmutableList.of(executionPlatformKey1)))
-        .addEqualityGroup(
-            // A single, different, platform registered.
-            RegisteredExecutionPlatformsValue.create(ImmutableList.of(executionPlatformKey2)))
-        .addEqualityGroup(
-            // The same as the first group, but the order is different.
+            RegisteredExecutionPlatformsValue.create(ImmutableList.of(executionPlatformKey1)),
+            RegisteredExecutionPlatformsValue.create(ImmutableList.of(executionPlatformKey2)),
             RegisteredExecutionPlatformsValue.create(
-                ImmutableList.of(executionPlatformKey2, executionPlatformKey1)))
-        .testEquals();
+                ImmutableList.of(executionPlatformKey2, executionPlatformKey1)));
   }
 }

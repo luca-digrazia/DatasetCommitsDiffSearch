@@ -14,13 +14,8 @@
 
 package com.google.devtools.build.lib.skyframe;
 
-import static com.google.common.base.Predicates.equalTo;
-import static com.google.common.base.Predicates.not;
-import static java.util.stream.Collectors.joining;
-
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformProviderUtils;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -38,7 +33,7 @@ public class PlatformLookupUtil {
 
   @Nullable
   public static Map<ConfiguredTargetKey, PlatformInfo> getPlatformInfo(
-      Iterable<ConfiguredTargetKey> platformKeys, Environment env, boolean sanityCheckConfiguration)
+      Iterable<ConfiguredTargetKey> platformKeys, Environment env)
       throws InterruptedException, InvalidPlatformException {
 
     Map<
@@ -54,7 +49,7 @@ public class PlatformLookupUtil {
     boolean valuesMissing = env.valuesMissing();
     Map<ConfiguredTargetKey, PlatformInfo> platforms = valuesMissing ? null : new HashMap<>();
     for (ConfiguredTargetKey key : platformKeys) {
-      PlatformInfo platformInfo = findPlatformInfo(key, values.get(key), sanityCheckConfiguration);
+      PlatformInfo platformInfo = findPlatformInfo(key, values.get(key));
       if (!valuesMissing && platformInfo != null) {
         platforms.put(key, platformInfo);
       }
@@ -77,8 +72,7 @@ public class PlatformLookupUtil {
       ConfiguredTargetKey key,
       ValueOrException3<
               ConfiguredValueCreationException, NoSuchThingException, ActionConflictException>
-          valueOrException,
-      boolean sanityCheckConfiguration)
+          valueOrException)
       throws InvalidPlatformException {
 
     try {
@@ -88,29 +82,6 @@ public class PlatformLookupUtil {
       }
 
       ConfiguredTarget configuredTarget = ctv.getConfiguredTarget();
-      BuildConfigurationValue.Key configurationKey = configuredTarget.getConfigurationKey();
-      // This check is necessary because trimming for other rules assumes that platform resolution
-      // uses the platform fragment and _only_ the platform fragment. Without this check, it's
-      // possible another fragment could slip in without us realizing, and thus break this
-      // assumption.
-      if (sanityCheckConfiguration
-          && configurationKey.getFragments().stream()
-              .anyMatch(not(equalTo(PlatformConfiguration.class)))) {
-        // Only the PlatformConfiguration fragment may be present on a platform rule in retroactive
-        // trimming mode.
-        String extraFragmentDescription =
-            configurationKey.getFragments().stream()
-                .filter(not(equalTo(PlatformConfiguration.class)))
-                .map(cl -> cl.getSimpleName())
-                .collect(joining(","));
-        throw new InvalidPlatformException(
-            configuredTarget.getLabel(),
-            "has fragments other than PlatformConfiguration, "
-                + "which is forbidden in retroactive trimming mode: "
-                + "extra fragments are ["
-                + extraFragmentDescription
-                + "]");
-      }
       PlatformInfo platformInfo = PlatformProviderUtils.platform(configuredTarget);
       if (platformInfo == null) {
         throw new InvalidPlatformException(configuredTarget.getLabel());
@@ -128,14 +99,12 @@ public class PlatformLookupUtil {
 
   /** Exception used when a platform label is not a valid platform. */
   public static final class InvalidPlatformException extends ToolchainException {
-    private static final String DEFAULT_ERROR = "does not provide PlatformInfo";
-
     InvalidPlatformException(Label label) {
-      super(formatError(label, DEFAULT_ERROR));
+      super(formatError(label));
     }
 
     InvalidPlatformException(Label label, ConfiguredValueCreationException e) {
-      super(formatError(label, DEFAULT_ERROR), e);
+      super(formatError(label), e);
     }
 
     public InvalidPlatformException(Label label, NoSuchThingException e) {
@@ -144,15 +113,12 @@ public class PlatformLookupUtil {
     }
 
     public InvalidPlatformException(Label label, ActionConflictException e) {
-      super(formatError(label, DEFAULT_ERROR), e);
+      super(formatError(label), e);
     }
 
-    InvalidPlatformException(Label label, String error) {
-      super(formatError(label, error));
-    }
-
-    private static String formatError(Label label, String error) {
-      return String.format("Target %s was referenced as a platform, but %s", label, error);
+    private static String formatError(Label label) {
+      return String.format(
+          "Target %s was referenced as a platform, but does not provide PlatformInfo", label);
     }
   }
 }
