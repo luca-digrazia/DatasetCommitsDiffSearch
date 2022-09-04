@@ -81,7 +81,7 @@ public class ObjectMapperFactory {
         this.factoryFeatures = Maps.newHashMap();
         this.visibilityRules = Maps.newLinkedHashMap();
 
-        this.propertyNamingStrategy = new AnnotationSensitivePropertyNamingStrategy();
+        this.propertyNamingStrategy = AnnotationSensitivePropertyNamingStrategy.INSTANCE;
 
         enable(JsonParser.Feature.ALLOW_COMMENTS);
         disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
@@ -506,15 +506,15 @@ public class ObjectMapperFactory {
         }
 
         for (Map.Entry<JsonGenerator.Feature, Boolean> entry : generatorFeatures.entrySet()) {
-            mapper.getFactory().configure(entry.getKey(), entry.getValue());
+            mapper.getJsonFactory().configure(entry.getKey(), entry.getValue());
         }
 
         for (Map.Entry<JsonParser.Feature, Boolean> entry : parserFeatures.entrySet()) {
-            mapper.getFactory().configure(entry.getKey(), entry.getValue());
+            mapper.getJsonFactory().configure(entry.getKey(), entry.getValue());
         }
 
         for (Map.Entry<JsonFactory.Feature, Boolean> entry : factoryFeatures.entrySet()) {
-            mapper.getFactory().configure(entry.getKey(), entry.getValue());
+            mapper.getJsonFactory().configure(entry.getKey(), entry.getValue());
         }
 
         if (annotationIntrospector != null) {

@@ -31,26 +31,26 @@ public class ObjectMapperFactoryTest {
         final JsonFactory jsonFactory = new YAMLFactory();
         final ObjectMapper mapper = factory.build(jsonFactory);
 
-        assertThat(mapper.getFactory())
+        assertThat(mapper.getJsonFactory())
                 .isSameAs(jsonFactory);
     }
 
     @Test
     public void defaultsToAnnotationSensitivePropertyNames() throws Exception {
         assertThat(factory.getPropertyNamingStrategy())
-                .isInstanceOf(AnnotationSensitivePropertyNamingStrategy.class);
+                .isEqualTo(AnnotationSensitivePropertyNamingStrategy.INSTANCE);
 
         final ObjectMapper mapper = factory.build();
 
         assertThat(mapper.getDeserializationConfig().getPropertyNamingStrategy())
-                .isInstanceOf(AnnotationSensitivePropertyNamingStrategy.class);
+                .isSameAs(AnnotationSensitivePropertyNamingStrategy.INSTANCE);
     }
 
     @Test
     public void defaultsToAllowingComments() throws Exception {
         final ObjectMapper mapper = factory.build();
 
-        assertThat(mapper.getFactory().isEnabled(JsonParser.Feature.ALLOW_COMMENTS))
+        assertThat(mapper.getJsonFactory().isEnabled(JsonParser.Feature.ALLOW_COMMENTS))
                 .isTrue();
     }
 
