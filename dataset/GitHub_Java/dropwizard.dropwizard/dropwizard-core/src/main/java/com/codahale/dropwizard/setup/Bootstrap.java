@@ -30,14 +30,12 @@ public class Bootstrap<T extends Configuration> {
     );
 
     private final Service<T> service;
+    private ConfigurationSourceProvider configurationProvider = new FileConfigurationSourceProvider();
     private final ObjectMapper objectMapper;
     private final List<Bundle> bundles;
     private final List<ConfiguredBundle<? super T>> configuredBundles;
     private final List<Command> commands;
     private final MetricRegistry metricRegistry;
-
-    private ConfigurationSourceProvider configurationProvider;
-    private ClassLoader classLoader;
 
     public Bootstrap(Service<T> service) {
         this.service = service;
@@ -54,9 +52,6 @@ public class Bootstrap<T extends Configuration> {
         metricRegistry.register("jvm.gc", new GarbageCollectorMetricSet());
         metricRegistry.register("jvm.memory", new MemoryUsageGaugeSet());
         metricRegistry.register("jvm.threads", new ThreadStatesGaugeSet());
-
-        this.configurationProvider = new FileConfigurationSourceProvider();
-        this.classLoader = Thread.currentThread().getContextClassLoader();
     }
 
     public Service<T> getService() {
@@ -69,14 +64,6 @@ public class Bootstrap<T extends Configuration> {
 
     public void setConfigurationProvider(ConfigurationSourceProvider configurationProvider) {
         this.configurationProvider = configurationProvider;
-    }
-
-    public ClassLoader getClassLoader() {
-        return classLoader;
-    }
-
-    public void setClassLoader(ClassLoader classLoader) {
-        this.classLoader = classLoader;
     }
 
     public void addBundle(Bundle bundle) {
