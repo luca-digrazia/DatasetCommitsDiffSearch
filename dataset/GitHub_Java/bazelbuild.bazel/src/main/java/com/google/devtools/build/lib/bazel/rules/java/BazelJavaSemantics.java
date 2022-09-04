@@ -66,8 +66,6 @@ import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.rules.java.JavaUtil;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
-import com.google.devtools.build.lib.shell.ShellUtils;
-import com.google.devtools.build.lib.shell.ShellUtils.TokenizationException;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.OS;
@@ -343,7 +341,16 @@ public class BazelJavaSemantics implements JavaSemantics {
     }
     arguments.add(new ComputedClasspathSubstitution(classpath, workspacePrefix, isRunfilesEnabled));
 
-    if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
+    JavaCompilationArtifacts javaArtifacts = javaCommon.getJavaCompilationArtifacts();
+    String path =
+        javaArtifacts.getInstrumentedJar() != null
+            ? "${JAVA_RUNFILES}/"
+            + workspacePrefix
+            + javaArtifacts.getInstrumentedJar().getRootRelativePath().getPathString()
+            : "";
+
+    if (ruleContext.getConfiguration().isCodeCoverageEnabled()
+        && ruleContext.getConfiguration().isExperimentalJavaCoverage()) {
       if (createCoverageMetadataJar) {
         Artifact runtimeClassPathArtifact =
             ruleContext.getUniqueDirectoryArtifact(
@@ -382,11 +389,15 @@ public class BazelJavaSemantics implements JavaSemantics {
       arguments.add(
           Substitution.of("%java_start_class%", ShellEscaper.escapeString(javaStartClass)));
     } else {
-      arguments.add(Substitution.of(JavaSemantics.JACOCO_METADATA_PLACEHOLDER, ""));
+      arguments.add(Substitution.of(JavaSemantics.JACOCO_METADATA_PLACEHOLDER,
+          ruleContext.getConfiguration().isCodeCoverageEnabled()
+              ? "export JACOCO_METADATA_JAR=" + path : ""));
       arguments.add(Substitution.of(JavaSemantics.JACOCO_MAIN_CLASS_PLACEHOLDER, ""));
       arguments.add(Substitution.of(JavaSemantics.JACOCO_JAVA_RUNFILES_ROOT_PLACEHOLDER, ""));
       arguments.add(
-          Substitution.of(JavaSemantics.JAVA_COVERAGE_NEW_IMPLEMENTATION_PLACEHOLDER, ""));
+          Substitution.of(
+              JavaSemantics.JAVA_COVERAGE_NEW_IMPLEMENTATION_PLACEHOLDER,
+              "export JAVA_COVERAGE_NEW_IMPLEMENTATION=NO"));
     }
 
     arguments.add(Substitution.of("%java_start_class%",
@@ -396,18 +407,13 @@ public class BazelJavaSemantics implements JavaSemantics {
     arguments.add(Substitution.ofSpaceSeparatedList("%jvm_flags%", jvmFlagsList));
 
     if (OS.getCurrent() == OS.WINDOWS) {
-      List<String> jvmFlagsForLauncher = jvmFlagsList;
-      try {
-        jvmFlagsForLauncher = new ArrayList<>(jvmFlagsList.size());
-        for (String f : jvmFlagsList) {
-          ShellUtils.tokenize(jvmFlagsForLauncher, f);
-        }
-      } catch (TokenizationException e) {
-        ruleContext.attributeError("jvm_flags", "could not Bash-tokenize flag: " + e);
-      }
-
       return createWindowsExeLauncher(
-          ruleContext, javaExecutable, classpath, javaStartClass, jvmFlagsForLauncher, executable);
+          ruleContext,
+          javaExecutable,
+          classpath,
+          javaStartClass,
+          jvmFlagsList,
+          executable);
     }
 
     ruleContext.registerAction(new TemplateExpansionAction(
@@ -420,8 +426,9 @@ public class BazelJavaSemantics implements JavaSemantics {
       String javaExecutable,
       NestedSet<Artifact> classpath,
       String javaStartClass,
-      List<String> jvmFlags,
+      ImmutableList<String> jvmFlags,
       Artifact javaLauncher) {
+
     LaunchInfo launchInfo =
         LaunchInfo.builder()
             .addKeyValuePair("binary_type", "Java")
@@ -666,10 +673,63 @@ public class BazelJavaSemantics implements JavaSemantics {
     return jvmFlags.build();
   }
 
+  /**
+   * Returns whether coverage has instrumented artifacts.
+   */
+  public static boolean hasInstrumentationMetadata(JavaTargetAttributes.Builder attributes) {
+    return !attributes.getInstrumentationMetadata().isEmpty();
+  }
+
   @Override
-  public String addCoverageSupport(JavaCompilationHelper helper, Artifact executable) {
+  public String addCoverageSupport(
+      JavaCompilationHelper helper,
+      JavaTargetAttributes.Builder attributes,
+      Artifact executable,
+      Artifact instrumentationMetadata,
+      JavaCompilationArtifacts.Builder javaArtifactsBuilder,
+      String mainClass) throws InterruptedException {
+    return addCoverageSupport(helper, attributes, executable, instrumentationMetadata,
+        javaArtifactsBuilder, mainClass, false);
+  }
+
+  // TODO(yueg): refactor this (only mainClass different for now)
+  @Override
+  public String addCoverageSupport(
+      JavaCompilationHelper helper,
+      JavaTargetAttributes.Builder attributes,
+      Artifact executable,
+      Artifact instrumentationMetadata,
+      JavaCompilationArtifacts.Builder javaArtifactsBuilder,
+      String mainClass,
+      boolean isExperimentalCoverage)
+      throws InterruptedException {
     // This method can be called only for *_binary/*_test targets.
     Preconditions.checkNotNull(executable);
+    if (!isExperimentalCoverage) {
+      // Add our own metadata artifact (if any).
+      if (instrumentationMetadata != null) {
+        attributes.addInstrumentationMetadataEntries(ImmutableList.of(instrumentationMetadata));
+      }
+
+      if (!hasInstrumentationMetadata(attributes)) {
+        return mainClass;
+      }
+
+      Artifact instrumentedJar =
+          helper
+              .getRuleContext()
+              .getBinArtifact(helper.getRuleContext().getLabel().getName() + "_instrumented.jar");
+
+      // Create an instrumented Jar. This will be referenced on the runtime classpath prior
+      // to all other Jars.
+      JavaCommon.createInstrumentedJarAction(
+          helper.getRuleContext(),
+          this,
+          attributes.getInstrumentationMetadata(),
+          instrumentedJar,
+          mainClass);
+      javaArtifactsBuilder.setInstrumentedJar(instrumentedJar);
+    }
 
     // Add the coverage runner to the list of dependencies when compiling in coverage mode.
     TransitiveInfoCollection runnerTarget =

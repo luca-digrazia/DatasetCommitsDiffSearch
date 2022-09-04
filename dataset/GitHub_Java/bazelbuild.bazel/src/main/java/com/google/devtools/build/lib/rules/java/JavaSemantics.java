@@ -355,7 +355,30 @@ public interface JavaSemantics {
    *
    * @return new main class
    */
-  String addCoverageSupport(JavaCompilationHelper helper, Artifact executable)
+  String addCoverageSupport(
+      JavaCompilationHelper helper,
+      JavaTargetAttributes.Builder attributes,
+      Artifact executable,
+      Artifact instrumentationMetadata,
+      JavaCompilationArtifacts.Builder javaArtifactsBuilder,
+      String mainClass)
+      throws InterruptedException;
+
+  /**
+   * Same as {@link #addCoverageSupport(JavaCompilationHelper, JavaTargetAttributes.Builder,
+   * Artifact, Artifact, JavaCompilationArtifacts.Builder, String)}.
+   *
+   * <p>In *experimental* coverage mode omits dealing with instrumentation metadata and does not
+   * create the instrumented jar.
+   */
+  String addCoverageSupport(
+      JavaCompilationHelper helper,
+      JavaTargetAttributes.Builder attributes,
+      Artifact executable,
+      Artifact instrumentationMetadata,
+      JavaCompilationArtifacts.Builder javaArtifactsBuilder,
+      String mainClass,
+      boolean isExperimentalCoverage)
       throws InterruptedException;
 
   /** Return the JVM flags to be used in a Java binary. */
@@ -462,6 +485,4 @@ public interface JavaSemantics {
    * even if the java_proto_library rule sets strict_deps = 0.
    */
   boolean isJavaProtoLibraryStrictDeps(RuleContext ruleContext);
-
-  void checkDependencyRuleKinds(RuleContext ruleContext);
 }
