@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.rules.java;
 
 import static com.google.devtools.build.lib.rules.java.DeployArchiveBuilder.Compression.COMPRESSED;
 import static com.google.devtools.build.lib.rules.java.DeployArchiveBuilder.Compression.UNCOMPRESSED;
+import static com.google.devtools.build.lib.vfs.FileSystemUtils.replaceExtension;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
@@ -24,7 +25,6 @@ import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -285,18 +285,21 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
         ruleContext, deployJar, common.getBootClasspath(), mainClass, semantics, filesBuilder);
 
     if (javaConfig.oneVersionEnforcementLevel() != OneVersionEnforcementLevel.OFF) {
-      builder.addOutputGroup(
-          OutputGroupProvider.HIDDEN_TOP_LEVEL,
-          OneVersionCheckActionBuilder.newBuilder()
-              .withEnforcementLevel(javaConfig.oneVersionEnforcementLevel())
-              .outputArtifact(
-                  ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_ONE_VERSION_ARTIFACT))
-              .useToolchain(JavaToolchainProvider.fromRuleContext(ruleContext))
-              .checkJars(
-                  NestedSetBuilder.fromNestedSet(attributes.getRuntimeClassPath())
-                      .add(classJar)
-                      .build())
-              .build(ruleContext));
+      Artifact oneVersionOutput =
+          ruleContext
+              .getAnalysisEnvironment()
+              .getDerivedArtifact(
+                  replaceExtension(classJar.getRootRelativePath(), "-one-version.txt"),
+                  classJar.getRoot());
+      filesBuilder.add(oneVersionOutput);
+
+      NestedSet<Artifact> transitiveDependencies =
+          NestedSetBuilder.fromNestedSet(attributes.getRuntimeClassPath()).add(classJar).build();
+      OneVersionCheckActionBuilder.build(
+          ruleContext,
+          transitiveDependencies,
+          oneVersionOutput,
+          javaConfig.oneVersionEnforcementLevel());
     }
     NestedSet<Artifact> filesToBuild = filesBuilder.build();
 

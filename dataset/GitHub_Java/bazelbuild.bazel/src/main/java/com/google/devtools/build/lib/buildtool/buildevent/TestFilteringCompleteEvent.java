@@ -14,14 +14,13 @@
 
 package com.google.devtools.build.lib.buildtool.buildevent;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.test.TestProvider;
-import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
+import com.google.devtools.build.lib.rules.test.TestProvider;
+import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.Collection;
-import java.util.Map;
+
 import javax.annotation.concurrent.Immutable;
 
 /**
@@ -34,22 +33,17 @@ import javax.annotation.concurrent.Immutable;
 public class TestFilteringCompleteEvent {
   private final Collection<ConfiguredTarget> targets;
   private final Collection<ConfiguredTarget> testTargets;
-  private final Map<BuildConfigurationValue.Key, BuildConfiguration> configurationMap;
 
   /**
    * Construct the event.
-   *
    * @param targets The set of active targets that remain.
    * @param testTargets The collection of tests to be run. May be null.
-   * @param configurationMap A map from configuration keys of all targets to the configurations.
    */
   public TestFilteringCompleteEvent(
       Collection<? extends ConfiguredTarget> targets,
-      Collection<? extends ConfiguredTarget> testTargets,
-      Map<BuildConfigurationValue.Key, BuildConfiguration> configurationMap) {
+      Collection<? extends ConfiguredTarget> testTargets) {
     this.targets = ImmutableList.copyOf(targets);
     this.testTargets = testTargets == null ? null : ImmutableList.copyOf(testTargets);
-    this.configurationMap = configurationMap;
     if (testTargets == null) {
       return;
     }
@@ -72,9 +66,5 @@ public class TestFilteringCompleteEvent {
    */
   public Collection<ConfiguredTarget> getTestTargets() {
     return testTargets;
-  }
-
-  public BuildConfiguration getConfigurationForTarget(ConfiguredTarget target) {
-    return Preconditions.checkNotNull(configurationMap.get(target.getConfigurationKey()));
   }
 }

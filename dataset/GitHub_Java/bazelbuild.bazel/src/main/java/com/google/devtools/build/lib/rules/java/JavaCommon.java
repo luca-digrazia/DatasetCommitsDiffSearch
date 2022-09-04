@@ -35,22 +35,22 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.Util;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.LocalMetadataCollector;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.packages.NativeProvider;
+import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.rules.cpp.CppCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.LinkerInput;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgs.ClasspathType;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.InstrumentationSpec;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.LocalMetadataCollector;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
@@ -86,8 +86,7 @@ public class JavaCommon {
             ActionAnalysisMetadata action = analysisEnvironment.getLocalGeneratingAction(artifact);
             if (action instanceof JavaCompileAction) {
               addOutputs(metadataFilesBuilder, action, JavaSemantics.COVERAGE_METADATA);
-            } else if (action != null
-                && action.getMnemonic().equals(ResourceJarActionBuilder.MNEMONIC)) {
+            } else if (action != null && action.getMnemonic().equals("JavaResourceJar")) {
               // recurse on resource jar actions
               collectMetadataArtifacts(
                   action.getInputs(), analysisEnvironment, metadataFilesBuilder);
@@ -290,7 +289,7 @@ public class JavaCommon {
       builder.add(outDeps);
     }
 
-    for (JavaCompilationArgsProvider provider : JavaInfo.getProvidersFromListOfTargets(
+    for (JavaCompilationArgsProvider provider : JavaProvider.getProvidersFromListOfTargets(
         JavaCompilationArgsProvider.class, getExports(ruleContext))) {
       builder.addTransitive(provider.getCompileTimeJavaDependencyArtifacts());
     }
@@ -370,7 +369,7 @@ public class JavaCommon {
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.<Artifact>stableOrder()
         .addAll(targetSrcJars);
 
-    for (JavaSourceJarsProvider sourceJarsProvider : JavaInfo.getProvidersFromListOfTargets(
+    for (JavaSourceJarsProvider sourceJarsProvider : JavaProvider.getProvidersFromListOfTargets(
         JavaSourceJarsProvider.class, getDependencies())) {
       builder.addTransitive(sourceJarsProvider.getTransitiveSourceJars());
     }
@@ -466,14 +465,14 @@ public class JavaCommon {
   }
 
   public static PathFragment getHostJavaExecutable(RuleContext ruleContext) {
-    JavaRuntimeInfo javaRuntime = JavaHelper.getHostJavaRuntime(ruleContext);
+    JavaRuntimeProvider javaRuntime = JavaHelper.getHostJavaRuntime(ruleContext);
     return javaRuntime != null
         ? javaRuntime.javaBinaryExecPath()
         : ruleContext.getHostConfiguration().getFragment(Jvm.class).getJavaExecutable();
   }
 
   public static PathFragment getJavaExecutable(RuleContext ruleContext) {
-    JavaRuntimeInfo javaRuntime = JavaHelper.getJavaRuntime(ruleContext);
+    JavaRuntimeProvider javaRuntime = JavaHelper.getJavaRuntime(ruleContext);
     return javaRuntime != null
         ? javaRuntime.javaBinaryExecPath()
         : ruleContext.getFragment(Jvm.class).getJavaExecutable();
@@ -487,7 +486,7 @@ public class JavaCommon {
       RuleContext ruleContext, @Nullable Artifact launcher) {
     Preconditions.checkState(ruleContext.getConfiguration().hasFragment(Jvm.class));
     PathFragment javaExecutable;
-    JavaRuntimeInfo javaRuntime = JavaHelper.getJavaRuntime(ruleContext);
+    JavaRuntimeProvider javaRuntime = JavaHelper.getJavaRuntime(ruleContext);
 
     if (launcher != null) {
       javaExecutable = launcher.getRootRelativePath();
@@ -787,7 +786,7 @@ public class JavaCommon {
   private static Iterable<JavaPluginInfoProvider> getPluginInfoProvidersForAttribute(
       RuleContext ruleContext, String attribute, Mode mode) {
     if (ruleContext.attributes().has(attribute, BuildType.LABEL_LIST)) {
-      return JavaInfo.getProvidersFromListOfTargets(
+      return JavaProvider.getProvidersFromListOfTargets(
           JavaPluginInfoProvider.class, ruleContext.getPrerequisites(attribute, mode));
     }
     return ImmutableList.of();
@@ -879,7 +878,8 @@ public class JavaCommon {
   }
 
   /** Gets all the deps that implement a particular provider. */
-  public final <P extends Info> Iterable<P> getDependencies(NativeProvider<P> provider) {
+  public final <P extends SkylarkClassObject> Iterable<P> getDependencies(
+      NativeClassObjectConstructor<P> provider) {
     return AnalysisUtils.getProviders(getDependencies(), provider);
   }
 
