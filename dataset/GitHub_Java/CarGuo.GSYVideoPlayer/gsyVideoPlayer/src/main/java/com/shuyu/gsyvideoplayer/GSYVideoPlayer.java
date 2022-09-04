@@ -38,7 +38,6 @@ import java.util.TimerTask;
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 
 import static com.shuyu.gsyvideoplayer.utils.CommonUtil.getTextSpeed;
-import static com.shuyu.gsyvideoplayer.utils.CommonUtil.hideNavKey;
 
 
 /**
@@ -109,7 +108,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
     protected int mSeekToInAdvance = -1; //// TODO: 2016/11/13 跳过广告
 
-    protected int mSeekOnStart = -1; //从哪个开始播放
 
     protected int mRotate = 0; //针对某些视频的旋转信息做了旋转处理
 
@@ -288,9 +286,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     @Override
     public void onClick(View v) {
         int i = v.getId();
-        if (mHideKey && mIfCurrentIsFullscreen) {
-            hideNavKey(mContext);
-        }
         if (i == R.id.start) {
             if (TextUtils.isEmpty(mUrl)) {
                 Toast.makeText(getContext(), getResources().getString(R.string.no_url), Toast.LENGTH_SHORT).show();
@@ -606,10 +601,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
                         }
                     }
                     startProgressTimer();
-                    //不要和隐藏虚拟按键后，滑出虚拟按键冲突
-                    if (mHideKey && mChangePosition) {
-                        return true;
-                    }
                     break;
             }
         } else if (id == R.id.progress) {
@@ -701,29 +692,17 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     @Override
     public void onPrepared() {
         if (mCurrentState != CURRENT_STATE_PREPAREING) return;
-
-        if (GSYVideoManager.instance().getMediaPlayer() != null) {
-            GSYVideoManager.instance().getMediaPlayer().start();
-        }
-
-        if (GSYVideoManager.instance().getMediaPlayer() != null && mSeekToInAdvance != -1) {
+        GSYVideoManager.instance().getMediaPlayer().start();
+        if (mSeekToInAdvance != -1) {
             GSYVideoManager.instance().getMediaPlayer().seekTo(mSeekToInAdvance);
             mSeekToInAdvance = -1;
         }
-
         startProgressTimer();
-
         setStateAndUi(CURRENT_STATE_PLAYING);
-
         if (mVideoAllCallBack != null && isCurrentMediaListener()) {
             Debuger.printfLog("onPrepared");
             mVideoAllCallBack.onPrepared(mUrl, mObjects);
         }
-
-        if (GSYVideoManager.instance().getMediaPlayer() != null && mSeekOnStart > 0) {
-            GSYVideoManager.instance().getMediaPlayer().seekTo(mSeekOnStart);
-        }
-
         mHadPlay = true;
     }
 
@@ -1148,15 +1127,4 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         return getTextSpeed(speed);
     }
 
-    public int getSeekOnStart() {
-        return mSeekOnStart;
-    }
-
-    /**
-     * 从哪里开始播放
-     * 目前有时候前几秒有跳动问题
-     */
-    public void setSeekOnStart(int seekOnStart) {
-        this.mSeekOnStart = seekOnStart;
-    }
 }
