@@ -49,38 +49,25 @@ public class MaxmindDataAdapter extends LookupDataAdapter {
     private FileInfo fileInfo;
 
     @Inject
-    protected MaxmindDataAdapter(@Assisted("id") String id,
-                                 @Assisted("name") String name,
-                                 @Assisted LookupDataAdapterConfiguration config,
+    protected MaxmindDataAdapter(@Assisted LookupDataAdapterConfiguration config,
                                  @Named("daemonScheduler") ScheduledExecutorService scheduler) {
-        super(id, name, config, scheduler);
+        super(config, scheduler);
         this.config = (Config) config;
     }
 
     @Override
     protected void doStart() throws Exception {
         Path path = Paths.get(config.path());
-        fileInfo = FileInfo.forPath(path);
-
         if (!Files.isReadable(path)) {
-            LOG.warn("Cannot read database file {}", config.path());
-            setError(new IllegalStateException("Cannot read database file " + config.path()));
-        } else {
-            try {
-                this.databaseReader.set(loadReader(path.toFile()));
-            } catch (Exception e) {
-                LOG.warn("Unable to read data base file {}", config.path());
-                setError(e);
-            }
+            throw new IllegalArgumentException("Cannot read database file: " + config.path());
         }
+        fileInfo = FileInfo.forPath(path);
+        this.databaseReader.set(loadReader(path.toFile()));
     }
 
     @Override
     protected void doStop() throws Exception {
-        final DatabaseReader databaseReader = this.databaseReader.get();
-        if (databaseReader != null) {
-            databaseReader.close();
-        }
+        databaseReader.get().close();
     }
 
     @Override
@@ -95,7 +82,6 @@ public class MaxmindDataAdapter extends LookupDataAdapter {
     @Override
     protected void doRefresh() throws Exception {
         try {
-            clearError();
             final FileInfo.Change databaseFileCheck = fileInfo.checkForChange();
             if (!databaseFileCheck.isChanged()) {
                 return;
@@ -107,17 +93,13 @@ public class MaxmindDataAdapter extends LookupDataAdapter {
             try {
                 this.databaseReader.set(loadReader(Paths.get(config.path()).toFile()));
                 getLookupTable().cache().purge();
-                if (oldReader != null) {
-                    oldReader.close();
-                }
+                oldReader.close();
                 fileInfo = databaseFileCheck.fileInfo();
             } catch (IOException e) {
                 LOG.warn("Unable to load changed database file, leaving old one intact. Error message: {}", e.getMessage());
-                setError(e);
             }
         } catch (IllegalArgumentException iae) {
             LOG.error("Unable to refresh MaxMind database file: {}", iae.getMessage());
-            setError(iae);
         }
     }
 
@@ -191,9 +173,7 @@ public class MaxmindDataAdapter extends LookupDataAdapter {
 
     public interface Factory extends LookupDataAdapter.Factory<MaxmindDataAdapter> {
         @Override
-        MaxmindDataAdapter create(@Assisted("id") String id,
-                                  @Assisted("name") String name,
-                                  LookupDataAdapterConfiguration configuration);
+        MaxmindDataAdapter create(LookupDataAdapterConfiguration configuration);
 
         @Override
         MaxmindDataAdapter.Descriptor getDescriptor();
