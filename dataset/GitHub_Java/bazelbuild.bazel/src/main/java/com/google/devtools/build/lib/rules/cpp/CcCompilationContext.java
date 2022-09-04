@@ -38,8 +38,7 @@ import com.google.devtools.build.lib.skyframe.TreeArtifactValue;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationContextApi;
-import com.google.devtools.build.lib.syntax.Depset;
-import com.google.devtools.build.lib.syntax.SkylarkType;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
@@ -139,24 +138,25 @@ public final class CcCompilationContext implements CcCompilationContextApi {
   }
 
   @Override
-  public Depset getSkylarkDefines() {
-    return Depset.of(SkylarkType.STRING, NestedSetBuilder.wrap(Order.STABLE_ORDER, getDefines()));
+  public SkylarkNestedSet getSkylarkDefines() {
+    return SkylarkNestedSet.of(
+        String.class, NestedSetBuilder.wrap(Order.STABLE_ORDER, getDefines()));
   }
 
   @Override
-  public Depset getSkylarkNonTransitiveDefines() {
-    return Depset.of(
+  public SkylarkNestedSet getSkylarkNonTransitiveDefines() {
+    return SkylarkNestedSet.of(
         String.class, NestedSetBuilder.wrap(Order.STABLE_ORDER, getNonTransitiveDefines()));
   }
 
   @Override
-  public Depset getSkylarkHeaders() {
-    return Depset.of(Artifact.TYPE, getDeclaredIncludeSrcs());
+  public SkylarkNestedSet getSkylarkHeaders() {
+    return SkylarkNestedSet.of(Artifact.class, getDeclaredIncludeSrcs());
   }
 
   @Override
-  public Depset getSkylarkSystemIncludeDirs() {
-    return Depset.of(
+  public SkylarkNestedSet getSkylarkSystemIncludeDirs() {
+    return SkylarkNestedSet.of(
         String.class,
         NestedSetBuilder.wrap(
             Order.STABLE_ORDER,
@@ -166,8 +166,8 @@ public final class CcCompilationContext implements CcCompilationContextApi {
   }
 
   @Override
-  public Depset getSkylarkFrameworkIncludeDirs() {
-    return Depset.of(
+  public SkylarkNestedSet getSkylarkFrameworkIncludeDirs() {
+    return SkylarkNestedSet.of(
         String.class,
         NestedSetBuilder.wrap(
             Order.STABLE_ORDER,
@@ -177,8 +177,8 @@ public final class CcCompilationContext implements CcCompilationContextApi {
   }
 
   @Override
-  public Depset getSkylarkIncludeDirs() {
-    return Depset.of(
+  public SkylarkNestedSet getSkylarkIncludeDirs() {
+    return SkylarkNestedSet.of(
         String.class,
         NestedSetBuilder.wrap(
             Order.STABLE_ORDER,
@@ -188,8 +188,8 @@ public final class CcCompilationContext implements CcCompilationContextApi {
   }
 
   @Override
-  public Depset getSkylarkQuoteIncludeDirs() {
-    return Depset.of(
+  public SkylarkNestedSet getSkylarkQuoteIncludeDirs() {
+    return SkylarkNestedSet.of(
         String.class,
         NestedSetBuilder.wrap(
             Order.STABLE_ORDER,

@@ -52,7 +52,7 @@ import javax.annotation.Nullable;
 public final class ExtraAction extends SpawnAction {
   private final Action shadowedAction;
   private final boolean createDummyOutput;
-  private final NestedSet<Artifact> extraActionInputs;
+  private final ImmutableSet<Artifact> extraActionInputs;
 
   /**
    * A long way to say (ExtraAction xa) -> xa.getShadowedAction().
@@ -67,7 +67,7 @@ public final class ExtraAction extends SpawnAction {
       };
 
   ExtraAction(
-      NestedSet<Artifact> extraActionInputs,
+      ImmutableSet<Artifact> extraActionInputs,
       RunfilesSupplier runfilesSupplier,
       Collection<Artifact.DerivedArtifact> outputs,
       Action shadowedAction,
@@ -79,7 +79,7 @@ public final class ExtraAction extends SpawnAction {
       String mnemonic) {
     super(
         shadowedAction.getOwner(),
-        NestedSetBuilder.emptySet(Order.STABLE_ORDER),
+        ImmutableList.<Artifact>of(),
         createInputs(shadowedAction.getInputs(), ImmutableList.<Artifact>of(), extraActionInputs),
         outputs,
         Iterables.getFirst(outputs, null),
@@ -140,7 +140,7 @@ public final class ExtraAction extends SpawnAction {
   private static NestedSet<Artifact> createInputs(
       Iterable<Artifact> shadowedActionInputs,
       Iterable<Artifact> inputFilesForExtraAction,
-      NestedSet<Artifact> extraActionInputs) {
+      ImmutableSet<Artifact> extraActionInputs) {
     NestedSetBuilder<Artifact> result = new NestedSetBuilder<>(Order.STABLE_ORDER);
     for (Iterable<Artifact> inputSet : ImmutableList.of(
         shadowedActionInputs, inputFilesForExtraAction)) {
@@ -150,7 +150,7 @@ public final class ExtraAction extends SpawnAction {
         result.addAll(inputSet);
       }
     }
-    return result.addTransitive(extraActionInputs).build();
+    return result.addAll(extraActionInputs).build();
   }
 
   @Override
