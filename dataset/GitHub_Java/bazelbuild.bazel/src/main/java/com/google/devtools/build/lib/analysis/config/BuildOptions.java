@@ -178,7 +178,7 @@ public final class BuildOptions implements Cloneable, Serializable {
   /** Returns the actual instance of a FragmentOptions class. */
   public <T extends FragmentOptions> T get(Class<T> optionsClass) {
     FragmentOptions options = fragmentOptionsMap.get(optionsClass);
-    Preconditions.checkNotNull(options, "fragment options unavailable: %s", optionsClass);
+    Preconditions.checkNotNull(options, "fragment options unavailable: " + optionsClass.getName());
     return optionsClass.cast(options);
   }
 
@@ -1295,12 +1295,12 @@ public final class BuildOptions implements Cloneable, Serializable {
    * BuildOptions.OptionsDiffForReconstruction}. This requires that {@code BuildConfigurationValue}
    * instances must always be serialized.
    */
-  public static final class FingerprintingKDiffToByteStringCache
+  public static class FingerprintingKDiffToByteStringCache
       implements BuildOptions.OptionsDiffCache {
-    private final ConcurrentHashMap<OptionsDiffForReconstruction, ByteString>
+    private static final ConcurrentHashMap<OptionsDiffForReconstruction, ByteString>
         diffToByteStringCache = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<ByteString, OptionsDiffForReconstruction> byteStringToDiffMap =
-        new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<ByteString, OptionsDiffForReconstruction>
+        byteStringToDiffMap = new ConcurrentHashMap<>();
 
     @Override
     public ByteString getBytesFromOptionsDiff(OptionsDiffForReconstruction diff) {
