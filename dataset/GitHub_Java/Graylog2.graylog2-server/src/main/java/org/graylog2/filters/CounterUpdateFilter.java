@@ -20,26 +20,42 @@
 
 package org.graylog2.filters;
 
-import org.graylog2.GraylogServer;
-import org.graylog2.MessageCounter;
-import org.graylog2.logmessage.LogMessage;
-import org.graylog2.streams.Stream;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Timer;
+import com.yammer.metrics.core.TimerContext;
+import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.MessageCounter;
+import org.graylog2.plugin.filters.MessageFilter;
+import org.graylog2.plugin.logmessage.LogMessage;
+import org.graylog2.plugin.streams.Stream;
 
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import org.graylog2.Core;
+import org.graylog2.MessageCounterImpl;
 /**
- * CounterUpdateFilter.java: 26.04.2012 17:27:47
- *
- * Describe me.
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class CounterUpdateFilter implements MessageFilter {
 
+    private final Timer processTime = Metrics.newTimer(CounterUpdateFilter.class, "ProcessTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS);
+
     @Override
     public boolean filter(LogMessage msg, GraylogServer server) {
+        Core serverImpl = (Core) server;
+        TimerContext tcx = processTime.time();
+
         // Increment all registered message counters.
-        for (MessageCounter counter : server.getMessageCounterManager().getAllCounters().values()) {
-            // Five second throughput for health page.
-            counter.incrementThroughput();
+        for (Map<Integer, MessageCounter> counters : serverImpl.getMessageCounterManager().getAllCounters().values()) {
+
+            //Get the message TS with precision to the second (base unit of all periodical threads)
+            Integer counterTimestamp = Integer.valueOf(Double.valueOf(Math.floor(msg.getCreatedAt() / 1000)).intValue());
+
+            MessageCounter counter = counters.get(counterTimestamp);
+            if (counter == null) {
+                counter = new MessageCounterImpl();
+                counters.put(counterTimestamp, counter);
+            }
 
             // Total count.
             counter.incrementTotal();
@@ -53,7 +69,16 @@ public class CounterUpdateFilter implements MessageFilter {
             counter.incrementHost(msg.getHost());
         }
 
-        // Do not discard message.
+        // Update hostcounters. Used to build hosts connection.
+        serverImpl.getHostCounterCache().increment(msg.getHost());
+
+        tcx.stop();
         return false;
     }
+
+    @Override
+    public String getName() {
+        return "CounterUpdater";
+    }
+
 }

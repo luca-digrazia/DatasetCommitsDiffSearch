@@ -20,41 +20,49 @@
 
 package org.graylog2.periodical;
 
-import org.apache.log4j.Logger;
-import org.graylog2.database.MongoBridge;
-import org.graylog2.messagehandlers.common.MessageCounter;
+import java.util.Map;
+
+import org.graylog2.Core;
+import org.graylog2.plugin.MessageCounter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
- * MessageCountWriterThread.java: Sep 21, 2011 4:09:55 PM
- *
  * Periodically writes message counts to message count collection.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class MessageCountWriterThread extends Thread {
+public class MessageCountWriterThread implements Runnable {
 
-    private static final Logger LOG = Logger.getLogger(MessageCountWriterThread.class);
+    private static final Logger LOG = LoggerFactory.getLogger(MessageCountWriterThread.class);
 
-    /**
-     * Start the thread. Runs forever.
-     */
-    @Override public void run() {
-        // Run forever.
-        while (true) {
-            // Run every 60 seconds.
-            try { Thread.sleep(60000); } catch(InterruptedException e) {}
+    public static final int INITIAL_DELAY = 60;
+    public static final int PERIOD = 60;
 
-            MessageCounter counter = MessageCounter.getInstance();
-            try {
-                MongoBridge m = new MongoBridge();
-                m.writeMessageCounts(counter.getTotalCount(), counter.getStreamCounts(), counter.getHostCounts());
-            } catch (Exception e) {
-                LOG.warn("Error in MessageCountWriterThread: " + e.getMessage(), e);
-            } finally {
-                counter.resetAllCounts();
-            }
-        }
+    private final Core graylogServer;
+
+    public MessageCountWriterThread(Core graylogServer) {
+        this.graylogServer = graylogServer;
     }
 
+    @Override
+    public void run() {
+        Map<Integer, MessageCounter> counters = this.graylogServer.getMessageCounterManager().get(Core.MASTER_COUNTER_NAME);
+
+        try {
+            for(Integer currentCounterKey : counters.keySet()) {
+                MessageCounter currentCounterValue = counters.remove(currentCounterKey);
+
+                // We store the first second of the current minute, to allow syncing (summing) message counts
+                // from different graylog-server nodes later
+                int counterTimestamp = currentCounterKey.intValue();
+                int startOfPeriod = counterTimestamp - counterTimestamp % PERIOD;
+
+                graylogServer.getMongoBridge().writeMessageCounts(startOfPeriod, currentCounterValue);
+            }
+        } catch (Exception e) {
+            LOG.warn("Error in MessageCountWriterThread: " + e.getMessage(), e);
+        }
+    }
 }

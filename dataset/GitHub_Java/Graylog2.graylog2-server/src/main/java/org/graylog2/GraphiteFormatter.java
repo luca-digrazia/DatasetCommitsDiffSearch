@@ -20,45 +20,60 @@
 
 package org.graylog2;
 
-import com.google.common.collect.Lists;
 import java.util.List;
 import java.util.Map.Entry;
 
+import org.graylog2.plugin.Counter;
+import org.graylog2.plugin.MessageCounter;
+import org.graylog2.plugin.Tools;
+
+import com.google.common.collect.Lists;
+
 /**
- * GraphiteFormatter.java: 08.05.2012 18:58:14
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GraphiteFormatter {
 
+    private Integer timestamp = null;
     private MessageCounter counter;
+    private String prefix;
 
-    public GraphiteFormatter(MessageCounter counter) {
+    public GraphiteFormatter(MessageCounter counter, String prefix) {
+        this(null, counter, prefix);
+    }
+
+    public GraphiteFormatter(Integer timestamp, MessageCounter counter, String prefix) {
+        this.timestamp = timestamp;
         this.counter = counter;
+        this.prefix = prefix;
     }
 
     public List<String> getAllMetrics() {
         List<String> r = Lists.newArrayList();
 
-        int now = Tools.getUTCTimestamp();
+        int now = ((this.timestamp != null) ? this.timestamp.intValue() : Tools.getUTCTimestamp());
 
         // Overall count.
-        String overall = "graylog2.messagecounts.total " + counter.getTotalCount() + " " + now;
+        String overall = prefix() + "total " + counter.getTotalCount() + " " + now;
         r.add(overall);
 
         // Streams.
-        for(Entry<String, Integer> stream : counter.getStreamCounts().entrySet()) {
-            String sval = "graylog2.messagecounts.streams." + stream.getKey() + " " + stream.getValue() + " " + now;
+        for(Entry<String, Counter> stream : counter.getStreamCounts().entrySet()) {
+            String sval = prefix() + "streams." + stream.getKey() + " " + stream.getValue().get() + " " + now;
             r.add(sval);
         }
 
         // Hosts.
-        for(Entry<String, Integer> host : counter.getHostCounts().entrySet()) {
-            String hval = "graylog2.messagecounts.hosts." + Tools.decodeBase64(host.getKey()).replaceAll("[^a-zA-Z0-9]", "") + " " + host.getValue() + " " + Tools.getUTCTimestamp();
+        for(Entry<String, Counter> host : counter.getHostCounts().entrySet()) {
+            String hval = prefix() + "hosts." + Tools.decodeBase64(host.getKey()).replaceAll("[^a-zA-Z0-9\\.]", "") + " " + host.getValue().get() + " " + Tools.getUTCTimestamp();
             r.add(hval);
         }
 
         return r;
+    }
+
+    private String prefix() {
+        return prefix + "." + "messagecounts" + ".";
     }
 
 }

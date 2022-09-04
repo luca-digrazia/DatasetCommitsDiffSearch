@@ -20,41 +20,46 @@
 
 package org.graylog2.periodical;
 
+import org.graylog2.Core;
+import org.graylog2.GraphiteFormatter;
+import org.graylog2.plugin.MessageCounter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.List;
-import org.apache.log4j.Logger;
-import org.graylog2.GraphiteFormatter;
-import org.graylog2.GraylogServer;
-import org.graylog2.MessageCounter;
+import java.util.Map;
 
 /**
- * GraphiteWriterThread.java: 08.05.2012 16:13:29
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GraphiteWriterThread implements Runnable {
 
-    private static final Logger LOG = Logger.getLogger(GraphiteWriterThread.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GraphiteWriterThread.class);
 
     public static final String COUNTER_NAME = "graphitecounter";
 
     public static final int INITIAL_DELAY = 0;
     public static final int PERIOD = 1;
 
-    private final GraylogServer graylogServer;
+    private final Core graylogServer;
 
     String carbonHost;
     int carbonPort;
+    SocketAddress carbonServer;
 
-    public GraphiteWriterThread(GraylogServer graylogServer) {
+    public GraphiteWriterThread(Core graylogServer) {
         this.graylogServer = graylogServer;
 
         carbonHost = graylogServer.getConfiguration().getGraphiteCarbonHost();
         carbonPort = graylogServer.getConfiguration().getGraphiteCarbonTcpPort();
+        this.carbonServer = new InetSocketAddress(carbonHost, carbonPort);
     }
 
     @Override
@@ -64,29 +69,38 @@ public class GraphiteWriterThread implements Runnable {
             this.graylogServer.getMessageCounterManager().register(COUNTER_NAME);
         }
 
-        MessageCounter counter = this.graylogServer.getMessageCounterManager().get(COUNTER_NAME);
-        try {
-            GraphiteFormatter f = new GraphiteFormatter(counter);
-            send(f.getAllMetrics());
+        Map<Integer, MessageCounter> counters = this.graylogServer.getMessageCounterManager().get(COUNTER_NAME);
 
-            LOG.debug("Sent message counts to Graphite at <" + carbonHost + ":" + carbonPort + ">.");
-        } catch (Exception e) {
-            LOG.warn("Error in GraphiteWriterThread: " + e.getMessage(), e);
-        } finally {
-            counter.resetAllCounts();
+        for(Integer currentCounterKey : counters.keySet()) {
+            MessageCounter currentCounterValue = counters.remove(currentCounterKey);
+
+            try {
+                GraphiteFormatter f = new GraphiteFormatter(
+                        currentCounterKey,
+                        currentCounterValue,
+                        graylogServer.getConfiguration().getGraphitePrefix()
+                        );
+
+                send(f.getAllMetrics());
+
+                LOG.debug("Sent message counts to Graphite at <{}:{}>.", carbonHost, carbonPort);
+            } catch (Exception e) {
+                LOG.warn("Error in GraphiteWriterThread: " + e.getMessage(), e);
+            }
         }
     }
 
     private boolean send(List<String> metrics) {
         try {
-            Socket sock = new Socket(carbonHost, carbonPort);
+            Socket sock = new Socket();
+            sock.connect(this.carbonServer, 1000);
 
             PrintWriter out = new PrintWriter(sock.getOutputStream(), true);
 
             for (String metric : metrics) {
                 out.write(metric + "\n");
             }
-            
+
             out.close();
             sock.close();
         } catch (SocketException e) {
