@@ -17,7 +17,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.analysis.OutputGroupInfo.INTERNAL_SUFFIX;
 import static com.google.devtools.build.lib.packages.FunctionSplitTransitionWhitelist.WHITELIST_ATTRIBUTE_NAME;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -1625,7 +1625,12 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "genrule(name = 'rule')");
 
     reporter.removeHandler(failFastHandler);
-    assertThrows(BuildFileContainsErrorsException.class, () -> getTarget("//test/skylark:rule"));
+    try {
+      getTarget("//test/skylark:rule");
+      fail();
+    } catch (BuildFileContainsErrorsException e) {
+      // This is expected
+    }
     assertContainsEvent(
         "cycle detected in extension files: \n"
             + "    test/skylark/BUILD\n"
@@ -1647,7 +1652,12 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "genrule(name = 'rule')");
 
     reporter.removeHandler(failFastHandler);
-    assertThrows(BuildFileContainsErrorsException.class, () -> getTarget("//test/skylark:rule"));
+    try {
+      getTarget("//test/skylark:rule");
+      fail();
+    } catch (BuildFileContainsErrorsException e) {
+      // This is expected
+    }
     assertContainsEvent(
         "cycle detected in extension files: \n"
             + "    test/skylark/BUILD\n"
@@ -2969,12 +2979,16 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
           "genrule(name = 'rule')");
 
       reporter.removeHandler(failFastHandler);
-      BuildFileContainsErrorsException e =
-          assertThrows(
-              BuildFileContainsErrorsException.class, () -> getTarget("//test/skylark:rule"));
-      assertThat(e)
-          .hasMessageThat()
-          .contains("Starlark import cycle: [//test/skylark:ext1.bzl, //test/skylark:ext2.bzl]");
+      try {
+        getTarget("//test/skylark:rule");
+        fail();
+      } catch (BuildFileContainsErrorsException e) {
+        // The reason that this is an exception and not reported to the event handler is that the
+        // error is reported by the parent sky function, which we don't have here.
+        assertThat(e)
+            .hasMessageThat()
+            .contains("Starlark import cycle: [//test/skylark:ext1.bzl, //test/skylark:ext2.bzl]");
+      }
     }
 
     @Override
@@ -2991,14 +3005,18 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
           "genrule(name = 'rule')");
 
       reporter.removeHandler(failFastHandler);
-      BuildFileContainsErrorsException e =
-          assertThrows(
-              BuildFileContainsErrorsException.class, () -> getTarget("//test/skylark:rule"));
-      assertThat(e)
-          .hasMessageThat()
-          .contains(
-              "Starlark import cycle: [//test/skylark:ext2.bzl, "
-                  + "//test/skylark:ext3.bzl, //test/skylark:ext4.bzl]");
+      try {
+        getTarget("//test/skylark:rule");
+        fail();
+      } catch (BuildFileContainsErrorsException e) {
+        // The reason that this is an exception and not reported to the event handler is that the
+        // error is reported by the parent sky function, which we don't have here.
+        assertThat(e)
+            .hasMessageThat()
+            .contains(
+                "Starlark import cycle: [//test/skylark:ext2.bzl, "
+                    + "//test/skylark:ext3.bzl, //test/skylark:ext4.bzl]");
+      }
     }
   }
 
