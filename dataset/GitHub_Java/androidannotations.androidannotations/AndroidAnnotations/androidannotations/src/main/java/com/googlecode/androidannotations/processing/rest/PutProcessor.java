@@ -48,8 +48,9 @@ public class PutProcessor extends MethodProcessor {
 
 		Put putAnnotation = element.getAnnotation(Put.class);
 		String urlSuffix = putAnnotation.value();
+		String url = holder.urlPrefix + urlSuffix;
 
-		generateRestTemplateCallBlock(new MethodProcessorHolder(executableElement, urlSuffix, null, null, codeModel));
+		generateRestTemplateCallBlock(new MethodProcessorHolder(executableElement, url, null, null, codeModel));
 	}
 
 	@Override
