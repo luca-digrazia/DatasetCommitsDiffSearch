@@ -20,18 +20,14 @@
 
 package org.graylog2.database;
 
-import java.util.Map;
-
-import org.apache.log4j.Logger;
-import org.graylog2.Tools;
-import org.graylog2.messagehandlers.gelf.GELFMessage;
-
 import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
-import com.mongodb.WriteConcern;
-import com.mongodb.WriteResult;
+import org.apache.log4j.Logger;
+import org.graylog2.Tools;
+
+import java.util.Map;
 
 /**
  * MongoBridge.java: Apr 13, 2010 9:13:03 PM
@@ -43,19 +39,6 @@ import com.mongodb.WriteResult;
 public class MongoBridge {
 
     private static final Logger LOG = Logger.getLogger(MongoBridge.class);
-
-    private MongoConnection connection;
-
-    public MongoBridge() {
-    }
-
-    public MongoConnection getConnection() {
-        return connection;
-    }
-
-    public void setConnection(MongoConnection connection) {
-        this.connection = connection;
-    }
 
     /**
      * Adds x to the counter of host in "hosts" collection.
@@ -70,7 +53,7 @@ public class MongoBridge {
         BasicDBObject update = new BasicDBObject();
         update.put("$inc", new BasicDBObject("message_count", add));
 
-        DB db = getConnection().getDatabase();
+        DB db = MongoConnection.getInstance().getDatabase();
         if (db == null) {
             // Not connected to DB.
             LOG.error("MongoBridge::upsertHost(): Could not get hosts collection.");
@@ -82,13 +65,13 @@ public class MongoBridge {
     public void writeThroughput(int current, int highest) {
         BasicDBObject query = new BasicDBObject();
         query.put("type", "total_throughput");
-
+        
         BasicDBObject update = new BasicDBObject();
         update.put("type", "total_throughput");
         update.put("current", current);
         update.put("highest", highest);
-
-        DBCollection coll = getConnection().getDatabase().getCollection("server_values");
+        
+        DBCollection coll = MongoConnection.getInstance().getDatabase().getCollection("server_values");
         coll.update(query, update, true, false);
     }
 
@@ -100,9 +83,7 @@ public class MongoBridge {
         update.put("value", value);
         update.put("type", key);
 
-        MongoConnection connection2 = getConnection();
-        DB database = connection2.getDatabase();
-        DBCollection coll = database.getCollection("server_values");
+        DBCollection coll = MongoConnection.getInstance().getDatabase().getCollection("server_values");
         coll.update(query, update, true, false);
     }
 
@@ -113,17 +94,7 @@ public class MongoBridge {
         obj.put("streams", streams);
         obj.put("hosts", hosts);
 
-        getConnection().getMessageCountsColl().insert(obj);
-    }
-
-    public void writeToRealtimeCollection(GELFMessage message) {
-        BasicDBObject obj = new BasicDBObject();
-
-        obj.put("received_at", Tools.getUTCTimestampWithMilliseconds());
-        obj.put("message", message.getShortMessage());
-        obj.put("streams", message.getStreamIds());
-
-        WriteResult result = getConnection().getRealtimeMessagesColl().insert(obj, WriteConcern.NORMAL);
+        MongoConnection.getInstance().getMessageCountsColl().insert(obj);
     }
 
     /**
@@ -133,12 +104,11 @@ public class MongoBridge {
      * @return The settings - Can be null.
      */
     public DBObject getSetting(int type) {
-        DBCollection coll = getConnection().getDatabase().getCollection("settings");
+        DBCollection coll = MongoConnection.getInstance().getDatabase().getCollection("settings");
 
         DBObject query = new BasicDBObject();
         query.put("setting_type", type);
         return coll.findOne(query);
     }
-
 
 }
