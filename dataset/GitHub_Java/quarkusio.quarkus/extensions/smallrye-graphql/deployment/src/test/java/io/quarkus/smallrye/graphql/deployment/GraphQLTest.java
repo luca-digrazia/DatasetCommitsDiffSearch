@@ -2,6 +2,7 @@ package io.quarkus.smallrye.graphql.deployment;
 
 import static io.quarkus.smallrye.graphql.deployment.AbstractGraphQLTest.MEDIATYPE_JSON;
 
+import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -30,7 +31,8 @@ public class GraphQLTest extends AbstractGraphQLTest {
     @RegisterExtension
     static QuarkusUnitTest test = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-                    .addClasses(TestResource.class, TestPojo.class, TestRandom.class, TestGenericsPojo.class)
+                    .addClasses(TestResource.class, TestPojo.class, TestRandom.class, TestGenericsPojo.class,
+                            BusinessException.class)
                     .addAsResource(new StringAsset(getPropertyAsString(configuration())), "application.properties")
                     .addAsManifestResource(EmptyAsset.INSTANCE, "beans.xml"));
 
@@ -106,6 +108,67 @@ public class GraphQLTest extends AbstractGraphQLTest {
     }
 
     @Test
+    public void testWrongAcceptType() {
+        String fooRequest = getPayload("{\n" +
+                "  foo {\n" +
+                "    message\n" +
+                "    randomNumber{\n" +
+                "       value\n" +
+                "    }\n" +
+                "    list\n" +
+                "  }\n" +
+                "}");
+
+        RestAssured.given().when()
+                .accept(MEDIATYPE_TEXT)
+                .contentType(MEDIATYPE_JSON)
+                .body(fooRequest)
+                .post("/graphql")
+                .then()
+                .assertThat()
+                .statusCode(406);
+    }
+
+    @Test
+    public void testUTF8Charset() {
+        String fooRequest = getPayload("{\n" +
+                "  testCharset(characters:\"óôöúüýáâäçéëíî®©\")\n" +
+                "}");
+
+        byte[] response = RestAssured.given().when()
+                .body(fooRequest)
+                .post("/graphql")
+                .then()
+                .assertThat()
+                .statusCode(200)
+                .and()
+                .extract().body().asByteArray();
+
+        String decodedResponse = new String(response, Charset.forName("UTF-8"));
+        Assertions.assertTrue(decodedResponse.contains("{\"data\":{\"testCharset\":\"óôöúüýáâäçéëíî®©\"}}"));
+    }
+
+    @Test
+    public void testCP1250Charset() {
+        String fooRequest = getPayload("{\n" +
+                "  testCharset(characters:\"óôöúüýáâäçéëíî®©\")\n" +
+                "}");
+
+        byte[] response = RestAssured.given().when()
+                .accept("application/json;charset=CP1250")
+                .body(fooRequest)
+                .post("/graphql")
+                .then()
+                .assertThat()
+                .statusCode(200)
+                .and()
+                .extract().body().asByteArray();
+
+        String decodedResponse = new String(response, Charset.forName("CP1250"));
+        Assertions.assertTrue(decodedResponse.contains("{\"data\":{\"testCharset\":\"óôöúüýáâäçéëíî®©\"}}"));
+    }
+
+    @Test
     public void testSourcePost2() {
         String foosRequest = getPayload("{\n" +
                 "  foos {\n" +
@@ -138,6 +201,28 @@ public class GraphQLTest extends AbstractGraphQLTest {
                 "    message\n" +
                 "  }\n" +
                 "}");
+
+        RestAssured.given().when()
+                .accept(MEDIATYPE_JSON)
+                .contentType(MEDIATYPE_JSON)
+                .body(foosRequest)
+                .post("/graphql")
+                .then()
+                .assertThat()
+                .statusCode(200)
+                .and()
+                .body(CoreMatchers.containsString(
+                        "{\"data\":{\"generics\":{\"message\":\"I know it\"}}}"));
+    }
+
+    /**
+     * Send a query in JSON that contains raw unescaped line breaks and tabs inside the "query" string,
+     * which technically is forbidden by the JSON spec, but we want to seamlessly support
+     * queries from Java text blocks, for example, which preserve line breaks and tab characters.
+     */
+    @Test
+    public void testQueryWithNewlinesAndTabs() {
+        String foosRequest = "{\"query\": \"query myquery { \n generics { \n \t message } } \"}";
 
         RestAssured.given().when()
                 .accept(MEDIATYPE_JSON)
