@@ -387,7 +387,9 @@ public final class ObjcCommon implements StarlarkValue {
             .addIncludes(
                 attributes
                     .headerSearchPaths(
-                        buildConfiguration.getGenfilesFragment(context.getRepository()))
+                        buildConfiguration.getGenfilesFragment(context.getRepository()),
+                        buildConfiguration.getBinFragment(context.getRepository()),
+                        buildConfiguration.hasSeparateGenfilesDirectory())
                     .toList())
             .addIncludes(sdkIncludes);
       }

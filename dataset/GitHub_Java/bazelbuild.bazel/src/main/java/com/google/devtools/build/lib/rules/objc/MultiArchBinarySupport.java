@@ -14,191 +14,274 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import com.google.common.base.Optional;
+import static com.google.common.collect.ImmutableList.toImmutableList;
+
+import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.packages.BuiltinProvider;
+import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.rules.apple.Platform;
+import com.google.devtools.build.lib.rules.cpp.CcInfo;
+import com.google.devtools.build.lib.rules.cpp.CcLinkingContext;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
+import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
-import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
-/**
- * Support utility for creating multi-arch Apple binaries.
- */
+/** Support utility for creating multi-arch Apple binaries. */
 public class MultiArchBinarySupport {
   private final RuleContext ruleContext;
-  
-  /**
-   * @param ruleContext the current rule context
-   */
-  public MultiArchBinarySupport(RuleContext ruleContext) {
-    this.ruleContext = ruleContext;
-  }
+  private final CppSemantics cppSemantics;
 
   /**
-   * Registers actions to create a multi-arch Apple binary.
-   *
-   * @param platform the platform for which the binary is targeted
-   * @param extraLinkArgs the extra linker args to add to link actions linking single-architecture
-   *     binaries together
-   * @param configurationToObjcCommon a map from from dependency configuration to the
-   *     {@link ObjcCommon} which comprises all information about the dependencies in that
-   *     configuration. Can be obtained via {@link #objcCommonByDepConfiguration}
-   * @param configToDepsCollectionMap a multimap from dependency configuration to the
-   *     list of provider collections which are propagated from the dependencies of that
-   *     configuration
-   * @param outputLipoBinary the artifact (lipo'ed binary) which should be output as a result of
-   *     this support
-   * @throws RuleErrorException if there are attribute errors in the current rule context
+   * Returns all child configurations for this multi-arch target, mapped to the toolchains that they
+   * should use.
    */
-  public void registerActions(Platform platform,
-      ExtraLinkArgs extraLinkArgs,
-      Map<BuildConfiguration, ObjcCommon> configurationToObjcCommon,
-      ImmutableListMultimap<BuildConfiguration, TransitiveInfoCollection> configToDepsCollectionMap,
-      Artifact outputLipoBinary) throws RuleErrorException {
+  static ImmutableMap<BuildConfiguration, CcToolchainProvider> getChildConfigurationsAndToolchains(
+      RuleContext ruleContext) {
+    ImmutableListMultimap<BuildConfiguration, CcToolchainProvider> configToProvider =
+        ruleContext.getPrerequisitesByConfiguration(
+            ObjcRuleClasses.CHILD_CONFIG_ATTR, CcToolchainProvider.PROVIDER);
 
-    NestedSetBuilder<Artifact> binariesToLipo =
-        NestedSetBuilder.<Artifact>stableOrder();
-    for (BuildConfiguration childConfig : configurationToObjcCommon.keySet()) {
-      ObjcCommon common = configurationToObjcCommon.get(childConfig);
-      IntermediateArtifacts intermediateArtifacts =
-          ObjcRuleClasses.intermediateArtifacts(ruleContext, childConfig);
-      ImmutableList.Builder<J2ObjcMappingFileProvider> j2ObjcMappingFileProviders =
-          ImmutableList.builder();
-      J2ObjcEntryClassProvider.Builder j2ObjcEntryClassProviderBuilder =
-          new J2ObjcEntryClassProvider.Builder();
-      for (TransitiveInfoCollection dep : configToDepsCollectionMap.get(childConfig)) {
-        if (dep.getProvider(J2ObjcMappingFileProvider.class) != null) {
-          j2ObjcMappingFileProviders.add(dep.getProvider(J2ObjcMappingFileProvider.class));
-        }
-        if (dep.getProvider(J2ObjcEntryClassProvider.class) != null) {
-          j2ObjcEntryClassProviderBuilder.addTransitive(
-              dep.getProvider(J2ObjcEntryClassProvider.class));
-        }
-      }
-      J2ObjcMappingFileProvider j2ObjcMappingFileProvider =
-          J2ObjcMappingFileProvider.union(j2ObjcMappingFileProviders.build());
-      J2ObjcEntryClassProvider j2ObjcEntryClassProvider = j2ObjcEntryClassProviderBuilder.build();
-
-      binariesToLipo.add(intermediateArtifacts.strippedSingleArchitectureBinary());
-
-      new CompilationSupport(ruleContext, childConfig)
-          .registerCompileAndArchiveActions(common)
-          .registerLinkActions(
-              common.getObjcProvider(),
-              j2ObjcMappingFileProvider,
-              j2ObjcEntryClassProvider,
-              extraLinkArgs,
-              ImmutableList.<Artifact>of(),
-              DsymOutputType.APP)
-          .validateAttributes();
-      ruleContext.assertNoErrors();
+    ImmutableMap.Builder<BuildConfiguration, CcToolchainProvider> result = ImmutableMap.builder();
+    for (BuildConfiguration config : configToProvider.keySet()) {
+      CcToolchainProvider toolchain = Iterables.getOnlyElement(configToProvider.get(config));
+      result.put(config, toolchain);
     }
 
-    new LipoSupport(ruleContext)
-        .registerCombineArchitecturesAction(
-            binariesToLipo.build(),
-            outputLipoBinary,
-            platform);
+    return result.build();
+  }
+
+  static <V> ImmutableListMultimap<String, V> transformMap(Multimap<BuildConfiguration, V> input) {
+    ImmutableListMultimap.Builder<String, V> result = ImmutableListMultimap.builder();
+    for (Map.Entry<BuildConfiguration, V> entry : input.entries()) {
+      result.put(entry.getKey().getCpu(), entry.getValue());
+    }
+
+    return result.build();
+  }
+
+  /** A tuple of values about dependency trees in a specific child configuration. */
+  @AutoValue
+  abstract static class DependencySpecificConfiguration {
+    static DependencySpecificConfiguration create(
+        BuildConfiguration config,
+        CcToolchainProvider toolchain,
+        ObjcProvider objcLinkProvider,
+        ObjcProvider objcPropagateProvider) {
+      return new AutoValue_MultiArchBinarySupport_DependencySpecificConfiguration(
+          config, toolchain, objcLinkProvider, objcPropagateProvider);
+    }
+
+    /** Returns the child configuration for this tuple. */
+    abstract BuildConfiguration config();
+
+    /** Returns the cc toolchain for this configuration. */
+    abstract CcToolchainProvider toolchain();
+
+    /**
+     * Returns the {@link ObjcProvider} to use as input to the support controlling link actoins;
+     * dylib symbols should be subtracted from this provider.
+     */
+    abstract ObjcProvider objcLinkProvider();
+
+    /**
+     * Returns the {@link ObjcProvider} to propagate up to dependers; this will not have dylib
+     * symbols subtracted, thus signaling that this target is still responsible for those symbols.
+     */
+    abstract ObjcProvider objcProviderWithDylibSymbols();
+  }
+
+  /** @param ruleContext the current rule context */
+  public MultiArchBinarySupport(RuleContext ruleContext, CppSemantics cppSemantics) {
+    this.ruleContext = ruleContext;
+    this.cppSemantics = cppSemantics;
   }
 
   /**
-   * Returns a map from from dependency configuration to the {@link ObjcCommon} which comprises
-   * all information about the dependencies in that configuration. This can be used both to
-   * register actions in {@link #registerActions} and collect provider information to be
-   * propagated upstream.
+   * Registers actions to link a single-platform/architecture Apple binary in a specific
+   * configuration.
    *
-   * @param childConfigurations the set of configurations in which dependencies of the current
-   *     rule are built
-   * @param configToDepsCollectionMap a map from child configuration to providers that "deps" of
-   *     the current rule have propagated in that configuration
-   * @param configurationToNonPropagatedObjcMap a map from child configuration to providers that
-   *     "non_propagated_deps" of the current rule have propagated in that configuration
-   * @param configToDylibsObjcMap providers that dynamic library dependencies of the current rule
-   *     have propagated
+   * @param dependencySpecificConfiguration a single {@link DependencySpecificConfiguration} that
+   *     corresponds to the child configuration to link for this target. Can be obtained via {@link
+   *     #getDependencySpecificConfigurations}
+   * @param extraLinkArgs the extra linker args to add to link actions linking single-architecture
+   *     binaries together
+   * @param extraLinkInputs the extra linker inputs to be made available during link actions
+   * @param isStampingEnabled whether linkstamping is enabled
+   * @param infoCollections a list of provider collections which are propagated from the
+   *     dependencies in the requested configuration
+   * @param outputMapCollector a map to which output groups created by compile action generation are
+   *     added
+   * @return an {@link Artifact} representing the single-architecture binary linked from this call
    * @throws RuleErrorException if there are attribute errors in the current rule context
    */
-  public Map<BuildConfiguration, ObjcCommon> objcCommonByDepConfiguration(
-      Set<BuildConfiguration> childConfigurations,
-      ImmutableListMultimap<BuildConfiguration, TransitiveInfoCollection> configToDepsCollectionMap,
-      ImmutableListMultimap<BuildConfiguration, ObjcProvider> configurationToNonPropagatedObjcMap,
-      Iterable<ObjcProvider> configToDylibsObjcMap)
-      throws RuleErrorException {
-    ImmutableMap.Builder<BuildConfiguration, ObjcCommon> configurationToObjcCommonBuilder =
-        ImmutableMap.builder();
-    for (BuildConfiguration childConfig : childConfigurations) {
-      ProtobufSupport protoSupport =
-          new ProtobufSupport(ruleContext, childConfig)
-              .registerGenerationActions()
-              .registerCompilationActions();
+  public Artifact registerConfigurationSpecificLinkActions(
+      DependencySpecificConfiguration dependencySpecificConfiguration,
+      ExtraLinkArgs extraLinkArgs,
+      Iterable<Artifact> extraLinkInputs,
+      boolean isStampingEnabled,
+      Iterable<TransitiveInfoCollection> infoCollections,
+      Map<String, NestedSet<Artifact>> outputMapCollector)
+      throws RuleErrorException, InterruptedException {
+    IntermediateArtifacts intermediateArtifacts =
+        ObjcRuleClasses.intermediateArtifacts(
+            ruleContext, dependencySpecificConfiguration.config());
+    J2ObjcMappingFileProvider j2ObjcMappingFileProvider =
+        J2ObjcMappingFileProvider.union(
+            getTypedProviders(infoCollections, J2ObjcMappingFileProvider.PROVIDER));
+    J2ObjcEntryClassProvider j2ObjcEntryClassProvider =
+        new J2ObjcEntryClassProvider.Builder()
+            .addTransitive(getTypedProviders(infoCollections, J2ObjcEntryClassProvider.PROVIDER))
+            .build();
+    ImmutableList<CcLinkingContext> ccLinkingContexts =
+        getTypedProviders(infoCollections, CcInfo.PROVIDER).stream()
+            .map(CcInfo::getCcLinkingContext)
+            .collect(toImmutableList());
 
-      Optional<ObjcProvider> protosObjcProvider = protoSupport.getObjcProvider();
+    ObjcProvider objcProvider = dependencySpecificConfiguration.objcLinkProvider();
+    CompilationArtifacts compilationArtifacts =
+        new CompilationArtifacts.Builder()
+            .setIntermediateArtifacts(
+                ObjcRuleClasses.intermediateArtifacts(
+                    ruleContext, dependencySpecificConfiguration.config()))
+            .build();
+
+    CompilationSupport compilationSupport =
+        new CompilationSupport.Builder(ruleContext, cppSemantics)
+            .setConfig(dependencySpecificConfiguration.config())
+            .setToolchainProvider(dependencySpecificConfiguration.toolchain())
+            .setOutputGroupCollector(outputMapCollector)
+            .build();
+
+    compilationSupport
+        .registerCompileAndArchiveActions(compilationArtifacts, ObjcCompilationContext.EMPTY)
+        .registerLinkActions(
+            objcProvider,
+            ccLinkingContexts,
+            j2ObjcMappingFileProvider,
+            j2ObjcEntryClassProvider,
+            extraLinkArgs,
+            extraLinkInputs,
+            isStampingEnabled)
+        .validateAttributes();
+    ruleContext.assertNoErrors();
+
+    return intermediateArtifacts.strippedSingleArchitectureBinary();
+  }
+
+  /**
+   * Returns a set of {@link DependencySpecificConfiguration} instances that comprise all
+   * information about the dependencies for each child configuration. This can be used both to
+   * register actions in {@link #registerConfigurationSpecificLinkActions} and collect provider
+   * information to be propagated upstream.
+   *
+   * @param childConfigurationsAndToolchains the set of configurations and toolchains for which
+   *     dependencies of the current rule are built
+   * @param cpuToDepsCollectionMap a map from child configuration CPU to providers that "deps" of
+   *     the current rule have propagated in that configuration
+   * @param dylibProviders {@link TransitiveInfoCollection}s that dynamic library dependencies of
+   *     the current rule have propagated
+   * @throws RuleErrorException if there are attribute errors in the current rule context
+   */
+  public ImmutableSet<DependencySpecificConfiguration> getDependencySpecificConfigurations(
+      Map<BuildConfiguration, CcToolchainProvider> childConfigurationsAndToolchains,
+      ImmutableListMultimap<String, TransitiveInfoCollection> cpuToDepsCollectionMap,
+      ImmutableList<TransitiveInfoCollection> dylibProviders)
+      throws RuleErrorException, InterruptedException {
+    Iterable<ObjcProvider> dylibObjcProviders = getDylibObjcProviders(dylibProviders);
+    ImmutableSet.Builder<DependencySpecificConfiguration> childInfoBuilder = ImmutableSet.builder();
+
+    for (BuildConfiguration childToolchainConfig : childConfigurationsAndToolchains.keySet()) {
+      String childCpu = childToolchainConfig.getCpu();
 
       IntermediateArtifacts intermediateArtifacts =
-          ObjcRuleClasses.intermediateArtifacts(ruleContext, childConfig);
-
-      Iterable<ObjcProvider> additionalDepProviders = Iterables.concat(configToDylibsObjcMap,
-          ruleContext.getPrerequisites("bundles", Mode.TARGET, ObjcProvider.class),
-          protosObjcProvider.asSet());
+          ObjcRuleClasses.intermediateArtifacts(ruleContext, childToolchainConfig);
 
       ObjcCommon common =
           common(
               ruleContext,
-              childConfig,
+              childToolchainConfig,
               intermediateArtifacts,
-              nullToEmptyList(configToDepsCollectionMap.get(childConfig)),
-              nullToEmptyList(configurationToNonPropagatedObjcMap.get(childConfig)),
-              additionalDepProviders);
-      
-      configurationToObjcCommonBuilder.put(childConfig, common);
+              nullToEmptyList(cpuToDepsCollectionMap.get(childCpu)),
+              dylibObjcProviders);
+      ObjcProvider objcProviderWithDylibSymbols = common.getObjcProvider();
+      ObjcProvider objcProvider =
+          objcProviderWithDylibSymbols.subtractSubtrees(dylibObjcProviders, ImmutableList.of());
+
+      childInfoBuilder.add(
+          DependencySpecificConfiguration.create(
+              childToolchainConfig,
+              childConfigurationsAndToolchains.get(childToolchainConfig),
+              objcProvider,
+              objcProviderWithDylibSymbols));
     }
-    
-    return configurationToObjcCommonBuilder.build();
+
+    return childInfoBuilder.build();
+  }
+
+  private static Iterable<ObjcProvider> getDylibObjcProviders(
+      ImmutableList<TransitiveInfoCollection> transitiveInfoCollections) {
+    // Dylibs.
+    ImmutableList<ObjcProvider> frameworkObjcProviders =
+        getTypedProviders(transitiveInfoCollections, AppleDynamicFrameworkInfo.STARLARK_CONSTRUCTOR)
+            .stream()
+            .map(frameworkProvider -> frameworkProvider.getDepsObjcProvider())
+            .collect(ImmutableList.toImmutableList());
+    // Bundle Loaders.
+    ImmutableList<ObjcProvider> executableObjcProviders =
+        getTypedProviders(transitiveInfoCollections, AppleExecutableBinaryInfo.STARLARK_CONSTRUCTOR)
+            .stream()
+            .map(frameworkProvider -> frameworkProvider.getDepsObjcProvider())
+            .collect(ImmutableList.toImmutableList());
+
+    return Iterables.concat(
+        frameworkObjcProviders,
+        executableObjcProviders,
+        getTypedProviders(transitiveInfoCollections, ObjcProvider.STARLARK_CONSTRUCTOR));
   }
 
   private ObjcCommon common(
       RuleContext ruleContext,
       BuildConfiguration buildConfiguration,
       IntermediateArtifacts intermediateArtifacts,
-      List<TransitiveInfoCollection> propagatedDeps,
-      List<ObjcProvider> nonPropagatedObjcDeps,
-      Iterable<ObjcProvider> additionalDepProviders) {
+      List<? extends TransitiveInfoCollection> propagatedDeps,
+      Iterable<ObjcProvider> additionalDepProviders)
+      throws InterruptedException {
 
-    CompilationArtifacts compilationArtifacts =
-        CompilationSupport.compilationArtifacts(ruleContext, intermediateArtifacts);
+    ObjcCommon.Builder commonBuilder =
+        new ObjcCommon.Builder(ObjcCommon.Purpose.LINK_ONLY, ruleContext, buildConfiguration)
+            .setCompilationAttributes(
+                CompilationAttributes.Builder.fromRuleContext(ruleContext).build())
+            .addDeps(propagatedDeps)
+            .addObjcProviders(additionalDepProviders)
+            .setIntermediateArtifacts(intermediateArtifacts)
+            .setAlwayslink(false);
 
-    ObjcCommon.Builder commonBuilder = new ObjcCommon.Builder(ruleContext, buildConfiguration)
-        .setCompilationAttributes(
-            CompilationAttributes.Builder.fromRuleContext(ruleContext).build())
-        .setCompilationArtifacts(compilationArtifacts)
-        .setResourceAttributes(new ResourceAttributes(ruleContext))
-        .addDefines(ruleContext.getTokenizedStringListAttr("defines"))
-        .addDeps(propagatedDeps)
-        .addDepObjcProviders(additionalDepProviders)
-        .addNonPropagatedDepObjcProviders(nonPropagatedObjcDeps)
-        .setIntermediateArtifacts(intermediateArtifacts)
-        .setAlwayslink(false)
-        // TODO(b/29152500): Enable module map generation.
-        .setLinkedBinary(intermediateArtifacts.strippedSingleArchitectureBinary());
-
-    if (ObjcRuleClasses.objcConfiguration(ruleContext).generateDsym()) {
-      commonBuilder.addDebugArtifacts(DsymOutputType.APP);
-    }
     return commonBuilder.build();
   }
 
   private <T> List<T> nullToEmptyList(List<T> inputList) {
     return inputList != null ? inputList : ImmutableList.<T>of();
+  }
+
+  private static <T extends Info> ImmutableList<T> getTypedProviders(
+      Iterable<TransitiveInfoCollection> infoCollections, BuiltinProvider<T> providerClass) {
+    return Streams.stream(infoCollections)
+        .filter(infoCollection -> infoCollection.get(providerClass) != null)
+        .map(infoCollection -> infoCollection.get(providerClass))
+        .collect(ImmutableList.toImmutableList());
   }
 }
