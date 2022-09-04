@@ -1,7 +1,5 @@
 package io.quarkus.deployment.pkg.steps;
 
-import static io.quarkus.deployment.pkg.steps.LinuxIDUtil.getLinuxID;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -9,52 +7,36 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import org.apache.commons.lang3.SystemUtils;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.jboss.logging.Logger;
 
 import io.quarkus.deployment.pkg.NativeConfig;
 import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.deployment.util.ProcessUtil;
 
-public class NativeImageBuildContainerRunner extends NativeImageBuildRunner {
+public abstract class NativeImageBuildContainerRunner extends NativeImageBuildRunner {
 
     private static final Logger log = Logger.getLogger(NativeImageBuildContainerRunner.class);
 
-    private final NativeConfig nativeConfig;
-    private final NativeConfig.ContainerRuntime containerRuntime;
+    final NativeConfig nativeConfig;
+    protected final NativeConfig.ContainerRuntime containerRuntime;
     private final String[] baseContainerRuntimeArgs;
-    private final String outputPath;
+    protected final String outputPath;
+    private final String containerName;
 
     public NativeImageBuildContainerRunner(NativeConfig nativeConfig, Path outputDir) {
         this.nativeConfig = nativeConfig;
         containerRuntime = nativeConfig.containerRuntime.orElseGet(NativeImageBuildContainerRunner::detectContainerRuntime);
         log.infof("Using %s to run the native image builder", containerRuntime.getExecutableName());
 
-        List<String> containerRuntimeArgs = new ArrayList<>();
-        Collections.addAll(containerRuntimeArgs, "run", "--env", "LANG=C");
+        this.baseContainerRuntimeArgs = new String[] { "--env", "LANG=C", "--rm" };
 
-        String outputPath = outputDir.toAbsolutePath().toString();
-        if (SystemUtils.IS_OS_WINDOWS) {
-            outputPath = FileUtil.translateToVolumePath(outputPath);
-        }
-        this.outputPath = outputPath;
-
-        if (SystemUtils.IS_OS_LINUX) {
-            String uid = getLinuxID("-ur");
-            String gid = getLinuxID("-gr");
-            if (uid != null && gid != null && !uid.isEmpty() && !gid.isEmpty()) {
-                Collections.addAll(containerRuntimeArgs, "--user", uid + ":" + gid);
-                if (containerRuntime == NativeConfig.ContainerRuntime.PODMAN) {
-                    // Needed to avoid AccessDeniedExceptions
-                    containerRuntimeArgs.add("--userns=keep-id");
-                }
-            }
-        }
-        Collections.addAll(containerRuntimeArgs, "--rm");
-        this.baseContainerRuntimeArgs = containerRuntimeArgs.toArray(new String[0]);
+        outputPath = outputDir == null ? null : outputDir.toAbsolutePath().toString();
+        containerName = "build-native-" + RandomStringUtils.random(5, true, false);
     }
 
     @Override
@@ -83,26 +65,62 @@ public class NativeImageBuildContainerRunner extends NativeImageBuildRunner {
 
     @Override
     protected String[] getGraalVMVersionCommand(List<String> args) {
-        return buildCommand(Collections.emptyList(), args);
+        return buildCommand("run", Collections.singletonList("--rm"), args);
     }
 
     @Override
     protected String[] getBuildCommand(List<String> args) {
+        List<String> containerRuntimeBuildArgs = getContainerRuntimeBuildArgs();
+        List<String> effectiveContainerRuntimeBuildArgs = new ArrayList<>(containerRuntimeBuildArgs.size() + 2);
+        effectiveContainerRuntimeBuildArgs.addAll(containerRuntimeBuildArgs);
+        effectiveContainerRuntimeBuildArgs.add("--name");
+        effectiveContainerRuntimeBuildArgs.add(containerName);
+        return buildCommand("run", effectiveContainerRuntimeBuildArgs, args);
+    }
+
+    @Override
+    protected void objcopy(String... args) {
+        final List<String> containerRuntimeBuildArgs = getContainerRuntimeBuildArgs();
+        Collections.addAll(containerRuntimeBuildArgs, "--entrypoint", "/bin/bash");
+        final ArrayList<String> objcopyCommand = new ArrayList<>(2);
+        objcopyCommand.add("-c");
+        objcopyCommand.add("objcopy " + String.join(" ", args));
+        final String[] command = buildCommand("run", containerRuntimeBuildArgs, objcopyCommand);
+        runCommand(command, null, null);
+    }
+
+    @Override
+    public void addShutdownHook(Process process) {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (process.isAlive()) {
+                try {
+                    Process removeProcess = new ProcessBuilder(
+                            List.of(containerRuntime.getExecutableName(), "rm", "-f", containerName))
+                                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                                    .start();
+                    removeProcess.waitFor(2, TimeUnit.SECONDS);
+                } catch (IOException | InterruptedException e) {
+                    log.debug("Unable to stop running container", e);
+                }
+            }
+        }));
+    }
+
+    protected List<String> getContainerRuntimeBuildArgs() {
         List<String> containerRuntimeArgs = new ArrayList<>();
-        Collections.addAll(containerRuntimeArgs, "-v",
-                outputPath + ":" + NativeImageBuildStep.CONTAINER_BUILD_VOLUME_PATH + ":z");
         nativeConfig.containerRuntimeOptions.ifPresent(containerRuntimeArgs::addAll);
         if (nativeConfig.debugBuildProcess && nativeConfig.publishDebugBuildProcessPort) {
             // publish the debug port onto the host if asked for
             containerRuntimeArgs.add("--publish=" + NativeImageBuildStep.DEBUG_BUILD_PROCESS_PORT + ":"
                     + NativeImageBuildStep.DEBUG_BUILD_PROCESS_PORT);
         }
-        return buildCommand(containerRuntimeArgs, args);
+        return containerRuntimeArgs;
     }
 
-    private String[] buildCommand(List<String> containerRuntimeArgs, List<String> command) {
+    protected String[] buildCommand(String dockerCmd, List<String> containerRuntimeArgs, List<String> command) {
         return Stream
-                .of(Stream.of(containerRuntime.getExecutableName()), Stream.of(baseContainerRuntimeArgs),
+                .of(Stream.of(containerRuntime.getExecutableName()), Stream.of(dockerCmd), Stream.of(baseContainerRuntimeArgs),
                         containerRuntimeArgs.stream(), Stream.of(nativeConfig.builderImage), command.stream())
                 .flatMap(Function.identity()).toArray(String[]::new);
     }
