@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.shamrock.example.jpa;
 
 import java.io.IOException;
@@ -24,7 +8,7 @@ import java.util.UUID;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.EntityTransaction;
-import javax.persistence.PersistenceUnit;
+import javax.persistence.Persistence;
 import javax.persistence.TypedQuery;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaQuery;
@@ -35,22 +19,31 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 /**
- * Various tests covering JPA functionality. All tests should work in both standard JVM and SubstrateVM.
+ * Various tests convering JPA functionality. All tests should work in both standard JVM and SubstrateVM.
  */
 @WebServlet(name = "JPATestBootstrapEndpoint", urlPatterns = "/jpa/testfunctionality")
 public class JPAFunctionalityTestEndpoint extends HttpServlet {
 
-    @PersistenceUnit(unitName = "templatePU")
-    EntityManagerFactory entityManagerFactory;
-
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         try {
-            doStuffWithHibernate(entityManagerFactory);
+            bootAndDoStuff();
         } catch (Exception e) {
             reportException("Oops, shit happened, No boot for you!", e, resp);
         }
         resp.getWriter().write("OK");
+    }
+
+    public void bootAndDoStuff() throws Exception {
+        EntityManagerFactory entityManagerFactory = Persistence.createEntityManagerFactory("templatePU");
+        try {
+            System.out.println("Hibernate EntityManagerFactory: booted");
+            doStuffWithHibernate(entityManagerFactory);
+        }
+        finally {
+            entityManagerFactory.close();
+            System.out.println("Hibernate EntityManagerFactory: shut down");
+        }
     }
 
     /**
