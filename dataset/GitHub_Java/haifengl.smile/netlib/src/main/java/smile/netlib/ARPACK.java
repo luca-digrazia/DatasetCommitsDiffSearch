@@ -21,6 +21,8 @@ import smile.math.MathEx;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.EVD;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * ARPACK based eigen decomposition. Currently support only symmetric matrix.
@@ -28,7 +30,7 @@ import smile.math.matrix.EVD;
  * @author Haifeng Li
  */
 public class ARPACK {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ARPACK.class);
+    private static final Logger logger = LoggerFactory.getLogger(ARPACK.class);
 
     /** Specify which of the Ritz values of OP to compute. */
     public enum Ritz {

@@ -1,19 +1,18 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.netlib;
 
@@ -70,7 +69,7 @@ public class ARPACKTest {
     @Test
     public void testARPACK() {
         System.out.println("ARPACK");
-        DenseMatrix a = Matrix.of(A);
+        DenseMatrix a = Matrix.newInstance(A);
         a.setSymmetric(true);
         EVD result = ARPACK.eigen(a, 2, ARPACK.Ritz.SA);
         assertEquals(eigenValues[1], result.getEigenValues()[0], 1E-4);
@@ -91,7 +90,7 @@ public class ARPACKTest {
     @Test
     public void testARPACK1() {
         System.out.println("ARPACK1");
-        DenseMatrix a = Matrix.of(A);
+        DenseMatrix a = Matrix.newInstance(A);
         a.setSymmetric(true);
         EVD result = ARPACK.eigen(a, 1, ARPACK.Ritz.LA);
         assertEquals(eigenValues[0], result.getEigenValues()[0], 1E-4);
@@ -111,7 +110,7 @@ public class ARPACKTest {
         A[0][0] = A[1][1] = A[2][2] = A[3][3] = 2.0;
         for (int i = 4; i < 500; i++)
             A[i][i] = (500 - i) / 500.0;
-        DenseMatrix a = Matrix.of(A);
+        DenseMatrix a = Matrix.newInstance(A);
         a.setSymmetric(true);
         EVD result = ARPACK.eigen(a, 6, ARPACK.Ritz.LA);
         assertEquals(2.0, result.getEigenValues()[0], 1E-4);

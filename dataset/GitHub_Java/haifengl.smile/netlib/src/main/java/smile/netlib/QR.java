@@ -15,6 +15,7 @@
  *******************************************************************************/
 package smile.netlib;
 
+import smile.math.MathEx;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Cholesky;
@@ -38,13 +39,13 @@ import org.slf4j.LoggerFactory;
  *
  * @author Haifeng Li
  */
-class QR extends smile.math.matrix.QR {
+public class QR extends smile.math.matrix.QR {
     private static final Logger logger = LoggerFactory.getLogger(QR.class);
 
     /**
      * Constructor.
      */
-    public QR(NLMatrix qr, double[] tau, boolean singular) {
+    public QR(DenseMatrix qr, double[] tau, boolean singular) {
         super(qr, tau, singular);
     }
 
@@ -125,7 +126,7 @@ class QR extends smile.math.matrix.QR {
         }
 
         double[] B = b.clone();
-        solve(Matrix.of(B));
+        solve(Matrix.newInstance(B));
         System.arraycopy(B, 0, x, 0, x.length);
     }
 

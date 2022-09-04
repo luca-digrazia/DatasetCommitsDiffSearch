@@ -16,6 +16,7 @@
 
 package smile.netlib;
 
+import smile.math.MathEx;
 import smile.math.matrix.DenseMatrix;
 import com.github.fommil.netlib.LAPACK;
 import org.netlib.util.intW;
@@ -37,7 +38,7 @@ import smile.math.matrix.Matrix;
  *
  * @author Haifeng Li
  */
-class LU extends smile.math.matrix.LU {
+public class LU extends smile.math.matrix.LU {
     private static final Logger logger = LoggerFactory.getLogger(LU.class);
 
     /**
@@ -46,7 +47,7 @@ class LU extends smile.math.matrix.LU {
      * @param piv      pivot vector
      * @param singular True if the matrix is singular
      */
-    public LU(NLMatrix lu, int[] piv, boolean singular) {
+    public LU(DenseMatrix lu, int[] piv, boolean singular) {
         super(lu, piv, pivsign(piv, Math.min(lu.nrows(), lu.ncols())), singular);
     }
 
@@ -97,7 +98,7 @@ class LU extends smile.math.matrix.LU {
     @Override
     public void solve(double[] b) {
         // B use b as the internal storage. Therefore b will contains the results.
-        DenseMatrix B = Matrix.of(b);
+        DenseMatrix B = Matrix.newInstance(b);
         solve(B);
     }
 
