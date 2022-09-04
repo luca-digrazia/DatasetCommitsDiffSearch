@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BasicActionLookupValue;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
@@ -38,8 +37,7 @@ public class WorkspaceStatusValue extends BasicActionLookupValue {
       Artifact stableArtifact,
       Artifact volatileArtifact,
       WorkspaceStatusAction workspaceStatusAction) {
-    super(
-        Actions.GeneratingActions.fromSingleAction(workspaceStatusAction), /*nonceVersion=*/ null);
+    super(workspaceStatusAction);
     this.stableArtifact = stableArtifact;
     this.volatileArtifact = volatileArtifact;
   }
