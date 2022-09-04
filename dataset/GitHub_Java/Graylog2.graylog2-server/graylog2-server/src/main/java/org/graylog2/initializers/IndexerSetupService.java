@@ -25,7 +25,6 @@ import org.graylog2.indexer.Indexer;
 import org.graylog2.plugin.Tools;
 
 import javax.inject.Inject;
-import java.util.concurrent.Executors;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
@@ -39,15 +38,6 @@ public class IndexerSetupService extends AbstractIdleService {
     public IndexerSetupService(Indexer indexer, BufferSynchronizerService bufferSynchronizerService) {
         this.indexer = indexer;
         this.bufferSynchronizerService = bufferSynchronizerService;
-
-        // Shutdown after the BufferSynchronizerServer has stopped to avoid shutting down ES too early.
-        bufferSynchronizerService.addListener(new Listener() {
-            @Override
-            public void terminated(State from) {
-                // Properly close ElasticSearch node.
-                IndexerSetupService.this.indexer.getNode().close();
-            }
-        }, Executors.newSingleThreadExecutor());
     }
 
     @Override
@@ -63,6 +53,7 @@ public class IndexerSetupService extends AbstractIdleService {
 
     @Override
     protected void shutDown() throws Exception {
-        // See constructor. Actual shutdown happens after BufferSynchronizerServer has stopped.
+        // Properly close ElasticSearch node.
+        indexer.getNode().close();
     }
 }
