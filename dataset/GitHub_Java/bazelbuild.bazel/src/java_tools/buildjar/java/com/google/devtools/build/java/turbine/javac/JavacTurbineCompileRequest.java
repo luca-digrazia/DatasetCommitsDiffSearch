@@ -17,41 +17,45 @@ package com.google.devtools.build.java.turbine.javac;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.buildjar.javac.plugins.dependency.StrictJavaDepsPlugin;
-import com.google.devtools.build.java.turbine.javac.JavacTurbineCompileRequest.Prune;
-
 import java.nio.file.Path;
-
 import javax.annotation.Nullable;
 
 /** The input to a {@link JavacTurbineCompiler} compilation. */
 class JavacTurbineCompileRequest {
 
-  enum Prune {
-    YES,
-    NO
-  }
-
+  private final ImmutableList<Path> sources;
   private final ImmutableList<Path> classPath;
   private final ImmutableList<Path> bootClassPath;
+  private final ImmutableSet<String> builtinProcessors;
   private final ImmutableList<Path> processorClassPath;
   private final ImmutableList<String> javacOptions;
   @Nullable private final StrictJavaDepsPlugin strictJavaDepsPlugin;
-  private final Prune prune;
+  private final JavacTransitive transitivePlugin;
 
   JavacTurbineCompileRequest(
+      ImmutableList<Path> sources,
       ImmutableList<Path> classPath,
       ImmutableList<Path> bootClassPath,
+      ImmutableSet<String> builtinProcessors,
       ImmutableList<Path> processorClassPath,
       ImmutableList<String> javacOptions,
       @Nullable StrictJavaDepsPlugin strictJavaDepsPlugin,
-      Prune prune) {
+      JavacTransitive transitivePlugin) {
+    this.sources = checkNotNull(sources);
     this.classPath = checkNotNull(classPath);
     this.bootClassPath = checkNotNull(bootClassPath);
+    this.builtinProcessors = checkNotNull(builtinProcessors);
     this.processorClassPath = checkNotNull(processorClassPath);
     this.javacOptions = checkNotNull(javacOptions);
     this.strictJavaDepsPlugin = strictJavaDepsPlugin;
-    this.prune = checkNotNull(prune);
+    this.transitivePlugin = checkNotNull(transitivePlugin);
+  }
+
+  /** The sources to compile. */
+  ImmutableList<Path> sources() {
+    return sources;
   }
 
   /** The class path; correspond's to javac -classpath. */
@@ -62,6 +66,10 @@ class JavacTurbineCompileRequest {
   /** The boot class path; corresponds to javac -bootclasspath. */
   ImmutableList<Path> bootClassPath() {
     return bootClassPath;
+  }
+
+  ImmutableSet<String> builtinProcessors() {
+    return builtinProcessors;
   }
 
   /** The class path to search for processors; corresponds to javac -processorpath. */
@@ -82,9 +90,8 @@ class JavacTurbineCompileRequest {
     return strictJavaDepsPlugin;
   }
 
-  /** Whether to perform a relaxed header-only compilation. */
-  Prune prune() {
-    return prune;
+  JavacTransitive transitivePlugin() {
+    return transitivePlugin;
   }
 
   static JavacTurbineCompileRequest.Builder builder() {
@@ -92,18 +99,32 @@ class JavacTurbineCompileRequest {
   }
 
   static class Builder {
+    private ImmutableList<Path> sources;
     private ImmutableList<Path> classPath;
     private ImmutableList<Path> bootClassPath;
+    private ImmutableSet<String> builtinProcessors;
     private ImmutableList<Path> processorClassPath;
     private ImmutableList<String> javacOptions;
     @Nullable private StrictJavaDepsPlugin strictDepsPlugin;
-    private Prune prune = Prune.YES;
+    private JavacTransitive transitivePlugin;
 
     private Builder() {}
 
     JavacTurbineCompileRequest build() {
       return new JavacTurbineCompileRequest(
-          classPath, bootClassPath, processorClassPath, javacOptions, strictDepsPlugin, prune);
+          sources,
+          classPath,
+          bootClassPath,
+          builtinProcessors,
+          processorClassPath,
+          javacOptions,
+          strictDepsPlugin,
+          transitivePlugin);
+    }
+
+    Builder setSources(ImmutableList<Path> sources) {
+      this.sources = sources;
+      return this;
     }
 
     Builder setClassPath(ImmutableList<Path> classPath) {
@@ -113,6 +134,11 @@ class JavacTurbineCompileRequest {
 
     Builder setBootClassPath(ImmutableList<Path> bootClassPath) {
       this.bootClassPath = bootClassPath;
+      return this;
+    }
+
+    Builder setBuiltinProcessors(ImmutableSet<String> builtinProcessors) {
+      this.builtinProcessors = builtinProcessors;
       return this;
     }
 
@@ -131,8 +157,8 @@ class JavacTurbineCompileRequest {
       return this;
     }
 
-    Builder setPrune(Prune prune) {
-      this.prune = prune;
+    Builder setTransitivePlugin(JavacTransitive transitivePlugin) {
+      this.transitivePlugin = transitivePlugin;
       return this;
     }
   }
