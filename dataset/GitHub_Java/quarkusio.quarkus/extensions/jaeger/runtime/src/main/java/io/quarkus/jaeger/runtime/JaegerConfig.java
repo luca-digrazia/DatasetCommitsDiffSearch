@@ -111,10 +111,4 @@ public class JaegerConfig {
     @ConfigItem
     public Optional<String> senderFactory;
 
-    /**
-     * Whether the trace context should be logged.
-     */
-    @ConfigItem(defaultValue = "true")
-    public Boolean logTraceContext;
-
 }
