@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.server.FailureDetails.RemoteExecution;
 import com.google.devtools.build.lib.server.FailureDetails.RemoteExecution.Code;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.DetailedExitCode;
+import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
@@ -518,6 +519,7 @@ public class BazelRulesModule extends BlazeModule {
       String message, Code remoteExecutionCode) {
     return new AbruptExitException(
         DetailedExitCode.of(
+            ExitCode.COMMAND_LINE_ERROR,
             FailureDetail.newBuilder()
                 .setMessage(message)
                 .setRemoteExecution(RemoteExecution.newBuilder().setCode(remoteExecutionCode))

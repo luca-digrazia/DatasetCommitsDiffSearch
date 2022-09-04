@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.runtime;
 
 import static com.google.devtools.build.lib.runtime.BlazeOptionHandler.BAD_OPTION_TAG;
 import static com.google.devtools.build.lib.runtime.BlazeOptionHandler.ERROR_SEPARATOR;
-import static com.google.devtools.common.options.Converters.BLAZE_ALIASING_FLAG;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -49,6 +48,7 @@ import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.In
 import com.google.devtools.build.lib.server.FailureDetails;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.server.FailureDetails.Interrupted.Code;
+import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.AnsiStrippingOutputStream;
 import com.google.devtools.build.lib.util.DebugLoggerConfigurator;
@@ -73,7 +73,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.logging.Level;
-import net.starlark.java.eval.Starlark;
 
 /**
  * Dispatches to the Blaze commands; that is, given a command line, this abstraction looks up the
@@ -83,15 +82,12 @@ import net.starlark.java.eval.Starlark;
 public class BlazeCommandDispatcher implements CommandDispatcher {
   private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
-  public static final int UNKNOWN_SERVER_PID = -1;
-
   private static final ImmutableList<String> HELP_COMMAND = ImmutableList.of("help");
 
   private static final ImmutableSet<String> ALL_HELP_OPTIONS =
       ImmutableSet.of("--help", "-help", "-h");
 
   private final BlazeRuntime runtime;
-  private final int serverPid;
   private final BugReporter bugReporter;
   private final Object commandLock;
   private String currentClientDescription = null;
@@ -111,25 +107,15 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
                 }
               });
 
-  BlazeCommandDispatcher(BlazeRuntime runtime, int serverPid) {
-    this(runtime, serverPid, runtime.getBugReporter());
-  }
-
-  /** Convenience test-only constructor. */
+  /** Create a Blaze dispatcher that uses the specified {@code BlazeRuntime} instance. */
   @VisibleForTesting
   public BlazeCommandDispatcher(BlazeRuntime runtime) {
-    this(runtime, UNKNOWN_SERVER_PID, runtime.getBugReporter());
+    this(runtime, runtime.getBugReporter());
   }
 
-  /** Convenience test-only constructor. */
   @VisibleForTesting
   BlazeCommandDispatcher(BlazeRuntime runtime, BugReporter bugReporter) {
-    this(runtime, UNKNOWN_SERVER_PID, bugReporter);
-  }
-
-  private BlazeCommandDispatcher(BlazeRuntime runtime, int serverPid, BugReporter bugReporter) {
     this.runtime = runtime;
-    this.serverPid = serverPid;
     this.bugReporter = bugReporter;
     this.commandLock = new Object();
   }
@@ -185,13 +171,11 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
         switch (lockingMode) {
           case WAIT:
             if (!otherClientDescription.equals(currentClientDescription)) {
-              String serverDescription =
-                  serverPid == UNKNOWN_SERVER_PID ? "" : (" (server_pid=" + serverPid + ")");
               outErr.printErrLn(
-                  String.format(
-                      "Another command (%s) is running. Waiting for it to complete on the"
-                          + " server%s...",
-                      currentClientDescription, serverDescription));
+                  "Another command ("
+                      + currentClientDescription
+                      + ") is running. "
+                      + " Waiting for it to complete on the server...");
               otherClientDescription = currentClientDescription;
             }
             commandLock.wait(500);
@@ -327,7 +311,8 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
     boolean profileExplicitlyDisabled =
         options.containsExplicitOption("experimental_generate_json_trace_profile")
             && !commonOptions.enableTracer;
-    if (commandSupportsProfile && !profileExplicitlyDisabled) {
+    if (commandSupportsProfile
+        && !profileExplicitlyDisabled) {
       commonOptions.enableTracer = true;
       if (!options.containsExplicitOption("experimental_profile_cpu_usage")) {
         commonOptions.enableCpuUsageProfiling = true;
@@ -738,7 +723,6 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
             .optionsData(optionsData)
             .skipStarlarkOptionPrefixes()
             .allowResidue(annotation.allowResidue())
-            .withAliasFlag(BLAZE_ALIASING_FLAG)
             .build();
     return parser;
   }
