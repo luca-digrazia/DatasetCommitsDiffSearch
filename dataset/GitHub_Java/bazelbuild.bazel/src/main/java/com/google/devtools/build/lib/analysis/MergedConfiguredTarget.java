@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A single dependency with its configured target and aspects merged together.
@@ -89,9 +90,9 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
     }
 
     for (ConfiguredAspect aspect : aspects) {
-      TransitiveInfoProviderMap providers = aspect.getProviders();
-      for (int i = 0; i < providers.getProviderCount(); ++i) {
-        Class<? extends TransitiveInfoProvider> providerClass = providers.getProviderClassAt(i);
+      for (Map.Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> entry :
+          aspect.getProviders().entries()) {
+        Class<? extends TransitiveInfoProvider> providerClass = entry.getKey();
         if (OutputGroupProvider.class.equals(providerClass)
             || SkylarkProviders.class.equals(providerClass)
             || ExtraActionArtifactsProvider.class.equals(providerClass)) {
@@ -102,7 +103,7 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
           throw new IllegalStateException("Provider " + providerClass + " provided twice");
         }
 
-        aspectProviders.add(providers.getProviderAt(i));
+        aspectProviders.add(entry.getValue());
       }
     }
     return new MergedConfiguredTarget(base, aspectProviders.build());

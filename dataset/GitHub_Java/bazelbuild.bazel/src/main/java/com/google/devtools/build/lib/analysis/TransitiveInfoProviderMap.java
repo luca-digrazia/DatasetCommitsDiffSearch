@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.analysis;
 
+import java.util.Map;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
@@ -24,9 +25,7 @@ public interface TransitiveInfoProviderMap {
   @Nullable
   <P extends TransitiveInfoProvider> P getProvider(Class<P> providerClass);
 
-  int getProviderCount();
+  Iterable<Map.Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider>> entries();
 
-  Class<? extends TransitiveInfoProvider> getProviderClassAt(int i);
-
-  TransitiveInfoProvider getProviderAt(int i);
+  Iterable<TransitiveInfoProvider> values();
 }
