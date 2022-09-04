@@ -54,7 +54,6 @@ import com.google.devtools.build.lib.skyframe.FileSymlinkInfiniteExpansionUnique
 import com.google.devtools.build.lib.skyframe.PackageFunction;
 import com.google.devtools.build.lib.skyframe.PackageFunction.ActionOnIOExceptionReadingBuildFile;
 import com.google.devtools.build.lib.skyframe.PackageFunction.IncrementalityIntent;
-import com.google.devtools.build.lib.skyframe.PackageFunction.LoadedPackageCacheEntry;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
 import com.google.devtools.build.lib.skyframe.PackageValue;
@@ -144,8 +143,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
       // TODO(nharmata): Refactor WorkspaceFileFunction to make this a non-issue.
       Path devNull = workspaceDir.getFileSystem().getPath("/dev/null");
       directories =
-          new BlazeDirectories(
-              new ServerDirectories(devNull, devNull, devNull), workspaceDir, "blaze");
+          new BlazeDirectories(new ServerDirectories(devNull, devNull), workspaceDir, "blaze");
     }
 
     public Builder setRuleClassProvider(RuleClassProvider ruleClassProvider) {
@@ -230,7 +228,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     this.skyframeThreads = builder.skyframeThreads;
     this.directories = builder.directories;
 
-    this.externalFilesHelper = ExternalFilesHelper.create(
+    this.externalFilesHelper = new ExternalFilesHelper(
         pkgLocatorRef,
         ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS,
         directories);
@@ -342,7 +340,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
   protected final ImmutableMap<SkyFunctionName, SkyFunction> makeFreshSkyFunctions() {
     AtomicReference<TimestampGranularityMonitor> tsgm =
         new AtomicReference<>(new TimestampGranularityMonitor(BlazeClock.instance()));
-    Cache<PackageIdentifier, LoadedPackageCacheEntry> packageFunctionCache =
+    Cache<PackageIdentifier, PackageFunction.BuilderAndGlobDeps> packageFunctionCache =
         CacheBuilder.newBuilder().build();
     Cache<PackageIdentifier, AstParseResult> astCache = CacheBuilder.newBuilder().build();
     AtomicReference<PerBuildSyscallCache> syscallCacheRef = new AtomicReference<>(
