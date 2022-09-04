@@ -28,7 +28,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Pattern;
 
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Completion;
@@ -67,9 +66,6 @@ import org.jboss.jdeparser.JTypes;
 import io.quarkus.annotation.processor.generate_doc.GenerateExtensionConfigurationDoc;
 
 public class ExtensionAnnotationProcessor extends AbstractProcessor {
-
-    private static final Pattern REMOVE_LEADING_SPACE = Pattern.compile("^ ", Pattern.MULTILINE);
-
     private final Set<String> generatedAccessors = new ConcurrentHashMap<String, Boolean>().keySet(Boolean.TRUE);
     private final Set<String> generatedJavaDocs = new ConcurrentHashMap<String, Boolean>().keySet(Boolean.TRUE);
     private final GenerateExtensionConfigurationDoc generateExtensionConfigurationDoc = new GenerateExtensionConfigurationDoc();
@@ -585,16 +581,13 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
     }
 
     private String getRequiredJavadoc(Element e) {
-        String docComment = processingEnv.getElementUtils().getDocComment(e);
-
+        final String docComment = processingEnv.getElementUtils().getDocComment(e);
         if (docComment == null) {
             processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Unable to find javadoc for config item " + e, e);
             return "";
         }
 
-        // javax.lang.model keeps the leading space after the "*" so we need to remove it.
-
-        return REMOVE_LEADING_SPACE.matcher(docComment).replaceAll("").trim();
+        return docComment.trim();
     }
 
     private static boolean hasParameterAnnotated(ExecutableElement ex, String annotationName) {

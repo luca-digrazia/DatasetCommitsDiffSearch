@@ -47,7 +47,6 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.AnnotationProxyBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
-import io.quarkus.deployment.builditem.IOThreadDetectorBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
@@ -177,12 +176,6 @@ class VertxProcessor {
                 shutdown, codecByClass);
         serviceStart.produce(new ServiceStartBuildItem("vertx"));
         return new VertxBuildItem(vertx);
-    }
-
-    @BuildStep
-    @Record(ExecutionTime.STATIC_INIT)
-    IOThreadDetectorBuildItem ioThreadDetector(VertxRecorder recorder) {
-        return new IOThreadDetectorBuildItem(recorder.detector());
     }
 
     @BuildStep
