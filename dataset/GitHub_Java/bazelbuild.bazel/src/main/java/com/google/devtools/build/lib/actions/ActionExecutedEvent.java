@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.actions;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.actions.SpawnResult.MetadataLog;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile.LocalFileType;
 import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
@@ -29,7 +28,6 @@ import com.google.devtools.build.lib.buildeventstream.NullConfiguration;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.ProgressLike;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -41,36 +39,26 @@ import java.util.logging.Logger;
 public class ActionExecutedEvent implements BuildEventWithConfiguration, ProgressLike {
   private static final Logger logger = Logger.getLogger(ActionExecutedEvent.class.getName());
 
-  private final PathFragment actionId;
   private final Action action;
   private final ActionExecutionException exception;
   private final Path primaryOutput;
   private final Path stdout;
   private final Path stderr;
-  private final ImmutableList<MetadataLog> actionMetadataLogs;
-  private final boolean isInMemoryFs;
   private final ErrorTiming timing;
 
   public ActionExecutedEvent(
-      PathFragment actionId,
       Action action,
       ActionExecutionException exception,
       Path primaryOutput,
       Path stdout,
       Path stderr,
-      ImmutableList<MetadataLog> actionMetadataLogs,
-      ErrorTiming timing,
-      boolean isInMemoryFs) {
-    this.actionId = actionId;
+      ErrorTiming timing) {
     this.action = action;
     this.exception = exception;
     this.primaryOutput = primaryOutput;
     this.stdout = stdout;
     this.stderr = stderr;
     this.timing = timing;
-    this.actionMetadataLogs = actionMetadataLogs;
-    this.isInMemoryFs = isInMemoryFs;
-    Preconditions.checkNotNull(this.actionMetadataLogs, this);
     Preconditions.checkState(
         (this.exception == null) == (this.timing == ErrorTiming.NO_ERROR), this);
   }
@@ -88,10 +76,6 @@ public class ActionExecutedEvent implements BuildEventWithConfiguration, Progres
     return timing;
   }
 
-  public boolean hasInMemoryFs() {
-    return isInMemoryFs;
-  }
-
   public String getStdout() {
     if (stdout == null) {
       return null;
@@ -106,17 +90,13 @@ public class ActionExecutedEvent implements BuildEventWithConfiguration, Progres
     return stderr.toString();
   }
 
-  public ImmutableList<MetadataLog> getActionMetadataLogs() {
-    return actionMetadataLogs;
-  }
-
   @Override
   public BuildEventId getEventId() {
     if (action.getOwner() == null) {
-      return BuildEventId.actionCompleted(actionId);
+      return BuildEventId.actionCompleted(primaryOutput);
     } else {
       return BuildEventId.actionCompleted(
-          actionId,
+          primaryOutput,
           action.getOwner().getLabel(),
           action.getOwner().getConfigurationChecksum());
     }
@@ -148,9 +128,6 @@ public class ActionExecutedEvent implements BuildEventWithConfiguration, Progres
     }
     if (stderr != null) {
       localFiles.add(new LocalFile(stderr, LocalFileType.STDERR));
-    }
-    for (MetadataLog actionMetadataLog : actionMetadataLogs) {
-      localFiles.add(new LocalFile(actionMetadataLog.getFilePath(), LocalFileType.LOG));
     }
     if (exception == null) {
       localFiles.add(new LocalFile(primaryOutput, LocalFileType.OUTPUT));
@@ -193,16 +170,6 @@ public class ActionExecutedEvent implements BuildEventWithConfiguration, Progres
       }
       actionBuilder.setConfiguration(configuration.getEventId().asStreamProto().getConfiguration());
     }
-    for (MetadataLog actionMetadataLog : actionMetadataLogs) {
-      String uri = pathConverter.apply(actionMetadataLog.getFilePath());
-      if (uri != null) {
-        actionBuilder.addActionMetadataLogs(
-            BuildEventStreamProtos.File.newBuilder()
-                .setName(actionMetadataLog.getName())
-                .setUri(uri)
-                .build());
-      }
-    }
     if (exception == null) {
       String uri = pathConverter.apply(primaryOutput);
       if (uri != null) {
@@ -215,7 +182,7 @@ public class ActionExecutedEvent implements BuildEventWithConfiguration, Progres
         actionBuilder.addAllCommandLine(((CommandAction) action).getArguments());
       }
     } catch (CommandLineExpansionException e) {
-      // Command-line not available, so just not report it
+      // Command-line not avaiable, so just not report it
       logger.log(Level.INFO, "Could no compute commandline of reported action", e);
     }
     return GenericBuildEvent.protoChaining(this).setAction(actionBuilder.build()).build();

@@ -42,7 +42,7 @@ import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.OptionsParsingResult;
+import com.google.devtools.common.options.OptionsProvider;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -83,7 +83,7 @@ public class BazelBuildEventServiceModuleTest {
 
   @Mock public BuildEventStreamOptions bepOptions;
 
-  @Mock public OptionsParsingResult optionsProvider;
+  @Mock public OptionsProvider optionsProvider;
 
   @Mock public ModuleEnvironment moduleEnvironment;
 
@@ -145,8 +145,7 @@ public class BazelBuildEventServiceModuleTest {
         reporter,
         /* buildRequestId= */ "foo",
         /* invocationId= */ "bar",
-        commandName,
-        /*eventbus=*/ new EventBus());
+        commandName);
   }
 
   @Test
