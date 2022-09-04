@@ -25,7 +25,6 @@ import java.net.JarURLConnection;
 import java.net.Socket;
 import java.net.URL;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -47,7 +46,6 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
-import org.jboss.shamrock.dev.ClassLoaderCompiler;
 import org.jboss.shamrock.dev.DevModeMain;
 import org.jboss.shamrock.maven.utilities.MojoUtils;
 
@@ -160,7 +158,7 @@ public class DevMojo extends AbstractMojo {
                 args.add("-Xrunjdwp:transport=dt_socket,address=localhost:5005,server=n,suspend=n");
             } else if (debug.toLowerCase().equals("true")) {
                 args.add("-Xdebug");
-                args.add("-Xrunjdwp:transport=dt_socket,address=localhost:5005,server=n,suspend=y");
+                args.add("-Xrunjdwp:transport=dt_socket,address=localhost:5005,server=y,suspend=y");
             } else if (!debug.toLowerCase().equals("false")) {
                 try {
                     int port = Integer.parseInt(debug);
@@ -266,9 +264,6 @@ public class DevMojo extends AbstractMojo {
                 manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, DevModeMain.class.getName());
                 out.putNextEntry(new ZipEntry("META-INF/MANIFEST.MF"));
                 manifest.write(out);
-
-                out.putNextEntry(new ZipEntry(ClassLoaderCompiler.DEV_MODE_CLASS_PATH));
-                out.write(classPath.toString().getBytes(StandardCharsets.UTF_8));
             }
             String resources = null;
             for(Resource i : project.getBuild().getResources()) {
