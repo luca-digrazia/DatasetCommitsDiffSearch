@@ -120,7 +120,6 @@ import io.quarkus.deployment.builditem.ApplicationInfoBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedFileSystemResourceBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
-import io.quarkus.deployment.metrics.MetricsCapabilityBuildItem;
 import io.quarkus.deployment.pkg.PackageConfig;
 import io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem;
 import io.quarkus.deployment.util.FileUtil;
@@ -135,6 +134,7 @@ import io.quarkus.kubernetes.spi.KubernetesLabelBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesPortBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesRoleBuildItem;
 import io.quarkus.runtime.LaunchMode;
+import io.quarkus.smallrye.metrics.deployment.spi.MetricsConfigurationBuildItem;
 
 class KubernetesProcessor {
 
@@ -198,7 +198,7 @@ class KubernetesProcessor {
     @BuildStep
     public List<KubernetesAnnotationBuildItem> createAnnotations(KubernetesConfig kubernetesConfig,
             OpenshiftConfig openshiftConfig, KnativeConfig knativeConfig,
-            Optional<MetricsCapabilityBuildItem> metricsConfiguration, List<KubernetesPortBuildItem> kubernetesPorts) {
+            Optional<MetricsConfigurationBuildItem> metricsConfiguration, List<KubernetesPortBuildItem> kubernetesPorts) {
         List<KubernetesAnnotationBuildItem> result = new ArrayList<KubernetesAnnotationBuildItem>();
         addAnnotations(kubernetesConfig, KUBERNETES, metricsConfiguration, kubernetesPorts, result);
         addAnnotations(kubernetesConfig, MINIKUBE, metricsConfiguration, kubernetesPorts, result);
@@ -208,19 +208,17 @@ class KubernetesProcessor {
     }
 
     private void addAnnotations(PlatformConfiguration config, String target,
-            Optional<MetricsCapabilityBuildItem> metricsConfigurationBuildItem,
+            Optional<MetricsConfigurationBuildItem> metricsConfigurationBuildItem,
             List<KubernetesPortBuildItem> kubernetesPorts,
             List<KubernetesAnnotationBuildItem> result) {
         for (Map.Entry<String, String> entry : config.getAnnotations().entrySet()) {
             result.add(new KubernetesAnnotationBuildItem(entry.getKey(), entry.getValue(), target));
         }
         if (metricsConfigurationBuildItem.isPresent() && !kubernetesPorts.isEmpty()) {
-            String path = metricsConfigurationBuildItem.get().metricsEndpoint();
-            if (path != null) {
-                result.add(new KubernetesAnnotationBuildItem(Prometheus.SCRAPE, "true", target));
-                result.add(new KubernetesAnnotationBuildItem(Prometheus.PATH, path, target));
-                result.add(new KubernetesAnnotationBuildItem(Prometheus.PORT, "" + kubernetesPorts.get(0).getPort(), target));
-            }
+            result.add(new KubernetesAnnotationBuildItem(Prometheus.SCRAPE, "true", target));
+            result.add(new KubernetesAnnotationBuildItem(Prometheus.PATH, metricsConfigurationBuildItem.get().getPath(),
+                    target));
+            result.add(new KubernetesAnnotationBuildItem(Prometheus.PORT, "" + kubernetesPorts.get(0).getPort(), target));
         }
     }
 
