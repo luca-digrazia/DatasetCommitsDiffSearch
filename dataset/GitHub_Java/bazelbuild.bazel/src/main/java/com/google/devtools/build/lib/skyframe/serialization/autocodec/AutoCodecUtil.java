@@ -86,7 +86,7 @@ class AutoCodecUtil {
             .addParameter(TypeName.get(env.getTypeUtils().erasure(encodedType.asType())), "input")
             .addParameter(CodedOutputStream.class, "codedOut");
     if (annotation.checkClassExplicitlyAllowed()) {
-      builder.addStatement("context.checkClassExplicitlyAllowed(getEncodedClass(), input)");
+      builder.addStatement("context.checkClassExplicitlyAllowed(getEncodedClass())");
     }
     List<? extends TypeMirror> explicitlyAllowedClasses;
     try {

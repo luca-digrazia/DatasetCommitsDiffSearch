@@ -48,6 +48,8 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.Printer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
 
@@ -60,13 +62,7 @@ import javax.annotation.Nullable;
  */
 @AutoCodec(checkClassExplicitlyAllowed = true)
 public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
-  /**
-   * The name of the key for the 'actions' synthesized provider.
-   *
-   * <p>If you respond to this key you are expected to return a list of actions belonging to this
-   * configured target.
-   */
-  public static final String ACTIONS_FIELD_NAME = "actions";
+  private static final String ACTIONS_FIELD_NAME = "actions";
 
   /**
    * The configuration transition for an attribute through which a prerequisite
@@ -90,10 +86,11 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   private static final Interner<ImmutableSet<ConfiguredTargetKey>> IMPLICIT_DEPS_INTERNER =
       BlazeInterners.newWeakInterner();
 
+  private boolean actionsAccessible = true;
   private final TransitiveInfoProviderMap providers;
   private final ImmutableMap<Label, ConfigMatchingProvider> configConditions;
   private final String ruleClassString;
-  private final ImmutableList<ActionAnalysisMetadata> actions;
+  private final ArrayList<ActionAnalysisMetadata> actions;
   private final ImmutableMap<Artifact, Integer> generatingActionIndex;
 
   @Instantiator
@@ -106,7 +103,7 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       ImmutableSet<ConfiguredTargetKey> implicitDeps,
       String ruleClassString,
-      ImmutableList<ActionAnalysisMetadata> actions,
+      List<ActionAnalysisMetadata> actions,
       ImmutableMap<Artifact, Integer> generatingActionIndex) {
     super(label, configurationKey, visibility);
 
@@ -130,14 +127,14 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
     this.configConditions = configConditions;
     this.implicitDeps = IMPLICIT_DEPS_INTERNER.intern(implicitDeps);
     this.ruleClassString = ruleClassString;
-    this.actions = actions;
+    this.actions = new ArrayList<>(actions);
     this.generatingActionIndex = generatingActionIndex;
   }
 
   public RuleConfiguredTarget(
       RuleContext ruleContext,
       TransitiveInfoProviderMap providers,
-      ImmutableList<ActionAnalysisMetadata> actions,
+      List<? extends ActionAnalysisMetadata> actions,
       ImmutableMap<Artifact, Integer> generatingActionIndex) {
     this(
         ruleContext.getLabel(),
@@ -147,7 +144,7 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
         ruleContext.getConfigConditions(),
         Util.findImplicitDeps(ruleContext),
         ruleContext.getRule().getRuleClass(),
-        actions,
+        (List<ActionAnalysisMetadata>) actions,
         generatingActionIndex);
 
     // If this rule is the run_under target, then check that we have an executable; note that
@@ -218,7 +215,7 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   @Override
   protected Object rawGetSkylarkProvider(String providerKey) {
     if (providerKey.equals(ACTIONS_FIELD_NAME)) {
-      return actions;
+      return actionsAccessible ? actions : ImmutableList.of();
     }
     return providers.getProvider(providerKey);
   }
@@ -246,7 +243,7 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   }
 
   /** Returns a list of actions that this configured target generated. */
-  public ImmutableList<ActionAnalysisMetadata> getActions() {
+  public ArrayList<ActionAnalysisMetadata> getActions() {
     return actions;
   }
 
@@ -256,5 +253,10 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
    */
   public ImmutableMap<Artifact, Integer> getGeneratingActionIndex() {
     return generatingActionIndex;
+  }
+
+  /** Disables accessing actions via a provider skylark interface. */
+  public void disableAcccesibleActions() {
+    this.actionsAccessible = false;
   }
 }

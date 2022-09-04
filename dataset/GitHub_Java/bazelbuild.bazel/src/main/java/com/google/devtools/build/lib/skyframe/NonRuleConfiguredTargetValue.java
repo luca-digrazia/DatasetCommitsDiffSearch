@@ -15,12 +15,10 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.SourceArtifact;
 import com.google.devtools.build.lib.actions.BasicActionLookupValue;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
@@ -32,6 +30,7 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.skyframe.SkyKey;
+import java.util.ArrayList;
 import javax.annotation.Nullable;
 
 /** A non-rule configured target in the context of a Skyframe graph. */
@@ -53,10 +52,10 @@ public final class NonRuleConfiguredTargetValue extends BasicActionLookupValue
   @AutoCodec.Instantiator
   @VisibleForSerialization
   NonRuleConfiguredTargetValue(
-      ImmutableList<ActionAnalysisMetadata> actions,
+      ArrayList<ActionAnalysisMetadata> actions,
       ImmutableMap<Artifact, Integer> generatingActionIndex,
       ConfiguredTarget configuredTarget) {
-    super(actions, generatingActionIndex);
+    super(actions, generatingActionIndex, /*removeActionsAfterEvaluation=*/ false);
     this.configuredTarget = configuredTarget;
     // Transitive packages are not serialized.
     this.transitivePackagesForPackageRootResolution = null;
@@ -65,8 +64,9 @@ public final class NonRuleConfiguredTargetValue extends BasicActionLookupValue
   NonRuleConfiguredTargetValue(
       ConfiguredTarget configuredTarget,
       GeneratingActions generatingActions,
-      @Nullable NestedSet<Package> transitivePackagesForPackageRootResolution) {
-    super(generatingActions);
+      @Nullable NestedSet<Package> transitivePackagesForPackageRootResolution,
+      boolean removeActionsAfterEvaluation) {
+    super(generatingActions, removeActionsAfterEvaluation);
     this.configuredTarget = Preconditions.checkNotNull(configuredTarget, generatingActions);
     this.transitivePackagesForPackageRootResolution = transitivePackagesForPackageRootResolution;
   }
@@ -80,7 +80,7 @@ public final class NonRuleConfiguredTargetValue extends BasicActionLookupValue
 
   @VisibleForTesting
   @Override
-  public ImmutableList<ActionAnalysisMetadata> getActions() {
+  public ArrayList<ActionAnalysisMetadata> getActions() {
     Preconditions.checkNotNull(configuredTarget, this);
     return actions;
   }
@@ -113,10 +113,5 @@ public final class NonRuleConfiguredTargetValue extends BasicActionLookupValue
   @Override
   public String toString() {
     return getStringHelper().add("configuredTarget", configuredTarget).toString();
-  }
-
-  @Override
-  public SourceArtifact getSourceArtifact() {
-    return configuredTarget == null ? null : configuredTarget.getSourceArtifact();
   }
 }

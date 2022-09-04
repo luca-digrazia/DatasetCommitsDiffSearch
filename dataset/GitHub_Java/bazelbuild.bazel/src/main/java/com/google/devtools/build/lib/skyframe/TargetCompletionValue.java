@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.util.Collection;
 import java.util.Set;
@@ -51,30 +52,27 @@ public class TargetCompletionValue implements SkyValue {
                 targetsToTest.contains(ct)));
   }
 
-  /**
-   * {@link com/google/devtools/build/lib/skyframe/TargetCompletionValue.java used only in javadoc:
-   * com.google.devtools.build.skyframe.SkyKey} for {@link TargetCompletionValue}.
-   */
+  /** {@link SkyKey} for {@link TargetCompletionValue}. */
   @AutoCodec
   @AutoValue
-  public abstract static class TargetCompletionKey
-      implements CompletionFunction.TopLevelActionLookupKey {
+  public abstract static class TargetCompletionKey implements SkyKey {
     @AutoCodec.Instantiator
     static TargetCompletionKey create(
-        ConfiguredTargetKey actionLookupKey,
+        ConfiguredTargetKey configuredTargetKey,
         TopLevelArtifactContext topLevelArtifactContext,
         boolean willTest) {
       return new AutoValue_TargetCompletionValue_TargetCompletionKey(
-          topLevelArtifactContext, actionLookupKey, willTest);
+          configuredTargetKey, topLevelArtifactContext, willTest);
     }
-
-    @Override
-    public abstract ConfiguredTargetKey actionLookupKey();
 
     @Override
     public SkyFunctionName functionName() {
       return SkyFunctions.TARGET_COMPLETION;
     }
+
+    public abstract ConfiguredTargetKey configuredTargetKey();
+
+    abstract TopLevelArtifactContext topLevelArtifactContext();
 
     abstract boolean willTest();
   }

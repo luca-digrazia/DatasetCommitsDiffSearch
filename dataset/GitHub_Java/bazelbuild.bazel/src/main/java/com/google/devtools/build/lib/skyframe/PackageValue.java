@@ -60,10 +60,9 @@ public class PackageValue implements NotComparableSkyValue {
     return Key.create(pkgIdentifier);
   }
 
-  /** Skyframe key for packages */
   @AutoCodec.VisibleForSerialization
   @AutoCodec
-  public static class Key extends AbstractSkyKey<PackageIdentifier> {
+  static class Key extends AbstractSkyKey<PackageIdentifier> {
     private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
 
     private Key(PackageIdentifier arg) {

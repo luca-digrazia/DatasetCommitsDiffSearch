@@ -37,7 +37,7 @@ import javax.annotation.Nullable;
 /**
  * Stateful class for providing additional context to a single serialization "session". This class
  * is thread-safe so long as {@link #serializer} is null (which also implies that {@link
- * #allowFuturesToBlockWritingOn}) is false). If it is not null, this class is not thread-safe and
+ * #allowFuturesToBlockWritingOn) is false). If it is not null, this class is not thread-safe and
  * should only be accessed on a single thread for serializing one object (that may involve
  * serializing other objects contained in it).
  */
@@ -190,18 +190,10 @@ public class SerializationContext {
    * com.google.devtools.build.lib.packages.Package} inside {@link
    * com.google.devtools.build.lib.skyframe.PackageValue}.
    */
-  public void checkClassExplicitlyAllowed(Class<?> allowedClass) throws SerializationException {
-    if (serializer == null) {
-      throw new SerializationException(
-          "Cannot check explicitly allowed class " + allowedClass + " without memoization");
-    }
-    if (!explicitlyAllowedClasses.contains(allowedClass)) {
-      throw new SerializationException(
-          allowedClass
-              + " not explicitly allowed (allowed classes were: "
-              + explicitlyAllowedClasses
-              + ")");
-    }
+  public void checkClassExplicitlyAllowed(Class<?> allowedClass) {
+    Preconditions.checkNotNull(
+        serializer, "Cannot check explicitly allowed class %s without memoization", allowedClass);
+    Preconditions.checkState(explicitlyAllowedClasses.contains(allowedClass), allowedClass);
   }
 
   /**
@@ -220,11 +212,9 @@ public class SerializationContext {
    * be determined if the inclusion of the expensive object is legitimate, before it is whitelisted
    * using this method.
    */
-  public void addExplicitlyAllowedClass(Class<?> allowedClass) throws SerializationException {
-    if (serializer == null) {
-      throw new SerializationException(
-          "Cannot add explicitly allowed class %s without memoization: " + allowedClass);
-    }
+  public void addExplicitlyAllowedClass(Class<?> allowedClass) {
+    Preconditions.checkNotNull(
+        serializer, "Cannot add explicitly allowed class %s without memoization", allowedClass);
     explicitlyAllowedClasses.add(allowedClass);
   }
 
