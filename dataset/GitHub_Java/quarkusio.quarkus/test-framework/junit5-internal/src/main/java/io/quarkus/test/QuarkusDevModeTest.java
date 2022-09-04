@@ -31,12 +31,10 @@ import org.junit.jupiter.api.extension.TestInstanceFactory;
 import org.junit.jupiter.api.extension.TestInstanceFactoryContext;
 import org.junit.jupiter.api.extension.TestInstantiationException;
 
-import io.quarkus.deployment.dev.CompilationProvider;
-import io.quarkus.deployment.dev.DevModeContext;
-import io.quarkus.deployment.dev.DevModeMain;
 import io.quarkus.deployment.util.FileUtil;
-import io.quarkus.dev.appstate.ApplicationStateNotification;
-import io.quarkus.runtime.util.ClassPathUtils;
+import io.quarkus.dev.CompilationProvider;
+import io.quarkus.dev.DevModeContext;
+import io.quarkus.dev.DevModeMain;
 import io.quarkus.test.common.PathTestHelper;
 import io.quarkus.test.common.PropertyTestUtil;
 import io.quarkus.test.common.TestResourceManager;
@@ -125,7 +123,7 @@ public class QuarkusDevModeTest
 
                 @Override
                 public void close() throws Throwable {
-                    manager.close();
+                    manager.stop();
                 }
             });
         }
@@ -152,7 +150,6 @@ public class QuarkusDevModeTest
             context.getBuildSystemProperties().put("quarkus.banner.enabled", "false");
             devModeMain = new DevModeMain(context);
             devModeMain.start();
-            ApplicationStateNotification.waitForApplicationStart();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -261,29 +258,22 @@ public class QuarkusDevModeTest
                 if (!url.getPath().contains("surefirebooter")) {
                     continue;
                 }
-                final boolean foundForkedBooter = ClassPathUtils.readStream(url, is -> {
-                    try {
-                        final Manifest manifest = new Manifest(is);
-                        final String mainClass = manifest.getMainAttributes().getValue(Attributes.Name.MAIN_CLASS);
-                        // additional check to make sure we are probing the right jar
-                        if ("org.apache.maven.surefire.booter.ForkedBooter".equals(mainClass)) {
-                            final String manifestFilePath = url.getPath();
-                            if (manifestFilePath.startsWith("file:")) {
-                                // manifest file path will be of the form jar:file:....!META-INF/MANIFEST.MF
-                                final String jarFilePath = manifestFilePath.substring(5, manifestFilePath.lastIndexOf('!'));
-                                final File surefirebooterJar = new File(
-                                        URLDecoder.decode(jarFilePath, StandardCharsets.UTF_8.name()));
-                                context.setDevModeRunnerJarFile(surefirebooterJar);
-                            }
-                            return true;
+                try (final InputStream is = url.openStream()) {
+                    final Manifest manifest = new Manifest(is);
+                    final String mainClass = manifest.getMainAttributes().getValue(Attributes.Name.MAIN_CLASS);
+                    // additional check to make sure we are probing the right jar
+                    if ("org.apache.maven.surefire.booter.ForkedBooter".equals(mainClass)) {
+                        final String manifestFilePath = url.getPath();
+                        if (manifestFilePath.startsWith("file:")) {
+                            // manifest file path will be of the form jar:file:....!META-INF/MANIFEST.MF
+                            final String jarFilePath = manifestFilePath.substring(5, manifestFilePath.lastIndexOf('!'));
+                            final File surefirebooterJar = new File(
+                                    URLDecoder.decode(jarFilePath, StandardCharsets.UTF_8.name()));
+                            context.setDevModeRunnerJarFile(surefirebooterJar);
                         }
-                    } catch (IOException e) {
-                        throw new UncheckedIOException(e);
+                        break;
                     }
-                    return false;
-                });
-                if (foundForkedBooter) {
-                    break;
+
                 }
             }
         } catch (Throwable t) {
@@ -417,7 +407,7 @@ public class QuarkusDevModeTest
         long timeout = System.currentTimeMillis() + 5000;
         //in general there is a potential race here
         //if you serve a file you will send the data to the client, then close the resource
-        //this means that by the time the client request is run the file may not
+        //this means that by the time the client request is run the file may not 
         //have been closed yet, as the test sees the response as being complete after the last data is send
         //we wait up to 5s for this condition to be resolved
         for (;;) {
