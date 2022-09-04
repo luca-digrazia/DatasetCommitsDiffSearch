@@ -61,7 +61,6 @@ import com.google.devtools.common.options.OptionsParsingResult;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -656,13 +655,9 @@ public class ConfigCommand implements BlazeCommand {
 
   private static Map<String, Pair<Object, Object>> diffOptions(
       @Nullable FragmentOptionsForOutput options1, @Nullable FragmentOptionsForOutput options2) {
-    Set<String> optionNames1 =
-        options1 == null ? Collections.<String>emptySet() : options1.optionNames();
-    Set<String> optionNames2 =
-        options2 == null ? Collections.<String>emptySet() : options2.optionNames();
     Map<String, Pair<Object, Object>> diffs = new HashMap<>();
 
-    for (String optionName : Sets.union(optionNames1, optionNames2)) {
+    for (String optionName : Sets.union(options1.optionNames(), options2.optionNames())) {
       String value1 = options1 == null ? null : options1.getOption(optionName);
       String value2 = options2 == null ? null : options2.getOption(optionName);
 

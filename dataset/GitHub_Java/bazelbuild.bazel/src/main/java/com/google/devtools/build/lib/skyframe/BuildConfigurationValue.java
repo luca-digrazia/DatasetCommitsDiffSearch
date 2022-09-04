@@ -138,8 +138,9 @@ public class BuildConfigurationValue implements SkyValue {
     private static final Interner<Key> keyInterner = BlazeInterners.newWeakInterner();
 
     private final FragmentClassSet fragments;
-    private final BuildOptions.OptionsDiffForReconstruction optionsDiff;
-    private final int hashCode;
+    final BuildOptions.OptionsDiffForReconstruction optionsDiff;
+    // If hashCode really is -1, we'll recompute it from scratch each time. Oh well.
+    private volatile int hashCode = -1;
 
     @AutoCodec.Instantiator
     @VisibleForSerialization
@@ -151,7 +152,6 @@ public class BuildConfigurationValue implements SkyValue {
     private Key(FragmentClassSet fragments, BuildOptions.OptionsDiffForReconstruction optionsDiff) {
       this.fragments = Preconditions.checkNotNull(fragments);
       this.optionsDiff = Preconditions.checkNotNull(optionsDiff);
-      this.hashCode = Objects.hash(fragments, optionsDiff);
     }
 
     @VisibleForTesting
@@ -182,6 +182,9 @@ public class BuildConfigurationValue implements SkyValue {
 
     @Override
     public int hashCode() {
+      if (hashCode == -1) {
+        hashCode = Objects.hash(fragments, optionsDiff);
+      }
       return hashCode;
     }
 
