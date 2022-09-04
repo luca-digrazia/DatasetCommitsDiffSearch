@@ -196,15 +196,6 @@ class Desugar {
     public boolean tolerateMissingDependencies;
 
     @Option(
-      name = "desugar_supported_core_libs",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help = "Enable core library desugaring, which requires configuration with related flags."
-    )
-    public boolean desugarCoreLibs;
-
-    @Option(
       name = "desugar_interface_method_bodies_if_needed",
       defaultValue = "true",
       category = "misc",
@@ -402,14 +393,15 @@ class Desugar {
       ImmutableSet.Builder<String> interfaceLambdaMethodCollector = ImmutableSet.builder();
       ClassVsInterface interfaceCache = new ClassVsInterface(classpathReader);
       CoreLibrarySupport coreLibrarySupport =
-          options.desugarCoreLibs
-              ? new CoreLibrarySupport(
+          options.rewriteCoreLibraryPrefixes.isEmpty()
+                  && options.emulateCoreLibraryInterfaces.isEmpty()
+              ? null
+              : new CoreLibrarySupport(
                   rewriter,
                   loader,
-                  options.rewriteCoreLibraryPrefixes,
-                  options.emulateCoreLibraryInterfaces,
-                  options.retargetCoreLibraryMembers)
-          : null;
+                  ImmutableList.copyOf(options.rewriteCoreLibraryPrefixes),
+                  ImmutableList.copyOf(options.emulateCoreLibraryInterfaces),
+                  options.retargetCoreLibraryMembers);
 
       desugarClassesInInput(
           inputFiles,
@@ -908,10 +900,6 @@ class Desugar {
     for (Path path : options.bootclasspath) {
       checkArgument(!Files.isDirectory(path), "Bootclasspath entry must be a jar file: %s", path);
     }
-    checkArgument(!options.desugarCoreLibs
-        || !options.rewriteCoreLibraryPrefixes.isEmpty()
-        || !options.emulateCoreLibraryInterfaces.isEmpty(),
-        "--desugar_supported_core_libs requires specifying renamed and/or emulated core libraries");
     return options;
   }
 
