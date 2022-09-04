@@ -90,7 +90,6 @@ class HttpConnector {
   URLConnection connect(
       URL originalUrl, ImmutableMap<String, String> requestHeaders)
           throws IOException {
-
     if (Thread.interrupted()) {
       throw new InterruptedIOException();
     }
@@ -117,7 +116,7 @@ class HttpConnector {
             // appears to be compressed.
             continue;
           }
-          connection.addRequestProperty(entry.getKey(), entry.getValue());
+          connection.setRequestProperty(entry.getKey(), entry.getValue());
         }
         connection.setConnectTimeout(connectTimeout);
         // The read timeout is always large because it stays in effect after this method.
@@ -209,12 +208,7 @@ class HttpConnector {
           throw e;
         }
         if (++retries == MAX_RETRIES) {
-          if (e instanceof SocketTimeoutException) {
-            // SocketTimeoutExceptions are InterruptedIOExceptions; however they do not signify
-            // an external interruption, but simply a failed download due to some server timing
-            // out. So rethrow them as ordinary IOExceptions.
-            e = new IOException(e.getMessage(), e);
-          } else {
+          if (!(e instanceof SocketTimeoutException)) {
             eventHandler
                 .handle(Event.progress(format("Error connecting to %s: %s", url, e.getMessage())));
           }

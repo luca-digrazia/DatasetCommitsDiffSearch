@@ -18,8 +18,6 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Optional;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.common.io.ByteStreams;
 import com.google.devtools.build.lib.bazel.repository.cache.RepositoryCache;
 import com.google.devtools.build.lib.bazel.repository.cache.RepositoryCache.KeyType;
@@ -37,11 +35,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.io.OutputStream;
-import java.net.SocketTimeoutException;
-import java.net.URI;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -77,12 +71,12 @@ public class HttpDownloader {
   /**
    * Downloads file to disk and returns path.
    *
-   * <p>If the checksum and path to the repository cache is specified, attempt to load the file from
-   * the {@link RepositoryCache}. If it doesn't exist, proceed to download the file and load it into
-   * the cache prior to returning the value.
+   * <p>If the SHA256 checksum and path to the repository cache is specified, attempt to load the
+   * file from the {@link RepositoryCache}. If it doesn't exist, proceed to download the file and
+   * load it into the cache prior to returning the value.
    *
    * @param urls list of mirror URLs with identical content
-   * @param checksum valid checksum which is checked, or empty to disable
+   * @param sha256 valid SHA256 hex checksum string which is checked, or empty to disable
    * @param type extension, e.g. "tar.gz" to force on downloaded filename, or empty to not do this
    * @param output destination filename if {@code type} is <i>absent</i>, otherwise output directory
    * @param eventHandler CLI progress reporter
@@ -95,9 +89,7 @@ public class HttpDownloader {
    */
   public Path download(
       List<URL> urls,
-      Map<URI, Map<String, String>> authHeaders,
-      Optional<Checksum> checksum,
-      String canonicalId,
+      String sha256,
       Optional<String> type,
       Path output,
       ExtendedEventHandler eventHandler,
@@ -120,37 +112,30 @@ public class HttpDownloader {
       mainUrl = urls.get(0);
     }
     Path destination = getDownloadDestination(mainUrl, type, output);
-    ImmutableSet<String> candidateFileNames = getCandidateFileNames(mainUrl, destination);
 
-    // Is set to true if the value should be cached by the checksum value provided
-    boolean isCachingByProvidedChecksum = false;
+    // Is set to true if the value should be cached by the sha256 value provided
+    boolean isCachingByProvidedSha256 = false;
 
-    if (checksum.isPresent()) {
-      String cacheKey = checksum.get().toString();
-      KeyType cacheKeyType = checksum.get().getKeyType();
+    if (!sha256.isEmpty()) {
       try {
-        eventHandler.post(
-            new CacheProgress(mainUrl.toString(), "Checking in " + cacheKeyType + " cache"));
-        String currentChecksum = RepositoryCache.getChecksum(cacheKeyType, destination);
-        if (currentChecksum.equals(cacheKey)) {
+        String currentSha256 =
+            RepositoryCache.getChecksum(KeyType.SHA256, destination);
+        if (currentSha256.equals(sha256)) {
           // No need to download.
           return destination;
         }
       } catch (IOException e) {
         // Ignore error trying to hash. We'll attempt to retrieve from cache or just download again.
-      } finally {
-        eventHandler.post(new CacheProgress(mainUrl.toString()));
       }
 
       if (repositoryCache.isEnabled()) {
-        isCachingByProvidedChecksum = true;
+        isCachingByProvidedSha256 = true;
 
         try {
-          Path cachedDestination =
-              repositoryCache.get(cacheKey, destination, cacheKeyType, canonicalId);
+          Path cachedDestination = repositoryCache.get(sha256, destination, KeyType.SHA256);
           if (cachedDestination != null) {
             // Cache hit!
-            eventHandler.post(new RepositoryCacheHitEvent(repo, cacheKey, mainUrl));
+            eventHandler.post(new RepositoryCacheHitEvent(repo, sha256, mainUrl));
             return cachedDestination;
           }
         } catch (IOException e) {
@@ -171,34 +156,27 @@ public class HttpDownloader {
         } else if (!dir.isDirectory()) {
           eventHandler.handle(Event.warn("distdir " + dir + " is not a directory"));
         } else {
-          for (String name : candidateFileNames) {
-            boolean match = false;
-            Path candidate = dir.getRelative(name);
-            try {
-              eventHandler.post(
-                  new CacheProgress(
-                      mainUrl.toString(), "Checking " + cacheKeyType + " of " + candidate));
-              match = RepositoryCache.getChecksum(cacheKeyType, candidate).equals(cacheKey);
-            } catch (IOException e) {
-              // Not finding anything in a distdir is a normal case, so handle it absolutely
-              // quietly. In fact, it is common to specify a whole list of dist dirs,
-              // with the assumption that only one will contain an entry.
-            } finally {
-              eventHandler.post(new CacheProgress(mainUrl.toString()));
-            }
-            if (match) {
-              if (isCachingByProvidedChecksum) {
-                try {
-                  repositoryCache.put(cacheKey, candidate, cacheKeyType, canonicalId);
-                } catch (IOException e) {
-                  eventHandler.handle(
-                      Event.warn("Failed to copy " + candidate + " to repository cache: " + e));
-                }
+          boolean match = false;
+          Path candidate = dir.getRelative(destination.getBaseName());
+          try {
+            match = RepositoryCache.getChecksum(KeyType.SHA256, candidate).equals(sha256);
+          } catch (IOException e) {
+            // Not finding anything in a distdir is a normal case, so handle it absolutely
+            // quietly. In fact, it is not uncommon to specify a whole list of dist dirs,
+            // with the asumption that only one will contain an entry.
+          }
+          if (match) {
+            if (isCachingByProvidedSha256) {
+              try {
+                repositoryCache.put(sha256, candidate, KeyType.SHA256);
+              } catch (IOException e) {
+                eventHandler.handle(
+                    Event.warn("Failed to copy " + candidate + " to repository cache: " + e));
               }
-              FileSystemUtils.createDirectoryAndParents(destination.getParentDirectory());
-              FileSystemUtils.copyFile(candidate, destination);
-              return destination;
             }
+            FileSystemUtils.createDirectoryAndParents(destination.getParentDirectory());
+            FileSystemUtils.copyFile(candidate, destination);
+            return destination;
           }
         }
       }
@@ -216,67 +194,27 @@ public class HttpDownloader {
     HttpConnectorMultiplexer multiplexer =
         new HttpConnectorMultiplexer(eventHandler, connector, httpStreamFactory, clock, sleeper);
 
-    // Iterate over urls and download the file falling back to the next url if previous failed,
-    // while reporting progress to the CLI.
+    // Connect to the best mirror and download the file, while reporting progress to the CLI.
+    semaphore.acquire();
     boolean success = false;
-
-    List<IOException> ioExceptions = ImmutableList.of();
-
-    for (URL url : urls) {
-      semaphore.acquire();
-
-      try (HttpStream payload =
-              multiplexer.connect(Collections.singletonList(url), checksum, authHeaders);
-          OutputStream out = destination.getOutputStream()) {
-        try {
-          ByteStreams.copy(payload, out);
-        } catch (SocketTimeoutException e) {
-          // SocketTimeoutExceptions are InterruptedIOExceptions; however they do not signify
-          // an external interruption, but simply a failed download due to some server timing
-          // out. So rethrow them as ordinary IOExceptions.
-          throw new IOException(e);
-        }
-        success = true;
-        break;
-      } catch (InterruptedIOException e) {
-        throw new InterruptedException(e.getMessage());
-      } catch (IOException e) {
-        if (ioExceptions.isEmpty()) {
-          ioExceptions = new ArrayList<>(1);
-        }
-        ioExceptions.add(e);
-        eventHandler.handle(
-            Event.warn("Download from " + url + " failed: " + e.getClass() + " " + e.getMessage()));
-        continue;
-      } finally {
-        semaphore.release();
-        eventHandler.post(new FetchEvent(url.toString(), success));
-      }
+    try (HttpStream payload = multiplexer.connect(urls, sha256);
+        OutputStream out = destination.getOutputStream()) {
+      ByteStreams.copy(payload, out);
+      success = true;
+    } catch (InterruptedIOException e) {
+      throw new InterruptedException();
+    } catch (IOException e) {
+      throw new IOException(
+          "Error downloading " + urls + " to " + destination + ": " + e.getMessage());
+    } finally {
+      semaphore.release();
+      eventHandler.post(new FetchEvent(urls.get(0).toString(), success));
     }
 
-    if (!success) {
-      final IOException exception =
-          new IOException(
-              "Error downloading "
-                  + urls
-                  + " to "
-                  + destination
-                  + (ioExceptions.isEmpty()
-                      ? ""
-                      : ": " + Iterables.getLast(ioExceptions).getMessage()));
-
-      for (IOException cause : ioExceptions) {
-        exception.addSuppressed(cause);
-      }
-
-      throw exception;
-    }
-
-    if (isCachingByProvidedChecksum) {
-      repositoryCache.put(
-          checksum.get().toString(), destination, checksum.get().getKeyType(), canonicalId);
+    if (isCachingByProvidedSha256) {
+      repositoryCache.put(sha256, destination, KeyType.SHA256);
     } else if (repositoryCache.isEnabled()) {
-      String newSha256 = repositoryCache.put(destination, KeyType.SHA256, canonicalId);
+      String newSha256 = repositoryCache.put(destination, KeyType.SHA256);
       eventHandler.handle(Event.info("SHA256 (" + urls.get(0) + ") = " + newSha256));
     }
 
@@ -298,52 +236,5 @@ public class HttpDownloader {
       }
     }
     return output.getRelative(basename);
-  }
-
-  /**
-   * Deterimine the list of filenames to look for in the distdirs. Note that an output name may be
-   * specified that is unrelated to the primary URL. This happens, e.g., when the paramter output is
-   * specified in ctx.download.
-   */
-  private static ImmutableSet<String> getCandidateFileNames(URL url, Path destination) {
-    String urlBaseName = PathFragment.create(url.getPath()).getBaseName();
-    if (!Strings.isNullOrEmpty(urlBaseName) && !urlBaseName.equals(destination.getBaseName())) {
-      return ImmutableSet.of(urlBaseName, destination.getBaseName());
-    } else {
-      return ImmutableSet.of(destination.getBaseName());
-    }
-  }
-
-  private static class CacheProgress implements ExtendedEventHandler.FetchProgress {
-    private final String originalUrl;
-    private final String progress;
-    private final boolean isFinished;
-
-    CacheProgress(String originalUrl, String progress) {
-      this.originalUrl = originalUrl;
-      this.progress = progress;
-      this.isFinished = false;
-    }
-
-    CacheProgress(String originalUrl) {
-      this.originalUrl = originalUrl;
-      this.progress = "";
-      this.isFinished = true;
-    }
-
-    @Override
-    public String getResourceIdentifier() {
-      return originalUrl;
-    }
-
-    @Override
-    public String getProgress() {
-      return progress;
-    }
-
-    @Override
-    public boolean isFinished() {
-      return isFinished;
-    }
   }
 }

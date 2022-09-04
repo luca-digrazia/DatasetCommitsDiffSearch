@@ -227,16 +227,7 @@ public class BazelRepositoryModule extends BlazeModule {
     RepositoryOptions repoOptions = env.getOptions().getOptions(RepositoryOptions.class);
     if (repoOptions != null) {
       repositoryCache.setHardlink(repoOptions.useHardlinks);
-      if (repoOptions.experimentalScaleTimeouts > 0.0) {
-        skylarkRepositoryFunction.setTimeoutScaling(repoOptions.experimentalScaleTimeouts);
-      } else {
-        env.getReporter()
-            .handle(
-                Event.warn(
-                    "Ingoring request to scale timeouts for repositories by a non-positive"
-                        + " factor"));
-        skylarkRepositoryFunction.setTimeoutScaling(1.0);
-      }
+      skylarkRepositoryFunction.setTimeoutScaling(repoOptions.experimentalScaleTimeouts);
       if (repoOptions.experimentalRepositoryCache != null) {
         // A set but empty path indicates a request to disable the repository cache.
         if (!repoOptions.experimentalRepositoryCache.isEmpty()) {
@@ -286,13 +277,7 @@ public class BazelRepositoryModule extends BlazeModule {
         httpDownloader.setDistdir(ImmutableList.<Path>of());
       }
 
-      if (repoOptions.httpTimeoutScaling > 0) {
-        httpDownloader.setTimeoutScaling((float) repoOptions.httpTimeoutScaling);
-      } else {
-        env.getReporter()
-            .handle(Event.warn("Ingoring request to scale http timeouts by a non-positive factor"));
-        httpDownloader.setTimeoutScaling(1.0f);
-      }
+      httpDownloader.setTimeoutScaling((float) repoOptions.httpTimeoutScaling);
 
       if (repoOptions.repositoryOverrides != null) {
         ImmutableMap.Builder<RepositoryName, PathFragment> builder = ImmutableMap.builder();
