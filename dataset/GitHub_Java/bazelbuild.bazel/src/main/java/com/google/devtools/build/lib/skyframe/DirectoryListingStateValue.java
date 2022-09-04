@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.Dirent;
+import com.google.devtools.build.lib.vfs.Dirent.Type;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.skyframe.AbstractSkyKey;
@@ -202,13 +203,13 @@ public final class DirectoryListingStateValue implements SkyValue {
       boolean upper = packedTypes.get(start);
       boolean lower = packedTypes.get(start + 1);
       if (!upper && !lower) {
-        return Dirent.Type.FILE;
+        return Type.FILE;
       } else if (!upper && lower){
-        return Dirent.Type.DIRECTORY;
+        return Type.DIRECTORY;
       } else if (upper && !lower) {
-        return Dirent.Type.SYMLINK;
+        return Type.SYMLINK;
       } else {
-        return Dirent.Type.UNKNOWN;
+        return Type.UNKNOWN;
       }
     }
 

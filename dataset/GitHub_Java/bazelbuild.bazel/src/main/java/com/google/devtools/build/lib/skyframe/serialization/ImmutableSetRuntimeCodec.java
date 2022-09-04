@@ -14,44 +14,22 @@
 
 package com.google.devtools.build.lib.skyframe.serialization;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.LinkedHashMultimap;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
 
-/** {@link ObjectCodec} for {@link ImmutableSet} and other sets that should be immutable. */
+/** {@link ObjectCodec} for {@link ImmutableSet}. */
 @SuppressWarnings("rawtypes") // Intentional erasure of ImmutableSet.
-class ImmutableSetRuntimeCodec implements ObjectCodec<Set> {
-  @SuppressWarnings("unchecked")
-  private static final Class<Set> LINKED_HASH_MULTIMAP_CLASS =
-      (Class<Set>) LinkedHashMultimap.create(ImmutableMultimap.of("a", "b")).get("a").getClass();
-
-  @SuppressWarnings("unchecked")
-  private static final Class<Set> SINGLETON_SET_CLASS =
-      (Class<Set>) Collections.singleton("a").getClass();
-
-  @SuppressWarnings("unchecked")
-  private static final Class<Set> EMPTY_SET_CLASS = (Class<Set>) Collections.emptySet().getClass();
-
+class ImmutableSetRuntimeCodec implements ObjectCodec<ImmutableSet> {
   @Override
   public Class<ImmutableSet> getEncodedClass() {
     return ImmutableSet.class;
   }
 
   @Override
-  public ImmutableList<Class<? extends Set>> additionalEncodedClasses() {
-    return ImmutableList.of(
-        LINKED_HASH_MULTIMAP_CLASS, SINGLETON_SET_CLASS, EMPTY_SET_CLASS, HashSet.class);
-  }
-
-  @Override
-  public void serialize(SerializationContext context, Set object, CodedOutputStream codedOut)
+  public void serialize(
+      SerializationContext context, ImmutableSet object, CodedOutputStream codedOut)
       throws SerializationException, IOException {
     codedOut.writeInt32NoTag(object.size());
     for (Object obj : object) {
