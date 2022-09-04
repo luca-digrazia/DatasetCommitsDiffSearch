@@ -126,15 +126,15 @@ public class MerkleTreeTest {
           digestUtil.computeAsUtf8("buzz"),
           digestUtil.computeAsUtf8("fizzbuzz")
         };
-    assertThat(tree.getFileByDigest(inputDigests[0]).getPath()).isEqualTo(foo.getPath());
-    assertThat(tree.getFileByDigest(inputDigests[1]).getPath()).isEqualTo(bar.getPath());
-    assertThat(tree.getFileByDigest(inputDigests[2]).getPath()).isEqualTo(buzz.getPath());
-    assertThat(tree.getFileByDigest(inputDigests[3]).getPath()).isEqualTo(fizzbuzz.getPath());
+    assertThat(tree.getInputByDigest(inputDigests[0])).isEqualTo(foo);
+    assertThat(tree.getInputByDigest(inputDigests[1])).isEqualTo(bar);
+    assertThat(tree.getInputByDigest(inputDigests[2])).isEqualTo(buzz);
+    assertThat(tree.getInputByDigest(inputDigests[3])).isEqualTo(fizzbuzz);
 
     Digest[] allDigests = Iterables.toArray(tree.getAllDigests(), Digest.class);
     assertThat(allDigests.length).isEqualTo(dirDigests.length + inputDigests.length);
-    assertThat(allDigests).asList().containsAtLeastElementsIn(dirDigests);
-    assertThat(allDigests).asList().containsAtLeastElementsIn(inputDigests);
+    assertThat(allDigests).asList().containsAllIn(dirDigests);
+    assertThat(allDigests).asList().containsAllIn(inputDigests);
   }
 
   private Artifact addFile(

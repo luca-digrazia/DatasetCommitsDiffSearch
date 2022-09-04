@@ -18,7 +18,6 @@ import static com.google.common.truth.Truth.assertWithMessage;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
-import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
@@ -33,17 +32,17 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class CompactPersistentActionCacheTest {
 
-  private final Scratch scratch = new Scratch();
+  private Scratch scratch = new Scratch();
   private Path dataRoot;
   private Path mapFile;
   private Path journalFile;
-  private final ManualClock clock = new ManualClock();
+  private ManualClock clock = new ManualClock();
   private CompactPersistentActionCache cache;
 
   @Before
   public final void createFiles() throws Exception  {
     dataRoot = scratch.resolve("/cache/test.dat");
-    cache = CompactPersistentActionCache.create(dataRoot, clock, NullEventHandler.INSTANCE);
+    cache = new CompactPersistentActionCache(dataRoot, clock);
     mapFile = CompactPersistentActionCache.cacheFile(dataRoot);
     journalFile = CompactPersistentActionCache.journalFile(dataRoot);
   }
@@ -90,7 +89,7 @@ public class CompactPersistentActionCacheTest {
     assertThat(journalFile.exists()).isFalse();
 
     CompactPersistentActionCache newcache =
-        CompactPersistentActionCache.create(dataRoot, clock, NullEventHandler.INSTANCE);
+        new CompactPersistentActionCache(dataRoot, clock);
     ActionCache.Entry readentry = newcache.get(key);
     assertThat(readentry).isNotNull();
     assertThat(readentry.toString()).isEqualTo(cache.get(key).toString());
@@ -111,7 +110,7 @@ public class CompactPersistentActionCacheTest {
     // Make sure we have all the entries, including those in the journal,
     // after deserializing into a new cache.
     CompactPersistentActionCache newcache =
-        CompactPersistentActionCache.create(dataRoot, clock, NullEventHandler.INSTANCE);
+        new CompactPersistentActionCache(dataRoot, clock);
     for (int i = 0; i < 100; i++) {
       assertKeyEquals(cache, newcache, Integer.toString(i));
     }
@@ -122,7 +121,7 @@ public class CompactPersistentActionCacheTest {
 
     // Make sure we can see previous journal values after a second incremental save.
     CompactPersistentActionCache newerCache =
-        CompactPersistentActionCache.create(dataRoot, clock, NullEventHandler.INSTANCE);
+        new CompactPersistentActionCache(dataRoot, clock);
     for (int i = 0; i < 100; i++) {
       assertKeyEquals(cache, newerCache, Integer.toString(i));
     }
@@ -140,10 +139,10 @@ public class CompactPersistentActionCacheTest {
 
   // Regression test to check that CompactActionCacheEntry.toString does not mutate the object.
   // Mutations may result in IllegalStateException.
-  @SuppressWarnings("ReturnValueIgnored")
   @Test
-  public void testEntryToStringIsIdempotent() {
-    ActionCache.Entry entry = new ActionCache.Entry("actionKey", ImmutableMap.of(), false);
+  public void testEntryToStringIsIdempotent() throws Exception {
+    ActionCache.Entry entry =
+        new ActionCache.Entry("actionKey", ImmutableMap.<String, String>of(), false);
     entry.toString();
     entry.addFile(
         PathFragment.create("foo/bar"), FileArtifactValue.createForDirectoryWithMtime(1234));
@@ -152,7 +151,7 @@ public class CompactPersistentActionCacheTest {
     entry.toString();
   }
 
-  private void assertToStringIsntTooBig(int numRecords) {
+  private void assertToStringIsntTooBig(int numRecords) throws Exception {
     for (int i = 0; i < numRecords; i++) {
       putKey(Integer.toString(i));
     }
@@ -166,7 +165,7 @@ public class CompactPersistentActionCacheTest {
   }
 
   @Test
-  public void testToStringIsntTooBig() {
+  public void testToStringIsntTooBig() throws Exception {
     assertToStringIsntTooBig(3);
     assertToStringIsntTooBig(3000);
   }
@@ -199,7 +198,7 @@ public class CompactPersistentActionCacheTest {
 
   private void putKey(String key, ActionCache ac, boolean discoversInputs) {
     ActionCache.Entry entry =
-        new ActionCache.Entry(key, ImmutableMap.of("k", "v"), discoversInputs);
+        new ActionCache.Entry(key, ImmutableMap.<String, String>of(), discoversInputs);
     entry.getFileDigest();
     ac.put(key, entry);
   }

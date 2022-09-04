@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
+import com.google.devtools.build.lib.actions.ArtifactFileMetadata;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FileArtifactValue.RemoteFileArtifactValue;
@@ -383,13 +384,13 @@ public class FilesystemValueCheckerTest {
             actionKey1,
                 actionValue(
                     new TestAction(
-                        Runnables.doNothing(), ImmutableSet.<Artifact>of(), ImmutableSet.of(out1))),
+                        Runnables.doNothing(), ImmutableSet.<Artifact>of(), ImmutableSet.of(out1)),
+                    forceDigests),
             actionKey2,
                 actionValue(
                     new TestAction(
-                        Runnables.doNothing(),
-                        ImmutableSet.<Artifact>of(),
-                        ImmutableSet.of(out2)))));
+                        Runnables.doNothing(), ImmutableSet.<Artifact>of(), ImmutableSet.of(out2)),
+                    forceDigests)));
     EvaluationContext evaluationContext =
         EvaluationContext.newBuilder()
             .setKeepGoing(false)
@@ -727,20 +728,15 @@ public class FilesystemValueCheckerTest {
   // TODO(bazel-team): Add some tests for FileSystemValueChecker#changedKeys*() methods.
   // Presently these appear to be untested.
 
-  private ActionExecutionValue actionValue(Action action) {
-    Map<Artifact, FileArtifactValue> artifactData = new HashMap<>();
+  private ActionExecutionValue actionValue(Action action, boolean forceDigest) {
+    Map<Artifact, ArtifactFileMetadata> artifactData = new HashMap<>();
     for (Artifact output : action.getOutputs()) {
       try {
         Path path = output.getPath();
-        FileArtifactValue noDigest =
-            ActionMetadataHandler.fileArtifactValueFromArtifact(
-                output,
-                FileStatusWithDigestAdapter.adapt(path.statIfFound(Symlinks.NOFOLLOW)),
-                null);
-        FileArtifactValue withDigest =
-            FileArtifactValue.createFromInjectedDigest(
-                noDigest, path.getDigest(), !output.isConstantMetadata());
-        artifactData.put(output, withDigest);
+        FileStatusWithDigest stat =
+            forceDigest ? statWithDigest(path, path.statIfFound(Symlinks.NOFOLLOW)) : null;
+        artifactData.put(
+            output, ActionMetadataHandler.fileMetadataFromArtifact(output, stat, null));
       } catch (IOException e) {
         throw new IllegalStateException(e);
       }
@@ -748,6 +744,7 @@ public class FilesystemValueCheckerTest {
     return ActionExecutionValue.create(
         artifactData,
         ImmutableMap.<Artifact, TreeArtifactValue>of(),
+        ImmutableMap.<Artifact, FileArtifactValue>of(),
         /*outputSymlinks=*/ null,
         /*discoveredModules=*/ null,
         /*actionDependsOnBuildId=*/ false);
@@ -760,13 +757,14 @@ public class FilesystemValueCheckerTest {
     return ActionExecutionValue.create(
         ImmutableMap.of(),
         ImmutableMap.of(emptyDir, emptyValue),
+        ImmutableMap.<Artifact, FileArtifactValue>of(),
         /*outputSymlinks=*/ null,
         /*discoveredModules=*/ null,
         /*actionDependsOnBuildId=*/ false);
   }
 
   private ActionExecutionValue actionValueWithTreeArtifacts(List<TreeFileArtifact> contents) {
-    Map<Artifact, FileArtifactValue> fileData = new HashMap<>();
+    Map<Artifact, ArtifactFileMetadata> fileData = new HashMap<>();
     Map<Artifact, Map<TreeFileArtifact, FileArtifactValue>> directoryData = new HashMap<>();
 
     for (TreeFileArtifact output : contents) {
@@ -777,17 +775,10 @@ public class FilesystemValueCheckerTest {
           dirDatum = new HashMap<>();
           directoryData.put(output.getParent(), dirDatum);
         }
-        Path path = output.getPath();
-        FileArtifactValue noDigest =
-            ActionMetadataHandler.fileArtifactValueFromArtifact(
-                output,
-                FileStatusWithDigestAdapter.adapt(path.statIfFound(Symlinks.NOFOLLOW)),
-                null);
-        FileArtifactValue withDigest =
-            FileArtifactValue.createFromInjectedDigest(
-                noDigest, path.getDigest(), !output.isConstantMetadata());
-        dirDatum.put(output, withDigest);
-        fileData.put(output, withDigest);
+        ArtifactFileMetadata fileValue =
+            ActionMetadataHandler.fileMetadataFromArtifact(output, null, null);
+        dirDatum.put(output, FileArtifactValue.createForTesting(output, fileValue));
+        fileData.put(output, fileValue);
       } catch (IOException e) {
         throw new IllegalStateException(e);
       }
@@ -802,6 +793,7 @@ public class FilesystemValueCheckerTest {
     return ActionExecutionValue.create(
         fileData,
         treeArtifactData,
+        ImmutableMap.<Artifact, FileArtifactValue>of(),
         /*outputSymlinks=*/ null,
         /*discoveredModules=*/ null,
         /*actionDependsOnBuildId=*/ false);
@@ -819,8 +811,9 @@ public class FilesystemValueCheckerTest {
     }
     TreeArtifactValue treeArtifactValue = TreeArtifactValue.create(childFileValues.build());
     return ActionExecutionValue.create(
-        ImmutableMap.of(),
+        Collections.emptyMap(),
         Collections.singletonMap(output, treeArtifactValue),
+        ImmutableMap.of(),
         /* outputSymlinks= */ null,
         /* discoveredModules= */ null,
         /* actionDependsOnBuildId= */ false);
@@ -829,8 +822,9 @@ public class FilesystemValueCheckerTest {
   private ActionExecutionValue actionValueWithRemoteArtifact(
       Artifact output, RemoteFileArtifactValue value) {
     return ActionExecutionValue.create(
-        Collections.singletonMap(output, value),
+        Collections.singletonMap(output, ArtifactFileMetadata.PLACEHOLDER),
         ImmutableMap.of(),
+        Collections.singletonMap(output, value),
         /* outputSymlinks= */ null,
         /* discoveredModules= */ null,
         /* actionDependsOnBuildId= */ false);

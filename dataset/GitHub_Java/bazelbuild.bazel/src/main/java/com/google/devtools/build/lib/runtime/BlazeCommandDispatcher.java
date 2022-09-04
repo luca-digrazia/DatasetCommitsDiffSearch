@@ -273,8 +273,7 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
     CommonCommandOptions commonOptions = options.getOptions(CommonCommandOptions.class);
     // We cannot flip an incompatible flag that expands to other flags, so we do it manually here.
     // If an option is specified explicitly, we give that preference.
-    if ((commandAnnotation.builds() || "query".equals(commandName))
-        && commonOptions.enableProfileByDefault
+    if (commonOptions.enableProfileByDefault
         && (!options.containsExplicitOption("experimental_generate_json_trace_profile")
             || commonOptions.enableTracer)) {
       commonOptions.enableTracer = true;

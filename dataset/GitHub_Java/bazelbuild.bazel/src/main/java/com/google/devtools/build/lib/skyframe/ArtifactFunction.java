@@ -27,9 +27,9 @@ import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.DerivedArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
+import com.google.devtools.build.lib.actions.ArtifactFileMetadata;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
-import com.google.devtools.build.lib.actions.FileStateType;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.DirectTraversalRoot;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBoundaryMode;
@@ -294,19 +294,14 @@ class ArtifactFunction implements SkyFunction {
     if (value != null) {
       return value;
     }
-    FileArtifactValue data =
-        Preconditions.checkNotNull(
-            actionValue.getArtifactValue(artifact), "%s %s", artifact, actionValue);
+    ArtifactFileMetadata data =
+        Preconditions.checkNotNull(actionValue.getData(artifact), "%s %s", artifact, actionValue);
     Preconditions.checkNotNull(
         data.getDigest(), "Digest should already have been calculated for %s (%s)", artifact, data);
     // Directories are special-cased because their mtimes are used, so should have been constructed
     // during execution of the action (in ActionMetadataHandler#maybeStoreAdditionalData).
-    Preconditions.checkState(
-        data.getType() == FileStateType.REGULAR_FILE,
-        "Unexpected not file %s (%s)",
-        artifact,
-        data);
-    return data;
+    Preconditions.checkState(data.isFile(), "Unexpected not file %s (%s)", artifact, data);
+    return FileArtifactValue.createFromMetadata(data, !artifact.isConstantMetadata());
   }
 
   @Nullable
