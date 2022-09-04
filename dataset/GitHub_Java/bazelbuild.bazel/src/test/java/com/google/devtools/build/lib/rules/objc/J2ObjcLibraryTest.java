@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.rules.objc;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -35,8 +34,8 @@ public class J2ObjcLibraryTest extends ObjcRuleTestCase {
       new ArtifactExpander() {
         @Override
         public void expand(Artifact artifact, Collection<? super Artifact> output) {
-          output.add(ActionInputHelper.treeFileArtifact((SpecialArtifact) artifact, "children1"));
-          output.add(ActionInputHelper.treeFileArtifact((SpecialArtifact) artifact, "children2"));
+          output.add(ActionInputHelper.treeFileArtifact(artifact, "children1"));
+          output.add(ActionInputHelper.treeFileArtifact(artifact, "children2"));
         }
       };
 
@@ -81,8 +80,10 @@ public class J2ObjcLibraryTest extends ObjcRuleTestCase {
         "    deps = ['test'])");
     MockObjcSupport.setup(mockToolsConfig);
     MockObjcSupport.setupIosSimDevice(mockToolsConfig);
+    MockObjcSupport.setupIosTest(mockToolsConfig);
     MockJ2ObjcSupport.setup(mockToolsConfig);
     MockProtoSupport.setup(mockToolsConfig);
+    MockObjcSupport.setupObjcProto(mockToolsConfig);
 
     useConfiguration("--proto_toolchain_for_java=//tools/proto/toolchains:java");
 
