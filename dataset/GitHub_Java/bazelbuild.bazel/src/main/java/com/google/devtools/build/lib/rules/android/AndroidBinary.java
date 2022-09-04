@@ -564,7 +564,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       Artifact instrumentationApk = zipAlignedApk;
 
       AndroidInstrumentationInfo instrumentationProvider =
-          new AndroidInstrumentationInfo(targetApk, instrumentationApk, targetApkProvider);
+          new AndroidInstrumentationInfo(targetApk, instrumentationApk);
 
       builder.addNativeDeclaredProvider(instrumentationProvider);
 
