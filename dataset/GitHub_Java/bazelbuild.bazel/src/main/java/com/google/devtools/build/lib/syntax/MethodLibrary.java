@@ -396,7 +396,7 @@ public class MethodLibrary {
       result.addFirst(input.substring(0, remainingLength));
     }
 
-    return MutableList.copyOf(env, result);
+    return new MutableList<>(result, env);
   }
 
   @SkylarkSignature(name = "partition", objectType = StringModule.class,
@@ -1134,9 +1134,9 @@ public class MethodLibrary {
         public MutableList<?> invoke(Object self, Location loc, Environment env)
             throws EvalException {
           try {
-            return MutableList.copyOf(
-                env,
-                EvalUtils.SKYLARK_COMPARATOR.sortedCopy(EvalUtils.toCollection(self, loc, env)));
+            return new MutableList<>(
+                EvalUtils.SKYLARK_COMPARATOR.sortedCopy(EvalUtils.toCollection(self, loc, env)),
+                env);
           } catch (EvalUtils.ComparisonException e) {
             throw new EvalException(loc, e);
           }
@@ -1176,7 +1176,7 @@ public class MethodLibrary {
           for (Object element : EvalUtils.toIterable(sequence, loc, env)) {
             tmpList.addFirst(element);
           }
-          return MutableList.copyOf(env, tmpList);
+          return new MutableList<>(tmpList, env);
         }
       };
 
@@ -1500,7 +1500,7 @@ public class MethodLibrary {
   private static final BuiltinFunction values =
       new BuiltinFunction("values") {
         public MutableList<?> invoke(SkylarkDict<?, ?> self, Environment env) throws EvalException {
-          return MutableList.copyOf(env, self.values());
+          return new MutableList<>(self.values(), env);
         }
       };
 
@@ -1523,7 +1523,7 @@ public class MethodLibrary {
           for (Map.Entry<?, ?> entries : self.entrySet()) {
             list.add(Tuple.of(entries.getKey(), entries.getValue()));
           }
-          return MutableList.copyOf(env, list);
+          return new MutableList<>(list, env);
         }
       };
 
@@ -1545,7 +1545,7 @@ public class MethodLibrary {
       for (Map.Entry<?, ?> entries : self.entrySet()) {
         list.add(entries.getKey());
       }
-      return MutableList.copyOf(env, list);
+      return new MutableList(list, env);
     }
   };
 
@@ -1601,7 +1601,7 @@ public class MethodLibrary {
   private static final BuiltinFunction list =
       new BuiltinFunction("list") {
         public MutableList<?> invoke(Object x, Location loc, Environment env) throws EvalException {
-          return MutableList.copyOf(env, EvalUtils.toCollection(x, loc, env));
+          return new MutableList<>(EvalUtils.toCollection(x, loc, env), env);
         }
       };
 
@@ -1616,8 +1616,7 @@ public class MethodLibrary {
   private static final BuiltinFunction len =
       new BuiltinFunction("len") {
         public Integer invoke(Object x, Location loc, Environment env) throws EvalException {
-          if (env.getSemantics().incompatibleDepsetIsNotIterable()
-              && x instanceof SkylarkNestedSet) {
+          if (env.getSemantics().incompatibleDepsetIsNotIterable && x instanceof SkylarkNestedSet) {
             throw new EvalException(
                 loc,
                 EvalUtils.getDataTypeName(x)
@@ -1872,7 +1871,7 @@ public class MethodLibrary {
             result.add(Tuple.of(count, obj));
             count++;
           }
-          return MutableList.copyOf(env, result);
+          return new MutableList<>(result, env);
         }
       };
 
@@ -1966,7 +1965,7 @@ public class MethodLibrary {
               start += step;
             }
           }
-          return MutableList.copyOf(env, result);
+          return new MutableList<>(result, env);
         }
       };
 
@@ -2078,7 +2077,7 @@ public class MethodLibrary {
           }
           fields.addAll(Runtime.getFunctionNames(object.getClass()));
           fields.addAll(FuncallExpression.getMethodNames(object.getClass()));
-          return MutableList.copyOf(env, fields);
+          return new MutableList<>(fields, env);
         }
       };
 
@@ -2155,7 +2154,7 @@ public class MethodLibrary {
           // As part of the integration test "skylark_flag_test.sh", if the
           // "--internal_skylark_flag_test_canary" flag is enabled, append an extra marker string to
           // the output.
-          if (env.getSemantics().internalSkylarkFlagTestCanary()) {
+          if (env.getSemantics().internalSkylarkFlagTestCanary) {
             msg += "<== skylark flag test ==>";
           }
           env.handleEvent(Event.debug(loc, msg));
@@ -2204,7 +2203,7 @@ public class MethodLibrary {
               result.add(Tuple.copyOf(elem));
             }
           } while (allHasNext);
-          return MutableList.copyOf(env, result);
+          return new MutableList<>(result, env);
         }
       };
 
