@@ -2,13 +2,9 @@ package io.quarkus.gradle.tasks;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 
-import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.tasks.Classpath;
@@ -24,11 +20,8 @@ import io.quarkus.bootstrap.app.CuratedApplication;
 import io.quarkus.bootstrap.app.QuarkusBootstrap;
 import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.bootstrap.resolver.AppModelResolver;
-import io.quarkus.runtime.util.StringUtil;
 
 public class QuarkusBuild extends QuarkusTask {
-
-    private static final String NATIVE_PROPERTY_NAMESPACE = "quarkus.native";
 
     private boolean uberJar;
 
@@ -36,15 +29,6 @@ public class QuarkusBuild extends QuarkusTask {
 
     public QuarkusBuild() {
         super("Quarkus builds a runner jar based on the build jar");
-    }
-
-    public QuarkusBuild nativeArgs(Action<Map<String, ?>> action) {
-        Map<String, ?> nativeArgsMap = new HashMap<>();
-        action.execute(nativeArgsMap);
-        for (Map.Entry<String, ?> nativeArg : nativeArgsMap.entrySet()) {
-            System.setProperty(expandConfigurationKey(nativeArg.getKey()), nativeArg.getValue().toString());
-        }
-        return this;
     }
 
     @Input
@@ -108,14 +92,7 @@ public class QuarkusBuild extends QuarkusTask {
                 .setIsolateDeployment(true)
                 .build().bootstrap()) {
 
-            // Processes launched from within the build task of Gradle (daemon) lose content
-            // generated on STDOUT/STDERR by the process (see https://github.com/gradle/gradle/issues/13522).
-            // We overcome this by letting build steps know that the STDOUT/STDERR should be explicitly
-            // streamed, if they need to make available that generated data.
-            // The io.quarkus.deployment.pkg.builditem.ProcessInheritIODisabled$Factory
-            // does the necessary work to generate such a build item which the build step(s) can rely on
-            appCreationContext.createAugmentor("io.quarkus.deployment.pkg.builditem.ProcessInheritIODisabled$Factory",
-                    Collections.emptyMap()).createProductionApplication();
+            appCreationContext.createAugmentor().createProductionApplication();
 
         } catch (BootstrapException e) {
             throw new GradleException("Failed to build a runnable JAR", e);
@@ -124,13 +101,5 @@ public class QuarkusBuild extends QuarkusTask {
                 System.clearProperty("quarkus.package.uber-jar");
             }
         }
-    }
-
-    private String expandConfigurationKey(String shortKey) {
-        final String hyphenatedKey = StringUtil.hyphenate(shortKey);
-        if (hyphenatedKey.startsWith(NATIVE_PROPERTY_NAMESPACE)) {
-            return hyphenatedKey;
-        }
-        return String.format("%s.%s", NATIVE_PROPERTY_NAMESPACE, hyphenatedKey);
     }
 }
