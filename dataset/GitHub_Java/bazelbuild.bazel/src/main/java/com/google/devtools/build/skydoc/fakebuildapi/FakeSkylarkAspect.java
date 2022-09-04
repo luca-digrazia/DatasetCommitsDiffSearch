@@ -16,8 +16,14 @@ package com.google.devtools.build.skydoc.fakebuildapi;
 
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkAspectApi;
 import com.google.devtools.build.lib.syntax.BaseFunction;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
+import java.util.List;
+import java.util.Map;
+import javax.annotation.Nullable;
 
 /** Fake implementation of {@link SkylarkAspectApi}. */
 public class FakeSkylarkAspect extends BaseFunction implements SkylarkAspectApi {
@@ -29,14 +35,23 @@ public class FakeSkylarkAspect extends BaseFunction implements SkylarkAspectApi 
 
   private final String name = "AspectIdentifier" + idCounter++;
 
-  @Override
-  public String getName() {
-    return name;
+  public FakeSkylarkAspect() {
+    super(FunctionSignature.KWARGS);
   }
 
   @Override
-  public FunctionSignature getSignature() {
-    return FunctionSignature.KWARGS;
+  public Object callImpl(
+      StarlarkThread thread,
+      @Nullable FuncallExpression call,
+      List<Object> args,
+      Map<String, Object> kwargs)
+      throws EvalException {
+    throw new EvalException("not implemented");
+  }
+
+  @Override
+  public String getName() {
+    return name;
   }
 
   @Override
