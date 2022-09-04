@@ -26,7 +26,6 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -53,8 +52,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
-/** Syntax node for a function call expression. */
-@AutoCodec
+/**
+ * Syntax node for a function call expression.
+ */
 public final class FuncallExpression extends Expression {
 
   /**
@@ -261,18 +261,18 @@ public final class FuncallExpression extends Expression {
     return numPositionalArgs;
   }
 
-  @Override
-  public void prettyPrint(Appendable buffer) throws IOException {
-    function.prettyPrint(buffer);
-    buffer.append('(');
-    String sep = "";
-    for (Argument.Passed arg : arguments) {
-      buffer.append(sep);
-      arg.prettyPrint(buffer);
-      sep = ", ";
-    }
-    buffer.append(')');
-  }
+   @Override
+   public void prettyPrint(Appendable buffer) throws IOException {
+     function.prettyPrint(buffer);
+     buffer.append('(');
+     String sep = "";
+     for (Argument.Passed arg : arguments) {
+       buffer.append(sep);
+       arg.prettyPrint(buffer);
+       sep = ", ";
+     }
+     buffer.append(')');
+   }
 
   @Override
   public String toString() {
@@ -361,7 +361,7 @@ public final class FuncallExpression extends Expression {
               "method invocation returned None, please file a bug report: "
                   + methodName
                   + Printer.printAbbreviatedList(
-                  ImmutableList.copyOf(args), "(", ", ", ")", null));
+                      ImmutableList.copyOf(args), "(", ", ", ")", null));
         }
       }
       // TODO(bazel-team): get rid of this, by having everyone use the Skylark data structures
@@ -394,11 +394,7 @@ public final class FuncallExpression extends Expression {
   // exactly and copy that behaviour.
   // Throws an EvalException when it cannot find a matching function.
   private Pair<MethodDescriptor, List<Object>> findJavaMethod(
-      Class<?> objClass,
-      String methodName,
-      List<Object> args,
-      Map<String, Object> kwargs,
-      Environment environment)
+      Class<?> objClass, String methodName, List<Object> args, Map<String, Object> kwargs)
       throws EvalException {
     Pair<MethodDescriptor, List<Object>> matchingMethod = null;
     List<MethodDescriptor> methods = getMethods(objClass, methodName);
@@ -406,10 +402,9 @@ public final class FuncallExpression extends Expression {
     if (methods != null) {
       for (MethodDescriptor method : methods) {
         if (method.getAnnotation().structField()) {
-          // TODO(cparsons): Allow structField methods to accept interpreter-supplied arguments.
           return new Pair<>(method, null);
         } else {
-          argumentListConversionResult = convertArgumentList(args, kwargs, method, environment);
+          argumentListConversionResult = convertArgumentList(args, kwargs, method);
           if (argumentListConversionResult.getArguments() != null) {
             if (matchingMethod == null) {
               matchingMethod = new Pair<>(method, argumentListConversionResult.getArguments());
@@ -440,7 +435,7 @@ public final class FuncallExpression extends Expression {
       } else {
         errorMessage =
             String.format(
-                "%s, in method call %s of '%s'",
+                "%s, in method %s of '%s'",
                 argumentListConversionResult.getError(),
                 formatMethod(methodName, args, kwargs),
                 EvalUtils.getDataTypeNameFromClass(objClass));
@@ -476,36 +471,26 @@ public final class FuncallExpression extends Expression {
    * any. If there is a type or argument mismatch, returns a result containing an error message.
    */
   private ArgumentListConversionResult convertArgumentList(
-      List<Object> args,
-      Map<String, Object> kwargs,
-      MethodDescriptor method,
-      Environment environment) {
+      List<Object> args, Map<String, Object> kwargs, MethodDescriptor method) {
     ImmutableList.Builder<Object> builder = ImmutableList.builder();
-    Class<?>[] javaMethodSignatureParams = method.getMethod().getParameterTypes();
+    Class<?>[] params = method.getMethod().getParameterTypes();
     SkylarkCallable callable = method.getAnnotation();
-    int numExtraInterpreterParams = 0;
-    numExtraInterpreterParams += callable.useLocation() ? 1 : 0;
-    numExtraInterpreterParams += callable.useAst() ? 1 : 0;
-    numExtraInterpreterParams += callable.useEnvironment() ? 1 : 0;
-
     int mandatoryPositionals = callable.mandatoryPositionals();
     if (mandatoryPositionals < 0) {
       if (callable.parameters().length > 0) {
         mandatoryPositionals = 0;
       } else {
-        mandatoryPositionals = javaMethodSignatureParams.length - numExtraInterpreterParams;
+        mandatoryPositionals = params.length;
       }
     }
-    if (mandatoryPositionals > args.size()) {
-      return ArgumentListConversionResult.fromError("too few arguments");
-    }
-    if (args.size() > mandatoryPositionals + callable.parameters().length) {
+    if (mandatoryPositionals > args.size()
+        || args.size() > mandatoryPositionals + callable.parameters().length) {
       return ArgumentListConversionResult.fromError("too many arguments");
     }
     // First process the legacy positional parameters.
     int i = 0;
     if (mandatoryPositionals > 0) {
-      for (Class<?> param : javaMethodSignatureParams) {
+      for (Class<?> param : params) {
         Object value = args.get(i);
         if (!param.isAssignableFrom(value.getClass())) {
           return ArgumentListConversionResult.fromError(
@@ -515,7 +500,7 @@ public final class FuncallExpression extends Expression {
         }
         builder.add(value);
         i++;
-        if (i >= mandatoryPositionals) {
+        if (mandatoryPositionals >= 0 && i >= mandatoryPositionals) {
           // Stops for specified parameters instead.
           break;
         }
@@ -538,8 +523,7 @@ public final class FuncallExpression extends Expression {
         } else if (!type.contains(value)) {
           return ArgumentListConversionResult.fromError(
               String.format(
-                  "expected value of type '%s' for parameter '%s'",
-                  type.toString(), param.name()));
+                  "Cannot convert parameter '%s' to type %s", param.name(), type.toString()));
         }
         i++;
       } else if (param.named() && keys.remove(param.name())) {
@@ -548,8 +532,7 @@ public final class FuncallExpression extends Expression {
         if (!type.contains(value)) {
           return ArgumentListConversionResult.fromError(
               String.format(
-                  "expected value of type '%s' for parameter '%s'",
-                  type.toString(), param.name()));
+                  "Cannot convert parameter '%s' to type %s", param.name(), type.toString()));
         }
       } else {
         // Use default value
@@ -571,21 +554,9 @@ public final class FuncallExpression extends Expression {
     if (!keys.isEmpty()) {
       return ArgumentListConversionResult.fromError(
           String.format("unexpected keyword%s %s",
-              keys.size() > 1 ? "s" : "",
-              Joiner.on(",").join(Iterables.transform(keys, s -> "'" + s + "'"))));
+          keys.size() > 1 ? "s" : "",
+          Joiner.on(",").join(Iterables.transform(keys, s -> "'" + s + "'"))));
     }
-
-    // Then add any skylark-info arguments (for example the Environment).
-    if (callable.useLocation()) {
-      builder.add(getLocation());
-    }
-    if (callable.useAst()) {
-      builder.add(this);
-    }
-    if (callable.useEnvironment()) {
-      builder.add(environment);
-    }
-
     return ArgumentListConversionResult.fromArgumentList(builder.build());
   }
 
@@ -719,7 +690,7 @@ public final class FuncallExpression extends Expression {
         objClass = value.getClass();
       }
       Pair<MethodDescriptor, List<Object>> javaMethod =
-          call.findJavaMethod(objClass, method, positionalArgs, keyWordArgs, env);
+          call.findJavaMethod(objClass, method, positionalArgs, keyWordArgs);
       if (javaMethod.first.getAnnotation().structField()) {
         // Not a method but a callable attribute
         try {
