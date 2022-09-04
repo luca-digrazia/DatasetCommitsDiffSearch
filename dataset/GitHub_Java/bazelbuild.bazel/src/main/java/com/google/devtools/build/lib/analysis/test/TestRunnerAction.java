@@ -360,7 +360,6 @@ public class TestRunnerAction extends AbstractAction
     return unconditionalExecution;
   }
 
-
   @Override
   public boolean isVolatile() {
     return true;
