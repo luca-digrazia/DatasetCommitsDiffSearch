@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import javax.inject.Inject;
+import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
@@ -75,6 +76,9 @@ public final class DesugarRule implements TestRule {
 
   private final Path androidRuntimeJar;
   private final Path jacocoAgentJar;
+
+  /** For hosting desugared jar temporarily. */
+  private final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
   private final Object testInstance;
   private final MethodHandles.Lookup testInstanceLookup;
@@ -172,83 +176,86 @@ public final class DesugarRule implements TestRule {
 
   @Override
   public Statement apply(Statement base, Description description) {
-    return new Statement() {
-      @Override
-      public void evaluate() throws Throwable {
-        ImmutableList<Path> transInputs = inputs;
-        for (int round = 1; round <= maxNumOfTransformations; round++) {
-          ImmutableList<Path> transOutputs =
-              getRuntimeOutputPaths(
-                  transInputs,
-                  tempDirs,
-                  /* outputRootPrefix= */ DEFAULT_OUTPUT_ROOT_PREFIX + "_" + round);
-          JarTransformationRecord transformationRecord =
-              JarTransformationRecord.create(
-                  transInputs,
-                  transOutputs,
-                  classPathEntries,
-                  bootClassPathEntries,
-                  extraCustomCommandOptions);
-          Desugar.main(transformationRecord.getDesugarFlags().toArray(new String[0]));
+    return temporaryFolder.apply(
+        new Statement() {
+          @Override
+          public void evaluate() throws Throwable {
+            ImmutableList<Path> transInputs = inputs;
+            for (int round = 1; round <= maxNumOfTransformations; round++) {
+              ImmutableList<Path> transOutputs =
+                  getRuntimeOutputPaths(
+                      transInputs,
+                      temporaryFolder,
+                      tempDirs,
+                      /* outputRootPrefix= */ DEFAULT_OUTPUT_ROOT_PREFIX + "_" + round);
+              JarTransformationRecord transformationRecord =
+                  JarTransformationRecord.create(
+                      transInputs,
+                      transOutputs,
+                      classPathEntries,
+                      bootClassPathEntries,
+                      extraCustomCommandOptions);
+              Desugar.main(transformationRecord.getDesugarFlags().toArray(new String[0]));
 
-          jarTransformationRecords.add(transformationRecord);
-          transInputs = transOutputs;
-        }
+              jarTransformationRecords.add(transformationRecord);
+              transInputs = transOutputs;
+            }
 
-        ClassLoader inputClassLoader = getInputClassLoader();
-        for (Field field : injectableClassLiterals) {
-          Class<?> classLiteral =
-              loadClassLiteral(
-                  field.getDeclaredAnnotation(DynamicClassLiteral.class),
-                  jarTransformationRecords,
-                  inputClassLoader,
-                  reflectionBasedMembers,
-                  descriptorLookupRepo,
-                  workingJavaPackage);
-          MethodHandle fieldSetter = testInstanceLookup.unreflectSetter(field);
-          fieldSetter.invoke(testInstance, classLiteral);
-        }
+            ClassLoader inputClassLoader = getInputClassLoader();
+            for (Field field : injectableClassLiterals) {
+              Class<?> classLiteral =
+                  loadClassLiteral(
+                      field.getDeclaredAnnotation(DynamicClassLiteral.class),
+                      jarTransformationRecords,
+                      inputClassLoader,
+                      reflectionBasedMembers,
+                      descriptorLookupRepo,
+                      workingJavaPackage);
+              MethodHandle fieldSetter = testInstanceLookup.unreflectSetter(field);
+              fieldSetter.invoke(testInstance, classLiteral);
+            }
 
-        for (Field field : injectableAsmNodes) {
-          Class<?> requestedFieldType = field.getType();
-          Object asmNode =
-              getAsmNode(
-                  field.getDeclaredAnnotation(AsmNode.class),
-                  requestedFieldType,
-                  jarTransformationRecords,
-                  inputs,
-                  workingJavaPackage);
-          MethodHandle fieldSetter = testInstanceLookup.unreflectSetter(field);
-          fieldSetter.invoke(testInstance, asmNode);
-        }
+            for (Field field : injectableAsmNodes) {
+              Class<?> requestedFieldType = field.getType();
+              Object asmNode =
+                  getAsmNode(
+                      field.getDeclaredAnnotation(AsmNode.class),
+                      requestedFieldType,
+                      jarTransformationRecords,
+                      inputs,
+                      workingJavaPackage);
+              MethodHandle fieldSetter = testInstanceLookup.unreflectSetter(field);
+              fieldSetter.invoke(testInstance, asmNode);
+            }
 
-        for (Field field : injectableMethodHandles) {
-          MethodHandle methodHandle =
-              getMethodHandle(
-                  field.getDeclaredAnnotation(RuntimeMethodHandle.class),
-                  testInstanceLookup,
-                  jarTransformationRecords,
-                  inputClassLoader,
-                  reflectionBasedMembers,
-                  descriptorLookupRepo,
-                  workingJavaPackage);
-          MethodHandle fieldSetter = testInstanceLookup.unreflectSetter(field);
-          fieldSetter.invoke(testInstance, methodHandle);
-        }
+            for (Field field : injectableMethodHandles) {
+              MethodHandle methodHandle =
+                  getMethodHandle(
+                      field.getDeclaredAnnotation(RuntimeMethodHandle.class),
+                      testInstanceLookup,
+                      jarTransformationRecords,
+                      inputClassLoader,
+                      reflectionBasedMembers,
+                      descriptorLookupRepo,
+                      workingJavaPackage);
+              MethodHandle fieldSetter = testInstanceLookup.unreflectSetter(field);
+              fieldSetter.invoke(testInstance, methodHandle);
+            }
 
-        for (Field field : injectableZipEntries) {
-          ZipEntry zipEntry =
-              getZipEntry(
-                  field.getDeclaredAnnotation(RuntimeZipEntry.class),
-                  jarTransformationRecords,
-                  inputs,
-                  workingJavaPackage);
-          MethodHandle fieldSetter = testInstanceLookup.unreflectSetter(field);
-          fieldSetter.invoke(testInstance, zipEntry);
-        }
-        base.evaluate();
-      }
-    };
+            for (Field field : injectableZipEntries) {
+              ZipEntry zipEntry =
+                  getZipEntry(
+                      field.getDeclaredAnnotation(RuntimeZipEntry.class),
+                      jarTransformationRecords,
+                      inputs,
+                      workingJavaPackage);
+              MethodHandle fieldSetter = testInstanceLookup.unreflectSetter(field);
+              fieldSetter.invoke(testInstance, zipEntry);
+            }
+            base.evaluate();
+          }
+        },
+        description);
   }
 
   private static void fillMissingClassMemberDescriptorRepo(
@@ -556,7 +563,10 @@ public final class DesugarRule implements TestRule {
   }
 
   private static ImmutableList<Path> getRuntimeOutputPaths(
-      ImmutableList<Path> inputs, Map<String, Path> tempDirs, String outputRootPrefix)
+      ImmutableList<Path> inputs,
+      TemporaryFolder temporaryFolder,
+      Map<String, Path> tempDirs,
+      String outputRootPrefix)
       throws IOException {
     ImmutableList.Builder<Path> outputRuntimePathsBuilder = ImmutableList.builder();
     for (Path path : inputs) {
@@ -565,9 +575,7 @@ public final class DesugarRule implements TestRule {
       if (tempDirs.containsKey(targetDirKey)) {
         outputDirPath = tempDirs.get(targetDirKey);
       } else {
-        Path root = Files.createTempDirectory("junit");
-        Files.delete(root);
-        outputDirPath = Files.createDirectories(root.resolve(Paths.get(targetDirKey)));
+        outputDirPath = Paths.get(temporaryFolder.newFolder(targetDirKey.split("/")).getPath());
         tempDirs.put(targetDirKey, outputDirPath);
       }
       outputRuntimePathsBuilder.add(outputDirPath.resolve(path.getFileName()));
@@ -589,4 +597,5 @@ public final class DesugarRule implements TestRule {
     }
     return fields.build();
   }
+
 }
