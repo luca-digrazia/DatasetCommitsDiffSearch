@@ -77,7 +77,7 @@ public class MongoBridge {
         }
 
         if (message.getCreatedAt() == 0) {
-            dbObj.put("created_at", Tools.getUTCTimestampWithMilliseconds());
+            dbObj.put("created_at", Tools.getUTCTimestamp());
         } else {
             dbObj.put("created_at", message.getCreatedAt());
         }

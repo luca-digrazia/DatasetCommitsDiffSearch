@@ -221,9 +221,7 @@ public class GELFMessage {
      * Add a key/value pair
      */
     public void addAdditionalData(String key, String value) {
-        if (key != null && value != null) {
-            this.additionalData.put(key, value);
-        }
+        this.additionalData.put(key, value);
     }
     
     /**
