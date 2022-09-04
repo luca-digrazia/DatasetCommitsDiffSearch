@@ -19,36 +19,24 @@
 package controllers;
 
 import com.google.inject.Inject;
-import org.graylog2.restclient.lib.APIException;
-import org.graylog2.restclient.lib.ApiClient;
-import org.graylog2.restclient.lib.ServerNodes;
-import org.graylog2.restclient.models.Node;
-import org.graylog2.restclient.models.StreamService;
-import org.graylog2.restclient.models.Stream;
-import org.graylog2.restclient.models.api.requests.streams.CreateStreamRequest;
-import play.data.Form;
+import lib.APIException;
+import lib.ApiClient;
+import models.StreamService;
+import models.api.results.StreamsResult;
 import play.mvc.Result;
-import views.html.streams.clone_stream;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
 
 public class StreamsController extends AuthenticatedController {
-    private static final Form<CreateStreamRequest> createStreamForm = Form.form(CreateStreamRequest.class);
 
     @Inject
     private StreamService streamService;
 
-    @Inject
-    private ServerNodes serverNodes;
-
-    public Result index() {
+	public Result index() {
 		try {
-			List<Stream> streams = streamService.all();
-            Map<String, Node> nodes = serverNodes.asMap();
+			StreamsResult streams = streamService.allEnabled();
 
-			return ok(views.html.streams.index.render(currentUser(), streams, nodes));
+			return ok(views.html.streams.index.render(currentUser(), streams));
 		} catch (IOException e) {
 			return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
 		} catch (APIException e) {
@@ -60,128 +48,5 @@ public class StreamsController extends AuthenticatedController {
     public Result newStream() {
         return ok(views.html.streams.new_stream.render(currentUser()));
     }
-
-    public Result edit(String streamId) {
-        try {
-            Stream stream = streamService.get(streamId);
-            return ok(views.html.streams.edit.render(currentUser(), stream));
-        } catch (IOException e) {
-            return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
-        } catch (APIException e) {
-            String message = "Could not fetch stream. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
-            return status(504, views.html.errors.error.render(message, e, request()));
-        }
-    }
-
-    public Result create() {
-        Form<CreateStreamRequest> form = createStreamForm.bindFromRequest();
-        if (form.hasErrors()) {
-            flash("error", "Please fill in all fields: " + form.errors());
-
-            return redirect(routes.StreamsController.newStream());
-        }
-
-        String newStreamId;
-
-        try {
-            CreateStreamRequest csr = form.get();
-            csr.creatorUserId = currentUser().getName();
-            newStreamId = streamService.create(csr);
-        } catch (APIException e) {
-            String message = "Could not create stream. We expected HTTP 201, but got a HTTP " + e.getHttpCode() + ".";
-            return status(504, views.html.errors.error.render(message, e, request()));
-        } catch (IOException e) {
-            return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
-        }
-
-        return redirect(routes.StreamRulesController.index(newStreamId));
-    }
-
-    public Result cloneStreamForm(String stream_id) {
-        return ok(clone_stream.render(currentUser(), stream_id));
-    }
-
-    public Result cloneStream(String stream_id) {
-        Form<CreateStreamRequest> form = createStreamForm.bindFromRequest();
-        if (form.hasErrors()) {
-            flash("error", "Please fill in all fields: " + form.errors());
-
-            return redirect(routes.StreamsController.cloneStreamForm(stream_id));
-        }
-
-        String newStreamId;
-
-        try {
-            CreateStreamRequest csr = form.get();
-            csr.creatorUserId = currentUser().getName();
-            newStreamId = streamService.cloneStream(stream_id, csr);
-        } catch (APIException e) {
-            String message = "Could not create stream. We expected HTTP 201, but got a HTTP " + e.getHttpCode() + ".";
-            return status(504, views.html.errors.error.render(message, e, request()));
-        } catch (IOException e) {
-            return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
-        }
-
-        return redirect(routes.StreamRulesController.index(newStreamId));
-    }
-
-    public Result update(String streamId) {
-        Form<CreateStreamRequest> form = createStreamForm.bindFromRequest();
-        if (form.hasErrors()) {
-            flash("error", "Please fill in all fields: " + form.errors());
-
-            return redirect(routes.StreamsController.edit(streamId));
-        }
-
-        try {
-            CreateStreamRequest csr = form.get();
-            streamService.update(streamId, csr);
-        } catch (APIException e) {
-            String message = "Could not create stream. We expected HTTP 201, but got a HTTP " + e.getHttpCode() + ".";
-            return status(504, views.html.errors.error.render(message, e, request()));
-        } catch (IOException e) {
-            return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
-        }
-
-        return redirect(routes.StreamsController.index());
-    }
-
-    public Result delete(String stream_id) {
-        try {
-            streamService.delete(stream_id);
-        } catch (APIException e) {
-            String message = "Could not delete stream. We expect HTTP 204, but got a HTTP " + e.getHttpCode() + ".";
-            return status(504, views.html.errors.error.render(message, e, request()));
-        } catch (IOException e) {
-            return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
-        }
-
-        return redirect(routes.StreamsController.index());
-    }
-
-    public Result pause(String stream_id) {
-        try {
-            streamService.pause(stream_id);
-        } catch (APIException e) {
-            String message = "Could not delete stream. We expect HTTP 204, but got a HTTP " + e.getHttpCode() + ".";
-            return status(504, views.html.errors.error.render(message, e, request()));
-        } catch (IOException e) {
-            return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
-        }
-
-        return redirect(routes.StreamsController.index());
-    }
-
-    public Result resume(String stream_id) {
-        try {
-            streamService.resume(stream_id);
-        } catch (APIException e) {
-            String message = "Could not delete stream. We expect HTTP 204, but got a HTTP " + e.getHttpCode() + ".";
-            return status(504, views.html.errors.error.render(message, e, request()));
-        } catch (IOException e) {
-            return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
-        }
-
-        return redirect(routes.StreamsController.index());
-    }
+	
 }
