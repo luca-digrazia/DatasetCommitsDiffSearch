@@ -164,9 +164,7 @@ public class DevMojo extends AbstractMojo {
     /**
      * If this server should be started in debug mode. The default is to start in debug mode and listen on
      * port 5005. Whether or not the JVM is suspended waiting for a debugger to be attached,
-     * depends on the value of {@link #suspend}.
-     * <p>
-     * {@code debug} supports the following options:
+     * depends on the value of {@link #suspend}. {@code debug} supports the following options:
      * <table>
      * <tr>
      * <td><b>Value</b></td>
@@ -178,18 +176,17 @@ public class DevMojo extends AbstractMojo {
      * </tr>
      * <tr>
      * <td><b>true</b></td>
-     * <td>The JVM is started in debug mode and will be listening on {@code debugHost}:{@code debugPort}</td>
+     * <td>The JVM is started in debug mode and will be listening on port 5005</td>
      * </tr>
      * <tr>
      * <td><b>client</b></td>
-     * <td>The JVM is started in client mode, and will attempt to connect to {@code debugHost}:{@code debugPort}</td>
+     * <td>The JVM is started in client mode, and attempts to connect to localhost:5005</td>
      * </tr>
      * <tr>
      * <td><b>{port}</b></td>
-     * <td>The JVM is started in debug mode and will be listening on {@code debugHost}:{port}.</td>
+     * <td>The JVM is started in debug mode and will be listening on {port}</td>
      * </tr>
      * </table>
-     * By default, {@code debugHost} has the value "localhost", and {@code debugPort} is 5005.
      */
     @Parameter(defaultValue = "${debug}")
     private String debug;
@@ -218,9 +215,6 @@ public class DevMojo extends AbstractMojo {
 
     @Parameter(defaultValue = "${debugHost}")
     private String debugHost;
-
-    @Parameter(defaultValue = "${debugPort}")
-    private String debugPort;
 
     @Parameter(defaultValue = "${project.build.directory}")
     private File buildDir;
@@ -311,6 +305,8 @@ public class DevMojo extends AbstractMojo {
 
     @Component
     private BuildPluginManager pluginManager;
+
+    private Boolean debugPortOk;
 
     @Component
     private ToolchainManager toolchainManager;
@@ -806,7 +802,7 @@ public class DevMojo extends AbstractMojo {
                 .suspend(suspend)
                 .debug(debug)
                 .debugHost(debugHost)
-                .debugPort(debugPort)
+                .debugPortOk(debugPortOk)
                 .deleteDevJar(deleteDevJar);
 
         setJvmArgs(builder);
