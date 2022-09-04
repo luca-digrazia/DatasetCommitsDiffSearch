@@ -437,7 +437,7 @@ final class JavaInfoBuildHelper {
       SkylarkList<Artifact> resources,
       Boolean neverlink,
       JavaSemantics javaSemantics)
-      throws EvalException {
+      throws EvalException, InterruptedException {
     if (sourceJars.isEmpty() && sourceFiles.isEmpty() && exports.isEmpty()) {
       throw new EvalException(
           null, "source_jars, sources and exports cannot be simultaneous empty");
@@ -499,15 +499,9 @@ final class JavaInfoBuildHelper {
             javaRuntimeInfo,
             SkylarkList.createImmutable(ImmutableList.of()),
             outputJarsBuilder,
-            /*createOutputSourceJar=*/ generateMergedSourceJar,
+            /*createOutputSourceJar*/ generateMergedSourceJar,
             outputSourceJar,
-            javaInfoBuilder,
-            // Include JavaGenJarsProviders from both deps and exports in the JavaGenJarsProvider
-            // added to javaInfoBuilder for this target.
-            NestedSetBuilder.<JavaGenJarsProvider>stableOrder()
-                .addAll(JavaInfo.fetchProvidersFromList(deps, JavaGenJarsProvider.class))
-                .addAll(JavaInfo.fetchProvidersFromList(exports, JavaGenJarsProvider.class))
-                .build());
+            javaInfoBuilder);
 
     JavaCompilationArgsProvider javaCompilationArgsProvider =
         helper.buildCompilationArgsProvider(artifacts, true, neverlink);
