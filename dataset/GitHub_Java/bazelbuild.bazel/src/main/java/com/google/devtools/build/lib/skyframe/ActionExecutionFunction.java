@@ -56,9 +56,6 @@ import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.rules.cpp.IncludeScannable;
 import com.google.devtools.build.lib.skyframe.ActionRewindStrategy.RewindPlan;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionPostprocessing;
@@ -125,13 +122,6 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     skyframeActionExecutor.noteActionEvaluationStarted(actionLookupData, action);
     if (actionDependsOnBuildId(action)) {
       PrecomputedValue.BUILD_ID.get(env);
-    }
-
-    if (skyframeActionExecutor.isBazelRemoteExecutionEnabled()) {
-      // Declaring a dependency on the precomputed value so that all actions are invalidated if
-      // the value of the flag changes. We are doing this conditionally only in Bazel if remote
-      // execution is available in order to not introduce additional skyframe edges in Blaze.
-      PrecomputedValue.REMOTE_OUTPUTS_MODE.get(env);
     }
 
     // Look up the parts of the environment that influence the action.
@@ -618,7 +608,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
 
     if (action.discoversInputs()) {
       if (state.discoveredInputs == null) {
-        try (SilentCloseable c = Profiler.instance().profile(ProfilerTask.INFO, "discoverInputs")) {
+        try {
           try {
             state.updateFileSystemContext(
                 skyframeActionExecutor, env, metadataHandler, ImmutableMap.of());

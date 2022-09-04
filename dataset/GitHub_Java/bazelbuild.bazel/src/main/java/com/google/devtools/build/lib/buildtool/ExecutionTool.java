@@ -192,6 +192,7 @@ public class ExecutionTool {
         runtime.getFileSystem(),
         env.getExecRoot(),
         getReporter(),
+        env.getEventBus(),
         runtime.getClock(),
         request,
         spawnActionContextMaps,
@@ -332,6 +333,7 @@ public class ExecutionTool {
                           analysisResult, aspects)));
         }
       }
+      executor.executionPhaseStarting();
       skyframeExecutor.drainChangedFiles();
 
       if (request.getViewOptions().discardAnalysisCache
@@ -397,6 +399,8 @@ public class ExecutionTool {
       if (buildCompleted) {
         getReporter().handle(Event.progress("Building complete."));
       }
+
+      executor.executionPhaseEnding();
 
       if (buildCompleted) {
         saveActionCache(actionCache);
