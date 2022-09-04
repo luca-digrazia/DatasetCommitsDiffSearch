@@ -35,11 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-/**
- * Helper methods that are shared by the different sandboxing strategies.
- *
- * <p>All sandboxed strategies within a build should share the same instance of this object.
- */
+/** Helper methods that are shared by the different sandboxing strategies in this package. */
 public final class SandboxHelpers {
   /** Wrapper class for the inputs of a sandbox. */
   public static final class SandboxInputs {
@@ -68,7 +64,7 @@ public final class SandboxHelpers {
    *
    * @throws IOException If any files could not be written.
    */
-  public SandboxInputs processInputFiles(
+  public static SandboxInputs processInputFiles(
       Map<PathFragment, ActionInput> inputMap,
       Spawn spawn,
       ArtifactExpander artifactExpander,
@@ -144,7 +140,7 @@ public final class SandboxHelpers {
     }
   }
 
-  public SandboxOutputs getOutputs(Spawn spawn) {
+  public static SandboxOutputs getOutputs(Spawn spawn) {
     ImmutableSet.Builder<PathFragment> files = ImmutableSet.builder();
     ImmutableSet.Builder<PathFragment> dirs = ImmutableSet.builder();
     for (ActionInput output : spawn.getOutputFiles()) {
@@ -165,7 +161,7 @@ public final class SandboxHelpers {
    * reference to the full set of build options (and also for performance, since this only needs to
    * be checked once-per-build).
    */
-  boolean shouldAllowNetwork(OptionsParsingResult buildOptions) {
+  static boolean shouldAllowNetwork(OptionsParsingResult buildOptions) {
     // Allow network access, when --java_debug is specified, otherwise we can't connect to the
     // remote debug server of the test. This intentionally overrides the "block-network" execution
     // tag.

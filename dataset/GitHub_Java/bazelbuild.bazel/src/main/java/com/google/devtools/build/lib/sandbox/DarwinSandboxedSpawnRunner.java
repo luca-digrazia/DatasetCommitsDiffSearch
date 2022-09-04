@@ -99,7 +99,6 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     return true;
   }
 
-  private final SandboxHelpers helpers;
   private final Path execRoot;
   private final boolean allowNetwork;
   private final Path processWrapper;
@@ -121,7 +120,6 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
    * Creates a sandboxed spawn runner that uses the {@code process-wrapper} tool and the MacOS
    * {@code sandbox-exec} binary.
    *
-   * @param helpers common tools and state across all spawns during sandboxed execution
    * @param cmdEnv the command environment to use
    * @param sandboxBase path to the sandbox base directory
    * @param timeoutKillDelay additional grace period before killing timing out commands
@@ -130,7 +128,6 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
    * @param sandboxfsMapSymlinkTargets map the targets of symlinks within the sandbox if true
    */
   DarwinSandboxedSpawnRunner(
-      SandboxHelpers helpers,
       CommandEnvironment cmdEnv,
       Path sandboxBase,
       Duration timeoutKillDelay,
@@ -139,9 +136,8 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
       TreeDeleter treeDeleter)
       throws IOException {
     super(cmdEnv);
-    this.helpers = helpers;
     this.execRoot = cmdEnv.getExecRoot();
-    this.allowNetwork = helpers.shouldAllowNetwork(cmdEnv.getOptions());
+    this.allowNetwork = SandboxHelpers.shouldAllowNetwork(cmdEnv.getOptions());
     this.alwaysWritableDirs = getAlwaysWritableDirs(cmdEnv.getRuntime().getFileSystem());
     this.processWrapper = ProcessWrapperUtil.getProcessWrapper(cmdEnv);
     this.localEnvProvider = LocalEnvProvider.forCurrentOs(cmdEnv.getClientEnv());
@@ -235,13 +231,13 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     writableDirs.addAll(extraWritableDirs);
 
     SandboxInputs inputs =
-        helpers.processInputFiles(
+        SandboxHelpers.processInputFiles(
             context.getInputMapping(
                 getSandboxOptions().symlinkedSandboxExpandsTreeArtifactsInRunfilesTree),
             spawn,
             context.getArtifactExpander(),
             execRoot);
-    SandboxOutputs outputs = helpers.getOutputs(spawn);
+    SandboxOutputs outputs = SandboxHelpers.getOutputs(spawn);
 
     final Path sandboxConfigPath = sandboxPath.getRelative("sandbox.sb");
     Duration timeout = context.getTimeout();
