@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
@@ -38,7 +37,7 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
 import com.google.devtools.build.lib.rules.proto.ProtoSourcesProvider;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -72,11 +71,11 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
 
   @Override
   public final ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
     MultiArchSplitTransitionProvider.validateMinimumOs(ruleContext);
     PlatformType platformType = MultiArchSplitTransitionProvider.getPlatformType(ruleContext);
 
-    ImmutableListMultimap<BuildConfiguration, ConfiguredTargetAndData>
+    ImmutableListMultimap<BuildConfiguration, ConfiguredTargetAndTarget>
         configToCTATDepsCollectionMap =
             ruleContext.getPrerequisiteCofiguredTargetAndTargetsByConfiguration("deps", Mode.SPLIT);
     ImmutableListMultimap<BuildConfiguration, ObjcProvider> configToObjcAvoidDepsMap =
@@ -208,7 +207,7 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
       RuleContext ruleContext,
       BuildConfiguration buildConfiguration,
       IntermediateArtifacts intermediateArtifacts,
-      List<ConfiguredTargetAndData> propagatedConfigredTargetAndTargetDeps,
+      List<ConfiguredTargetAndTarget> propagatedConfigredTargetAndTargetDeps,
       Optional<ObjcProvider> protosObjcProvider) {
 
     CompilationArtifacts compilationArtifacts = new CompilationArtifacts.Builder().build();

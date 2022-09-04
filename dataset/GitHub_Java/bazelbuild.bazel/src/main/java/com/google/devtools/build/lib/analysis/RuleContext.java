@@ -177,8 +177,7 @@ public final class RuleContext extends TargetContext
   private final ListMultimap<String, ConfiguredFilesetEntry> filesetEntryMap;
   private final ImmutableMap<Label, ConfigMatchingProvider> configConditions;
   private final AspectAwareAttributeMapper attributes;
-  private final ImmutableSet<String> enabledFeatures;
-  private final ImmutableSet<String> disabledFeatures;
+  private final ImmutableSet<String> features;
   private final String ruleClassNameForLogging;
   private final BuildConfiguration hostConfiguration;
   private final PatchTransition disableLipoTransition;
@@ -218,11 +217,7 @@ public final class RuleContext extends TargetContext
     this.filesetEntryMap = filesetEntryMap;
     this.configConditions = configConditions;
     this.attributes = new AspectAwareAttributeMapper(attributes, aspectAttributes);
-    Set<String> allEnabledFeatures = new HashSet<>();
-    Set<String> allDisabledFeatures = new HashSet<>();
-    getAllFeatures(allEnabledFeatures, allDisabledFeatures);
-    this.enabledFeatures = ImmutableSortedSet.copyOf(allEnabledFeatures);
-    this.disabledFeatures = ImmutableSortedSet.copyOf(allDisabledFeatures);
+    this.features = getEnabledFeatures();
     this.ruleClassNameForLogging = ruleClassNameForLogging;
     this.hostConfiguration = builder.hostConfiguration;
     this.disableLipoTransition = builder.disableLipoTransition;
@@ -230,7 +225,7 @@ public final class RuleContext extends TargetContext
     this.toolchainContext = toolchainContext;
   }
 
-  private void getAllFeatures(Set<String> allEnabledFeatures, Set<String> allDisabledFeatures) {
+  private ImmutableSet<String> getEnabledFeatures() {
     Set<String> globallyEnabled = new HashSet<>();
     Set<String> globallyDisabled = new HashSet<>();
     parseFeatures(getConfiguration().getDefaultFeatures(), globallyEnabled, globallyDisabled);
@@ -242,26 +237,23 @@ public final class RuleContext extends TargetContext
     if (attributes().has("features", Type.STRING_LIST)) {
       parseFeatures(attributes().get("features", Type.STRING_LIST), ruleEnabled, ruleDisabled);
     }
-
     Set<String> ruleDisabledFeatures =
         Sets.union(ruleDisabled, Sets.difference(packageDisabled, ruleEnabled));
-    allDisabledFeatures.addAll(Sets.union(ruleDisabledFeatures, globallyDisabled));
+    Set<String> disabledFeatures = Sets.union(ruleDisabledFeatures, globallyDisabled);
     for (ImmutableMap.Entry<Class<? extends Fragment>, Fragment> entry :
         getConfiguration().getAllFragments().entrySet()) {
       if (isLegalFragment(entry.getKey())) {
         globallyEnabled.addAll(
             entry
                 .getValue()
-                .configurationEnabledFeatures(
-                    this, ImmutableSortedSet.copyOf(allDisabledFeatures)));
+                .configurationEnabledFeatures(this, ImmutableSortedSet.copyOf(disabledFeatures)));
       }
     }
-
     Set<String> packageFeatures =
         Sets.difference(Sets.union(globallyEnabled, packageEnabled), packageDisabled);
     Set<String> ruleFeatures =
         Sets.difference(Sets.union(packageFeatures, ruleEnabled), ruleDisabled);
-    allEnabledFeatures.addAll(Sets.difference(ruleFeatures, globallyDisabled));
+    return ImmutableSortedSet.copyOf(Sets.difference(ruleFeatures, globallyDisabled));
   }
 
   private void parseFeatures(Iterable<String> features, Set<String> enabled, Set<String> disabled) {
@@ -1379,12 +1371,7 @@ public final class RuleContext extends TargetContext
    * @return the set of features applicable for the current rule's package.
    */
   public ImmutableSet<String> getFeatures() {
-    return enabledFeatures;
-  }
-
-  /** @return the set of features that are disabled for the current rule's package. */
-  public ImmutableSet<String> getDisabledFeatures() {
-    return disabledFeatures;
+    return features;
   }
 
   @Override
