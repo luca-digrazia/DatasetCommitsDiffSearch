@@ -19,6 +19,7 @@ package org.graylog2.security.realm;
 import org.apache.shiro.authc.AuthenticationException;
 import org.apache.shiro.authc.AuthenticationInfo;
 import org.apache.shiro.authc.AuthenticationToken;
+import org.apache.shiro.authc.BearerToken;
 import org.apache.shiro.authc.SimpleAccount;
 import org.apache.shiro.authc.credential.AllowAllCredentialsMatcher;
 import org.apache.shiro.authc.pam.UnsupportedTokenException;
@@ -26,9 +27,7 @@ import org.apache.shiro.realm.AuthenticatingRealm;
 import org.graylog.security.authservice.AuthServiceAuthenticator;
 import org.graylog.security.authservice.AuthServiceException;
 import org.graylog.security.authservice.AuthServiceResult;
-import org.graylog.security.authservice.AuthServiceToken;
 import org.graylog2.shared.security.AuthenticationServiceUnavailableException;
-import org.graylog2.shared.security.TypedBearerToken;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +44,7 @@ public class BearerTokenRealm extends AuthenticatingRealm {
     public BearerTokenRealm(AuthServiceAuthenticator authenticator) {
         this.authenticator = authenticator;
 
-        setAuthenticationTokenClass(TypedBearerToken.class);
+        setAuthenticationTokenClass(BearerToken.class);
         setCachingEnabled(false);
 
         // Credentials will be matched via the authentication service itself so we don't need Shiro to do it
@@ -54,20 +53,17 @@ public class BearerTokenRealm extends AuthenticatingRealm {
 
     @Override
     protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authToken) throws AuthenticationException {
-        if (authToken instanceof TypedBearerToken) {
-            return doGetAuthenticationInfo((TypedBearerToken) authToken);
+        if (authToken instanceof BearerToken) {
+            return doGetAuthenticationInfo((BearerToken) authToken);
         }
         throw new UnsupportedTokenException("Unsupported authentication token type: " + authToken.getClass());
     }
 
-    private AuthenticationInfo doGetAuthenticationInfo(TypedBearerToken token) throws AuthenticationException {
-        log.debug("Attempting authentication for bearer token of type <{}>.",
-                token.getType());
+    private AuthenticationInfo doGetAuthenticationInfo(BearerToken token) throws AuthenticationException {
+        log.debug("Attempting authentication for bearer token received from <{}>", token.getHost());
         try {
-            final AuthServiceResult result = authenticator.authenticate(AuthServiceToken.builder()
-                    .token(token.getToken())
-                    .type(token.getType())
-                    .build());
+            final AuthServiceResult result =
+                    authenticator.authenticate(token.getToken());
 
             if (result.isSuccess()) {
                 log.debug("Successfully authenticated username <{}> for user profile <{}> with backend <{}/{}/{}>",
