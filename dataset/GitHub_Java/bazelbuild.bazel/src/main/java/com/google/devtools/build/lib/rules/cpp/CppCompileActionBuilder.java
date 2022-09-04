@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CoptsFilter;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -53,7 +54,7 @@ public class CppCompileActionBuilder {
   private final ActionOwner owner;
   private final BuildConfiguration configuration;
   private CcToolchainFeatures.FeatureConfiguration featureConfiguration;
-  private CcToolchainVariables variables = CcToolchainVariables.EMPTY;
+  private CcToolchainFeatures.Variables variables = Variables.EMPTY;
   private Artifact sourceFile;
   private final NestedSetBuilder<Artifact> mandatoryInputsBuilder;
   private Artifact optionalSourceFile;
@@ -63,7 +64,7 @@ public class CppCompileActionBuilder {
   private PathFragment tempOutputFile;
   private DotdFile dotdFile;
   private Artifact gcnoFile;
-  private CcCompilationContext ccCompilationContext = CcCompilationContext.EMPTY;
+  private CcCompilationContextInfo ccCompilationContextInfo = CcCompilationContextInfo.EMPTY;
   private final List<String> pluginOpts = new ArrayList<>();
   private CoptsFilter coptsFilter = CoptsFilter.alwaysPasses();
   private ImmutableList<PathFragment> extraSystemIncludePrefixes = ImmutableList.of();
@@ -147,7 +148,7 @@ public class CppCompileActionBuilder {
     this.tempOutputFile = other.tempOutputFile;
     this.dotdFile = other.dotdFile;
     this.gcnoFile = other.gcnoFile;
-    this.ccCompilationContext = other.ccCompilationContext;
+    this.ccCompilationContextInfo = other.ccCompilationContextInfo;
     this.pluginOpts.addAll(other.pluginOpts);
     this.coptsFilter = other.coptsFilter;
     this.extraSystemIncludePrefixes = ImmutableList.copyOf(other.extraSystemIncludePrefixes);
@@ -200,8 +201,8 @@ public class CppCompileActionBuilder {
     return sourceFile;
   }
 
-  public CcCompilationContext getCcCompilationContext() {
-    return ccCompilationContext;
+  public CcCompilationContextInfo getCcCompilationContextInfo() {
+    return ccCompilationContextInfo;
   }
 
   public NestedSet<Artifact> getMandatoryInputs() {
@@ -336,7 +337,7 @@ public class CppCompileActionBuilder {
     NestedSet<Artifact> allInputs = buildAllInputs(realMandatoryInputs);
 
     NestedSetBuilder<Artifact> prunableInputBuilder = NestedSetBuilder.stableOrder();
-    prunableInputBuilder.addTransitive(ccCompilationContext.getDeclaredIncludeSrcs());
+    prunableInputBuilder.addTransitive(ccCompilationContextInfo.getDeclaredIncludeSrcs());
     prunableInputBuilder.addTransitive(cppSemantics.getAdditionalPrunableIncludes());
 
     Iterable<IncludeScannable> lipoScannables = getLipoScannables(realMandatoryInputs);
@@ -379,7 +380,7 @@ public class CppCompileActionBuilder {
               tempOutputFile,
               dotdFile,
               localShellEnvironment,
-              ccCompilationContext,
+              ccCompilationContextInfo,
               coptsFilter,
               getLipoScannables(realMandatoryInputs),
               cppSemantics,
@@ -410,7 +411,7 @@ public class CppCompileActionBuilder {
               ltoIndexingFile,
               optionalSourceFile,
               localShellEnvironment,
-              ccCompilationContext,
+              ccCompilationContextInfo,
               coptsFilter,
               getLipoScannables(realMandatoryInputs),
               additionalIncludeScanningRoots.build(),
@@ -444,11 +445,13 @@ public class CppCompileActionBuilder {
     NestedSetBuilder<Artifact> realMandatoryInputsBuilder = NestedSetBuilder.compileOrder();
     realMandatoryInputsBuilder.addTransitive(mandatoryInputsBuilder.build());
     realMandatoryInputsBuilder.addAll(getBuiltinIncludeFiles());
-    realMandatoryInputsBuilder.addAll(ccCompilationContext.getTransitiveCompilationPrerequisites());
+    realMandatoryInputsBuilder.addAll(
+        ccCompilationContextInfo.getTransitiveCompilationPrerequisites());
     if (useHeaderModules() && !shouldPruneModules()) {
-      realMandatoryInputsBuilder.addTransitive(ccCompilationContext.getTransitiveModules(usePic));
+      realMandatoryInputsBuilder.addTransitive(
+          ccCompilationContextInfo.getTransitiveModules(usePic));
     }
-    realMandatoryInputsBuilder.addTransitive(ccCompilationContext.getAdditionalInputs());
+    realMandatoryInputsBuilder.addTransitive(ccCompilationContextInfo.getAdditionalInputs());
     realMandatoryInputsBuilder.add(Preconditions.checkNotNull(sourceFile));
     if (grepIncludes != null) {
       realMandatoryInputsBuilder.add(grepIncludes);
@@ -528,14 +531,16 @@ public class CppCompileActionBuilder {
     return this;
   }
 
-  /** Sets the feature build variables to be used for the action. */
-  public CppCompileActionBuilder setVariables(CcToolchainVariables variables) {
+  /**
+   * Sets the feature build variables to be used for the action.
+   */
+  public CppCompileActionBuilder setVariables(CcToolchainFeatures.Variables variables) {
     this.variables = variables;
     return this;
   }
 
   /** Returns the build variables to be used for the action. */
-  public CcToolchainVariables getVariables() {
+  public CcToolchainFeatures.Variables getVariables() {
     return variables;
   }
 
@@ -658,9 +663,9 @@ public class CppCompileActionBuilder {
     return this;
   }
 
-  public CppCompileActionBuilder setCcCompilationContext(
-      CcCompilationContext ccCompilationContext) {
-    this.ccCompilationContext = ccCompilationContext;
+  public CppCompileActionBuilder setCcCompilationContextInfo(
+      CcCompilationContextInfo ccCompilationContextInfo) {
+    this.ccCompilationContextInfo = ccCompilationContextInfo;
     return this;
   }
 
