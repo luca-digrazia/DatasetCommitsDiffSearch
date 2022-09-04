@@ -48,12 +48,7 @@ class InstanceImpl<T> implements Instance<T> {
 
     InstanceImpl(Type type, Set<Annotation> qualifiers, CreationalContextImpl<?> creationalContext) {
         if (type instanceof ParameterizedType) {
-            ParameterizedType parameterizedType = (ParameterizedType) type;
-            if (parameterizedType.getRawType().equals(Instance.class)) {
-                this.type = parameterizedType.getActualTypeArguments()[0];
-            } else {
-                this.type = type;
-            }
+            this.type = ((ParameterizedType) type).getActualTypeArguments()[0];
         } else {
             this.type = type;
         }
@@ -96,7 +91,7 @@ class InstanceImpl<T> implements Instance<T> {
     public <U extends T> Instance<U> select(Class<U> subtype, Annotation... qualifiers) {
         Set<Annotation> newQualifiers = new HashSet<>(this.qualifiers);
         Collections.addAll(newQualifiers, qualifiers);
-        return new InstanceImpl<>(subtype, newQualifiers, creationalContext);
+        return new InstanceImpl<>(type, newQualifiers, creationalContext);
     }
 
     @Override
