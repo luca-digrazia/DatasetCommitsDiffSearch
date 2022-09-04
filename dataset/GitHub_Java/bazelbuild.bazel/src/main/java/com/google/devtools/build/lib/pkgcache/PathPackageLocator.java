@@ -24,9 +24,6 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.PackageLoading;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.Path;
@@ -83,18 +80,7 @@ public class PathPackageLocator implements Serializable {
   public Path getPackageBuildFile(PackageIdentifier packageName) throws NoSuchPackageException {
     Path buildFile  = getPackageBuildFileNullable(packageName, UnixGlob.DEFAULT_SYSCALLS_REF);
     if (buildFile == null) {
-      String message = "BUILD file not found on package path";
-      throw new BuildFileNotFoundException(
-          packageName,
-          message,
-          DetailedExitCode.of(
-              FailureDetail.newBuilder()
-                  .setMessage(message)
-                  .setPackageLoading(
-                      PackageLoading.newBuilder()
-                          .setCode(PackageLoading.Code.BUILD_FILE_MISSING)
-                          .build())
-                  .build()));
+      throw new BuildFileNotFoundException(packageName, "BUILD file not found on package path");
     }
     return buildFile;
   }
@@ -133,7 +119,7 @@ public class PathPackageLocator implements Serializable {
       for (BuildFileName buildFileName : buildFilesByPriority) {
         Path buildFile =
             outputBase
-                .getRelative(packageIdentifier.getPackagePath())
+                .getRelative(packageIdentifier.getSourceRoot())
                 .getRelative(buildFileName.getFilenameFragment());
         try {
           FileStatus stat = cache.get().statIfFound(buildFile, Symlinks.FOLLOW);
@@ -264,10 +250,6 @@ public class PathPackageLocator implements Serializable {
     AtomicReference<? extends UnixGlob.FilesystemCalls> cache = UnixGlob.DEFAULT_SYSCALLS_REF;
     // TODO(bazel-team): correctness in the presence of changes to the location of the WORKSPACE
     // file.
-    Path workspaceFile = getFilePath(LabelConstants.WORKSPACE_DOT_BAZEL_FILE_NAME, cache);
-    if (workspaceFile != null) {
-      return workspaceFile;
-    }
     return getFilePath(LabelConstants.WORKSPACE_FILE_NAME, cache);
   }
 

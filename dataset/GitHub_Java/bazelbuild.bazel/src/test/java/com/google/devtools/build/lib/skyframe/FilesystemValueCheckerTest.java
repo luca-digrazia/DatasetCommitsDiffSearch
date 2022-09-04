@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.skyframe;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.actions.ActionInputHelper.treeFileArtifact;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -951,9 +951,12 @@ public class FilesystemValueCheckerTest {
     assertEmptyDiff(getDirtyFilesystemKeys(evaluator, checker));
 
     fs.statThrowsRuntimeException = true;
-    RuntimeException e =
-        assertThrows(RuntimeException.class, () -> getDirtyFilesystemKeys(evaluator, checker));
-    assertThat(e).hasMessageThat().isEqualTo("bork");
+    try {
+      getDirtyFilesystemKeys(evaluator, checker);
+      fail();
+    } catch (RuntimeException e) {
+      assertThat(e).hasMessageThat().isEqualTo("bork");
+    }
   }
 
   private static void assertEmptyDiff(Diff diff) {

@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -86,7 +85,7 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
     assertThat(sym1.delete()).isTrue();
     FileSystemUtils.ensureSymbolicLink(sym1, path);
     assertThat(symlink.delete()).isTrue();
-    scratch.file("bar/BUILD", "sh_library(name = 'bar')");
+    symlink = scratch.file("bar/BUILD", "sh_library(name = 'bar')");
     syncPackages();
     assertLabelsVisited(
         ImmutableSet.of("//bar:bar"), ImmutableSet.of("//bar:bar"), !EXPECT_ERROR, !KEEP_GOING);
@@ -294,10 +293,12 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
     scratch.file("x/BUILD");
     Thread.currentThread().interrupt();
 
-    assertThrows(
-        InterruptedException.class,
-        () ->
-            assertLabelsVisitedWithErrors(ImmutableSet.of("//x:x"), ImmutableSet.of("//x:BUILD")));
+    try {
+      assertLabelsVisitedWithErrors(ImmutableSet.of("//x:x"), ImmutableSet.of("//x:BUILD"));
+      fail();
+    } catch (InterruptedException e) {
+      // Expected
+    }
   }
 
   // Regression test for "crash when // encountered in package name".

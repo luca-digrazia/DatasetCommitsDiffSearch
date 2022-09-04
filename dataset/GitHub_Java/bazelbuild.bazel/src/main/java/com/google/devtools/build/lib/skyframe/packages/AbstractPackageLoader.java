@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.AstParseResult;
+import com.google.devtools.build.lib.packages.AttributeContainer;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.CachingPackageLocator;
@@ -42,7 +43,6 @@ import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.rules.repository.ManagedDirectoriesKnowledge;
 import com.google.devtools.build.lib.skyframe.ASTFileLookupFunction;
 import com.google.devtools.build.lib.skyframe.BlacklistedPackagePrefixesFunction;
 import com.google.devtools.build.lib.skyframe.ContainingPackageLookupFunction;
@@ -232,11 +232,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     public final PackageLoader build() {
       validate();
       externalFilesHelper =
-          ExternalFilesHelper.create(
-              pkgLocatorRef,
-              externalFileAction,
-              directories,
-              ManagedDirectoriesKnowledge.NO_MANAGED_DIRECTORIES);
+          ExternalFilesHelper.create(pkgLocatorRef, externalFileAction, directories);
       return buildImpl();
     }
 
@@ -265,6 +261,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     pkgFactory =
         new PackageFactory(
             ruleClassProvider,
+            AttributeContainer::new,
             getEnvironmentExtensions(),
             "PackageLoader",
             Package.Builder.DefaultHelper.INSTANCE);

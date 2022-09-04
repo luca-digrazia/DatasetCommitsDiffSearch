@@ -713,7 +713,7 @@ public class FileFunctionTest {
       fail(String.format("Evaluation error for %s: %s", key, result.getError()));
     }
     FileValue newValue = (FileValue) result.get(key);
-    assertThat(newValue).isNotSameInstanceAs(oldValue);
+    assertThat(newValue).isNotSameAs(oldValue);
     assertThat(newValue.exists()).isFalse();
   }
 
