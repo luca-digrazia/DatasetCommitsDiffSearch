@@ -27,14 +27,14 @@ import com.mongodb.DBObject;
 import java.util.List;
 import java.util.Set;
 import org.graylog2.Core;
-import org.graylog2.plugin.Tools;
+import org.graylog2.Tools;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class Cluster {
  
-    public static final int PING_TIMEOUT = 7;
+    private static final int PING_TIMEOUT = 7;
     
     Core localServer;
     

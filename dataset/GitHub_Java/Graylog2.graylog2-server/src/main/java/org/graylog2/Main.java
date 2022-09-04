@@ -121,7 +121,7 @@ public final class Main {
         server.initialize(configuration);
         
         // Could it be that there is another master instance already?
-        if (configuration.isMaster() && server.cluster().masterCountExcept(server.getServerId()) != 0) {
+        if (server.cluster().masterCountExcept(server.getServerId()) != 0) {
             // All devils here.
             String what = "Detected other master node in the cluster! Starting as non-master! "
                     + "This is a mis-configuration you should fix.";
@@ -131,7 +131,7 @@ public final class Main {
             configuration.setIsMaster(false);
         }
         
-        if (commandLineArguments.isLocal() || commandLineArguments.isDebug()) {
+        if (commandLineArguments.isLocal()) {
             // In local mode, systemstats are sent to localhost for example.
             LOG.info("Running in local mode");
             server.setLocalMode(true);
@@ -151,9 +151,6 @@ public final class Main {
         if (configuration.isEnableLibratoMetricsOutput()) { server.registerInitializer(new LibratoMetricsInitializer(server)); }
         server.registerInitializer(new DeflectorThreadsInitializer(server));
         server.registerInitializer(new AnonymousInformationCollectorInitializer(server));
-        if (configuration.performRetention() && commandLineArguments.performRetention()) {
-            server.registerInitializer(new IndexRetentionInitializer(server));
-        }
         
         // Register inputs.
         if (configuration.isUseGELF()) {
@@ -165,11 +162,11 @@ public final class Main {
         if (configuration.isSyslogTcpEnabled()) { server.registerInput(new SyslogTCPInput()); }
 
         // Register message filters.
-        server.registerFilter(new RewriteFilter());
-        server.registerFilter(new BlacklistFilter());
-        if (configuration.isEnableTokenizerFilter()) { server.registerFilter(new TokenizerFilter()); }
-        server.registerFilter(new StreamMatcherFilter());
-        server.registerFilter(new CounterUpdateFilter());
+        server.registerFilter(RewriteFilter.class);
+        server.registerFilter(BlacklistFilter.class);
+        if (configuration.isEnableTokenizerFilter()) { server.registerFilter(TokenizerFilter.class); }
+        server.registerFilter(StreamMatcherFilter.class);
+        server.registerFilter(CounterUpdateFilter.class);
 
         // Register outputs.
         server.registerOutput(ElasticSearchOutput.class);

@@ -29,7 +29,6 @@ import com.github.joschi.jadconfig.Parameter;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.ValidatorMethod;
 import com.github.joschi.jadconfig.converters.StringListConverter;
-import com.github.joschi.jadconfig.validators.FileReadableValidator;
 import com.github.joschi.jadconfig.validators.InetPortValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.google.common.collect.Lists;
@@ -89,7 +88,7 @@ public class Configuration {
     @Parameter(value = "output_batch_size", required = true, validator = PositiveIntegerValidator.class)
     private int outputBatchSize = 5000;
 
-    @Parameter(value = "elasticsearch_config_file", required = true, validator = FileReadableValidator.class)
+    @Parameter(value = "elasticsearch_config_file", required = true, validator = FilePresentValidator.class)
     private String elasticSearchConfigFile = "/etc/graylog2-elasticsearch.yml";
 
     @Parameter(value = "elasticsearch_index_prefix", required = true)
