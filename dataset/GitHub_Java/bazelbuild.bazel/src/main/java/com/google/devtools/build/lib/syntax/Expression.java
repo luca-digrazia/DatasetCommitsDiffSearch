@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import java.io.IOException;
-
 /**
  * Base class for all expression nodes in the AST.
  */
@@ -59,15 +57,13 @@ public abstract class Expression extends ASTNode {
    */
   abstract Object doEval(Environment env) throws EvalException, InterruptedException;
 
-  @Override
-  public final void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
-    prettyPrint(buffer);
-  }
-
   /**
-   * Expressions should implement this method instead of {@link #prettyPrint(Appendable, int)},
-   * since the {@code indentLevel} argument is not needed.
+   * Returns the inferred type of the result of the Expression.
+   *
+   * <p>Checks the semantics of the Expression using the {@link Environment} according to
+   * the rules of the Skylark language, throws {@link EvalException} in case of a semantical error.
+   *
+   * @see Statement
    */
-  @Override
-  public abstract void prettyPrint(Appendable buffer) throws IOException;
+  abstract void validate(ValidationEnvironment env) throws EvalException;
 }
