@@ -24,8 +24,10 @@ import java.net.SocketAddress;
 import org.graylog2.Log;
 import org.graylog2.Main;
 import org.graylog2.Tools;
-import org.graylog2.messagehandlers.gelf.GELFMessage;
-import org.graylog2.messagehandlers.gelf.SimpleGELFClientHandler;
+import org.graylog2.database.MongoBridge;
+import org.graylog2.messagehandlers.common.HostUpsertHook;
+import org.graylog2.messagehandlers.common.MessageCounterHook;
+import org.graylog2.messagehandlers.common.ReceiveHookManager;
 import org.productivity.java.syslog4j.server.SyslogServerEventIF;
 import org.productivity.java.syslog4j.server.SyslogServerIF;
 import org.productivity.java.syslog4j.server.SyslogServerSessionlessEventHandlerIF;
@@ -49,28 +51,36 @@ public class SyslogEventHandler implements SyslogServerSessionlessEventHandlerIF
 
         // Print out debug information.
         if (Main.debugMode) {
-            Log.info("Received message: " + event.getMessage());
+            if (event instanceof GraylogSyslogServerEvent) {
+                GraylogSyslogServerEvent glEvent = (GraylogSyslogServerEvent) event;
+                Log.info("Received syslog message (via AMQP): " + event.getMessage());
+                Log.info("AMQP queue: " + glEvent.getAmqpReceiverQueue());
+            } else {
+                Log.info("Received syslog message: " + event.getMessage());
+            }
             Log.info("Host: " + event.getHost());
             Log.info("Facility: " + event.getFacility() + " (" + Tools.syslogFacilityToReadable(event.getFacility()) + ")");
             Log.info("Level: " + event.getLevel() + " (" + Tools.syslogLevelToReadable(event.getLevel()) + ")");
             Log.info("Raw: " + new String(event.getRaw()));
             Log.info("=======");
         }
-        
-        // Convert SyslogServerEventIF to GELFMessage and pass to SimpleGELFClientHandler
-        GELFMessage gelf = new GELFMessage();
-        gelf.setVersion("1.0");
-        gelf.setShortMessage(event.getMessage());
-        gelf.setHost(event.getHost());
-        gelf.setFacility(Tools.syslogFacilityToReadable(event.getFacility()));
-        gelf.setLevel(event.getLevel());
-        gelf.setFullMessage(new String(event.getRaw()));
-		try {
-        	SimpleGELFClientHandler gelfHandler = new SimpleGELFClientHandler(gelf);
-			gelfHandler.handle();
-		} catch ( Exception e ) {
-			// I don't care
-		}
+
+        // Insert into database.
+        try {
+            // Connect to database.
+            MongoBridge m = new MongoBridge();
+
+            m.insert(event);
+
+            // This is doing the upcounting for statistics.
+            ReceiveHookManager.postProcess(new MessageCounterHook(), event);
+
+            // Counts up host in hosts collection.
+            ReceiveHookManager.postProcess(new HostUpsertHook(), event);
+        } catch (Exception e) {
+            Log.crit("Could not insert syslog event into database: " + e.toString());
+        }
+
     }
 
     public void exception(SyslogServerIF syslogServer, SocketAddress socketAddress, Exception exception) {
