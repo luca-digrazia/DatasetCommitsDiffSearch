@@ -14,6 +14,7 @@ import javax.inject.Singleton;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
 
+import org.hibernate.MultiTenancyStrategy;
 import org.jboss.logging.Logger;
 
 @Singleton
@@ -23,11 +24,16 @@ public class JPAConfig {
 
     private final Map<String, Set<String>> entityPersistenceUnitMapping;
 
+    private final MultiTenancyStrategy multiTenancyStrategy;
+    private final String multiTenancySchemaDataSource;
+
     private final Map<String, LazyPersistenceUnit> persistenceUnits;
 
     @Inject
     public JPAConfig(JPAConfigSupport jpaConfigSupport) {
         this.entityPersistenceUnitMapping = Collections.unmodifiableMap(jpaConfigSupport.entityPersistenceUnitMapping);
+        this.multiTenancyStrategy = jpaConfigSupport.multiTenancyStrategy;
+        this.multiTenancySchemaDataSource = jpaConfigSupport.multiTenancySchemaDataSource;
 
         Map<String, LazyPersistenceUnit> persistenceUnitsBuilder = new HashMap<>();
         for (String persistenceUnitName : jpaConfigSupport.persistenceUnitNames) {
@@ -67,6 +73,24 @@ public class JPAConfig {
      */
     public Set<String> getPersistenceUnits() {
         return persistenceUnits.keySet();
+    }
+
+    /**
+     * Returns the selected multitenancy strategy.
+     *
+     * @return Strategy to use.
+     */
+    public MultiTenancyStrategy getMultiTenancyStrategy() {
+        return multiTenancyStrategy;
+    }
+
+    /**
+     * Determines which data source should be used in case of {@link MultiTenancyStrategy#SCHEMA} approach.
+     *
+     * @return Data source name or {@link null} in case the default data source should be used.
+     */
+    public String getMultiTenancySchemaDataSource() {
+        return multiTenancySchemaDataSource;
     }
 
     /**
