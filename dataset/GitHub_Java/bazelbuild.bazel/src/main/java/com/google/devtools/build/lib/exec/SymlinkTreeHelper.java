@@ -85,8 +85,7 @@ public final class SymlinkTreeHelper {
       ImmutableMap<String, String> shellEnvironment,
       OutErr outErr)
       throws CommandException {
-    List<String> argv = getSpawnArgumentList(execRoot,
-        binTools.getEmbeddedPath(BUILD_RUNFILES).asFragment());
+    List<String> argv = getSpawnArgumentList(execRoot, binTools.getExecPath(BUILD_RUNFILES));
     Preconditions.checkNotNull(shellEnvironment);
     Command command =
         new CommandBuilder().addArgs(argv).setWorkingDir(execRoot).setEnv(shellEnvironment).build();
