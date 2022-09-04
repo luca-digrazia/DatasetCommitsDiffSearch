@@ -95,8 +95,7 @@ public class ProfilerTest {
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
         /* includePrimaryOutput= */ false,
-        /* includeTargetLabel= */ false,
-        /* collectTaskHistograms= */ true);
+        /* includeTargetLabel= */ false);
     return buffer;
   }
 
@@ -113,8 +112,7 @@ public class ProfilerTest {
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
         /* includePrimaryOutput= */ false,
-        /* includeTargetLabel= */ false,
-        /* collectTaskHistograms= */ true);
+        /* includeTargetLabel= */ false);
   }
 
   @Test
@@ -219,8 +217,7 @@ public class ProfilerTest {
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
         /* includePrimaryOutput= */ false,
-        /* includeTargetLabel= */ false,
-        /* collectTaskHistograms= */ true);
+        /* includeTargetLabel= */ false);
     try (SilentCloseable c = profiler.profile(ProfilerTask.ACTION, "action task")) {
       // Next task takes less than 10 ms but should be recorded anyway.
       long before = clock.nanoTime();
@@ -268,8 +265,7 @@ public class ProfilerTest {
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
         /* includePrimaryOutput= */ false,
-        /* includeTargetLabel= */ false,
-        /* collectTaskHistograms= */ true);
+        /* includeTargetLabel= */ false);
     profiler.logSimpleTask(10000, 20000, ProfilerTask.VFS_STAT, "stat");
     // Unlike the VFS_STAT event above, the remote execution event will not be recorded since we
     // don't record the slowest remote exec events (see ProfilerTask.java).
@@ -390,8 +386,7 @@ public class ProfilerTest {
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
         /* includePrimaryOutput= */ false,
-        /* includeTargetLabel= */ false,
-        /* collectTaskHistograms= */ true);
+        /* includeTargetLabel= */ false);
     profiler.logSimpleTask(10000, 20000, ProfilerTask.VFS_STAT, "stat");
 
     assertThat(ProfilerTask.VFS_STAT.collectsSlowestInstances()).isTrue();
@@ -581,8 +576,7 @@ public class ProfilerTest {
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
         /* includePrimaryOutput= */ false,
-        /* includeTargetLabel= */ false,
-        /* collectTaskHistograms= */ true);
+        /* includeTargetLabel= */ false);
     profiler.logSimpleTask(badClock.nanoTime(), ProfilerTask.INFO, "some task");
     profiler.stop();
   }
@@ -593,12 +587,10 @@ public class ProfilerTest {
     startUnbuffered(getAllProfilerTasks());
     profiler.logSimpleTaskDuration(
         Profiler.nanoTimeMaybe(), Duration.ofSeconds(10), ProfilerTask.INFO, "foo");
-    for (StatRecorder recorder : profiler.tasksHistograms) {
-      assertThat(recorder).isNotNull();
-    }
     profiler.stop();
-    for (StatRecorder recorder : profiler.tasksHistograms) {
-      assertThat(recorder).isNull();
+    ImmutableList<StatRecorder> histograms = profiler.getTasksHistograms();
+    for (StatRecorder recorder : histograms) {
+      assertThat(recorder.isEmpty()).isTrue();
     }
   }
 
@@ -639,8 +631,7 @@ public class ProfilerTest {
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
         /* includePrimaryOutput= */ false,
-        /* includeTargetLabel= */ false,
-        /* collectTaskHistograms= */ true);
+        /* includeTargetLabel= */ false);
     profiler.logSimpleTaskDuration(
         Profiler.nanoTimeMaybe(), Duration.ofSeconds(10), ProfilerTask.INFO, "foo");
     IOException expected = assertThrows(IOException.class, () -> profiler.stop());
@@ -667,8 +658,7 @@ public class ProfilerTest {
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
         /* includePrimaryOutput= */ false,
-        /* includeTargetLabel= */ false,
-        /* collectTaskHistograms= */ true);
+        /* includeTargetLabel= */ false);
     profiler.logSimpleTaskDuration(
         Profiler.nanoTimeMaybe(), Duration.ofSeconds(10), ProfilerTask.INFO, "foo");
     IOException expected = assertThrows(IOException.class, () -> profiler.stop());
@@ -691,8 +681,7 @@ public class ProfilerTest {
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
         /* includePrimaryOutput= */ true,
-        /* includeTargetLabel= */ false,
-        /* collectTaskHistograms= */ true);
+        /* includeTargetLabel= */ false);
     try (SilentCloseable c = profiler.profileAction(ProfilerTask.ACTION, "test", "foo.out", "")) {
       profiler.logEvent(ProfilerTask.PHASE, "event1");
     }
@@ -723,8 +712,7 @@ public class ProfilerTest {
         /* enabledCpuUsageProfiling= */ false,
         /* slimProfile= */ false,
         /* includePrimaryOutput= */ false,
-        /* includeTargetLabel= */ true,
-        /* collectTaskHistograms= */ true);
+        /* includeTargetLabel= */ true);
     try (SilentCloseable c =
         profiler.profileAction(ProfilerTask.ACTION, "test", "foo.out", "//foo:bar")) {
       profiler.logEvent(ProfilerTask.PHASE, "event1");
@@ -754,8 +742,7 @@ public class ProfilerTest {
         /* enabledCpuUsageProfiling= */ false,
         slimProfile,
         /* includePrimaryOutput= */ false,
-        /* includeTargetLabel= */ false,
-        /* collectTaskHistograms= */ true);
+        /* includeTargetLabel= */ false);
     long curTime = Profiler.nanoTimeMaybe();
     for (int i = 0; i < 100_000; i++) {
       Duration duration;
