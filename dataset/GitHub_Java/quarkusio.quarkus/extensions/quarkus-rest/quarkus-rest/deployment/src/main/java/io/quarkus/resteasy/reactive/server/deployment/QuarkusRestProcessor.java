@@ -43,6 +43,7 @@ import org.jboss.resteasy.reactive.common.model.ResourceInterceptors;
 import org.jboss.resteasy.reactive.common.model.ResourceParamConverterProvider;
 import org.jboss.resteasy.reactive.common.model.ResourceReader;
 import org.jboss.resteasy.reactive.common.model.ResourceWriter;
+import org.jboss.resteasy.reactive.common.processor.AdditionalReaderWriter;
 import org.jboss.resteasy.reactive.common.processor.AdditionalReaders;
 import org.jboss.resteasy.reactive.common.processor.AdditionalWriters;
 import org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames;
@@ -62,6 +63,8 @@ import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.runtime.BeanContainer;
+import io.quarkus.arc.runtime.ClientProxyUnwrapper;
+import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
@@ -172,7 +175,7 @@ public class QuarkusRestProcessor {
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    public void setupEndpoints(BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
+    public void setupEndpoints(Capabilities capabilities, BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
             BeanContainerBuildItem beanContainerBuildItem,
             QuarkusRestConfig config,
             Optional<ResourceScanningResultBuildItem> resourceScanningResultBuildItem,
@@ -201,6 +204,11 @@ public class QuarkusRestProcessor {
         if (!resourceScanningResultBuildItem.isPresent()) {
             // no detected @Path, bail out
             return;
+        }
+
+        if (capabilities.isPresent(Capability.RESTEASY)) {
+            throw new IllegalStateException(
+                    "The 'quarkus-rest' and 'quarkus-resteasy' extensions cannot be used at the same time.");
         }
 
         recorderContext.registerNonDefaultConstructor(
@@ -389,15 +397,15 @@ public class QuarkusRestProcessor {
                 reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, builtinReader.readerClass.getName()));
             }
 
-            for (AdditionalReaders.Entry additionalReader : additionalReaders.get()) {
-                Class readerClass = additionalReader.getReaderClass();
+            for (AdditionalReaderWriter.Entry additionalReader : additionalReaders.get()) {
+                Class readerClass = additionalReader.getHandlerClass();
                 registerReader(recorder, serialisers, additionalReader.getEntityClass(), readerClass,
                         beanContainerBuildItem.getValue(), additionalReader.getMediaType(), additionalReader.getConstraint());
                 reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, readerClass.getName()));
             }
 
-            for (AdditionalWriters.Entry<?> entry : additionalWriters.get()) {
-                Class<? extends MessageBodyWriter<?>> writerClass = entry.getWriterClass();
+            for (AdditionalReaderWriter.Entry entry : additionalWriters.get()) {
+                Class writerClass = entry.getHandlerClass();
                 registerWriter(recorder, serialisers, entry.getEntityClass(), writerClass,
                         beanContainerBuildItem.getValue(), entry.getMediaType());
                 reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, writerClass.getName()));
@@ -422,14 +430,16 @@ public class QuarkusRestProcessor {
                     .setExceptionMapping(exceptionMapping)
                     .setCtxResolvers(ctxResolvers)
                     .setFeatures(feats)
+                    .setClientProxyUnwrapper(new ClientProxyUnwrapper())
                     .setApplicationSupplier(recorder.handleApplication(applicationClass, singletonClasses.isEmpty()))
                     .setFactoryCreator(recorder.factoryCreator(beanContainerBuildItem.getValue()))
                     .setDynamicFeatures(dynamicFeats)
                     .setSerialisers(serialisers)
+                    .setApplicationPath(applicationPath)
                     .setResourceClasses(resourceClasses)
                     .setLocatableResourceClasses(subResourceClasses)
                     .setParamConverterProviders(converterProviders),
-                    beanContainerBuildItem.getValue(), shutdownContext, vertxConfig, applicationPath,
+                    beanContainerBuildItem.getValue(), shutdownContext, vertxConfig,
                     initClassFactory);
 
             String deploymentPath = sanitizeApplicationPath(applicationPath);
