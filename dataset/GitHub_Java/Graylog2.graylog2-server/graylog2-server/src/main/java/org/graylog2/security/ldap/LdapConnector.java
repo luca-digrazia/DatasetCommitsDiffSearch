@@ -48,8 +48,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
-
 public class LdapConnector {
     private static final Logger LOG = LoggerFactory.getLogger(LdapConnector.class);
 
@@ -108,7 +106,7 @@ public class LdapConnector {
                             boolean activeDirectory,
                             String groupSearchBase,
                             String groupIdAttribute,
-                            String groupSearchPattern) throws LdapException, CursorException {
+                            String groupObjectClass) throws LdapException, CursorException {
         final LdapEntry ldapEntry = new LdapEntry();
 
         final String filter = MessageFormat.format(searchPattern, sanitizePrincipal(principal));
@@ -145,12 +143,12 @@ public class LdapConnector {
                 LOG.trace("No LDAP entry found for filter {}", filter);
                 return null;
             }
-            if (!isNullOrEmpty(groupSearchBase) && !isNullOrEmpty(groupIdAttribute) && !isNullOrEmpty(groupSearchPattern)) {
+            if (groupSearchBase != null && groupIdAttribute != null && groupObjectClass != null) {
                 // TODO ActiveDirectory could use the memberOf attribute, but then we'd need to resolve the CN of each group, too.
                 // TODO we do not check for dynamic groups yet.
                 ldapEntry.addGroups(findGroups(connection,
                                                groupSearchBase,
-                                               groupSearchPattern,
+                                               groupObjectClass,
                                                groupIdAttribute,
                                                ldapEntry.getDn()));
                 LOG.trace("LDAP search found entry for DN {} with search filter {}: {}",
@@ -170,7 +168,7 @@ public class LdapConnector {
 
     public Set<String> findGroups(LdapNetworkConnection connection,
                                   String groupSearchBase,
-                                  String groupSearchPattern,
+                                  String groupObjectClass,
                                   String groupIdAttribute,
                                   String dn) throws LdapException {
         final Set<String> groups = Sets.newHashSet();
@@ -179,10 +177,10 @@ public class LdapConnector {
         try {
             groupSearch = connection.search(
                     groupSearchBase,
-                    groupSearchPattern,
+                    "(objectClass=" + groupObjectClass + ")",
                     SearchScope.SUBTREE,
                     "*");
-            LOG.trace("LDAP search for groups: {} starting at {}", groupSearchPattern, groupSearchBase);
+            LOG.trace("LDAP search for groups: {} starting at {}", "(objectClass=" + groupObjectClass + ")", groupSearchBase);
             for (Entry e : groupSearch) {
                 if (LOG.isTraceEnabled()) {
                     LOG.trace("Group Entry: {}", e.toString("  "));
@@ -192,28 +190,21 @@ public class LdapConnector {
                     continue;
                 }
                 final String groupId = e.get(groupIdAttribute).getString();
-                if (dn == null) {
-                    // no membership lookup possible (we have no user), simply collect the found group names
-                    groups.add(groupId);
+                String memberAttribute;
+                if (e.hasObjectClass("groupOfUniqueNames")) {
+                    memberAttribute = "uniqueMember";
+                } else if (e.hasObjectClass("groupOfNames") || e.hasObjectClass("group")) {
+                    memberAttribute = "member";
                 } else {
-                    // test if the given dn parameter is actually member of any of the found groups
-                    String memberAttribute;
-                    if (e.hasObjectClass("groupOfUniqueNames")) {
-                        memberAttribute = "uniqueMember";
-                    } else if (e.hasObjectClass("groupOfNames") || e.hasObjectClass("group")) {
-                        memberAttribute = "member";
-                    } else {
-                        LOG.warn(
-                                "Unable to auto-detect the LDAP group object class, using assuming 'member' is the correct attribute.");
-                        memberAttribute = "member";
-                    }
-                    final Attribute members = e.get(memberAttribute);
-                    if (members != null) {
-                        for (Value<?> member : members) {
-                            LOG.trace("DN {} == {} member?", dn, member.getString());
-                            if (dn.equalsIgnoreCase(member.getString())) {
-                                groups.add(groupId);
-                            }
+                    LOG.warn("Unable to auto-detect the LDAP group object class, using assuming 'member' is the correct attribute.");
+                    memberAttribute = "member";
+                }
+                final Attribute members = e.get(memberAttribute);
+                if (members != null) {
+                    for (Value<?> member : members) {
+                        LOG.trace("DN {} == {} member?", dn, member.getString());
+                        if (dn.equalsIgnoreCase(member.getString())) {
+                            groups.add(groupId);
                         }
                     }
                 }
@@ -229,9 +220,33 @@ public class LdapConnector {
 
     public Set<String> listGroups(LdapNetworkConnection connection,
                                   String groupSearchBase,
-                                  String groupSearchPattern,
+                                  String groupObjectClass,
                                   String groupIdAttribute) throws LdapException {
-        return findGroups(connection, groupSearchBase, groupSearchPattern, groupIdAttribute, null);
+        final Set<String> groups = Sets.newHashSet();
+
+        EntryCursor groupSearch = null;
+        try {
+            groupSearch = connection.search(
+                    groupSearchBase,
+                    "(objectClass=" + groupObjectClass + ")",
+                    SearchScope.SUBTREE,
+                    "*");
+            for (Entry e : groupSearch) {
+                if (!e.containsAttribute(groupIdAttribute)) {
+                    LOG.warn("Unknown group id attribute {}, skipping group entry {}", groupIdAttribute, e);
+                    continue;
+                }
+                final String groupId = e.get(groupIdAttribute).getString();
+                groups.add(groupId);
+            }
+        } finally {
+            if (groupSearch != null) {
+                groupSearch.close();
+            }
+        }
+
+        return groups;
+
     }
 
     /**

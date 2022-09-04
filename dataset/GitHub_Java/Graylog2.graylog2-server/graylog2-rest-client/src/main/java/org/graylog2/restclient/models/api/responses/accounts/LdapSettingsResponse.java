@@ -69,9 +69,9 @@ public class LdapSettingsResponse {
     @Nullable
     public String groupIdAttribute;
 
-    @JsonProperty("group_search_pattern")
+    @JsonProperty("group_object_class")
     @Nullable
-    public String groupSearchPattern;
+    public String groupObjectClass;
 
     @JsonProperty("additional_default_groups")
     @Nullable
@@ -193,12 +193,12 @@ public class LdapSettingsResponse {
     }
 
     @Nullable
-    public String getGroupSearchPattern() {
-        return groupSearchPattern;
+    public String getGroupObjectClass() {
+        return groupObjectClass;
     }
 
-    public void setGroupSearchPattern(@Nullable String groupSearchPattern) {
-        this.groupSearchPattern = groupSearchPattern;
+    public void setGroupObjectClass(@Nullable String groupObjectClass) {
+        this.groupObjectClass = groupObjectClass;
     }
 
     @Nullable

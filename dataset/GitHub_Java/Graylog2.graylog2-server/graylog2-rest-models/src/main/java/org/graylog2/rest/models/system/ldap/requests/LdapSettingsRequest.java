@@ -81,7 +81,7 @@ public abstract class LdapSettingsRequest {
 
     @JsonProperty
     @Nullable
-    public abstract String groupSearchPattern();
+    public abstract String groupObjectClass();
 
     @JsonCreator
     public static LdapSettingsRequest create(@JsonProperty("enabled") boolean enabled,
@@ -99,7 +99,7 @@ public abstract class LdapSettingsRequest {
                                              @JsonProperty("group_search_base") @Nullable String groupSearchBase,
                                              @JsonProperty("group_id_attribute") @Nullable String groupIdAttribute,
                                              @JsonProperty("additional_default_groups") @Nullable Set<String> additionalDefaultGroups,
-                                             @JsonProperty("group_search_pattern") @Nullable String groupSearchPattern) {
+                                             @JsonProperty("group_object_class") @Nullable String groupObjectClass) {
         return new AutoValue_LdapSettingsRequest(enabled,
                                                  systemUsername,
                                                  systemPassword,
@@ -115,6 +115,6 @@ public abstract class LdapSettingsRequest {
                                                  groupSearchBase,
                                                  groupIdAttribute,
                                                  additionalDefaultGroups,
-                                                 groupSearchPattern);
+                                                 groupObjectClass);
     }
 }
