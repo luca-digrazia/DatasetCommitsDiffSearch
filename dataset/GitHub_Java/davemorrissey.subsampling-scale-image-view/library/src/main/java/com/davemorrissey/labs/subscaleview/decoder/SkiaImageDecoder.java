@@ -9,8 +9,6 @@ import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.text.TextUtils;
 
-import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView;
-
 import java.io.InputStream;
 import java.util.List;
 
@@ -33,13 +31,10 @@ public class SkiaImageDecoder implements ImageDecoder {
     }
 
     public SkiaImageDecoder(Bitmap.Config bitmapConfig) {
-        Bitmap.Config globalBitmapConfig = SubsamplingScaleImageView.getPreferredBitmapConfig();
-        if (bitmapConfig != null) {
-            this.bitmapConfig = bitmapConfig;
-        } else if (globalBitmapConfig != null) {
-            this.bitmapConfig = globalBitmapConfig;
-        } else {
+        if (bitmapConfig == null) {
             this.bitmapConfig = Bitmap.Config.RGB_565;
+        } else {
+            this.bitmapConfig = bitmapConfig;
         }
     }
 
