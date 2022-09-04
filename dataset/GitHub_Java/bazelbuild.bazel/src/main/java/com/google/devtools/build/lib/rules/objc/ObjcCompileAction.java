@@ -193,7 +193,13 @@ public class ObjcCompileAction extends SpawnAction {
   public synchronized Iterable<Artifact> discoverInputs(
       ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
-    discoveredInputs = headersListFile != null ? findRequiredHeaderInputs() : filterHeaderFiles();
+    if (headersListFile != null) {
+      discoveredInputs = findRequiredHeaderInputs();
+      // For header thinning we update action inputs here as it won't be done post execution
+      updateActionInputs(discoveredInputs);
+    } else {
+      discoveredInputs = filterHeaderFiles();
+    }
     return discoveredInputs;
   }
 
