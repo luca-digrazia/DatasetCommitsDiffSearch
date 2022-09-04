@@ -93,15 +93,11 @@ public class IncludeScanningModule extends BlazeModule {
         .register(CppIncludeExtractionContext.class, new CppIncludeExtractionContextImpl(env))
         .register(SwigIncludeScanningContext.class, lifecycleManager.getSwigActionContext())
         .register(CppIncludeScanningContext.class, lifecycleManager.getCppActionContext());
-    registryBuilder
-        .restrictTo(CppIncludeExtractionContext.class, "")
-        .restrictTo(SwigIncludeScanningContext.class, "")
-        .restrictTo(CppIncludeScanningContext.class, "");
   }
 
   @Override
-  @ThreadHostile
-  public void executorInit(CommandEnvironment env, BuildRequest request, ExecutorBuilder builder) {
+  public void executorInit(CommandEnvironment env, BuildRequest request, ExecutorBuilder builder)
+      throws ExecutorInitException {
     lifecycleManager =
         new IncludeScannerLifecycleManager(env, request, spawnIncludeScannerSupplier);
     builder.addExecutorLifecycleListener(lifecycleManager);
