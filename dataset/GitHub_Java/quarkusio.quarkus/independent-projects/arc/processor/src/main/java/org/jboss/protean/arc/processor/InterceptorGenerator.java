@@ -75,9 +75,9 @@ public class InterceptorGenerator extends BeanGenerator {
         ClassInfo interceptorClass = interceptor.getTarget().get().asClass();
         String baseName;
         if (interceptorClass.enclosingClass() != null) {
-            baseName = DotNames.simpleName(interceptorClass.enclosingClass()) + "_" + DotNames.simpleName(interceptorClass);
+            baseName = DotNames.simpleName(interceptorClass.enclosingClass()) + "_" + DotNames.simpleName(interceptorClass.name());
         } else {
-            baseName = DotNames.simpleName(interceptorClass);
+            baseName = DotNames.simpleName(interceptorClass.name());
         }
         ClassInfo providerClass = interceptor.getDeployment().getIndex().getClassByName(providerType.name());
         String providerTypeName = providerClass.name().toString();

@@ -135,9 +135,9 @@ public class BeanGenerator extends AbstractGenerator {
 
         String baseName;
         if (bean.getImplClazz().enclosingClass() != null) {
-            baseName = DotNames.simpleName(bean.getImplClazz().enclosingClass()) + "_" + DotNames.simpleName(bean.getImplClazz());
+            baseName = DotNames.simpleName(bean.getImplClazz().enclosingClass()) + "_" + DotNames.simpleName(bean.getImplClazz().name());
         } else {
-            baseName = DotNames.simpleName(bean.getImplClazz());
+            baseName = DotNames.simpleName(bean.getImplClazz().name());
         }
         baseName += SYNTHETIC_SUFFIX;
         
@@ -229,9 +229,9 @@ public class BeanGenerator extends AbstractGenerator {
 
         String baseName;
         if (beanClass.enclosingClass() != null) {
-            baseName = DotNames.simpleName(beanClass.enclosingClass()) + "_" + DotNames.simpleName(beanClass);
+            baseName = DotNames.simpleName(beanClass.enclosingClass()) + "_" + DotNames.simpleName(beanClass.name());
         } else {
-            baseName = DotNames.simpleName(beanClass);
+            baseName = DotNames.simpleName(beanClass.name());
         }
         Type providerType = bean.getProviderType();
         ClassInfo providerClass = bean.getDeployment().getIndex().getClassByName(providerType.name());
@@ -300,9 +300,9 @@ public class BeanGenerator extends AbstractGenerator {
         ClassInfo declaringClass = producerMethod.declaringClass();
         String declaringClassBase;
         if (declaringClass.enclosingClass() != null) {
-            declaringClassBase = DotNames.simpleName(declaringClass.enclosingClass()) + "_" + DotNames.simpleName(declaringClass);
+            declaringClassBase = DotNames.simpleName(declaringClass.enclosingClass()) + "_" + DotNames.simpleName(declaringClass.name());
         } else {
-            declaringClassBase = DotNames.simpleName(declaringClass);
+            declaringClassBase = DotNames.simpleName(declaringClass.name());
         }
 
         Type providerType = bean.getProviderType();
@@ -380,9 +380,9 @@ public class BeanGenerator extends AbstractGenerator {
         ClassInfo declaringClass = producerField.declaringClass();
         String declaringClassBase;
         if (declaringClass.enclosingClass() != null) {
-            declaringClassBase = DotNames.simpleName(declaringClass.enclosingClass()) + "_" + DotNames.simpleName(declaringClass);
+            declaringClassBase = DotNames.simpleName(declaringClass.enclosingClass()) + "_" + DotNames.simpleName(declaringClass.name());
         } else {
-            declaringClassBase = DotNames.simpleName(declaringClass);
+            declaringClassBase = DotNames.simpleName(declaringClass.name());
         }
 
         Type providerType = bean.getProviderType();
@@ -444,15 +444,18 @@ public class BeanGenerator extends AbstractGenerator {
     protected void initMaps(BeanInfo bean, Map<InjectionPointInfo, String> injectionPointToProvider, Map<InterceptorInfo, String> interceptorToProvider) {
         int providerIdx = 1;
         for (InjectionPointInfo injectionPoint : bean.getAllInjectionPoints()) {
-            injectionPointToProvider.put(injectionPoint, "injectProvider" + providerIdx++);
+            String name = providerName(DotNames.simpleName(injectionPoint.getRequiredType().name())) + "Provider" + providerIdx++;
+            injectionPointToProvider.put(injectionPoint, name);
         }
         if (bean.getDisposer() != null) {
             for (InjectionPointInfo injectionPoint : bean.getDisposer().getInjection().injectionPoints) {
-                injectionPointToProvider.put(injectionPoint, "disposerProvider" + providerIdx++);
+                String name = providerName(DotNames.simpleName(injectionPoint.getRequiredType().name())) + "Provider" + providerIdx++;
+                injectionPointToProvider.put(injectionPoint, name);
             }
         }
         for (InterceptorInfo interceptor : bean.getBoundInterceptors()) {
-            interceptorToProvider.put(interceptor, "interceptorProvider" + providerIdx++);
+            String name = providerName(DotNames.simpleName(interceptor.getProviderType().name())) + "Provider" + providerIdx++;
+            interceptorToProvider.put(interceptor, name);
         }
     }
 
