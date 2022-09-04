@@ -16,7 +16,6 @@
 
 package smile.regression;
 
-import java.io.Serializable;
 import java.util.Arrays;
 
 import smile.math.distance.Metric;
@@ -76,8 +75,7 @@ import smile.util.SmileUtils;
  * 
  * @author Haifeng Li
  */
-public class RBFNetwork<T> implements Regression<T>, Serializable {
-    private static final long serialVersionUID = 1L;
+public class RBFNetwork<T> implements Regression<T> {
 
     /**
      * The centers of RBF functions.

@@ -16,7 +16,6 @@
 
 package smile.regression;
 
-import java.io.Serializable;
 import java.util.Arrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,8 +72,7 @@ import smile.math.special.Beta;
  * 
  * @author Haifeng Li
  */
-public class OLS implements Regression<double[]>, Serializable {
-    private static final long serialVersionUID = 1L;
+public class OLS implements Regression<double[]> {
     private static final Logger logger = LoggerFactory.getLogger(OLS.class);
 
     /**
