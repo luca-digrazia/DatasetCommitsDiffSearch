@@ -780,7 +780,7 @@ public class Package {
             helper,
             LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER,
             runfilesPrefix,
-            starlarkSemantics.incompatibleNoImplicitFileExport(),
+            starlarkSemantics,
             Builder.EMPTY_REPOSITORY_MAPPING)
         .setFilename(workspacePath);
   }
@@ -843,7 +843,7 @@ public class Package {
      */
     private final Package pkg;
 
-    private final boolean noImplicitFileExport;
+    private final StarlarkSemantics starlarkSemantics;
     private final CallStack.Builder callStackBuilder = new CallStack.Builder();
 
     // The map from each repository to that repository's remappings map.
@@ -932,10 +932,10 @@ public class Package {
         Helper helper,
         PackageIdentifier id,
         String runfilesPrefix,
-        boolean noImplicitFileExport,
+        StarlarkSemantics starlarkSemantics,
         ImmutableMap<RepositoryName, RepositoryName> repositoryMapping) {
       this.pkg = helper.createFreshPackage(id, runfilesPrefix);
-      this.noImplicitFileExport = noImplicitFileExport;
+      this.starlarkSemantics = starlarkSemantics;
       this.repositoryMapping = repositoryMapping;
       if (pkg.getName().startsWith("javatests/")) {
         setDefaultTestonly(true);
@@ -1616,10 +1616,12 @@ public class Package {
     private InputFile createInputFileMaybe(Label label, Location location) {
       if (label != null && label.getPackageIdentifier().equals(pkg.getPackageIdentifier())) {
         if (!targets.containsKey(label.getName())) {
-          return noImplicitFileExport
-              ? new InputFile(
-                  pkg, label, location, ConstantRuleVisibility.PRIVATE, License.NO_LICENSE)
-              : new InputFile(pkg, label, location);
+          if (starlarkSemantics.incompatibleNoImplicitFileExport()) {
+            return new InputFile(
+                pkg, label, location, ConstantRuleVisibility.PRIVATE, License.NO_LICENSE);
+          } else {
+            return new InputFile(pkg, label, location);
+          }
         }
       }
       return null;
