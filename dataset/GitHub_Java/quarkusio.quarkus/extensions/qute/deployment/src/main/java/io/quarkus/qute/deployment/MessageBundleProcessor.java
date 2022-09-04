@@ -82,7 +82,6 @@ import io.quarkus.qute.i18n.Message;
 import io.quarkus.qute.i18n.MessageBundle;
 import io.quarkus.qute.i18n.MessageBundles;
 import io.quarkus.qute.runtime.MessageBundleRecorder;
-import io.quarkus.qute.runtime.QuteConfig;
 import io.quarkus.runtime.util.StringUtil;
 
 public class MessageBundleProcessor {
@@ -282,8 +281,21 @@ public class MessageBundleProcessor {
                 Set<String> paramNames = IntStream.range(0, messageBundleMethod.getMethod().parameters().size())
                         .mapToObj(idx -> getParameterName(messageBundleMethod.getMethod(), idx)).collect(Collectors.toSet());
                 for (Expression expression : analysis.expressions) {
-                    validateExpression(incorrectExpressions, messageBundleMethod, expression, paramNames, usedParamNames);
+                    if (expression.isLiteral() || expression.hasNamespace()) {
+                        continue;
+                    }
+                    String name = expression.getParts().get(0).getName();
+                    if (!paramNames.contains(name)) {
+                        incorrectExpressions.produce(new IncorrectExpressionBuildItem(expression.toOriginalString(),
+                                name + " is not a parameter of the message bundle method "
+                                        + messageBundleMethod.getMethod().declaringClass().name() + "#"
+                                        + messageBundleMethod.getMethod().name() + "()",
+                                expression.getOrigin()));
+                    } else {
+                        usedParamNames.add(name);
+                    }
                 }
+
                 // Log a warning if a parameter is not used in the template
                 for (String paramName : paramNames) {
                     if (!usedParamNames.contains(paramName)) {
@@ -296,34 +308,6 @@ public class MessageBundleProcessor {
         }
     }
 
-    private void validateExpression(BuildProducer<IncorrectExpressionBuildItem> incorrectExpressions,
-            MessageBundleMethodBuildItem messageBundleMethod, Expression expression, Set<String> paramNames,
-            Set<String> usedParamNames) {
-        if (expression.isLiteral()) {
-            return;
-        }
-        if (!expression.hasNamespace()) {
-            String name = expression.getParts().get(0).getName();
-            if (!paramNames.contains(name)) {
-                incorrectExpressions.produce(new IncorrectExpressionBuildItem(expression.toOriginalString(),
-                        name + " is not a parameter of the message bundle method "
-                                + messageBundleMethod.getMethod().declaringClass().name() + "#"
-                                + messageBundleMethod.getMethod().name() + "()",
-                        expression.getOrigin()));
-            } else {
-                usedParamNames.add(name);
-            }
-        }
-        // Inspect method params too
-        for (Part part : expression.getParts()) {
-            if (part.isVirtualMethod()) {
-                for (Expression param : part.asVirtualMethod().getParameters()) {
-                    validateExpression(incorrectExpressions, messageBundleMethod, param, paramNames, usedParamNames);
-                }
-            }
-        }
-    }
-
     @BuildStep
     void validateMessageBundleMethodsInTemplates(TemplatesAnalysisBuildItem analysis,
             BeanArchiveIndexBuildItem beanArchiveIndex,
@@ -331,11 +315,8 @@ public class MessageBundleProcessor {
             List<TypeCheckExcludeBuildItem> excludes,
             List<MessageBundleBuildItem> messageBundles,
             List<MessageBundleMethodBuildItem> messageBundleMethods,
-            List<TemplateExpressionMatchesBuildItem> expressionMatches,
             BuildProducer<IncorrectExpressionBuildItem> incorrectExpressions,
-            BuildProducer<ImplicitValueResolverBuildItem> implicitClasses,
-            List<CheckedTemplateBuildItem> checkedTemplates,
-            QuteConfig config) {
+            BuildProducer<ImplicitValueResolverBuildItem> implicitClasses) {
 
         IndexView index = beanArchiveIndex.getIndex();
         Function<String, String> templateIdToPathFun = new Function<String, String>() {
@@ -375,30 +356,7 @@ public class MessageBundleProcessor {
 
                 for (Entry<TemplateAnalysis, Set<Expression>> exprEntry : expressions.entrySet()) {
 
-                    TemplateAnalysis templateAnalysis = exprEntry.getKey();
-
-                    String path = templateAnalysis.path;
-                    for (String suffix : config.suffixes) {
-                        if (path.endsWith(suffix)) {
-                            path = path.substring(0, path.length() - (suffix.length() + 1));
-                            break;
-                        }
-                    }
-                    CheckedTemplateBuildItem checkedTemplate = null;
-                    for (CheckedTemplateBuildItem item : checkedTemplates) {
-                        if (item.templateId.equals(path)) {
-                            checkedTemplate = item;
-                            break;
-                        }
-                    }
-
-                    Map<Integer, Match> generatedIdsToMatches = Collections.emptyMap();
-                    for (TemplateExpressionMatchesBuildItem templateExpressionMatchesBuildItem : expressionMatches) {
-                        if (templateExpressionMatchesBuildItem.templateGeneratedId.equals(templateAnalysis.generatedId)) {
-                            generatedIdsToMatches = templateExpressionMatchesBuildItem.getGeneratedIdsToMatches();
-                            break;
-                        }
-                    }
+                    Map<Integer, Match> generatedIdsToMatches = new HashMap<>();
 
                     for (Expression expression : exprEntry.getValue()) {
                         // msg:hello_world(foo.name)
@@ -447,9 +405,9 @@ public class MessageBundleProcessor {
                                     QuteProcessor.validateNestedExpressions(exprEntry.getKey(), defaultBundleInterface,
                                             results, templateExtensionMethods, excludes,
                                             incorrectExpressions, expression, index, implicitClassToMembersUsed,
-                                            templateIdToPathFun, generatedIdsToMatches, checkedTemplate);
+                                            templateIdToPathFun, generatedIdsToMatches);
                                     Match match = results.get(param.toOriginalString());
-                                    if (match != null && !match.isEmpty() && !Types.isAssignableFrom(match.type(),
+                                    if (match != null && !Types.isAssignableFrom(match.type(),
                                             methodParams.get(idx), index)) {
                                         incorrectExpressions
                                                 .produce(new IncorrectExpressionBuildItem(expression.toOriginalString(),
@@ -458,15 +416,6 @@ public class MessageBundleProcessor {
                                                                 + "] does not match the type: " + match.type(),
                                                         expression.getOrigin()));
                                     }
-                                } else if (checkedTemplate != null && checkedTemplate.requireTypeSafeExpressions) {
-                                    incorrectExpressions.produce(new IncorrectExpressionBuildItem(expression.toOriginalString(),
-                                            "Only type-safe expressions are allowed in the checked template defined via: "
-                                                    + checkedTemplate.method.declaringClass().name() + "."
-                                                    + checkedTemplate.method.name()
-                                                    + "(); an expression must be based on a checked template parameter "
-                                                    + checkedTemplate.bindings.keySet()
-                                                    + ", or bound via a param declaration, or the requirement must be relaxed via @CheckedTemplate(requireTypeSafeExpressions = false)",
-                                            expression.getOrigin()));
                                 }
                                 idx++;
                             }
@@ -979,8 +928,7 @@ public class MessageBundleProcessor {
             }
             // E.g. to match the bundle class generated for a localized file; org.acme.Foo_en -> org.acme.Foo
             className = additionalClassNameSanitizer.apply(className);
-            return applicationArchives.containingArchive(className) != null
-                    || GeneratedClassGizmoAdaptor.isApplicationClass(name);
+            return applicationArchives.containingArchive(className) != null;
         }
     }
 }
