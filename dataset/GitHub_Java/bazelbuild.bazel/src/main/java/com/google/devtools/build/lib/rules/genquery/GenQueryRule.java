@@ -16,9 +16,9 @@ package com.google.devtools.build.lib.rules.genquery;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
-import static com.google.devtools.build.lib.packages.Type.STRING;
-import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
+import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
+import static com.google.devtools.build.lib.syntax.Type.STRING;
+import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
@@ -80,7 +80,7 @@ public final class GenQueryRule implements RuleDefinition {
   }
 }
 
-/*<!-- #BLAZE_RULE (NAME = genquery, FAMILY = General)[GENERIC_RULE] -->
+/*<!-- #BLAZE_RULE (NAME = genquery, TYPE = LIBRARY, FAMILY = General)[GENERIC_RULE] -->
 
   <p>
   <code>genquery()</code> runs a query specified in the
