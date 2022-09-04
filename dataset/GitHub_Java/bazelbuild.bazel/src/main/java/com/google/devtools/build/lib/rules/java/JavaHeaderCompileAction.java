@@ -154,7 +154,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
   protected List<SpawnResult> internalExecute(ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException {
     Spawn spawn = getDirectSpawn();
-    SpawnActionContext context = actionExecutionContext.getContext(SpawnActionContext.class);
+    SpawnActionContext context = getContext(actionExecutionContext, spawn);
     try {
       return context.exec(spawn, actionExecutionContext);
     } catch (ExecException e) {
