@@ -115,8 +115,7 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
                     ImmutableList.<EnvironmentExtension>of(
                         new PackageFactory.EmptyEnvironmentExtension()))
                 .build(ruleClassProvider, fileSystem),
-            directories,
-            /*skylarkImportLookupFunctionForInlining=*/ null));
+            directories));
     skyFunctions.put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction());
     skyFunctions.put(SkyFunctions.LOCAL_REPOSITORY_LOOKUP, new LocalRepositoryLookupFunction());
     skyFunctions.put(

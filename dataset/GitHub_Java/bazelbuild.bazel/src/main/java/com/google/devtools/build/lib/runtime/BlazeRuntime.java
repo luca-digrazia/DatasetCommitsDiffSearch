@@ -990,8 +990,7 @@ public final class BlazeRuntime {
                 startupOptions.shutdownOnLowSysMem,
                 startupOptions.idleServerTasks);
       } catch (ReflectiveOperationException | IllegalArgumentException e) {
-        throw new AbruptExitException(
-            "gRPC server not compiled in", ExitCode.BLAZE_INTERNAL_ERROR, e);
+        throw new AbruptExitException("gRPC server not compiled in", ExitCode.BLAZE_INTERNAL_ERROR);
       }
 
       // Register the signal handler.

@@ -612,8 +612,7 @@ public class IncrementalLoadingTest {
       skyframeExecutor.setActionEnv(ImmutableMap.<String, String>of());
       skyframeExecutor.invalidateFilesUnderPathForTesting(
           new Reporter(new EventBus()), modifiedFileSet, Root.fromPath(workspace));
-      ((SequencedSkyframeExecutor) skyframeExecutor)
-          .handleDiffsForTesting(new Reporter(new EventBus()));
+      ((SequencedSkyframeExecutor) skyframeExecutor).handleDiffs(new Reporter(new EventBus()));
 
       changes.clear();
     }

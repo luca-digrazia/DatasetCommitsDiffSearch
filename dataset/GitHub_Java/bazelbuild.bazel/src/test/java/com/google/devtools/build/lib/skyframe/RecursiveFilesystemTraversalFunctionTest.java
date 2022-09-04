@@ -156,8 +156,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
             analysisMock
                 .getPackageFactoryBuilderForTesting(directories)
                 .build(ruleClassProvider, fileSystem),
-            directories,
-            /*skylarkImportLookupFunctionForInlining=*/ null));
+            directories));
     skyFunctions.put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction());
     skyFunctions.put(SkyFunctions.LOCAL_REPOSITORY_LOOKUP, new LocalRepositoryLookupFunction());
     skyFunctions.put(

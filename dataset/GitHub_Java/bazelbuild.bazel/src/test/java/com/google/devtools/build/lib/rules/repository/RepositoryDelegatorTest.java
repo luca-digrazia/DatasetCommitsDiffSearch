@@ -127,8 +127,7 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
                         TestConstants.PACKAGE_FACTORY_BUILDER_FACTORY_FOR_TESTING
                             .builder(directories)
                             .build(TestRuleClassProvider.getRuleClassProvider(), fileSystem),
-                        directories,
-                        /*skylarkImportLookupFunctionForInlining=*/ null))
+                        directories))
                 .put(SkyFunctions.LOCAL_REPOSITORY_LOOKUP, new LocalRepositoryLookupFunction())
                 .put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction())
                 .build(),

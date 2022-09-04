@@ -138,8 +138,7 @@ public class ExternalPackageUtilTest extends BuildViewTestCase {
                     ImmutableList.<EnvironmentExtension>of(
                         new PackageFactory.EmptyEnvironmentExtension()))
                 .build(ruleClassProvider, fileSystem),
-            directories,
-            /*skylarkImportLookupFunctionForInlining=*/ null));
+            directories));
     skyFunctions.put(
         SkyFunctions.PACKAGE, new PackageFunction(null, null, null, null, null, null, null));
     skyFunctions.put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction());
@@ -165,7 +164,7 @@ public class ExternalPackageUtilTest extends BuildViewTestCase {
     if (!analysisMock.isThisBazel()) {
       return;
     }
-    scratch.overwriteFile("WORKSPACE", "local_repository(name = 'foo', path = 'path/to/repo')");
+    scratch.overwriteFile("WORKSPACE", "http_archive(name = 'foo', url = 'http://foo')");
 
     SkyKey key = getRuleByNameKey("foo");
     EvaluationResult<GetRuleByNameValue> result = getRuleByName(key);
@@ -186,7 +185,7 @@ public class ExternalPackageUtilTest extends BuildViewTestCase {
     if (!analysisMock.isThisBazel()) {
       return;
     }
-    scratch.overwriteFile("WORKSPACE", "local_repository(name = 'foo', path = 'path/to/repo')");
+    scratch.overwriteFile("WORKSPACE", "http_archive(name = 'foo', url = 'http://foo')");
 
     SkyKey key = getRuleByNameKey("bar");
     EvaluationResult<GetRuleByNameValue> result = getRuleByName(key);

@@ -119,8 +119,7 @@ abstract class ArtifactFunctionTestCase {
                         TestConstants.PACKAGE_FACTORY_BUILDER_FACTORY_FOR_TESTING
                             .builder(directories)
                             .build(TestRuleClassProvider.getRuleClassProvider(), fs),
-                        directories,
-                        /*skylarkImportLookupFunctionForInlining=*/ null))
+                        directories))
                 .put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction())
                 .put(
                     SkyFunctions.ACTION_TEMPLATE_EXPANSION,
