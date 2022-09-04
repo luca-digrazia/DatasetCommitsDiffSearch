@@ -189,11 +189,8 @@ public class AngelConfiguration extends Configuration {
   /** Angel application output directory, this parameter is used by Angel itself. */
   public static final String ANGEL_JOB_OUTPUT_PATH = ANGEL_PREFIX + "output.path";
 
-  /** Angel application temporary result output directory prefix. */
-  public static final String ANGEL_JOB_TMP_OUTPUT_PATH_PREFIX = ANGEL_PREFIX + "tmp.output.path.prefix";
-
   /** Angel application temporary result output directory, this parameter is used by Angel itself. */
-  public static final String ANGEL_JOB_TMP_OUTPUT_PATH = ANGEL_PREFIX + "tmp.output.path";
+  public static final String ANGEL_JOB_TMP_OUTPUT_DIRECTORY = ANGEL_PREFIX + "tmp.output.path";
 
   /** The listen port range for all modules:AppMaster, Workers and PSs */
   public static final String ANGEL_LISTEN_PORT_RANGE = ANGEL_PREFIX + "listen.port.range";
@@ -655,7 +652,7 @@ public class AngelConfiguration extends Configuration {
    */
   public static final String ANGEL_MATRIXTRANSFER_CHECK_INTERVAL_MS = ANGEL_PREFIX
       + "matrixtransfer.check.interval.ms";
-  public static final int DEFAULT_ANGEL_MATRIXTRANSFER_CHECK_INTERVAL_MS = 100;
+  public static final int DEFAULT_ANGEL_MATRIXTRANSFER_CHECK_INTERVAL_MS = 1000;
 
   // //////////////////////////////
   // Matrix transfer Configs.
