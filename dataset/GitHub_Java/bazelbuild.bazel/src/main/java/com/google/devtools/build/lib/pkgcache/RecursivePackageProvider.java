@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import java.util.Map;
-import java.util.function.Consumer;
 
 /**
  * Support for resolving {@code package/...} target patterns.
@@ -33,14 +32,11 @@ import java.util.function.Consumer;
 public interface RecursivePackageProvider extends PackageProvider {
 
   /**
-   * Calls the supplied callback with the name of each package under a given directory, as soon as
-   * that package is identified.
+   * Returns the names of all the packages under a given directory.
    *
-   * <p>Packages yielded by this method and passed into {@link #bulkGetPackages(Iterable)} are
+   * <p>Packages returned by this method and passed into {@link #bulkGetPackages(Iterable)} are
    * expected to return successful {@link Package} values.
    *
-   * @param results callback invoked <em>from a single thread</em> for every eligible, loaded
-   *     package as it is discovered
    * @param eventHandler any errors emitted during package lookup and loading for {@code directory}
    *     and non-excluded directories beneath it will be reported here
    * @param directory a {@link RootedPath} specifying the directory to search
@@ -49,8 +45,7 @@ public interface RecursivePackageProvider extends PackageProvider {
    * @param excludedSubdirectories a set of {@link PathFragment}s specifying transitive
    *     subdirectories to exclude
    */
-  void streamPackagesUnderDirectory(
-      Consumer<PackageIdentifier> results,
+  Iterable<PathFragment> getPackagesUnderDirectory(
       ExtendedEventHandler eventHandler,
       RepositoryName repository,
       PathFragment directory,
@@ -77,7 +72,7 @@ public interface RecursivePackageProvider extends PackageProvider {
   /**
    * A {@link RecursivePackageProvider} in terms of a map of pre-fetched packages.
    *
-   * <p>Note that this class implements neither {@link #streamPackagesUnderDirectory} nor {@link
+   * <p>Note that this class implements neither {@link #getPackagesUnderDirectory} nor {@link
    * #bulkGetPackages}, so it can only be used for use cases that do not call either of these
    * methods. When used for target pattern resolution, it can be used to resolve SINGLE_TARGET and
    * TARGETS_IN_PACKAGE patterns by pre-fetching the corresponding packages. It can also be used to
@@ -115,8 +110,7 @@ public interface RecursivePackageProvider extends PackageProvider {
     }
 
     @Override
-    public void streamPackagesUnderDirectory(
-        Consumer<PackageIdentifier> results,
+    public Iterable<PathFragment> getPackagesUnderDirectory(
         ExtendedEventHandler eventHandler,
         RepositoryName repository,
         PathFragment directory,

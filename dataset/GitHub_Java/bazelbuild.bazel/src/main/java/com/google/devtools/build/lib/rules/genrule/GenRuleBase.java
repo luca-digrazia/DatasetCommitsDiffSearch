@@ -108,7 +108,11 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> resolvedSrcs = resolvedSrcsBuilder.build();
 
     CommandHelper commandHelper =
-        commandHelperBuilder(ruleContext).addLabelMap(labelMap.build()).build();
+        CommandHelper.builder(ruleContext)
+            .addHostToolDependencies("tools")
+            .addHostToolDependencies("toolchains")
+            .addLabelMap(labelMap.build())
+            .build();
 
     if (ruleContext.hasErrors()) {
       return null;
@@ -212,12 +216,6 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
 
     builder = updateBuilder(builder, ruleContext, filesToBuild);
     return builder.build();
-  }
-
-  protected CommandHelper.Builder commandHelperBuilder(RuleContext ruleContext) {
-    return CommandHelper.builder(ruleContext)
-        .addHostToolDependencies("tools")
-        .addHostToolDependencies("toolchains");
   }
 
   /**
