@@ -25,7 +25,7 @@ import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.SkylarkProvider.SkylarkKey;
 import com.google.devtools.build.lib.packages.StructImpl;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 import java.util.Collection;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -36,7 +36,7 @@ import org.junit.runners.JUnit4;
 
 /** Tests Skylark API for {@link ConstraintCollection} providers. */
 @RunWith(JUnit4.class)
-public class ConstraintCollectionApiTest extends PlatformTestCase {
+public class ConstraintCollectionApiTest extends PlatformInfoApiTest {
 
   @Test
   public void testConstraintSettings() throws Exception {
@@ -124,13 +124,11 @@ public class ConstraintCollectionApiTest extends PlatformTestCase {
         "  value_from_get = constraint_collection.get(constraint_setting)",
         "  used_constraints = constraint_collection.constraint_settings",
         "  has_constraint = constraint_collection.has(constraint_setting)",
-        "  has_constraint_value = constraint_collection.has_constraint_value(value_from_get)",
         "  return [result(",
         "    value_from_index = value_from_index,",
         "    value_from_get = value_from_get,",
         "    used_constraints = used_constraints,",
         "    has_constraint = has_constraint,",
-        "    has_constraint_value = has_constraint_value,",
         "  )]",
         "verify = rule(",
         "  implementation = _impl,",
@@ -170,8 +168,8 @@ public class ConstraintCollectionApiTest extends PlatformTestCase {
         .isEqualTo(Label.parseAbsoluteUnchecked("//foo:value1"));
 
     @SuppressWarnings("unchecked")
-    Sequence<ConstraintSettingInfo> usedConstraints =
-        (Sequence<ConstraintSettingInfo>) info.getValue("used_constraints");
+    SkylarkList<ConstraintSettingInfo> usedConstraints =
+        (SkylarkList<ConstraintSettingInfo>) info.getValue("used_constraints");
     assertThat(usedConstraints).isNotNull();
     assertThat(usedConstraints)
         .containsExactly(
@@ -180,9 +178,6 @@ public class ConstraintCollectionApiTest extends PlatformTestCase {
 
     boolean hasConstraint = (boolean) info.getValue("has_constraint");
     assertThat(hasConstraint).isTrue();
-
-    boolean hasConstraintValue = (boolean) info.getValue("has_constraint_value");
-    assertThat(hasConstraintValue).isTrue();
   }
 
   @Test
