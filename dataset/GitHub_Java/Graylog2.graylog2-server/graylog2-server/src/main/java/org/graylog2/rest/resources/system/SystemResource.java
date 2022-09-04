@@ -77,7 +77,6 @@ public class SystemResource extends RestResource {
         result.put("started_at", Tools.getISO8601String(core.getStartedAt()));
         result.put("is_processing", core.isProcessing());
         result.put("hostname", Tools.getLocalCanonicalHostname());
-        result.put("lifecycle", core.getLifecycle().getName().toLowerCase());
 
         return json(result);
     }
