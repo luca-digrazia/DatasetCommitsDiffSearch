@@ -13,20 +13,23 @@
 // limitations under the License.
 package com.google.devtools.build.lib.collect.nestedset;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.skyframe.serialization.AutoRegistry;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodecs;
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.devtools.build.lib.skyframe.serialization.SerializationConstants;
+import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Mockito;
 
-/** Tests for {@link NestedSet} serialization. */
+/** Tests for {@link NestedSetCodec}. */
 @RunWith(JUnit4.class)
 public class NestedSetCodecTest {
+
+  private static final NestedSet<String> SHARED_NESTED_SET =
+      NestedSetBuilder.<String>stableOrder().add("e").build();
+
   @Before
   public void setUp() {
     SerializationConstants.shouldSerializeNestedSet = true;
@@ -38,40 +41,52 @@ public class NestedSetCodecTest {
   }
 
   @Test
-  public void testAutoCodecedCodec() throws Exception {
-    ObjectCodecs objectCodecs =
-        new ObjectCodecs(
-            AutoRegistry.get().getBuilder().setAllowDefaultCodec(true).build(), ImmutableMap.of());
-    NestedSetCodecTestUtils.checkCodec(objectCodecs, false);
+  public void testCodec() throws Exception {
+    new SerializationTester(
+            NestedSetBuilder.emptySet(Order.STABLE_ORDER),
+            NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER),
+            NestedSetBuilder.create(Order.STABLE_ORDER, "a"),
+            NestedSetBuilder.create(Order.STABLE_ORDER, "a", "b", "c"),
+            NestedSetBuilder.<String>stableOrder()
+                .add("a")
+                .add("b")
+                .addTransitive(
+                    NestedSetBuilder.<String>stableOrder()
+                        .add("c")
+                        .addTransitive(SHARED_NESTED_SET)
+                        .build())
+                .addTransitive(
+                    NestedSetBuilder.<String>stableOrder()
+                        .add("d")
+                        .addTransitive(SHARED_NESTED_SET)
+                        .build())
+                .addTransitive(NestedSetBuilder.emptySet(Order.STABLE_ORDER))
+                .build())
+        .setVerificationFunction(NestedSetCodecTest::verifyDeserialization)
+        .runTests();
   }
 
-  @Test
-  public void testCodecWithInMemoryNestedSetStore() throws Exception {
-    ObjectCodecs objectCodecs =
-        new ObjectCodecs(
-            AutoRegistry.get()
-                .getBuilder()
-                .setAllowDefaultCodec(true)
-                .add(new NestedSetCodecWithStore<>(NestedSetStore.inMemory()))
-                .build(),
-            ImmutableMap.of());
-    NestedSetCodecTestUtils.checkCodec(objectCodecs, true);
+  private static void verifyDeserialization(
+      NestedSet<String> subject, NestedSet<String> deserialized) {
+    assertThat(subject.getOrder()).isEqualTo(deserialized.getOrder());
+    assertThat(subject.toSet()).isEqualTo(deserialized.toSet());
+    verifyStructure(subject.rawChildren(), deserialized.rawChildren());
   }
 
-  @Test
-  public void testSingletonNestedSetSerializedWithoutStore() throws Exception {
-    NestedSetStore mockNestedSetStore = Mockito.mock(NestedSetStore.class);
-    Mockito.when(mockNestedSetStore.computeFingerprintAndStore(Mockito.any(), Mockito.any()))
-        .thenThrow(new AssertionError("NestedSetStore should not have been used"));
-
-    ObjectCodecs objectCodecs =
-        new ObjectCodecs(
-            AutoRegistry.get()
-                .getBuilder()
-                .setAllowDefaultCodec(true)
-                .add(new NestedSetCodecWithStore<>(mockNestedSetStore))
-                .build());
-    NestedSet<String> singletonNestedSet = new NestedSet<>(Order.STABLE_ORDER, "a");
-    objectCodecs.serialize(singletonNestedSet);
+  private static void verifyStructure(Object lhs, Object rhs) {
+    if (lhs == NestedSet.EMPTY_CHILDREN) {
+      assertThat(rhs).isSameAs(NestedSet.EMPTY_CHILDREN);
+    } else if (lhs instanceof Object[]) {
+      assertThat(rhs).isInstanceOf(Object[].class);
+      Object[] lhsArray = (Object[]) lhs;
+      Object[] rhsArray = (Object[]) rhs;
+      int n = lhsArray.length;
+      assertThat(rhsArray).hasLength(n);
+      for (int i = 0; i < n; ++i) {
+        verifyStructure(lhsArray[i], rhsArray[i]);
+      }
+    } else {
+      assertThat(lhs).isEqualTo(rhs);
+    }
   }
 }
