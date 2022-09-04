@@ -290,7 +290,7 @@ public class ParserTest extends EvaluationTestCase {
   @Test
   public void testSubstring() throws Exception {
     SliceExpression s = (SliceExpression) parseExpression("'FOO.CC'[:].lower()[1:]");
-    assertThat(((IntegerLiteral) s.getStart()).getValue()).isEqualTo(1);
+    assertThat(((IntegerLiteral) s.getStart()).value).isEqualTo(1);
 
     FuncallExpression e = (FuncallExpression) parseExpression(
         "'FOO.CC'.lower()[1:].startswith('oo')");
@@ -299,7 +299,7 @@ public class ParserTest extends EvaluationTestCase {
     assertThat(e.getArguments()).hasSize(1);
 
     s = (SliceExpression) parseExpression("'FOO.CC'[1:][:2]");
-    assertThat(((IntegerLiteral) s.getEnd()).getValue()).isEqualTo(2);
+    assertThat(((IntegerLiteral) s.getEnd()).value).isEqualTo(2);
   }
 
   @Test
@@ -914,6 +914,22 @@ public class ParserTest extends EvaluationTestCase {
   }
 
   @Test
+  public void testFunctionDefinitionErrorRecovery() throws Exception {
+    // Parser skips over entire function definitions, and reports a meaningful
+    // error.
+    setFailFast(false);
+    List<Statement> stmts = parseFile(
+        "x = 1;\n"
+        + "def foo(x, y, **z):\n"
+        + "  # a comment\n"
+        + "  x = 2\n"
+        + "  foo(bar)\n"
+        + "  return z\n"
+        + "x = 3");
+    assertThat(stmts).hasSize(2);
+  }
+
+  @Test
   public void testDefSingleLine() throws Exception {
     List<Statement> statements = parseFileForSkylark(
         "def foo(): x = 1; y = 2\n");
@@ -936,6 +952,19 @@ public class ParserTest extends EvaluationTestCase {
     assertThat(statements).hasSize(1);
     FunctionDefStatement stmt = (FunctionDefStatement) statements.get(0);
     assertThat(stmt.getStatements()).isEmpty();
+  }
+
+  @Test
+  public void testSkipIfBlockFail() throws Exception {
+    // Do not parse 'if' blocks, when parsePython is not set
+    setFailFast(false);
+    List<Statement> stmts = parseFile(
+        "x = 1;",
+        "if x == 1:",
+        "  x = 2",
+        "x = 3;\n");
+    assertThat(stmts).hasSize(2);
+    assertContainsError("This is not supported in BUILD files");
   }
 
   @Test
@@ -1373,7 +1402,7 @@ public class ParserTest extends EvaluationTestCase {
         "def func(a):",
         // no if
         "  else: return a");
-    assertContainsError("syntax error at 'else': expected expression");
+    assertContainsError("syntax error at 'else': not allowed here.");
   }
 
   @Test
@@ -1384,36 +1413,42 @@ public class ParserTest extends EvaluationTestCase {
         "  for i in range(a):",
         "    print(i)",
         "  else: return a");
-    assertContainsError("syntax error at 'else': expected expression");
+    assertContainsError("syntax error at 'else': not allowed here.");
   }
 
   @Test
   public void testTryStatementInBuild() throws Exception {
     setFailFast(false);
     parseFile("try: pass");
-    assertContainsError("'try' not supported, all exceptions are fatal");
+    assertContainsError("syntax error at 'try': Try statements are not supported.");
+  }
+
+  @Test
+  public void testTryStatementInSkylark() throws Exception {
+    setFailFast(false);
+    parseFileForSkylark("try: pass");
+    assertContainsError("syntax error at 'try': Try statements are not supported.");
   }
 
   @Test
   public void testClassDefinitionInBuild() throws Exception {
     setFailFast(false);
-    parseFileWithComments("class test(object): pass");
-    assertContainsError("keyword 'class' not supported");
+    parseFile("class test(object): pass");
+    assertContainsError("syntax error at 'class': Class definitions are not supported.");
   }
 
   @Test
   public void testClassDefinitionInSkylark() throws Exception {
     setFailFast(false);
     parseFileForSkylark("class test(object): pass");
-    assertContainsError("keyword 'class' not supported");
+    assertContainsError("syntax error at 'class': Class definitions are not supported.");
   }
 
   @Test
   public void testDefInBuild() throws Exception {
     setFailFast(false);
-    BuildFileAST result = parseFileWithComments("def func(): pass");
+    parseFile("def func(): pass");
     assertContainsError("syntax error at 'def': This is not supported in BUILD files. "
         + "Move the block to a .bzl file and load it");
-    assertThat(result.containsErrors()).isTrue();
   }
 }

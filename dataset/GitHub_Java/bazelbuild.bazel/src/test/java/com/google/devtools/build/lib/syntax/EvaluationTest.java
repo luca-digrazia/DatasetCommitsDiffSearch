@@ -224,7 +224,7 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testCheckedArithmetic() throws Exception {
-    new SkylarkTest()
+    new SkylarkTest("--incompatible_checked_arithmetic=true")
         .testIfErrorContains("integer overflow", "2000000000 + 2000000000")
         .testIfErrorContains("integer overflow", "1234567890 * 987654321")
         .testIfErrorContains("integer overflow", "- 2000000000 - 2000000000")
@@ -384,9 +384,15 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testDictWithDuplicatedKey() throws Exception {
-    new SkylarkTest()
+    new SkylarkTest("--incompatible_dict_literal_has_no_duplicates=true")
         .testIfErrorContains(
             "Duplicated key \"str\" when creating dictionary", "{'str': 1, 'x': 2, 'str': 3}");
+  }
+
+  @Test
+  public void testDictAllowDuplicatedKey() throws Exception {
+    new SkylarkTest("--incompatible_dict_literal_has_no_duplicates=false")
+        .testStatement("{'str': 1, 'x': 2, 'str': 3}", ImmutableMap.of("str", 3, "x", 2));
   }
 
   @Test
@@ -400,10 +406,12 @@ public class EvaluationTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testListComprehensionAtTopLevel() throws Exception {
-    // It is allowed to have a loop variable with the same name as a global variable.
-    newTest().update("x", 42).setUp("y = [x + 1 for x in [1,2,3]]")
-        .testExactOrder("y", 2, 3, 4);
+  public void testListComprehensionModifiesGlobalEnv() throws Exception {
+    new SkylarkTest()
+        .update("x", 42)
+        .testIfErrorContains("Variable x is read only", "[x + 1 for x in [1,2,3]]");
+    new BuildTest().update("x", 42).setUp("y =[x + 1 for x in [1,2,3]]")
+        .testExactOrder("y", 2, 3, 4).testLookup("x", 3); // (x is global)
   }
 
   @Test
@@ -627,14 +635,22 @@ public class EvaluationTest extends EvaluationTestCase {
       public void repr(SkylarkPrinter printer) {
         printer.append("<str marker>");
       }
+
+      @Override
+      public void reprLegacy(SkylarkPrinter printer) {
+        printer.append("<str legacy marker>");
+      }
     };
   }
 
   @Test
   public void testPercOnObject() throws Exception {
-    newTest()
+    newTest("--incompatible_descriptive_string_representations=true")
         .update("obj", createObjWithStr())
         .testStatement("'%s' % obj", "<str marker>");
+    newTest("--incompatible_descriptive_string_representations=false")
+        .update("obj", createObjWithStr())
+        .testStatement("'%s' % obj", "<str legacy marker>");
     newTest()
         .update("unknown", new Object())
         .testStatement("'%s' % unknown", "<unknown object java.lang.Object>");
@@ -642,9 +658,12 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testPercOnObjectList() throws Exception {
-    newTest()
+    newTest("--incompatible_descriptive_string_representations=true")
         .update("obj", createObjWithStr())
         .testStatement("'%s %s' % (obj, obj)", "<str marker> <str marker>");
+    newTest("--incompatible_descriptive_string_representations=false")
+        .update("obj", createObjWithStr())
+        .testStatement("'%s %s' % (obj, obj)", "<str legacy marker> <str legacy marker>");
     newTest()
         .update("unknown", new Object())
         .testStatement(
@@ -654,7 +673,10 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testPercOnObjectInvalidFormat() throws Exception {
-    newTest()
+    newTest("--incompatible_descriptive_string_representations=true")
+        .update("obj", createObjWithStr())
+        .testIfExactError("invalid argument <str marker> for format pattern %d", "'%d' % obj");
+    newTest("--incompatible_descriptive_string_representations=false")
         .update("obj", createObjWithStr())
         .testIfExactError("invalid argument <str marker> for format pattern %d", "'%d' % obj");
   }
@@ -667,14 +689,12 @@ public class EvaluationTest extends EvaluationTestCase {
   @Test
   public void testDictKeysTooManyArgs() throws Exception {
     newTest().testIfExactError(
-        "expected no more than 0 positional arguments, but got 1, "
-            + "in method call keys(string) of 'dict'", "{'a': 1}.keys('abc')");
+        "too many (2) positional arguments in call to keys(self: dict)", "{'a': 1}.keys('abc')");
   }
 
   @Test
   public void testDictKeysTooManyKeyArgs() throws Exception {
-    newTest().testIfExactError(
-        "unexpected keyword 'arg', in method call keys(string arg) of 'dict'",
+    newTest().testIfExactError("unexpected keyword 'arg' in call to keys(self: dict)",
         "{'a': 1}.keys(arg='abc')");
   }
 
