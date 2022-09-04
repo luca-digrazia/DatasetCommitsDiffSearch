@@ -22,8 +22,6 @@ import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeCommandResult;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
@@ -155,7 +153,7 @@ public class InfoCommand implements BlazeCommand {
     Supplier<BuildConfiguration> configurationSupplier =
         Suppliers.memoize(
             () -> {
-              try (SilentCloseable c = Profiler.instance().profile("Creating BuildConfiguration")) {
+              try {
                 // In order to be able to answer configuration-specific queries, we need to set up
                 // the package path. Since info inherits all the build options, all the necessary
                 // information is available here.
@@ -253,9 +251,7 @@ public class InfoCommand implements BlazeCommand {
           }
           outErr.getOutputStream().write(
               (infoItem.getName() + ": ").getBytes(StandardCharsets.UTF_8));
-          try (SilentCloseable c = Profiler.instance().profile(infoItem.getName() + ".infoItem")) {
-            outErr.getOutputStream().write(infoItem.get(configurationSupplier, env));
-          }
+          outErr.getOutputStream().write(infoItem.get(configurationSupplier, env));
         }
       }
     } catch (AbruptExitException e) {
