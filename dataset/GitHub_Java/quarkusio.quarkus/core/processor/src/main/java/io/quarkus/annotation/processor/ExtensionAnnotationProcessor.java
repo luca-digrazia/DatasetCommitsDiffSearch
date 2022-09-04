@@ -20,7 +20,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -65,19 +64,15 @@ import org.jboss.jdeparser.JSources;
 import org.jboss.jdeparser.JType;
 import org.jboss.jdeparser.JTypes;
 
-import io.quarkus.annotation.processor.generate_doc.ConfigDocGeneratedOutput;
-import io.quarkus.annotation.processor.generate_doc.ConfigDocItemScanner;
-import io.quarkus.annotation.processor.generate_doc.ConfigDocWriter;
-import io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil;
+import io.quarkus.annotation.processor.generate_doc.GenerateExtensionConfigurationDoc;
 
 public class ExtensionAnnotationProcessor extends AbstractProcessor {
 
     private static final Pattern REMOVE_LEADING_SPACE = Pattern.compile("^ ", Pattern.MULTILINE);
 
-    private final ConfigDocWriter configDocWriter = new ConfigDocWriter();
-    private final ConfigDocItemScanner configDocItemScanner = new ConfigDocItemScanner();
     private final Set<String> generatedAccessors = new ConcurrentHashMap<String, Boolean>().keySet(Boolean.TRUE);
     private final Set<String> generatedJavaDocs = new ConcurrentHashMap<String, Boolean>().keySet(Boolean.TRUE);
+    private final GenerateExtensionConfigurationDoc generateExtensionConfigurationDoc = new GenerateExtensionConfigurationDoc();
 
     public ExtensionAnnotationProcessor() {
     }
@@ -236,18 +231,10 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
         }
 
         try {
-            if (!Constants.SKIP_DOCS_GENERATION) {
-                final Set<ConfigDocGeneratedOutput> outputs = configDocItemScanner
-                        .scanExtensionsConfigurationItems(javaDocProperties);
-                for (ConfigDocGeneratedOutput output : outputs) {
-                    DocGeneratorUtil.sort(output.getConfigDocItems()); // sort before writing
-                    configDocWriter.writeAllExtensionConfigDocumentation(output);
-                }
-            }
+            generateExtensionConfigurationDoc.writeExtensionConfiguration(javaDocProperties);
         } catch (IOException e) {
             processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Failed to generate extension doc: " + e);
             return;
-
         }
     }
 
@@ -291,7 +278,7 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
             }
 
             for (VariableElement variableElement : i.getParameters()) {
-                configDocItemScanner.addProcessorClassMember(variableElement.asType().toString());
+                generateExtensionConfigurationDoc.addProcessorClassMember(variableElement.asType().toString());
             }
 
             final PackageElement pkg = processingEnv.getElementUtils().getPackageOf(clazz);
@@ -306,7 +293,7 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
                 // new class
                 for (Element element : clazz.getEnclosedElements()) {
                     if (element.getKind().isField()) {
-                        configDocItemScanner.addProcessorClassMember(element.asType().toString());
+                        generateExtensionConfigurationDoc.addProcessorClassMember(element.asType().toString());
                     }
                 }
                 recordConfigJavadoc(clazz);
@@ -357,21 +344,21 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
         for (Element e : clazz.getEnclosedElements()) {
             switch (e.getKind()) {
                 case FIELD: {
-                    if (isAnnotationPresent(e, Constants.ANNOTATION_CONFIG_ITEM, Constants.ANNOTATION_CONFIG_DOC_SECTION)) {
+                    if (isAnnotationPresent(e, Constants.ANNOTATION_CONFIG_ITEM)) {
                         processFieldConfigItem((VariableElement) e, javadocProps, className);
                     }
                     break;
                 }
                 case CONSTRUCTOR: {
                     final ExecutableElement ex = (ExecutableElement) e;
-                    if (hasParameterAnnotated(ex, Constants.ANNOTATION_CONFIG_ITEM, Constants.ANNOTATION_CONFIG_DOC_SECTION)) {
+                    if (hasParameterAnnotated(ex, Constants.ANNOTATION_CONFIG_ITEM)) {
                         processCtorConfigItem(ex, javadocProps, className);
                     }
                     break;
                 }
                 case METHOD: {
                     final ExecutableElement ex = (ExecutableElement) e;
-                    if (hasParameterAnnotated(ex, Constants.ANNOTATION_CONFIG_ITEM, Constants.ANNOTATION_CONFIG_DOC_SECTION)) {
+                    if (hasParameterAnnotated(ex, Constants.ANNOTATION_CONFIG_ITEM)) {
                         processMethodConfigItem(ex, javadocProps, className);
                     }
                     break;
@@ -422,7 +409,7 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
             if (groupClassNames.add(i.getQualifiedName().toString())) {
                 generateAccessor(i);
                 recordConfigJavadoc(i);
-                configDocItemScanner.addConfigGroups(i);
+                generateExtensionConfigurationDoc.addConfigGroups(i);
             }
         }
     }
@@ -438,7 +425,7 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
                 continue;
             }
 
-            configDocItemScanner.addConfigRoot(pkg, clazz);
+            generateExtensionConfigurationDoc.addConfigRoot(pkg, clazz);
 
             final String binaryName = processingEnv.getElementUtils().getBinaryName(clazz).toString();
             if (rootClassNames.add(binaryName)) {
@@ -610,21 +597,18 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
         return REMOVE_LEADING_SPACE.matcher(docComment).replaceAll("").trim();
     }
 
-    private static boolean hasParameterAnnotated(ExecutableElement ex, String... annotationNames) {
+    private static boolean hasParameterAnnotated(ExecutableElement ex, String annotationName) {
         for (VariableElement param : ex.getParameters()) {
-            if (isAnnotationPresent(param, annotationNames)) {
+            if (isAnnotationPresent(param, annotationName)) {
                 return true;
             }
         }
-
         return false;
     }
 
-    private static boolean isAnnotationPresent(Element element, String... annotationNames) {
-        Set<String> annotations = new HashSet<>(Arrays.asList(annotationNames));
+    private static boolean isAnnotationPresent(Element element, String annotationName) {
         for (AnnotationMirror i : element.getAnnotationMirrors()) {
-            String annotationName = ((TypeElement) i.getAnnotationType().asElement()).getQualifiedName().toString();
-            if (annotations.contains(annotationName)) {
+            if (((TypeElement) i.getAnnotationType().asElement()).getQualifiedName().toString().equals(annotationName)) {
                 return true;
             }
         }
