@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -32,7 +32,6 @@ import org.androidannotations.annotations.Receiver;
 import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.ModelConstants;
 import org.androidannotations.holder.HasReceiverRegistration;
-import org.androidannotations.holder.ReceiverRegistrationHolder.IntentFilterData;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
 
@@ -90,7 +89,7 @@ public class ReceiverHandler extends BaseAnnotationHandler<HasReceiverRegistrati
 		Receiver.RegisterAt registerAt = annotation.registerAt();
 		boolean local = annotation.local();
 
-		JFieldVar intentFilterField = holder.getIntentFilterField(new IntentFilterData(actions, dataSchemes, registerAt));
+		JFieldVar intentFilterField = holder.getIntentFilterField(actions, dataSchemes);
 		JFieldVar receiverField = createReceiverField(holder, receiverName, methodName, (ExecutableElement) element);
 		registerAndUnregisterReceiver(holder, registerAt, intentFilterField, receiverField, local);
 	}
@@ -129,8 +128,7 @@ public class ReceiverHandler extends BaseAnnotationHandler<HasReceiverRegistrati
 	}
 
 	private void registerAndUnregisterReceiver(HasReceiverRegistration holder, Receiver.RegisterAt registerAt, JFieldVar intentFilterField, JFieldVar receiverField, boolean local) {
-		JBlock registerBlock = null;
-		JBlock unregisterBlock = null;
+		JBlock registerBlock = null, unregisterBlock = null;
 		switch (registerAt) {
 		case OnCreateOnDestroy:
 			registerBlock = holder.getOnCreateAfterSuperBlock();

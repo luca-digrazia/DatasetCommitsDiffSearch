@@ -15,14 +15,6 @@
  */
 package org.androidannotations.handler;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
-import javax.annotation.processing.ProcessingEnvironment;
-
 import org.androidannotations.handler.rest.DeleteHandler;
 import org.androidannotations.handler.rest.GetHandler;
 import org.androidannotations.handler.rest.HeadHandler;
@@ -39,6 +31,13 @@ import org.androidannotations.model.AndroidSystemServices;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.ProcessHolder;
 import org.androidannotations.rclass.IRClass;
+
+import javax.annotation.processing.ProcessingEnvironment;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 public class AnnotationHandlers {
 
@@ -148,10 +147,8 @@ public class AnnotationHandlers {
 		 * SupposeUiThreadHandler and SupposeBackgroundHandler must be after all
 		 * handlers that modifies generated method body
 		 */
-		if (optionsHelper.shouldEnsureThreadControl()) {
-			add(new SupposeUiThreadHandler(processingEnvironment));
-			add(new SupposeBackgroundHandler(processingEnvironment));
-		}
+		add(new SupposeUiThreadHandler(processingEnvironment));
+		add(new SupposeBackgroundHandler(processingEnvironment));
 	}
 
 	public void add(AnnotationHandler<? extends GeneratedClassHolder> annotationHandler) {
