@@ -18,18 +18,17 @@
  */
 package org.graylog2.restclient.models;
 
+import com.google.common.collect.Maps;
 import org.graylog2.restclient.models.api.responses.BufferSummaryResponse;
 import org.graylog2.restclient.models.api.responses.BuffersResponse;
 import org.graylog2.restclient.models.api.responses.MasterCacheSummaryResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import static org.graylog2.restclient.lib.Tools.firstNonNull;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class BufferInfo {
-    private static final Logger log = LoggerFactory.getLogger(BufferInfo.class);
-
     private final BufferSummaryResponse inputBuffer;
     private final BufferSummaryResponse outputBuffer;
     private final MasterCacheSummaryResponse inputMasterCache;
@@ -43,18 +42,27 @@ public class BufferInfo {
     }
 
     public BufferSummaryResponse getInputBuffer() {
-        return inputBuffer;
+        return firstNonNull(BufferSummaryResponse.EMPTY, inputBuffer);
     }
 
     public BufferSummaryResponse getOutputBuffer() {
-        return outputBuffer;
+        return firstNonNull(BufferSummaryResponse.EMPTY, outputBuffer);
     }
 
     public MasterCacheSummaryResponse getInputMasterCache() {
-        return inputMasterCache;
+        return firstNonNull(MasterCacheSummaryResponse.EMPTY, inputMasterCache);
     }
 
     public MasterCacheSummaryResponse getOutputMasterCache() {
-        return outputMasterCache;
+        return firstNonNull(MasterCacheSummaryResponse.EMPTY, outputMasterCache);
+    }
+
+    public static BufferInfo buildEmpty() {
+        final BuffersResponse response = new BuffersResponse();
+
+        response.buffers = Maps.newHashMap();
+        response.masterCaches = Maps.newHashMap();
+
+        return new BufferInfo(response);
     }
 }

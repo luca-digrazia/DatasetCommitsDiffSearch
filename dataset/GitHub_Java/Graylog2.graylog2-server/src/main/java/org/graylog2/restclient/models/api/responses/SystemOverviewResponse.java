@@ -42,4 +42,16 @@ public class SystemOverviewResponse {
     @SerializedName("lb_status")
     public String lbStatus;
 
+    public String timezone;
+
+    public static SystemOverviewResponse buildEmpty() {
+        final SystemOverviewResponse response = new SystemOverviewResponse();
+
+        response.hostname = "unknown";
+        response.version = "unknown";
+        response.lifecycle = "unknown";
+        response.lbStatus = "unknown";
+
+        return response;
+    }
 }
