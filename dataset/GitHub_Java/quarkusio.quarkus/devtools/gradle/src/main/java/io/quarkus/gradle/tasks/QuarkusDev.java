@@ -1,8 +1,5 @@
 package io.quarkus.gradle.tasks;
 
-import static java.util.stream.Collectors.collectingAndThen;
-import static java.util.stream.Collectors.toSet;
-
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -23,13 +20,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
-import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -46,7 +41,6 @@ import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputDirectory;
-import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
@@ -99,12 +93,12 @@ public class QuarkusDev extends QuarkusTask {
     }
 
     @Optional
-    @InputFiles
-    public Set<File> getSourceDir() {
+    @InputDirectory
+    public File getSourceDir() {
         if (sourceDir == null)
-            return Collections.unmodifiableSet(new HashSet<>(extension().sourceDir()));
+            return extension().sourceDir();
         else
-            return getProject().getLayout().files(sourceDir.split(Pattern.quote(File.pathSeparator))).getFiles();
+            return new File(sourceDir);
     }
 
     @Option(description = "Set source directory", option = "source-dir")
@@ -156,7 +150,7 @@ public class QuarkusDev extends QuarkusTask {
         Project project = getProject();
         QuarkusPluginExtension extension = (QuarkusPluginExtension) project.getExtensions().findByName("quarkus");
 
-        if (getSourceDir().stream().anyMatch(file -> !file.isDirectory())) {
+        if (!getSourceDir().isDirectory()) {
             throw new GradleException("The `src/main/java` directory is required, please create it.");
         }
 
@@ -170,29 +164,7 @@ public class QuarkusDev extends QuarkusTask {
         try {
             List<String> args = new ArrayList<>();
             args.add(JavaBinFinder.findBin());
-            final String debug = System.getProperty("debug");
-            final String suspend = System.getProperty("suspend");
-            String debugSuspend = "n";
-            if (suspend != null) {
-                switch (suspend.toLowerCase(Locale.ENGLISH)) {
-                    case "n":
-                    case "false": {
-                        debugSuspend = "n";
-                        break;
-                    }
-                    case "":
-                    case "y":
-                    case "true": {
-                        debugSuspend = "y";
-                        break;
-                    }
-                    default: {
-                        System.err.println(
-                                "Ignoring invalid value \"" + suspend + "\" for \"suspend\" param and defaulting to \"n\"");
-                        break;
-                    }
-                }
-            }
+            String debug = System.getProperty("debug");
             if (debug == null) {
                 // debug mode not specified
                 // make sure 5005 is not used, we don't want to just fail if something else is using it
@@ -200,14 +172,14 @@ public class QuarkusDev extends QuarkusTask {
                     System.err.println("Port 5005 in use, not starting in debug mode");
                 } catch (IOException e) {
                     args.add("-Xdebug");
-                    args.add("-Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend=" + debugSuspend);
+                    args.add("-Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend=n");
                 }
             } else if (debug.toLowerCase().equals("client")) {
                 args.add("-Xdebug");
-                args.add("-Xrunjdwp:transport=dt_socket,address=localhost:5005,server=n,suspend=" + debugSuspend);
+                args.add("-Xrunjdwp:transport=dt_socket,address=localhost:5005,server=n,suspend=n");
             } else if (debug.toLowerCase().equals("true") || debug.isEmpty()) {
                 args.add("-Xdebug");
-                args.add("-Xrunjdwp:transport=dt_socket,address=localhost:5005,server=y,suspend=" + debugSuspend);
+                args.add("-Xrunjdwp:transport=dt_socket,address=localhost:5005,server=y,suspend=y");
             } else if (!debug.toLowerCase().equals("false")) {
                 try {
                     int port = Integer.parseInt(debug);
@@ -215,7 +187,7 @@ public class QuarkusDev extends QuarkusTask {
                         throw new GradleException("The specified debug port must be greater than 0");
                     }
                     args.add("-Xdebug");
-                    args.add("-Xrunjdwp:transport=dt_socket,address=" + port + ",server=y,suspend=" + debugSuspend);
+                    args.add("-Xrunjdwp:transport=dt_socket,address=" + port + ",server=y,suspend=y");
                 } catch (NumberFormatException e) {
                     throw new GradleException(
                             "Invalid value for debug parameter: " + debug + " must be true|false|client|{port}");
@@ -314,8 +286,7 @@ public class QuarkusDev extends QuarkusTask {
             DevModeContext.ModuleInfo moduleInfo = new DevModeContext.ModuleInfo(
                     project.getName(),
                     project.getProjectDir().getAbsolutePath(),
-                    getSourceDir().stream().map(File::getAbsolutePath)
-                            .collect(collectingAndThen(toSet(), Collections::unmodifiableSet)),
+                    Collections.singleton(getSourceDir().getAbsolutePath()),
                     extension.outputDirectory().getAbsolutePath(),
                     res);
             context.getModules().add(moduleInfo);
