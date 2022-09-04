@@ -113,7 +113,8 @@ public final class TransitionResolver {
    * be composed after it.
    */
   private static boolean isFinal(ConfigurationTransition transition) {
-    return (transition == NullTransition.INSTANCE || transition.isHostTransition());
+    return (transition == NullTransition.INSTANCE
+        || transition == HostTransition.INSTANCE);
   }
 
   /**
