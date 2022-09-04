@@ -54,7 +54,6 @@ import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.processor.Transformation;
 import io.quarkus.deployment.Capabilities;
-import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
@@ -437,8 +436,8 @@ public class ResteasyServerCommonProcessor {
             BuildProducer<ResteasyJaxrsProviderBuildItem> jaxRsProviders,
             BuildProducer<FilterBuildItem> servletFilters,
             Capabilities capabilities) {
-        if (buildConfig.metricsEnabled && capabilities.isPresent(Capability.METRICS)) {
-            if (capabilities.isPresent(Capability.SERVLET)) {
+        if (buildConfig.metricsEnabled && capabilities.isCapabilityPresent(Capabilities.METRICS)) {
+            if (capabilities.isCapabilityPresent(Capabilities.SERVLET)) {
                 // if running with servlet, use the MetricsFilter implementation from SmallRye
                 jaxRsProviders.produce(
                         new ResteasyJaxrsProviderBuildItem("io.smallrye.metrics.jaxrs.JaxRsMetricsFilter"));
@@ -751,18 +750,15 @@ public class ResteasyServerCommonProcessor {
             if (instance.target().kind() != Kind.METHOD) {
                 continue;
             }
-
             MethodInfo method = instance.target().asMethod();
-            String source = method.declaringClass() + "[" + method + "]";
-
             reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(method.returnType(), index,
-                    ResteasyDotNames.IGNORE_FOR_REFLECTION_PREDICATE, source));
+                    ResteasyDotNames.IGNORE_FOR_REFLECTION_PREDICATE));
 
             for (short i = 0; i < method.parameters().size(); i++) {
                 Type parameterType = method.parameters().get(i);
                 if (!hasAnnotation(method, i, ResteasyDotNames.CONTEXT)) {
                     reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(parameterType, index,
-                            ResteasyDotNames.IGNORE_FOR_REFLECTION_PREDICATE, source));
+                            ResteasyDotNames.IGNORE_FOR_REFLECTION_PREDICATE));
                 }
             }
         }
