@@ -21,14 +21,18 @@
 */
 package org.graylog2.plugin.initializers;
 
+import java.util.Map;
+import org.graylog2.plugin.GraylogServer;
+
 /**
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public interface Initializer {
 
-    void initialize();
-
+    void initialize(GraylogServer server, Map<String, String> config) throws InitializerConfigurationException;
+    public Map<String, String> getRequestedConfiguration();
+    public String getName();
     boolean masterOnly();
     
 }
