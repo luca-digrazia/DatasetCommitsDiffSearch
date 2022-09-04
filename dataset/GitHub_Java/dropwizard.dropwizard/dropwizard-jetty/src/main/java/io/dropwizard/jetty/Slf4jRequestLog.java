@@ -29,13 +29,6 @@ public class Slf4jRequestLog extends AbstractNCSARequestLog {
         setLogTimeZone(timeZone);
         setExtended(true);
         setPreferProxiedForAddress(true);
-
-        // the appenders already started
-        try {
-            start();
-        } catch (Exception e) {
-            throw new IllegalStateException("Should have succeeded doing a noop start", e);
-        }
     }
 
     @Override
@@ -55,11 +48,5 @@ public class Slf4jRequestLog extends AbstractNCSARequestLog {
 
     public void setLogTimeZone(TimeZone tz) {
         setLogTimeZone(tz.getID());
-    }
-
-    @Override
-    protected void doStop() throws Exception {
-        appenders.detachAndStopAllAppenders();
-        super.doStop();
     }
 }
