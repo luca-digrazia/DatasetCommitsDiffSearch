@@ -1,18 +1,18 @@
-/**
- * This file is part of Graylog.
+/*
+ * Copyright (C) 2020 Graylog, Inc.
  *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
  */
 package org.graylog.security.authservice.backend;
 
@@ -22,6 +22,8 @@ import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
+import com.unboundid.ldap.sdk.Filter;
+import com.unboundid.ldap.sdk.LDAPException;
 import org.apache.commons.lang3.StringUtils;
 import org.graylog.security.authservice.AuthServiceBackendConfig;
 import org.graylog.security.authservice.ldap.LDAPConnectorConfig;
@@ -39,7 +41,7 @@ import static org.apache.commons.lang3.StringUtils.isBlank;
 @JsonDeserialize(builder = LDAPAuthServiceBackendConfig.Builder.class)
 @JsonTypeName(LDAPAuthServiceBackend.TYPE_NAME)
 public abstract class LDAPAuthServiceBackendConfig implements AuthServiceBackendConfig, LDAPConnectorConfigProvider {
-    private static final String FIELD_SERVER_URLS = "server_urls";
+    private static final String FIELD_SERVERS = "servers";
     private static final String FIELD_TRANSPORT_SECURITY = "transport_security";
     private static final String FIELD_VERIFY_CERTIFICATES = "verify_certificates";
     private static final String FIELD_SYSTEM_USER_DN = "system_user_dn";
@@ -50,8 +52,8 @@ public abstract class LDAPAuthServiceBackendConfig implements AuthServiceBackend
     private static final String FIELD_USER_NAME_ATTRIBUTE = "user_name_attribute";
     private static final String FIELD_USER_FULL_NAME_ATTRIBUTE = "user_full_name_attribute";
 
-    @JsonProperty(FIELD_SERVER_URLS)
-    public abstract ImmutableList<String> serverUrls();
+    @JsonProperty(FIELD_SERVERS)
+    public abstract ImmutableList<HostAndPort> servers();
 
     @JsonProperty(FIELD_TRANSPORT_SECURITY)
     public abstract LDAPTransportSecurity transportSecurity();
@@ -82,14 +84,20 @@ public abstract class LDAPAuthServiceBackendConfig implements AuthServiceBackend
 
     @Override
     public void validate(ValidationResult result) {
-        if (serverUrls().size() > 1) {
-            result.addError(FIELD_SERVER_URLS, "Currently only a single server URL is supported.");
+        if (servers().isEmpty()) {
+            result.addError(FIELD_SERVERS, "Server list cannot be empty.");
         }
         if (isBlank(userSearchBase())) {
             result.addError(FIELD_USER_SEARCH_BASE, "User search base cannot be empty.");
         }
         if (isBlank(userSearchPattern())) {
             result.addError(FIELD_USER_SEARCH_PATTERN, "User search pattern cannot be empty.");
+        } else {
+            try {
+                Filter.create(userSearchPattern());
+            } catch (LDAPException e) {
+                result.addError(FIELD_USER_SEARCH_PATTERN, "User search pattern cannot be parsed. It must be a valid LDAP filter.");
+            }
         }
         if (isBlank(userUniqueIdAttribute())) {
             result.addError(FIELD_USER_UNIQUE_ID_ATTRIBUTE, "User unique ID attribute cannot be empty.");
@@ -105,8 +113,8 @@ public abstract class LDAPAuthServiceBackendConfig implements AuthServiceBackend
     @Override
     public LDAPConnectorConfig getLDAPConnectorConfig() {
         return LDAPConnectorConfig.builder()
-                .serverList(serverUrls().stream()
-                        .map(LDAPConnectorConfig.LDAPServer::fromUrl)
+                .serverList(servers().stream()
+                        .map(hap -> LDAPConnectorConfig.LDAPServer.create(hap.host(), hap.port()))
                         .collect(Collectors.toList()))
                 .systemUsername(StringUtils.trimToNull(systemUserDn()))
                 .systemPassword(systemUserPassword())
@@ -133,8 +141,8 @@ public abstract class LDAPAuthServiceBackendConfig implements AuthServiceBackend
                     .userUniqueIdAttribute("entryUUID");
         }
 
-        @JsonProperty(FIELD_SERVER_URLS)
-        public abstract Builder serverUrls(List<String> serverUrls);
+        @JsonProperty(FIELD_SERVERS)
+        public abstract Builder servers(List<HostAndPort> servers);
 
         @JsonProperty(FIELD_TRANSPORT_SECURITY)
         public abstract Builder transportSecurity(LDAPTransportSecurity transportSecurity);
@@ -164,5 +172,24 @@ public abstract class LDAPAuthServiceBackendConfig implements AuthServiceBackend
         public abstract Builder userFullNameAttribute(String userFullNameAttribute);
 
         public abstract LDAPAuthServiceBackendConfig build();
+    }
+
+    @AutoValue
+    public static abstract class HostAndPort {
+        @JsonProperty("host")
+        public abstract String host();
+
+        @JsonProperty("port")
+        public abstract int port();
+
+        @JsonCreator
+        public static HostAndPort create(@JsonProperty("host") String host, @JsonProperty("port") int port) {
+            return new AutoValue_LDAPAuthServiceBackendConfig_HostAndPort(host, port);
+        }
+
+        @Override
+        public String toString() {
+            return host() + ":" + port();
+        }
     }
 }
