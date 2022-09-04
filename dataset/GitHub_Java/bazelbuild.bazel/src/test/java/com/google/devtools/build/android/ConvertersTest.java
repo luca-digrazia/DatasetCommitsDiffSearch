@@ -21,8 +21,10 @@ import com.google.devtools.build.android.Converters.PathConverter;
 import com.google.devtools.build.android.Converters.PathListConverter;
 import com.google.devtools.build.android.Converters.StringDictionaryConverter;
 import com.google.devtools.common.options.OptionsParsingException;
+import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.Map;
 import org.junit.Rule;
 import org.junit.Test;
@@ -36,6 +38,8 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public final class ConvertersTest {
+
+  private static final String SEPARATOR = File.pathSeparator;
 
   @Rule public final TemporaryFolder tmp = new TemporaryFolder();
 
@@ -85,7 +89,9 @@ public final class ConvertersTest {
   @Test
   public void testPathListConverter() throws Exception {
     PathListConverter converter = new PathListConverter();
-    assertThat(converter.convert("foo:bar::baz:"))
+    List<Path> result =
+        converter.convert("foo" + SEPARATOR + "bar" + SEPARATOR + SEPARATOR + "baz" + SEPARATOR);
+    assertThat(result)
         .containsAllOf(Paths.get("foo"), Paths.get("bar"), Paths.get("baz"))
         .inOrder();
   }
