@@ -102,8 +102,7 @@ public final class ConfigurationFragmentPolicyTest {
                 ImmutableSet.<Class<?>>of(Long.class))
             .build();
 
-    assertThat(policy.getRequiredConfigurationFragments())
-        .containsAtLeast(Integer.class, Long.class);
+    assertThat(policy.getRequiredConfigurationFragments()).containsAllOf(Integer.class, Long.class);
 
     assertThat(policy.isLegalConfigurationFragment(Integer.class)).isTrue();
     assertThat(

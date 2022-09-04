@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTr
 import com.google.devtools.build.lib.analysis.config.transitions.NullTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
-import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Location;
@@ -109,7 +108,7 @@ public abstract class DependencyResolver {
       @Nullable RuleTransitionFactory trimmingTransitionFactory)
       throws EvalException, InvalidConfigurationException, InterruptedException,
           InconsistentAspectOrderException {
-    NestedSetBuilder<Cause> rootCauses = NestedSetBuilder.stableOrder();
+    NestedSetBuilder<Label> rootCauses = NestedSetBuilder.<Label>stableOrder();
     OrderedSetMultimap<Attribute, Dependency> outgoingEdges =
         dependentNodeMap(
             node,
@@ -165,7 +164,7 @@ public abstract class DependencyResolver {
       Iterable<Aspect> aspects,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       ImmutableSet<Label> toolchainLabels,
-      NestedSetBuilder<Cause> rootCauses,
+      NestedSetBuilder<Label> rootCauses,
       BuildOptions defaultBuildOptions,
       @Nullable RuleTransitionFactory trimmingTransitionFactory)
       throws EvalException, InvalidConfigurationException, InterruptedException,
@@ -208,7 +207,7 @@ public abstract class DependencyResolver {
       Iterable<Aspect> aspects,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       ImmutableSet<Label> toolchainLabels,
-      NestedSetBuilder<Cause> rootCauses,
+      NestedSetBuilder<Label> rootCauses,
       OrderedSetMultimap<Attribute, Dependency> outgoingEdges,
       BuildOptions defaultBuildOptions,
       @Nullable RuleTransitionFactory trimmingTransitionFactory)
@@ -235,7 +234,7 @@ public abstract class DependencyResolver {
     resolveLateBoundAttributes(depResolver, ruleConfig, hostConfig, defaultBuildOptions);
 
     Attribute toolchainsAttribute =
-        attributeMap.getAttributeDefinition(PlatformSemantics.RESOLVED_TOOLCHAINS_ATTR);
+        attributeMap.getAttributeDefinition(PlatformSemantics.TOOLCHAINS_ATTR);
     resolveToolchainDependencies(outgoingEdges.get(toolchainsAttribute), toolchainLabels);
   }
 
@@ -555,7 +554,7 @@ public abstract class DependencyResolver {
   public final Collection<Dependency> resolveRuleLabels(
       TargetAndConfiguration node,
       OrderedSetMultimap<Attribute, Label> depLabels,
-      NestedSetBuilder<Cause> rootCauses,
+      NestedSetBuilder<Label> rootCauses,
       @Nullable RuleTransitionFactory trimmingTransitionFactory)
       throws InterruptedException, InconsistentAspectOrderException {
     Preconditions.checkArgument(node.getTarget() instanceof Rule);
@@ -582,7 +581,7 @@ public abstract class DependencyResolver {
   private void visitPackageGroup(
       TargetAndConfiguration node,
       PackageGroup packageGroup,
-      NestedSetBuilder<Cause> rootCauses,
+      NestedSetBuilder<Label> rootCauses,
       Collection<Dependency> outgoingEdges)
       throws InterruptedException {
     for (Label label : packageGroup.getIncludes()) {
@@ -692,7 +691,7 @@ public abstract class DependencyResolver {
     private final BuildConfiguration ruleConfig;
     private final Iterable<Aspect> aspects;
     private final ConfiguredAttributeMapper attributeMap;
-    private final NestedSetBuilder<Cause> rootCauses;
+    private final NestedSetBuilder<Label> rootCauses;
     private final OrderedSetMultimap<Attribute, Dependency> outgoingEdges;
     @Nullable private final RuleTransitionFactory trimmingTransitionFactory;
     private final List<AttributeAndOwner> attributes;
@@ -712,7 +711,7 @@ public abstract class DependencyResolver {
         BuildConfiguration ruleConfig,
         Iterable<Aspect> aspects,
         ConfiguredAttributeMapper attributeMap,
-        NestedSetBuilder<Cause> rootCauses,
+        NestedSetBuilder<Label> rootCauses,
         OrderedSetMultimap<Attribute, Dependency> outgoingEdges,
         @Nullable RuleTransitionFactory trimmingTransitionFactory) {
       this.rule = rule;
@@ -840,7 +839,7 @@ public abstract class DependencyResolver {
 
   private void visitTargetVisibility(
       TargetAndConfiguration node,
-      NestedSetBuilder<Cause> rootCauses,
+      NestedSetBuilder<Label> rootCauses,
       Collection<Dependency> outgoingEdges)
       throws InterruptedException {
     Target target = node.getTarget();
@@ -900,7 +899,7 @@ public abstract class DependencyResolver {
    * dependencies.
    */
   @Nullable
-  protected abstract Target getTarget(Target from, Label label, NestedSetBuilder<Cause> rootCauses)
+  protected abstract Target getTarget(Target from, Label label, NestedSetBuilder<Label> rootCauses)
       throws InterruptedException;
 
   /**

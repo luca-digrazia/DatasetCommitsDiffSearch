@@ -69,7 +69,6 @@ import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy;
 import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.packages.FileTarget;
@@ -929,15 +928,6 @@ public final class RuleContext extends TargetContext
    */
   public <T extends Info> Iterable<T> getPrerequisites(
       String attributeName, Mode mode, final NativeProvider<T> skylarkKey) {
-    return AnalysisUtils.getProviders(getPrerequisites(attributeName, mode), skylarkKey);
-  }
-
-  /**
-   * Returns all the declared providers (native and Skylark) for the specified constructor under the
-   * specified attribute of this target in the BUILD file.
-   */
-  public <T extends Info> Iterable<T> getPrerequisites(
-      String attributeName, Mode mode, final BuiltinProvider<T> skylarkKey) {
     return AnalysisUtils.getProviders(getPrerequisites(attributeName, mode), skylarkKey);
   }
 
