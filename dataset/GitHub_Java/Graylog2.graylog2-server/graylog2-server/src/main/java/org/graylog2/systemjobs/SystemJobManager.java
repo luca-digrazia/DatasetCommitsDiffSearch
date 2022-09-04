@@ -69,14 +69,12 @@ public class SystemJobManager {
 
         job.setId(new UUID().toString());
         jobs.put(job.getId(), job);
-
         executor.submit(new Runnable() {
             @Override
             public void run() {
                 job.markStarted();
 
                 Stopwatch x = new Stopwatch().start();
-
                 job.execute();  // ... blocks until it finishes.
                 x.stop();
 
