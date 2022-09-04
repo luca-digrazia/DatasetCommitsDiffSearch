@@ -178,8 +178,7 @@ public class ProcessedAndroidData {
       AndroidResources resources,
       AndroidAssets assets,
       ResourceDependencies resourceDeps,
-      AssetDependencies assetDeps,
-      List<String> noCompressExtensions)
+      AssetDependencies assetDeps)
       throws InterruptedException {
 
     return builderForNonIncrementalTopLevelTarget(
@@ -194,7 +193,6 @@ public class ProcessedAndroidData {
         .setCrunchPng(false)
         .withResourceDependencies(resourceDeps)
         .withAssetDependencies(assetDeps)
-        .setUncompressedExtensions(noCompressExtensions)
         .build(dataContext, resources, assets, manifest, dataBindingContext);
   }
 
@@ -268,7 +266,7 @@ public class ProcessedAndroidData {
         .setApplicationId(manifestValues.get("applicationId"))
         .setVersionCode(manifestValues.get("versionCode"))
         .setVersionName(manifestValues.get("versionName"))
-        .setThrowOnResourceConflict(dataContext.throwOnResourceConflict())
+        .setThrowOnResourceConflict(dataContext.getAndroidConfig().throwOnResourceConflict())
 
         // Output
         .setProguardOut(
