@@ -17,6 +17,7 @@
 package smile.data.vector;
 
 import java.util.stream.IntStream;
+import smile.data.type.DiscreteMeasure;
 
 /**
  * An immutable byte vector.
@@ -28,6 +29,8 @@ class ByteVectorImpl implements ByteVector {
     private String name;
     /** The vector data. */
     private byte[] vector;
+    /** The scale of measure. */
+    private DiscreteMeasure scale;
 
     /** Constructor. */
     public ByteVectorImpl(String name, byte[] vector) {
@@ -36,22 +39,13 @@ class ByteVectorImpl implements ByteVector {
     }
 
     @Override
-    public byte[] array() {
-        return vector;
+    public DiscreteMeasure getScale() {
+        return scale;
     }
 
     @Override
-    public int[] toIntArray() {
-        int[] a = new int[vector.length];
-        for (int i = 0; i < a.length; i++) a[i] = vector[i];
-        return a;
-    }
-
-    @Override
-    public double[] toDoubleArray() {
-        double[] a = new double[vector.length];
-        for (int i = 0; i < a.length; i++) a[i] = vector[i];
-        return a;
+    public void setScale(DiscreteMeasure scale) {
+        this.scale = scale;
     }
 
     @Override
