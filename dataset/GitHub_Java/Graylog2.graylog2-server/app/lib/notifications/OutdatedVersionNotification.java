@@ -20,8 +20,8 @@
 package lib.notifications;
 
 import com.google.common.collect.Maps;
-import org.graylog2.restclient.models.Notification;
-import org.graylog2.restclient.models.SystemJob;
+import models.Notification;
+import models.SystemJob;
 
 import java.util.Map;
 
@@ -32,19 +32,12 @@ public class OutdatedVersionNotification implements NotificationType {
 
     private final String TITLE;
     private final String DESCRIPTION;
-    private final Notification notification;
 
     public OutdatedVersionNotification(Notification notification) {
-        this.notification = notification;
         DESCRIPTION = "The most recent stable Graylog2 version is <em>" + notification.getDetail("current_version")
                 + "</em>. Get it from <a href=\"http://www.graylog2.org/\" target=\"_blank\">http://www.graylog2.org/</a>.";
 
         TITLE = "You are running an outdated Graylog2 version.";
-    }
-
-    @Override
-    public Notification getNotification() {
-        return notification;
     }
 
     @Override
