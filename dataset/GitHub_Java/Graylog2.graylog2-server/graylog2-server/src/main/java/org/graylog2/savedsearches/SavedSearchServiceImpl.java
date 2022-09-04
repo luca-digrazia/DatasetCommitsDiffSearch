@@ -57,7 +57,7 @@ public class SavedSearchServiceImpl extends PersistedServiceImpl implements Save
         BasicDBObject o = (BasicDBObject) get(SavedSearchImpl.class, id);
 
         if (o == null) {
-            throw new NotFoundException("Couldn't find saved search with ID " + id);
+            throw new NotFoundException();
         }
 
         return new SavedSearchImpl((ObjectId) o.get("_id"), o.toMap());
