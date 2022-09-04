@@ -2,13 +2,13 @@ package io.quarkus.qute;
 
 import io.quarkus.qute.Expression.Part;
 import io.quarkus.qute.Results.Result;
+import io.quarkus.qute.SectionHelper.SectionResolutionContext;
 import io.quarkus.qute.SectionHelperFactory.ParametersInfo;
 import io.quarkus.qute.TemplateNode.Origin;
 import java.io.IOException;
 import java.io.Reader;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -135,9 +135,8 @@ class Parser implements Function<String, Expression>, ParserHelper {
             root.addBlock(part.build());
             TemplateImpl template = new TemplateImpl(engine, root.build(), generatedId, variant);
 
-            Set<TemplateNode> nodesToRemove;
             if (engine.removeStandaloneLines) {
-                nodesToRemove = new HashSet<>();
+                Set<TemplateNode> nodesToRemove = new HashSet<>();
                 List<List<TemplateNode>> lines = readLines(template.root);
                 for (List<TemplateNode> line : lines) {
                     if (isStandalone(line)) {
@@ -149,10 +148,8 @@ class Parser implements Function<String, Expression>, ParserHelper {
                         }
                     }
                 }
-            } else {
-                nodesToRemove = Collections.emptySet();
+                template.root.removeNodes(nodesToRemove);
             }
-            template.root.optimizeNodes(nodesToRemove);
 
             LOGGER.tracef("Parsing finished in %s ms", System.currentTimeMillis() - start);
             return template;
@@ -231,10 +228,6 @@ class Parser implements Function<String, Expression>, ParserHelper {
             // End of comment
             state = State.TEXT;
             buffer = new StringBuilder();
-            if (engine.removeStandaloneLines) {
-                // Add a dummy comment block to detect standalone lines
-                sectionBlockStack.peek().addNode(COMMENT_NODE);
-            }
         } else {
             buffer.append(character);
         }
@@ -290,20 +283,6 @@ class Parser implements Function<String, Expression>, ParserHelper {
                 || character == UNDERSCORE
                 || Character.isDigit(character)
                 || Character.isAlphabetic(character);
-    }
-
-    static boolean isValidIdentifier(String value) {
-        int offset = 0;
-        int length = value.length();
-        while (offset < length) {
-            int c = value.codePointAt(offset);
-            if (!Character.isWhitespace(c)) {
-                offset += Character.charCount(c);
-                continue;
-            }
-            return false;
-        }
-        return true;
     }
 
     private boolean isLineSeparatorStart(char character) {
@@ -546,7 +525,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
     static int getFirstDeterminingEqualsCharPosition(String part) {
         boolean stringLiteral = false;
         for (int i = 0; i < part.length(); i++) {
-            if (LiteralSupport.isStringLiteralSeparator(part.charAt(i))) {
+            if (isStringLiteralSeparator(part.charAt(i))) {
                 if (i == 0) {
                     // The first char is a string literal separator
                     return -1;
@@ -585,7 +564,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
                 }
             } else {
                 if (composite == 0
-                        && LiteralSupport.isStringLiteralSeparator(c)) {
+                        && isStringLiteralSeparator(c)) {
                     stringLiteral = !stringLiteral;
                 } else if (!stringLiteral
                         && isCompositeStart(c) && (i == 0 || space || composite > 0
@@ -663,13 +642,8 @@ class Parser implements Function<String, Expression>, ParserHelper {
         int bracketIdx = value.indexOf('(');
 
         List<String> strParts;
-        if (namespaceIdx != -1
-                // No space or colon before the space
-                && (spaceIdx == -1 || namespaceIdx < spaceIdx)
-                // No bracket or colon before the bracket
-                && (bracketIdx == -1 || namespaceIdx < bracketIdx)
-                // No string literal
-                && !LiteralSupport.isStringLiteralSeparator(value.charAt(0))) {
+        if (namespaceIdx != -1 && (spaceIdx == -1 || namespaceIdx < spaceIdx)
+                && (bracketIdx == -1 || namespaceIdx < bracketIdx)) {
             // Expression that starts with a namespace
             strParts = Expressions.splitParts(value.substring(namespaceIdx + 1, value.length()));
             namespace = value.substring(0, namespaceIdx);
@@ -687,15 +661,6 @@ class Parser implements Function<String, Expression>, ParserHelper {
         Part first = null;
         for (String strPart : strParts) {
             Part part = createPart(namespace, first, strPart, scope, origin);
-            if (!isValidIdentifier(part.getName())) {
-                StringBuilder builder = new StringBuilder("Invalid identifier found [");
-                builder.append(value).append("]");
-                if (!origin.getTemplateId().equals(origin.getTemplateGeneratedId())) {
-                    builder.append(" in template [").append(origin.getTemplateId()).append("]");
-                }
-                builder.append(" on line ").append(origin.getLine());
-                throw new TemplateException(builder.toString());
-            }
             if (first == null) {
                 first = part;
             }
@@ -712,25 +677,8 @@ class Parser implements Function<String, Expression>, ParserHelper {
             for (String strParam : strParams) {
                 params.add(parseExpression(strParam.trim(), scope, origin));
             }
-            return new ExpressionImpl.VirtualMethodPartImpl(name, params);
+            return new ExpressionImpl.VirtualMethodExpressionPartImpl(name, params);
         }
-        // Try to parse the literal for bracket notation
-        if (Expressions.isBracketNotation(value)) {
-            value = Expressions.parseBracketContent(value);
-            Object literal = LiteralSupport.getLiteralValue(value);
-            if (literal != null && !Result.NOT_FOUND.equals(literal)) {
-                value = literal.toString();
-            } else {
-                StringBuilder builder = new StringBuilder(literal == null ? "Null" : "Non-literal");
-                builder.append(" value used in bracket notation [").append(value).append("]");
-                if (!origin.getTemplateId().equals(origin.getTemplateGeneratedId())) {
-                    builder.append(" in template [").append(origin.getTemplateId()).append("]");
-                }
-                builder.append(" on line ").append(origin.getLine());
-                throw new TemplateException(builder.toString());
-            }
-        }
-
         String typeInfo = null;
         if (namespace != null) {
             typeInfo = value;
@@ -739,7 +687,21 @@ class Parser implements Function<String, Expression>, ParserHelper {
         } else if (first.getTypeInfo() != null) {
             typeInfo = value;
         }
-        return new ExpressionImpl.PartImpl(value, typeInfo);
+        return new ExpressionImpl.ExpressionPartImpl(value, typeInfo);
+    }
+
+    static boolean isSeparator(char candidate) {
+        return candidate == '.' || candidate == '[' || candidate == ']';
+    }
+
+    /**
+     *
+     * @param character
+     * @return <code>true</code> if the char is a string literal separator,
+     *         <code>false</code> otherwise
+     */
+    static boolean isStringLiteralSeparator(char character) {
+        return character == '"' || character == '\'';
     }
 
     static boolean isLeftBracket(char character) {
@@ -804,8 +766,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
             if (node instanceof ExpressionNode) {
                 // Line contains an expression
                 return false;
-            } else if (node instanceof SectionNode || node instanceof ParameterDeclarationNode || node == BLOCK_NODE
-                    || node == COMMENT_NODE) {
+            } else if (node instanceof SectionNode || node instanceof ParameterDeclarationNode || node instanceof BlockNode) {
                 maybeStandalone = true;
             } else if (node instanceof TextNode) {
                 if (!isBlank(((TextNode) node).getValue())) {
@@ -911,21 +872,14 @@ class Parser implements Function<String, Expression>, ParserHelper {
         currentScope.put(name, Expressions.TYPE_INFO_SEPARATOR + type + Expressions.TYPE_INFO_SEPARATOR);
     }
 
-    private static final SectionHelper ROOT_SECTION_HELPER = new SectionHelper() {
-        @Override
-        public CompletionStage<ResultNode> resolve(SectionResolutionContext context) {
-            return context.execute();
-        }
-    };
     private static final SectionHelperFactory<SectionHelper> ROOT_SECTION_HELPER_FACTORY = new SectionHelperFactory<SectionHelper>() {
         @Override
         public SectionHelper initialize(SectionInitContext context) {
-            return ROOT_SECTION_HELPER;
+            return SectionResolutionContext::execute;
         }
     };
 
     private static final BlockNode BLOCK_NODE = new BlockNode();
-    static final CommentNode COMMENT_NODE = new CommentNode();
 
     // A dummy node for section blocks, it's only used when removing standalone lines
     private static class BlockNode implements TemplateNode {
@@ -938,21 +892,6 @@ class Parser implements Function<String, Expression>, ParserHelper {
         @Override
         public Origin getOrigin() {
             throw new IllegalStateException();
-        }
-
-    }
-
-    // A dummy node for comments, it's only used when removing standalone lines
-    static class CommentNode implements TemplateNode {
-
-        @Override
-        public CompletionStage<ResultNode> resolve(ResolutionContext context) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public Origin getOrigin() {
-            throw new UnsupportedOperationException();
         }
 
     }
