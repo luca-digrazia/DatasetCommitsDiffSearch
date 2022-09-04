@@ -7,6 +7,7 @@ import android.os.Handler;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -14,9 +15,9 @@ import com.example.gsyvideoplayer.R;
 import com.example.gsyvideoplayer.model.SwitchVideoModel;
 import com.example.gsyvideoplayer.view.SwitchVideoTypeDialog;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
-import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
+import com.shuyu.gsyvideoplayer.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
-import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
+import com.shuyu.gsyvideoplayer.video.GSYBaseVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 
 import java.io.File;
@@ -117,9 +118,13 @@ public class SampleVideo extends StandardGSYVideoPlayer {
                 if ((mTextureView.getRotation() - mRotate) == 270) {
                     mTextureView.setRotation(mRotate);
                     mTextureView.requestLayout();
+                    mCoverImageView.setRotation(mRotate);
+                    mCoverImageView.requestLayout();
                 } else {
                     mTextureView.setRotation(mTextureView.getRotation() + 90);
                     mTextureView.requestLayout();
+                    mCoverImageView.setRotation(mCoverImageView.getRotation() + 90);
+                    mCoverImageView.requestLayout();
                 }
             }
         });
@@ -153,35 +158,59 @@ public class SampleVideo extends StandardGSYVideoPlayer {
         resolveTransform();
     }
 
+    /**
+     * 销毁暂停切换显示的bitmap
+     * 因为onSurfaceTextureSizeChanged的时候，bitmap大小不符合当前size的了
+     */
+    protected void releasePauseCoverWhenSizeChangeAndBitmap() {
+        try {
+            if (mFullPauseBitmap != null
+                    && !mFullPauseBitmap.isRecycled() && mShowPauseCover) {
+                mCoverImageView.setImageResource(com.shuyu.gsyvideoplayer.R.drawable.empty_drawable);
+                mCoverImageView.setVisibility(GONE);
+                mFullPauseBitmap.recycle();
+                mFullPauseBitmap = null;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
     /**
      * 处理镜像旋转
      * 注意，暂停时
      */
     protected void resolveTransform() {
+        setShowPauseCover(false);
         switch (mTransformSize) {
             case 1: {
                 Matrix transform = new Matrix();
                 transform.setScale(-1, 1, mTextureView.getWidth() / 2, 0);
                 mTextureView.setTransform(transform);
+                mCoverImageView.setScaleType(ImageView.ScaleType.MATRIX);
+                mCoverImageView.setImageMatrix(transform);
+                mTransformCover = transform;
                 mChangeTransform.setText("左右镜像");
-                mTextureView.invalidate();
             }
             break;
             case 2: {
                 Matrix transform = new Matrix();
                 transform.setScale(1, -1, 0, mTextureView.getHeight() / 2);
                 mTextureView.setTransform(transform);
+                mCoverImageView.setScaleType(ImageView.ScaleType.MATRIX);
+                mCoverImageView.setImageMatrix(transform);
+                mTransformCover = transform;
                 mChangeTransform.setText("上下镜像");
-                mTextureView.invalidate();
             }
             break;
             case 0: {
                 Matrix transform = new Matrix();
                 transform.setScale(1, 1, mTextureView.getWidth() / 2, 0);
                 mTextureView.setTransform(transform);
+                mCoverImageView.setScaleType(ImageView.ScaleType.MATRIX);
+                mCoverImageView.setImageMatrix(transform);
+                mTransformCover = null;
                 mChangeTransform.setText("旋转镜像");
-                mTextureView.invalidate();
             }
             break;
         }
@@ -285,6 +314,8 @@ public class SampleVideo extends StandardGSYVideoPlayer {
         }
         mTextureView.setRotation(mRotate);
         mTextureView.requestLayout();
+        mCoverImageView.setRotation(mRotate);
+        mCoverImageView.requestLayout();
     }
 
     /**
