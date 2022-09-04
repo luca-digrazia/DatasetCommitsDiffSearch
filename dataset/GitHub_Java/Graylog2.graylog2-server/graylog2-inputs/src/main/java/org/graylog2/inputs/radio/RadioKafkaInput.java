@@ -70,6 +70,11 @@ public class RadioKafkaInput extends KafkaInput {
     }
 
     @Override
+    public boolean isExclusive() {
+        return true;
+    }
+
+    @Override
     public ConfigurationRequest getRequestedConfiguration() {
         ConfigurationRequest cr = new ConfigurationRequest();
 
