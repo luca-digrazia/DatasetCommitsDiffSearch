@@ -25,13 +25,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
 import org.graylog.plugins.views.search.engine.BackendQuery;
-import org.graylog.plugins.views.search.timeranges.DerivedTimeRange;
-import org.graylog2.contentpacks.ContentPackable;
-import org.graylog2.contentpacks.EntityDescriptorIds;
-import org.graylog2.contentpacks.exceptions.ContentPackException;
-import org.graylog2.contentpacks.model.ModelTypes;
-import org.graylog2.contentpacks.model.entities.EntityDescriptor;
-import org.graylog2.contentpacks.model.entities.SearchTypeEntity;
+import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
@@ -39,7 +33,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * A search type represents parts of a query that generates a {@see Result result}.
@@ -54,7 +47,7 @@ import java.util.stream.Collectors;
         visible = true,
         defaultImpl = SearchType.Fallback.class)
 @JsonAutoDetect
-public interface SearchType extends ContentPackable<SearchTypeEntity> {
+public interface SearchType {
     String TYPE_FIELD = "type";
 
     @JsonProperty(TYPE_FIELD)
@@ -63,15 +56,12 @@ public interface SearchType extends ContentPackable<SearchTypeEntity> {
     @JsonProperty("id")
     String id();
 
-    @JsonProperty
-    Optional<String> name();
-
     @Nullable
     @JsonProperty("filter")
     Filter filter();
 
     @JsonProperty
-    Optional<DerivedTimeRange> timerange();
+    Optional<TimeRange> timerange();
 
     @JsonProperty
     Optional<BackendQuery> query();
@@ -99,9 +89,6 @@ public interface SearchType extends ContentPackable<SearchTypeEntity> {
          */
         @JsonProperty("type")
         String type();
-
-        @JsonProperty
-        Optional<String> name();
     }
 
     @JsonAutoDetect
@@ -113,9 +100,6 @@ public interface SearchType extends ContentPackable<SearchTypeEntity> {
         @JsonProperty
         private String id;
 
-        @JsonProperty
-        private Optional<String> name;
-
         private Map<String, Object> props = Maps.newHashMap();
 
         @Nullable
@@ -124,7 +108,7 @@ public interface SearchType extends ContentPackable<SearchTypeEntity> {
 
         @Nullable
         @JsonProperty
-        private DerivedTimeRange timeRange;
+        private TimeRange timeRange;
 
         @Nullable
         @JsonProperty
@@ -144,17 +128,12 @@ public interface SearchType extends ContentPackable<SearchTypeEntity> {
         }
 
         @Override
-        public Optional<String> name() {
-            return name;
-        }
-
-        @Override
         public Filter filter() {
             return filter;
         }
 
         @Override
-        public Optional<DerivedTimeRange> timerange() {
+        public Optional<TimeRange> timerange() {
             return Optional.ofNullable(this.timeRange);
         }
 
@@ -201,18 +180,5 @@ public interface SearchType extends ContentPackable<SearchTypeEntity> {
         public int hashCode() {
             return Objects.hash(type, id, props);
         }
-
-        @Override
-        public SearchTypeEntity toContentPackEntity(EntityDescriptorIds entityDescriptorIds) {
-            return null;
-        }
-    }
-
-    default Set<String> mappedStreams(EntityDescriptorIds entityDescriptorIds) {
-        return streams().stream()
-                .map(streamId -> entityDescriptorIds.get(EntityDescriptor.create(streamId, ModelTypes.STREAM_V1)))
-                .map(optionalStreamId -> optionalStreamId.orElseThrow(() ->
-                        new ContentPackException("Did not find matching stream id")))
-                .collect(Collectors.toSet());
     }
 }

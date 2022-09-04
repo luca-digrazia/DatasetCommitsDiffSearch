@@ -27,7 +27,7 @@ import com.google.common.collect.ImmutableSet;
 import org.graylog.plugins.views.search.Filter;
 import org.graylog.plugins.views.search.SearchType;
 import org.graylog.plugins.views.search.engine.BackendQuery;
-import org.graylog.plugins.views.search.timeranges.DerivedTimeRange;
+import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
@@ -89,16 +89,13 @@ public abstract class EventList implements SearchType {
         public abstract Builder id(String id);
 
         @JsonProperty
-        public abstract Builder name(@Nullable String name);
-
-        @JsonProperty
         public abstract Builder filter(@Nullable Filter filter);
 
         @JsonProperty
         public abstract Builder query(@Nullable BackendQuery query);
 
         @JsonProperty
-        public abstract Builder timerange(@Nullable DerivedTimeRange timeRange);
+        public abstract Builder timerange(@Nullable TimeRange timeRange);
 
         @JsonProperty
         public abstract Builder streams(Set<String> streams);
@@ -132,8 +129,6 @@ public abstract class EventList implements SearchType {
         @AutoValue.Builder
         public abstract static class Builder {
             public abstract Builder id(String id);
-
-            public abstract Builder name(String name);
 
             public abstract Builder events(List<EventSummary> events);
 

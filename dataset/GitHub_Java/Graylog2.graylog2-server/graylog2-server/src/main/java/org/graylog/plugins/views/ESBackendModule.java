@@ -1,8 +1,25 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog.plugins.views;
 
 import com.google.inject.Scopes;
 import org.graylog.plugins.views.search.elasticsearch.ElasticsearchBackend;
 import org.graylog.plugins.views.search.elasticsearch.ElasticsearchQueryString;
+import org.graylog.plugins.views.search.elasticsearch.searchtypes.ESEventList;
 import org.graylog.plugins.views.search.elasticsearch.searchtypes.ESMessageList;
 import org.graylog.plugins.views.search.elasticsearch.searchtypes.pivot.ESPivot;
 import org.graylog.plugins.views.search.elasticsearch.searchtypes.pivot.buckets.ESTimeHandler;
@@ -18,6 +35,7 @@ import org.graylog.plugins.views.search.elasticsearch.searchtypes.pivot.series.E
 import org.graylog.plugins.views.search.elasticsearch.searchtypes.pivot.series.ESSumOfSquaresHandler;
 import org.graylog.plugins.views.search.elasticsearch.searchtypes.pivot.series.ESVarianceHandler;
 import org.graylog.plugins.views.search.searchtypes.MessageList;
+import org.graylog.plugins.views.search.searchtypes.events.EventList;
 import org.graylog.plugins.views.search.searchtypes.pivot.Pivot;
 import org.graylog.plugins.views.search.searchtypes.pivot.buckets.Time;
 import org.graylog.plugins.views.search.searchtypes.pivot.buckets.Values;
@@ -41,6 +59,7 @@ public class ESBackendModule extends ViewsModule {
         registerQueryBackend(ElasticsearchQueryString.NAME, ElasticsearchBackend.class);
 
         registerESSearchTypeHandler(MessageList.NAME, ESMessageList.class);
+        registerESSearchTypeHandler(EventList.NAME, ESEventList.class);
         registerESSearchTypeHandler(Pivot.NAME, ESPivot.class).in(Scopes.SINGLETON);
 
         registerPivotSeriesHandler(Average.NAME, ESAverageHandler.class);

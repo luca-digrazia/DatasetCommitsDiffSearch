@@ -43,7 +43,6 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 import static com.google.common.collect.ImmutableSet.of;
-import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static java.util.stream.Collectors.toSet;
 
 @AutoValue
@@ -91,7 +90,6 @@ public abstract class Search {
         return Optional.ofNullable(parameterIndex.get(parameterName));
     }
 
-    @SuppressWarnings("UnstableApiUsage")
     public Search applyExecutionState(ObjectMapper objectMapper, Map<String, Object> executionState) {
         final Builder builder = toBuilder();
 
@@ -100,10 +98,11 @@ public abstract class Search {
         if (state.hasNonNull("parameter_bindings")) {
             final ImmutableSet<Parameter> parameters = parameters().stream()
                     .map(param -> param.applyExecutionState(objectMapper, state.path("parameter_bindings")))
-                    .collect(toImmutableSet());
+                    .collect(ImmutableSet.toImmutableSet());
             builder.parameters(parameters);
         }
         if (state.hasNonNull("queries") || state.hasNonNull("global_override")) {
+
             final ImmutableSet<Query> queries = queries().stream()
                     .map(query -> {
                         final JsonNode queryOverride = state.hasNonNull("global_override")
@@ -111,8 +110,7 @@ public abstract class Search {
                                 : state.path("queries").path(query.id());
                         return query.applyExecutionState(objectMapper, queryOverride);
                     })
-                    .filter(Query::hasSearchTypes)
-                    .collect(toImmutableSet());
+                    .collect(ImmutableSet.toImmutableSet());
             builder.queries(queries);
         }
         return builder.build();
@@ -151,7 +149,7 @@ public abstract class Search {
                 .reduce(Collections.emptySet(), Sets::union);
         final Set<String> searchTypeStreamIds = queries().stream()
                 .flatMap(q -> q.searchTypes().stream())
-                .map(SearchType::streams)
+                .map(SearchType::effectiveStreams)
                 .reduce(Collections.emptySet(), Sets::union);
 
         return Sets.union(queryStreamIds, searchTypeStreamIds);

@@ -55,7 +55,7 @@ public class ESMessageList implements ESSearchTypeHandler<MessageList> {
         final String queryString = this.esQueryDecorators.decorate(((ElasticsearchQueryString)query.query()).queryString(), job, query, Collections.emptySet());
 
         final SearchSourceBuilder searchSourceBuilder = queryContext.searchSourceBuilder(messageList)
-                .size(messageList.limit())
+                .size(messageList.limit() - messageList.offset())
                 .from(messageList.offset())
                 .highlighter(new HighlightBuilder().requireFieldMatch(false)
                         .highlightQuery(QueryBuilders.queryStringQuery(queryString))
@@ -74,9 +74,9 @@ public class ESMessageList implements ESSearchTypeHandler<MessageList> {
                 .map((resultMessage) -> ResultMessageSummary.create(resultMessage.highlightRanges, resultMessage.getMessage().getFields(), resultMessage.getIndex()))
                 .collect(Collectors.toList());
 
-        final MessageList.Result.Builder resultBuilder = MessageList.Result.result(searchType.id())
+        return MessageList.Result.result(searchType.id())
                 .messages(messages)
-                .totalResults(result.getTotal());
-        return searchType.name().map(resultBuilder::name).orElse(resultBuilder).build();
+                .totalResults(result.getTotal())
+                .build();
     }
 }

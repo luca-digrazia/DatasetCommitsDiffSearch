@@ -55,11 +55,9 @@ public class ESEventList implements ESSearchTypeHandler<EventList> {
                 .map(EventSummary::parse)
                 .filter(eventSummary -> effectiveStreams.containsAll(eventSummary.streams()))
                 .collect(Collectors.toList());
-        final EventList.Result.Builder resultBuilder = EventList.Result.builder()
+        return EventList.Result.builder()
                 .events(eventSummaries)
-                .id(searchType.id());
-        searchType.name().ifPresent(resultBuilder::name);
-        return resultBuilder
+                .id(searchType.id())
                 .build();
     }
 }
