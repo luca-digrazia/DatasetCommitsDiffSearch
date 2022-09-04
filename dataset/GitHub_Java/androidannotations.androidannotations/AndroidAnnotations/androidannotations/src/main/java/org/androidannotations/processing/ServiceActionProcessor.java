@@ -22,13 +22,14 @@ import static com.sun.codemodel.JMod.PUBLIC;
 import static com.sun.codemodel.JMod.STATIC;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
-import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.annotations.ServiceAction;
 import org.androidannotations.helper.APTCodeModelHelper;
@@ -43,10 +44,8 @@ import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldVar;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JMod;
 import com.sun.codemodel.JPrimitiveType;
 import com.sun.codemodel.JType;
-import com.sun.codemodel.JTypeVar;
 import com.sun.codemodel.JVar;
 
 public class ServiceActionProcessor implements DecoratingElementProcessor {
@@ -65,11 +64,10 @@ public class ServiceActionProcessor implements DecoratingElementProcessor {
 
 	@Override
 	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+		Map<String, JFieldVar> extraKeyFields = new HashMap<String, JFieldVar>();
+
 		ExecutableElement executableElement = (ExecutableElement) element;
-
 		String methodName = element.getSimpleName().toString();
-
-		TypeMirror elementType = element.asType();
 
 		Classes classes = holder.classes();
 
@@ -80,12 +78,8 @@ public class ServiceActionProcessor implements DecoratingElementProcessor {
 			extraKey = methodName;
 		}
 
-		String staticFieldName;
-		if (methodName.startsWith("action")) {
-			staticFieldName = CaseHelper.camelCaseToUpperSnakeCase(methodName);
-		} else {
-			staticFieldName = CaseHelper.camelCaseToUpperSnakeCase("action_" + methodName);
-		}
+		String staticFieldName = CaseHelper.camelCaseToUpperSnakeCase("action", methodName, null);
+
 		JFieldVar actionKeyField = holder.generatedClass.field(PUBLIC | STATIC | FINAL, classes.STRING, staticFieldName, lit(extraKey));
 
 		if (holder.onHandleIntentBody != null) {
@@ -104,7 +98,7 @@ public class ServiceActionProcessor implements DecoratingElementProcessor {
 			List<? extends VariableElement> methodParameters = executableElement.getParameters();
 			if (methodParameters.size() > 0) {
 				if (holder.cast == null) {
-					generateCastMethod(codeModel, holder);
+					helper.addCastMethod(codeModel, holder);
 				}
 
 				// Extras
@@ -121,15 +115,19 @@ public class ServiceActionProcessor implements DecoratingElementProcessor {
 					String paramName = param.getSimpleName().toString();
 					String extraParamName = paramName + "Extra";
 					JClass extraParamClass = helper.typeMirrorToJClass(param.asType(), holder);
-					boolean isPrimitive = false; // param.getKind().isPrimitive();
+					boolean isPrimitive = param.asType().getKind().isPrimitive();
+
+					String extraKeyName = CaseHelper.camelCaseToUpperSnakeCase(null, methodName + paramName, "Extra");
+					JFieldVar extraKeyField = holder.generatedClass.field(PUBLIC | STATIC | FINAL, classes.STRING, extraKeyName, lit(extraKeyName));
+					extraKeyFields.put(methodName + paramName, extraKeyField);
 
 					JExpression extraInvok;
 					if (isPrimitive) {
-						JPrimitiveType primitiveType = JType.parse(codeModel, elementType.toString());
+						JPrimitiveType primitiveType = JType.parse(codeModel, param.asType().toString());
 						JClass wrapperType = primitiveType.boxify();
-						extraInvok = JExpr.cast(wrapperType, extras.invoke("get").arg(paramName));
+						extraInvok = JExpr.cast(wrapperType, extras.invoke("get").arg(extraKeyField));
 					} else {
-						extraInvok = JExpr.invoke(holder.cast).arg(extras.invoke("get").arg(paramName));
+						extraInvok = JExpr.invoke(holder.cast).arg(extras.invoke("get").arg(extraKeyField));
 					}
 					JVar extraField = extrasNotNullBlock.decl(extraParamClass, extraParamName, extraInvok);
 					extraFields.add(extraField);
@@ -142,18 +140,38 @@ public class ServiceActionProcessor implements DecoratingElementProcessor {
 			} else {
 				callActionBlock.add(callActionInvok);
 			}
+
+			callActionBlock._return();
 		}
 
-	}
+		/*
+		 * holder.intentBuilderClass may be null if the annotated component is
+		 * an abstract activity
+		 */
+		if (holder.intentBuilderClass != null) {
+			// flags()
+			JMethod method = holder.intentBuilderClass.method(PUBLIC, holder.intentBuilderClass, methodName);
+			JBlock body = method.body();
 
-	private void generateCastMethod(JCodeModel codeModel, EBeanHolder holder) {
-		JType objectType = codeModel._ref(Object.class);
-		JMethod method = holder.generatedClass.method(JMod.PRIVATE, objectType, "cast_");
-		JTypeVar genericType = method.generify("T");
-		method.type(genericType);
-		JVar objectParam = method.param(objectType, "object");
-		method.annotate(SuppressWarnings.class).param("value", "unchecked");
-		method.body()._return(JExpr.cast(genericType, objectParam));
-		holder.cast = method;
+			// setAction
+			body.invoke(holder.intentField, "setAction").arg(actionKeyField);
+
+			// For each method params, we get put value into extras
+			List<? extends VariableElement> methodParameters = executableElement.getParameters();
+			if (methodParameters.size() > 0) {
+
+				// Extras params
+				for (VariableElement param : methodParameters) {
+					String paramName = param.getSimpleName().toString();
+
+					JFieldVar extraKeyField = extraKeyFields.get(methodName + paramName);
+
+					helper.addIntentBuilderPutExtraMethod(codeModel, holder, helper, processingEnv, method, param.asType(), paramName, extraKeyField);
+				}
+
+			}
+			body._return(JExpr._this());
+		}
+
 	}
 }

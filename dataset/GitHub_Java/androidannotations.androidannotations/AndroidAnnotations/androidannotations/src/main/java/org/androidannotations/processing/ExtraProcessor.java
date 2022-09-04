@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,41 +15,37 @@
  */
 package org.androidannotations.processing;
 
-import static org.androidannotations.helper.CanonicalNameConstants.PARCELABLE;
-import static org.androidannotations.helper.CanonicalNameConstants.STRING;
 import static com.sun.codemodel.JExpr._null;
 import static com.sun.codemodel.JExpr._super;
 import static com.sun.codemodel.JExpr._this;
-import static com.sun.codemodel.JExpr.cast;
 import static com.sun.codemodel.JExpr.invoke;
+import static com.sun.codemodel.JExpr.lit;
+import static com.sun.codemodel.JMod.FINAL;
 import static com.sun.codemodel.JMod.PRIVATE;
 import static com.sun.codemodel.JMod.PUBLIC;
-
-import java.lang.annotation.Annotation;
+import static com.sun.codemodel.JMod.STATIC;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
-import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.Elements;
-import javax.lang.model.util.Types;
 
 import org.androidannotations.annotations.Extra;
 import org.androidannotations.helper.APTCodeModelHelper;
+import org.androidannotations.helper.CaseHelper;
 import org.androidannotations.processing.EBeansHolder.Classes;
+
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCatchBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JFieldRef;
+import com.sun.codemodel.JFieldVar;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JMod;
 import com.sun.codemodel.JPrimitiveType;
 import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JType;
-import com.sun.codemodel.JTypeVar;
 import com.sun.codemodel.JVar;
 
 public class ExtraProcessor implements DecoratingElementProcessor {
@@ -62,8 +58,8 @@ public class ExtraProcessor implements DecoratingElementProcessor {
 	}
 
 	@Override
-	public Class<? extends Annotation> getTarget() {
-		return Extra.class;
+	public String getTarget() {
+		return Extra.class.getName();
 	}
 
 	@Override
@@ -82,14 +78,18 @@ public class ExtraProcessor implements DecoratingElementProcessor {
 		Classes classes = holder.classes();
 
 		if (!isPrimitive && holder.cast == null) {
-			generateCastMethod(codeModel, holder);
+			helper.addCastMethod(codeModel, holder);
 		}
 
 		if (holder.extras == null) {
 			injectExtras(holder, codeModel);
 		}
 
-		JBlock ifContainsKey = holder.extrasNotNullBlock._if(JExpr.invoke(holder.extras, "containsKey").arg(extraKey))._then();
+		String staticFieldName = CaseHelper.camelCaseToUpperSnakeCase(null, fieldName, "Extra");
+
+		JFieldVar extraKeyField = holder.generatedClass.field(PUBLIC | STATIC | FINAL, classes.STRING, staticFieldName, lit(extraKey));
+
+		JBlock ifContainsKey = holder.extrasNotNullBlock._if(JExpr.invoke(holder.extras, "containsKey").arg(extraKeyField))._then();
 
 		JTryBlock containsKeyTry = ifContainsKey._try();
 
@@ -98,9 +98,9 @@ public class ExtraProcessor implements DecoratingElementProcessor {
 		if (isPrimitive) {
 			JPrimitiveType primitiveType = JType.parse(codeModel, elementType.toString());
 			JClass wrapperType = primitiveType.boxify();
-			containsKeyTry.body().assign(extraField, JExpr.cast(wrapperType, holder.extras.invoke("get").arg(extraKey)));
+			containsKeyTry.body().assign(extraField, JExpr.cast(wrapperType, holder.extras.invoke("get").arg(extraKeyField)));
 		} else {
-			containsKeyTry.body().assign(extraField, JExpr.invoke(holder.cast).arg(holder.extras.invoke("get").arg(extraKey)));
+			containsKeyTry.body().assign(extraField, JExpr.invoke(holder.cast).arg(holder.extras.invoke("get").arg(extraKeyField)));
 		}
 
 		JCatchBlock containsKeyCatch = containsKeyTry._catch(classes.CLASS_CAST_EXCEPTION);
@@ -123,43 +123,13 @@ public class ExtraProcessor implements DecoratingElementProcessor {
 				// flags()
 				JMethod method = holder.intentBuilderClass.method(PUBLIC, holder.intentBuilderClass, fieldName);
 
-				boolean castToSerializable = false;
-				TypeMirror extraType = elementType;
-				if (extraType.getKind() == TypeKind.DECLARED) {
-					Elements elementUtils = processingEnv.getElementUtils();
-					Types typeUtils = processingEnv.getTypeUtils();
-					TypeMirror parcelableType = elementUtils.getTypeElement(PARCELABLE).asType();
-					if (!typeUtils.isSubtype(extraType, parcelableType)) {
-						TypeMirror stringType = elementUtils.getTypeElement(STRING).asType();
-						if (!typeUtils.isSubtype(extraType, stringType)) {
-							castToSerializable = true;
-						}
-					}
-				}
-				JClass paramClass = helper.typeMirrorToJClass(extraType, holder);
-				JVar extraParam = method.param(paramClass, fieldName);
+				helper.addIntentBuilderPutExtraMethod(codeModel, holder, helper, processingEnv, method, elementType, fieldName, extraKeyField);
+
 				JBlock body = method.body();
-				JInvocation invocation = body.invoke(holder.intentField, "putExtra").arg(extraKey);
-				if (castToSerializable) {
-					invocation.arg(cast(classes.SERIALIZABLE, extraParam));
-				} else {
-					invocation.arg(extraParam);
-				}
 				body._return(_this());
 			}
 		}
 
-	}
-
-	private void generateCastMethod(JCodeModel codeModel, EBeanHolder holder) {
-		JType objectType = codeModel._ref(Object.class);
-		JMethod method = holder.generatedClass.method(JMod.PRIVATE, objectType, "cast_");
-		JTypeVar genericType = method.generify("T");
-		method.type(genericType);
-		JVar objectParam = method.param(objectType, "object");
-		method.annotate(SuppressWarnings.class).param("value", "unchecked");
-		method.body()._return(JExpr.cast(genericType, objectParam));
-		holder.cast = method;
 	}
 
 	/**
@@ -200,6 +170,6 @@ public class ExtraProcessor implements DecoratingElementProcessor {
 	}
 
 	private void injectExtrasOnInit(EBeanHolder holder, JClass intentClass, JMethod injectExtrasMethod) {
-		holder.init.body().invoke(injectExtrasMethod);
+		holder.initBody.invoke(injectExtrasMethod);
 	}
 }
