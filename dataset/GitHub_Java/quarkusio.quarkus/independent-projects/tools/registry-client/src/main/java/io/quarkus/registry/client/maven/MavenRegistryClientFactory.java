@@ -41,8 +41,6 @@ import org.eclipse.aether.resolution.ArtifactResult;
 
 public class MavenRegistryClientFactory implements RegistryClientFactory {
 
-    private static final String CLEANUP_TIMESTAMPED_ARTIFACTS = "cleanup-timestamped-artifacts";
-
     private MessageWriter log;
     private MavenArtifactResolver originalResolver;
     private List<RemoteRepository> singleRegistryRepos = new ArrayList<RemoteRepository>();
@@ -73,16 +71,13 @@ public class MavenRegistryClientFactory implements RegistryClientFactory {
             resolver = newResolver(resolver, aggregatedRepos);
         }
 
-        final boolean cleanupTimestampedArtifacts = isCleanupTimestampedArtifacts(config);
-
         final ArtifactCoords originalDescrCoords = descriptorConfig.getArtifact();
         final Artifact registryDescriptorCoords = new DefaultArtifact(originalDescrCoords.getGroupId(),
                 originalDescrCoords.getArtifactId(), originalDescrCoords.getClassifier(), originalDescrCoords.getType(),
                 originalDescrCoords.getVersion());
         ArtifactResult result;
         try {
-            result = MavenRegistryArtifactResolverWithCleanup.resolveAndCleanupOldTimestampedVersions(resolver,
-                    registryDescriptorCoords, cleanupTimestampedArtifacts);
+            result = resolver.resolve(registryDescriptorCoords);
         } catch (BootstrapMavenException e) {
             final StringWriter buf = new StringWriter();
             try (BufferedWriter writer = new BufferedWriter(buf)) {
@@ -138,7 +133,6 @@ public class MavenRegistryClientFactory implements RegistryClientFactory {
             config = complete;
         }
 
-        MavenRegistryArtifactResolver defaultResolver = null;
         final RegistryNonPlatformExtensionsResolver nonPlatformExtensionsResolver;
         final RegistryNonPlatformExtensionsConfig nonPlatformExtensions = config.getNonPlatformExtensions();
         if (nonPlatformExtensions == null || nonPlatformExtensions.isDisabled()) {
@@ -146,7 +140,7 @@ public class MavenRegistryClientFactory implements RegistryClientFactory {
             nonPlatformExtensionsResolver = null;
         } else {
             nonPlatformExtensionsResolver = new MavenNonPlatformExtensionsResolver(nonPlatformExtensions,
-                    defaultResolver = defaultResolver(resolver, cleanupTimestampedArtifacts), log);
+                    resolver, log);
         }
 
         final RegistryPlatformsResolver platformsResolver;
@@ -155,31 +149,14 @@ public class MavenRegistryClientFactory implements RegistryClientFactory {
             log.debug("Platform catalogs were disabled for registry %s", config.getId());
             platformsResolver = null;
         } else {
-            platformsResolver = new MavenPlatformsResolver(platformsConfig,
-                    defaultResolver == null ? defaultResolver = defaultResolver(resolver, cleanupTimestampedArtifacts)
-                            : defaultResolver,
-                    log);
+            platformsResolver = new MavenPlatformsResolver(platformsConfig, resolver, log);
         }
 
         return new RegistryClientDispatcher(config, platformsResolver,
                 Boolean.TRUE.equals(config.getPlatforms().getExtensionCatalogsIncluded())
-                        ? new MavenPlatformExtensionsResolver(
-                                defaultResolver == null ? defaultResolver(resolver, cleanupTimestampedArtifacts)
-                                        : defaultResolver,
-                                log)
-                        : new MavenPlatformExtensionsResolver(defaultResolver(originalResolver, cleanupTimestampedArtifacts),
-                                log),
+                        ? new MavenPlatformExtensionsResolver(resolver, log)
+                        : new MavenPlatformExtensionsResolver(originalResolver, log),
                 nonPlatformExtensionsResolver);
-    }
-
-    private static boolean isCleanupTimestampedArtifacts(RegistryConfig config) {
-        final Object o = config.getExtra().get(CLEANUP_TIMESTAMPED_ARTIFACTS);
-        return o == null ? true : Boolean.parseBoolean(o.toString());
-    }
-
-    private static MavenRegistryArtifactResolver defaultResolver(MavenArtifactResolver resolver,
-            boolean cleanupTimestampedArtifacts) {
-        return new MavenRegistryArtifactResolverWithCleanup(resolver, cleanupTimestampedArtifacts);
     }
 
     private static void complete(JsonRegistryConfig complete, RegistryConfig original, RegistryConfig descriptor) {

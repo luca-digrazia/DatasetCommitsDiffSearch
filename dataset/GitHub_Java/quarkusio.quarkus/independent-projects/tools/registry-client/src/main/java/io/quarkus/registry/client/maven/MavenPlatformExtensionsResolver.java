@@ -1,5 +1,6 @@
 package io.quarkus.registry.client.maven;
 
+import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
 import io.quarkus.devtools.messagewriter.MessageWriter;
 import io.quarkus.maven.ArtifactCoords;
 import io.quarkus.registry.RegistryResolutionException;
@@ -16,10 +17,10 @@ import org.eclipse.aether.artifact.DefaultArtifact;
 
 public class MavenPlatformExtensionsResolver implements RegistryPlatformExtensionsResolver {
 
-    private final MavenRegistryArtifactResolver artifactResolver;
+    private final MavenArtifactResolver artifactResolver;
     private final MessageWriter log;
 
-    public MavenPlatformExtensionsResolver(MavenRegistryArtifactResolver artifactResolver,
+    public MavenPlatformExtensionsResolver(MavenArtifactResolver artifactResolver,
             MessageWriter log) {
         this.artifactResolver = Objects.requireNonNull(artifactResolver);
         this.log = Objects.requireNonNull(log);
@@ -42,7 +43,7 @@ public class MavenPlatformExtensionsResolver implements RegistryPlatformExtensio
         log.debug("Resolving platform extension catalog %s", catalogArtifact);
         final Path jsonPath;
         try {
-            jsonPath = artifactResolver.resolve(catalogArtifact);
+            jsonPath = artifactResolver.resolve(catalogArtifact).getArtifact().getFile().toPath();
         } catch (Exception e) {
             throw new RegistryResolutionException("Failed to resolve Quarkus extensions catalog " + catalogArtifact,
                     e);
