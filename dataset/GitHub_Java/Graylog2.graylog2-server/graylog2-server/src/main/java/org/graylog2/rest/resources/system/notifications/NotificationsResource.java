@@ -62,12 +62,14 @@ public class NotificationsResource extends RestResource {
         for (Notification n : Notification.all(core)) {
             Map<String, Object> notification = Maps.newHashMap();
             notification.put("timestamp", Tools.getISO8601String(n.getTimestamp()));
+            notification.put("severity", n.getSeverity().toString().toLowerCase());
             notification.put("type", n.getType().toString().toLowerCase());
 
             notifications.add(notification);
         }
 
         Map<String, Object> result = Maps.newHashMap();
+        result.put("total", notifications.size());
         result.put("notifications", notifications);
 
         return json(result, prettyPrint);

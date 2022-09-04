@@ -94,12 +94,8 @@ public class Notification extends Persisted {
         }
     }
 
-    public static void fixed(Core core, Type type) {
-        destroy(new BasicDBObject("type", type.toString().toLowerCase()), core, COLLECTION);
-    }
-
     public static boolean isFirst(Core core, Type type) {
-        return (findOne(new BasicDBObject("type", type.toString().toLowerCase()), core, COLLECTION) == null);
+        return (Notification.findOne(new BasicDBObject("type", type.toString().toLowerCase()), core, COLLECTION) == null);
     }
 
     public static List<Notification> all(Core core) {
