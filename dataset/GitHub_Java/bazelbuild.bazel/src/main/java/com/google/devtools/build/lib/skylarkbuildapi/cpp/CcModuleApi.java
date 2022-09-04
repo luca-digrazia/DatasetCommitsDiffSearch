@@ -489,7 +489,7 @@ public interface CcModuleApi<
       })
   LibraryToLinkT createLibraryLinkerInput(
       SkylarkRuleContext skylarkRuleContext, Artifact library, String skylarkArtifactCategory)
-      throws EvalException, InterruptedException;
+      throws EvalException;
 
   @SkylarkCallable(
       name = "create_symlink_library_to_link",
@@ -572,7 +572,7 @@ public interface CcModuleApi<
       Object skylarkLibrariesToLink,
       Object skylarkDynamicLibrariesForRuntime,
       Object skylarkUserLinkFlags)
-      throws EvalException, InterruptedException;
+      throws EvalException;
 
   @SkylarkCallable(
       name = "create_cc_skylark_info",
@@ -591,6 +591,5 @@ public interface CcModuleApi<
               @ParamType(type = NoneType.class)
             })
       })
-  CcSkylarkInfoT createCcSkylarkInfo(Object skylarkRuleContextObject)
-      throws EvalException, InterruptedException;
+  CcSkylarkInfoT createCcSkylarkInfo(Object skylarkRuleContextObject) throws EvalException;
 }
