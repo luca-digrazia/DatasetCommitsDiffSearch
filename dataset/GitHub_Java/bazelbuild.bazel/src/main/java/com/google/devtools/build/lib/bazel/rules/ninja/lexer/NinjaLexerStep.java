@@ -246,15 +246,6 @@ public class NinjaLexerStep {
     return false;
   }
 
-  public boolean tryReadPipeAt() {
-    Preconditions.checkState('|' == fragment.byteAt(position));
-    if (checkForward(1, '@')) {
-      end = position + 2;
-      return true;
-    }
-    return false;
-  }
-
   public void readText() {
     int i = position;
     for (; i < fragment.length(); i++) {
