@@ -9,9 +9,13 @@ public class LongParam extends AbstractParam<Long> {
         super(input);
     }
 
+    public LongParam(String input, String parameterName) {
+        super(input, parameterName);
+    }
+
     @Override
-    protected String errorMessage(String input, Exception e) {
-        return '"' + input + "\" is not a number.";
+    protected String errorMessage(Exception e) {
+        return "%s is not a number.";
     }
 
     @Override

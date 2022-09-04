@@ -1,7 +1,8 @@
 package io.dropwizard.jersey.params;
 
-import com.google.common.base.Optional;
 import com.google.common.base.Strings;
+
+import java.util.Optional;
 
 /**
  * A parameter encapsulating optional string values with the condition that empty string inputs are
@@ -10,12 +11,16 @@ import com.google.common.base.Strings;
  * {@code Optional.of("")}.
  */
 public class NonEmptyStringParam extends AbstractParam<Optional<String>> {
-    protected NonEmptyStringParam(String input) {
+    public NonEmptyStringParam(String input) {
         super(input);
+    }
+
+    public NonEmptyStringParam(String input, String parameterName) {
+        super(input, parameterName);
     }
 
     @Override
     protected Optional<String> parse(String input) throws Exception {
-        return Optional.fromNullable(Strings.emptyToNull(input));
+        return Optional.ofNullable(Strings.emptyToNull(input));
     }
 }
