@@ -16,179 +16,197 @@ package com.google.devtools.build.lib.skylarkbuildapi.apple;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
+import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkAspectApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SplitTransitionProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
 import com.google.devtools.build.lib.skylarkbuildapi.apple.AppleStaticLibraryInfoApi.AppleStaticLibraryInfoProvider;
-import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
-import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.syntax.Depset;
-import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 
 /** Interface for a module with useful functions for creating apple-related rule implementations. */
 @SkylarkModule(
     name = "apple_common",
     doc = "Functions for Starlark to access internals of the apple rule implementations.")
 public interface AppleCommonApi<
-        FileApiT extends FileApi,
-        ObjcProviderApiT extends ObjcProviderApi<?>,
-        XcodeConfigInfoApiT extends XcodeConfigInfoApi<?, ?>,
-        ApplePlatformApiT extends ApplePlatformApi>
-    extends StarlarkValue {
+    FileApiT extends FileApi,
+    ObjcProviderApiT extends ObjcProviderApi<?>,
+    XcodeConfigProviderApiT extends XcodeConfigProviderApi<?, ?>,
+    ApplePlatformApiT extends ApplePlatformApi> {
 
   @SkylarkCallable(
       name = "apple_toolchain",
-      doc = "Utilities for resolving items from the apple toolchain.")
-  AppleToolchainApi<?> getAppleToolchain();
+      doc = "Utilities for resolving items from the apple toolchain."
+  )
+  public AppleToolchainApi<?> getAppleToolchain();
 
   @SkylarkCallable(
-      name = "platform_type",
-      doc =
-          "An enum-like struct that contains the following fields corresponding to Apple platform "
-              + "types:<br><ul><li><code>ios</code></li><li><code>macos</code></li>"
-              + "<li><code>tvos</code></li><li><code>watchos</code></li></ul><p>These values can"
-              + " be passed to methods that expect a platform type, like the 'apple' configuration"
-              + " fragment's <a href='apple.html#multi_arch_platform'>multi_arch_platform</a>"
-              + " method.<p>Example:<p><pre class='language-python'>\n"
-              + "ctx.fragments.apple.multi_arch_platform(apple_common.platform_type.ios)\n"
-              + "</pre>",
-      structField = true)
-  StructApi getPlatformTypeStruct();
+    name = "platform_type",
+    doc =
+        "An enum-like struct that contains the following fields corresponding to Apple platform "
+            + "types:<br><ul>"
+            + "<li><code>ios</code></li>"
+            + "<li><code>macos</code></li>"
+            + "<li><code>tvos</code></li>"
+            + "<li><code>watchos</code></li>"
+            + "</ul><p>"
+            + "These values can be passed to methods that expect a platform type, like the 'apple' "
+            + "configuration fragment's "
+            + "<a href='apple.html#multi_arch_platform'>multi_arch_platform</a> method.<p>"
+            + "Example:<p>"
+            + "<pre class='language-python'>\n"
+            + "ctx.fragments.apple.multi_arch_platform(apple_common.platform_type.ios)\n"
+            + "</pre>",
+    structField = true
+  )
+  public StructApi getPlatformTypeStruct();
 
   @SkylarkCallable(
-      name = "platform",
-      doc =
-          "An enum-like struct that contains the following fields corresponding to Apple "
-              + "platforms:<br><ul>"
-              + "<li><code>ios_device</code></li>"
-              + "<li><code>ios_simulator</code></li>"
-              + "<li><code>macos</code></li>"
-              + "<li><code>tvos_device</code></li>"
-              + "<li><code>tvos_simulator</code></li>"
-              + "<li><code>watchos_device</code></li>"
-              + "<li><code>watchos_device</code></li>"
-              + "</ul><p>"
-              + "These values can be passed to methods that expect a platform, like "
-              + "<a href='apple.html#sdk_version_for_platform'>apple.sdk_version_for_platform</a>.",
-      structField = true)
-  StructApi getPlatformStruct();
+    name = "platform",
+    doc =
+        "An enum-like struct that contains the following fields corresponding to Apple "
+            + "platforms:<br><ul>"
+            + "<li><code>ios_device</code></li>"
+            + "<li><code>ios_simulator</code></li>"
+            + "<li><code>macos</code></li>"
+            + "<li><code>tvos_device</code></li>"
+            + "<li><code>tvos_simulator</code></li>"
+            + "<li><code>watchos_device</code></li>"
+            + "<li><code>watchos_device</code></li>"
+            + "</ul><p>"
+            + "These values can be passed to methods that expect a platform, like "
+            + "<a href='apple.html#sdk_version_for_platform'>apple.sdk_version_for_platform</a>.",
+    structField = true
+  )
+  public StructApi getPlatformStruct();
 
   @SkylarkCallable(
-      name = "XcodeProperties",
-      doc =
-          "The constructor/key for the <code>XcodeVersionProperties</code> provider.<p>"
-              + "If a target propagates the <code>XcodeVersionProperties</code> provider,"
-              + " use this as the key with which to retrieve it. Example:<br>"
-              + "<pre class='language-python'>\n"
-              + "dep = ctx.attr.deps[0]\n"
-              + "p = dep[apple_common.XcodeVersionProperties]\n"
-              + "</pre>",
-      structField = true)
-  ProviderApi getXcodeVersionPropertiesConstructor();
+    name = "XcodeProperties",
+    doc =
+        "The constructor/key for the <code>XcodeVersionProperties</code> provider.<p>"
+            + "If a target propagates the <code>XcodeVersionProperties</code> provider,"
+            + " use this as the key with which to retrieve it. Example:<br>"
+            + "<pre class='language-python'>\n"
+            + "dep = ctx.attr.deps[0]\n"
+            + "p = dep[apple_common.XcodeVersionProperties]\n"
+            + "</pre>",
+    structField = true
+  )
+  public ProviderApi getXcodeVersionPropertiesConstructor();
 
   @SkylarkCallable(
       name = "XcodeVersionConfig",
       doc = "The constructor/key for the <code>XcodeVersionConfig</code> provider.",
-      structField = true)
-  ProviderApi getXcodeVersionConfigConstructor();
+      structField =  true
+  )
+  public ProviderApi getXcodeVersionConfigConstructor();
 
   @SkylarkCallable(
-      // TODO(b/63899207): This currently does not match ObjcProvider.SKYLARK_NAME as it requires
-      // a migration of existing skylark rules.
-      name = "Objc",
-      doc =
-          "The constructor/key for the <code>Objc</code> provider.<p>"
-              + "If a target propagates the <code>Objc</code> provider, use this as the "
-              + "key with which to retrieve it. Example:<br>"
-              + "<pre class='language-python'>\n"
-              + "dep = ctx.attr.deps[0]\n"
-              + "p = dep[apple_common.Objc]\n"
-              + "</pre>",
-      structField = true)
-  ProviderApi getObjcProviderConstructor();
+    // TODO(b/63899207): This currently does not match ObjcProvider.SKYLARK_NAME as it requires
+    // a migration of existing skylark rules.
+    name = "Objc",
+    doc =
+        "The constructor/key for the <code>Objc</code> provider.<p>"
+            + "If a target propagates the <code>Objc</code> provider, use this as the "
+            + "key with which to retrieve it. Example:<br>"
+            + "<pre class='language-python'>\n"
+            + "dep = ctx.attr.deps[0]\n"
+            + "p = dep[apple_common.Objc]\n"
+            + "</pre>",
+    structField = true
+  )
+  public ProviderApi getObjcProviderConstructor();
 
   @SkylarkCallable(
-      name = "AppleDynamicFramework",
-      doc =
-          "The constructor/key for the <code>AppleDynamicFramework</code> provider.<p>"
-              + "If a target propagates the <code>AppleDynamicFramework</code> provider, use this "
-              + "as the key with which to retrieve it. Example:<br>"
-              + "<pre class='language-python'>\n"
-              + "dep = ctx.attr.deps[0]\n"
-              + "p = dep[apple_common.AppleDynamicFramework]\n"
-              + "</pre>",
-      structField = true)
-  ProviderApi getAppleDynamicFrameworkConstructor();
+    name = "AppleDynamicFramework",
+    doc =
+        "The constructor/key for the <code>AppleDynamicFramework</code> provider.<p>"
+            + "If a target propagates the <code>AppleDynamicFramework</code> provider, use this "
+            + "as the key with which to retrieve it. Example:<br>"
+            + "<pre class='language-python'>\n"
+            + "dep = ctx.attr.deps[0]\n"
+            + "p = dep[apple_common.AppleDynamicFramework]\n"
+            + "</pre>",
+    structField = true
+  )
+  public ProviderApi getAppleDynamicFrameworkConstructor();
 
   @SkylarkCallable(
-      name = "AppleDylibBinary",
-      doc =
-          "The constructor/key for the <code>AppleDylibBinary</code> provider.<p>If a target"
-              + " propagates the <code>AppleDylibBinary</code> provider, use this as the key with"
-              + " which to retrieve it. Example:<br><pre class='language-python'>\n"
-              + "dep = ctx.attr.deps[0]\n"
-              + "p = dep[apple_common.AppleDylibBinary]\n"
-              + "</pre>",
-      structField = true)
-  ProviderApi getAppleDylibBinaryConstructor();
+    name = "AppleDylibBinary",
+    doc =
+        "The constructor/key for the <code>AppleDylibBinary</code> provider.<p>"
+            + "If a target propagates the <code>AppleDylibBinary</code> provider, use this as the "
+            + "key with which to retrieve it. Example:<br>"
+            + "<pre class='language-python'>\n"
+            + "dep = ctx.attr.deps[0]\n"
+            + "p = dep[apple_common.AppleDylibBinary]\n"
+            + "</pre>",
+    structField = true
+  )
+  public ProviderApi getAppleDylibBinaryConstructor();
 
   @SkylarkCallable(
-      name = "AppleExecutableBinary",
-      doc =
-          "The constructor/key for the <code>AppleExecutableBinary</code> provider.<p>"
-              + "If a target propagates the <code>AppleExecutableBinary</code> provider,"
-              + " use this as the key with which to retrieve it. Example:<br>"
-              + "<pre class='language-python'>\n"
-              + "dep = ctx.attr.deps[0]\n"
-              + "p = dep[apple_common.AppleExecutableBinary]\n"
-              + "</pre>",
-      structField = true)
-  ProviderApi getAppleExecutableBinaryConstructor();
+    name = "AppleExecutableBinary",
+    doc =
+        "The constructor/key for the <code>AppleExecutableBinary</code> provider.<p>"
+            + "If a target propagates the <code>AppleExecutableBinary</code> provider,"
+            + " use this as the key with which to retrieve it. Example:<br>"
+            + "<pre class='language-python'>\n"
+            + "dep = ctx.attr.deps[0]\n"
+            + "p = dep[apple_common.AppleExecutableBinary]\n"
+            + "</pre>",
+    structField = true
+  )
+  public ProviderApi getAppleExecutableBinaryConstructor();
 
   @SkylarkCallable(
-      name = "AppleStaticLibrary",
-      doc =
-          "The constructor/key for the <code>AppleStaticLibrary</code> provider.<p>"
-              + "If a target propagates the <code>AppleStaticLibrary</code> provider, use "
-              + "this as the key with which to retrieve it. Example:<br>"
-              + "<pre class='language-python'>\n"
-              + "dep = ctx.attr.deps[0]\n"
-              + "p = dep[apple_common.AppleStaticLibrary]\n"
-              + "</pre>",
-      structField = true)
-  AppleStaticLibraryInfoProvider<?, ?> getAppleStaticLibraryProvider();
+    name = "AppleStaticLibrary",
+    doc =
+        "The constructor/key for the <code>AppleStaticLibrary</code> provider.<p>"
+            + "If a target propagates the <code>AppleStaticLibrary</code> provider, use "
+            + "this as the key with which to retrieve it. Example:<br>"
+            + "<pre class='language-python'>\n"
+            + "dep = ctx.attr.deps[0]\n"
+            + "p = dep[apple_common.AppleStaticLibrary]\n"
+            + "</pre>",
+    structField = true
+  )
+  public AppleStaticLibraryInfoProvider<?, ?> getAppleStaticLibraryProvider();
 
   @SkylarkCallable(
-      name = "AppleDebugOutputs",
-      doc =
-          "The constructor/key for the <code>AppleDebugOutputs</code> provider.<p>If a target"
-              + " propagates the <code>AppleDebugOutputs</code> provider, use this as the key with"
-              + " which to retrieve it. Example:<br><pre class='language-python'>\n"
-              + "dep = ctx.attr.deps[0]\n"
-              + "p = dep[apple_common.AppleDebugOutputs]\n"
-              + "</pre>",
-      structField = true)
-  ProviderApi getAppleDebugOutputsConstructor();
+    name = "AppleDebugOutputs",
+    doc =
+        "The constructor/key for the <code>AppleDebugOutputs</code> provider.<p>"
+            + "If a target propagates the <code>AppleDebugOutputs</code> provider, use this as the "
+            + "key with which to retrieve it. Example:<br>"
+            + "<pre class='language-python'>\n"
+            + "dep = ctx.attr.deps[0]\n"
+            + "p = dep[apple_common.AppleDebugOutputs]\n"
+            + "</pre>",
+    structField = true
+  )
+  public ProviderApi getAppleDebugOutputsConstructor();
 
   @SkylarkCallable(
-      name = "AppleLoadableBundleBinary",
-      doc =
-          "The constructor/key for the <code>AppleLoadableBundleBinary</code> provider.<p>"
-              + "If a target propagates the <code>AppleLoadableBundleBinary</code> provider, "
-              + "use this as the key with which to retrieve it. Example:<br>"
-              + "<pre class='language-python'>\n"
-              + "dep = ctx.attr.deps[0]\n"
-              + "p = dep[apple_common.AppleLoadableBundleBinary]\n"
-              + "</pre>",
-      structField = true)
-  ProviderApi getAppleLoadableBundleBinaryConstructor();
+    name = "AppleLoadableBundleBinary",
+    doc =
+        "The constructor/key for the <code>AppleLoadableBundleBinary</code> provider.<p>"
+            + "If a target propagates the <code>AppleLoadableBundleBinary</code> provider, "
+            + "use this as the key with which to retrieve it. Example:<br>"
+            + "<pre class='language-python'>\n"
+            + "dep = ctx.attr.deps[0]\n"
+            + "p = dep[apple_common.AppleLoadableBundleBinary]\n"
+            + "</pre>",
+    structField = true
+  )
+  public ProviderApi getAppleLoadableBundleBinaryConstructor();
 
   @SkylarkCallable(
       name = "apple_host_system_env",
@@ -202,10 +220,13 @@ public interface AppleCommonApi<
             name = "xcode_config",
             positional = true,
             named = false,
-            type = XcodeConfigInfoApi.class,
-            doc = "A provider containing information about the xcode configuration."),
-      })
-  ImmutableMap<String, String> getAppleHostSystemEnv(XcodeConfigInfoApiT xcodeConfig);
+            type = XcodeConfigProviderApi.class,
+            doc = "A provider containing information about the xcode configuration."
+        ),
+      }
+  )
+  public ImmutableMap<String, String> getAppleHostSystemEnv(
+      XcodeConfigProviderApiT xcodeConfig);
 
   @SkylarkCallable(
       name = "target_apple_env",
@@ -219,38 +240,43 @@ public interface AppleCommonApi<
             name = "xcode_config",
             positional = true,
             named = false,
-            type = XcodeConfigInfoApi.class,
-            doc = "A provider containing information about the xcode configuration."),
+            type = XcodeConfigProviderApi.class,
+            doc = "A provider containing information about the xcode configuration."
+        ),
         @Param(
             name = "platform",
             positional = true,
             named = false,
             type = ApplePlatformApi.class,
-            doc = "The apple platform."),
-      })
-  ImmutableMap<String, String> getTargetAppleEnvironment(
-      XcodeConfigInfoApiT xcodeConfig, ApplePlatformApiT platform);
+            doc = "The apple platform."
+        ),
+      }
+  )
+  public ImmutableMap<String, String> getTargetAppleEnvironment(
+      XcodeConfigProviderApiT xcodeConfig, ApplePlatformApiT platform);
 
   @SkylarkCallable(
       name = "multi_arch_split",
-      doc =
-          "A configuration transition for rule attributes to build dependencies in one or more"
-              + " Apple platforms. <p>Use of this transition requires that the 'platform_type' and"
-              + " 'minimum_os_version' string attributes are defined and mandatory on the"
-              + " rule.</p><p>The value of the platform_type attribute will dictate the target"
-              + " architectures  for which dependencies along this configuration transition will"
-              + " be built.</p><p>Options are:</p><ul><li><code>ios</code>: architectures gathered"
-              + " from <code>--ios_multi_cpus</code>.</li><li><code>macos</code>: architectures"
-              + " gathered from <code>--macos_cpus</code>.</li><li><code>tvos</code>:"
-              + " architectures gathered from"
-              + " <code>--tvos_cpus</code>.</li><li><code>watchos</code>: architectures gathered"
-              + " from <code>--watchos_cpus</code>.</li></ul><p>minimum_os_version should be a"
-              + " dotted version string such as '7.3', and is used to set the minimum operating"
-              + " system on the configuration similarly based on platform type. For example,"
-              + " specifying platform_type 'ios' and minimum_os_version '8.0' will ensure that"
-              + " dependencies are built with minimum iOS version '8.0'.",
-      structField = true)
-  SplitTransitionProviderApi getMultiArchSplitProvider();
+      doc = "A configuration transition for rule attributes to build dependencies in one or"
+          + " more Apple platforms. "
+          + "<p>Use of this transition requires that the 'platform_type' and 'minimum_os_version'"
+          + " string attributes are defined and mandatory on the rule.</p>"
+          + "<p>The value of the platform_type attribute will dictate the target architectures "
+          + " for which dependencies along this configuration transition will be built.</p>"
+          + "<p>Options are:</p>"
+          + "<ul>"
+          + "<li><code>ios</code>: architectures gathered from <code>--ios_multi_cpus</code>.</li>"
+          + "<li><code>macos</code>: architectures gathered from <code>--macos_cpus</code>.</li>"
+          + "<li><code>tvos</code>: architectures gathered from <code>--tvos_cpus</code>.</li>"
+          + "<li><code>watchos</code>: architectures gathered from <code>--watchos_cpus</code>."
+          + "</li></ul>"
+          + "<p>minimum_os_version should be a dotted version string such as '7.3', and is used to"
+          + " set the minimum operating system on the configuration similarly based on platform"
+          + " type. For example, specifying platform_type 'ios' and minimum_os_version '8.0' will"
+          + " ensure that dependencies are built with minimum iOS version '8.0'.",
+      structField = true
+  )
+  public SplitTransitionProviderApi getMultiArchSplitProvider();
 
   @SkylarkCallable(
       name = "new_objc_provider",
@@ -267,13 +293,13 @@ public interface AppleCommonApi<
       extraKeywords =
           @Param(
               name = "kwargs",
-              type = Dict.class,
+              type = SkylarkDict.class,
               defaultValue = "{}",
               doc = "Dictionary of arguments."),
       useStarlarkThread = true)
   // This method is registered statically for skylark, and never called directly.
-  ObjcProviderApi<?> newObjcProvider(Boolean usesSwift, Dict<?, ?> kwargs, StarlarkThread thread)
-      throws EvalException;
+  public ObjcProviderApi<?> newObjcProvider(
+      Boolean usesSwift, SkylarkDict<?, ?> kwargs, StarlarkThread thread) throws EvalException;
 
   @SkylarkCallable(
       name = "new_dynamic_framework_provider",
@@ -297,7 +323,7 @@ public interface AppleCommonApi<
                     + "dependencies linked into the binary."),
         @Param(
             name = "framework_dirs",
-            type = Depset.class,
+            type = SkylarkNestedSet.class,
             generic1 = String.class,
             named = true,
             noneable = true,
@@ -308,7 +334,7 @@ public interface AppleCommonApi<
                     + "framework."),
         @Param(
             name = "framework_files",
-            type = Depset.class,
+            type = SkylarkNestedSet.class,
             generic1 = FileApi.class,
             named = true,
             noneable = true,
@@ -318,7 +344,7 @@ public interface AppleCommonApi<
                 "The full set of artifacts that should be included as inputs to link against the "
                     + "dynamic framework")
       })
-  AppleDynamicFrameworkInfoApi<?> newDynamicFrameworkProvider(
+  public AppleDynamicFrameworkInfoApi<?> newDynamicFrameworkProvider(
       Object dylibBinary,
       ObjcProviderApiT depsObjcProvider,
       Object dynamicFrameworkDirs,
@@ -343,7 +369,7 @@ public interface AppleCommonApi<
             doc = "The Starlark rule context."),
         @Param(
             name = "extra_linkopts",
-            type = Sequence.class,
+            type = SkylarkList.class,
             generic1 = String.class,
             named = true,
             positional = false,
@@ -351,7 +377,7 @@ public interface AppleCommonApi<
             doc = "Extra linkopts to be passed to the linker action."),
         @Param(
             name = "extra_link_inputs",
-            type = Sequence.class,
+            type = SkylarkList.class,
             generic1 = FileApi.class,
             named = true,
             positional = false,
@@ -360,10 +386,10 @@ public interface AppleCommonApi<
       },
       useStarlarkThread = true)
   // TODO(b/70937317): Iterate on, improve, and solidify this API.
-  StructApi linkMultiArchBinary(
+  public StructApi linkMultiArchBinary(
       SkylarkRuleContextApi skylarkRuleContext,
-      Sequence<?> extraLinkopts, // <String> expected.
-      Sequence<?> extraLinkInputs, // <? extends FileApi> expected.
+      SkylarkList<?> extraLinkopts, // <String> expected.
+      SkylarkList<?> extraLinkInputs, // <? extends FileApi> expected.
       StarlarkThread thread)
       throws EvalException, InterruptedException;
 
@@ -376,13 +402,14 @@ public interface AppleCommonApi<
             type = String.class,
             doc = "The string representation of the DottedVersion.")
       })
-  DottedVersionApi<?> dottedVersion(String version) throws EvalException;
+  public DottedVersionApi<?> dottedVersion(String version) throws EvalException;
 
   @SkylarkCallable(
-      name = "objc_proto_aspect",
-      doc =
-          "objc_proto_aspect gathers the proto dependencies of the attached rule target,and"
-              + " propagates the proto values of its dependencies through the ObjcProto provider.",
-      structField = true)
-  SkylarkAspectApi getObjcProtoAspect();
+    name = "objc_proto_aspect",
+    doc =
+        "objc_proto_aspect gathers the proto dependencies of the attached rule target,"
+            + "and propagates the proto values of its dependencies through the ObjcProto provider.",
+    structField = true
+  )
+  public SkylarkAspectApi getObjcProtoAspect();
 }

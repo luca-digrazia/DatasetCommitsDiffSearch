@@ -39,11 +39,10 @@ import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.java.JavaInfoApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkType;
-import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.ArrayList;
 import java.util.List;
@@ -63,7 +62,7 @@ public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact> 
 
   @Nullable
   private static <T> T nullIfNone(Object object, Class<T> type) {
-    return object != Starlark.NONE ? type.cast(object) : null;
+    return object != Runtime.NONE ? type.cast(object) : null;
   }
 
   public static final JavaInfo EMPTY = JavaInfo.Builder.create().build();
@@ -289,12 +288,12 @@ public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact> 
   }
 
   @Override
-  public Sequence<Artifact> getSourceJars() {
+  public SkylarkList<Artifact> getSourceJars() {
     // TODO(#4221) change return type to NestedSet<Artifact>
     JavaSourceJarsProvider provider = providers.getProvider(JavaSourceJarsProvider.class);
     ImmutableList<Artifact> sourceJars =
         provider == null ? ImmutableList.of() : provider.getSourceJars();
-    return StarlarkList.immutableCopyOf(sourceJars);
+    return SkylarkList.createImmutable(sourceJars);
   }
 
   @Override
@@ -313,8 +312,8 @@ public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact> 
   }
 
   @Override
-  public Sequence<Artifact> getRuntimeOutputJars() {
-    return StarlarkList.immutableCopyOf(getDirectRuntimeJars());
+  public SkylarkList<Artifact> getRuntimeOutputJars() {
+    return SkylarkList.createImmutable(getDirectRuntimeJars());
   }
 
   public ImmutableList<Artifact> getDirectRuntimeJars() {
@@ -415,9 +414,9 @@ public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact> 
         Object compileJarApi,
         Object sourceJarApi,
         Boolean neverlink,
-        Sequence<?> deps,
-        Sequence<?> runtimeDeps,
-        Sequence<?> exports,
+        SkylarkList<?> deps,
+        SkylarkList<?> runtimeDeps,
+        SkylarkList<?> exports,
         Object jdepsApi,
         Location loc,
         StarlarkThread thread)
@@ -435,9 +434,9 @@ public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact> 
               compileJar,
               sourceJar,
               neverlink,
-              (Sequence<JavaInfo>) deps,
-              (Sequence<JavaInfo>) runtimeDeps,
-              (Sequence<JavaInfo>) exports,
+              (SkylarkList<JavaInfo>) deps,
+              (SkylarkList<JavaInfo>) runtimeDeps,
+              (SkylarkList<JavaInfo>) exports,
               jdeps,
               loc);
     }

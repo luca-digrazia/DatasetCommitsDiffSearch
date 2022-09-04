@@ -14,23 +14,24 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi.apple;
 
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.apple.AppleDynamicFrameworkInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.apple.ObjcProviderApi;
-import com.google.devtools.build.lib.syntax.Depset;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 
 /** Fake implementation of {@link AppleDynamicFrameworkInfoApi}. */
 public class FakeAppleDynamicFrameworkInfo implements AppleDynamicFrameworkInfoApi<FileApi> {
 
   @Override
-  public Depset /*<String>*/ getDynamicFrameworkDirs() {
+  public SkylarkNestedSet /*<String>*/ getDynamicFrameworkDirs() {
     return null;
   }
 
   @Override
-  public Depset /*<FileApi>*/ getDynamicFrameworkFiles() {
+  public SkylarkNestedSet /*<FileApi>*/ getDynamicFrameworkFiles() {
     return null;
   }
 
@@ -45,15 +46,15 @@ public class FakeAppleDynamicFrameworkInfo implements AppleDynamicFrameworkInfoA
   }
 
   @Override
-  public String toProto() throws EvalException {
+  public String toProto(Location loc) throws EvalException {
     return "";
   }
 
   @Override
-  public String toJson() throws EvalException {
+  public String toJson(Location loc) throws EvalException {
     return "";
   }
 
   @Override
-  public void repr(Printer printer) {}
+  public void repr(SkylarkPrinter printer) {}
 }
