@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.blas;
 
@@ -32,7 +32,7 @@ public enum UPLO {
      * This is the case when the matrix is upper triangular, lower triangular,
      * symmetric, or Hermitian.
      */
-    UPPER((byte) 121),
+    UPPER(121, (byte) 'U'),
     /**
      * Lower triangle is stored. The packed storage format compactly stores
      * matrix elements when only one part of the matrix, the upper or lower
@@ -40,16 +40,28 @@ public enum UPLO {
      * This is the case when the matrix is upper triangular, lower triangular,
      * symmetric, or Hermitian.
      */
-    LOWER((byte) 122);
+    LOWER(122, (byte) 'L');
 
-    /** Byte value passed to CBLAS/LAPACKE. */
-    private final byte value;
+    /** Byte value passed to BLAS. */
+    private final int blas;
+    /** Byte value passed to LAPACK. */
+    private final byte lapack;
 
     /** Constructor. */
-    UPLO(byte value) {
-        this.value = value;
+    UPLO(int blas, byte lapack) {
+        this.blas = blas;
+        this.lapack = lapack;
     }
 
-    /** Returns the byte value for BLAS. */
-    public byte getValue() { return value; }
+    /**
+     * Returns the int value for BLAS.
+     * @return the int value for BLAS.
+     */
+    public int blas() { return blas; }
+
+    /**
+     * Returns the byte value for LAPACK.
+     * @return the byte value for LAPACK.
+     */
+    public byte lapack() { return lapack; }
 }

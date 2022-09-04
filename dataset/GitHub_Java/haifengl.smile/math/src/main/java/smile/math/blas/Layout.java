@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.blas;
 
@@ -24,14 +24,26 @@ public enum Layout {
     /** Column major layout. */
     COL_MAJOR(102);
 
-    /** Integer value passed to CBLAS. */
-    private final int value;
+    /** Byte value passed to BLAS. */
+    private final int blas;
+    /** Byte value passed to LAPACK. */
+    private final int lapack;
 
     /** Constructor. */
     Layout(int value) {
-        this.value = value;
+        this.blas = value;
+        this.lapack = value;
     }
 
-    /** Returns the integer value for BLAS. */
-    public int getValue() { return value; }
+    /**
+     * Returns the int value for BLAS.
+     * @return the int value for BLAS.
+     */
+    public int blas() { return blas; }
+
+    /**
+     * Returns the byte value for LAPACK.
+     * @return the byte value for LAPACK.
+     */
+    public int lapack() { return lapack; }
 }

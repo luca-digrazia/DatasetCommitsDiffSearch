@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,29 +13,32 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.blas;
 
 /** The option if computing singular vectors. */
 public enum SVDJob {
     /** All left (or right) singular vectors are returned in supplied  matrix U (or Vt). */
-    ALL((byte) 65),        // 'A'
+    ALL((byte) 'A'),
     /** The first min(m, n) singular vectors are returned in supplied matrix U (or Vt). */
-    ECONOMY((byte) 83),    // 'S'
+    COMPACT((byte) 'S'),
     /** The first min(m, n) singular vectors are overwritten on the matrix A. */
-    OVERWRITE((byte) 79),  // 'O'
+    OVERWRITE((byte) 'O'),
     /** No singular vectors are computed. */
-    NO_VECTORS((byte) 78); // 'N'
+    NO_VECTORS((byte) 'N');
 
     /** Byte value passed to LAPACK. */
-    private final byte value;
+    private final byte lapack;
 
     /** Constructor. */
-    SVDJob(byte value) {
-        this.value = value;
+    SVDJob(byte lapack) {
+        this.lapack = lapack;
     }
 
-    /** Returns the byte value for LAPACK. */
-    public byte getValue() { return value; }
+    /**
+     * Returns the byte value for LAPACK.
+     * @return the byte value for LAPACK.
+     */
+    public byte lapack() { return lapack; }
 }

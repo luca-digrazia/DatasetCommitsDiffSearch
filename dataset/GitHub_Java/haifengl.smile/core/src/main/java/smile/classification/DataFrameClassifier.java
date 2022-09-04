@@ -17,7 +17,6 @@
 
 package smile.classification;
 
-import java.util.List;
 import smile.data.DataFrame;
 import smile.data.Tuple;
 import smile.data.formula.Formula;
@@ -28,18 +27,14 @@ import smile.data.type.StructType;
  *
  * @author Haifeng Li
  */
-public interface DataFrameClassifier extends Classifier<Tuple> {
-    /**
-     * Returns the formula associated with the model.
-     * @return the formula associated with the model.
-     */
-    Formula formula();
+public interface DataFrameClassifier {
 
     /**
-     * Returns the design matrix schema.
-     * @return the design matrix schema.
+     * Predicts the class label of an instance.
+     * @param x a tuple instance.
+     * @return the predicted class label.
      */
-    StructType schema();
+    int predict(Tuple x);
 
     /**
      * Predicts the class labels of a data frame.
@@ -51,26 +46,23 @@ public interface DataFrameClassifier extends Classifier<Tuple> {
         // Binds the formula to the data frame's schema in case that
         // it is different from that of training data.
         formula().bind(data.schema());
-        return data.stream().mapToInt(this::predict).toArray();
+        int n = data.size();
+        int[] y = new int[n];
+        for (int i = 0; i < n; i++) {
+            y[i] = predict(data.get(i));
+        }
+        return y;
     }
 
     /**
-     * Predicts the class labels of a dataset.
-     *
-     * @param data the data frame.
-     * @param posteriori an empty list to store a posteriori probabilities on output.
-     * @return the predicted class labels.
+     * Returns the formula associated with the model.
+     * @return the formula associated with the model.
      */
-    default int[] predict(DataFrame data, List<double[]> posteriori) {
-        // Binds the formula to the data frame's schema in case that
-        // it is different from that of training data.
-        formula().bind(data.schema());
+    Formula formula();
 
-        int k = numClasses();
-        return data.stream().mapToInt(xi -> {
-            double[] prob = new double[k];
-            posteriori.add(prob);
-            return predict(xi, prob);
-        }).toArray();
-    }
+    /**
+     * Returns the design matrix schema.
+     * @return the design matrix schema.
+     */
+    StructType schema();
 }
