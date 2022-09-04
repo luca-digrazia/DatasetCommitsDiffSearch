@@ -10,7 +10,6 @@
 package com.facebook.stetho.inspector.elements.android;
 
 import android.app.Dialog;
-import android.graphics.Rect;
 import android.view.View;
 import android.view.Window;
 import com.facebook.stetho.common.Accumulator;
@@ -31,10 +30,10 @@ final class DialogDescriptor
 
   @Nullable
   @Override
-  public View getViewAndBoundsForHighlighting(Dialog element, Rect bounds) {
+  public View getViewForHighlighting(Dialog element) {
     final Descriptor.Host host = getHost();
     if (host instanceof AndroidDescriptorHost) {
-      return ((AndroidDescriptorHost) host).getHighlightingView(element.getWindow(), bounds);
+      return ((AndroidDescriptorHost) host).getHighlightingView(element.getWindow());
     }
 
     return null;

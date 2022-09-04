@@ -9,7 +9,6 @@
 
 package com.facebook.stetho.inspector.elements.android;
 
-import android.graphics.Rect;
 import android.view.View;
 import android.view.Window;
 
@@ -30,7 +29,7 @@ final class WindowDescriptor extends AbstractChainedDescriptor<Window>
 
   @Override
   @Nullable
-  public View getViewAndBoundsForHighlighting(Window element, Rect bounds) {
+  public View getViewForHighlighting(Window element) {
     return element.peekDecorView();
   }
 }

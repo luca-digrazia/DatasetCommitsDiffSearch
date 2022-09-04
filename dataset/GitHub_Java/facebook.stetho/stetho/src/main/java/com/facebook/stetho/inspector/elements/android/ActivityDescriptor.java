@@ -10,7 +10,6 @@
 package com.facebook.stetho.inspector.elements.android;
 
 import android.app.Activity;
-import android.graphics.Rect;
 import android.view.View;
 import android.view.Window;
 
@@ -47,11 +46,11 @@ final class ActivityDescriptor
 
   @Override
   @Nullable
-  public View getViewAndBoundsForHighlighting(Activity element, Rect bounds) {
+  public View getViewForHighlighting(Activity element) {
     final Descriptor.Host host = getHost();
     if (host instanceof AndroidDescriptorHost) {
       Window window = element.getWindow();
-      return ((AndroidDescriptorHost) host).getHighlightingView(window, bounds);
+      return ((AndroidDescriptorHost) host).getHighlightingView(window);
     }
 
     return null;

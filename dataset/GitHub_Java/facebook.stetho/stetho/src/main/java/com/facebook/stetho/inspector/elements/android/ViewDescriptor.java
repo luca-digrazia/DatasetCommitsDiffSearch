@@ -10,7 +10,6 @@
 package com.facebook.stetho.inspector.elements.android;
 
 import android.support.v4.view.ViewCompat;
-import android.graphics.Rect;
 import android.view.View;
 import android.view.ViewDebug;
 import android.support.v4.view.accessibility.AccessibilityNodeInfoCompat;
@@ -158,8 +157,7 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View>
   }
 
   @Override
-  @Nullable
-  public View getViewAndBoundsForHighlighting(View element, Rect bounds) {
+  public View getViewForHighlighting(View element) {
     return element;
   }
 
