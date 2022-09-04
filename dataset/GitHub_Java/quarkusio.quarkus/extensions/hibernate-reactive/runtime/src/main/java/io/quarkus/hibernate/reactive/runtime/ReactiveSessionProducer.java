@@ -34,24 +34,13 @@ public class ReactiveSessionProducer {
 
     public void disposeStageSession(@Disposes Stage.Session reactiveSession) {
         if (reactiveSession != null) {
-            //We're ignoring the returned CompletionStage!
-            //This could certainly done better but it should be effective enough to
-            //eventually close the session: the connection pool will order the operations
-            //as it won't be able to return connections to other consumers when it's saturated,
-            //ensuring close operations are handled.
-            reactiveSession.close().toCompletableFuture().join();
+            reactiveSession.close();
         }
     }
 
     public void disposeMutinySession(@Disposes Mutiny.Session reactiveSession) {
         if (reactiveSession != null) {
-            //We're ignoring the returned CompletionStage!
-            //This could certainly done better but it should be effective enough to
-            //eventually close the session: the connection pool will order the operations
-            //as it won't be able to return connections to other consumers when it's saturated,
-            //ensuring close operations are handled.
-            //N.B. for the Mutiny API we need to make sure to subscribe
-            reactiveSession.close().subscribe().asCompletionStage().join();
+            reactiveSession.close();
         }
     }
 }
