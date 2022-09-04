@@ -708,7 +708,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
 
     @Option(
         name = "android_aapt",
-        defaultValue = "auto",
+        defaultValue = "aapt2",
         documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
         effectTags = {
           OptionEffectTag.AFFECTS_OUTPUTS,
@@ -968,7 +968,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
           OptionMetadataTag.INCOMPATIBLE_CHANGE,
           OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
         },
-        defaultValue = "false",
+        defaultValue = "true",
         help =
             "Switch the Android rules to use aapt2 by default for resource processing. "
                 + "To resolve issues when migrating your app to build with aapt2, see "
@@ -1037,8 +1037,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
           oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
       host.persistentBusyboxTools = persistentBusyboxTools;
 
-      // Unless the build was started from an Android device, host means MAIN.
-      host.configurationDistinguisher = ConfigurationDistinguisher.MAIN;
+      // Once this has been set to ANDROID, the crosstool_top is the android crosstool, even after
+      // a host transition. In that case, allowing the distinguisher to reset creates the action
+      // conflicts that this was added to stop.
+      host.configurationDistinguisher = configurationDistinguisher;
       return host;
     }
   }

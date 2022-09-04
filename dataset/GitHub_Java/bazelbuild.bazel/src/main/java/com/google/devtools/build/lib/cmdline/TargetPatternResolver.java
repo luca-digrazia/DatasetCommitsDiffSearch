@@ -19,6 +19,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.devtools.build.lib.concurrent.BatchCallback;
+import com.google.devtools.build.lib.concurrent.ThreadSafeBatchCallback;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
 
@@ -111,7 +112,7 @@ public abstract class TargetPatternResolver<T> {
       boolean rulesOnly,
       ImmutableSet<PathFragment> blacklistedSubdirectories,
       ImmutableSet<PathFragment> excludedSubdirectories,
-      BatchCallback<T, E> callback,
+      ThreadSafeBatchCallback<T, E> callback,
       Class<E> exceptionClass,
       ListeningExecutorService executor) {
       try {

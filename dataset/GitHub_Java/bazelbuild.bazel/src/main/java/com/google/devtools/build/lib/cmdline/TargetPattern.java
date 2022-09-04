@@ -30,8 +30,6 @@ import com.google.devtools.build.lib.concurrent.BatchCallback;
 import com.google.devtools.build.lib.concurrent.ThreadSafeBatchCallback;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.errorprone.annotations.CheckReturnValue;
-import com.google.errorprone.annotations.CompileTimeConstant;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -883,24 +881,15 @@ public abstract class TargetPattern implements Serializable {
     }
 
     /**
-     * Parses a constant string TargetPattern, throwing IllegalStateException on invalid pattern.
-     */
-    @CheckReturnValue
-    public TargetPattern parseConstantUnchecked(@CompileTimeConstant String pattern) {
-      try {
-        return parse(pattern);
-      } catch (TargetParsingException e) {
-        throw new IllegalStateException(e);
-      }
-    }
-
-    /**
-     * Absolutizes the target pattern to the offset. Patterns starting with "//" are absolute and
-     * not modified. Assumes the given pattern is not invalid wrt leading "/"s.
+     * Absolutizes the target pattern to the offset.
+     * Patterns starting with "//" are absolute and not modified.
+     * Assumes the given pattern is not invalid wrt leading "/"s.
      *
-     * <p>If the offset is "foo": absolutize(":bar") --> "//foo:bar" absolutize("bar") -->
-     * "//foo/bar" absolutize("//biz/bar") --> "//biz/bar" (absolute) absolutize("biz:bar") -->
-     * "//foo/biz:bar"
+     * If the offset is "foo":
+     *   absolutize(":bar") --> "//foo:bar"
+     *   absolutize("bar") --> "//foo/bar"
+     *   absolutize("//biz/bar") --> "//biz/bar" (absolute)
+     *   absolutize("biz:bar") --> "//foo/biz:bar"
      *
      * @param pattern The target pattern to parse.
      * @return the pattern, absolutized to the offset if approprate.
