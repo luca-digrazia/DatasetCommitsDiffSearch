@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.analysis;
 
 import static com.google.devtools.build.lib.analysis.ExtraActionUtils.createExtraActionProvider;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -25,8 +26,6 @@ import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
-import com.google.devtools.build.lib.analysis.config.CoreOptions.IncludeConfigFragmentsEnum;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkApiProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -37,6 +36,7 @@ import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.Provider;
+import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.EvalException;
 import java.util.Arrays;
@@ -61,7 +61,7 @@ import javax.annotation.Nullable;
  */
 @Immutable
 @AutoCodec
-public final class ConfiguredAspect implements ProviderCollection {
+public final class ConfiguredAspect {
   private final AspectDescriptor descriptor;
   private final ImmutableList<ActionAnalysisMetadata> actions;
   private final TransitiveInfoProviderMap providers;
@@ -107,19 +107,25 @@ public final class ConfiguredAspect implements ProviderCollection {
     return providers;
   }
 
-  @Override
   @Nullable
+  @VisibleForTesting
   public <P extends TransitiveInfoProvider> P getProvider(Class<P> providerClass) {
     AnalysisUtils.checkProvider(providerClass);
     return providers.getProvider(providerClass);
   }
 
-  @Override
+  public Object getProvider(SkylarkProviderIdentifier id) {
+    if (id.isLegacy()) {
+      return get(id.getLegacyId());
+    } else {
+      return get(id.getKey());
+    }
+  }
+
   public Info get(Provider.Key key) {
     return providers.get(key);
   }
 
-  @Override
   public Object get(String legacyKey) {
     if (OutputGroupInfo.SKYLARK_NAME.equals(legacyKey)) {
       return get(OutputGroupInfo.SKYLARK_CONSTRUCTOR.getKey());
@@ -274,18 +280,6 @@ public final class ConfiguredAspect implements ProviderCollection {
               analysisEnvironment.getRegisteredActions(),
               ruleContext.getOwner(),
               /*outputFiles=*/ null);
-
-      if (ruleContext
-              .getConfiguration()
-              .getOptions()
-              .get(CoreOptions.class)
-              .includeRequiredConfigFragmentsProvider
-          != IncludeConfigFragmentsEnum.OFF) {
-        // This guarantees aspects pass through the requirements of their dependencies. But native
-        // aspects can also declare direct requirements.
-        // TODO(gregce): support native aspect direct requirements.
-        addProvider(new RequiredConfigFragmentsProvider(ruleContext.getRequiredConfigFragments()));
-      }
 
       return new ConfiguredAspect(
           descriptor,

@@ -24,8 +24,11 @@ import com.google.devtools.build.lib.skylarkbuildapi.test.AnalysisTestResultInfo
  */
 public class AnalysisTestResultInfo implements Info, AnalysisTestResultInfoApi {
 
-  /** Singleton provider instance for {@link AnalysisTestResultInfo}. */
-  public static final TestResultInfoProvider STARLARK_CONSTRUCTOR = new TestResultInfoProvider();
+  /**
+   * Singleton provider instance for {@link AnalysisTestResultInfo}.
+   */
+  public static final TestResultInfoProvider SKYLARK_CONSTRUCTOR =
+      new TestResultInfoProvider();
 
   private final Boolean success;
   private final String message;
@@ -37,7 +40,7 @@ public class AnalysisTestResultInfo implements Info, AnalysisTestResultInfoApi {
 
   @Override
   public TestResultInfoProvider getProvider() {
-    return STARLARK_CONSTRUCTOR;
+    return SKYLARK_CONSTRUCTOR;
   }
 
   @Override

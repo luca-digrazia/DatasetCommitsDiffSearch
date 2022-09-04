@@ -20,10 +20,8 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.DuplicateException;
 import com.google.devtools.build.lib.analysis.ExtraActionArtifactsProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
-import com.google.devtools.build.lib.analysis.RequiredConfigFragmentsProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMapBuilder;
@@ -47,29 +45,34 @@ import java.util.function.Consumer;
 public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
   private final ConfiguredTarget base;
   private final ImmutableList<ConfiguredAspect> aspects;
+  private final TransitiveInfoProviderMap providers;
+
   /**
-   * Providers that come from any source that isn't a pure pointer to the base rule's providers.
-   *
-   * <p>Examples include providers from aspects and merged providers that appear in both the base
-   * rule and aspects.
+   * This exception is thrown when configured targets and aspects
+   * being merged provide duplicate things that they shouldn't
+   * (output groups or providers).
    */
-  private final TransitiveInfoProviderMap nonBaseProviders;
+  public static final class DuplicateException extends Exception {
+    public DuplicateException(String message) {
+      super(message);
+    }
+  }
 
   private MergedConfiguredTarget(
       ConfiguredTarget base,
       Iterable<ConfiguredAspect> aspects,
-      TransitiveInfoProviderMap nonBaseProviders) {
+      TransitiveInfoProviderMap providers) {
     super(base.getLabel(), base.getConfigurationKey());
     this.base = base;
     this.aspects = ImmutableList.copyOf(aspects);
-    this.nonBaseProviders = nonBaseProviders;
+    this.providers = providers;
   }
 
   @Override
   public <P extends TransitiveInfoProvider> P getProvider(Class<P> providerClass) {
     AnalysisUtils.checkProvider(providerClass);
 
-    P provider = nonBaseProviders.getProvider(providerClass);
+    P provider = providers.getProvider(providerClass);
     if (provider == null) {
       provider = base.getProvider(providerClass);
     }
@@ -82,18 +85,18 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
     if (base instanceof AbstractConfiguredTarget) {
       ((AbstractConfiguredTarget) base).addExtraSkylarkKeys(result);
     }
-    for (int i = 0; i < nonBaseProviders.getProviderCount(); i++) {
-      Object classAt = nonBaseProviders.getProviderKeyAt(i);
+    for (int i = 0; i < providers.getProviderCount(); i++) {
+      Object classAt = providers.getProviderKeyAt(i);
       if (classAt instanceof String) {
         result.accept((String) classAt);
       }
     }
-    result.accept(AbstractConfiguredTarget.ACTIONS_FIELD_NAME);
+    result.accept(RuleConfiguredTarget.ACTIONS_FIELD_NAME);
   }
 
   @Override
   protected Info rawGetSkylarkProvider(Provider.Key providerKey) {
-    Info provider = nonBaseProviders.get(providerKey);
+    Info provider = providers.get(providerKey);
     if (provider == null) {
       provider = base.get(providerKey);
     }
@@ -102,7 +105,7 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
 
   @Override
   protected Object rawGetSkylarkProvider(String providerKey) {
-    if (providerKey.equals(AbstractConfiguredTarget.ACTIONS_FIELD_NAME)) {
+    if (providerKey.equals(RuleConfiguredTarget.ACTIONS_FIELD_NAME)) {
       ImmutableList.Builder<ActionAnalysisMetadata> actions = ImmutableList.builder();
       // Only expose actions which are SkylarkValues.
       // TODO(cparsons): Expose all actions to Starlark.
@@ -117,7 +120,7 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
       }
       return actions.build();
     }
-    Object provider = nonBaseProviders.get(providerKey);
+    Object provider = providers.get(providerKey);
     if (provider == null) {
       provider = base.get(providerKey);
     }
@@ -132,27 +135,20 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
       return base;
     }
 
-    TransitiveInfoProviderMapBuilder nonBaseProviders = new TransitiveInfoProviderMapBuilder();
-
     // Merge output group providers.
     OutputGroupInfo mergedOutputGroupInfo =
         OutputGroupInfo.merge(getAllOutputGroupProviders(base, aspects));
-    if (mergedOutputGroupInfo != null) {
-      nonBaseProviders.put(mergedOutputGroupInfo);
-    }
 
     // Merge extra-actions provider.
     ExtraActionArtifactsProvider mergedExtraActionProviders = ExtraActionArtifactsProvider.merge(
         getAllProviders(base, aspects, ExtraActionArtifactsProvider.class));
-    if (mergedExtraActionProviders != null) {
-      nonBaseProviders.add(mergedExtraActionProviders);
-    }
 
-    // Merge required config fragments provider.
-    List<RequiredConfigFragmentsProvider> requiredConfigFragmentProviders =
-        getAllProviders(base, aspects, RequiredConfigFragmentsProvider.class);
-    if (!requiredConfigFragmentProviders.isEmpty()) {
-      nonBaseProviders.add(RequiredConfigFragmentsProvider.merge(requiredConfigFragmentProviders));
+    TransitiveInfoProviderMapBuilder aspectProviders = new TransitiveInfoProviderMapBuilder();
+    if (mergedOutputGroupInfo != null) {
+      aspectProviders.put(mergedOutputGroupInfo);
+    }
+    if (mergedExtraActionProviders != null) {
+      aspectProviders.add(mergedExtraActionProviders);
     }
 
     for (ConfiguredAspect aspect : aspects) {
@@ -160,8 +156,7 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
       for (int i = 0; i < providers.getProviderCount(); ++i) {
         Object providerKey = providers.getProviderKeyAt(i);
         if (OutputGroupInfo.SKYLARK_CONSTRUCTOR.getKey().equals(providerKey)
-            || ExtraActionArtifactsProvider.class.equals(providerKey)
-            || RequiredConfigFragmentsProvider.class.equals(providerKey)) {
+            || ExtraActionArtifactsProvider.class.equals(providerKey)) {
           continue;
         }
 
@@ -169,27 +164,28 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
           @SuppressWarnings("unchecked")
           Class<? extends TransitiveInfoProvider> providerClass =
               (Class<? extends TransitiveInfoProvider>) providerKey;
-          if (base.getProvider(providerClass) != null || nonBaseProviders.contains(providerClass)) {
+          if (base.getProvider(providerClass) != null
+              || aspectProviders.contains(providerClass)) {
             throw new DuplicateException("Provider " + providerKey + " provided twice");
           }
-          nonBaseProviders.put(
+          aspectProviders.put(
               providerClass, (TransitiveInfoProvider) providers.getProviderInstanceAt(i));
         } else if (providerKey instanceof String) {
           String legacyId = (String) providerKey;
-          if (base.get(legacyId) != null || nonBaseProviders.contains(legacyId)) {
+          if (base.get(legacyId) != null || aspectProviders.contains(legacyId)) {
             throw new DuplicateException("Provider " + legacyId + " provided twice");
           }
-          nonBaseProviders.put(legacyId, providers.getProviderInstanceAt(i));
+          aspectProviders.put(legacyId, providers.getProviderInstanceAt(i));
         } else if (providerKey instanceof Provider.Key) {
           Provider.Key key = (Key) providerKey;
-          if (base.get(key) != null || nonBaseProviders.contains(key)) {
+          if (base.get(key) != null || aspectProviders.contains(key)) {
             throw new DuplicateException("Provider " + key + " provided twice");
           }
-          nonBaseProviders.put((Info) providers.getProviderInstanceAt(i));
+          aspectProviders.put((Info) providers.getProviderInstanceAt(i));
         }
       }
     }
-    return new MergedConfiguredTarget(base, aspects, nonBaseProviders.build());
+    return new MergedConfiguredTarget(base, aspects, aspectProviders.build());
   }
 
   private static ImmutableList<OutputGroupInfo> getAllOutputGroupProviders(
