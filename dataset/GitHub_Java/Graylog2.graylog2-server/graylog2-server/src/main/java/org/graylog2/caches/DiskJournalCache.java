@@ -49,6 +49,8 @@ import java.util.concurrent.TimeUnit;
  * @author Bernd Ahlers <bernd@torch.sh>
  */
 public abstract class DiskJournalCache implements InputCache, OutputCache {
+    private static final float NO_COMPACT_DB_SIZE = (float) (50 * 1024 * 1024);
+
     private final Logger LOG = LoggerFactory.getLogger(DiskJournalCache.class);
 
     private final DB db;
@@ -58,10 +60,12 @@ public abstract class DiskJournalCache implements InputCache, OutputCache {
     private final MessageToJsonSerializer serializer;
     private final Object modificationLock = new Object();
     private final Store store;
+    private final float compactSizePercentageWatermark;
     private final MetricRegistry metricRegistry;
     private final Timer addTimer;
     private final Timer popTimer;
     private final Timer commitTimer;
+    private final Timer compactTimer;
 
     public static class Input extends DiskJournalCache {
         @Inject
@@ -101,24 +105,23 @@ public abstract class DiskJournalCache implements InputCache, OutputCache {
                 new ThreadFactoryBuilder().setNameFormat("disk-journal-cache-%d").build()
         );
         this.serializer = serializer;
+        this.compactSizePercentageWatermark = config.getMessageCacheCompactionWatermark();
         this.addTimer = metricRegistry.timer(MetricRegistry.name(getClass(), getDbFileName(), "add", "executionTime"));
         this.popTimer = metricRegistry.timer(MetricRegistry.name(getClass(), getDbFileName(), "pop", "executionTime"));
         this.commitTimer = metricRegistry.timer(MetricRegistry.name(getClass(), getDbFileName(), "commit", "executionTime"));
+        this.compactTimer = metricRegistry.timer(MetricRegistry.name(getClass(), getDbFileName(), "compact", "executionTime"));
 
         /* Commit and compact the database to flush existing data in the transaction log and to reduce the file
          * size of the database.
          */
         commit();
-        compact();
+        compact(0);
 
         this.commitService.scheduleWithFixedDelay(new Runnable() {
             @Override
             public void run() {
-                try {
-                    commit();
-                } catch (Exception e) {
-                    LOG.error("Commit thread error", e);
-                }
+                commit();
+                compact(compactSizePercentageWatermark);
             }
         }, 0, 1000, TimeUnit.MILLISECONDS);
     }
@@ -223,17 +226,34 @@ public abstract class DiskJournalCache implements InputCache, OutputCache {
         time.stop();
     }
 
-    private void compact() {
+    private void compact(final float watermark) {
         if (db.isClosed()) {
             return;
         }
+        final Timer.Context time = compactTimer.time();
         final long currSize = store.getCurrSize();
 
-        db.compact();
+        if (isReadyToCompact(store, watermark)) {
+            db.compact();
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Compacted db {} (freed up {} bytes)", getDbFileName(), (currSize - store.getCurrSize()));
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Compacted db {} (freed up {} bytes)", getDbFileName(), (currSize - store.getCurrSize()));
+            }
         }
+        time.stop();
+    }
+
+    private boolean isReadyToCompact(Store dbStore, final float watermark) {
+        final float currSize = (float) dbStore.getCurrSize();
+
+        if (currSize < NO_COMPACT_DB_SIZE) {
+            return false;
+        }
+
+        final float freeSize = (float) dbStore.getFreeSize();
+        final float percentFree = (freeSize * 100.0f) / currSize;
+
+        return percentFree >= watermark;
     }
 
     private File getDbFile(final Configuration config) {
