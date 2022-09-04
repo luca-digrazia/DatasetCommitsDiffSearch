@@ -30,8 +30,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
+import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.NativeProvider.WithLegacySkylarkName;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
@@ -263,6 +263,18 @@ public final class ObjcProvider extends NativeInfo implements ObjcProviderApi<Ar
       new Key<>(STABLE_ORDER, "nested_bundle", Bundling.class);
 
   /**
+   * Artifact containing information on debug symbols.
+   */
+  public static final Key<Artifact> DEBUG_SYMBOLS =
+      new Key<>(STABLE_ORDER, "debug_symbols", Artifact.class);
+
+  /**
+   * Artifact containing the plist of the debug symbols.
+   */
+  public static final Key<Artifact> DEBUG_SYMBOLS_PLIST =
+      new Key<>(STABLE_ORDER, "debug_symbols_plist", Artifact.class);
+
+  /**
    * Debug artifacts that should be exported by the top-level target.
    */
   public static final Key<Artifact> EXPORTED_DEBUG_ARTIFACTS =
@@ -360,6 +372,8 @@ public final class ObjcProvider extends NativeInfo implements ObjcProviderApi<Ar
           DEFINE,
           DYNAMIC_FRAMEWORK_DIR,
           DYNAMIC_FRAMEWORK_FILE,
+          DEBUG_SYMBOLS,
+          DEBUG_SYMBOLS_PLIST,
           EXPORTED_DEBUG_ARTIFACTS,
           FRAMEWORK_SEARCH_PATH_ONLY,
           FORCE_LOAD_LIBRARY,
@@ -430,6 +444,16 @@ public final class ObjcProvider extends NativeInfo implements ObjcProviderApi<Ar
   @Override
   public NestedSet<Artifact> dynamicFrameworkFile() {
     return get(DYNAMIC_FRAMEWORK_FILE);
+  }
+
+  @Override
+  public NestedSet<Artifact> debugSymbols() {
+    return get(DEBUG_SYMBOLS);
+  }
+
+  @Override
+  public NestedSet<Artifact> debugSymbolsPlist() {
+    return get(DEBUG_SYMBOLS_PLIST);
   }
 
   @Override
@@ -661,7 +685,7 @@ public final class ObjcProvider extends NativeInfo implements ObjcProviderApi<Ar
   private final ImmutableMap<Key<?>, NestedSet<?>> strictDependencyItems;
 
   /** Skylark constructor and identifier for ObjcProvider. */
-  public static final BuiltinProvider<ObjcProvider> SKYLARK_CONSTRUCTOR = new Constructor();
+  public static final NativeProvider<ObjcProvider> SKYLARK_CONSTRUCTOR = new Constructor();
 
   private ObjcProvider(
       SkylarkSemantics semantics,
@@ -962,7 +986,7 @@ public final class ObjcProvider extends NativeInfo implements ObjcProviderApi<Ar
       }
       return this;
     }
-
+   
     /**
      * Add all keys and values from the given provider, but propagate any normally-propagated items
      * only to direct dependers of this ObjcProvider.
@@ -1124,10 +1148,10 @@ public final class ObjcProvider extends NativeInfo implements ObjcProviderApi<Ar
     }
   }
 
-  private static class Constructor extends BuiltinProvider<ObjcProvider>
+  private static class Constructor extends NativeProvider<ObjcProvider>
       implements WithLegacySkylarkName {
     public Constructor() {
-      super(ObjcProvider.SKYLARK_NAME, ObjcProvider.class);
+      super(ObjcProvider.class, ObjcProvider.SKYLARK_NAME);
     }
 
     @Override

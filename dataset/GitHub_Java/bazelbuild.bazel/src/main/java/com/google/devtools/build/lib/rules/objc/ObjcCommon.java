@@ -18,6 +18,8 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.ASSET_CATALOG;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.BUNDLE_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.CC_LIBRARY;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DEBUG_SYMBOLS;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DEBUG_SYMBOLS_PLIST;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DEFINE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DYNAMIC_FRAMEWORK_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DYNAMIC_FRAMEWORK_FILE;
@@ -62,7 +64,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
@@ -166,6 +167,7 @@ public final class ObjcCommon {
     private boolean alwayslink;
     private boolean hasModuleMap;
     private Iterable<Artifact> extraImportLibraries = ImmutableList.of();
+    private DsymOutputType dsymOutputType;
     private Optional<Artifact> linkedBinary = Optional.absent();
     private Optional<Artifact> linkmapFile = Optional.absent();
     private Iterable<CcCompilationContext> depCcHeaderProviders = ImmutableList.of();
@@ -303,7 +305,6 @@ public final class ObjcCommon {
       return this;
     }
 
-    @Deprecated // Use the BuiltinProvider method instead.
     private <T extends Info> ImmutableList.Builder<T> addAnyProviders(
         ImmutableList.Builder<T> listBuilder,
         TransitiveInfoCollection collection,
@@ -315,16 +316,6 @@ public final class ObjcCommon {
       return listBuilder;
     }
 
-    private <T extends Info> ImmutableList.Builder<T> addAnyProviders(
-        ImmutableList.Builder<T> listBuilder,
-        TransitiveInfoCollection collection,
-        BuiltinProvider<T> providerClass) {
-      T provider = collection.get(providerClass);
-      if (provider != null) {
-        listBuilder.add(provider);
-      }
-      return listBuilder;
-    }
 
     /**
      * Add providers which will be exposed both to the declaring rule and to any dependers on the
@@ -403,6 +394,14 @@ public final class ObjcCommon {
      */
     Builder setLinkedBinary(Artifact linkedBinary) {
       this.linkedBinary = Optional.of(linkedBinary);
+      return this;
+    }
+
+    /**
+     * Sets which type of dsym output this rule generated to be propagated to dependers.
+     */
+    Builder addDebugArtifacts(DsymOutputType dsymOutputType) {
+      this.dsymOutputType = dsymOutputType;
       return this;
     }
 
@@ -591,6 +590,12 @@ public final class ObjcCommon {
           .addAll(LINKED_BINARY, linkedBinary.asSet())
           .addAll(LINKMAP_FILE, linkmapFile.asSet());
 
+      if (dsymOutputType != null) {
+        objcProvider
+            .add(DEBUG_SYMBOLS, intermediateArtifacts.dsymSymbol(dsymOutputType))
+            .add(DEBUG_SYMBOLS_PLIST, intermediateArtifacts.dsymPlist(dsymOutputType));
+      }
+
       return new ObjcCommon(objcProvider.build(), compilationArtifacts, textualHeaders.build());
     }
 
@@ -615,7 +620,7 @@ public final class ObjcCommon {
         return false;
       }
     }
-
+    
     /**
      * Returns {@code true} if the given rule context has a launch storyboard set.
      */
