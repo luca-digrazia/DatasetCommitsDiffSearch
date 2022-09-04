@@ -48,8 +48,8 @@ import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.android.ZipFilterBuilder.CheckHashMismatchMode;
 import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper.CcLinkingContext;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper.CcLinkingContext.LinkOptions;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
+import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
 import com.google.devtools.build.lib.rules.java.ClasspathConfiguredFragment;
 import com.google.devtools.build.lib.rules.java.JavaCcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
@@ -524,12 +524,9 @@ public class AndroidCommon {
       jarsProducedForRuntime.add(resourceApk.getResourceJavaClassJar());
     }
 
-    // Databinding metadata that the databinding annotation processor reads.
-    ImmutableList<Artifact> additionalJavaInputsFromDatabinding =
-        resourceApk.asDataBindingContext().processDeps(ruleContext, isBinary);
-
     JavaCompilationHelper helper =
-        initAttributes(attributes, javaSemantics, additionalJavaInputsFromDatabinding);
+        initAttributes(
+            attributes, javaSemantics, resourceApk.asDataBindingContext().processDeps(ruleContext));
     if (ruleContext.hasErrors()) {
       return null;
     }
@@ -825,15 +822,16 @@ public class AndroidCommon {
   public static CcInfo getCcInfo(
       final Iterable<? extends TransitiveInfoCollection> deps, final Collection<String> linkOpts) {
 
-    CcLinkingContext ccLinkingContext =
-        CcLinkingContext.builder()
-            .addUserLinkFlags(
-                NestedSetBuilder.<LinkOptions>linkOrder()
-                    .add(CcLinkingContext.LinkOptions.of(linkOpts))
-                    .build())
+    CcLinkParams linkOptsParams = CcLinkParams.builder().addLinkOpts(linkOpts).build();
+    CcLinkingInfo linkOptsCcLinkingInfo =
+        CcLinkingInfo.Builder.create()
+            .setStaticModeParamsForDynamicLibrary(linkOptsParams)
+            .setStaticModeParamsForExecutable(linkOptsParams)
+            .setDynamicModeParamsForDynamicLibrary(linkOptsParams)
+            .setDynamicModeParamsForExecutable(linkOptsParams)
             .build();
 
-    CcInfo linkoptsCcInfo = CcInfo.builder().setCcLinkingContext(ccLinkingContext).build();
+    CcInfo linkoptsCcInfo = CcInfo.builder().setCcLinkingInfo(linkOptsCcLinkingInfo).build();
 
     ImmutableList<CcInfo> ccInfos =
         ImmutableList.<CcInfo>builder()

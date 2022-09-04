@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidLibraryResourceClassJarProviderApi;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import javax.annotation.Nonnull;
 
@@ -71,11 +70,10 @@ public final class AndroidLibraryResourceClassJarProvider extends NativeInfo
     }
 
     @Override
-    public AndroidLibraryResourceClassJarProvider create(SkylarkNestedSet jars)
-        throws EvalException {
+    public AndroidLibraryResourceClassJarProvider create(SkylarkNestedSet jars) {
       return new AndroidLibraryResourceClassJarProvider(
           NestedSetBuilder.<Artifact>stableOrder()
-              .addTransitive(jars.getSetFromParam(Artifact.class, "jars"))
+              .addTransitive(jars.getSet(Artifact.class))
               .build());
     }
   }
