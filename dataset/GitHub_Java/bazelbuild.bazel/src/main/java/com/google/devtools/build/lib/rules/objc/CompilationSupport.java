@@ -1770,8 +1770,7 @@ public class CompilationSupport implements StarlarkValue {
         NestedSetBuilder<Artifact> metadataFilesBuilder) {
       for (Artifact artifact : artifacts) {
         ActionAnalysisMetadata action = analysisEnvironment.getLocalGeneratingAction(artifact);
-        if (action.getMnemonic().equals("ObjcCompile")
-            || action.getMnemonic().equals("ObjcCompileHeader")) {
+        if (action.getMnemonic().equals("ObjcCompile")) {
           addOutputs(metadataFilesBuilder, action, ObjcRuleClasses.COVERAGE_NOTES);
         }
       }
