@@ -16,17 +16,15 @@ import org.apache.tika.parser.Parser;
 import org.eclipse.microprofile.config.ConfigProvider;
 
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
-import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.JniBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
+import io.quarkus.deployment.builditem.substrate.RuntimeInitializedClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ServiceProviderBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.tika.runtime.TikaConfiguration;
 import io.quarkus.tika.runtime.TikaRecorder;
@@ -55,12 +53,7 @@ public class TikaProcessor {
         recorder.initTikaParser(beanContainer.getValue(), config, getSupportedParserNames(config.parsers));
     }
 
-    @BuildStep
-    CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capabilities.TIKA);
-    }
-
-    @BuildStep
+    @BuildStep(providesCapabilities = "io.quarkus.tika")
     FeatureBuildItem feature() {
         return new FeatureBuildItem(FeatureBuildItem.TIKA);
     }
@@ -77,21 +70,21 @@ public class TikaProcessor {
     }
 
     @BuildStep
-    public void registerTikaCoreResources(BuildProducer<NativeImageResourceBuildItem> resource) throws Exception {
-        resource.produce(new NativeImageResourceBuildItem("org/apache/tika/mime/tika-mimetypes.xml"));
-        resource.produce(new NativeImageResourceBuildItem("org/apache/tika/parser/external/tika-external-parsers.xml"));
+    public void registerTikaCoreResources(BuildProducer<SubstrateResourceBuildItem> resource) throws Exception {
+        resource.produce(new SubstrateResourceBuildItem("org/apache/tika/mime/tika-mimetypes.xml"));
+        resource.produce(new SubstrateResourceBuildItem("org/apache/tika/parser/external/tika-external-parsers.xml"));
     }
 
     @BuildStep
-    public void registerTikaParsersResources(BuildProducer<NativeImageResourceBuildItem> resource) throws Exception {
-        resource.produce(new NativeImageResourceBuildItem("org/apache/tika/parser/pdf/PDFParser.properties"));
+    public void registerTikaParsersResources(BuildProducer<SubstrateResourceBuildItem> resource) throws Exception {
+        resource.produce(new SubstrateResourceBuildItem("org/apache/tika/parser/pdf/PDFParser.properties"));
     }
 
     @BuildStep
-    public void registerPdfBoxResources(BuildProducer<NativeImageResourceBuildItem> resource) throws Exception {
-        resource.produce(new NativeImageResourceBuildItem("org/apache/pdfbox/resources/glyphlist/additional.txt"));
-        resource.produce(new NativeImageResourceBuildItem("org/apache/pdfbox/resources/glyphlist/glyphlist.txt"));
-        resource.produce(new NativeImageResourceBuildItem("org/apache/pdfbox/resources/glyphlist/zapfdingbats.txt"));
+    public void registerPdfBoxResources(BuildProducer<SubstrateResourceBuildItem> resource) throws Exception {
+        resource.produce(new SubstrateResourceBuildItem("org/apache/pdfbox/resources/glyphlist/additional.txt"));
+        resource.produce(new SubstrateResourceBuildItem("org/apache/pdfbox/resources/glyphlist/glyphlist.txt"));
+        resource.produce(new SubstrateResourceBuildItem("org/apache/pdfbox/resources/glyphlist/zapfdingbats.txt"));
     }
 
     @BuildStep
