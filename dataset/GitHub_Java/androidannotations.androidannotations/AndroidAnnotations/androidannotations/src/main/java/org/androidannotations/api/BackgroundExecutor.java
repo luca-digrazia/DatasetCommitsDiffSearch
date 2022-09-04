@@ -16,7 +16,11 @@
 package org.androidannotations.api;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -26,85 +30,91 @@ public class BackgroundExecutor {
 
 	private static Executor executor = Executors.newScheduledThreadPool(2 * Runtime.getRuntime().availableProcessors());
 
-	private static final List<Task> tasks = new ArrayList<Task>();
-
-	/**
-	 * Execute a runnable after the given delay.
-	 * 
-	 * @param runnable
-	 *            the task to execute
-	 * @param delay
-	 *            the time from now to delay execution, in milliseconds
-	 * @throws IllegalArgumentException
-	 *             if <code>delay</code> is strictly positive and the current
-	 *             executor does not support scheduling (if
-	 *             {@link #setExecutor(Executor)} has been called with such an
-	 *             executor)
+	/*
+	 * serialRunning is used as a lock in synchronized blocks for both
+	 * serialRunning and serialQueues access
 	 */
-	private static void directExecute(Runnable runnable, int delay) {
-		if (delay > 0) {
-			/* no serial, but a delay: schedule the task */
-			if (!(executor instanceof ScheduledExecutorService)) {
-				throw new IllegalArgumentException("The executor set does not support scheduling");
-			}
-			((ScheduledExecutorService) executor).schedule(runnable, delay, TimeUnit.MILLISECONDS);
-		} else {
-			/* no serial, no delay: execute now */
-			executor.execute(runnable);
-		}
-	}
+
+	/* Set of queueIds having a currently running task */
+	private static final Set<String> serialRunning = new HashSet<String>();
+
+	/* Tasks queues for each serial */
+	private static final Map<String, List<Task>> serialQueues = new HashMap<String, List<Task>>();
 
 	/**
-	 * Execute a task after (at least) its delay <strong>and</strong> after all
-	 * tasks added with the same non-null <code>serial</code> (if any) have
-	 * completed execution.
-	 * 
-	 * @param task
-	 *            the task to execute
-	 * @throws IllegalArgumentException
-	 *             if <code>task.delay</code> is strictly positive and the
-	 *             current executor does not support scheduling (if
-	 *             {@link #setExecutor(Executor)} has been called with such an
-	 *             executor)
-	 */
-	public static synchronized void execute(Task task) {
-		if (task.serial == null || !hasSerialRunning(task.serial)) {
-			task.executionAsked = true;
-			directExecute(task, task.delay);
-		}
-		if (task.serial != null) {
-			/* keep task */
-			tasks.add(task);
-		}
-	}
-
-	/**
-	 * Execute a task.
+	 * Execute a task after (at least) the given delay <strong>and</strong>
+	 * after all tasks added with the same non-null <code>serial</code> (if any)
+	 * have completed execution.
 	 * 
 	 * @param runnable
 	 *            the task to execute
 	 * @param delay
 	 *            the time from now to delay execution, in milliseconds
 	 * @param serial
-	 *            the serial queue (<code>null</code> or <code>""</code> for no
-	 *            serial execution)
+	 *            the serial queue to use (<code>null</code> or <code>""</code>
+	 *            for no serial execution)
 	 * @throws IllegalArgumentException
 	 *             if <code>delay</code> is strictly positive and the current
 	 *             executor does not support scheduling (if
 	 *             {@link #setExecutor(Executor)} has been called with such an
 	 *             executor)
 	 */
-	public static void execute(final Runnable runnable, int delay, String serial) {
-		execute(new Task(delay, serial) {
-			@Override
-			public void execute() {
-				runnable.run();
+	public static void execute(Runnable runnable, int delay, String serial) {
+		/* "" means null (a default annotation String value cannot be null) */
+		if (serial == null || serial.isEmpty()) {
+			if (delay > 0) {
+				/* no serial, but a delay: schedule the task */
+				if (!(executor instanceof ScheduledExecutorService)) {
+					throw new IllegalArgumentException("The executor set does not support scheduling");
+				}
+				((ScheduledExecutorService) executor).schedule(runnable, delay, TimeUnit.MILLISECONDS);
+			} else {
+				/* no serial, no delay: execute now */
+				executor.execute(runnable);
 			}
-		});
+		} else {
+			/* serial is defined, the delay is managed by Task */
+			Task task = new Task(runnable, delay, serial);
+
+			synchronized (serialRunning) {
+				if (serialRunning.contains(serial)) {
+					/* a task for this serial is already running, queue this one */
+					List<Task> queue = serialQueues.get(serial);
+					if (queue == null) {
+						/* the queue does not exist yet */
+						queue = new ArrayList<Task>();
+						serialQueues.put(serial, queue);
+					}
+					/* queue the task for later execution */
+					queue.add(task);
+				} else {
+					/* mark this serial as having a running task */
+					serialRunning.add(serial);
+					/* execute the task (a wrapper for runnable) now */
+					execute(task, delay); /* do not pass serial here */
+				}
+			}
+		}
+	}
+
+	/**
+	 * Execute a task.
+	 * 
+	 * Equivalent to {@link #execute(Runnable, int, String) execute(runnable, 0,
+	 * null)}.
+	 * 
+	 * @param runnable
+	 *            the task to execute
+	 */
+	public static void execute(Runnable runnable) {
+		execute(runnable, 0, null);
 	}
 
 	/**
 	 * Execute a task after the given delay.
+	 * 
+	 * Equivalent to {@link #execute(Runnable, int, String) execute(runnable,
+	 * delay, null)}.
 	 * 
 	 * @param runnable
 	 *            the task to execute
@@ -117,17 +127,7 @@ public class BackgroundExecutor {
 	 *             executor)
 	 */
 	public static void execute(Runnable runnable, int delay) {
-		directExecute(runnable, delay);
-	}
-
-	/**
-	 * Execute a task.
-	 * 
-	 * @param runnable
-	 *            the task to execute
-	 */
-	public static void execute(Runnable runnable) {
-		directExecute(runnable, 0);
+		execute(runnable, delay, null);
 	}
 
 	/**
@@ -160,88 +160,50 @@ public class BackgroundExecutor {
 		BackgroundExecutor.executor = executor;
 	}
 
-	/**
-	 * Indicates whether a task with the specified <code>serial</code> has been
-	 * submitted to the executor.
-	 * 
-	 * @param serial
-	 *            the serial queue
-	 * @return <code>true</code> if such a task has been submitted,
-	 *         <code>false</code> otherwise
-	 */
-	private static boolean hasSerialRunning(String serial) {
-		for (Task task : tasks) {
-			if (task.executionAsked && serial.equals(task.serial)) {
-				return true;
-			}
-		}
-		return false;
-	}
+	private static class Task implements Runnable {
 
-	/**
-	 * Retrieve and remove the first task having the specified
-	 * <code>serial</code> (if any).
-	 * 
-	 * @param serial
-	 *            the serial queue
-	 * @return task if found, <code>null</code> otherwise
-	 */
-	private static Task take(String serial) {
-		int len = tasks.size();
-		for (int i = 0; i < len; i++) {
-			if (serial.equals(tasks.get(i).serial)) {
-				return tasks.remove(i);
-			}
-		}
-		return null;
-	}
+		Runnable runnable;
+		long targetTime; /* in milliseconds since epoch */
+		String serial;
 
-	public static abstract class Task implements Runnable {
-
-		private int delay;
-		private long targetTime; /* in milliseconds since epoch */
-		private String serial;
-		private boolean executionAsked;
-
-		public Task(int delay, String serial) {
+		Task(Runnable runnable, int delay, String serial) {
+			this.runnable = runnable;
 			if (delay > 0) {
-				this.delay = delay;
 				targetTime = System.currentTimeMillis() + delay;
 			}
-			if (!"".equals(serial)) {
-				this.serial = serial;
-			}
+			this.serial = serial;
 		}
 
 		@Override
 		public void run() {
 			try {
-				execute();
+				runnable.run();
 			} finally {
 				/* handle next tasks */
 				postExecute();
 			}
 		}
 
-		public abstract void execute();
-
 		private void postExecute() {
-			if (serial == null) {
-				/* nothing to do */
-				return;
-			}
-			synchronized (BackgroundExecutor.class) {
-				/* execution complete */
-				tasks.remove(this);
+			synchronized (serialRunning) {
+				List<Task> queue = serialQueues.get(serial);
+				if (queue == null) {
+					/* no task is queue for this serial, mark it as not running */
+					serialRunning.remove(serial);
+				} else {
+					/* queue is not empty, retrieve the oldest queued task */
+					Task nextTask = queue.remove(0);
 
-				Task next = take(serial);
-				if (next != null) {
-					if (next.delay != 0) {
-						/* compute remaining delay */
-						next.delay = Math.max(0, (int) (targetTime - System.currentTimeMillis()));
+					if (queue.isEmpty()) {
+						/* no more tasks in the queue */
+						serialQueues.remove(serial);
 					}
-					/* a task having the same serial was queued, execute it */
-					BackgroundExecutor.execute(next);
+
+					/* compute the remaining delay */
+					int delay = Math.max(0, (int) (nextTask.targetTime - System.currentTimeMillis()));
+
+					/* execute the next task */
+					execute(nextTask, delay); /* do not pass serial here */
 				}
 			}
 		}
