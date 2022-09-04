@@ -1,15 +1,15 @@
 package io.quarkus.hibernate.orm.runtime;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.PreDestroy;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.BeforeDestroyed;
 import javax.enterprise.event.Observes;
-import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
@@ -22,24 +22,61 @@ public class JPAConfig {
 
     private static final Logger LOGGER = Logger.getLogger(JPAConfig.class.getName());
 
-    private final Map<String, Set<String>> entityPersistenceUnitMapping;
+    private final AtomicBoolean jtaEnabled;
 
-    private final MultiTenancyStrategy multiTenancyStrategy;
-    private final String multiTenancySchemaDataSource;
+    private final AtomicReference<MultiTenancyStrategy> multiTenancyStrategy;
+
+    private final AtomicReference<String> multiTenancySchemaDataSource;
 
     private final Map<String, LazyPersistenceUnit> persistenceUnits;
 
-    @Inject
-    public JPAConfig(JPAConfigSupport jpaConfigSupport) {
-        this.entityPersistenceUnitMapping = Collections.unmodifiableMap(jpaConfigSupport.entityPersistenceUnitMapping);
-        this.multiTenancyStrategy = jpaConfigSupport.multiTenancyStrategy;
-        this.multiTenancySchemaDataSource = jpaConfigSupport.multiTenancySchemaDataSource;
+    private final AtomicReference<String> defaultPersistenceUnitName;
 
-        Map<String, LazyPersistenceUnit> persistenceUnitsBuilder = new HashMap<>();
-        for (String persistenceUnitName : jpaConfigSupport.persistenceUnitNames) {
-            persistenceUnitsBuilder.put(persistenceUnitName, new LazyPersistenceUnit(persistenceUnitName));
+    public JPAConfig() {
+        this.jtaEnabled = new AtomicBoolean();
+        this.multiTenancyStrategy = new AtomicReference<MultiTenancyStrategy>();
+        this.multiTenancySchemaDataSource = new AtomicReference<String>();
+        this.persistenceUnits = new ConcurrentHashMap<>();
+        this.defaultPersistenceUnitName = new AtomicReference<String>();
+    }
+
+    void setJtaEnabled(boolean value) {
+        jtaEnabled.set(value);
+    }
+
+    /**
+     * Sets the strategy for multitenancy.
+     * 
+     * @param strategy Strategy to use.
+     */
+    void setMultiTenancyStrategy(MultiTenancyStrategy strategy) {
+        multiTenancyStrategy.set(strategy);
+    }
+
+    /**
+     * Sets the name of the data source that should be used in case of {@link MultiTenancyStrategy#SCHEMA} approach.
+     * 
+     * @param dataSourceName Name to use or {@literal null} for the default data source.
+     */
+    void setMultiTenancySchemaDataSource(String dataSourceName) {
+        multiTenancySchemaDataSource.set(dataSourceName);
+    }
+
+    public EntityManagerFactory getEntityManagerFactory(String unitName) {
+        if (unitName == null || unitName.isEmpty()) {
+            if (persistenceUnits.size() == 1) {
+                String defaultUnitName = defaultPersistenceUnitName.get();
+                return defaultUnitName != null ? persistenceUnits.get(defaultUnitName).get()
+                        : persistenceUnits.values().iterator().next().get();
+            } else {
+                throw new IllegalStateException("Unable to identify the default PU: " + persistenceUnits);
+            }
         }
-        this.persistenceUnits = persistenceUnitsBuilder;
+        return persistenceUnits.get(unitName).get();
+    }
+
+    void registerPersistenceUnit(String unitName) {
+        persistenceUnits.put(unitName, new LazyPersistenceUnit(unitName));
     }
 
     void startAll() {
@@ -48,22 +85,14 @@ public class JPAConfig {
         }
     }
 
-    public EntityManagerFactory getEntityManagerFactory(String unitName) {
-        LazyPersistenceUnit lazyPersistenceUnit = null;
-        if (unitName == null) {
-            if (persistenceUnits.size() == 1) {
-                lazyPersistenceUnit = persistenceUnits.values().iterator().next();
-            }
-        } else {
-            lazyPersistenceUnit = persistenceUnits.get(unitName);
+    void initDefaultPersistenceUnit() {
+        if (persistenceUnits.size() == 1) {
+            defaultPersistenceUnitName.set(persistenceUnits.keySet().iterator().next());
         }
+    }
 
-        if (lazyPersistenceUnit == null) {
-            throw new IllegalArgumentException(
-                    String.format("Unable to find an EntityManagerFactory for persistence unit '%s'", unitName));
-        }
-
-        return lazyPersistenceUnit.get();
+    boolean isJtaEnabled() {
+        return jtaEnabled.get();
     }
 
     /**
@@ -77,27 +106,20 @@ public class JPAConfig {
 
     /**
      * Returns the selected multitenancy strategy.
-     *
+     * 
      * @return Strategy to use.
      */
     public MultiTenancyStrategy getMultiTenancyStrategy() {
-        return multiTenancyStrategy;
+        return multiTenancyStrategy.get();
     }
 
     /**
      * Determines which data source should be used in case of {@link MultiTenancyStrategy#SCHEMA} approach.
-     *
+     * 
      * @return Data source name or {@link null} in case the default data source should be used.
      */
     public String getMultiTenancySchemaDataSource() {
-        return multiTenancySchemaDataSource;
-    }
-
-    /**
-     * Returns the set of persistence units an entity is attached to.
-     */
-    public Set<String> getPersistenceUnitsForEntity(String entityClass) {
-        return entityPersistenceUnitMapping.getOrDefault(entityClass, Collections.emptySet());
+        return multiTenancySchemaDataSource.get();
     }
 
     /**
