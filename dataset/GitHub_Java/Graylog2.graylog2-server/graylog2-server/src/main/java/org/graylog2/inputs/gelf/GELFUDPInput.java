@@ -35,55 +35,36 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class GELFUDPInput extends MessageInput {
+public class GELFUDPInput implements MessageInput {
 
     private static final Logger LOG = LoggerFactory.getLogger(GELFUDPInput.class);
 
     public static final String NAME = "GELF UDP";
 
-    @Override
-    public void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException {
-        //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public void launch() throws MisfireException {
-        //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public void stop() {
-        //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public ConfigurationRequest getRequestedConfiguration() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public boolean isExclusive() {
-        return false;  //To change body of implemented methods use File | Settings | File Templates.
-    }
+    private Core core;
+    private String inputId;
+    private InetSocketAddress socketAddress;
 
     @Override
     public String getName() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        return NAME;
     }
 
     @Override
-    public Map<String, String> getAttributes() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+    public void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException {
+        this.core = (Core) graylogServer;
+
+        // TODO load from actual config.
+        this.socketAddress = new InetSocketAddress("127.0.0.1",12201);
     }
 
-    /*@Override
+    @Override
     public void launch() throws MisfireException {
         final ExecutorService workerThreadPool = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
@@ -105,6 +86,31 @@ public class GELFUDPInput extends MessageInput {
             LOG.error(msg, e);
             throw new MisfireException(msg);
         }
-    }*/
+    }
+
+    @Override
+    public void stop() {
+        // TODO implement me.
+    }
+
+    @Override
+    public ConfigurationRequest getRequestedConfiguration() {
+        return new ConfigurationRequest();
+    }
+
+    @Override
+    public void setId(String id) {
+        this.inputId = id;
+    }
+
+    @Override
+    public String getId() {
+        return inputId;
+    }
+
+    @Override
+    public boolean isExclusive() {
+        return false;
+    }
 
 }

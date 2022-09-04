@@ -29,21 +29,27 @@ import org.slf4j.LoggerFactory;
 
 import org.graylog2.plugin.GraylogServer;
 
-import java.util.Map;
-
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class GELFTCPInput extends MessageInput {
+public class GELFTCPInput implements MessageInput {
 
     private static final Logger LOG = LoggerFactory.getLogger(GELFTCPInput.class);
 
     public static final String NAME = "GELF TCP";
 
+    private Configuration config;
+    private GraylogServer server;
+
+    @Override
+    public String getName() {
+        return NAME;
+    }
 
     @Override
     public void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException {
-        //To change body of implemented methods use File | Settings | File Templates.
+        this.config = config;
+        this.server = graylogServer;
     }
 
     @Override
@@ -78,27 +84,27 @@ public class GELFTCPInput extends MessageInput {
 
     @Override
     public void stop() {
-        //To change body of implemented methods use File | Settings | File Templates.
+
     }
 
     @Override
     public ConfigurationRequest getRequestedConfiguration() {
+        return new ConfigurationRequest();
+    }
+
+    @Override
+    public void setId(String id) {
+        //To change body of implemented methods use File | Settings | File Templates.
+    }
+
+    @Override
+    public String getId() {
         return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
     @Override
     public boolean isExclusive() {
-        return false;  //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public String getName() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public Map<String, String> getAttributes() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        return false;
     }
 
 }
