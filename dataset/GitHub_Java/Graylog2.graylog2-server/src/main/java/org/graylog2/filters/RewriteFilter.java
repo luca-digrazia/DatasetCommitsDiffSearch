@@ -23,39 +23,35 @@ package org.graylog2.filters;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Timer;
 import com.yammer.metrics.core.TimerContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.Logger;
 import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.filters.MessageFilter;
 import org.graylog2.plugin.logmessage.LogMessage;
 
 import java.util.concurrent.TimeUnit;
-import org.graylog2.Core;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class RewriteFilter implements MessageFilter {
 
-    private static final Logger LOG = LoggerFactory.getLogger(RewriteFilter.class);
+    private static final Logger LOG = Logger.getLogger(RewriteFilter.class);
     private final Timer processTime = Metrics.newTimer(RewriteFilter.class, "ProcessTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS);
 
     @Override
-    public boolean filter(LogMessage msg, GraylogServer server) {
-        Core serverImpl = (Core) server;
+    public void filter(LogMessage msg, GraylogServer server) {
         TimerContext tcx = processTime.time();
 
-        if (serverImpl.getRulesEngine() != null) {
-            serverImpl.getRulesEngine().evaluate(msg);
+        if (server.getRulesEngine() != null) {
+            server.getRulesEngine().evaluate(msg);
         }
 
         tcx.stop();
-        return false;
     }
-    
+
     @Override
-    public String getName() {
-        return "Rewriter";
+    public boolean discard() {
+        return false;
     }
 
 }

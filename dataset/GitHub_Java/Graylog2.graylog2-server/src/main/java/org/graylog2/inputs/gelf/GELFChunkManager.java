@@ -20,47 +20,52 @@
 
 package org.graylog2.inputs.gelf;
 
+import com.google.common.collect.Maps;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Meter;
+import org.apache.log4j.Logger;
+import org.graylog2.Core;
+
 import java.io.ByteArrayOutputStream;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import org.apache.log4j.Logger;
-import org.graylog2.GraylogServer;
-
-import com.google.common.collect.Maps;
+import java.util.concurrent.TimeUnit;
 
 /**
- * GELFChunkManager.java: 13.04.2012 22:38:40
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GELFChunkManager extends Thread {
 
     private static final Logger LOG = Logger.getLogger(GELFChunkManager.class);
 
-    private Map<String, Map<Integer, GELFMessageChunk>> chunks = new ConcurrentHashMap<String, Map<Integer, GELFMessageChunk>>();
+    private Map<String, Map<Integer, GELFMessageChunk>> chunks = Maps.newConcurrentMap();
     private GELFProcessor processor;
-    private GraylogServer server;
+    private Core server;
 
     // The number of seconds a chunk is valid. Every message with chunks older than this will be dropped.
     public static final int SECONDS_VALID = 5;
+    private final Meter outdatedMessagesDropped = Metrics.newMeter(GELFChunkManager.class, "OutdatedMessagesDropped", "messages", TimeUnit.SECONDS);
 
-    public GELFChunkManager(GraylogServer server) {
-        this.server = server;
+    public GELFChunkManager(Core server) {
         this.processor = new GELFProcessor(server);
+        this.server = server;
     }
 
     @Override
     public void run() {
         while (true) {
             try {
-                LOG.debug("Dumping GELF chunk map [" + chunks.size() + "]:\n" + humanReadableChunkMap());
-
+                if (!chunks.isEmpty()) {
+                    LOG.debug("Dumping GELF chunk map [" + chunks.size() + "]:\n" + humanReadableChunkMap());
+                }
+                
                 // Check for complete or outdated messages.
                 for (Map.Entry<String, Map<Integer, GELFMessageChunk>> message : chunks.entrySet()) {
                     String messageId = message.getKey();
 
                     // Outdated?
                     if (isOutdated(messageId)) {
+                        outdatedMessagesDropped.mark();
+                        
                         LOG.debug("Not all chunks of <" + messageId + "> arrived in time. Dropping. [" + SECONDS_VALID + "s]");
                         dropMessage(messageId);
                         continue;
@@ -146,6 +151,10 @@ public class GELFChunkManager extends Thread {
     
     public boolean hasMessage(String messageId) {
         return chunks.containsKey(messageId);
+    }
+
+    public void insert(GELFMessage msg) {
+        insert(new GELFMessageChunk(msg));
     }
 
     public void insert(GELFMessageChunk chunk) {

@@ -23,8 +23,7 @@ package org.graylog2.filters;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Timer;
 import com.yammer.metrics.core.TimerContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.Logger;
 import org.graylog2.blacklists.Blacklist;
 import org.graylog2.blacklists.BlacklistRule;
 import org.graylog2.plugin.GraylogServer;
@@ -39,31 +38,35 @@ import java.util.regex.Pattern;
  */
 public class BlacklistFilter implements MessageFilter {
     
-    private static final Logger LOG = LoggerFactory.getLogger(BlacklistFilter.class);
+    private static final Logger LOG = Logger.getLogger(BlacklistFilter.class);
 
+    private boolean discard;
     private final Timer processTime = Metrics.newTimer(BlacklistFilter.class, "ProcessTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS);
-    
+
     @Override
-    public boolean filter(LogMessage msg, GraylogServer server) {
+    public void filter(LogMessage msg, GraylogServer server) {
         TimerContext tcx = processTime.time();
         for (Blacklist blacklist : Blacklist.fetchAll()) {
             for (BlacklistRule rule : blacklist.getRules()) {
                 if (Pattern.compile(rule.getTerm(), Pattern.DOTALL).matcher(msg.getShortMessage()).matches()) {
-                    LOG.debug("Message <{}> is blacklisted. First match on {}", this, rule.getTerm());
+                    LOG.debug("Message <" + this.toString() + "> is blacklisted. First match on " + rule.getTerm());
 
                     // Done - This message is blacklisted.
-                    return true;
+                    discard = true;
+                    return;
                 }
             }
         }
 
         tcx.stop();
-        return false;
+        discard = false;
+    }
+
+    @Override
+    public boolean discard() {
+        return discard;
     }
     
-    @Override
-    public String getName() {
-        return "Blacklister";
-    }
+    
 
 }

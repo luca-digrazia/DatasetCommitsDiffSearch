@@ -47,48 +47,39 @@ public class ProcessBufferProcessor implements EventHandler<LogMessageEvent> {
     private final Meter filteredOutMessages = Metrics.newMeter(ProcessBufferProcessor.class, "FilteredOutMessages", "messages", TimeUnit.SECONDS);
     private final Meter outgoingMessages = Metrics.newMeter(ProcessBufferProcessor.class, "OutgoingMessages", "messages", TimeUnit.SECONDS);
 
-    private final long ordinal;
-    private final long numberOfConsumers;
-    
-    public ProcessBufferProcessor(Core server, final long ordinal, final long numberOfConsumers) {
-        this.ordinal = ordinal;
-        this.numberOfConsumers = numberOfConsumers;
+    public ProcessBufferProcessor(Core server) {
         this.server = server;
     }
 
     @Override
     public void onEvent(LogMessageEvent event, long sequence, boolean endOfBatch) throws Exception {
-        // Because Trisha said so. (http://code.google.com/p/disruptor/wiki/FrequentlyAskedQuestions)
-        if ((sequence % numberOfConsumers) != ordinal) {
-            return;
-        }
-        
         incomingMessages.mark();
         incomingMessagesPerMinute.mark();
         TimerContext tcx = processTime.time();
 
         LogMessage msg = event.getMessage();
 
-        if (LOG.isDebugEnabled()) {
+        if (LOG.isDebugEnabled())
             LOG.debug("Starting to process message <" + msg.getId() + ">.");
-        }
 
-        for (MessageFilter filter : server.getFilters()) {
+        for (Class<? extends MessageFilter> filterType : server.getFilters()) {
             try {
-                
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("Applying filter [" + filter.getName() +"] on message <" + msg.getId() + ">.");
-                }
+                // Always create a new instance of this filter.
+                MessageFilter filter = filterType.newInstance();
 
-                if (filter.filter(msg, server)) {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("Filter [" + filter.getName() + "] marked message <" + msg.getId() + "> to be discarded. Dropping message.");
-                    }
+                String name = filterType.getSimpleName();
+                if (LOG.isDebugEnabled())
+                    LOG.debug("Applying filter [" + name +"] on message <" + msg.getId() + ">.");
+
+                filter.filter(msg, server);
+                if (filter.discard()) {
+                    if (LOG.isDebugEnabled())
+                        LOG.debug("Filter [" + name + "] marked message <" + msg.getId() + "> to be discarded. Dropping message.");
                     filteredOutMessages.mark();
                     return;
                 }
             } catch (Exception e) {
-                LOG.error("Could not apply filter [" + filter.getName() +"] on message <" + msg.getId() +">: ", e);
+                LOG.error("Could not apply filter [" + filterType.getSimpleName() +"] on message <" + msg.getId() +">: ", e);
             }
         }
 

@@ -47,28 +47,17 @@ public class OutputBufferProcessor implements EventHandler<LogMessageEvent> {
     private final Meter incomingMessages = Metrics.newMeter(OutputBufferProcessor.class, "IncomingMessages", "messages", TimeUnit.SECONDS);
     private final Histogram batchSize = Metrics.newHistogram(OutputBufferProcessor.class, "BatchSize");
 
-    private final long ordinal;
-    private final long numberOfConsumers;
-    
-    public OutputBufferProcessor(Core server, final long ordinal, final long numberOfConsumers) {
-        this.ordinal = ordinal;
-        this.numberOfConsumers = numberOfConsumers;
+    public OutputBufferProcessor(Core server) {
         this.server = server;
     }
 
     @Override
     public void onEvent(LogMessageEvent event, long sequence, boolean endOfBatch) throws Exception {
-        // Because Trisha said so. (http://code.google.com/p/disruptor/wiki/FrequentlyAskedQuestions)
-        if ((sequence % numberOfConsumers) != ordinal) {
-            return;
-        }
-        
         incomingMessages.mark();
 
         LogMessage msg = event.getMessage();
-        if (LOG.isDebugEnabled()) {
+        if (LOG.isDebugEnabled())
             LOG.debug("Processing message <" + msg.getId() + "> from OutputBuffer.");
-        }
 
         buffer.add(msg);
 
@@ -78,9 +67,8 @@ public class OutputBufferProcessor implements EventHandler<LogMessageEvent> {
                     // Always create a new instance of this filter.
                     MessageOutput output = outputType.newInstance();
 
-                    if (LOG.isDebugEnabled()) {
+                    if (LOG.isDebugEnabled())
                         LOG.debug("Writing message batch to [" + outputType.getSimpleName() + "]. Size <" + buffer.size() + ">");
-                    }
 
                     batchSize.update(buffer.size());
                     output.write(buffer, server);
@@ -92,9 +80,8 @@ public class OutputBufferProcessor implements EventHandler<LogMessageEvent> {
             }
         }
 
-        if (LOG.isDebugEnabled()) {
+        if (LOG.isDebugEnabled())
             LOG.debug("Wrote message <" + msg.getId() + "> to all outputs. Finished handling.");
-        }
     }
 
 }

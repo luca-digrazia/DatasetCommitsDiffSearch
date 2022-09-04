@@ -24,8 +24,7 @@ import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.Timer;
 import com.yammer.metrics.core.TimerContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.Logger;
 import org.graylog2.Core;
 import org.graylog2.Tools;
 import org.graylog2.logmessage.LogMessageImpl;
@@ -42,7 +41,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class SyslogProcessor {
 
-    private static final Logger LOG = LoggerFactory.getLogger(SyslogProcessor.class);
+    private static final Logger LOG = Logger.getLogger(SyslogProcessor.class);
     private Core server;
 
     private final Meter incomingMessages = Metrics.newMeter(SyslogProcessor.class, "IncomingMessages", "messages", TimeUnit.SECONDS);
@@ -55,7 +54,7 @@ public class SyslogProcessor {
         this.server = server;
     }
 
-    public void messageReceived(String msg, InetAddress remoteAddress) {
+    public void messageReceived(String msg, InetAddress remoteAddress) throws Exception {
         incomingMessages.mark();
 
         // Convert to LogMessage
@@ -80,17 +79,13 @@ public class SyslogProcessor {
         }
 
         // Add to process buffer.
-        LOG.debug("Adding received syslog message <{}> to process buffer: {}", lm.getId(), lm);
+        LOG.debug("Adding received syslog message <" + lm.getId() +"> to process buffer: " + lm);
         processedMessages.mark();
         server.getProcessBuffer().insert(lm);
     }
 
     private LogMessageImpl parse(String msg, InetAddress remoteAddress) throws UnknownHostException {
         TimerContext tcx = syslogParsedTime.time();
-        
-        if (remoteAddress == null) {
-            remoteAddress = InetAddress.getLocalHost();
-        }
 
         LogMessageImpl lm = new LogMessageImpl();
 
@@ -114,14 +109,15 @@ public class SyslogProcessor {
         Map<String, String> structuredData = StructuredSyslog.extractFields(msg.getRaw());
 
         if (structuredData.size() > 0) {
-            LOG.debug("Parsed <{}> structured data pairs. Adding as additional_fields. Not using tokenizer.", structuredData.size());
+            LOG.debug("Parsed <" + structuredData.size() + "> structured data pairs."
+                        + " Adding as additional_fields. Not using tokenizer.");
         }
 
         return structuredData;
     }
 
     private String parseHost(SyslogServerEvent msg, InetAddress remoteAddress) {
-        if (remoteAddress != null &&server.getConfiguration().getForceSyslogRdns()) {
+        if (server.getConfiguration().getForceSyslogRdns()) {
             try {
                 return Tools.rdnsLookup(remoteAddress);
             } catch (UnknownHostException e) {
