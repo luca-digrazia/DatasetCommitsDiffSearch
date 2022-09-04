@@ -11,10 +11,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import org.apache.maven.model.Dependency;
-
-import com.fasterxml.jackson.annotation.JsonIgnore;
-
 import io.quarkus.dependencies.Category;
 import io.quarkus.dependencies.Extension;
 import io.quarkus.devtools.messagewriter.MessageWriter;
@@ -101,12 +97,6 @@ public class QuarkusJsonPlatformDescriptor implements QuarkusPlatformDescriptor,
     @Override
     public Map<String, Object> getMetadata() {
         return metadata;
-    }
-
-    @Override
-    @JsonIgnore
-    public List<Dependency> getManagedDependencies() {
-        throw new UnsupportedOperationException();
     }
 
     @Override

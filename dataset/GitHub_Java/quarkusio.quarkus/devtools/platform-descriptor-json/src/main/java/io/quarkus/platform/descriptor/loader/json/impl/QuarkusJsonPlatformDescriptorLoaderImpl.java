@@ -2,11 +2,10 @@ package io.quarkus.platform.descriptor.loader.json.impl;
 
 import java.io.IOException;
 
-import com.fasterxml.jackson.core.json.JsonReadFeature;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 
 import io.quarkus.platform.descriptor.loader.json.QuarkusJsonPlatformDescriptorLoader;
 import io.quarkus.platform.descriptor.loader.json.QuarkusJsonPlatformDescriptorLoaderContext;
@@ -20,12 +19,11 @@ public class QuarkusJsonPlatformDescriptorLoaderImpl
         final QuarkusJsonPlatformDescriptor platform = context
                 .parseJson(is -> {
                     try {
-                        ObjectMapper mapper = JsonMapper.builder()
-                                .enable(JsonReadFeature.ALLOW_JAVA_COMMENTS)
-                                .enable(JsonReadFeature.ALLOW_LEADING_ZEROS_FOR_NUMBERS)
+                        ObjectMapper mapper = new ObjectMapper()
+                                .enable(JsonParser.Feature.ALLOW_COMMENTS)
+                                .enable(JsonParser.Feature.ALLOW_NUMERIC_LEADING_ZEROS)
                                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-                                .propertyNamingStrategy(PropertyNamingStrategies.KEBAB_CASE)
-                                .build();
+                                .setPropertyNamingStrategy(PropertyNamingStrategy.KEBAB_CASE);
                         return mapper.readValue(is, QuarkusJsonPlatformDescriptor.class);
                     } catch (IOException e) {
                         throw new RuntimeException("Failed to parse JSON stream", e);

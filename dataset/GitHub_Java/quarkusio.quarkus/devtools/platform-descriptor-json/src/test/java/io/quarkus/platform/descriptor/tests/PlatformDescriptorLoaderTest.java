@@ -1,21 +1,21 @@
 package io.quarkus.platform.descriptor.tests;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.function.Function;
 
 import org.junit.jupiter.api.Test;
 
-import io.quarkus.bootstrap.resolver.AppModelResolverException;
-import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
+import io.quarkus.platform.descriptor.loader.json.ArtifactResolver;
 import io.quarkus.platform.descriptor.loader.json.QuarkusJsonPlatformDescriptorLoader;
 import io.quarkus.platform.descriptor.loader.json.QuarkusJsonPlatformDescriptorLoaderContext;
 import io.quarkus.platform.descriptor.loader.json.impl.QuarkusJsonPlatformDescriptor;
 import io.quarkus.platform.descriptor.loader.json.impl.QuarkusJsonPlatformDescriptorLoaderImpl;
-import io.quarkus.platform.tools.DefaultMessageWriter;
-import io.quarkus.platform.tools.MessageWriter;
 
 class PlatformDescriptorLoaderTest {
 
@@ -24,48 +24,42 @@ class PlatformDescriptorLoaderTest {
 
         QuarkusJsonPlatformDescriptorLoader<QuarkusJsonPlatformDescriptor> qpd = new QuarkusJsonPlatformDescriptorLoaderImpl();
 
-        QuarkusJsonPlatformDescriptorLoaderContext context = new QuarkusJsonPlatformDescriptorLoaderContext() {
-
-            MessageWriter mw = new DefaultMessageWriter();
+        final ArtifactResolver artifactResolver = new ArtifactResolver() {
 
             @Override
-            public MessageWriter getMessageWriter() {
-                return mw;
-            }
-
-            @Override
-            public MavenArtifactResolver getMavenArtifactResolver() {
-                try {
-                    return MavenArtifactResolver.builder()
-                            .setRepoHome(new File("~/.m2").toPath())
-                            .setOffline(true)
-                            .build();
-                } catch (AppModelResolverException e) {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
-                }
-                return null;
-            }
-
-            @Override
-            public Path getJsonDescriptorFile() {
-                String resourceName = "fakeextensions.json";
-
-                ClassLoader classLoader = getClass().getClassLoader();
-                File file = new File(classLoader.getResource(resourceName).getFile());
-
-                return file.toPath();
+            public <T> T process(String groupId, String artifactId, String classifier, String type, String version,
+                    Function<Path, T> processor) {
+                throw new UnsupportedOperationException();
             }
         };
 
+        QuarkusJsonPlatformDescriptorLoaderContext context = new QuarkusJsonPlatformDescriptorLoaderContext(artifactResolver) {
+            @Override
+            public <T> T parseJson(Function<InputStream, T> parser) {
+                String resourceName = "fakeextensions.json";
+
+                final InputStream is = getClass().getClassLoader().getResourceAsStream(resourceName);
+                if (is == null) {
+                    throw new IllegalStateException("Failed to locate " + resourceName + " on the classpath");
+                }
+
+                try {
+                    return parser.apply(is);
+                } finally {
+                    try {
+                        is.close();
+                    } catch (IOException e) {
+                    }
+                }
+            }
+
+        };
+
         QuarkusJsonPlatformDescriptor load = qpd.load(context);
-
         assertNotNull(load);
-
         assertEquals(85, load.getExtensions().size());
-
         assertEquals(1, load.getCategories().size());
-
+        assertThat(load.getMetadata()).containsKeys("application-properties", "maven", "gradle");
     }
 
 }
