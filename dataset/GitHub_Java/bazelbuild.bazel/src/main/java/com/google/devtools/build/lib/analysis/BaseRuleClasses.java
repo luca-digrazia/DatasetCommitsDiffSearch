@@ -186,7 +186,7 @@ public class BaseRuleClasses {
   public static final class TestBaseRule implements RuleDefinition {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
-      builder
+      return builder
           .addExecGroup(TEST_RUNNER_EXEC_GROUP)
           .requiresConfigurationFragments(TestConfiguration.class)
           // TestConfiguration only needed to create TestAction and TestProvider
@@ -259,15 +259,8 @@ public class BaseRuleClasses {
                       coverageReportGeneratorAttribute(
                           env.getToolsLabel(DEFAULT_COVERAGE_REPORT_GENERATOR_VALUE))))
           // The target itself and run_under both run on the same machine.
-          .add(attr(":run_under", LABEL).value(RUN_UNDER).skipPrereqValidatorCheck());
-
-      env.getNetworkAllowlistForTests()
-          .ifPresent(
-              label ->
-                  builder.add(
-                      Allowlist.getAttributeFromAllowlistName("$network_allowlist").value(label)));
-
-      return builder.build();
+          .add(attr(":run_under", LABEL).value(RUN_UNDER).skipPrereqValidatorCheck())
+          .build();
     }
 
     @Override
@@ -376,11 +369,7 @@ public class BaseRuleClasses {
                 .allowedFileTypes(FileTypeSet.NO_FILE)
                 // TODO(b/148601291): Require provider to be "LicenseInfo".
                 .dontCheckConstraints()
-                .nonconfigurable("applicable_licenses is not configurable"))
-        .add(
-            attr("aspect_hints", LABEL_LIST)
-                .allowedFileTypes(FileTypeSet.NO_FILE)
-                .undocumented("experimental attribute"));
+                .nonconfigurable("applicable_licenses is not configurable"));
   }
 
   public static RuleClass.Builder execPropertiesAttribute(RuleClass.Builder builder)
