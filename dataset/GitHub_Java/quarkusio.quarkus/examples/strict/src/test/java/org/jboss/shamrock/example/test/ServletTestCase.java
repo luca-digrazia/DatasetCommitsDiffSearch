@@ -24,8 +24,4 @@ public class ServletTestCase {
         Assert.assertTrue(URLTester.relative("index.html").invokeURL().asString().contains("A HTML page"));
     }
 
-    @Test
-    public void testWelcomeFile() {
-        Assert.assertTrue(URLTester.relative("/").invokeURL().asString().contains("A HTML page"));
-    }
 }
