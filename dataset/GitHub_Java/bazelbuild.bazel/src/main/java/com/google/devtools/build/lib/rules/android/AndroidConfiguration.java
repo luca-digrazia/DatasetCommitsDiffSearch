@@ -422,7 +422,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     // This flag is intended to be flipped globally.
     @Option(
         name = "experimental_check_desugar_deps",
-        defaultValue = "true",
+        defaultValue = "false",
         documentationCategory = OptionDocumentationCategory.INPUT_STRICTNESS,
         effectTags = {
           OptionEffectTag.EAGERNESS_TO_EXIT,
