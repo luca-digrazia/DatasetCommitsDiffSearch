@@ -1,5 +1,5 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,165 +15,129 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package models;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
 import lib.APIException;
 import lib.ApiClient;
-import lib.ExclusiveInputException;
-import models.api.requests.InputLaunchRequest;
-import models.api.responses.BuffersResponse;
+import lib.Configuration;
+import models.api.responses.NodeResponse;
 import models.api.responses.NodeSummaryResponse;
-import models.api.responses.system.*;
+import models.api.responses.system.InputSummaryResponse;
+import models.api.responses.system.InputsResponse;
 import org.joda.time.DateTime;
-import org.slf4j.LoggerFactory;
 import play.Logger;
-import play.mvc.Http;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class Node {
 
-    public interface Factory {
-        Node fromSummaryResponse(NodeSummaryResponse r);
-    }
-    private static final org.slf4j.Logger log = LoggerFactory.getLogger(Node.class);
+    private static final Random randomGenerator = new Random();
 
-    private final ApiClient api;
-
-    private final Input.Factory inputFactory;
     private final String transportAddress;
     private final DateTime lastSeen;
     private final String nodeId;
     private final String shortNodeId;
-
     private final String hostname;
     private final boolean isMaster;
-    private final boolean isProcessing;
-    @AssistedInject
-    public Node(ApiClient api, Input.Factory inputFactory, @Assisted NodeSummaryResponse r) {
-        this.api = api;
-        this.inputFactory = inputFactory;
 
+    // populate this lazily to avoid blowing tests...(the Configuration class isn't loaded at that point)
+    private static Node INITIAL_NODE;
+
+    private static final List<Node> nodes = Lists.newArrayList();
+
+    public Node(NodeSummaryResponse r) {
         transportAddress = r.transportAddress;
         lastSeen = new DateTime(r.lastSeen);
         nodeId = r.nodeId;
         shortNodeId = r.shortNodeId;
         hostname = r.hostname;
         isMaster = r.isMaster;
-        isProcessing = r.isProcessing;
     }
 
-    public BufferInfo getBufferInfo() {
+    public static Node fromId(String id) {
+        NodeSummaryResponse response;
         try {
-            return new BufferInfo(
-                    api.get(BuffersResponse.class)
-                    .node(this)
-                    .path("/system/buffers")
-                    .execute());
-        } catch (APIException e) {
-            log.error("Unable to read buffer info from node " + this, e);
+            response = ApiClient.get(NodeSummaryResponse.class)
+                    .node(getInitialNode())
+                    .path("/cluster/nodes/{0}", id)
+                    .execute();
         } catch (IOException e) {
-            log.error("Unexpected exception", e);
+            return null;
+        } catch (APIException e) {
+            return null;
         }
-        return null;
+
+        return new Node(response);
+    }
+
+    public synchronized static List<Node> all() throws IOException, APIException {
+        // TODO don't just get the node list once
+        if (nodes.size() == 0) {
+            NodeResponse response = ApiClient.get(NodeResponse.class)
+                    .path("/cluster/nodes")
+                    .node(getInitialNode())
+                    .execute();
+            for (NodeSummaryResponse nsr : response.nodes) {
+                nodes.add(new Node(nsr));
+            }
+        }
+        return nodes;
+    }
+
+    public static Map<String, Node> map() throws IOException, APIException {
+        Map<String, Node> map = Maps.newHashMap();
+        for (Node node : all()) {
+            map.put(node.getNodeId(), node);
+        }
+
+        return map;
+    }
+
+    public static Node random() throws IOException, APIException {
+        List<Node> nodes = all();
+        return nodes.get(randomGenerator.nextInt(nodes.size()));
+    }
+
+    public static synchronized Node getInitialNode() {
+        if (INITIAL_NODE == null) {
+            final NodeSummaryResponse r = new NodeSummaryResponse();
+            r.transportAddress = Configuration.getServerRestUris().get(0);
+            INITIAL_NODE = new Node(r);
+        }
+        return INITIAL_NODE;
     }
 
     public String getThreadDump() throws IOException, APIException {
-        return api.get(String.class).node(this).path("/system/threaddump").execute();
+        return ApiClient.get(String.class).node(this).path("/system/threaddump").execute();
     }
 
     public List<Input> getInputs() {
         List<Input> inputs = Lists.newArrayList();
 
         for (InputSummaryResponse input : inputs().inputs) {
-            inputs.add(inputFactory.fromSummaryResponse(input));
+            inputs.add(new Input(input));
         }
 
         return inputs;
     }
 
     public Input getInput(String inputId) throws IOException, APIException {
-        final InputSummaryResponse inputSummaryResponse = api.get(InputSummaryResponse.class).node(this).path("/system/inputs/{0}", inputId).execute();
-        return inputFactory.fromSummaryResponse(inputSummaryResponse);
+        final InputSummaryResponse inputSummaryResponse = ApiClient.get(InputSummaryResponse.class).node(this).path("/system/inputs/{0}", inputId).execute();
+        return new Input(inputSummaryResponse);
     }
 
     public int numberOfInputs() {
         return inputs().total;
-    }
-
-    public boolean launchInput(String title, String type, Map<String, Object> configuration, User creator, boolean isExclusive) throws ExclusiveInputException {
-        if (isExclusive) {
-            for (Input input : getInputs()) {
-                if (input.getType().equals(type)) {
-                    throw new ExclusiveInputException();
-                }
-            }
-        }
-
-        InputLaunchRequest request = new InputLaunchRequest();
-        request.title = title;
-        request.type = type;
-        request.configuration = configuration;
-        request.creatorUserId = creator.getId();
-
-        try {
-            api.post()
-                    .path("/system/inputs")
-                    .node(this)
-                    .body(request)
-                    .expect(Http.Status.ACCEPTED)
-                    .execute();
-            return true;
-        } catch (APIException e) {
-            log.error("Could not launch input " + title, e);
-        } catch (IOException e) {
-            log.error("Could not launch input " + title, e);
-        }
-        return false;
-    }
-
-    public boolean terminateInput(String inputId) {
-        try {
-            api.delete().path("/system/inputs/{0}", inputId)
-                    .node(this)
-                    .expect(Http.Status.ACCEPTED)
-                    .execute();
-            return true;
-        } catch (APIException e) {
-            log.error("Could not terminate input " + inputId, e);
-        } catch (IOException e) {
-            log.error("Could not terminate input " + inputId, e);
-        }
-        return false;
-    }
-
-    public Map<String, String> getInputTypes() throws IOException, APIException {
-        return api.get(InputTypesResponse.class).node(this).path("/system/inputs/types").execute().types;
-    }
-
-    public InputTypeSummaryResponse getInputTypeInformation(String type) throws IOException, APIException {
-        return api.get(InputTypeSummaryResponse.class).node(this).path("/system/inputs/types/{0}", type).execute();
-    }
-
-    public Map<String, InputTypeSummaryResponse> getAllInputTypeInformation() throws IOException, APIException {
-        Map<String, InputTypeSummaryResponse> types = Maps.newHashMap();
-
-        for (String type : getInputTypes().keySet()) {
-            InputTypeSummaryResponse itr = getInputTypeInformation(type);
-            types.put(itr.type, itr);
-        }
-
-        return types;
     }
 
     public String getTransportAddress() {
@@ -200,55 +164,17 @@ public class Node {
         return isMaster;
     }
 
-    public boolean isProcessing() {
-        return isProcessing;
-    }
-
-    public void pause() throws IOException, APIException {
-        api.put()
-            .path("/system/processing/pause")
-            .node(this)
-            .execute();
-    }
-
-    public void resume() throws IOException, APIException {
-        api.put()
-            .path("/system/processing/resume")
-            .node(this)
-            .execute();
-    }
-
-    public int getThroughput() {
-        try {
-            return api.get(ServerThroughputResponse.class).node(this).path("/system/throughput").execute().throughput;
-        } catch (APIException e) {
-            log.error("Could not load throughput for node " + this, e);
-        } catch (IOException e) {
-            log.error("Could not load throughput for node " + this, e);
-        }
-        return 0;
-    }
-
     /**
      * This swallows all exceptions to allow easy lazy-loading in views without exception handling.
      *
      * @return List of running inputs o this node.
      */
-    private InputsResponse inputs() {
+    private InputsResponse inputs()  {
         try {
-            return api.get(InputsResponse.class).node(this).path("/system/inputs").execute();
+            return ApiClient.get(InputsResponse.class).node(this).path("/system/inputs").execute();
         } catch (Exception e) {
             Logger.error("Could not get inputs.", e);
             throw new RuntimeException("Could not get inputs.", e);
         }
-    }
-
-    @Override
-    public String toString() {
-        return "Node{" +
-                "nodeId='" + nodeId + '\'' +
-                ", transportAddress='" + transportAddress + '\'' +
-                ", isMaster=" + isMaster +
-                '}';
     }
 }
