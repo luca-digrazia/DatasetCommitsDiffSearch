@@ -15,7 +15,11 @@ import javax.net.ssl.HostnameVerifier;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.rest.client.RestClientBuilder;
+
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.InstanceHandle;
 
 public class RestClientBase {
 
@@ -50,25 +54,24 @@ public class RestClientBase {
         configureTimeouts(builder);
         configureProviders(builder);
         configureSsl(builder);
+        // If we have context propagation, then propagate context to the async client threads
+        InstanceHandle<ManagedExecutor> managedExecutor = Arc.container().instance(ManagedExecutor.class);
+        if (managedExecutor.isAvailable()) {
+            builder.executorService(managedExecutor.get());
+        }
 
         return builder.build(proxyType);
     }
 
     private void configureSsl(RestClientBuilder builder) {
         Optional<String> maybeTrustStore = getOptionalProperty(REST_TRUST_STORE, String.class);
-        if (maybeTrustStore.isPresent()) {
-            registerTrustStore(maybeTrustStore.get(), builder);
-        }
+        maybeTrustStore.ifPresent(trustStore -> registerTrustStore(trustStore, builder));
 
         Optional<String> maybeKeyStore = getOptionalProperty(REST_KEY_STORE, String.class);
-        if (maybeKeyStore.isPresent()) {
-            registerKeyStore(maybeKeyStore.get(), builder);
-        }
+        maybeKeyStore.ifPresent(keyStore -> registerKeyStore(keyStore, builder));
 
         Optional<String> maybeHostnameVerifier = getOptionalProperty(REST_HOSTNAME_VERIFIER, String.class);
-        if (maybeHostnameVerifier.isPresent()) {
-            registerHostnameVerifier(maybeHostnameVerifier.get(), builder);
-        }
+        maybeHostnameVerifier.ifPresent(verifier -> registerHostnameVerifier(verifier, builder));
     }
 
     private void registerHostnameVerifier(String verifier, RestClientBuilder builder) {
@@ -92,10 +95,8 @@ public class RestClientBase {
 
         try {
             KeyStore keyStore = KeyStore.getInstance(keyStoreType.orElse("JKS"));
-            if (!keyStorePassword.isPresent()) {
-                throw new IllegalArgumentException("No password provided for keystore");
-            }
-            String password = keyStorePassword.get();
+            String password = keyStorePassword
+                    .orElseThrow(() -> new IllegalArgumentException("No password provided for keystore"));
 
             try (InputStream input = locateStream(keyStorePath)) {
                 keyStore.load(input, password.toCharArray());
@@ -116,10 +117,8 @@ public class RestClientBase {
 
         try {
             KeyStore trustStore = KeyStore.getInstance(maybeTrustStoreType.orElse("JKS"));
-            if (!maybeTrustStorePassword.isPresent()) {
-                throw new IllegalArgumentException("No password provided for truststore");
-            }
-            String password = maybeTrustStorePassword.get();
+            String password = maybeTrustStorePassword
+                    .orElseThrow(() -> new IllegalArgumentException("No password provided for truststore"));
 
             try (InputStream input = locateStream(trustStorePath)) {
                 trustStore.load(input, password.toCharArray());
@@ -161,15 +160,14 @@ public class RestClientBase {
 
     private void configureProviders(RestClientBuilder builder) {
         Optional<String> maybeProviders = getOptionalProperty(REST_PROVIDERS, String.class);
-        if (maybeProviders.isPresent()) {
-            registerProviders(builder, maybeProviders.get());
-        }
+        maybeProviders.ifPresent(providers -> registerProviders(builder, providers));
     }
 
     private void registerProviders(RestClientBuilder builder, String providersAsString) {
-        for (String s : providersAsString.split(",")) {
-            builder.register(providerClassForName(s.trim()));
-        }
+        Stream.of(providersAsString.split(","))
+                .map(String::trim)
+                .map(this::providerClassForName)
+                .forEach(builder::register);
     }
 
     private Class<?> providerClassForName(String name) {
@@ -182,14 +180,10 @@ public class RestClientBase {
 
     private void configureTimeouts(RestClientBuilder builder) {
         Optional<Long> connectTimeout = getOptionalProperty(REST_CONNECT_TIMEOUT_FORMAT, Long.class);
-        if (connectTimeout.isPresent()) {
-            builder.connectTimeout(connectTimeout.get(), TimeUnit.MILLISECONDS);
-        }
+        connectTimeout.ifPresent(timeout -> builder.connectTimeout(timeout, TimeUnit.MILLISECONDS));
 
         Optional<Long> readTimeout = getOptionalProperty(REST_READ_TIMEOUT_FORMAT, Long.class);
-        if (readTimeout.isPresent()) {
-            builder.readTimeout(readTimeout.get(), TimeUnit.MILLISECONDS);
-        }
+        readTimeout.ifPresent(timeout -> builder.readTimeout(timeout, TimeUnit.MILLISECONDS));
     }
 
     private void configureBaseUrl(RestClientBuilder builder) {
