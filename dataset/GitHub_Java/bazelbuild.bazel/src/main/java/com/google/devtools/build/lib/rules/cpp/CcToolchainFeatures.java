@@ -18,6 +18,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 import com.google.common.base.Strings;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -761,9 +762,14 @@ public class CcToolchainFeatures implements Serializable {
       Optional<CToolchain.Tool> tool =
           Iterables.tryFind(
               tools,
-              input -> {
-                Collection<String> featureNamesForTool = input.getWithFeature().getFeatureList();
-                return enabledFeatureNames.containsAll(featureNamesForTool);
+              new Predicate<CToolchain.Tool>() {
+                // We select the first listed tool for which all specified features are activated
+                // in this configuration
+                @Override
+                public boolean apply(CToolchain.Tool input) {
+                  Collection<String> featureNamesForTool = input.getWithFeature().getFeatureList();
+                  return enabledFeatureNames.containsAll(featureNamesForTool);
+                }
               });
       if (tool.isPresent()) {
         return new Tool(tool.get());
@@ -1429,13 +1435,7 @@ public class CcToolchainFeatures implements Serializable {
         stringVariablesMap.putAll(variables.stringVariablesMap);
       }
 
-      /** Add an integer variable that expands {@code name} to {@code value}. */
-      public Builder addIntegerVariable(String name, int value) {
-        variablesMap.put(name, new IntegerValue(value));
-        return this;
-      }
-
-      /** Add a string variable that expands {@code name} to {@code value}. */
+      /** Add a variable that expands {@code name} to {@code value}. */
       public Builder addStringVariable(String name, String value) {
         Preconditions.checkArgument(
             !variablesMap.containsKey(name), "Cannot overwrite variable '%s'", name);
