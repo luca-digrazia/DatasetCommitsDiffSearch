@@ -21,12 +21,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
 
 @AutoValue
-abstract class KeywordRange extends TimeRange {
+public abstract class KeywordRange extends TimeRange {
     static final String KEYWORD = "keyword";
 
     @JsonProperty
     @Override
-    abstract String type();
+    public abstract String type();
 
     @JsonProperty
     abstract String keyword();
@@ -36,7 +36,7 @@ abstract class KeywordRange extends TimeRange {
         return builder().type(type).keyword(keyword).build();
     }
 
-    static KeywordRange create(String keyword) {
+    public static KeywordRange create(String keyword) {
         return create(KEYWORD, keyword);
     }
 

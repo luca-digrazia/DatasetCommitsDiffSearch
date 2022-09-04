@@ -24,19 +24,19 @@ import org.joda.time.DateTime;
 
 @AutoValue
 @JsonTypeName(value = AbsoluteRange.ABSOLUTE)
-abstract class AbsoluteRange extends TimeRange {
+public abstract class AbsoluteRange extends TimeRange {
 
     static final String ABSOLUTE = "absolute";
 
     @JsonProperty
     @Override
-    abstract String type();
+    public abstract String type();
 
     @JsonProperty
-    abstract DateTime from();
+    public abstract DateTime from();
 
     @JsonProperty
-    abstract DateTime to();
+    public abstract DateTime to();
 
     static Builder builder() {
         return new AutoValue_AbsoluteRange.Builder();
@@ -49,7 +49,7 @@ abstract class AbsoluteRange extends TimeRange {
         return builder().type(type).from(from).to(to).build();
     }
 
-    static AbsoluteRange create(DateTime from, DateTime to) {
+    public static AbsoluteRange create(DateTime from, DateTime to) {
         return builder().type(ABSOLUTE).from(from).to(to).build();
     }
 
