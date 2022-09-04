@@ -1,294 +1,126 @@
 package io.quarkus.vertx.runtime;
 
-import io.vertx.core.Vertx;
-import io.vertx.core.VertxOptions;
-import io.vertx.core.eventbus.EventBus;
-import io.vertx.core.eventbus.EventBusOptions;
-import io.vertx.core.eventbus.MessageConsumer;
-import io.vertx.core.file.FileSystemOptions;
-import io.vertx.core.http.ClientAuth;
-import io.vertx.core.net.JksOptions;
-import io.vertx.core.net.PemKeyCertOptions;
-import io.vertx.core.net.PemTrustOptions;
-import io.vertx.core.net.PfxOptions;
+import java.util.Set;
 
-import javax.annotation.PreDestroy;
 import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.context.BeforeDestroyed;
+import javax.enterprise.context.spi.Context;
+import javax.enterprise.event.Observes;
+import javax.enterprise.inject.Any;
 import javax.enterprise.inject.Produces;
+import javax.enterprise.inject.spi.Bean;
+import javax.enterprise.inject.spi.BeanManager;
 import javax.inject.Singleton;
 
-import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+import org.jboss.logging.Logger;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Vertx;
+import io.vertx.core.eventbus.EventBus;
 
 /**
- * Produces a configured Vert.x instance.
- * It also exposes the Vert.x event bus.
+ * Expose the Vert.x event bus and produces Mutiny, Axle (Deprecated) and Rx Vert.x (Deprecated) instances.
+ * <p>
+ * The original Vert.x instance is coming from the core artifact.
+ *
+ * IMPORTANT: The Axle and RxJava 2 API are now deprecated. It is recommended to switch to the Mutiny API.
+ * 
+ * IMPL NOTE: There is no need to cache the mutiny/axle/rx wrappers locally because the bean instances are stored in the
+ * singleton context, i.e. the producer method is only called once.
  */
 @ApplicationScoped
 public class VertxProducer {
 
-    private volatile VertxConfiguration conf;
-    private volatile Vertx vertx;
-    private io.vertx.axle.core.Vertx axle;
-    private io.vertx.reactivex.core.Vertx rx;
+    private static final Logger LOGGER = Logger.getLogger(VertxProducer.class);
 
-    private void createCompanions(Vertx instance) {
-        this.vertx = instance == null ? Vertx.vertx() : instance;
-        this.axle = io.vertx.axle.core.Vertx.newInstance(this.vertx);
-        this.rx = io.vertx.reactivex.core.Vertx.newInstance(this.vertx);
-    }
-
-    private void initialize() {
-        if (conf == null) {
-            createCompanions(null);
-            return;
-        }
-
-        VertxOptions options = convertToVertxOptions(conf);
-
-        if (!conf.useAsyncDNS) {
-            System.setProperty("vertx.disableDnsResolver", "true");
-        }
-
-        System.setProperty("vertx.cacheDirBase", System.getProperty("java.io.tmpdir"));
-
-        if (options.isClustered()) {
-            AtomicReference<Throwable> failure = new AtomicReference<>();
-            CountDownLatch latch = new CountDownLatch(1);
-            Vertx.clusteredVertx(options, ar -> {
-                if (ar.failed()) {
-                    failure.set(ar.cause());
-                } else {
-                    createCompanions(ar.result());
-                }
-                latch.countDown();
-            });
-            try {
-                latch.await();
-                if (failure.get() != null) {
-                    throw new IllegalStateException("Unable to initialize the Vert.x instance", failure.get());
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("Unable to initialize the Vert.x instance", e);
-            }
-        } else {
-            createCompanions(Vertx.vertx(options));
-        }
-    }
-
-    private VertxOptions convertToVertxOptions(VertxConfiguration conf) {
-        VertxOptions options = new VertxOptions();
-        // Order matters, as the cluster options modifies the event bus options.
-        setEventBusOptions(options);
-        initializeClusterOptions(options);
-
-        options.setFileSystemOptions(new FileSystemOptions()
-                .setFileCachingEnabled(conf.caching)
-                .setClassPathResolvingEnabled(conf.classpathResolving));
-        options.setWorkerPoolSize(conf.workerPoolSize);
-        options.setBlockedThreadCheckInterval(conf.warningExceptionTime.toMillis());
-        options.setInternalBlockingPoolSize(conf.internalBlockingPoolSize);
-        if (conf.eventLoopsPoolSize.isPresent()) {
-            options.setEventLoopPoolSize(conf.eventLoopsPoolSize.getAsInt());
-        }
-        // TODO - Add the ability to configure these times in ns when long will be supported
-        //  options.setMaxEventLoopExecuteTime(conf.maxEventLoopExecuteTime)
-        //         .setMaxWorkerExecuteTime(conf.maxWorkerExecuteTime)
-        options.setWarningExceptionTime(conf.warningExceptionTime.toNanos());
-
-        return options;
-    }
-
-    @PreDestroy
-    public void destroy() {
-        if (vertx != null) {
-            vertx.close();
-        }
-    }
-
-    private void initializeClusterOptions(VertxOptions options) {
-        ClusterConfiguration cluster = conf.cluster;
-        options.setClustered(cluster.clustered);
-        options.setClusterPingReplyInterval(cluster.pingReplyInterval.toMillis());
-        options.setClusterPingInterval(cluster.pingInterval.toMillis());
-        if (cluster.host != null) {
-            options.setClusterHost(cluster.host);
-        }
-        if (cluster.port.isPresent()) {
-            options.setClusterPort(cluster.port.getAsInt());
-        }
-        cluster.publicHost.ifPresent(options::setClusterPublicHost);
-        if (cluster.publicPort.isPresent()) {
-            options.setClusterPort(cluster.publicPort.getAsInt());
-        }
-    }
-
-    private void setEventBusOptions(VertxOptions options) {
-        EventBusConfiguration eb = conf.eventbus;
-        EventBusOptions opts = new EventBusOptions();
-        opts.setAcceptBacklog(eb.acceptBacklog.orElse(-1));
-        opts.setClientAuth(ClientAuth.valueOf(eb.clientAuth.toUpperCase()));
-        opts.setConnectTimeout((int) (Math.min(Integer.MAX_VALUE, eb.connectTimeout.toMillis())));
-        // todo: use timeUnit cleverly
-        opts.setIdleTimeout(eb.idleTimeout.isPresent() ? (int) Math.max(1, Math.min(Integer.MAX_VALUE, eb.idleTimeout.get().getSeconds())) : 0);
-        opts.setSendBufferSize(eb.sendBufferSize.orElse(-1));
-        opts.setSoLinger(eb.soLinger.orElse(-1));
-        opts.setSsl(eb.ssl);
-        opts.setReceiveBufferSize(eb.receiveBufferSize.orElse(-1));
-        opts.setReconnectAttempts(eb.reconnectAttempts);
-        opts.setReconnectInterval(eb.reconnectInterval.toMillis());
-        opts.setReuseAddress(eb.reuseAddress);
-        opts.setReusePort(eb.reusePort);
-        opts.setTrafficClass(eb.trafficClass.orElse(-1));
-        opts.setTcpKeepAlive(eb.tcpKeepAlive);
-        opts.setTcpNoDelay(eb.tcpNoDelay);
-        opts.setTrustAll(eb.trustAll);
-
-        // Certificates and trust.
-        if (eb.keyCertificatePem != null) {
-            List<String> certs = new ArrayList<>();
-            List<String> keys = new ArrayList<>();
-            eb.keyCertificatePem.certs.ifPresent(s ->
-                    certs.addAll(Pattern.compile(",").splitAsStream(s).map(String::trim).collect(Collectors.toList()))
-            );
-            eb.keyCertificatePem.keys.ifPresent(s ->
-                    keys.addAll(Pattern.compile(",").splitAsStream(s).map(String::trim).collect(Collectors.toList()))
-            );
-            PemKeyCertOptions o = new PemKeyCertOptions()
-                    .setCertPaths(certs)
-                    .setKeyPaths(keys);
-            opts.setPemKeyCertOptions(o);
-        }
-
-        if (eb.keyCertificateJks != null) {
-            JksOptions o = new JksOptions();
-            eb.keyCertificateJks.path.ifPresent(o::setPath);
-            eb.keyCertificateJks.password.ifPresent(o::setPassword);
-            opts.setKeyStoreOptions(o);
-        }
-
-        if (eb.keyCertificatePfx != null) {
-            PfxOptions o = new PfxOptions();
-            eb.keyCertificatePfx.path.ifPresent(o::setPath);
-            eb.keyCertificatePfx.password.ifPresent(o::setPassword);
-            opts.setPfxKeyCertOptions(o);
-        }
-
-        if (eb.trustCertificatePem != null) {
-            eb.trustCertificatePem.certs.ifPresent(s -> {
-                PemTrustOptions o = new PemTrustOptions();
-                Pattern.compile(",").splitAsStream(s).map(String::trim).forEach(o::addCertPath);
-                opts.setPemTrustOptions(o);
-            });
-        }
-
-        if (eb.trustCertificateJks != null) {
-            JksOptions o = new JksOptions();
-            eb.trustCertificateJks.path.ifPresent(o::setPath);
-            eb.trustCertificateJks.password.ifPresent(o::setPassword);
-            opts.setTrustStoreOptions(o);
-        }
-
-        if (eb.trustCertificatePfx != null) {
-            PfxOptions o = new PfxOptions();
-            eb.trustCertificatePfx.path.ifPresent(o::setPath);
-            eb.trustCertificatePfx.password.ifPresent(o::setPassword);
-            opts.setPfxTrustOptions(o);
-        }
-        options.setEventBusOptions(opts);
+    @Singleton
+    @Produces
+    public EventBus eventbus(Vertx vertx) {
+        return vertx.eventBus();
     }
 
     @Singleton
     @Produces
-    public synchronized Vertx vertx() {
-        if (vertx != null) {
-            return vertx;
-        }
-        initialize();
-        return this.vertx;
+    public io.vertx.mutiny.core.Vertx mutiny(Vertx vertx) {
+        return io.vertx.mutiny.core.Vertx.newInstance(vertx);
     }
 
     @Singleton
     @Produces
-    public synchronized io.vertx.axle.core.Vertx axle() {
-        if (this.axle != null) {
-            return this.axle;
-        }
-        initialize();
-        return this.axle;
+    @Deprecated
+    public io.vertx.axle.core.Vertx axle(Vertx vertx) {
+        LOGGER.warn(
+                "`io.vertx.axle.core.Vertx` is deprecated and will be removed in a future version - it is "
+                        + "recommended to switch to `io.vertx.mutiny.core.Vertx`");
+        return io.vertx.axle.core.Vertx.newInstance(vertx);
     }
 
     @Singleton
     @Produces
-    public synchronized io.vertx.reactivex.core.Vertx rx() {
-        if (this.rx != null) {
-            return this.rx;
-        }
-        initialize();
-        return this.rx;
+    @Deprecated
+    public io.vertx.reactivex.core.Vertx rx(Vertx vertx) {
+        LOGGER.warn(
+                "`io.vertx.reactivex.core.Vertx` is deprecated  and will be removed in a future version - it is "
+                        + "recommended to switch to `io.vertx.mutiny.core.Vertx`");
+        return io.vertx.reactivex.core.Vertx.newInstance(vertx);
     }
 
     @Singleton
     @Produces
-    public synchronized EventBus eventbus() {
-        if (vertx == null) {
-            initialize();
-        }
-        return this.vertx.eventBus();
+    @Deprecated
+    public io.vertx.axle.core.eventbus.EventBus axleEventBus(io.vertx.axle.core.Vertx axle) {
+        LOGGER.warn(
+                "`io.vertx.axle.core.eventbus.EventBus` is deprecated and will be removed in a future version - it is "
+                        + "recommended to switch to `io.vertx.mutiny.core.eventbus.EventBus`");
+        return axle.eventBus();
     }
 
-    void configure(VertxConfiguration config) {
-        this.conf = config;
+    @Singleton
+    @Produces
+    @Deprecated
+    public io.vertx.reactivex.core.eventbus.EventBus rxEventBus(io.vertx.reactivex.core.Vertx rx) {
+        LOGGER.warn(
+                "`io.vertx.reactivex.core.eventbus.EventBus` is deprecated and will be removed in a future version - it "
+                        + "is recommended to switch to `io.vertx.mutiny.core.eventbus.EventBus`");
+        return rx.eventBus();
     }
 
-    void registerMessageConsumers(Map<String, ConsumeEvent> messageConsumerConfigurations) {
-        if (!messageConsumerConfigurations.isEmpty()) {
-            EventBus eventBus = eventbus();
-            CountDownLatch latch = new CountDownLatch(messageConsumerConfigurations.size());
-            for (Entry<String, ConsumeEvent> entry : messageConsumerConfigurations.entrySet()) {
-                EventConsumerInvoker invoker = createInvoker(entry.getKey());
-                String address = entry.getValue().value();
-                MessageConsumer<Object> consumer;
-                if (entry.getValue().local()) {
-                    consumer = eventBus.localConsumer(address);
-                } else {
-                    consumer = eventBus.consumer(address);
-                }
-                consumer.handler(m -> invoker.invoke(m));
-                consumer.completionHandler(ar -> {
-                    if (ar.succeeded()) {
-                        latch.countDown();
+    @Singleton
+    @Produces
+    public io.vertx.mutiny.core.eventbus.EventBus mutinyEventBus(io.vertx.mutiny.core.Vertx mutiny) {
+        return mutiny.eventBus();
+    }
+
+    /**
+     * Undeploy verticles backed by contextual instances of {@link ApplicationScoped} beans before the application context is
+     * destroyed. Otherwise Vertx may attempt to stop the verticles after the CDI container is shut down.
+     * 
+     * @param event
+     * @param beanManager
+     */
+    void undeployVerticles(@Observes @BeforeDestroyed(ApplicationScoped.class) Object event, BeanManager beanManager) {
+        // Only beans with the AbstractVerticle in the set of bean types are considered - we need a deployment id 
+        Set<Bean<?>> beans = beanManager.getBeans(AbstractVerticle.class, Any.Literal.INSTANCE);
+        Context applicationContext = beanManager.getContext(ApplicationScoped.class);
+        for (Bean<?> bean : beans) {
+            if (ApplicationScoped.class.equals(bean.getScope())) {
+                // Only beans with @ApplicationScoped are considered
+                Object instance = applicationContext.get(bean);
+                if (instance != null) {
+                    // Only existing instances are considered
+                    try {
+                        AbstractVerticle verticle = (AbstractVerticle) instance;
+                        io.vertx.mutiny.core.Vertx mutiny = beanManager.createInstance()
+                                .select(io.vertx.mutiny.core.Vertx.class).get();
+                        mutiny.undeploy(verticle.deploymentID()).await().indefinitely();
+                        LOGGER.debugf("Undeployed verticle: %s", instance.getClass());
+                    } catch (Exception e) {
+                        // In theory, a user can undeploy the verticle manually
+                        LOGGER.debugf("Unable to undeploy verticle %s: %s", instance.getClass(), e.toString());
                     }
-                });
-            }
-            try {
-                latch.await();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("Unable to register all message consumer methods", e);
+                }
             }
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private EventConsumerInvoker createInvoker(String invokerClassName) {
-        try {
-            ClassLoader cl = Thread.currentThread().getContextClassLoader();
-            if (cl == null) {
-                cl = VertxProducer.class.getClassLoader();
-            }
-            Class<? extends EventConsumerInvoker> invokerClazz = (Class<? extends EventConsumerInvoker>) cl.loadClass(invokerClassName);
-            return invokerClazz.getDeclaredConstructor().newInstance();
-        } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | NoSuchMethodException | InvocationTargetException e) {
-            throw new IllegalStateException("Unable to create invoker: " + invokerClassName, e);
-        }
-    }
 }
