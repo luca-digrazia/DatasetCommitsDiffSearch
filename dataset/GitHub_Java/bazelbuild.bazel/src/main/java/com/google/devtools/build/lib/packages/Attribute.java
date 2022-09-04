@@ -998,11 +998,6 @@ public final class Attribute implements Comparable<Attribute> {
       return this;
     }
 
-    public Builder<TYPE> mandatoryProviders(SkylarkProviderIdentifier... providers) {
-      mandatoryProviders(Arrays.asList(providers));
-      return this;
-    }
-
     /**
      * Asserts that a particular parameterized aspect probably needs to be computed for all direct
      * dependencies through this attribute.

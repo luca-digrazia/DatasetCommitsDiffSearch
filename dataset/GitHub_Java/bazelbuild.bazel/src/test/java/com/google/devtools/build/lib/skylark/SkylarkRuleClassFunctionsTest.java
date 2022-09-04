@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.packages.SkylarkAspectClass;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
+import com.google.devtools.build.lib.packages.ToolchainConstructor;
 import com.google.devtools.build.lib.rules.SkylarkAttr;
 import com.google.devtools.build.lib.rules.SkylarkAttr.Descriptor;
 import com.google.devtools.build.lib.rules.SkylarkFileType;
@@ -409,15 +410,6 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   }
 
   @Test
-  public void testAspectAddToolchain() throws Exception {
-    scratch.file("test/BUILD", "toolchain_type(name = 'my_toolchain_type')");
-    evalAndExport(
-        "def _impl(ctx): pass", "a1 = aspect(_impl, toolchains=['//test:my_toolchain_type'])");
-    SkylarkAspect a = (SkylarkAspect) lookup("a1");
-    assertThat(a.getRequiredToolchains()).containsExactly(makeLabel("//test:my_toolchain_type"));
-  }
-
-  @Test
   public void testNonLabelAttrWithProviders() throws Exception {
     checkErrorContains(
         "unexpected keyword 'providers' in call to string", "attr.string(providers = ['a'])");
@@ -492,8 +484,9 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void testAttrDefaultValueBadType() throws Exception {
     checkErrorContains(
-        "argument 'default' has type 'int', but should be 'string'\n"
-            + "in call to builtin function attr.string(*, default, doc, mandatory, values)",
+        "method attr.string(*, default: string, mandatory: bool, values: sequence of strings) "
+            + "is not applicable for arguments (int, bool, list): 'default' is 'int', "
+            + "but should be 'string'",
         "attr.string(default = 1)");
   }
 
@@ -559,34 +552,6 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   }
 
   @Test
-  public void testAttrDoc() throws Exception {
-    // We don't actually store the doc in the attr definition; right now it's just meant to be
-    // extracted by documentation generating tools. So we don't have anything to assert and we just
-    // verify that no exceptions were thrown from building them.
-    buildAttribute("a1", "attr.bool(doc='foo')");
-    buildAttribute("a2", "attr.int(doc='foo')");
-    buildAttribute("a3", "attr.int_list(doc='foo')");
-    buildAttribute("a4", "attr.label(doc='foo')");
-    buildAttribute("a5", "attr.label_keyed_string_dict(doc='foo')");
-    buildAttribute("a6", "attr.label_list(doc='foo')");
-    buildAttribute("a7", "attr.license(doc='foo')");
-    buildAttribute("a8", "attr.output(doc='foo')");
-    buildAttribute("a9", "attr.output_list(doc='foo')");
-    buildAttribute("a10", "attr.string(doc='foo')");
-    buildAttribute("a11", "attr.string_dict(doc='foo')");
-    buildAttribute("a12", "attr.string_list(doc='foo')");
-    buildAttribute("a13", "attr.string_list_dict(doc='foo')");
-  }
-
-  @Test
-  public void testAttrDocValueBadType() throws Exception {
-    checkErrorContains(
-        "argument 'doc' has type 'int', but should be 'string'\n"
-            + "in call to builtin function attr.string(*, default, doc, mandatory, values)",
-        "attr.string(doc = 1)");
-  }
-
-  @Test
   public void testRuleImplementation() throws Exception {
     evalAndExport("def impl(ctx): return None", "rule1 = rule(impl)");
     RuleClass c = ((RuleFunction) lookup("rule1")).getRuleClass();
@@ -594,15 +559,11 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   }
 
   @Test
-  public void testRuleDoc() throws Exception {
-    evalAndExport("def impl(ctx): return None", "rule1 = rule(impl, doc='foo')");
-  }
-
-  @Test
   public void testLateBoundAttrWorksWithOnlyLabel() throws Exception {
     checkEvalError(
-        "argument 'default' has type 'function', but should be 'string'\n"
-            + "in call to builtin function attr.string(*, default, doc, mandatory, values)",
+        "method attr.string(*, default: string, mandatory: bool, values: sequence of strings) "
+            + "is not applicable for arguments (function, bool, list): 'default' is 'function', "
+            + "but should be 'string'",
         "def attr_value(cfg): return 'a'",
         "attr.string(default=attr_value)");
   }
@@ -719,14 +680,6 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
     checkErrorContains(
         "expected <String, Descriptor> type for 'attrs' but got <string, string> instead",
         "rule(impl, attrs = {'a1': 'some text'})");
-  }
-
-  @Test
-  public void testRuleBadTypeForDoc() throws Exception {
-    registerDummyUserDefinedFunction();
-    checkErrorContains(
-        "argument 'doc' has type 'int', but should be 'string'",
-        "rule(impl, doc = 1)");
   }
 
   @Test
@@ -1250,6 +1203,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   }
 
   @Test
+
   public void structsAsDeclaredProvidersTest() throws Exception {
     evalAndExport(
         "data = struct(x = 1)"
@@ -1259,18 +1213,6 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
     assertThat(data.getConstructor()).isEqualTo(NativeClassObjectConstructor.STRUCT);
     assertThat(data.getConstructor().getKey())
         .isEqualTo(NativeClassObjectConstructor.STRUCT.getKey());
-  }
-
-  @Test
-  public void declaredProvidersDoc() throws Exception {
-    evalAndExport("data1 = provider(doc='foo')");
-  }
-
-  @Test
-  public void declaredProvidersBadTypeForDoc() throws Exception {
-    checkErrorContains(
-        "argument 'doc' has type 'int', but should be 'string'",
-        "provider(doc = 1)");
   }
 
   @Test
@@ -1400,22 +1342,6 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
             + " Should be list of providers, but got int. ");
   }
 
-  @Test
-  public void aspectDoc() throws Exception {
-    evalAndExport(
-        "def _impl(target, ctx):",
-        "   pass",
-        "my_aspect = aspect(_impl, doc='foo')");
-  }
-
-  @Test
-  public void aspectBadTypeForDoc() throws Exception {
-    registerDummyUserDefinedFunction();
-    checkErrorContains(
-        "argument 'doc' has type 'int', but should be 'string'",
-        "aspect(impl, doc = 1)");
-  }
-
 
 
   @Test
@@ -1494,11 +1420,13 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testRuleAddToolchain() throws Exception {
-    scratch.file("test/BUILD", "toolchain_type(name = 'my_toolchain_type')");
     evalAndExport(
-        "def impl(ctx): return None", "r1 = rule(impl, toolchains=['//test:my_toolchain_type'])");
+        "my_toolchain_type = platform_common.toolchain_type()",
+        "def impl(ctx): return None",
+        "r1 = rule(impl, toolchains=[my_toolchain_type])");
+    ToolchainConstructor toolchain = (ToolchainConstructor) lookup("my_toolchain_type");
     RuleClass c = ((RuleFunction) lookup("r1")).getRuleClass();
-    assertThat(c.getRequiredToolchains()).containsExactly(makeLabel("//test:my_toolchain_type"));
+    assertThat(c.getRequiredToolchains()).containsExactly(toolchain.getKey());
   }
 
   @Test
