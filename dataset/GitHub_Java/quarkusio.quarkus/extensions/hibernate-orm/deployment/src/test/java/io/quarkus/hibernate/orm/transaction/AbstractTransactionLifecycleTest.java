@@ -47,9 +47,8 @@ public abstract class AbstractTransactionLifecycleTest {
                     .addAsResource("application.properties"))
             // Expect no warnings (in particular from Agroal)
             .setLogRecordPredicate(record -> record.getLevel().intValue() >= Level.WARNING.intValue()
-                    // Ignore these particular warnings: they are not relevant to this test.
-                    && !record.getMessage().contains("Using Java versions older than 11 to build Quarkus applications")
-                    && !record.getMessage().contains("Agroal does not support detecting if a connection is still usable"))
+                    // Ignore this particular warning when building with Java 8: it's not relevant to this test.
+                    && !record.getMessage().contains("Using Java versions older than 11 to build Quarkus applications"))
             .assertLogRecords(records -> assertThat(records)
                     .extracting(LogRecord::getMessage) // This is just to get meaningful error messages, as LogRecord doesn't have a toString()
                     .isEmpty());
