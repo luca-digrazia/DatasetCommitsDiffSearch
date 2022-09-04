@@ -24,7 +24,6 @@ import static com.google.devtools.build.skyframe.GraphTester.NODE_TYPE;
 import static com.google.devtools.build.skyframe.GraphTester.skyKey;
 import static org.junit.Assert.fail;
 
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
@@ -42,6 +41,7 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.testutil.TestThread;
 import com.google.devtools.build.lib.testutil.TestUtils;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.GraphTester.NotComparableStringValue;
 import com.google.devtools.build.skyframe.GraphTester.StringValue;
 import com.google.devtools.build.skyframe.GraphTester.TestFunction;
@@ -238,19 +238,6 @@ public class MemoizingEvaluatorTest {
     assertThatEvaluationResult(result).hasError();
     // But the new error is not persisted to the graph, since the child error shut down evaluation.
     assertThatEvaluationResult(result).hasErrorEntryForKeyThat(newErrorKey).isNull();
-  }
-
-  @Test
-  public void interruptBitCleared() throws Exception {
-    SkyKey interruptKey = GraphTester.skyKey("interrupt");
-    tester.getOrCreate(interruptKey).setBuilder(INTERRUPT_BUILDER);
-    try {
-      tester.eval(/*keepGoing=*/ true, interruptKey);
-      fail("Expected interrupt");
-    } catch (InterruptedException e) {
-      // Expected.
-    }
-    assertThat(Thread.interrupted()).isFalse();
   }
 
   @Test
@@ -1749,6 +1736,7 @@ public class MemoizingEvaluatorTest {
 
   @Test
   public void continueWithErrorDepTurnedGood() throws Exception {
+    initializeTester();
     SkyKey errorKey = GraphTester.toSkyKey("my_error_value");
     tester.getOrCreate(errorKey).setHasError(true);
     tester.set("after", new StringValue("after"));
@@ -2676,6 +2664,7 @@ public class MemoizingEvaluatorTest {
 
   @Test
   public void changePruning() throws Exception {
+    initializeTester();
     SkyKey leaf = GraphTester.toSkyKey("leaf");
     SkyKey mid = GraphTester.toSkyKey("mid");
     SkyKey top = GraphTester.toSkyKey("top");
@@ -2733,6 +2722,7 @@ public class MemoizingEvaluatorTest {
 
   @Test
   public void changePruningAfterParentPrunes() throws Exception {
+    initializeTester();
     final SkyKey leaf = GraphTester.toSkyKey("leaf");
     SkyKey top = GraphTester.toSkyKey("top");
     tester.set(leaf, new StringValue("leafy"));

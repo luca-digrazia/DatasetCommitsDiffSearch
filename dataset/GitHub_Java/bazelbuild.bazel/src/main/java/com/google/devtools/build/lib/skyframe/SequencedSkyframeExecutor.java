@@ -629,17 +629,10 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     discardAnalysisCache(topLevelTargets, topLevelAspects);
   }
 
-  /**
-   * In addition to calling the superclass method, deletes all ConfiguredTarget values from the
-   * Skyframe cache. This is done to save memory (e.g. on a configuration change); since the
-   * configuration is part of the key, these key/value pairs will be sitting around doing nothing
-   * until the configuration changes back to the previous value.
-   *
-   * <p>The next evaluation will delete all invalid values.
-   */
   @Override
-  public void handleConfiguredTargetChange() {
-    super.handleConfiguredTargetChange();
+  public void dropConfiguredTargets() {
+    skyframeBuildView.clearInvalidatedConfiguredTargets();
+    skyframeBuildView.clearLegacyData();
     memoizingEvaluator.delete(
         // We delete any value that can hold an action -- all subclasses of ActionLookupValue -- as
         // well as ActionExecutionValues, since they do not depend on ActionLookupValues.
@@ -663,7 +656,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
    * next build should clear the legacy caches.
    */
   private void dropConfiguredTargetsNow(final ExtendedEventHandler eventHandler) {
-    handleConfiguredTargetChange();
+    dropConfiguredTargets();
     // Run the invalidator to actually delete the values.
     try {
       progressReceiver.ignoreInvalidations = true;

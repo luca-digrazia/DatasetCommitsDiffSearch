@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.rules.repository.RepositoryLoaderFunction;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue.BuildFileName;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -100,9 +99,7 @@ public class ContainingPackageLookupFunctionTest extends FoundationTestCase {
     skyFunctions.put(
         SkyFunctions.PACKAGE, new PackageFunction(null, null, null, null, null, null, null));
     skyFunctions.put(SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES,
-        new BlacklistedPackagePrefixesFunction(
-            /*hardcodedBlacklistedPackagePrefixes=*/ ImmutableSet.of(),
-            /*additionalBlacklistedPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT));
+        new BlacklistedPackagePrefixesFunction());
     skyFunctions.put(SkyFunctions.FILE_STATE, new FileStateFunction(
         new AtomicReference<TimestampGranularityMonitor>(), externalFilesHelper));
     skyFunctions.put(SkyFunctions.FILE, new FileFunction(pkgLocator));
@@ -141,7 +138,8 @@ public class ContainingPackageLookupFunctionTest extends FoundationTestCase {
     driver = new SequentialBuildDriver(evaluator);
     PrecomputedValue.BUILD_ID.set(differencer, UUID.randomUUID());
     PrecomputedValue.PATH_PACKAGE_LOCATOR.set(differencer, pkgLocator.get());
-    PrecomputedValue.SKYLARK_SEMANTICS.set(differencer, SkylarkSemantics.DEFAULT_SEMANTICS);
+    PrecomputedValue.BLACKLISTED_PACKAGE_PREFIXES_FILE.set(differencer,
+        PathFragment.EMPTY_FRAGMENT);
     RepositoryDelegatorFunction.REPOSITORY_OVERRIDES.set(
         differencer, ImmutableMap.<RepositoryName, PathFragment>of());
   }

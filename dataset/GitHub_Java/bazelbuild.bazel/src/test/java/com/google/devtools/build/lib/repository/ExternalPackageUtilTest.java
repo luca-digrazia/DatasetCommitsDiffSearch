@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtensio
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
 import com.google.devtools.build.lib.skyframe.ExternalPackageFunction;
@@ -42,6 +41,7 @@ import com.google.devtools.build.lib.skyframe.LocalRepositoryLookupFunction;
 import com.google.devtools.build.lib.skyframe.PackageFunction;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
+import com.google.devtools.build.lib.skyframe.PackageLookupValue.BuildFileName;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.RegisteredToolchainsFunction;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
@@ -81,9 +81,7 @@ public class ExternalPackageUtilTest extends BuildViewTestCase {
   public void createEnvironment() {
     AnalysisMock analysisMock = AnalysisMock.get();
     AtomicReference<PathPackageLocator> pkgLocator =
-        new AtomicReference<>(
-            new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)),
-            BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
+        new AtomicReference<>(new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)));
     AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages =
         new AtomicReference<>(ImmutableSet.<PackageIdentifier>of());
     BlazeDirectories directories =
@@ -103,7 +101,7 @@ public class ExternalPackageUtilTest extends BuildViewTestCase {
         new PackageLookupFunction(
             deletedPackages,
             CrossRepositoryLabelViolationStrategy.ERROR,
-            BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY));
+            ImmutableList.of(BuildFileName.BUILD_DOT_BAZEL, BuildFileName.BUILD)));
     skyFunctions.put(
         SkyFunctions.FILE_STATE,
         new FileStateFunction(

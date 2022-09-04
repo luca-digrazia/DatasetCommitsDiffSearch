@@ -228,8 +228,7 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
       differencer.inject(
           ImmutableMap.of(
               OWNER_KEY,
-              new ActionLookupValue(
-                  actionKeyContext, ImmutableList.<ActionAnalysisMetadata>copyOf(actions), false)));
+              new ActionLookupValue(ImmutableList.<ActionAnalysisMetadata>copyOf(actions), false)));
     }
   }
 
