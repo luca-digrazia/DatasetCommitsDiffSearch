@@ -1,13 +1,17 @@
 package org.jboss.resteasy.reactive.server.handlers;
 
+import java.io.ByteArrayInputStream;
+import java.util.List;
 import javax.ws.rs.core.GenericEntity;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
-import org.jboss.resteasy.reactive.common.jaxrs.QuarkusRestResponse;
+import org.jboss.resteasy.reactive.RestResponse;
+import org.jboss.resteasy.reactive.common.jaxrs.ResponseImpl;
+import org.jboss.resteasy.reactive.common.jaxrs.RestResponseImpl;
 import org.jboss.resteasy.reactive.server.core.EncodedMediaType;
 import org.jboss.resteasy.reactive.server.core.LazyResponse;
 import org.jboss.resteasy.reactive.server.core.ResteasyReactiveRequestContext;
-import org.jboss.resteasy.reactive.server.jaxrs.QuarkusRestServerResponseBuilder;
+import org.jboss.resteasy.reactive.server.jaxrs.ResponseBuilderImpl;
 import org.jboss.resteasy.reactive.server.spi.ServerRestHandler;
 
 /**
@@ -22,23 +26,32 @@ public class ResponseHandler implements ServerRestHandler {
             boolean mediaTypeAlreadyExists = false;
             //we already have a response
             //set it explicitly
-            Response.ResponseBuilder responseBuilder;
+            ResponseBuilderImpl responseBuilder;
             Response existing = (Response) result;
             if (existing.getEntity() instanceof GenericEntity) {
                 GenericEntity<?> genericEntity = (GenericEntity<?>) existing.getEntity();
                 requestContext.setGenericReturnType(genericEntity.getType());
-                responseBuilder = Response.fromResponse(existing).entity(genericEntity.getEntity());
+                responseBuilder = fromResponse(existing);
+                responseBuilder.entity(genericEntity.getEntity());
             } else {
                 // TCK says to use the entity type as generic type if we return a response
-                if (existing.hasEntity())
+                if (existing.hasEntity() && (existing.getEntity() != null))
                     requestContext.setGenericReturnType(existing.getEntity().getClass());
-                //TODO: super inefficent
-                responseBuilder = Response.fromResponse((Response) result);
-                if ((result instanceof QuarkusRestResponse)) {
+                //TODO: super inefficient
+                responseBuilder = fromResponse(existing);
+                if ((result instanceof ResponseImpl)) {
                     // needed in order to preserve entity annotations
-                    QuarkusRestResponse quarkusRestResponse = (QuarkusRestResponse) result;
-                    if (quarkusRestResponse.getEntityAnnotations() != null) {
-                        requestContext.setAdditionalAnnotations(quarkusRestResponse.getEntityAnnotations());
+                    ResponseImpl responseImpl = (ResponseImpl) result;
+                    if (responseImpl.getEntityAnnotations() != null) {
+                        requestContext.setAdditionalAnnotations(responseImpl.getEntityAnnotations());
+                    }
+
+                    // this is a weird case where the response comes from the the rest-client
+                    if (responseBuilder.getEntity() == null) {
+                        if (responseImpl.getEntityStream() instanceof ByteArrayInputStream) {
+                            ByteArrayInputStream byteArrayInputStream = (ByteArrayInputStream) responseImpl.getEntityStream();
+                            responseBuilder.entity(byteArrayInputStream.readAllBytes());
+                        }
                     }
                 }
             }
@@ -50,11 +63,60 @@ public class ResponseHandler implements ServerRestHandler {
             if (!mediaTypeAlreadyExists && produces != null) {
                 responseBuilder.header(HttpHeaders.CONTENT_TYPE, produces.toString());
             }
-            if ((responseBuilder instanceof QuarkusRestServerResponseBuilder)) {
+            if ((responseBuilder instanceof ResponseBuilderImpl)) {
                 // avoid unnecessary copying of HTTP headers from the Builder to the Response
                 requestContext
                         .setResponse(
-                                new LazyResponse.Existing(((QuarkusRestServerResponseBuilder) responseBuilder).build(false)));
+                                new LazyResponse.Existing(((ResponseBuilderImpl) responseBuilder).build(false)));
+            } else {
+                requestContext.setResponse(new LazyResponse.Existing(responseBuilder.build()));
+            }
+        } else if (result instanceof RestResponse) {
+            boolean mediaTypeAlreadyExists = false;
+            //we already have a response
+            //set it explicitly
+            ResponseBuilderImpl responseBuilder;
+            RestResponse<?> existing = (RestResponse<?>) result;
+            if (existing.getEntity() instanceof GenericEntity) {
+                GenericEntity<?> genericEntity = (GenericEntity<?>) existing.getEntity();
+                requestContext.setGenericReturnType(genericEntity.getType());
+                responseBuilder = fromResponse(existing);
+                responseBuilder.entity(genericEntity.getEntity());
+            } else {
+                // TCK says to use the entity type as generic type if we return a response
+                if (existing.hasEntity() && (existing.getEntity() != null))
+                    requestContext.setGenericReturnType(existing.getEntity().getClass());
+                //TODO: super inefficient
+                responseBuilder = fromResponse(existing);
+                if ((result instanceof RestResponseImpl)) {
+                    // needed in order to preserve entity annotations
+                    RestResponseImpl<?> responseImpl = (RestResponseImpl<?>) result;
+                    if (responseImpl.getEntityAnnotations() != null) {
+                        requestContext.setAdditionalAnnotations(responseImpl.getEntityAnnotations());
+                    }
+
+                    // this is a weird case where the response comes from the the rest-client
+                    if (responseBuilder.getEntity() == null) {
+                        if (responseImpl.getEntityStream() instanceof ByteArrayInputStream) {
+                            ByteArrayInputStream byteArrayInputStream = (ByteArrayInputStream) responseImpl.getEntityStream();
+                            responseBuilder.entity(byteArrayInputStream.readAllBytes());
+                        }
+                    }
+                }
+            }
+            if (existing.getMediaType() != null) {
+                requestContext.setResponseContentType(existing.getMediaType());
+                mediaTypeAlreadyExists = true;
+            }
+            EncodedMediaType produces = requestContext.getResponseContentType();
+            if (!mediaTypeAlreadyExists && produces != null) {
+                responseBuilder.header(HttpHeaders.CONTENT_TYPE, produces.toString());
+            }
+            if ((responseBuilder instanceof ResponseBuilderImpl)) {
+                // avoid unnecessary copying of HTTP headers from the Builder to the Response
+                requestContext
+                        .setResponse(
+                                new LazyResponse.Existing(((ResponseBuilderImpl) responseBuilder).build(false)));
             } else {
                 requestContext.setResponse(new LazyResponse.Existing(responseBuilder.build()));
             }
@@ -70,21 +132,21 @@ public class ResponseHandler implements ServerRestHandler {
                         if (result instanceof GenericEntity) {
                             GenericEntity<?> genericEntity = (GenericEntity<?>) result;
                             requestContext.setGenericReturnType(genericEntity.getType());
-                            responseBuilder = QuarkusRestResponse.ok(genericEntity.getEntity());
+                            responseBuilder = ResponseImpl.ok(genericEntity.getEntity());
                         } else if (result == null) {
                             // FIXME: custom status codes depending on method?
-                            responseBuilder = QuarkusRestResponse.noContent();
+                            responseBuilder = ResponseImpl.noContent();
                         } else {
                             // FIXME: custom status codes depending on method?
-                            responseBuilder = QuarkusRestResponse.ok(result);
+                            responseBuilder = ResponseImpl.ok(result);
                         }
                         EncodedMediaType produces = requestContext.getResponseContentType();
                         if (produces != null) {
                             responseBuilder.header(HttpHeaders.CONTENT_TYPE, produces.toString());
                         }
-                        if ((responseBuilder instanceof QuarkusRestServerResponseBuilder)) {
+                        if ((responseBuilder instanceof ResponseBuilderImpl)) {
                             // avoid unnecessary copying of HTTP headers from the Builder to the Response
-                            response = ((QuarkusRestServerResponseBuilder) responseBuilder).build(false);
+                            response = ((ResponseBuilderImpl) responseBuilder).build(false);
                         } else {
                             response = responseBuilder.build();
                         }
@@ -99,5 +161,35 @@ public class ResponseHandler implements ServerRestHandler {
             });
 
         }
+    }
+
+    // avoid the runtime overhead of looking up the provider
+    private ResponseBuilderImpl fromResponse(Response response) {
+        Response.ResponseBuilder b = new ResponseBuilderImpl().status(response.getStatus());
+        if (response.hasEntity()) {
+            b.entity(response.getEntity());
+        }
+        for (String headerName : response.getHeaders().keySet()) {
+            List<Object> headerValues = response.getHeaders().get(headerName);
+            for (Object headerValue : headerValues) {
+                b.header(headerName, headerValue);
+            }
+        }
+        return (ResponseBuilderImpl) b;
+    }
+
+    // avoid the runtime overhead of looking up the provider
+    private ResponseBuilderImpl fromResponse(RestResponse<?> response) {
+        Response.ResponseBuilder b = new ResponseBuilderImpl().status(response.getStatus());
+        if (response.hasEntity()) {
+            b.entity(response.getEntity());
+        }
+        for (String headerName : response.getHeaders().keySet()) {
+            List<Object> headerValues = response.getHeaders().get(headerName);
+            for (Object headerValue : headerValues) {
+                b.header(headerName, headerValue);
+            }
+        }
+        return (ResponseBuilderImpl) b;
     }
 }
