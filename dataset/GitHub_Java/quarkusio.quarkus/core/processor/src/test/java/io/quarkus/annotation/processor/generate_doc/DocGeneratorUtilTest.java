@@ -4,9 +4,7 @@ import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.AGRO
 import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.OFFICIAL_JAVA_DOC_BASE_LINK;
 import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.VERTX_JAVA_DOC_SITE;
 import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.appendConfigItemsIntoExistingOnes;
-import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.computeConfigGroupDocFileName;
 import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.computeExtensionDocFileName;
-import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.deriveConfigRootName;
 import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.getJavaDocSiteLink;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -94,12 +92,6 @@ public class DocGeneratorUtilTest {
 
         value = getJavaDocSiteLink(Map.Entry.class.getName());
         assertEquals(OFFICIAL_JAVA_DOC_BASE_LINK + "java/util/Map.Entry.html", value);
-
-        value = getJavaDocSiteLink(List.class.getName());
-        assertEquals(OFFICIAL_JAVA_DOC_BASE_LINK + "java/util/List.html", value);
-
-        value = getJavaDocSiteLink("java.util.List<java.lang.String>");
-        assertEquals(OFFICIAL_JAVA_DOC_BASE_LINK + "java/util/List.html", value);
     }
 
     @Test
@@ -130,7 +122,7 @@ public class DocGeneratorUtilTest {
     }
 
     @Test
-    public void shouldReturnConfigRootNameWhenComputingExtensionName() {
+    public void shouldReturnConfigRootName() {
         String configRoot = "org.acme.ConfigRoot";
         String expected = "org.acme.ConfigRoot.adoc";
         String fileName = computeExtensionDocFileName(configRoot);
@@ -156,7 +148,7 @@ public class DocGeneratorUtilTest {
     }
 
     @Test
-    public void shouldGuessArtifactIdWhenComputingExtensionName() {
+    public void shouldGuessArtifactId() {
         String configRoot = "io.quarkus.agroal.Config";
         String expected = "quarkus-agroal.adoc";
         String fileName = computeExtensionDocFileName(configRoot);
@@ -170,39 +162,6 @@ public class DocGeneratorUtilTest {
         configRoot = "io.quarkus.extension.name.BuildTimeConfig";
         expected = "quarkus-extension-name.adoc";
         fileName = computeExtensionDocFileName(configRoot);
-        assertEquals(expected, fileName);
-    }
-
-    @Test
-    public void shouldUseHyphenatedClassNameWithoutRuntimeOrDeploymentNamespaceWhenComputingConfigGroupFileName() {
-        String configRoot = "ClassName";
-        String expected = "config-group-class-name.adoc";
-        String fileName = computeConfigGroupDocFileName(configRoot);
-        assertEquals(expected, fileName);
-
-        configRoot = "io.quarkus.agroal.ConfigGroup";
-        expected = "quarkus-agroal-config-group.adoc";
-        fileName = computeConfigGroupDocFileName(configRoot);
-        assertEquals(expected, fileName);
-
-        configRoot = "io.quarkus.agroal.runtime.ClassName";
-        expected = "quarkus-agroal-config-group-class-name.adoc";
-        fileName = computeConfigGroupDocFileName(configRoot);
-        assertEquals(expected, fileName);
-
-        configRoot = "io.quarkus.keycloak.deployment.RealmConfig";
-        expected = "quarkus-keycloak-config-group-realm-config.adoc";
-        fileName = computeConfigGroupDocFileName(configRoot);
-        assertEquals(expected, fileName);
-
-        configRoot = "io.quarkus.extension.deployment.BuildTimeConfig";
-        expected = "quarkus-extension-config-group-build-time-config.adoc";
-        fileName = computeConfigGroupDocFileName(configRoot);
-        assertEquals(expected, fileName);
-
-        configRoot = "io.quarkus.extension.deployment.name.BuildTimeConfig";
-        expected = "quarkus-extension-config-group-name-build-time-config.adoc";
-        fileName = computeConfigGroupDocFileName(configRoot);
         assertEquals(expected, fileName);
     }
 
@@ -285,40 +244,5 @@ public class DocGeneratorUtilTest {
 
         assertEquals(deepConfigKey, deepSection.getConfigDocItems().get(0));
         assertEquals(configItem, deepSection.getConfigDocItems().get(1));
-    }
-
-    @Test
-    public void derivingConfigRootNameTestCase() {
-        // should hyphenate class name
-        String simpleClassName = "RootName";
-        String actual = deriveConfigRootName(simpleClassName, ConfigPhase.RUN_TIME);
-        assertEquals("quarkus.root-name", actual);
-
-        // should hyphenate class name after removing Config(uration) suffix
-        simpleClassName = "RootNameConfig";
-        actual = deriveConfigRootName(simpleClassName, ConfigPhase.BUILD_TIME);
-        assertEquals("quarkus.root-name", actual);
-
-        simpleClassName = "RootNameConfiguration";
-        actual = deriveConfigRootName(simpleClassName, ConfigPhase.BUILD_AND_RUN_TIME_FIXED);
-        assertEquals("quarkus.root-name", actual);
-
-        // should hyphenate class name after removing RunTimeConfig(uration) suffix
-        simpleClassName = "RootNameRunTimeConfig";
-        actual = deriveConfigRootName(simpleClassName, ConfigPhase.RUN_TIME);
-        assertEquals("quarkus.root-name", actual);
-
-        simpleClassName = "RootNameRunTimeConfiguration";
-        actual = deriveConfigRootName(simpleClassName, ConfigPhase.RUN_TIME);
-        assertEquals("quarkus.root-name", actual);
-
-        // should hyphenate class name after removing BuildTimeConfig(uration) suffix
-        simpleClassName = "RootNameBuildTimeConfig";
-        actual = deriveConfigRootName(simpleClassName, ConfigPhase.BUILD_AND_RUN_TIME_FIXED);
-        assertEquals("quarkus.root-name", actual);
-
-        simpleClassName = "RootNameBuildTimeConfiguration";
-        actual = deriveConfigRootName(simpleClassName, ConfigPhase.BUILD_TIME);
-        assertEquals("quarkus.root-name", actual);
     }
 }

@@ -14,7 +14,6 @@ final public class ConfigDocSection implements ConfigDocElement, Comparable<Conf
     private ConfigPhase configPhase;
 
     private List<ConfigDocItem> configDocItems = new ArrayList<>();
-    private String anchorPrefix;
 
     public ConfigDocSection() {
     }
@@ -105,7 +104,6 @@ final public class ConfigDocSection implements ConfigDocElement, Comparable<Conf
                 ", sectionDetailsTitle='" + sectionDetailsTitle + '\'' +
                 ", configPhase=" + configPhase +
                 ", configDocItems=" + configDocItems +
-                ", anchorPrefix=" + anchorPrefix +
                 '}';
     }
 
@@ -123,13 +121,5 @@ final public class ConfigDocSection implements ConfigDocElement, Comparable<Conf
                 return true;
         }
         return false;
-    }
-
-    public void setAnchorPrefix(String anchorPrefix) {
-        this.anchorPrefix = anchorPrefix;
-    }
-
-    public String getAnchorPrefix() {
-        return anchorPrefix;
     }
 }
