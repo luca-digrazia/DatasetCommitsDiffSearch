@@ -759,9 +759,7 @@ public final class CcLinkingHelper {
     if (dynamicLinkType.isExecutable()) {
       ccLinkingOutputs.setExecutable(linkerOutput);
     }
-    if (fake) {
-      ccLinkingOutputs.addLinkActionInputs(dynamicLinkAction.getInputs());
-    }
+    ccLinkingOutputs.addLinkActionInputs(dynamicLinkAction.getInputs());
     actionConstructionContext.registerAction(dynamicLinkAction);
 
     LinkerInputs.LibraryToLink dynamicLibrary = dynamicLinkAction.getOutputLibrary();
