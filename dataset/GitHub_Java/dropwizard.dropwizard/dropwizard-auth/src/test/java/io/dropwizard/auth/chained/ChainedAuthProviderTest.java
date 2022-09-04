@@ -1,14 +1,18 @@
 package io.dropwizard.auth.chained;
 
 import com.codahale.metrics.MetricRegistry;
+import com.google.common.base.Function;
 import com.google.common.collect.Lists;
-import io.dropwizard.auth.*;
+import io.dropwizard.auth.AuthDynamicFeature;
+import io.dropwizard.auth.AuthFilter;
+import io.dropwizard.auth.AuthResource;
+import io.dropwizard.auth.Authenticator;
 import io.dropwizard.auth.basic.BasicCredentialAuthFilter;
 import io.dropwizard.auth.basic.BasicCredentials;
 import io.dropwizard.auth.oauth.OAuthCredentialAuthFilter;
 import io.dropwizard.auth.util.AuthUtil;
 import io.dropwizard.jersey.DropwizardResourceConfig;
-import io.dropwizard.logging.BootstrapLogging;
+import io.dropwizard.logging.LoggingFactory;
 import org.glassfish.jersey.server.filter.RolesAllowedDynamicFeature;
 import org.glassfish.jersey.servlet.ServletProperties;
 import org.glassfish.jersey.test.DeploymentContext;
@@ -36,7 +40,7 @@ import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 public class ChainedAuthProviderTest extends JerseyTest {
     private static final String ADMIN_ROLE = "ADMIN";
     static {
-        BootstrapLogging.bootstrap();
+        LoggingFactory.bootstrap();
     }
 
     @Override
@@ -129,8 +133,8 @@ public class ChainedAuthProviderTest extends JerseyTest {
 
             final String validUser = "good-guy";
 
-            final Authorizer<Principal> authorizer =
-                    AuthUtil.getTestAuthorizer(validUser, ADMIN_ROLE);
+            final Function<AuthFilter.Tuple, SecurityContext> securityContextFunction =
+                    AuthUtil.getSecurityContextProviderFunction(validUser, ADMIN_ROLE);
 
             final Authenticator<BasicCredentials, Principal> basicAuthenticator =
                     AuthUtil.getTestAuthenticatorBasicCredential(validUser);
@@ -141,13 +145,13 @@ public class ChainedAuthProviderTest extends JerseyTest {
             final AuthFilter<BasicCredentials, Principal> basicAuthFilter =
                     new BasicCredentialAuthFilter.Builder<>()
                     .setAuthenticator(basicAuthenticator)
-                    .setAuthorizer(authorizer)
+                    .setSecurityContextFunction(securityContextFunction)
                     .buildAuthFilter();
 
             final AuthFilter<String, Principal> oAuthFilter = new OAuthCredentialAuthFilter.Builder<>()
                     .setAuthenticator(oauthAuthenticator)
                     .setPrefix("Bearer")
-                    .setAuthorizer(authorizer)
+                    .setSecurityContextFunction(securityContextFunction)
                     .buildAuthFilter();
 
             register(new AuthDynamicFeature(new ChainedAuthFilter<>(buildHandlerList(basicAuthFilter, oAuthFilter ))));

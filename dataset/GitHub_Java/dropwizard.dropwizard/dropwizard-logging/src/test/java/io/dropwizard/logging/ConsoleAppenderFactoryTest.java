@@ -5,9 +5,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Appender;
-import ch.qos.logback.core.Layout;
 import io.dropwizard.jackson.DiscoverableSubtypeResolver;
-import io.dropwizard.logging.filter.NullFilterFactory;
 import org.junit.Test;
 import org.slf4j.LoggerFactory;
 
@@ -26,20 +24,20 @@ public class ConsoleAppenderFactoryTest {
 
     @Test
     public void includesCallerData() {
-        ConsoleAppenderFactory<ILoggingEvent> consoleAppenderFactory = new ConsoleAppenderFactory<>();
-        AsyncAppender asyncAppender = (AsyncAppender) consoleAppenderFactory.build(new LoggerContext(), "test", new DropwizardLayoutFactory(), new NullFilterFactory<>(), new AsyncLoggingEventAppenderFactory());
+        ConsoleAppenderFactory consoleAppenderFactory = new ConsoleAppenderFactory();
+        AsyncAppender asyncAppender = (AsyncAppender) consoleAppenderFactory.build(new LoggerContext(), "test", null);
         assertThat(asyncAppender.isIncludeCallerData()).isFalse();
 
         consoleAppenderFactory.setIncludeCallerData(true);
-        asyncAppender = (AsyncAppender) consoleAppenderFactory.build(new LoggerContext(), "test", new DropwizardLayoutFactory(), new NullFilterFactory<>(), new AsyncLoggingEventAppenderFactory());
+        asyncAppender = (AsyncAppender) consoleAppenderFactory.build(new LoggerContext(), "test", null);
         assertThat(asyncAppender.isIncludeCallerData()).isTrue();
     }
 
     @Test
     public void appenderContextIsSet() throws Exception {
         final Logger root = (Logger) LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
-        final ConsoleAppenderFactory<ILoggingEvent> appenderFactory = new ConsoleAppenderFactory<>();
-        final Appender<ILoggingEvent> appender = appenderFactory.build(root.getLoggerContext(), "test", new DropwizardLayoutFactory(), new NullFilterFactory<>(), new AsyncLoggingEventAppenderFactory());
+        final ConsoleAppenderFactory appenderFactory = new ConsoleAppenderFactory();
+        final Appender<ILoggingEvent> appender = appenderFactory.build(root.getLoggerContext(), "test", null);
 
         assertThat(appender.getContext()).isEqualTo(root.getLoggerContext());
     }
@@ -47,8 +45,8 @@ public class ConsoleAppenderFactoryTest {
     @Test
     public void appenderNameIsSet() throws Exception {
         final Logger root = (Logger) LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
-        final ConsoleAppenderFactory<ILoggingEvent> appenderFactory = new ConsoleAppenderFactory<>();
-        final Appender<ILoggingEvent> appender = appenderFactory.build(root.getLoggerContext(), "test", new DropwizardLayoutFactory(), new NullFilterFactory<>(), new AsyncLoggingEventAppenderFactory());
+        final ConsoleAppenderFactory appenderFactory = new ConsoleAppenderFactory();
+        final Appender<ILoggingEvent> appender = appenderFactory.build(root.getLoggerContext(), "test", null);
 
         assertThat(appender.getName()).isEqualTo("async-console-appender");
     }

@@ -2,12 +2,12 @@ package io.dropwizard.jersey.guava;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.base.Optional;
-import io.dropwizard.jersey.AbstractJerseyTest;
 import io.dropwizard.jersey.DropwizardResourceConfig;
-import io.dropwizard.jersey.MyMessage;
-import io.dropwizard.jersey.MyMessageParamConverterProvider;
 import io.dropwizard.jersey.params.UUIDParam;
+import io.dropwizard.logging.BootstrapLogging;
 import org.glassfish.jersey.internal.util.collection.MultivaluedStringMap;
+import org.glassfish.jersey.test.JerseyTest;
+import org.glassfish.jersey.test.TestProperties;
 import org.junit.Test;
 
 import javax.ws.rs.FormParam;
@@ -21,10 +21,14 @@ import java.io.IOException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class OptionalFormParamResourceTest extends AbstractJerseyTest {
+public class OptionalFormParamResourceTest extends JerseyTest {
+    static {
+        BootstrapLogging.bootstrap();
+    }
 
     @Override
     protected Application configure() {
+        forceSet(TestProperties.CONTAINER_PORT, "0");
         return DropwizardResourceConfig.forTesting(new MetricRegistry())
                 .register(OptionalFormParamResource.class)
                 .register(MyMessageParamConverterProvider.class);
