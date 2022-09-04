@@ -46,12 +46,12 @@ import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestInstanceFactory;
 import org.junit.jupiter.api.extension.TestInstanceFactoryContext;
+import org.junit.jupiter.api.extension.TestInstancePostProcessor;
 import org.junit.jupiter.api.extension.TestInstantiationException;
 import org.junit.platform.commons.JUnitException;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
-import org.opentest4j.TestAbortedException;
 
 import io.quarkus.bootstrap.BootstrapClassLoaderFactory;
 import io.quarkus.bootstrap.BootstrapException;
@@ -74,11 +74,10 @@ import io.quarkus.test.common.TestScopeManager;
 import io.quarkus.test.common.http.TestHTTPResourceManager;
 
 public class QuarkusTestExtension
-        implements BeforeEachCallback, AfterEachCallback, TestInstanceFactory, BeforeAllCallback {
+        implements BeforeEachCallback, AfterEachCallback, TestInstanceFactory {
 
     private URLClassLoader appCl;
     private ClassLoader originalCl;
-    private static boolean failedBoot;
 
     private ExtensionState doJavaStart(ExtensionContext context, TestResourceManager testResourceManager) {
 
@@ -272,13 +271,6 @@ public class QuarkusTestExtension
     @Override
     public Object createTestInstance(TestInstanceFactoryContext factoryContext, ExtensionContext extensionContext)
             throws TestInstantiationException {
-        if (failedBoot) {
-            try {
-                return extensionContext.getRequiredTestClass().newInstance();
-            } catch (Exception e) {
-                throw new TestInstantiationException("Boot failed", e);
-            }
-        }
         ExtensionContext root = extensionContext.getRoot();
         ExtensionContext.Store store = root.getStore(ExtensionContext.Namespace.GLOBAL);
         ExtensionState state = store.get(ExtensionState.class.getName(), ExtensionState.class);
@@ -286,27 +278,20 @@ public class QuarkusTestExtension
         boolean substrateTest = extensionContext.getRequiredTestClass().isAnnotationPresent(SubstrateTest.class);
         if (state == null) {
             TestResourceManager testResourceManager = new TestResourceManager(extensionContext.getRequiredTestClass());
-            try {
-                testResourceManager.start();
+            testResourceManager.start();
 
-                if (substrateTest) {
-                    NativeImageLauncher launcher = new NativeImageLauncher(extensionContext.getRequiredTestClass());
-                    try {
-                        launcher.start();
-                    } catch (IOException e) {
-                        throw new JUnitException("Quarkus native image start failed, original cause: " + e);
-                    }
-                    state = new ExtensionState(testResourceManager, launcher, true);
-                } else {
-                    state = doJavaStart(extensionContext, testResourceManager);
+            if (substrateTest) {
+                NativeImageLauncher launcher = new NativeImageLauncher(extensionContext.getRequiredTestClass());
+                try {
+                    launcher.start();
+                } catch (IOException e) {
+                    throw new JUnitException("Quarkus native image start failed, original cause: " + e);
                 }
-                store.put(ExtensionState.class.getName(), state);
-
-            } catch (RuntimeException e) {
-                testResourceManager.stop();
-                failedBoot = true;
-                throw e;
+                state = new ExtensionState(testResourceManager, launcher, true);
+            } else {
+                state = doJavaStart(extensionContext, testResourceManager);
             }
+            store.put(ExtensionState.class.getName(), state);
         } else {
             if (substrateTest != state.isSubstrate()) {
                 throw new RuntimeException(
@@ -331,13 +316,6 @@ public class QuarkusTestExtension
         final ClassLoader original = thread.getContextClassLoader();
         thread.setContextClassLoader(cl);
         return original;
-    }
-
-    @Override
-    public void beforeAll(ExtensionContext context) throws Exception {
-        if (failedBoot) {
-            throw new TestAbortedException("Not running test as boot failed");
-        }
     }
 
     class ExtensionState implements ExtensionContext.Store.CloseableResource {
