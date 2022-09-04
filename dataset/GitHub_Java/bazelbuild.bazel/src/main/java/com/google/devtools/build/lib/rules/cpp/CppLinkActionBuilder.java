@@ -22,6 +22,7 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSet.Builder;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionOwner;
@@ -1194,7 +1195,7 @@ public class CppLinkActionBuilder {
   private Iterable<Artifact> getArtifactsPossiblyLtoMapped(
       Iterable<LinkerInput> inputs, Map<Artifact, Artifact> ltoMapping) {
     Preconditions.checkNotNull(ltoMapping);
-    ImmutableSet.Builder<Artifact> result = ImmutableSet.builder();
+    Builder<Artifact> result = ImmutableSet.builder();
     Iterable<Artifact> artifacts = LinkerInputs.toLibraryArtifacts(inputs);
     for (Artifact a : artifacts) {
       Artifact renamed = ltoMapping.get(a);

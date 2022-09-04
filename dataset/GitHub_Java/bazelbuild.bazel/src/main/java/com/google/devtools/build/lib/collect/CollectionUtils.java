@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -96,21 +95,14 @@ public final class CollectionUtils {
    * @return the set of repeated elements.  May return an empty set, but never null.
    */
   public static <T> Set<T> duplicatedElementsOf(Iterable<T> input) {
-    int count = Iterables.size(input);
-    if (count < 2) {
-      return ImmutableSet.of();
-    }
-    Set<T> duplicates = null;
-    Set<T> elementSet = CompactHashSet.createWithExpectedSize(count);
+    Set<T> duplicates = new HashSet<>();
+    Set<T> elementSet = new HashSet<>();
     for (T el : input) {
       if (!elementSet.add(el)) {
-        if (duplicates == null) {
-          duplicates = new HashSet<>();
-        }
         duplicates.add(el);
       }
     }
-    return duplicates == null ? ImmutableSet.of() : duplicates;
+    return duplicates;
   }
 
   /**
@@ -130,6 +122,7 @@ public final class CollectionUtils {
     return iterable instanceof ImmutableList<?>
         || iterable instanceof ImmutableSet<?>
         || iterable instanceof IterablesChain<?>
+        || iterable instanceof DedupingIterable<?>
         || iterable instanceof NestedSet<?>
         || iterable instanceof ImmutableIterable<?>;
   }
@@ -209,7 +202,7 @@ public final class CollectionUtils {
   }
 
   /**
-   * A variant of {@link com.google.common.collect.Iterables#isEmpty} that avoids expanding nested
+   * A variant of {@link com.google.common.collect.Iterables.isEmpty} that avoids expanding nested
    * sets.
    */
   public static <T> boolean isEmpty(Iterable<T> iterable) {

@@ -39,19 +39,19 @@ import java.util.List;
 import java.util.Set;
 import javax.annotation.Nullable;
 
-/** Utility for configuring an action to generate a deploy archive. */
+/**
+ * Utility for configuring an action to generate a deploy archive.
+ */
 public class DeployArchiveBuilder {
   /**
    * Memory consumption of SingleJar is about 250 bytes per entry in the output file. Unfortunately,
    * the JVM tends to kill the process with an OOM long before we're at the limit. In the most
    * recent example, 400 MB of memory was enough for about 500,000 entries.
    */
-  private static final int SINGLEJAR_MEMORY_MB = 1600;
-
-  private static final String SINGLEJAR_MAX_MEMORY = "-Xmx" + SINGLEJAR_MEMORY_MB + "m";
+  private static final String SINGLEJAR_MAX_MEMORY = "-Xmx1600m";
 
   private static final ResourceSet DEPLOY_ACTION_RESOURCE_SET =
-      ResourceSet.createWithRamCpu(/*memoryMb = */ SINGLEJAR_MEMORY_MB, /*cpuUsage = */ 1);
+      ResourceSet.createWithRamCpuIo(/*memoryMb = */ 200.0, /*cpuUsage = */ .2, /*ioUsage=*/ .2);
 
   private final RuleContext ruleContext;
 
@@ -72,7 +72,9 @@ public class DeployArchiveBuilder {
   private OneVersionEnforcementLevel oneVersionEnforcementLevel = OneVersionEnforcementLevel.OFF;
   @Nullable private Artifact oneVersionWhitelistArtifact;
 
-  /** Type of compression to apply to output archive. */
+  /**
+   * Type of compression to apply to output archive.
+   */
   public enum Compression {
 
     /** Output should be compressed */
@@ -82,64 +84,83 @@ public class DeployArchiveBuilder {
     UNCOMPRESSED;
   }
 
-  /** Creates a builder using the configuration of the rule as the action configuration. */
+  /**
+   * Creates a builder using the configuration of the rule as the action configuration.
+   */
   public DeployArchiveBuilder(JavaSemantics semantics, RuleContext ruleContext) {
     this.ruleContext = ruleContext;
     this.semantics = semantics;
   }
 
-  /** Sets the processed attributes of the rule generating the deploy archive. */
+  /**
+   * Sets the processed attributes of the rule generating the deploy archive.
+   */
   public DeployArchiveBuilder setAttributes(JavaTargetAttributes attributes) {
     this.attributes = attributes;
     return this;
   }
 
-  /** Sets whether to include build-data.properties in the deploy archive. */
+  /**
+   * Sets whether to include build-data.properties in the deploy archive.
+   */
   public DeployArchiveBuilder setIncludeBuildData(boolean includeBuildData) {
     this.includeBuildData = includeBuildData;
     return this;
   }
 
-  /** Sets whether to enable compression of the output deploy archive. */
+  /**
+   * Sets whether to enable compression of the output deploy archive.
+   */
   public DeployArchiveBuilder setCompression(Compression compress) {
     this.compression = Preconditions.checkNotNull(compress);
     return this;
   }
 
   /**
-   * Sets additional dependencies to be added to the action that creates the deploy jar so that we
-   * force the runtime dependencies to be built.
+   * Sets additional dependencies to be added to the action that creates the
+   * deploy jar so that we force the runtime dependencies to be built.
    */
   public DeployArchiveBuilder setRunfilesMiddleman(@Nullable Artifact runfilesMiddleman) {
     this.runfilesMiddleman = runfilesMiddleman;
     return this;
   }
 
-  /** Sets the artifact to create with the action. */
+  /**
+   * Sets the artifact to create with the action.
+   */
   public DeployArchiveBuilder setOutputJar(Artifact outputJar) {
     this.outputJar = Preconditions.checkNotNull(outputJar);
     return this;
   }
 
-  /** Sets the class to launch the Java application. */
+  /**
+   * Sets the class to launch the Java application.
+   */
   public DeployArchiveBuilder setJavaStartClass(@Nullable String javaStartClass) {
     this.javaStartClass = javaStartClass;
     return this;
   }
 
-  /** Adds additional jars that should be on the classpath at runtime. */
+  /**
+   * Adds additional jars that should be on the classpath at runtime.
+   */
   public DeployArchiveBuilder addRuntimeJars(Iterable<Artifact> jars) {
     this.runtimeJarsBuilder.add(jars);
     return this;
   }
 
-  /** Sets the list of extra lines to add to the archive's MANIFEST.MF file. */
+  /**
+   * Sets the list of extra lines to add to the archive's MANIFEST.MF file.
+   */
   public DeployArchiveBuilder setDeployManifestLines(Iterable<String> deployManifestLines) {
     this.deployManifestLines = ImmutableList.copyOf(deployManifestLines);
     return this;
   }
 
-  /** Sets the optional launcher to be used as the executable for this deploy JAR */
+  /**
+   * Sets the optional launcher to be used as the executable for this deploy
+   * JAR
+   */
   public DeployArchiveBuilder setLauncher(@Nullable Artifact launcher) {
     this.launcher = launcher;
     return this;
@@ -254,22 +275,21 @@ public class DeployArchiveBuilder {
     return args;
   }
 
+  /** Computes input artifacts for a deploy archive based on the given attributes. */
+  public static NestedSet<Artifact> getArchiveInputs(JavaTargetAttributes attributes) {
+    return getArchiveInputs(attributes, null);
+  }
+
   private static NestedSet<Artifact> getArchiveInputs(
-      JavaTargetAttributes attributes,
-      Iterable<Artifact> runtimeClasspathForArchive,
-      @Nullable Function<Artifact, Artifact> derivedJarFunction) {
+      JavaTargetAttributes attributes, @Nullable Function<Artifact, Artifact> derivedJarFunction) {
     NestedSetBuilder<Artifact> inputs = NestedSetBuilder.stableOrder();
     if (derivedJarFunction != null) {
       inputs.addAll(
-          Streams.stream(runtimeClasspathForArchive)
+          Streams.stream(attributes.getRuntimeClassPathForArchive())
               .map(derivedJarFunction)
               .collect(toImmutableList()));
     } else {
-      if (runtimeClasspathForArchive instanceof NestedSet) {
-        inputs.addTransitive((NestedSet<Artifact>) runtimeClasspathForArchive);
-      } else {
-        inputs.addAll(runtimeClasspathForArchive);
-      }
+      attributes.addRuntimeClassPathForArchiveToNestedSet(inputs);
     }
     // TODO(bazel-team): Remove?  Resources not used as input to singlejar action
     inputs.addAll(attributes.getResources().values());
@@ -284,8 +304,7 @@ public class DeployArchiveBuilder {
     for (Artifact artifact : classpathResources) {
       String name = artifact.getExecPath().getBaseName();
       if (!classPathResourceNames.add(name)) {
-        ruleContext.attributeError(
-            "classpath_resources",
+        ruleContext.attributeError("classpath_resources",
             "entries must have different file names (duplicate: " + name + ")");
         return;
       }
@@ -293,12 +312,10 @@ public class DeployArchiveBuilder {
 
     Iterable<Artifact> runtimeJars = runtimeJarsBuilder.build();
 
-    Iterable<Artifact> runtimeClasspathForArchive = attributes.getRuntimeClassPathForArchive();
-
     // TODO(kmb): Consider not using getArchiveInputs, specifically because we don't want/need to
     // transform anything but the runtimeClasspath and b/c we currently do it twice here and below
     NestedSetBuilder<Artifact> inputs = NestedSetBuilder.stableOrder();
-    inputs.addTransitive(getArchiveInputs(attributes, runtimeClasspathForArchive, derivedJars));
+    inputs.addTransitive(getArchiveInputs(attributes, derivedJars));
 
     if (derivedJars != null) {
       inputs.addAll(Streams.stream(runtimeJars).map(derivedJars).collect(toImmutableList()));
@@ -316,14 +333,11 @@ public class DeployArchiveBuilder {
     if (derivedJars != null) {
       runtimeClasspath.addAll(
           Iterables.transform(
-              Iterables.concat(runtimeJars, runtimeClasspathForArchive), derivedJars));
+              Iterables.concat(runtimeJars, attributes.getRuntimeClassPathForArchive()),
+              derivedJars));
     } else {
       runtimeClasspath.addAll(runtimeJars);
-      if (runtimeClasspathForArchive instanceof NestedSet) {
-        runtimeClasspath.addTransitive((NestedSet<Artifact>) runtimeClasspathForArchive);
-      } else {
-        runtimeClasspath.addAll(runtimeClasspathForArchive);
-      }
+      attributes.addRuntimeClassPathForArchiveToNestedSet(runtimeClasspath);
     }
 
     if (launcher != null) {
