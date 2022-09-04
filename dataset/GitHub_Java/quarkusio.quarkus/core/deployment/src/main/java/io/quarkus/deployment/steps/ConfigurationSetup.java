@@ -224,8 +224,7 @@ public class ConfigurationSetup {
         // expand properties
         builder.withWrapper(ExpandingConfigSource::new);
         builder.addDefaultSources();
-        final ApplicationPropertiesConfigSource.InJar inJar = new ApplicationPropertiesConfigSource.InJar();
-        builder.withSources(inJar);
+        builder.withSources(new ApplicationPropertiesConfigSource.InJar());
         for (ConfigurationCustomConverterBuildItem converter : converters) {
             withConverterHelper(builder, converter.getType(), converter.getPriority(), converter.getConverter());
         }
@@ -236,9 +235,6 @@ public class ConfigurationSetup {
                 buildTimeConfig,
                 buildTimeRunTimeConfig, // this one is only for generating a default-values config source
                 runTimeConfig);
-        // exclude any default config property names that aren't part of application.properties
-        final Set<String> inJarPropertyNames = inJar.getPropertyNames();
-        unmatched.removeIf(s -> ! inJarPropertyNames.contains(s) && ! s.startsWith("quarkus."));
 
         // store the expanded values from the build
         final byte[] bytes;
