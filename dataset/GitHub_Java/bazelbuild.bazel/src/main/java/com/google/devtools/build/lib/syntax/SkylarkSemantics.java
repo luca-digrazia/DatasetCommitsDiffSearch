@@ -45,17 +45,15 @@ public abstract class SkylarkSemantics {
 
   public abstract boolean incompatibleDepsetUnion();
 
+  public abstract boolean incompatibleDisableGlobTracking();
+
   public abstract boolean incompatibleDisableObjcProviderResources();
 
   public abstract boolean incompatibleDisallowDictPlus();
 
-  public abstract boolean incompatibleDisallowFileType();
-
-  public abstract boolean incompatibleDisallowLegacyJavaInfo();
-
   public abstract boolean incompatibleDisallowOldStyleArgsAdd();
 
-  public abstract boolean incompatibleDisallowSlashOperator();
+  public abstract boolean incompatibleDisallowToplevelIfStatement();
 
   public abstract boolean incompatibleNewActionsApi();
 
@@ -87,12 +85,11 @@ public abstract class SkylarkSemantics {
           .incompatibleBzlDisallowLoadAfterStatement(false)
           .incompatibleDepsetIsNotIterable(false)
           .incompatibleDepsetUnion(false)
+          .incompatibleDisableGlobTracking(true)
           .incompatibleDisableObjcProviderResources(false)
           .incompatibleDisallowDictPlus(false)
-          .incompatibleDisallowFileType(false)
-          .incompatibleDisallowLegacyJavaInfo(false)
           .incompatibleDisallowOldStyleArgsAdd(false)
-          .incompatibleDisallowSlashOperator(false)
+          .incompatibleDisallowToplevelIfStatement(true)
           .incompatibleNewActionsApi(false)
           .incompatiblePackageNameIsAFunction(false)
           .incompatibleRemoveNativeGitRepository(false)
@@ -112,17 +109,15 @@ public abstract class SkylarkSemantics {
 
     public abstract Builder incompatibleDepsetUnion(boolean value);
 
+    public abstract Builder incompatibleDisableGlobTracking(boolean value);
+
     public abstract Builder incompatibleDisableObjcProviderResources(boolean value);
 
     public abstract Builder incompatibleDisallowDictPlus(boolean value);
 
-    public abstract Builder incompatibleDisallowFileType(boolean value);
-
-    public abstract Builder incompatibleDisallowLegacyJavaInfo(boolean value);
-
     public abstract Builder incompatibleDisallowOldStyleArgsAdd(boolean value);
 
-    public abstract Builder incompatibleDisallowSlashOperator(boolean value);
+    public abstract Builder incompatibleDisallowToplevelIfStatement(boolean value);
 
     public abstract Builder incompatibleNewActionsApi(boolean value);
 

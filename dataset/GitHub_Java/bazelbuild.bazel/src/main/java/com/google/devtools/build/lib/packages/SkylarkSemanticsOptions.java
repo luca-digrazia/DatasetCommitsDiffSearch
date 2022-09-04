@@ -106,6 +106,19 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean incompatibleDepsetIsNotIterable;
 
   @Option(
+    name = "incompatible_disable_glob_tracking",
+    defaultValue = "true",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    metadataTags = {
+      OptionMetadataTag.INCOMPATIBLE_CHANGE,
+      OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+    },
+    help = "If set to true, do not track the values of globs (this is used by rare specific cases"
+  )
+  public boolean incompatibleDisableGlobTracking;
+
+  @Option(
     name = "incompatible_disable_objc_provider_resources",
     defaultValue = "false",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
@@ -131,44 +144,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   )
   public boolean incompatibleDisallowDictPlus;
 
-  @Option(
-    name = "incompatible_disallow_filetype",
-    defaultValue = "false",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {
-      OptionMetadataTag.INCOMPATIBLE_CHANGE,
-      OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-    },
-    help = "If set to true, function `FileType` is not available."
-  )
-  public boolean incompatibleDisallowFileType;
-
-  @Option(
-      name = "incompatible_disallow_legacy_javainfo",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "If set to true, old-style JavaInfo provider construction is disallowed.")
-  public boolean incompatibleDisallowLegacyJavaInfo;
-
-  @Option(
-    name = "incompatible_disallow_slash_operator",
-    defaultValue = "false",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {
-      OptionMetadataTag.INCOMPATIBLE_CHANGE,
-      OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-    },
-    help = "If set to true, the `/` operator is disabled. Use `//` for integer division."
-  )
-  public boolean incompatibleDisallowSlashOperator;
-
   /** Controls legacy arguments to ctx.actions.Args#add. */
   @Option(
     name = "incompatible_disallow_old_style_args_add",
@@ -183,6 +158,21 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
     help = "If set to true, vectorized calls to Args#add are disallowed."
   )
   public boolean incompatibleDisallowOldStyleArgsAdd;
+
+  @Option(
+    name = "incompatible_disallow_toplevel_if_statement",
+    defaultValue = "true",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    metadataTags = {
+      OptionMetadataTag.INCOMPATIBLE_CHANGE,
+      OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+    },
+    help =
+        "If set to true, 'if' statements are forbidden at the top-level "
+            + "(outside a function definition)"
+  )
+  public boolean incompatibleDisallowToplevelIfStatement;
 
   @Option(
     name = "incompatible_new_actions_api",
@@ -275,12 +265,11 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .incompatibleBzlDisallowLoadAfterStatement(incompatibleBzlDisallowLoadAfterStatement)
         .incompatibleDepsetIsNotIterable(incompatibleDepsetIsNotIterable)
         .incompatibleDepsetUnion(incompatibleDepsetUnion)
+        .incompatibleDisableGlobTracking(incompatibleDisableGlobTracking)
         .incompatibleDisableObjcProviderResources(incompatibleDisableObjcProviderResources)
         .incompatibleDisallowDictPlus(incompatibleDisallowDictPlus)
-        .incompatibleDisallowFileType(incompatibleDisallowFileType)
-        .incompatibleDisallowLegacyJavaInfo(incompatibleDisallowLegacyJavaInfo)
         .incompatibleDisallowOldStyleArgsAdd(incompatibleDisallowOldStyleArgsAdd)
-        .incompatibleDisallowSlashOperator(incompatibleDisallowSlashOperator)
+        .incompatibleDisallowToplevelIfStatement(incompatibleDisallowToplevelIfStatement)
         .incompatibleNewActionsApi(incompatibleNewActionsApi)
         .incompatiblePackageNameIsAFunction(incompatiblePackageNameIsAFunction)
         .incompatibleRemoveNativeGitRepository(incompatibleRemoveNativeGitRepository)
