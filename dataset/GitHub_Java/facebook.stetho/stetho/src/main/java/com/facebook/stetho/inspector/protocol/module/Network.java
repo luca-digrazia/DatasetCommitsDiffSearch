@@ -64,16 +64,9 @@ public class Network implements ChromeDevtoolsDomain {
   }
 
   private GetResponseBodyResponse readResponseBody(String requestId)
-      throws IOException, JsonRpcException {
+      throws IOException {
     GetResponseBodyResponse response = new GetResponseBodyResponse();
-    ResponseBodyData bodyData;
-    try {
-      bodyData = mResponseBodyFileManager.readFile(requestId);
-    } catch (OutOfMemoryError e) {
-      throw new JsonRpcException(new JsonRpcError(JsonRpcError.ErrorCode.INTERNAL_ERROR,
-          e.toString(),
-          null /* data */));
-    }
+    ResponseBodyData bodyData = mResponseBodyFileManager.readFile(requestId);
     response.body = bodyData.data;
     response.base64Encoded = bodyData.base64Encoded;
     return response;

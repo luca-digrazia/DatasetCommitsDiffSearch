@@ -3,6 +3,7 @@
 package com.facebook.stetho.inspector.network;
 
 import android.os.SystemClock;
+import com.facebook.stetho.common.LogRedirector;
 import com.facebook.stetho.common.Utf8Charset;
 import com.facebook.stetho.inspector.console.CLog;
 import com.facebook.stetho.inspector.protocol.module.Console;
@@ -26,6 +27,8 @@ import java.util.ArrayList;
  * implementation will be automatically wired up to them.
  */
 public class NetworkEventReporterImpl implements NetworkEventReporter {
+  private static final String TAG = "RealNetworkEventReporter";
+
   @Nullable
   private ResourceTypeHelper mResourceTypeHelper;
 
@@ -130,9 +133,9 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
       responseJSON.statusText = response.reasonPhrase();
       responseJSON.headers = formatHeadersAsJSON(response);
       String contentType = getContentType(response);
-      responseJSON.mimeType = contentType != null ?
-          getResourceTypeHelper().stripContentExtras(contentType) :
-          "application/octet-stream";
+      if (contentType != null) {
+        responseJSON.mimeType = getResourceTypeHelper().stripContentExtras(contentType);
+      }
       responseJSON.connectionReused = response.connectionReused();
       responseJSON.connectionId = response.connectionId();
       responseJSON.fromDiskCache = response.fromDiskCache();
@@ -141,9 +144,9 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
       receivedParams.frameId = "1";
       receivedParams.loaderId = "1";
       receivedParams.timestamp = stethoNow() / 1000.0;
-      receivedParams.type = contentType != null ?
-          getResourceTypeHelper().determineResourceType(contentType) :
-          Page.ResourceType.OTHER;
+      if (contentType != null) {
+        receivedParams.type = getResourceTypeHelper().determineResourceType(contentType);
+      }
       receivedParams.response = responseJSON;
       peerManager.sendNotificationToPeers("Network.responseReceived", receivedParams);
     }
