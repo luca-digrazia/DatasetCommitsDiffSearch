@@ -73,7 +73,6 @@ public class ProcessHolder {
 		public final JClass SEEKBAR = refClass(CanonicalNameConstants.SEEKBAR);
 		public final JClass ON_SEEKBAR_CHANGE_LISTENER = refClass(CanonicalNameConstants.ON_SEEKBAR_CHANGE_LISTENER);
 		public final JClass TEXT_VIEW = refClass(CanonicalNameConstants.TEXT_VIEW);
-		public final JClass TEXT_VIEW_ON_EDITOR_ACTION_LISTENER = refClass(CanonicalNameConstants.TEXT_VIEW_ON_EDITOR_ACTION_LISTENER);
 		public final JClass COMPOUND_BUTTON = refClass(CanonicalNameConstants.COMPOUND_BUTTON);
 		public final JClass COMPOUND_BUTTON_ON_CHECKED_CHANGE_LISTENER = refClass(CanonicalNameConstants.COMPOUND_BUTTON_ON_CHECKED_CHANGE_LISTENER);
 		public final JClass VIEW = refClass(CanonicalNameConstants.VIEW);
@@ -130,7 +129,7 @@ public class ProcessHolder {
 		 * RoboGuice
 		 */
 		public final JClass ROBO_CONTEXT = refClass(CanonicalNameConstants.ROBO_CONTEXT);
-		public final JClass ROBO_INJECTOR = refClass(CanonicalNameConstants.ROBO_INJECTOR);
+		public final JClass INJECTOR = refClass(CanonicalNameConstants.INJECTOR);
 		public final JClass CONTENT_VIEW_LISTENER = refClass(CanonicalNameConstants.CONTENT_VIEW_LISTENER);
 		public final JClass KEY = refClass(CanonicalNameConstants.KEY);
 		public final JClass ON_RESTART_EVENT = refClass(CanonicalNameConstants.ON_RESTART_EVENT);

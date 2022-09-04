@@ -15,10 +15,20 @@
  */
 package org.androidannotations.holder;
 
-import com.sun.codemodel.*;
-import org.androidannotations.api.SdkVersionHelper;
-import org.androidannotations.helper.*;
-import org.androidannotations.process.ProcessHolder;
+import static com.sun.codemodel.JExpr.FALSE;
+import static com.sun.codemodel.JExpr.TRUE;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JExpr._super;
+import static com.sun.codemodel.JExpr._this;
+import static com.sun.codemodel.JExpr.cast;
+import static com.sun.codemodel.JExpr.invoke;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
+import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -26,12 +36,29 @@ import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.ElementFilter;
-import java.util.ArrayList;
-import java.util.List;
 
-import static com.sun.codemodel.JExpr.*;
-import static com.sun.codemodel.JMod.PRIVATE;
-import static com.sun.codemodel.JMod.PUBLIC;
+import org.androidannotations.api.SdkVersionHelper;
+import org.androidannotations.helper.ActionBarSherlockHelper;
+import org.androidannotations.helper.ActivityIntentBuilder;
+import org.androidannotations.helper.AndroidManifest;
+import org.androidannotations.helper.AnnotationHelper;
+import org.androidannotations.helper.CanonicalNameConstants;
+import org.androidannotations.helper.GreenDroidHelper;
+import org.androidannotations.helper.IntentBuilder;
+import org.androidannotations.process.ProcessHolder;
+
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JClassAlreadyExistsException;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JType;
+import com.sun.codemodel.JVar;
 
 public class EActivityHolder extends EComponentWithViewSupportHolder implements HasIntentBuilder, HasExtras, HasInstanceState, HasOptionsMenu, HasOnActivityResult, HasReceiverRegistration {
 
@@ -42,7 +69,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	private JMethod setContentViewLayout;
 	private JVar initSavedInstanceParam;
 	private JDefinedClass intentBuilderClass;
-	private JFieldRef intentField;
+	private JFieldVar intentField;
 	private InstanceStateHolder instanceStateHolder;
 	private OnActivityResultHolder onActivityResultHolder;
 	private ReceiverRegistrationHolder receiverRegistrationHolder;
@@ -415,12 +442,12 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	@Override
-	public void setIntentField(JFieldRef intentField) {
+	public void setIntentField(JFieldVar intentField) {
 		this.intentField = intentField;
 	}
 
 	@Override
-	public JFieldRef getIntentField() {
+	public JFieldVar getIntentField() {
 		return intentField;
 	}
 
@@ -431,20 +458,21 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 		return roboGuiceHolder;
 	}
 
-	protected void setScopeField() {
-		getRoboGuiceHolder().scope = getGeneratedClass().field(JMod.PRIVATE, classes().CONTEXT_SCOPE, "scope_");
+	protected void setScopedObjectsField() {
+		JClass keyWildCard = classes().KEY.narrow(codeModel().wildcard());
+		JClass scopedHashMap = classes().HASH_MAP.narrow(keyWildCard, classes().OBJECT);
+
+		getRoboGuiceHolder().scopedObjects = getGeneratedClass().field(JMod.PROTECTED, scopedHashMap, "scopedObjects" + GENERATION_SUFFIX);
+		getRoboGuiceHolder().scopedObjects.assign(JExpr._new(scopedHashMap));
 	}
 
 	protected void setEventManagerField() {
-		getRoboGuiceHolder().eventManager = generatedClass.field(JMod.PRIVATE, classes().EVENT_MANAGER, "eventManager_");
+		getRoboGuiceHolder().eventManager = generatedClass.field(JMod.PROTECTED, classes().EVENT_MANAGER, "eventManager" + GENERATION_SUFFIX);
 	}
 
-	public void setGetInjector() {
-		JMethod method = generatedClass.method(JMod.PUBLIC, classes().INJECTOR, "getInjector");
-		method.annotate(Override.class);
-		JExpression castApplication = cast(classes().INJECTOR_PROVIDER, invoke("getApplication"));
-		method.body()._return(castApplication.invoke("getInjector"));
-		getRoboGuiceHolder().getInjector = method;
+	protected void setContentViewListenerField() {
+		getRoboGuiceHolder().contentViewListenerField = generatedClass.field(JMod.NONE, classes().CONTENT_VIEW_LISTENER, "ignored" + GENERATION_SUFFIX);
+		getRoboGuiceHolder().contentViewListenerField.annotate(classes().INJECT);
 	}
 
 	@Override
@@ -676,6 +704,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 		return onDestroyAfterSuperBlock;
 	}
 
+	@Override
 	public JBlock getOnResumeAfterSuperBlock() {
 		if (onResumeAfterSuperBlock == null) {
 			setOnResume();
@@ -734,6 +763,5 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	public JFieldVar getIntentFilterField(String[] actions) {
 		return receiverRegistrationHolder.getIntentFilterField(actions);
 	}
-
 
 }
