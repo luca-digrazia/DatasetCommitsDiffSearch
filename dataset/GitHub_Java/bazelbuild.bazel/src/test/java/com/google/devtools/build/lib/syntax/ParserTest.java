@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -1222,6 +1221,47 @@ public final class ParserTest {
   }
 
   @Test
+  public void testOptionalArgBeforeMandatoryArgInFuncDef() throws Exception {
+    setFailFast(false);
+    parseFile("def func(a, b = 'a', c):\n  return 0\n");
+    assertContainsError(
+        "a mandatory positional parameter must not follow an optional parameter");
+  }
+
+  @Test
+  public void testKwargBeforePositionalArg() throws Exception {
+    setFailFast(false);
+    parseFile("f(**a, b)");
+    assertContainsError("unexpected tokens after **kwargs argument");
+  }
+
+  @Test
+  public void testDuplicateKwarg() throws Exception {
+    setFailFast(false);
+    parseFile("f(**a, **b)");
+    assertContainsError("unexpected tokens after **kwargs argument");
+  }
+
+  @Test
+  public void testUnnamedStar() throws Exception {
+    setFailFast(false);
+    List<Statement> statements =
+        parseStatements(
+            "def func(a, b1=2, b2=3, *, c1, d=4, c2): return a + b1 + b2 + c1 + c2 + d\n");
+    assertThat(statements).hasSize(1);
+    assertThat(statements.get(0)).isInstanceOf(DefStatement.class);
+    DefStatement stmt = (DefStatement) statements.get(0);
+    FunctionSignature sig = stmt.getSignature();
+    // Note the reordering of optional named-only at the end.
+    assertThat(sig.getParameterNames())
+        .isEqualTo(ImmutableList.<String>of("a", "b1", "b2", "c1", "c2", "d"));
+    assertThat(sig.numMandatoryPositionals()).isEqualTo(1);
+    assertThat(sig.numOptionalPositionals()).isEqualTo(2);
+    assertThat(sig.numMandatoryNamedOnly()).isEqualTo(2);
+    assertThat(sig.numOptionalNamedOnly()).isEqualTo(1);
+  }
+
+  @Test
   public void testElseWithoutIf() throws Exception {
     setFailFast(false);
     parseFile(
@@ -1257,12 +1297,44 @@ public final class ParserTest {
   }
 
   @Test
-  public void testClassDefinitionInStarlark() throws Exception {
+  public void testClassDefinitionInSkylark() throws Exception {
     setFailFast(false);
     parseFile("class test(object): pass");
     assertContainsError("keyword 'class' not supported");
   }
 
+  @Test
+  public void testArgumentAfterKwargs() throws Exception {
+    setFailFast(false);
+    parseFile(
+        "f(",
+        "    1,",
+        "    *[2],",
+        "    *[3],", // error on this line
+        ")\n");
+    assertContainsError(":4:5: *arg argument is misplaced");
+  }
+
+  @Test
+  public void testPositionalArgAfterKeywordArg() throws Exception {
+    setFailFast(false);
+    parseFile(
+        "f(",
+        "    2,",
+        "    a = 4,",
+        "    3,", // error on this line
+        ")\n");
+    assertContainsError(":4:5: positional argument is misplaced (positional arguments come first)");
+  }
+
+  @Test
+  public void testFunctionDefDuplicateArguments() throws Exception {
+    setFailFast(false);
+    parseFile(
+        "def func(a,b,a):", //
+        "  a = 1\n");
+    assertContainsError("duplicate parameter name in function definition");
+  }
 
   @Test
   public void testStringsAreDeduped() throws Exception {
@@ -1283,33 +1355,5 @@ public final class ParserTest {
   public void testConditionalExpressions() throws Exception {
     assertThat(parseExpressionError("1 if 2"))
         .contains("missing else clause in conditional expression or semicolon before if");
-  }
-
-  @Test
-  public void testParseFileStackOverflow() throws Exception {
-    StarlarkFile file = StarlarkFile.parse(veryDeepExpression());
-    SyntaxError ex = LexerTest.assertContainsError(file.errors(), "internal error: stack overflow");
-    assertThat(ex.message()).contains("parseDictEntry"); // includes stack
-    assertThat(ex.message()).contains("Please report the bug");
-    assertThat(ex.message()).contains("include the text of foo.star"); // includes file name
-  }
-
-  @Test
-  public void testParseExpressionStackOverflow() throws Exception {
-    SyntaxError.Exception ex =
-        assertThrows(SyntaxError.Exception.class, () -> Expression.parse(veryDeepExpression()));
-    SyntaxError err = LexerTest.assertContainsError(ex.errors(), "internal error: stack overflow");
-    assertThat(err.message()).contains("parseDictEntry"); // includes stack
-    assertThat(err.message())
-        .contains("while parsing Starlark expression <<{{{{"); // includes expression
-    assertThat(err.message()).contains("Please report the bug");
-  }
-
-  private static ParserInput veryDeepExpression() {
-    StringBuilder s = new StringBuilder();
-    for (int i = 0; i < 1000; i++) {
-      s.append("{");
-    }
-    return ParserInput.create(s.toString(), "foo.star");
   }
 }

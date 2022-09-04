@@ -45,7 +45,7 @@ final class Eval {
   private static TokenKind execStatements(
       StarlarkThread.Frame fr, List<Statement> statements, boolean indented)
       throws EvalException, InterruptedException {
-    boolean isToplevelFunction = fn(fr).isToplevel();
+    boolean isToplevelFunction = fn(fr).isToplevel;
 
     // Hot code path, good chance of short lists which don't justify the iterator overhead.
     for (int i = 0; i < statements.size(); i++) {
@@ -121,34 +121,36 @@ final class Eval {
 
   private static void execDef(StarlarkThread.Frame fr, DefStatement node)
       throws EvalException, InterruptedException {
-    Resolver.Function rfn = node.resolved;
+    FunctionSignature sig = node.getSignature();
 
     // Evaluate default value expressions of optional parameters.
-    // We use MANDATORY to indicate a required parameter
-    // (not null, because defaults must be a legal tuple value, as
-    // it will be constructed by the code emitted by the compiler).
-    // As an optimization, we omit the prefix of MANDATORY parameters.
-    Object[] defaults = null;
-    int nparams = rfn.params.size() - (rfn.hasKwargs ? 1 : 0) - (rfn.hasVarargs ? 1 : 0);
-    for (int i = 0; i < nparams; i++) {
-      Expression expr = rfn.params.get(i).getDefaultValue();
-      if (expr == null && defaults == null) {
-        continue; // skip prefix of required parameters
+    // They may be discontinuous:
+    // def f(a, b=1, *, c, d=2) has a defaults tuple of (1, 2).
+    // TODO(adonovan): record the gaps (e.g. c) with a sentinel
+    // to simplify StarlarkFunction.matchSignature.
+    Tuple<Object> defaults = Tuple.empty();
+    int ndefaults = sig.numOptionals();
+    if (ndefaults > 0) {
+      Object[] array = new Object[ndefaults];
+      for (int i = sig.numMandatoryPositionals(), j = 0; i < sig.numParameters(); i++) {
+        Expression expr = node.getParameters().get(i).getDefaultValue();
+        if (expr != null) {
+          array[j++] = eval(fr, expr);
+        }
       }
-      if (defaults == null) {
-        defaults = new Object[nparams - i];
-      }
-      defaults[i - (nparams - defaults.length)] =
-          expr == null ? StarlarkFunction.MANDATORY : eval(fr, expr);
-    }
-    if (defaults == null) {
-      defaults = EMPTY;
+      defaults = Tuple.wrap(array);
     }
 
     assignIdentifier(
         fr,
         node.getIdentifier(),
-        new StarlarkFunction(rfn, Tuple.wrap(defaults), fn(fr).getModule()));
+        new StarlarkFunction(
+            node.getIdentifier().getName(),
+            node.getIdentifier().getStartLocation(),
+            sig,
+            defaults,
+            node.getBody(),
+            fn(fr).getModule()));
   }
 
   private static TokenKind execIf(StarlarkThread.Frame fr, IfStatement node)
@@ -304,7 +306,7 @@ final class Eval {
     // In effect, we do the missing resolution using fr.compcount.
     if (scope == null) {
       scope =
-          fn(fr).isToplevel() && fr.compcount == 0
+          fn(fr).isToplevel && fr.compcount == 0
               ? Resolver.Scope.Module //
               : Resolver.Scope.Local;
     }

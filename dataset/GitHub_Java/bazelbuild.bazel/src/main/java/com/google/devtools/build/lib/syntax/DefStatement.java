@@ -15,29 +15,28 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import javax.annotation.Nullable;
 
 /** Syntax node for a 'def' statement, which defines a function. */
 public final class DefStatement extends Statement {
 
   private final int defOffset;
   private final Identifier identifier;
+  private final FunctionSignature signature;
   private final ImmutableList<Statement> body; // non-empty if well formed
   private final ImmutableList<Parameter> parameters;
-
-  // set by resolver
-  @Nullable private Resolver.Function resolved;
 
   DefStatement(
       FileLocations locs,
       int defOffset,
       Identifier identifier,
       ImmutableList<Parameter> parameters,
+      FunctionSignature signature,
       ImmutableList<Statement> body) {
     super(locs);
     this.defOffset = defOffset;
     this.identifier = identifier;
     this.parameters = Preconditions.checkNotNull(parameters);
+    this.signature = Preconditions.checkNotNull(signature);
     this.body = Preconditions.checkNotNull(body);
   }
 
@@ -62,14 +61,8 @@ public final class DefStatement extends Statement {
     return parameters;
   }
 
-  void setResolvedFunction(Resolver.Function resolved) {
-    this.resolved = resolved;
-  }
-
-  /** Returns information about the resolved function. Set by the resolver. */
-  @Nullable
-  public Resolver.Function getResolvedFunction() {
-    return resolved;
+  FunctionSignature getSignature() {
+    return signature;
   }
 
   @Override

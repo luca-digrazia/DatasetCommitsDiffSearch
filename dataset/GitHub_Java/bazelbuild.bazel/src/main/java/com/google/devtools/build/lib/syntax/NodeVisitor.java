@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.devtools.build.lib.syntax.IfStatement.ConditionalStatements;
 import java.util.List;
 
 /** A visitor for visiting the nodes of a syntax tree in lexical order. */
@@ -43,18 +42,22 @@ public class NodeVisitor {
     visitAll(statements);
   }
 
-  // node specific visit methods
-  public void visit(Argument.Passed node) {
+  // node-specific visit methods
+
+  // All four subclasses of Argument are handled together.
+  public void visit(Argument node) {
     visit(node.getValue());
   }
 
-  public void visit(Parameter<Expression, Expression> node) {
+  // All four subclasses of Parameter are handled together.
+  public void visit(Parameter node) {
+    visit(node.getIdentifier());
     if (node.getDefaultValue() != null) {
       visit(node.getDefaultValue());
     }
   }
 
-  public void visit(BuildFileAST node) {
+  public void visit(StarlarkFile node) {
     visitBlock(node.getStatements());
     visitAll(node.getComments());
   }
@@ -64,31 +67,37 @@ public class NodeVisitor {
     visit(node.getY());
   }
 
-  public void visit(FuncallExpression node) {
+  public void visit(CallExpression node) {
     visit(node.getFunction());
     visitAll(node.getArguments());
   }
 
-  public void visit(@SuppressWarnings("unused") Identifier node) {}
+  public void visit(Identifier node) {}
 
   public void visit(Comprehension node) {
     for (Comprehension.Clause clause : node.getClauses()) {
       if (clause instanceof Comprehension.For) {
-        Comprehension.For forClause = (Comprehension.For) clause;
-        visit(forClause.getVars());
-        visit(forClause.getIterable());
+        visit((Comprehension.For) clause);
       } else {
-        Comprehension.If ifClause = (Comprehension.If) clause;
-        visit(ifClause.getCondition());
+        visit((Comprehension.If) clause);
       }
     }
     visit(node.getBody());
   }
 
+  public void visit(Comprehension.For node) {
+    visit(node.getVars());
+    visit(node.getIterable());
+  }
+
+  public void visit(Comprehension.If node) {
+    visit(node.getCondition());
+  }
+
   public void visit(ForStatement node) {
     visit(node.getCollection());
-    visit(node.getLHS());
-    visitBlock(node.getBlock());
+    visit(node.getVars());
+    visitBlock(node.getBody());
   }
 
   public void visit(LoadStatement node) {
@@ -97,7 +106,7 @@ public class NodeVisitor {
     }
   }
 
-  public void visit(ListLiteral node) {
+  public void visit(ListExpression node) {
     visitAll(node.getElements());
   }
 
@@ -110,38 +119,27 @@ public class NodeVisitor {
     visit(node.getLHS());
   }
 
-  public void visit(AugmentedAssignmentStatement node) {
-    visit(node.getRHS());
-    visit(node.getLHS());
-  }
-
   public void visit(ExpressionStatement node) {
     visit(node.getExpression());
   }
 
   public void visit(IfStatement node) {
-    visitAll(node.getThenBlocks());
-    visitBlock(node.getElseBlock());
-  }
-
-  public void visit(ConditionalStatements node) {
     visit(node.getCondition());
-    visitBlock(node.getStatements());
+    visitBlock(node.getThenBlock());
+    if (node.getElseBlock() != null) {
+      visitBlock(node.getElseBlock());
+    }
   }
 
   public void visit(DefStatement node) {
     visit(node.getIdentifier());
-    // Do not use visitAll for the parameters, because we would lose the type information.
-    // Inside the AST, we know that Parameters are using Expressions.
-    for (Parameter<Expression, Expression> param : node.getParameters()) {
-      visit(param);
-    }
-    visitBlock(node.getStatements());
+    visitAll(node.getParameters());
+    visitBlock(node.getBody());
   }
 
   public void visit(ReturnStatement node) {
-    if (node.getReturnExpression() != null) {
-      visit(node.getReturnExpression());
+    if (node.getResult() != null) {
+      visit(node.getResult());
     }
   }
 
@@ -175,8 +173,8 @@ public class NodeVisitor {
     if (node.getStart() != null) {
       visit(node.getStart());
     }
-    if (node.getEnd() != null) {
-      visit(node.getEnd());
+    if (node.getStop() != null) {
+      visit(node.getStop());
     }
     if (node.getStep() != null) {
       visit(node.getStep());
