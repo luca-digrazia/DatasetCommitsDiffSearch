@@ -22,7 +22,6 @@ package org.graylog2.inputs.radio;
 import com.codahale.metrics.MetricRegistry;
 import com.google.inject.Inject;
 import org.graylog2.inputs.amqp.AMQPInput;
-import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.ConfigurationField;
@@ -42,7 +41,7 @@ public class RadioAMQPInput extends AMQPInput {
     }
 
     @Override
-    public void checkConfiguration(Configuration configuration) throws ConfigurationException {
+    public void checkConfiguration() throws ConfigurationException {
         configuration.setString(CK_EXCHANGE, "graylog2");
         configuration.setString(CK_QUEUE, "graylog2-radio-messages");
         configuration.setString(CK_ROUTING_KEY, "graylog2-radio-message");

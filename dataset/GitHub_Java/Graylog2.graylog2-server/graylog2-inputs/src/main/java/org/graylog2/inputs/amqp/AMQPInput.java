@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2014 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.inputs.amqp;
 
@@ -62,15 +63,10 @@ public class AMQPInput extends MessageInput {
     public AMQPInput(MetricRegistry metricRegistry) {
         this.metricRegistry = metricRegistry;
     }
-
-    @Override
-    public void initialize(Configuration configuration) {
-        super.initialize(configuration);
-        setupMetrics();
-    }
-
     @Override
     public void launch(Buffer processBuffer) throws MisfireException {
+        setupMetrics();
+
         consumer = new Consumer(
                 configuration.getString(CK_HOSTNAME),
                 (int) configuration.getInt(CK_PORT),
