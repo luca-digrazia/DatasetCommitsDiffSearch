@@ -51,6 +51,7 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
@@ -125,7 +126,7 @@ public class BazelCppRuleClasses {
   public static final class CcLinkingRule implements RuleDefinition {
     @Override
     @SuppressWarnings("unchecked")
-    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
+    public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
           .add(
               attr(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, LABEL)
@@ -154,7 +155,7 @@ public class BazelCppRuleClasses {
    */
   public static final class CcBaseRule implements RuleDefinition {
     @Override
-    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
+    public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
           /*<!-- #BLAZE_RULE($cc_base_rule).ATTRIBUTE(copts) -->
           Add these options to the C++ compilation command.
@@ -193,7 +194,7 @@ public class BazelCppRuleClasses {
    */
   public static final class CcDeclRule implements RuleDefinition {
     @Override
-    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
+    public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
           /*<!-- #BLAZE_RULE($cc_decl_rule).ATTRIBUTE(defines) -->
           List of defines to add to the compile line.
@@ -265,7 +266,7 @@ public class BazelCppRuleClasses {
     }
 
     @Override
-    public RuleClass build(RuleClass.Builder builder, final RuleDefinitionEnvironment env) {
+    public RuleClass build(Builder builder, final RuleDefinitionEnvironment env) {
       if (defParserLabel != null) {
         builder.add(
             attr("$def_parser", LABEL)
@@ -479,7 +480,7 @@ public class BazelCppRuleClasses {
    */
   public static final class CcLibraryBaseRule implements RuleDefinition {
     @Override
-    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
+    public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
           /*<!-- #BLAZE_RULE($cc_library).ATTRIBUTE(hdrs) -->
            The list of header files published by
@@ -550,7 +551,7 @@ public class BazelCppRuleClasses {
   /** Helper rule class. */
   public static final class CcBinaryBaseRule implements RuleDefinition {
     @Override
-    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
+    public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
           /*<!-- #BLAZE_RULE($cc_binary_base).ATTRIBUTE(malloc) -->
           Override the default dependency on malloc.
