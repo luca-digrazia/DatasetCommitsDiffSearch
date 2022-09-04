@@ -33,26 +33,25 @@ public enum ProfilerTask {
   REMOTE_EXECUTION("remote action execution"),
   LOCAL_EXECUTION("local action execution"),
   SCANNER("include scanner"),
-  LOCAL_PARSE(
-      "Local parse to prepare for remote execution",
-      Threshold.FIFTY_MILLIS,
-      /* collectsSlowestInstances= */ true),
+  // 30 is a good number because the slowest items are stored in a heap, with temporarily
+  // one more element, and with 31 items, a heap becomes a complete binary tree
+  LOCAL_PARSE("Local parse to prepare for remote execution", Threshold.FIFTY_MILLIS, 30),
   UPLOAD_TIME("Remote execution upload time", Threshold.FIFTY_MILLIS),
   PROCESS_TIME("Remote execution process wall time", Threshold.FIFTY_MILLIS),
   REMOTE_QUEUE("Remote execution queuing time", Threshold.FIFTY_MILLIS),
   REMOTE_SETUP("Remote execution setup", Threshold.FIFTY_MILLIS),
   FETCH("Remote execution file fetching", Threshold.FIFTY_MILLIS),
-  VFS_STAT("VFS stat", Threshold.TEN_MILLIS, /* collectsSlowestInstances= */ true),
-  VFS_DIR("VFS readdir", Threshold.TEN_MILLIS, /* collectsSlowestInstances= */ true),
-  VFS_READLINK("VFS readlink", Threshold.TEN_MILLIS, /* collectsSlowestInstances= */ true),
+  VFS_STAT("VFS stat", Threshold.TEN_MILLIS, 30),
+  VFS_DIR("VFS readdir", Threshold.TEN_MILLIS, 30),
+  VFS_READLINK("VFS readlink", Threshold.TEN_MILLIS, 30),
   // TODO(olaola): rename to VFS_DIGEST. This refers to all digest function computations.
-  VFS_MD5("VFS md5", Threshold.TEN_MILLIS, /* collectsSlowestInstances= */ true),
-  VFS_XATTR("VFS xattr", Threshold.TEN_MILLIS, /* collectsSlowestInstances= */ true),
+  VFS_MD5("VFS md5", Threshold.TEN_MILLIS, 30),
+  VFS_XATTR("VFS xattr", Threshold.TEN_MILLIS, 30),
   VFS_DELETE("VFS delete", Threshold.TEN_MILLIS),
-  VFS_OPEN("VFS open", Threshold.TEN_MILLIS, /* collectsSlowestInstances= */ true),
-  VFS_READ("VFS read", Threshold.TEN_MILLIS, /* collectsSlowestInstances= */ true),
-  VFS_WRITE("VFS write", Threshold.TEN_MILLIS, /* collectsSlowestInstances= */ true),
-  VFS_GLOB("globbing", null, /* collectsSlowestInstances= */ true),
+  VFS_OPEN("VFS open", Threshold.TEN_MILLIS, 30),
+  VFS_READ("VFS read", Threshold.TEN_MILLIS, 30),
+  VFS_WRITE("VFS write", Threshold.TEN_MILLIS, 30),
+  VFS_GLOB("globbing", null, 30),
   VFS_VMFS_STAT("VMFS stat", Threshold.TEN_MILLIS),
   VFS_VMFS_DIR("VMFS readdir", Threshold.TEN_MILLIS),
   VFS_VMFS_READ("VMFS read", Threshold.TEN_MILLIS),
@@ -90,29 +89,29 @@ public enum ProfilerTask {
    * is used.
    */
   public final long minDuration;
-  /** Whether this task collects the slowest instances. */
-  public final boolean collectsSlowestInstances;
+  /** How many of the slowest instances to keep. If 0, no slowest instance calculation is done. */
+  public final int slowestInstancesCount;
   /** True if the metric records VFS operations */
   private final boolean vfs;
 
-  ProfilerTask(String description, Duration minDuration, boolean collectsSlowestInstances) {
+  ProfilerTask(String description, Duration minDuration, int slowestInstanceCount) {
     this.description = description;
     this.minDuration = minDuration == null ? -1 : minDuration.toNanos();
-    this.collectsSlowestInstances = collectsSlowestInstances;
+    this.slowestInstancesCount = slowestInstanceCount;
     this.vfs = this.name().startsWith("VFS");
   }
 
   ProfilerTask(String description, Duration minDuration) {
-    this(description, minDuration, /* collectsSlowestInstances= */ false);
+    this(description, minDuration, /* slowestInstanceCount= */ 0);
   }
 
   ProfilerTask(String description) {
-    this(description, /* minDuration= */ null, /* collectsSlowestInstances= */ false);
+    this(description, /* minDuration= */ null, /* slowestInstanceCount= */ 0);
   }
 
   /** Whether the Profiler collects the slowest instances of this task. */
   public boolean collectsSlowestInstances() {
-    return collectsSlowestInstances;
+    return slowestInstancesCount > 0;
   }
 
   public boolean isVfs() {
