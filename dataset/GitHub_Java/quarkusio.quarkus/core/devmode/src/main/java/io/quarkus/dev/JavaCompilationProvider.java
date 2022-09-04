@@ -8,7 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import javax.tools.Diagnostic;
@@ -21,15 +21,14 @@ import javax.tools.ToolProvider;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
-
-import io.quarkus.gizmo.Gizmo;
+import org.objectweb.asm.Opcodes;
 
 public class JavaCompilationProvider implements CompilationProvider {
 
     // -g is used to make the java compiler generate all debugging info
     // -parameters is used to generate metadata for reflection on method parameters
     // this is useful when people using debuggers against their hot-reloaded app
-    private static final Set<String> COMPILER_OPTIONS = new HashSet<>(Arrays.asList("-g", "-parameters"));
+    private static final List<String> COMPILER_OPTIONS = Arrays.asList("-g", "-parameters");
 
     @Override
     public Set<String> handledExtensions() {
@@ -49,12 +48,9 @@ public class JavaCompilationProvider implements CompilationProvider {
             fileManager.setLocation(StandardLocation.CLASS_PATH, context.getClasspath());
             fileManager.setLocation(StandardLocation.CLASS_OUTPUT, Collections.singleton(context.getOutputDirectory()));
 
-            CompilerFlags compilerFlags = new CompilerFlags(COMPILER_OPTIONS, context.getCompilerOptions(),
-                    context.getSourceJavaVersion(), context.getTargetJvmVersion());
-
             Iterable<? extends JavaFileObject> sources = fileManager.getJavaFileObjectsFromFiles(filesToCompile);
             JavaCompiler.CompilationTask task = compiler.getTask(null, fileManager, diagnostics,
-                    compilerFlags.toList(), null, sources);
+                    COMPILER_OPTIONS, null, sources);
 
             if (!task.call()) {
                 throw new RuntimeException("Compilation failed" + diagnostics.getDiagnostics());
@@ -83,13 +79,13 @@ public class JavaCompilationProvider implements CompilationProvider {
         return sourceFilePath;
     }
 
-    static class RuntimeUpdatesClassVisitor extends ClassVisitor {
+    class RuntimeUpdatesClassVisitor extends ClassVisitor {
         private Set<String> sourcePaths;
         private String classesPath;
         private String sourceFile;
 
         public RuntimeUpdatesClassVisitor(Set<String> sourcePaths, String classesPath) {
-            super(Gizmo.ASM_API_VERSION);
+            super(Opcodes.ASM7);
             this.sourcePaths = sourcePaths;
             this.classesPath = classesPath;
         }

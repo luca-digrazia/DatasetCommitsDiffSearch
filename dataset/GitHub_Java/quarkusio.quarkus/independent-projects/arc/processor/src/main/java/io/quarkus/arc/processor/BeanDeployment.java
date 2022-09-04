@@ -217,7 +217,6 @@ public class BeanDeployment {
             long removalStart = System.currentTimeMillis();
             Set<BeanInfo> removable = new HashSet<>();
             Set<BeanInfo> unusedProducers = new HashSet<>();
-            Set<BeanInfo> unusedButDeclaresProducer = new HashSet<>();
             List<BeanInfo> producers = beans.stream().filter(b -> b.isProducerMethod() || b.isProducerField())
                     .collect(Collectors.toList());
             List<InjectionPointInfo> instanceInjectionPoints = injectionPoints.stream()
@@ -246,17 +245,16 @@ public class BeanDeployment {
                 if (declaresObserver.contains(bean)) {
                     continue test;
                 }
+                // Declares a producer - see also second pass
+                if (declaresProducer.contains(bean)) {
+                    continue test;
+                }
                 // Instance<Foo>
                 for (InjectionPointInfo injectionPoint : instanceInjectionPoints) {
                     if (Beans.hasQualifiers(bean, injectionPoint.getRequiredQualifiers()) && Beans.matchesType(bean,
                             injectionPoint.getRequiredType().asParameterizedType().arguments().get(0))) {
                         continue test;
                     }
-                }
-                // Declares a producer - see also second pass
-                if (declaresProducer.contains(bean)) {
-                    unusedButDeclaresProducer.add(bean);
-                    continue test;
                 }
                 if (bean.isProducerField() || bean.isProducerMethod()) {
                     // This bean is very likely an unused producer
@@ -269,10 +267,9 @@ public class BeanDeployment {
                 Map<BeanInfo, List<BeanInfo>> declaringMap = producers.stream()
                         .collect(Collectors.groupingBy(BeanInfo::getDeclaringBean));
                 for (Entry<BeanInfo, List<BeanInfo>> entry : declaringMap.entrySet()) {
-                    BeanInfo declaringBean = entry.getKey();
-                    if (unusedButDeclaresProducer.contains(declaringBean) && unusedProducers.containsAll(entry.getValue())) {
+                    if (unusedProducers.containsAll(entry.getValue())) {
                         // All producers declared by this bean are unused
-                        removable.add(declaringBean);
+                        removable.add(entry.getKey());
                     }
                 }
             }
@@ -665,9 +662,6 @@ public class BeanDeployment {
             }
             for (FieldInfo field : beanClass.fields()) {
                 if (annotationStore.hasAnnotation(field, DotNames.PRODUCES)) {
-                    if (annotationStore.hasAnnotation(field, DotNames.INJECT)) {
-                        throw new DefinitionException("Injected field cannot be annotated with @Produces: " + field);
-                    }
                     // Producer fields are not inherited
                     producerFields.add(field);
                     if (!hasBeanDefiningAnnotation) {
