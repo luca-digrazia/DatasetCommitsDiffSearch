@@ -1,6 +1,6 @@
 package io.dropwizard.server;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.fest.assertions.api.Assertions.assertThat;
 import io.dropwizard.configuration.ConfigurationFactory;
 import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.jackson.Jackson;
@@ -33,7 +33,6 @@ import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.NetworkConnector;
 import org.eclipse.jetty.server.Server;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.codahale.metrics.MetricRegistry;
@@ -83,7 +82,6 @@ public class DefaultServerFactoryTest {
                 .contains(DefaultServerFactory.class);
     }
 
-    @Ignore("Issue #648: Test is flaky and should be re-activated after upgrade to Jetty 9.1 or higher.")
     @Test
     public void testGracefulShutdown() throws Exception {
         ObjectMapper objectMapper = Jackson.newObjectMapper();
