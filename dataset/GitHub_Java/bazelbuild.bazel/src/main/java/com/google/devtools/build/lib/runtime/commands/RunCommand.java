@@ -109,7 +109,6 @@ import javax.annotation.Nullable;
          completion = "label-bin",
          binaryStdErr = true)
 public class RunCommand implements BlazeCommand  {
-  /** Options for the "run" command. */
   public static class RunOptions extends OptionsBase {
     @Option(
         name = "as_test",
@@ -122,7 +121,7 @@ public class RunCommand implements BlazeCommand  {
 
     @Option(
       name = "direct_run",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = {OptionEffectTag.EXECUTION},
       help = "If set, the 'run' command will execute the binary to be executed in the terminal "
@@ -613,10 +612,11 @@ public class RunCommand implements BlazeCommand  {
   }
 
   private boolean writeScript(CommandEnvironment env, PathFragment scriptPathFrag, String cmd) {
+    final String SH_SHEBANG = "#!/bin/sh";
     Path scriptPath = env.getWorkingDirectory().getRelative(scriptPathFrag);
     try {
       FileSystemUtils.writeContent(scriptPath, StandardCharsets.ISO_8859_1,
-          "#!/bin/sh\n" + cmd + " \"$@\"");
+          SH_SHEBANG + "\n" + cmd + " \"$@\"");
       scriptPath.setExecutable(true);
     } catch (IOException e) {
       env.getReporter().handle(Event.error("Error writing run script:" + e.getMessage()));
