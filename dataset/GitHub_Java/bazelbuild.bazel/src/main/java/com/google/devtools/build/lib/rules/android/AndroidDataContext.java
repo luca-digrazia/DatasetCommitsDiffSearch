@@ -169,9 +169,9 @@ public class AndroidDataContext implements AndroidDataContextApi {
     registerAction(spawnActionBuilder.build(ruleContext));
   }
 
-  /** Registers an action. */
-  public void registerAction(ActionAnalysisMetadata action) {
-    ruleContext.registerAction(action);
+  /** Registers one or more actions. */
+  public void registerAction(ActionAnalysisMetadata... actions) {
+    ruleContext.registerAction(actions);
   }
 
   public Artifact createOutputArtifact(SafeImplicitOutputsFunction function)
