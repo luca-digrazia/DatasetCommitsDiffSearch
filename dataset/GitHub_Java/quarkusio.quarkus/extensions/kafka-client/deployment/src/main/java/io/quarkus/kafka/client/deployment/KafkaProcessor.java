@@ -46,7 +46,6 @@ import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Type;
 import org.jboss.jandex.Type.Kind;
-import org.xerial.snappy.OSInfo;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
@@ -200,7 +199,7 @@ public class KafkaProcessor {
             String path = root + dir + "/" + snappyNativeLibraryName;
             nativeLibs.produce(new NativeImageResourceBuildItem(path));
         } else { // otherwise the native lib of the platform this build runs on
-            String dir = OSInfo.getNativeLibFolderPathForCurrentOS();
+            String dir = getOs() + "/" + getArch();
             String snappyNativeLibraryName = System.mapLibraryName("snappyjava");
             if (snappyNativeLibraryName.toLowerCase().endsWith(".dylib")) {
                 snappyNativeLibraryName = snappyNativeLibraryName.replace(".dylib", ".jnilib");
@@ -413,6 +412,25 @@ public class KafkaProcessor {
             serviceProvider.produce(
                     new ServiceProviderBuildItem("io.quarkus.kubernetes.service.binding.runtime.ServiceBindingConverter",
                             KafkaBindingConverter.class.getName()));
+        }
+    }
+
+    public static String getArch() {
+        String osArch = System.getProperty("os.arch");
+        return osArch.replaceAll("\\W", "");
+    }
+
+    static String getOs() {
+        String osName = System.getProperty("os.name");
+
+        if (osName.contains("Windows")) {
+            return "Windows";
+        } else if (osName.contains("Mac")) {
+            return "Mac";
+        } else if (osName.contains("Linux")) {
+            return "Linux";
+        } else {
+            return osName.replaceAll("\\W", "");
         }
     }
 }
