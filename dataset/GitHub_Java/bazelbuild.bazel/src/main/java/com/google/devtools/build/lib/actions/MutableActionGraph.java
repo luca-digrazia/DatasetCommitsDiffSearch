@@ -232,11 +232,7 @@ public interface MutableActionGraph extends ActionGraph {
         ArtifactOwner bArtifactOwner = bPrimaryOutput.getArtifactOwner();
         addStringDetail(
             sb, "Owner information", aArtifactOwner.toString(), bArtifactOwner.toString());
-        addListDetail(
-            sb,
-            "MandatoryInputs",
-            a.getMandatoryInputs().toList(),
-            b.getMandatoryInputs().toList());
+        addListDetail(sb, "MandatoryInputs", a.getMandatoryInputs(), b.getMandatoryInputs());
         addListDetail(sb, "Outputs", a.getOutputs(), b.getOutputs());
       }
 
