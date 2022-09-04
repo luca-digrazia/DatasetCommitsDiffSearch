@@ -18,17 +18,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.jboss.classfilewriter.AccessFlag;
 import org.jboss.classfilewriter.ClassFile;
 import org.jboss.classfilewriter.ClassMethod;
-import org.jboss.classfilewriter.annotations.ClassAnnotation;
 import org.jboss.classfilewriter.code.CodeAttribute;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.Indexer;
 import org.jboss.shamrock.codegen.BytecodeRecorder;
-import org.jboss.shamrock.startup.StartupTast;
+import org.jboss.shamrock.startup.DeploymentTask;
 import org.jboss.shamrock.startup.StartupContext;
 
-/**
- * Class that does the build time processing
- */
+
 public class Runner {
 
     private static final AtomicInteger COUNT = new AtomicInteger();
@@ -42,7 +39,7 @@ public class Runner {
         while (loader.hasNext()) {
             processors.add(loader.next());
         }
-        processors.sort(Comparator.comparingInt(ResourceProcessor::getPriority));
+        Collections.sort(processors, Comparator.comparingInt(ResourceProcessor::getPriority));
         this.processors = Collections.unmodifiableList(processors);
         this.output = classOutput;
     }
@@ -87,7 +84,6 @@ public class Runner {
             }
         }
         processorContext.writeMainClass();
-        processorContext.writeAutoFeature();
     }
 
 
@@ -110,6 +106,26 @@ public class Runner {
         public Path getArchiveRoot() {
             return root;
         }
+
+        @Override
+        public <T> T getAttachment(AttachmentKey<T> key) {
+            return null;
+        }
+
+        @Override
+        public <T> void setAttachment(AttachmentKey<T> key, T value) {
+
+        }
+
+        @Override
+        public <T> void addToList(ListAttachmentKey<T> key, T value) {
+
+        }
+
+        @Override
+        public <T> List<T> getList(ListAttachmentKey<T> key) {
+            return null;
+        }
     }
 
 
@@ -117,23 +133,12 @@ public class Runner {
 
 
         private final List<DeploymentTaskHolder> tasks = new ArrayList<>();
-        private final List<String> reflectiveClasses = new ArrayList<>();
 
         @Override
         public BytecodeRecorder addDeploymentTask(int priority) {
             String className = getClass().getName() + "$$Proxy" + COUNT.incrementAndGet();
             tasks.add(new DeploymentTaskHolder(className, priority));
-            return new BytecodeRecorder(className, StartupTast.class, output, false);
-        }
-
-        @Override
-        public void addReflectiveClass(String className) {
-            reflectiveClasses.add(className);
-        }
-
-        @Override
-        public void addGeneratedClass(String name, byte[] classData) throws IOException {
-            output.writeClass(name, classData);
+            return new BytecodeRecorder(className, DeploymentTask.class, output);
         }
 
         void writeMainClass() throws IOException {
@@ -143,56 +148,17 @@ public class Runner {
             ca.newInstruction(StartupContext.class);
             ca.dup();
             ca.invokespecial(StartupContext.class.getName(), "<init>", "()V");
-            Collections.sort(tasks);
             for (DeploymentTaskHolder holder : tasks) {
                 ca.dup();
                 ca.newInstruction(holder.className);
                 ca.dup();
                 ca.invokespecial(holder.className, "<init>", "()V");
                 ca.swap();
-                ca.invokeinterface(StartupTast.class.getName(), "deploy", "(Lorg/jboss/shamrock/startup/StartupContext;)V");
+                ca.invokeinterface(DeploymentTask.class.getName(), "deploy", "(Lorg/jboss/shamrock/startup/StartupContext;)V");
             }
             ca.returnInstruction();
             output.writeClass(file.getName(), file.toBytecode());
         }
-
-        void writeAutoFeature() throws IOException {
-
-            ClassFile file = new ClassFile("org.jboss.shamrock.runner.AutoFeature", "java.lang.Object", "org.graalvm.nativeimage.Feature");
-            ClassMethod mainMethod = file.addMethod(AccessFlag.PUBLIC, "beforeAnalysis", "V", "Lorg/graalvm/nativeimage/Feature$BeforeAnalysisAccess;");
-            file.getRuntimeVisibleAnnotationsAttribute().addAnnotation(new ClassAnnotation(file.getConstPool(), "com.oracle.svm.core.annotate.AutomaticFeature", Collections.emptyList()));
-
-            CodeAttribute ca = mainMethod.getCodeAttribute();
-
-            for (String holder : reflectiveClasses) {
-                ca.ldc(1);
-                ca.anewarray("java/lang/Class");
-                ca.dup();
-                ca.ldc(0);
-                ca.loadClass(holder);
-                ca.aastore();
-                ca.invokestatic("org.graalvm.nativeimage.RuntimeReflection", "register", "([Ljava/lang/Class;)V");
-
-                //now load everything else
-                ca.loadClass(holder);
-                ca.invokevirtual("java.lang.Class", "getDeclaredConstructors", "()[Ljava/lang/reflect/Constructor;");
-                ca.invokestatic("org.graalvm.nativeimage.RuntimeReflection", "register", "([Ljava/lang/reflect/Executable;)V");
-                //now load everything else
-                ca.loadClass(holder);
-                ca.invokevirtual("java.lang.Class", "getMethods", "()[Ljava/lang/reflect/Method;");
-                ca.invokestatic("org.graalvm.nativeimage.RuntimeReflection", "register", "([Ljava/lang/reflect/Executable;)V");
-
-            }
-            ca.returnInstruction();
-
-            ClassMethod ctor = file.addMethod(AccessFlag.PUBLIC, "<init>", "V");
-            ca = ctor.getCodeAttribute();
-            ca.aload(0);
-            ca.invokespecial(Object.class.getName(), "<init>", "()V");
-            ca.returnInstruction();
-            output.writeClass(file.getName(), file.toBytecode());
-        }
-
     }
 
     private static final class DeploymentTaskHolder implements Comparable<DeploymentTaskHolder> {

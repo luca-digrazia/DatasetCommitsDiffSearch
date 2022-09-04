@@ -7,7 +7,6 @@ import java.util.Set;
 import javax.servlet.annotation.WebServlet;
 
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
 import org.jboss.shamrock.codegen.BytecodeRecorder;
@@ -16,8 +15,6 @@ import org.jboss.shamrock.core.ProcessorContext;
 import org.jboss.shamrock.core.ResourceProcessor;
 import org.jboss.shamrock.core.RuntimePriority;
 import org.jboss.shamrock.undertow.runtime.UndertowDeploymentTemplate;
-
-import io.undertow.servlet.handlers.DefaultServlet;
 
 public class ServletAnnotationProcessor implements ResourceProcessor {
 
@@ -31,9 +28,6 @@ public class ServletAnnotationProcessor implements ResourceProcessor {
     @Override
     public void process(ArchiveContext archiveContext, ProcessorContext processorContext) throws Exception{
 
-        processorContext.addReflectiveClass(DefaultServlet.class.getName());
-        processorContext.addReflectiveClass("io.undertow.server.protocol.http.HttpRequestParser$$generated");
-
         try (BytecodeRecorder context = processorContext.addDeploymentTask(RuntimePriority.UNDERTOW_CREATE_DEPLOYMENT)) {
             UndertowDeploymentTemplate template = context.getMethodRecorder().getRecordingProxy(UndertowDeploymentTemplate.class);
             template.createDeployment("test");
@@ -45,10 +39,7 @@ public class ServletAnnotationProcessor implements ResourceProcessor {
                 UndertowDeploymentTemplate template = context.getMethodRecorder().getRecordingProxy(UndertowDeploymentTemplate.class);
                 for (AnnotationInstance annotation : annotations) {
                     String name = annotation.value("name").asString();
-                    AnnotationValue asyncSupported = annotation.value("asyncSupported");
-                    String servletClass = annotation.target().asClass().toString();
-                    template.registerServlet(null, name, servletClass, asyncSupported != null && asyncSupported.asBoolean());
-                    processorContext.addReflectiveClass(servletClass);
+                    template.registerServlet(null, name, annotation.target().asClass().toString());
                     String[] mappings = annotation.value("urlPatterns").asStringArray();
                     for(String m : mappings) {
                         template.addServletMapping(null, name, m);
