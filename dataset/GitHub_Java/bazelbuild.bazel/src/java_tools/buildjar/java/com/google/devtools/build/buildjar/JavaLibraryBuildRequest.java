@@ -340,6 +340,7 @@ public final class JavaLibraryBuildRequest {
             .bootClassPath(getBootClassPath())
             .system(getSystem())
             .sourceFiles(ImmutableList.copyOf(getSourceFiles()))
+            .processors(null)
             .builtinProcessors(builtinProcessorNames)
             .sourcePath(getSourcePath())
             .sourceOutput(getSourceGenDir())
