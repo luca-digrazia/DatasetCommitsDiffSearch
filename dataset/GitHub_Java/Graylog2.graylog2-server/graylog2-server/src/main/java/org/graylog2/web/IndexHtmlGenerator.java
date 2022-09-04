@@ -20,14 +20,12 @@ import com.floreysoft.jmte.Engine;
 import com.google.common.io.Resources;
 
 import javax.inject.Inject;
-import javax.inject.Singleton;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
-@Singleton
 public class IndexHtmlGenerator {
     private static final String title = "Graylog Web Interface";
     private final Engine engine = new Engine();
@@ -40,7 +38,7 @@ public class IndexHtmlGenerator {
         final Map<String, Object> model = new HashMap<String, Object>() {{
             put("title", title);
             put("cssFiles", pluginAssets.cssFiles());
-            put("jsFiles", pluginAssets.sortedJsFiles());
+            put("jsFiles", pluginAssets.jsFiles());
         }};
 
         this.content = engine.transform(template, model);
