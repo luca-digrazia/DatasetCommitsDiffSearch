@@ -24,7 +24,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
-import com.google.devtools.build.lib.skyframe.serialization.UnshareableValue;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
@@ -58,7 +57,6 @@ public class GraphTester {
 
   public GraphTester() {
     functionMap.put(NODE_TYPE, new DelegatingFunction());
-    functionMap.put(FOR_TESTING_NONHERMETIC, new DelegatingFunction());
   }
 
   public TestFunction getOrCreate(String name) {
@@ -170,10 +168,6 @@ public class GraphTester {
 
   public static SkyKey skyKey(String key) {
     return Key.create(key);
-  }
-
-  public static NonHermeticKey nonHermeticKey(String key) {
-    return NonHermeticKey.create(key);
   }
 
   /** A value in the testing graph that is constructed in the tester. */
@@ -385,13 +379,6 @@ public class GraphTester {
     }
   }
 
-  /** An {@linkplain UnshareableValue unshareable} version of {@link StringValue}. */
-  public static final class UnshareableStringValue extends StringValue implements UnshareableValue {
-    public UnshareableStringValue(String value) {
-      super(value);
-    }
-  }
-
   /**
    * A callback interface to provide the value computation.
    */
@@ -434,12 +421,11 @@ public class GraphTester {
   static class Key extends AbstractSkyKey<String> {
     private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
 
-    private Key(String arg) {
+    @AutoCodec.VisibleForSerialization
+    Key(String arg) {
       super(arg);
     }
 
-    @AutoCodec.VisibleForSerialization
-    @AutoCodec.Instantiator
     static Key create(String arg) {
       return interner.intern(new Key(arg));
     }
@@ -449,28 +435,4 @@ public class GraphTester {
       return SkyFunctionName.FOR_TESTING;
     }
   }
-
-  @AutoCodec.VisibleForSerialization
-  @AutoCodec
-  static class NonHermeticKey extends AbstractSkyKey<String> {
-    private static final Interner<NonHermeticKey> interner = BlazeInterners.newWeakInterner();
-
-    private NonHermeticKey(String arg) {
-      super(arg);
-    }
-
-    @AutoCodec.VisibleForSerialization
-    @AutoCodec.Instantiator
-    static NonHermeticKey create(String arg) {
-      return interner.intern(new NonHermeticKey(arg));
-    }
-
-    @Override
-    public SkyFunctionName functionName() {
-      return FOR_TESTING_NONHERMETIC;
-    }
-  }
-
-  private static final SkyFunctionName FOR_TESTING_NONHERMETIC =
-      SkyFunctionName.createNonHermetic("FOR_TESTING_NONHERMETIC");
 }
