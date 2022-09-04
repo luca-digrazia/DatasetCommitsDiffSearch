@@ -34,8 +34,8 @@ import com.google.devtools.remoteexecution.v1test.Digest;
 import com.google.devtools.remoteexecution.v1test.RequestMetadata;
 import com.google.protobuf.ByteString;
 import io.grpc.BindableService;
+import io.grpc.Channel;
 import io.grpc.Context;
-import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.Server;
 import io.grpc.ServerCall;
@@ -90,7 +90,7 @@ public class ByteStreamUploaderTest {
   private static ListeningScheduledExecutorService retryService;
 
   private Server server;
-  private ManagedChannel channel;
+  private Channel channel;
   private Context withEmptyMetadata;
   private Context prevContext;
 
@@ -137,8 +137,7 @@ public class ByteStreamUploaderTest {
     Context prevContext = withEmptyMetadata.attach();
     RemoteRetrier retrier =
         new RemoteRetrier(() -> mockBackoff, (e) -> true, retryService, Retrier.ALLOW_ALL_CALLS);
-    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
-        new ReferenceCountedChannel(channel), null, 3, retrier);
+    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME, channel, null, 3, retrier);
 
     byte[] blob = new byte[CHUNK_SIZE * 2 + 1];
     new Random().nextBytes(blob);
@@ -194,7 +193,7 @@ public class ByteStreamUploaderTest {
           }
         });
 
-    uploader.uploadBlob(chunker, true);
+    uploader.uploadBlob(chunker);
 
     // This test should not have triggered any retries.
     Mockito.verifyZeroInteractions(mockBackoff);
@@ -210,8 +209,7 @@ public class ByteStreamUploaderTest {
     RemoteRetrier retrier =
         new RemoteRetrier(
             () -> new FixedBackoff(1, 0), (e) -> true, retryService, Retrier.ALLOW_ALL_CALLS);
-    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
-        new ReferenceCountedChannel(channel), null, 3, retrier);
+    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME, channel, null, 3, retrier);
 
     int numUploads = 10;
     Map<String, byte[]> blobsByHash = new HashMap<>();
@@ -226,9 +224,70 @@ public class ByteStreamUploaderTest {
       blobsByHash.put(chunker.digest().getHash(), blob);
     }
 
-    serviceRegistry.addService(new MaybeFailOnceUploadService(blobsByHash));
+    Set<String> uploadsFailedOnce = Collections.synchronizedSet(new HashSet<>());
 
-    uploader.uploadBlobs(builders, true);
+    serviceRegistry.addService(new ByteStreamImplBase() {
+      @Override
+      public StreamObserver<WriteRequest> write(StreamObserver<WriteResponse> response) {
+        return new StreamObserver<WriteRequest>() {
+
+          private String digestHash;
+          private byte[] receivedData;
+          private long nextOffset;
+
+          @Override
+          public void onNext(WriteRequest writeRequest) {
+            if (nextOffset == 0) {
+              String resourceName = writeRequest.getResourceName();
+              assertThat(resourceName).isNotEmpty();
+
+              String[] components = resourceName.split("/");
+              assertThat(components).hasLength(6);
+              digestHash = components[4];
+              assertThat(blobsByHash).containsKey(digestHash);
+              receivedData = new byte[Integer.parseInt(components[5])];
+            }
+            assertThat(digestHash).isNotNull();
+            // An upload for a given blob has a 10% chance to fail once during its lifetime.
+            // This is to exercise the retry mechanism a bit.
+            boolean shouldFail =
+                rand.nextInt(10) == 0 && !uploadsFailedOnce.contains(digestHash);
+            if (shouldFail) {
+              uploadsFailedOnce.add(digestHash);
+              response.onError(Status.INTERNAL.asException());
+              return;
+            }
+
+            ByteString data = writeRequest.getData();
+            System.arraycopy(
+                data.toByteArray(), 0, receivedData, (int) nextOffset, data.size());
+            nextOffset += data.size();
+
+            boolean lastWrite = nextOffset == receivedData.length;
+            assertThat(writeRequest.getFinishWrite()).isEqualTo(lastWrite);
+          }
+
+          @Override
+          public void onError(Throwable throwable) {
+            fail("onError should never be called.");
+          }
+
+          @Override
+          public void onCompleted() {
+            byte[] expectedBlob = blobsByHash.get(digestHash);
+            assertThat(receivedData).isEqualTo(expectedBlob);
+
+            WriteResponse writeResponse =
+                WriteResponse.newBuilder().setCommittedSize(receivedData.length).build();
+
+            response.onNext(writeResponse);
+            response.onCompleted();
+          }
+        };
+      }
+    });
+
+    uploader.uploadBlobs(builders);
 
     blockUntilInternalStateConsistent(uploader);
 
@@ -243,8 +302,7 @@ public class ByteStreamUploaderTest {
     RemoteRetrier retrier =
         new RemoteRetrier(
             () -> new FixedBackoff(5, 0), (e) -> true, retryService, Retrier.ALLOW_ALL_CALLS);
-    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
-        new ReferenceCountedChannel(channel), null, 3, retrier);
+    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME, channel, null, 3, retrier);
 
     List<String> toUpload = ImmutableList.of("aaaaaaaaaa", "bbbbbbbbbb", "cccccccccc");
     List<Chunker> builders = new ArrayList<>(toUpload.size());
@@ -314,7 +372,7 @@ public class ByteStreamUploaderTest {
               "build-req-id", "command-id", DIGEST_UTIL.asActionKey(chunker.digest()));
       ctx.call(
           () -> {
-            uploads.add(uploader.uploadBlobAsync(chunker, true));
+            uploads.add(uploader.uploadBlobAsync(chunker));
             return null;
           });
     }
@@ -335,8 +393,7 @@ public class ByteStreamUploaderTest {
     Context prevContext = withEmptyMetadata.attach();
     RemoteRetrier retrier =
         new RemoteRetrier(() -> mockBackoff, (e) -> true, retryService, Retrier.ALLOW_ALL_CALLS);
-    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
-        new ReferenceCountedChannel(channel), null, 3, retrier);
+    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME, channel, null, 3, retrier);
 
     byte[] blob = new byte[CHUNK_SIZE * 10];
     Chunker chunker = new Chunker(blob, CHUNK_SIZE, DIGEST_UTIL);
@@ -378,8 +435,8 @@ public class ByteStreamUploaderTest {
       }
     });
 
-    Future<?> upload1 = uploader.uploadBlobAsync(chunker, true);
-    Future<?> upload2 = uploader.uploadBlobAsync(chunker, true);
+    Future<?> upload1 = uploader.uploadBlobAsync(chunker);
+    Future<?> upload2 = uploader.uploadBlobAsync(chunker);
 
     blocker.countDown();
 
@@ -398,8 +455,7 @@ public class ByteStreamUploaderTest {
     RemoteRetrier retrier =
         new RemoteRetrier(
             () -> new FixedBackoff(1, 10), (e) -> true, retryService, Retrier.ALLOW_ALL_CALLS);
-    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
-        new ReferenceCountedChannel(channel), null, 3, retrier);
+    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME, channel, null, 3, retrier);
 
     byte[] blob = new byte[CHUNK_SIZE];
     Chunker chunker = new Chunker(blob, CHUNK_SIZE, DIGEST_UTIL);
@@ -413,7 +469,7 @@ public class ByteStreamUploaderTest {
     });
 
     try {
-      uploader.uploadBlob(chunker, true);
+      uploader.uploadBlob(chunker);
       fail("Should have thrown an exception.");
     } catch (RetryException e) {
       assertThat(e.getAttempts()).isEqualTo(2);
@@ -429,8 +485,7 @@ public class ByteStreamUploaderTest {
     RemoteRetrier retrier =
         new RemoteRetrier(
             () -> new FixedBackoff(1, 10), (e) -> true, retryService, Retrier.ALLOW_ALL_CALLS);
-    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
-        new ReferenceCountedChannel(channel), null, 3, retrier);
+    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME, channel, null, 3, retrier);
 
     CountDownLatch cancellations = new CountDownLatch(2);
 
@@ -465,8 +520,8 @@ public class ByteStreamUploaderTest {
     byte[] blob2 = new byte[CHUNK_SIZE + 1];
     Chunker chunker2 = new Chunker(blob2, CHUNK_SIZE, DIGEST_UTIL);
 
-    ListenableFuture<Void> f1 = uploader.uploadBlobAsync(chunker1, true);
-    ListenableFuture<Void> f2 = uploader.uploadBlobAsync(chunker2, true);
+    ListenableFuture<Void> f1 = uploader.uploadBlobAsync(chunker1);
+    ListenableFuture<Void> f2 = uploader.uploadBlobAsync(chunker2);
 
     assertThat(uploader.uploadsInProgress()).isTrue();
 
@@ -490,8 +545,7 @@ public class ByteStreamUploaderTest {
     RemoteRetrier retrier =
         new RemoteRetrier(
             () -> new FixedBackoff(1, 10), (e) -> true, retryService, Retrier.ALLOW_ALL_CALLS);
-    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
-        new ReferenceCountedChannel(channel), null, 3, retrier);
+    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME, channel, null, 3, retrier);
 
     serviceRegistry.addService(new ByteStreamImplBase() {
       @Override
@@ -510,7 +564,7 @@ public class ByteStreamUploaderTest {
     byte[] blob = new byte[1];
     Chunker chunker = new Chunker(blob, CHUNK_SIZE, DIGEST_UTIL);
     try {
-      uploader.uploadBlob(chunker, true);
+      uploader.uploadBlob(chunker);
       fail("Should have thrown an exception.");
     } catch (RetryException e) {
       assertThat(e).hasCauseThat().isInstanceOf(RejectedExecutionException.class);
@@ -525,8 +579,7 @@ public class ByteStreamUploaderTest {
     RemoteRetrier retrier =
         new RemoteRetrier(() -> mockBackoff, (e) -> true, retryService, Retrier.ALLOW_ALL_CALLS);
     ByteStreamUploader uploader =
-        new ByteStreamUploader(/* instanceName */ null,
-            new ReferenceCountedChannel(channel), null, 3, retrier);
+        new ByteStreamUploader(/* instanceName */ null, channel, null, 3, retrier);
 
     serviceRegistry.addService(new ByteStreamImplBase() {
       @Override
@@ -555,7 +608,7 @@ public class ByteStreamUploaderTest {
     byte[] blob = new byte[1];
     Chunker chunker = new Chunker(blob, CHUNK_SIZE, DIGEST_UTIL);
 
-    uploader.uploadBlob(chunker, true);
+    uploader.uploadBlob(chunker);
 
     withEmptyMetadata.detach(prevContext);
   }
@@ -570,8 +623,7 @@ public class ByteStreamUploaderTest {
             retryService,
             Retrier.ALLOW_ALL_CALLS);
     ByteStreamUploader uploader =
-        new ByteStreamUploader(/* instanceName */ null,
-            new ReferenceCountedChannel(channel), null, 3, retrier);
+        new ByteStreamUploader(/* instanceName */ null, channel, null, 3, retrier);
 
     AtomicInteger numCalls = new AtomicInteger();
 
@@ -588,72 +640,11 @@ public class ByteStreamUploaderTest {
     Chunker chunker = new Chunker(blob, CHUNK_SIZE, DIGEST_UTIL);
 
     try {
-      uploader.uploadBlob(chunker, true);
+      uploader.uploadBlob(chunker);
       fail("Should have thrown an exception.");
     } catch (RetryException e) {
       assertThat(numCalls.get()).isEqualTo(1);
     }
-
-    withEmptyMetadata.detach(prevContext);
-  }
-
-  @Test
-  public void deduplicationOfUploadsShouldWork() throws Exception {
-    Context prevContext = withEmptyMetadata.attach();
-    RemoteRetrier retrier =
-        new RemoteRetrier(() -> mockBackoff, (e) -> true, retryService, Retrier.ALLOW_ALL_CALLS);
-    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
-        new ReferenceCountedChannel(channel), null, 3, retrier);
-
-    byte[] blob = new byte[CHUNK_SIZE * 2 + 1];
-    new Random().nextBytes(blob);
-
-    Chunker chunker = new Chunker(blob, CHUNK_SIZE, DIGEST_UTIL);
-
-    AtomicInteger numUploads = new AtomicInteger();
-    serviceRegistry.addService(new ByteStreamImplBase() {
-      @Override
-      public StreamObserver<WriteRequest> write(StreamObserver<WriteResponse> streamObserver) {
-        numUploads.incrementAndGet();
-        return new StreamObserver<WriteRequest>() {
-
-          long nextOffset = 0;
-
-          @Override
-          public void onNext(WriteRequest writeRequest) {
-            nextOffset += writeRequest.getData().size();
-            boolean lastWrite = blob.length == nextOffset;
-            assertThat(writeRequest.getFinishWrite()).isEqualTo(lastWrite);
-          }
-
-          @Override
-          public void onError(Throwable throwable) {
-            fail("onError should never be called.");
-          }
-
-          @Override
-          public void onCompleted() {
-            assertThat(nextOffset).isEqualTo(blob.length);
-
-            WriteResponse response =
-                WriteResponse.newBuilder().setCommittedSize(nextOffset).build();
-            streamObserver.onNext(response);
-            streamObserver.onCompleted();
-          }
-        };
-      }
-    });
-
-    uploader.uploadBlob(chunker, true);
-    // This should not trigger an upload.
-    uploader.uploadBlob(chunker, false);
-
-    assertThat(numUploads.get()).isEqualTo(1);
-
-    // This test should not have triggered any retries.
-    Mockito.verifyZeroInteractions(mockBackoff);
-
-    blockUntilInternalStateConsistent(uploader);
 
     withEmptyMetadata.detach(prevContext);
   }
@@ -672,7 +663,7 @@ public class ByteStreamUploaderTest {
     }
   }
 
-  static class FixedBackoff implements Retrier.Backoff {
+  private static class FixedBackoff implements Retrier.Backoff {
 
     private final int maxRetries;
     private final int delayMillis;
@@ -696,80 +687,6 @@ public class ByteStreamUploaderTest {
     @Override
     public int getRetryAttempts() {
       return retries;
-    }
-  }
-
-  /**
-   * An byte stream service where an upload for a given blob may or may not fail on the first
-   * attempt but is guaranteed to succeed on the second try.
-   */
-  static class MaybeFailOnceUploadService extends ByteStreamImplBase {
-
-    private final Map<String, byte[]> blobsByHash;
-    private final Set<String> uploadsFailedOnce = Collections.synchronizedSet(new HashSet<>());
-    private final Random rand = new Random();
-
-    MaybeFailOnceUploadService(Map<String, byte[]> blobsByHash) {
-      this.blobsByHash = blobsByHash;
-    }
-
-    @Override
-    public StreamObserver<WriteRequest> write(StreamObserver<WriteResponse> response) {
-      return new StreamObserver<WriteRequest>() {
-
-        private String digestHash;
-        private byte[] receivedData;
-        private long nextOffset;
-
-        @Override
-        public void onNext(WriteRequest writeRequest) {
-          if (nextOffset == 0) {
-            String resourceName = writeRequest.getResourceName();
-            assertThat(resourceName).isNotEmpty();
-
-            String[] components = resourceName.split("/");
-            assertThat(components).hasLength(6);
-            digestHash = components[4];
-            assertThat(blobsByHash).containsKey(digestHash);
-            receivedData = new byte[Integer.parseInt(components[5])];
-          }
-          assertThat(digestHash).isNotNull();
-          // An upload for a given blob has a 10% chance to fail once during its lifetime.
-          // This is to exercise the retry mechanism a bit.
-          boolean shouldFail =
-              rand.nextInt(10) == 0 && !uploadsFailedOnce.contains(digestHash);
-          if (shouldFail) {
-            uploadsFailedOnce.add(digestHash);
-            response.onError(Status.INTERNAL.asException());
-            return;
-          }
-
-          ByteString data = writeRequest.getData();
-          System.arraycopy(
-              data.toByteArray(), 0, receivedData, (int) nextOffset, data.size());
-          nextOffset += data.size();
-
-          boolean lastWrite = nextOffset == receivedData.length;
-          assertThat(writeRequest.getFinishWrite()).isEqualTo(lastWrite);
-        }
-
-        @Override
-        public void onError(Throwable throwable) {
-          fail("onError should never be called.");
-        }
-
-        @Override
-        public void onCompleted() {
-          byte[] expectedBlob = blobsByHash.get(digestHash);
-          assertThat(receivedData).isEqualTo(expectedBlob);
-
-          WriteResponse writeResponse =
-              WriteResponse.newBuilder().setCommittedSize(receivedData.length).build();
-
-          response.onNext(writeResponse);
-          response.onCompleted();
-        }
-      };
     }
   }
 
