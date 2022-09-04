@@ -38,7 +38,6 @@ import org.graylog2.outputs.MessageOutput;
 import org.graylog2.streams.StreamCache;
 
 import com.google.common.collect.Lists;
-import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.graylog2.activities.Activity;
 import org.graylog2.activities.ActivityWriter;
 import org.graylog2.cluster.Cluster;
@@ -88,7 +87,7 @@ public class Core implements GraylogServer {
     
     private List<Initializer> initializers = Lists.newArrayList();
     private List<MessageInput> inputs = Lists.newArrayList();
-    private List<MessageFilter> filters = Lists.newArrayList();
+    private List<Class<? extends MessageFilter>> filters = Lists.newArrayList();
     private List<Class<? extends MessageOutput>> outputs = Lists.newArrayList();
     private List<Class<? extends CommunicatorMethod>> communicatorMethods = Lists.newArrayList();
     
@@ -172,8 +171,8 @@ public class Core implements GraylogServer {
         this.inputs.add(input);
     }
 
-    public void registerFilter(MessageFilter filter) {
-        this.filters.add(filter);
+    public <T extends MessageFilter> void registerFilter(Class<T> klazz) {
+        this.filters.add(klazz);
     }
 
     public <T extends MessageOutput> void registerOutput(Class<T> klazz) {
@@ -214,11 +213,7 @@ public class Core implements GraylogServer {
         // TODO: This is a code smell and needs to be fixed.
         LogglyForwarder.setTimeout(configuration.getForwarderLogglyTimeout());
 
-        scheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE,
-                new BasicThreadFactory.Builder()
-                    .namingPattern("scheduled-%d")
-                    .build()
-        );
+        scheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE);
 
         loadPlugins();
         
@@ -245,8 +240,8 @@ public class Core implements GraylogServer {
     
     private void loadPlugins() {
         PluginLoader pl = new PluginLoader(configuration.getPluginDir());
-        for (MessageFilter filter : pl.loadFilterPlugins()) {
-            LOG.info("Registering plugin filter [" + filter.getClass().getSimpleName() + "].");
+        for (Class<? extends MessageFilter> filter : pl.loadFilterPlugins()) {
+            LOG.info("Registering plugin filter [" + filter.getSimpleName() + "].");
             registerFilter(filter);
             this.loadedFilterPlugins += 1;
         }
@@ -298,7 +293,7 @@ public class Core implements GraylogServer {
         return this.outputBuffer;
     }
 
-    public List<MessageFilter> getFilters() {
+    public List<Class<? extends MessageFilter>> getFilters() {
         return this.filters;
     }
 

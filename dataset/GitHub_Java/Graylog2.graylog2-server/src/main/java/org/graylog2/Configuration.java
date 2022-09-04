@@ -92,15 +92,9 @@ public class Configuration {
     @Parameter(value = "output_batch_size", required = true, validator = PositiveIntegerValidator.class)
     private int outputBatchSize = 5000;
     
-    @Parameter(value = "processbuffer_processors", required = true, validator = PositiveIntegerValidator.class)
-    private int processBufferProcessors = 5;
-    
     @Parameter(value = "outputbuffer_processors", required = true, validator = PositiveIntegerValidator.class)
     private int outputBufferProcessors = 5;
-    
-    @Parameter(value = "ring_size", required = true, validator = PositiveIntegerValidator.class)
-    private int ringSize = 1024;
-    
+
     @Parameter(value = "elasticsearch_config_file", required = true, validator = FileReadableValidator.class)
     private String elasticSearchConfigFile = "/etc/graylog2-elasticsearch.yml";
 
@@ -109,9 +103,6 @@ public class Configuration {
     
     @Parameter(value = "elasticsearch_max_docs_per_index", validator = PositiveIntegerValidator.class, required = true)
     private int elasticsearchMaxDocsPerIndex = 80000000;
-    
-    @Parameter(value = "elasticsearch_analyzer", required = true)
-    private String elasticsearchAnalyzer = "standard";
     
     @Parameter(value = "mongodb_user")
     private String mongoUser;
@@ -296,18 +287,10 @@ public class Configuration {
         return outputBatchSize;
     }
     
-    public int getProcessBufferProcessors() {
-        return processBufferProcessors;
-    }
-    
     public int getOutputBufferProcessors() {
         return outputBufferProcessors;
     }
 
-    public int getRingSize() {
-        return ringSize;
-    }
-    
     public String getElasticSearchConfigFile() {
         return elasticSearchConfigFile;
     }
@@ -318,10 +301,6 @@ public class Configuration {
     
     public int getElasticSearchMaxDocsPerIndex() {
         return this.elasticsearchMaxDocsPerIndex;
-    }
-    
-    public String getElasticSearchAnalyzer() {
-        return elasticsearchAnalyzer;
     }
    
     public boolean isMongoUseAuth() {
