@@ -97,8 +97,6 @@ import io.quarkus.hibernate.orm.runtime.boot.scan.QuarkusScanner;
  */
 public final class HibernateOrmProcessor {
 
-    private static final String HIBERNATE_ORM_CONFIG_PREFIX = "quarkus.hibernate-orm.";
-
     private static final DotName PERSISTENCE_CONTEXT = DotName.createSimple(PersistenceContext.class.getName());
     private static final DotName PERSISTENCE_UNIT = DotName.createSimple(PersistenceUnit.class.getName());
     private static final DotName PRODUCES = DotName.createSimple(Produces.class.getName());
@@ -106,7 +104,7 @@ public final class HibernateOrmProcessor {
     /**
      * Hibernate ORM configuration
      */
-    HibernateOrmConfig hibernateConfig;
+    HibernateConfig hibernate;
 
     @BuildStep
     HotDeploymentConfigFileBuildItem configFile() {
@@ -287,7 +285,7 @@ public final class HibernateOrmProcessor {
             ApplicationArchivesBuildItem applicationArchivesBuildItem) {
         if (descriptors.isEmpty()) {
             //we have no persistence.xml so we will create a default one
-            Optional<String> dialect = hibernateConfig.dialect;
+            Optional<String> dialect = hibernate.dialect;
             if (!dialect.isPresent()) {
                 dialect = guessDialect(driverBuildItem.map(DataSourceDriverBuildItem::getDriver));
             }
@@ -297,19 +295,19 @@ public final class HibernateOrmProcessor {
                 desc.setName("default");
                 desc.setTransactionType(PersistenceUnitTransactionType.JTA);
                 desc.getProperties().setProperty(AvailableSettings.DIALECT, s);
-                hibernateConfig.schemaGeneration.ifPresent(
+                hibernate.schemaGeneration.ifPresent(
                         p -> desc.getProperties().setProperty(AvailableSettings.HBM2DDL_DATABASE_ACTION, p));
-                if (hibernateConfig.showSql) {
+                if (hibernate.showSql) {
                     desc.getProperties().setProperty(AvailableSettings.SHOW_SQL, "true");
                     desc.getProperties().setProperty(AvailableSettings.FORMAT_SQL, "true");
                 }
-                if (hibernateConfig.generateStatistics) {
+                if (hibernate.generateStatistics) {
                     desc.getProperties().setProperty(AvailableSettings.GENERATE_STATISTICS, "true");
                 }
 
                 // sql-load-script-source
                 // explicit file or default one
-                String file = hibernateConfig.sqlLoadScriptSource.orElse("import.sql"); //default Hibernate ORM file imported
+                String file = hibernate.sqlLoadScriptSource.orElse("import.sql"); //default Hibernate ORM file imported
 
                 Optional<Path> loadScriptPath = Optional
                         .ofNullable(applicationArchivesBuildItem.getRootArchive().getChildPath(file));
@@ -324,24 +322,20 @@ public final class HibernateOrmProcessor {
                         });
 
                 //raise exception if explicit file is not present (i.e. not the default)
-                hibernateConfig.sqlLoadScriptSource
+                hibernate.sqlLoadScriptSource
                         .filter(o -> !loadScriptPath.filter(path -> !Files.isDirectory(path)).isPresent())
                         .ifPresent(
                                 c -> {
                                     throw new ConfigurationError(
-                                            "Unable to find file referenced in '" + HIBERNATE_ORM_CONFIG_PREFIX
-                                                    + ".sql-load-script-source="
+                                            "Unable to find file referenced in 'quarkus.hibernate.sql-load-script-source="
                                                     + c + "'. Remove property or add file to your path.");
                                 });
 
-                // Push the config cache to the Hibernate configuration
-                // FIXME: this should use a Map as soon as Map support is complete
-                String prefix = HIBERNATE_ORM_CONFIG_PREFIX + "cache.";
+                String prefix = "quarkus.hibernate.cache.";
                 for (String propName : ConfigProvider.getConfig().getPropertyNames()) {
                     if (propName.startsWith(prefix)) {
                         String value = QuarkusConfig.getString(propName, null, false);
-                        String hibernateKey = propName.replace(HIBERNATE_ORM_CONFIG_PREFIX, "hibernate.")
-                                .replace("\"", "");
+                        String hibernateKey = propName.replace("quarkus.", "");
                         desc.getProperties().setProperty(hibernateKey, value);
                     }
                 }
@@ -349,11 +343,10 @@ public final class HibernateOrmProcessor {
                 descriptors.add(desc);
             });
         } else {
-            if (hibernateConfig.isAnyPropertySet()) {
+            if (hibernate.isAnyPropertySet()) {
                 throw new ConfigurationError(
                         "Hibernate ORM configuration present in persistence.xml and Quarkus config file at the same time\n"
-                                + "If you use persistence.xml remove all " + HIBERNATE_ORM_CONFIG_PREFIX
-                                + "* properties from the Quarkus config file.");
+                                + "If you use persistence.xml remove all quarkus.hibernate.* properties from the Quarkus config file.");
             }
         }
     }
@@ -374,7 +367,7 @@ public final class HibernateOrmProcessor {
         }
         String error = driver.isPresent()
                 ? "Hibernate extension could not guess the dialect from the driver '" + resolvedDriver
-                        + "'. Add an explicit '" + HIBERNATE_ORM_CONFIG_PREFIX + "dialect' property."
+                        + "'. Add an explicit 'quarkus.hibernate.dialect' property."
                 : "Hibernate extension cannot guess the dialect as no JDBC driver is specified by 'quarkus.datasource.driver'";
         throw new ConfigurationError(error);
     }
