@@ -18,6 +18,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.sun.tools.javac.util.Context;
+import javax.tools.Diagnostic;
+import javax.tools.JavaFileObject;
 
 /** The output from a {@link JavacTurbineCompiler} compilation. */
 class JavacTurbineCompileResult {
@@ -27,22 +29,19 @@ class JavacTurbineCompileResult {
     OK, ERROR
   }
 
-  private final ImmutableMap<String, byte[]> classOutputs;
-  private final ImmutableMap<String, byte[]> sourceOutputs;
+  private final ImmutableMap<String, byte[]> files;
   private final Status status;
   private final String output;
-  private final ImmutableList<FormattedDiagnostic> diagnostics;
+  private final ImmutableList<Diagnostic<? extends JavaFileObject>> diagnostics;
   private final Context context;
 
   JavacTurbineCompileResult(
-      ImmutableMap<String, byte[]> classOutputs,
-      ImmutableMap<String, byte[]> sourceOutputs,
+      ImmutableMap<String, byte[]> files,
       Status status,
       String output,
-      ImmutableList<FormattedDiagnostic> diagnostics,
+      ImmutableList<Diagnostic<? extends JavaFileObject>> diagnostics,
       Context context) {
-    this.classOutputs = classOutputs;
-    this.sourceOutputs = sourceOutputs;
+    this.files = files;
     this.status = status;
     this.output = output;
     this.diagnostics = diagnostics;
@@ -60,18 +59,13 @@ class JavacTurbineCompileResult {
   }
 
   /** The diagnostics from the compilation. */
-  ImmutableList<FormattedDiagnostic> diagnostics() {
+  ImmutableList<Diagnostic<? extends JavaFileObject>> diagnostics() {
     return diagnostics;
   }
 
-  /** The class files produced by the compilation. */
-  ImmutableMap<String, byte[]> classOutputs() {
-    return classOutputs;
-  }
-
-  /** The sources generated during the compilation. */
-  ImmutableMap<String, byte[]> sourceOutputs() {
-    return sourceOutputs;
+  /** The files produced by the compilation. */
+  ImmutableMap<String, byte[]> files() {
+    return files;
   }
 
   /** The compilation context, may by inspected by integration tests. */
