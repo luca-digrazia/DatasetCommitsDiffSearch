@@ -5,11 +5,13 @@ import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.CornerPathEffect;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PathMeasure;
 import android.graphics.RectF;
 import android.util.AttributeSet;
+import android.util.TypedValue;
 import android.view.View;
 import android.view.animation.AnticipateInterpolator;
 
@@ -30,9 +32,9 @@ public class ENPlayView extends View {
 
     public static int DEFAULT_BG_LINE_COLOR = 0xfffafafa;
 
-    public static int DEFAULT_LINE_WIDTH = 14;
+    public static int DEFAULT_LINE_WIDTH = 4;
 
-    public static int DEFAULT_BG_LINE_WIDTH = 12;
+    public static int DEFAULT_BG_LINE_WIDTH = 4;
 
     public static int DEFAULT_DURATION = 1200;
 
@@ -68,15 +70,18 @@ public class ENPlayView extends View {
         TypedArray ta = context.obtainStyledAttributes(attrs, R.styleable.play);
         int lineColor = ta.getColor(R.styleable.play_play_line_color, DEFAULT_LINE_COLOR);
         int bgLineColor = ta.getColor(R.styleable.play_play_bg_line_color, DEFAULT_BG_LINE_COLOR);
-        int lineWidth = ta.getInteger(R.styleable.play_play_line_width, DEFAULT_LINE_WIDTH);
-        int bgLineWidth = ta.getInteger(R.styleable.play_play_bg_line_width, DEFAULT_BG_LINE_WIDTH);
+        int lineWidth = ta.getInteger(R.styleable.play_play_line_width, dp2px(DEFAULT_LINE_WIDTH));
+        int bgLineWidth = ta.getInteger(R.styleable.play_play_bg_line_width, dp2px(DEFAULT_BG_LINE_WIDTH));
         ta.recycle();
+
+        setLayerType(View.LAYER_TYPE_SOFTWARE, null);
 
         mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeCap(Paint.Cap.ROUND);
         mPaint.setColor(lineColor);
         mPaint.setStrokeWidth(lineWidth);
+        mPaint.setPathEffect(new CornerPathEffect(1));
 
         mBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         mBgPaint.setStyle(Paint.Style.STROKE);
@@ -96,7 +101,7 @@ public class ENPlayView extends View {
         super.onSizeChanged(w, h, oldw, oldh);
         mWidth = w * 9 / 10;
         mHeight = h * 9 / 10;
-        mCircleRadius = mWidth / 10;
+        mCircleRadius = mWidth / dp2px(4);
         mCenterX = w / 2;
         mCenterY = h / 2;
         mRectF = new RectF(mCenterX - mCircleRadius, mCenterY + 0.6f * mCircleRadius,
@@ -129,14 +134,15 @@ public class ENPlayView extends View {
             canvas.drawLine(mCenterX - mCircleRadius, mCenterY - 1.6f * mCircleRadius,
                     mCenterX - mCircleRadius, mCenterY + 1.6f * mCircleRadius, mPaint);
 
-            canvas.drawArc(mRectF, 0f, 180f / 0.3f * mFraction, false, mPaint);
+            if (mFraction != 0)
+                canvas.drawArc(mRectF, 0f, 180f / 0.3f * mFraction, false, mPaint);
 
             canvas.drawArc(mBgRectF, -105 + 360 * mFraction, 360 * (1 - mFraction), false, mPaint);
         } else if (mFraction <= 0.6) {  //嗷~~ 下方曲线和三角形
             canvas.drawArc(mRectF, 180f / 0.3f * (mFraction - 0.3f), 180 - 180f / 0.3f * (mFraction - 0.3f), false , mPaint);
 
             mDstPath.reset();
-            mDstPath.lineTo(0 ,0);
+            //mDstPath.lineTo(0 ,0);
             mPathMeasure.getSegment(0.02f * mPathLength, 0.38f * mPathLength + 0.42f * mPathLength / 0.3f * (mFraction - 0.3f) ,
                     mDstPath, true);
             canvas.drawPath(mDstPath, mPaint);
@@ -144,7 +150,7 @@ public class ENPlayView extends View {
             canvas.drawArc(mBgRectF, -105 + 360 * mFraction, 360 * (1 - mFraction), false, mPaint);
         } else if (mFraction <= 0.8) {  //嗷~~ 三角形
             mDstPath.reset();
-            mDstPath.lineTo(0 ,0);
+            //mDstPath.lineTo(0 ,0);
             mPathMeasure.getSegment(0.02f * mPathLength + 0.2f * mPathLength / 0.2f * (mFraction - 0.6f)
                     , 0.8f * mPathLength + 0.2f * mPathLength / 0.2f * (mFraction - 0.6f) ,
                     mDstPath, true);
@@ -153,7 +159,7 @@ public class ENPlayView extends View {
             canvas.drawArc(mBgRectF, -105 + 360 * mFraction, 360 * (1 - mFraction), false, mPaint);
         } else {    //嗷~~ 弹性部分
             mDstPath.reset();
-            mDstPath.lineTo(0 ,0);
+            //mDstPath.lineTo(0 ,0);
             mPathMeasure.getSegment(10 * mCircleRadius * (mFraction - 1)
                     , mPathLength ,
                     mDstPath, true);
@@ -207,5 +213,10 @@ public class ENPlayView extends View {
 
     public void setDuration(int duration) {
         mDuration = duration;
+    }
+
+    private int dp2px(int dp) {
+        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp,
+                getContext().getResources().getDisplayMetrics());
     }
 }
