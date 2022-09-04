@@ -264,9 +264,7 @@ public final class ResourceDependencies {
             .addTransitive(transitiveResourceContainers)
             .addTransitive(directResourceContainers)
             .build(),
-        NestedSetBuilder.<ValidatedAndroidData>naiveLinkOrder()
-            .add(newDirectResource.export())
-            .build(),
+        NestedSetBuilder.<ValidatedAndroidData>naiveLinkOrder().add(newDirectResource).build(),
         NestedSetBuilder.<Artifact>naiveLinkOrder()
             .addTransitive(transitiveResources)
             .addAll(newDirectResource.getResources())

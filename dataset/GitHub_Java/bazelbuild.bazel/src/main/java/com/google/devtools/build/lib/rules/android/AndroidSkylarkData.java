@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryAarInfo.Aar;
 import com.google.devtools.build.lib.rules.java.JavaCompilationInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
@@ -117,19 +116,7 @@ public class AndroidSkylarkData {
             named = true,
             doc =
                 "Defaults to False. If true, resources will not be exposed to targets that depend"
-                    + " on them."),
-        @Param(
-            name = "custom_package",
-            positional = false,
-            defaultValue = "None",
-            type = String.class,
-            noneable = true,
-            named = true,
-            doc =
-                "The Android application package to stamp the manifest with. If not provided, the"
-                    + " current Java package, derived from the location of this target's BUILD"
-                    + " file, will be used. For example, given a BUILD file in"
-                    + " 'java/com/foo/bar/BUILD', the package would be 'com.foo.bar'."),
+                    + " on them.")
       },
       doc =
           "Creates an AndroidResourcesInfo from this target's resource dependencies, ignoring local"
@@ -138,20 +125,13 @@ public class AndroidSkylarkData {
               + " manifest will be generated and included in the provider - this path should not"
               + " be used when an explicit manifest is specified.")
   public static AndroidResourcesInfo resourcesFromDeps(
-      SkylarkRuleContext ctx,
-      SkylarkList<AndroidResourcesInfo> deps,
-      boolean neverlink,
-      Object customPackage)
+      SkylarkRuleContext ctx, SkylarkList<AndroidResourcesInfo> deps, boolean neverlink)
       throws EvalException, InterruptedException {
-    String pkg = fromNoneable(customPackage, String.class);
-    if (pkg == null) {
-      pkg = AndroidManifest.getDefaultPackage(ctx.getRuleContext());
-    }
     return ResourceApk.processFromTransitiveLibraryData(
             ctx.getRuleContext(),
             ResourceDependencies.fromProviders(deps, /* neverlink = */ neverlink),
             AssetDependencies.empty(),
-            StampedAndroidManifest.createEmpty(ctx.getRuleContext(), pkg, /* exported = */ false))
+            StampedAndroidManifest.createEmpty(ctx.getRuleContext(), /* exported = */ false))
         .toResourceInfo(ctx.getLabel());
   }
 
@@ -335,15 +315,6 @@ public class AndroidSkylarkData {
             doc =
                 "Defaults to False. If passed as True, these resources will not be inherited by"
                     + " targets that depend on this one."),
-        @Param(
-            name = "enable_data_binding",
-            positional = false,
-            defaultValue = "False",
-            type = Boolean.class,
-            named = true,
-            doc =
-                "Defaults to False. If True, processes data binding expressions in layout"
-                    + " resources."),
       },
       doc =
           "Merges this target's resources together with resources inherited from dependencies."
@@ -359,8 +330,7 @@ public class AndroidSkylarkData {
       AndroidManifestInfo manifest,
       SkylarkList<ConfiguredTarget> resources,
       SkylarkList<AndroidResourcesInfo> deps,
-      boolean neverlink,
-      boolean enableDataBinding)
+      boolean neverlink)
       throws EvalException, InterruptedException {
 
     ImmutableList<FileProvider> fileProviders =
@@ -371,22 +341,11 @@ public class AndroidSkylarkData {
             .collect(ImmutableList.toImmutableList());
 
     try {
-      AndroidAaptVersion aaptVersion =
-          AndroidCommon.getAndroidConfig(ctx.getRuleContext()).getAndroidAaptVersion();
-
       ValidatedAndroidResources validated =
           AndroidResources.from(ctx.getRuleContext(), fileProviders, "resources")
-              .parse(
-                  ctx.getRuleContext(),
-                  manifest.asStampedManifest(),
-                  enableDataBinding,
-                  aaptVersion)
-              .merge(
-                  ctx.getRuleContext(),
-                  ResourceDependencies.fromProviders(deps, neverlink),
-                  enableDataBinding,
-                  aaptVersion)
-              .validate(ctx.getRuleContext(), aaptVersion);
+              .parse(ctx.getRuleContext(), manifest.asStampedManifest())
+              .merge(ctx.getRuleContext(), ResourceDependencies.fromProviders(deps, neverlink))
+              .validate(ctx.getRuleContext());
 
       JavaInfo javaInfo =
           JavaInfo.Builder.create()
