@@ -20,8 +20,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
+import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Strategy;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.util.ArrayList;
@@ -38,14 +42,34 @@ public class ActionLookupValue implements SkyValue {
   protected final List<ActionAnalysisMetadata> actions;
   private final ImmutableMap<Artifact, Integer> generatingActionIndex;
 
-  protected ActionLookupValue(
-      ActionAnalysisMetadata action,
-      boolean removeActionAfterEvaluation) {
-    this(Actions.GeneratingActions.fromSingleAction(action), removeActionAfterEvaluation);
+  private static Actions.GeneratingActions filterSharedActionsAndThrowRuntimeIfConflict(
+      ActionKeyContext actionKeyContext, List<ActionAnalysisMetadata> actions) {
+    try {
+      return Actions.filterSharedActionsAndThrowActionConflict(actionKeyContext, actions);
+    } catch (ActionConflictException e) {
+      // Programming bug.
+      throw new IllegalStateException(e);
+    }
   }
 
   @VisibleForTesting
   public ActionLookupValue(
+      ActionKeyContext actionKeyContext,
+      List<ActionAnalysisMetadata> actions,
+      boolean removeActionsAfterEvaluation) {
+    this(
+        filterSharedActionsAndThrowRuntimeIfConflict(actionKeyContext, actions),
+        removeActionsAfterEvaluation);
+  }
+
+  protected ActionLookupValue(
+      ActionKeyContext actionKeyContext,
+      ActionAnalysisMetadata action,
+      boolean removeActionAfterEvaluation) {
+    this(actionKeyContext, ImmutableList.of(action), removeActionAfterEvaluation);
+  }
+
+  protected ActionLookupValue(
       Actions.GeneratingActions generatingActions, boolean removeActionsAfterEvaluation) {
     if (removeActionsAfterEvaluation) {
       this.actions = new ArrayList<>(generatingActions.getActions());
@@ -167,7 +191,11 @@ public class ActionLookupValue implements SkyValue {
    * subclasses of ActionLookupKey. This allows callers to easily find the value key, while
    * remaining agnostic to what ActionLookupValues actually exist.
    */
+  @AutoCodec(strategy = Strategy.POLYMORPHIC)
   public abstract static class ActionLookupKey implements ArtifactOwner, SkyKey {
+    public static final ObjectCodec<ActionLookupKey> CODEC =
+        new ActionLookupValue_ActionLookupKey_AutoCodec();
+
     @Override
     public Label getLabel() {
       return null;
