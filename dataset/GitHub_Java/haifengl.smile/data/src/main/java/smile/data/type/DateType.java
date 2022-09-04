@@ -15,9 +15,9 @@
  *******************************************************************************/
 package smile.data.type;
 
+import java.text.ParseException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-
 /**
  * Date data type.
  *
@@ -55,12 +55,7 @@ public class DateType implements DataType {
 
     @Override
     public String name() {
-        return String.format("Date[%s]", pattern);
-    }
-
-    @Override
-    public ID id() {
-        return ID.Date;
+        return String.format("date[%s]", pattern);
     }
 
     @Override
@@ -74,7 +69,7 @@ public class DateType implements DataType {
     }
 
     @Override
-    public LocalDate valueOf(String s) {
+    public LocalDate valueOf(String s) throws ParseException {
         return LocalDate.parse(s, formatter);
     }
 
