@@ -395,10 +395,7 @@ public final class RunfilesSupport {
         ruleContext,
         executable,
         runfiles,
-        computeArgs(
-            ruleContext,
-            CommandLine.EMPTY,
-            ruleContext.getConfigurationMakeVariableContext()));
+        computeArgs(ruleContext, CommandLine.EMPTY, ImmutableList.<MakeVariableSupplier>of()));
   }
 
   /**
@@ -412,9 +409,7 @@ public final class RunfilesSupport {
         executable,
         runfiles,
         computeArgs(
-            ruleContext,
-            CommandLine.of(appendingArgs),
-            ruleContext.getConfigurationMakeVariableContext()));
+            ruleContext, CommandLine.of(appendingArgs), ImmutableList.<MakeVariableSupplier>of()));
   }
 
   /**
@@ -427,26 +422,26 @@ public final class RunfilesSupport {
         ruleContext,
         executable,
         runfiles,
-        computeArgs(ruleContext, appendingArgs, ruleContext.getConfigurationMakeVariableContext()));
+        computeArgs(ruleContext, appendingArgs, ImmutableList.<MakeVariableSupplier>of()));
   }
 
   public static RunfilesSupport withExecutable(
       RuleContext ruleContext,
       Runfiles runfiles,
       Artifact executable,
-      ConfigurationMakeVariableContext makeVariableContext) {
+      ImmutableList<? extends MakeVariableSupplier> makeVariableSuppliers) {
     return new RunfilesSupport(
         ruleContext,
         executable,
         runfiles,
-        computeArgs(ruleContext, CommandLine.EMPTY, makeVariableContext));
+        computeArgs(ruleContext, CommandLine.EMPTY, makeVariableSuppliers));
   }
 
   private static CommandLine computeArgs(
       RuleContext ruleContext,
       CommandLine additionalArgs,
-      ConfigurationMakeVariableContext makeVariableContext) {
+      ImmutableList<? extends MakeVariableSupplier> makeVariableSuppliers) {
     return CommandLine.concat(
-        ruleContext.getTokenizedStringListAttr("args", makeVariableContext), additionalArgs);
+        ruleContext.getTokenizedStringListAttr("args", makeVariableSuppliers), additionalArgs);
   }
 }
