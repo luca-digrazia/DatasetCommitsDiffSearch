@@ -59,7 +59,6 @@ import com.google.devtools.build.lib.syntax.NoneType;
 import com.google.devtools.build.lib.syntax.ParserInput;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkCallable;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
@@ -267,7 +266,7 @@ public final class PackageFactory {
   // TODO(adonovan): don't call this function twice (once for BUILD files and
   // once for the native module) as it results in distinct objects. (Using
   // @SkylarkCallable may accomplish that.)
-  private static StarlarkCallable newPackageFunction(
+  private static BaseFunction newPackageFunction(
       final ImmutableMap<String, PackageArgument<?>> packageArguments) {
     FunctionSignature signature =
         FunctionSignature.namedOnly(0, packageArguments.keySet().toArray(new String[0]));
@@ -342,7 +341,10 @@ public final class PackageFactory {
     return result.build();
   }
 
-  /** A callable Starlark value that creates Rules for native RuleClasses. */
+  /**
+   * {@link BaseFunction} adapter for creating {@link Rule}s for native {@link
+   * com.google.devtools.build.lib.packages.RuleClass}es.
+   */
   private static class BuiltinRuleFunction extends BaseFunction implements RuleFunction {
     private final RuleClass ruleClass;
 

@@ -19,4 +19,9 @@ public enum Compression {
   DISALLOW,
   /** May compress. */
   ALLOW;
+
+  /** Maps true/false to allow/disallow respectively. */
+  public static Compression fromBoolean(boolean allow) {
+    return allow ? ALLOW : DISALLOW;
+  }
 }

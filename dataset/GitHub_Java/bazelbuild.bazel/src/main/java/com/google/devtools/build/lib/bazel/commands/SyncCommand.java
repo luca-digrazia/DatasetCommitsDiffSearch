@@ -171,7 +171,7 @@ public final class SyncCommand implements BlazeCommand {
                   fileValue.getPackage().getRegisteredExecutionPlatforms()));
       env.getReporter().post(new RepositoryOrderEvent(repositoryOrder.build()));
 
-      // take all Starlark workspace rules and get their values
+      // take all skylark workspace rules and get their values
       ImmutableSet.Builder<SkyKey> repositoriesToFetch = new ImmutableSet.Builder<>();
       for (Rule rule : fileValue.getPackage().getTargets(Rule.class)) {
         if (rule.getRuleClass().equals("bind")) {
@@ -235,8 +235,8 @@ public final class SyncCommand implements BlazeCommand {
       // declare themselves as configure-like.
       return SkylarkRepositoryFunction.isConfigureRule(rule);
     }
-    if (rule.getRuleClassObject().isStarlark()) {
-      // Starlark rules are all whitelisted
+    if (rule.getRuleClassObject().isSkylark()) {
+      // Skylark rules are all whitelisted
       return true;
     }
     return WHITELISTED_NATIVE_RULES.contains(rule.getRuleClassObject().getName());
