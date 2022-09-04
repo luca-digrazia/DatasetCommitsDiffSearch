@@ -27,7 +27,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,7 +40,6 @@ import java.util.stream.Stream;
 import org.jboss.logging.Logger;
 
 import io.quarkus.deployment.devmode.HotReplacementContext;
-import io.quarkus.deployment.devmode.HotReplacementSetup;
 import io.quarkus.runtime.Timing;
 
 public class RuntimeUpdatesProcessor implements HotReplacementContext {
@@ -50,12 +48,11 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
     private final ClassLoaderCompiler compiler;
     private volatile long lastChange = System.currentTimeMillis();
 
-    private volatile Set<String> watchedFilePaths = Collections.emptySet();
-    private final Map<Path, Long> watchedFileTimestamps = new ConcurrentHashMap<>();
+    private volatile Set<String> configFilePaths = Collections.emptySet();
+    private final Map<Path, Long> configFileTimestamps = new ConcurrentHashMap<>();
 
     private static final Logger log = Logger.getLogger(RuntimeUpdatesProcessor.class.getPackage().getName());
     private final List<Runnable> preScanSteps = new CopyOnWriteArrayList<>();
-    private final List<HotReplacementSetup> hotReplacementSetup = new ArrayList<>();
 
     public RuntimeUpdatesProcessor(DevModeContext context, ClassLoaderCompiler compiler) {
         this.context = context;
@@ -105,10 +102,10 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
         }
 
         boolean classChanged = checkForChangedClasses();
-        Set<String> configFileChanged = checkForFileChange();
+        boolean configFileChanged = checkForConfigFileChange();
 
-        if (classChanged || !configFileChanged.isEmpty()) {
-            DevModeMain.restartApp(configFileChanged);
+        if (classChanged || configFileChanged) {
+            DevModeMain.restartApp();
             log.infof("Hot replace total time: %ss ", Timing.convertToBigDecimalSeconds(System.nanoTime() - startNanoseconds));
             return true;
         }
@@ -169,8 +166,8 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
         return name.substring(lastIndexOf);
     }
 
-    private Set<String> checkForFileChange() {
-        Set<String> ret = new HashSet<>();
+    private boolean checkForConfigFileChange() {
+        boolean configFilesHaveChanged = false;
         for (DevModeContext.ModuleInfo module : context.getModules()) {
             boolean doCopy = true;
             String rootPath = module.getResourcePath();
@@ -184,30 +181,30 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
             Path root = Paths.get(rootPath);
             Path classesDir = Paths.get(module.getClassesPath());
 
-            for (String path : watchedFilePaths) {
-                Path file = root.resolve(path);
-                if (Files.exists(file)) {
+            for (String configFilePath : configFilePaths) {
+                Path config = root.resolve(configFilePath);
+                if (Files.exists(config)) {
                     try {
-                        long value = Files.getLastModifiedTime(file).toMillis();
-                        Long existing = watchedFileTimestamps.get(file);
+                        long value = Files.getLastModifiedTime(config).toMillis();
+                        Long existing = configFileTimestamps.get(config);
                         if (value > existing) {
-                            ret.add(path);
-                            log.infof("File change detected: %s", file);
+                            configFilesHaveChanged = true;
+                            log.infof("Config file change detected: %s", config);
                             if (doCopy) {
-                                Path target = classesDir.resolve(path);
-                                byte[] data = CopyUtils.readFileContent(file);
+                                Path target = classesDir.resolve(configFilePath);
+                                byte[] data = CopyUtils.readFileContent(config);
                                 try (FileOutputStream out = new FileOutputStream(target.toFile())) {
                                     out.write(data);
                                 }
                             }
-                            watchedFileTimestamps.put(file, value);
+                            configFileTimestamps.put(config, value);
                         }
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
                 } else {
-                    watchedFileTimestamps.put(file, 0L);
-                    Path target = classesDir.resolve(path);
+                    configFileTimestamps.put(config, 0L);
+                    Path target = classesDir.resolve(configFilePath);
                     try {
                         Files.deleteIfExists(target);
                     } catch (IOException e) {
@@ -217,7 +214,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
             }
         }
 
-        return ret;
+        return configFilesHaveChanged;
     }
 
     private boolean wasRecentlyModified(final Path p) {
@@ -229,9 +226,9 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
         }
     }
 
-    public RuntimeUpdatesProcessor setWatchedFilePaths(Set<String> watchedFilePaths) {
-        this.watchedFilePaths = watchedFilePaths;
-        watchedFileTimestamps.clear();
+    public RuntimeUpdatesProcessor setConfigFilePaths(Set<String> configFilePaths) {
+        this.configFilePaths = configFilePaths;
+        configFileTimestamps.clear();
 
         for (DevModeContext.ModuleInfo module : context.getModules()) {
             String rootPath = module.getResourcePath();
@@ -243,29 +240,19 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
                 continue;
             }
             Path root = Paths.get(rootPath);
-            for (String i : watchedFilePaths) {
+            for (String i : configFilePaths) {
                 Path config = root.resolve(i);
                 if (Files.exists(config)) {
                     try {
-                        watchedFileTimestamps.put(config, Files.getLastModifiedTime(config).toMillis());
+                        configFileTimestamps.put(config, Files.getLastModifiedTime(config).toMillis());
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
                 } else {
-                    watchedFileTimestamps.put(config, 0L);
+                    configFileTimestamps.put(config, 0L);
                 }
             }
         }
         return this;
-    }
-
-    public void addHotReplacementSetup(HotReplacementSetup service) {
-        hotReplacementSetup.add(service);
-    }
-
-    public void startupFailed() {
-        for (HotReplacementSetup i : hotReplacementSetup) {
-            i.handleFailedInitialStart();
-        }
     }
 }
