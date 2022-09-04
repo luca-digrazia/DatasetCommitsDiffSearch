@@ -9,7 +9,6 @@ import java.net.Socket;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
-import java.security.CodeSource;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -53,7 +52,7 @@ public class NativeImageLauncher implements Closeable {
     }
 
     private static Config installAndGetSomeConfig() {
-        final SmallRyeConfig config = ConfigUtils.configBuilder(false).build();
+        final SmallRyeConfig config = ConfigUtils.configBuilder().build();
         QuarkusConfigFactory.setConfig(config);
         final ConfigProviderResolver cpr = ConfigProviderResolver.instance();
         try {
@@ -116,63 +115,42 @@ public class NativeImageLauncher implements Closeable {
         if (cl instanceof URLClassLoader) {
             URL[] urls = ((URLClassLoader) cl).getURLs();
             for (URL url : urls) {
-                final String applicationNativeImagePath = guessPath(url);
-                if (applicationNativeImagePath != null) {
-                    return applicationNativeImagePath;
-                }
-            }
-        } else {
-            // try the CodeSource way
-            final CodeSource codeSource = testClass.getProtectionDomain().getCodeSource();
-            if (codeSource != null) {
-                final URL codeSourceLocation = codeSource.getLocation();
-                final String applicationNativeImagePath = guessPath(codeSourceLocation);
-                if (applicationNativeImagePath != null) {
-                    return applicationNativeImagePath;
+                if (url.getProtocol().equals("file") && url.getPath().endsWith("test-classes/")) {
+                    //we have the maven test classes dir
+                    File testClasses = new File(url.getPath());
+                    for (File file : testClasses.getParentFile().listFiles()) {
+                        if (file.getName().endsWith("-runner")) {
+                            logGuessedPath(file.getAbsolutePath());
+                            return file.getAbsolutePath();
+                        }
+                    }
+                } else if (url.getProtocol().equals("file") && url.getPath().endsWith("test/")) {
+                    //we have the gradle test classes dir, build/classes/java/test
+                    File testClasses = new File(url.getPath());
+                    for (File file : testClasses.getParentFile().getParentFile().getParentFile().listFiles()) {
+                        if (file.getName().endsWith("-runner")) {
+                            logGuessedPath(file.getAbsolutePath());
+                            return file.getAbsolutePath();
+                        }
+                    }
+                } else if (url.getProtocol().equals("file") && url.getPath().contains("/target/surefire/")) {
+                    //this will make mvn failsafe:integration-test work
+                    String path = url.getPath();
+                    int index = path.lastIndexOf("/target/");
+                    File targetDir = new File(path.substring(0, index) + "/target/");
+                    for (File file : targetDir.listFiles()) {
+                        if (file.getName().endsWith("-runner")) {
+                            logGuessedPath(file.getAbsolutePath());
+                            return file.getAbsolutePath();
+                        }
+                    }
+
                 }
             }
         }
 
         throw new RuntimeException(
                 "Unable to automatically find native image, please set the native.image.path to the native executable you wish to test");
-    }
-
-    private static String guessPath(final URL url) {
-        if (url == null) {
-            return null;
-        }
-        if (url.getProtocol().equals("file") && url.getPath().endsWith("test-classes/")) {
-            //we have the maven test classes dir
-            File testClasses = new File(url.getPath());
-            for (File file : testClasses.getParentFile().listFiles()) {
-                if (file.getName().endsWith("-runner")) {
-                    logGuessedPath(file.getAbsolutePath());
-                    return file.getAbsolutePath();
-                }
-            }
-        } else if (url.getProtocol().equals("file") && url.getPath().endsWith("test/")) {
-            //we have the gradle test classes dir, build/classes/java/test
-            File testClasses = new File(url.getPath());
-            for (File file : testClasses.getParentFile().getParentFile().getParentFile().listFiles()) {
-                if (file.getName().endsWith("-runner")) {
-                    logGuessedPath(file.getAbsolutePath());
-                    return file.getAbsolutePath();
-                }
-            }
-        } else if (url.getProtocol().equals("file") && url.getPath().contains("/target/surefire/")) {
-            //this will make mvn failsafe:integration-test work
-            String path = url.getPath();
-            int index = path.lastIndexOf("/target/");
-            File targetDir = new File(path.substring(0, index) + "/target/");
-            for (File file : targetDir.listFiles()) {
-                if (file.getName().endsWith("-runner")) {
-                    logGuessedPath(file.getAbsolutePath());
-                    return file.getAbsolutePath();
-                }
-            }
-
-        }
-        return null;
     }
 
     private static void logGuessedPath(String guessedPath) {
