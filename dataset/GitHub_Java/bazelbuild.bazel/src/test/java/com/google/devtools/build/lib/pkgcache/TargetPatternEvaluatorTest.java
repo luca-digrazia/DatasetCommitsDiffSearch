@@ -298,16 +298,15 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
 
   @Test
   public void testKeepGoingPartiallyBadPackage() throws Exception {
-    scratch.file(
-        "x/y/BUILD",
+    scratch.file("x/y/BUILD",
         "filegroup(name = 'a')",
-        "x = 1 // 0", // dynamic error
+        "BROKEN",
         "filegroup(name = 'b')");
 
     reporter.removeHandler(failFastHandler);
     Pair<Set<Label>, Boolean> result = parseListKeepGoing("//x/...");
 
-    assertContainsEvent("division by zero");
+    assertContainsEvent("name 'BROKEN' is not defined");
     // Execution stops at the first error,
     // Subsequent rule statements are not executed,
     // But thanks to --keep_going, we learn about the ones before the error.
@@ -343,8 +342,7 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
     Pair<Set<Label>, Boolean> result = parseListKeepGoing("foo/...");
     assertThat(result.first).containsExactlyElementsIn(rulesBeneathFoo);
     assertContainsEvent("syntax error at 'build'");
-    assertContainsEvent("name 'invalid' is not defined");
-
+    assertContainsEvent("package contains errors");
     reporter.addHandler(failFastHandler);
 
     // Even though there was a loading error in the package, parsing the target pattern was

@@ -46,10 +46,8 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 /** Tests of Starlark evaluation. */
-// This test uses 'extends' to make a copy of EvaluationTest whose
-// mode is overridden to SKYLARK, changing various environmental parameters.
 @RunWith(JUnit4.class)
-public final class SkylarkEvaluationTest extends EvaluationTest {
+public class SkylarkEvaluationTest extends EvaluationTest {
 
   @Before
   public final void setup() throws Exception {
@@ -976,35 +974,20 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     flowStatementAfterLoop("continue");
   }
 
-  // TODO(adonovan): move this and all tests that use it to Validation tests.
-  private void assertValidationError(String expectedError, final String... lines) throws Exception {
-    SyntaxError error = assertThrows(SyntaxError.class, () -> eval(lines));
-    assertThat(error).hasMessageThat().contains(expectedError);
-  }
-
   private void flowStatementInsideFunction(String statement) throws Exception {
-    assertValidationError(
-        statement + " statement must be inside a for loop",
-        //
+    checkEvalErrorContains(statement + " statement must be inside a for loop",
         "def foo():",
         "  " + statement,
         "x = foo()");
   }
 
-  private void flowStatementAfterLoop(String statement) throws Exception {
-    assertValidationError(
-        statement + " statement must be inside a for loop",
-        //
+  private void flowStatementAfterLoop(String statement) throws Exception  {
+    checkEvalErrorContains(statement + " statement must be inside a for loop",
         "def foo2():",
         "   for i in range(0, 3):",
         "      pass",
         "   " + statement,
         "y = foo2()");
-  }
-
-  @Test
-  public void testStructMembersAreImmutable() throws Exception {
-    assertValidationError("cannot assign to 's.x'", "s = struct(x = 'a')", "s.x = 'b'\n");
   }
 
   @Test
@@ -1595,21 +1578,17 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testInvalidAugmentedAssignment_ListExpression() throws Exception {
-    assertValidationError(
+    new SkylarkTest().testIfErrorContains(
         "cannot perform augmented assignment on a list or tuple expression",
-        //
         "def f(a, b):",
         "  [a, b] += []",
         "f(1, 2)");
   }
 
-
   @Test
   public void testInvalidAugmentedAssignment_NotAnLValue() throws Exception {
-    assertValidationError(
-        "cannot assign to 'x + 1'",
-        //
-        "x + 1 += 2");
+    newTest().testIfErrorContains(
+        "cannot assign to 'x + 1'", "x + 1 += 2");
   }
 
   @Test
@@ -1862,13 +1841,12 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @Test
-  // TODO(adonovan): move to Validation tests.
   public void testTypo() throws Exception {
-    assertValidationError(
-        "name 'my_variable' is not defined (did you mean 'myVariable'?)",
-        //
-        "myVariable = 2",
-        "x = my_variable + 1");
+    new SkylarkTest()
+        .testIfErrorContains(
+            "name 'my_variable' is not defined (did you mean 'myVariable'?)",
+            "myVariable = 2",
+            "x = my_variable + 1");
   }
 
   @Test
@@ -2245,7 +2223,6 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @Test
-  // TODO(adonovan): move to Validation tests.
   public void testExperimentalFlagGuardedValue() throws Exception {
     // This test uses an arbitrary experimental flag to verify this functionality. If this
     // experimental flag were to go away, this test may be updated to use any experimental flag.
@@ -2256,7 +2233,6 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     String errorMessage =
         "GlobalSymbol is experimental and thus unavailable with the current "
             + "flags. It may be enabled by setting --experimental_build_setting_api";
-
 
     new SkylarkTest(ImmutableMap.of("GlobalSymbol", val), "--experimental_build_setting_api=true")
         .setUp("var = GlobalSymbol")

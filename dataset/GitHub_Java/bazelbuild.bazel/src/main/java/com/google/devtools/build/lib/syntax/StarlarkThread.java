@@ -38,6 +38,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -1178,25 +1179,44 @@ public final class StarlarkThread implements Freezable {
     return vars;
   }
 
-  /** Evaluates a Skylark statement in this thread. (Debugger API) This operation mutates expr. */
+  private static final class EvalEventHandler implements EventHandler {
+    List<Event> messages = new ArrayList<>();
+
+    @Override
+    public void handle(Event event) {
+      if (event.getKind() == EventKind.ERROR) {
+        messages.add(event);
+      }
+    }
+  }
+
+  /** Evaluates a Skylark statement in this thread. (Debugger API) */
   // TODO(adonovan): push this up into the debugger once the eval API is finalized.
-  public Object debugEval(Expression expr) throws EvalException, InterruptedException {
+  public Object debugEval(ParserInput input) throws EvalException, InterruptedException {
+    EvalEventHandler handler = new EvalEventHandler();
+    Expression expr = Expression.parse(input, handler);
+    if (!handler.messages.isEmpty()) {
+      Event ev = handler.messages.get(0);
+      throw new EvalException(ev.getLocation(), ev.getMessage());
+    }
     return Eval.eval(this, expr);
   }
 
   /** Executes a Skylark file (sequence of statements) in this thread. (Debugger API) */
   // TODO(adonovan): push this up into the debugger once the exec API is finalized.
-  public void debugExec(ParserInput input) throws SyntaxError, EvalException, InterruptedException {
-    StarlarkFile file = StarlarkFile.parse(input);
-    ValidationEnvironment.validateFile(file, this, /*isBuildFile=*/ false);
-    if (!file.ok()) {
-      throw new SyntaxError(file.errors());
+  public void debugExec(ParserInput input) throws EvalException, InterruptedException {
+    EvalEventHandler handler = new EvalEventHandler();
+    StarlarkFile file = StarlarkFile.parse(input, handler);
+    if (!handler.messages.isEmpty()) {
+      Event ev = handler.messages.get(0);
+      throw new EvalException(ev.getLocation(), ev.getMessage());
     }
     for (Statement stmt : file.getStatements()) {
       if (stmt instanceof LoadStatement) {
-        throw new EvalException(stmt.getLocation(), "cannot execute load statements in debugger");
+        throw new EvalException(null, "cannot execute load statements in debugger");
       }
     }
+    ValidationEnvironment.validateFile(file, this, /*isBuildFile=*/ false);
     Eval.execStatements(this, file.getStatements());
   }
 
@@ -1421,7 +1441,6 @@ public final class StarlarkThread implements Freezable {
 
   /** An exception thrown by {@link #FAIL_FAST_HANDLER}. */
   // TODO(bazel-team): Possibly extend RuntimeException instead of IllegalArgumentException.
-  // TODO(adonovan): move to EventCollectionApparatus.
   public static class FailFastException extends IllegalArgumentException {
     public FailFastException(String s) {
       super(s);
@@ -1436,7 +1455,6 @@ public final class StarlarkThread implements Freezable {
    * assertions) need to be able to distinguish between organically occurring exceptions and
    * exceptions thrown by this handler.
    */
-  // TODO(adonovan): move to EventCollectionApparatus.
   public static final EventHandler FAIL_FAST_HANDLER =
       new EventHandler() {
         @Override
