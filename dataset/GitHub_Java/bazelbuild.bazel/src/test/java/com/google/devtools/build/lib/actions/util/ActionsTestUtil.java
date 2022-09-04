@@ -754,10 +754,5 @@ public final class ActionsTestUtil {
     public void discardOutputMetadata() {
       throw new UnsupportedOperationException();
     }
-
-    @Override
-    public void resetOutputs(Iterable<Artifact> outputs) {
-      throw new UnsupportedOperationException();
-    }
   }
 }
