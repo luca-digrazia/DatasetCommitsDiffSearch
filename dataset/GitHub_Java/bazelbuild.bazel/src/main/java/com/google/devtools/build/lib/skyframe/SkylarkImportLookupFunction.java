@@ -584,8 +584,11 @@ public class SkylarkImportLookupFunction implements SkyFunction {
       ImmutableMap<RepositoryName, RepositoryName> repositoryMapping)
       throws SkylarkImportFailedException, InterruptedException {
     StoredEventHandler eventHandler = new StoredEventHandler();
-    // Any change to an input file may affect program behavior,
-    // even if only by changing line numbers in error messages.
+    // TODO(bazel-team): this method overestimates the changes which can affect the
+    // Skylark RuleClass. For example changes to comments or unused functions can modify the hash.
+    // A more accurate - however much more complicated - way would be to calculate a hash based on
+    // the transitive closure of the accessible AST nodes.
+    // [False! Any change to the line numbering is a semantic change -adonovan.]
     PathFragment extensionFile = extensionLabel.toPathFragment();
     try (Mutability mutability = Mutability.create("importing %s", extensionFile)) {
       StarlarkThread thread =
@@ -596,8 +599,8 @@ public class SkylarkImportLookupFunction implements SkyFunction {
               eventHandler,
               file.getContentHashCode(),
               importMap,
-              packageFactory.getNativeModule(inWorkspace),
               repositoryMapping);
+      thread.setupOverride("native", packageFactory.getNativeModule(inWorkspace));
       execAndExport(file, extensionLabel, eventHandler, thread);
 
       Event.replayEventsOn(env.getListener(), eventHandler.getEvents());
