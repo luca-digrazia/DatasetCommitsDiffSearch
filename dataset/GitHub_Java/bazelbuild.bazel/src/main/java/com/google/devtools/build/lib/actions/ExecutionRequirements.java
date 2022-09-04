@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Function;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.util.Preconditions;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -140,10 +139,4 @@ public class ExecutionRequirements {
               return null;
             }
           });
-
-  /** If an action supports running in persistent worker mode. */
-  public static final String SUPPORTS_WORKERS = "supports-workers";
-
-  public static final ImmutableMap<String, String> WORKER_MODE_ENABLED =
-      ImmutableMap.of(SUPPORTS_WORKERS, "1");
 }
