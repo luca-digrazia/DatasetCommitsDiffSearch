@@ -47,7 +47,7 @@ public class DockerIntegrationTest {
     }
 
     @Test
-    void testHelloWorld() {
+    public void testHelloWorld() {
         final Optional<String> name = Optional.of("Dr. IntegrationTest");
         final Saying saying = APP.client().target("http://localhost:" + APP.getLocalPort() + "/hello-world")
                 .queryParam("name", name.get())
@@ -57,7 +57,7 @@ public class DockerIntegrationTest {
     }
 
     @Test
-    void testPostPerson() {
+    public void testPostPerson() {
         final Person person = new Person("Dr. IntegrationTest", "Chief Wizard", 1525);
         final Person newPerson = postPerson(person);
         assertThat(newPerson.getFullName()).isEqualTo(person.getFullName());
@@ -65,12 +65,12 @@ public class DockerIntegrationTest {
     }
 
     @Test
-    void testRenderingPersonFreemarker() {
+    public void testRenderingPersonFreemarker() {
         testRenderingPerson("view_freemarker");
     }
 
     @Test
-    void testRenderingPersonMustache() {
+    public void testRenderingPersonMustache() {
         testRenderingPerson("view_mustache");
     }
 
@@ -90,7 +90,7 @@ public class DockerIntegrationTest {
     }
 
     @Test
-    void testLogFileWritten() throws IOException {
+    public void testLogFileWritten() throws IOException {
         // The log file is using a size and time based policy, which used to silently
         // fail (and not write to a log file). This test ensures not only that the
         // log file exists, but also contains the log line that jetty prints on startup
