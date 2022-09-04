@@ -9,8 +9,8 @@ import com.google.common.collect.Maps;
 import io.dropwizard.jersey.gzip.ConfiguredGZipEncoder;
 import io.dropwizard.jersey.gzip.GZipDecoder;
 import io.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
-import io.dropwizard.jersey.validation.HibernateValidationFeature;
 import io.dropwizard.jersey.validation.Validators;
+import io.dropwizard.jersey.validation.HibernateValidationFeature;
 import io.dropwizard.lifecycle.Managed;
 import io.dropwizard.setup.Environment;
 import org.apache.http.client.CredentialsProvider;
@@ -32,7 +32,7 @@ import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 
-import static java.util.Objects.requireNonNull;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 
 /**
@@ -86,7 +86,7 @@ public class JerseyClientBuilder {
      * @return {@code this}
      */
     public JerseyClientBuilder withProvider(Object provider) {
-        singletons.add(requireNonNull(provider));
+        singletons.add(checkNotNull(provider));
         return this;
     }
 
@@ -98,7 +98,7 @@ public class JerseyClientBuilder {
      * @return {@code this}
      */
     public JerseyClientBuilder withProvider(Class<?> klass) {
-        providers.add(requireNonNull(klass));
+        providers.add(checkNotNull(klass));
         return this;
     }
 

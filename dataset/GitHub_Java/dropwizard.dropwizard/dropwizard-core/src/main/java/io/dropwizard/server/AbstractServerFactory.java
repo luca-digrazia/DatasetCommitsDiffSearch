@@ -10,21 +10,21 @@ import com.codahale.metrics.servlets.MetricsServlet;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
 import com.google.common.io.Resources;
 import io.dropwizard.jersey.errors.EarlyEofExceptionMapper;
 import io.dropwizard.jersey.errors.LoggingExceptionMapper;
 import io.dropwizard.jersey.filter.AllowedMethodsFilter;
-import io.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
 import io.dropwizard.jersey.jackson.JsonProcessingExceptionMapper;
+import io.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
 import io.dropwizard.jersey.setup.JerseyEnvironment;
 import io.dropwizard.jersey.validation.HibernateValidationFeature;
 import io.dropwizard.jersey.validation.JerseyViolationExceptionMapper;
-import io.dropwizard.jetty.GzipHandlerFactory;
+import io.dropwizard.jetty.GzipFilterFactory;
 import io.dropwizard.jetty.MutableServletContextHandler;
 import io.dropwizard.jetty.NonblockingServletHolder;
 import io.dropwizard.jetty.RequestLogFactory;
-import io.dropwizard.jetty.Slf4jRequestLogFactory;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import io.dropwizard.servlets.ThreadNameFilter;
 import io.dropwizard.util.Duration;
@@ -35,6 +35,7 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.handler.ErrorHandler;
 import org.eclipse.jetty.server.handler.RequestLogHandler;
 import org.eclipse.jetty.server.handler.StatisticsHandler;
+import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.setuid.RLimit;
 import org.eclipse.jetty.setuid.SetUIDListener;
 import org.eclipse.jetty.util.BlockingArrayQueue;
@@ -51,7 +52,6 @@ import javax.validation.Validator;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
@@ -75,7 +75,7 @@ import java.util.regex.Pattern;
  *     <tr>
  *         <td>{@code gzip}</td>
  *         <td></td>
- *         <td>The {@link GzipHandlerFactory GZIP} configuration.</td>
+ *         <td>The {@link GzipFilterFactory GZIP} configuration.</td>
  *     </tr>
  *     <tr>
  *         <td>{@code maxThreads}</td>
@@ -203,11 +203,11 @@ public abstract class AbstractServerFactory implements ServerFactory {
 
     @Valid
     @NotNull
-    private RequestLogFactory requestLog = new Slf4jRequestLogFactory();
+    private RequestLogFactory requestLog = new RequestLogFactory();
 
     @Valid
     @NotNull
-    private GzipHandlerFactory gzip = new GzipHandlerFactory();
+    private GzipFilterFactory gzip = new GzipFilterFactory();
 
     @Min(2)
     private int maxThreads = 1024;
@@ -265,12 +265,12 @@ public abstract class AbstractServerFactory implements ServerFactory {
     }
 
     @JsonProperty("gzip")
-    public GzipHandlerFactory getGzipFilterFactory() {
+    public GzipFilterFactory getGzipFilterFactory() {
         return gzip;
     }
 
     @JsonProperty("gzip")
-    public void setGzipFilterFactory(GzipHandlerFactory gzip) {
+    public void setGzipFilterFactory(GzipFilterFactory gzip) {
         this.gzip = gzip;
     }
 
@@ -467,6 +467,10 @@ public abstract class AbstractServerFactory implements ServerFactory {
         handler.addFilter(AllowedMethodsFilter.class, "/*", EnumSet.of(DispatcherType.REQUEST))
                 .setInitParameter(AllowedMethodsFilter.ALLOWED_METHODS_PARAM, Joiner.on(',').join(allowedMethods));
         handler.addFilter(ThreadNameFilter.class, "/*", EnumSet.of(DispatcherType.REQUEST));
+        if (gzip.isEnabled()) {
+            final FilterHolder holder = new FilterHolder(gzip.build());
+            handler.addFilter(holder, "/*", EnumSet.allOf(DispatcherType.class));
+        }
         if (jerseyContainer != null) {
             String urlPattern = jerseyRootPath;
             if (!urlPattern.endsWith("*") && !urlPattern.endsWith("/")) {
@@ -581,14 +585,10 @@ public abstract class AbstractServerFactory implements ServerFactory {
         return statisticsHandler;
     }
 
-    protected Handler buildGzipHandler(Handler handler) {
-        return gzip.isEnabled() ? gzip.build(handler) : handler;
-    }
-
     protected void printBanner(String name) {
         try {
             final String banner = WINDOWS_NEWLINE.matcher(Resources.toString(Resources.getResource("banner.txt"),
-                                                                             StandardCharsets.UTF_8))
+                                                                             Charsets.UTF_8))
                                                  .replaceAll("\n")
                                                  .replace("\n", String.format("%n"));
             LOGGER.info(String.format("Starting {}%n{}"), name, banner);
