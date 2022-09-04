@@ -150,7 +150,6 @@ public class AarImport implements RuleConfiguredTargetFactory {
             /* compileDeps = */ targets,
             /* runtimeDeps = */ targets,
             /* bothDeps = */ targets);
-    javaSemantics.checkRule(ruleContext, common);
 
     common.setJavaCompilationArtifacts(
         new JavaCompilationArtifacts.Builder()
@@ -197,8 +196,6 @@ public class AarImport implements RuleConfiguredTargetFactory {
     JavaInfo.Builder javaInfoBuilder =
         JavaInfo.Builder.create()
             .setRuntimeJars(ImmutableList.of(mergedJar))
-            .setJavaConstraints(ImmutableList.of("android"))
-            .setNeverlink(JavaCommon.isNeverLink(ruleContext))
             .addProvider(JavaCompilationArgsProvider.class, javaCompilationArgsProvider)
             .addProvider(JavaRuleOutputJarsProvider.class, jarProviderBuilder.build());
 

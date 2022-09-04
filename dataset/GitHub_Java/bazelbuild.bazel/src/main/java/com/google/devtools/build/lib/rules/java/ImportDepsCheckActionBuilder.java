@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
@@ -34,8 +35,6 @@ public final class ImportDepsCheckActionBuilder {
   }
 
   private Artifact outputArtifact;
-  private Artifact jdepsArtifact;
-  private String ruleLabel;
   private NestedSet<Artifact> jarsToCheck;
   private NestedSet<Artifact> bootclasspath;
   private NestedSet<Artifact> declaredDeps;
@@ -55,15 +54,10 @@ public final class ImportDepsCheckActionBuilder {
     return this;
   }
 
-  public ImportDepsCheckActionBuilder ruleLabel(String ruleLabel) {
-    checkState(this.ruleLabel == null);
-    this.ruleLabel = checkNotNull(ruleLabel);
-    return this;
-  }
-
   public ImportDepsCheckActionBuilder importDepsCheckingLevel(
       ImportDepsCheckingLevel importDepsCheckingLevel) {
     checkState(this.importDepsCheckingLevel == null);
+    checkArgument(importDepsCheckingLevel != ImportDepsCheckingLevel.OFF);
     this.importDepsCheckingLevel = checkNotNull(importDepsCheckingLevel);
     return this;
   }
@@ -71,12 +65,6 @@ public final class ImportDepsCheckActionBuilder {
   public ImportDepsCheckActionBuilder bootcalsspath(NestedSet<Artifact> bootclasspath) {
     checkState(this.bootclasspath == null);
     this.bootclasspath = checkNotNull(bootclasspath);
-    return this;
-  }
-
-  public ImportDepsCheckActionBuilder jdepsOutputArtifact(Artifact jdepsArtifact) {
-    checkState(this.jdepsArtifact == null);
-    this.jdepsArtifact = checkNotNull(jdepsArtifact);
     return this;
   }
 
@@ -91,10 +79,17 @@ public final class ImportDepsCheckActionBuilder {
     checkNotNull(jarsToCheck);
     checkNotNull(bootclasspath);
     checkNotNull(declaredDeps);
-    checkNotNull(importDepsCheckingLevel);
-    checkNotNull(jdepsArtifact);
-    checkNotNull(ruleLabel);
+    checkState(
+        importDepsCheckingLevel != ImportDepsCheckingLevel.OFF, "%s", importDepsCheckingLevel);
 
+    CustomCommandLine args =
+        CustomCommandLine.builder()
+            .addExecPath("--output", outputArtifact)
+            .addExecPaths(VectorArg.addBefore("--input").each(jarsToCheck))
+            .addExecPaths(VectorArg.addBefore("--classpath_entry").each(declaredDeps))
+            .addExecPaths(VectorArg.addBefore("--bootclasspath_entry").each(bootclasspath))
+            .addDynamicString(convertErrorFlag(importDepsCheckingLevel))
+            .build();
     ruleContext.registerAction(
         new SpawnAction.Builder()
             .useDefaultShellEnvironment()
@@ -103,7 +98,6 @@ public final class ImportDepsCheckActionBuilder {
             .addTransitiveInputs(declaredDeps)
             .addTransitiveInputs(bootclasspath)
             .addOutput(outputArtifact)
-            .addOutput(jdepsArtifact)
             .setMnemonic("ImportDepsChecker")
             .setProgressMessage(
                 "Checking the completeness of the deps for %s",
@@ -112,30 +106,17 @@ public final class ImportDepsCheckActionBuilder {
                     .stream()
                     .map(Artifact::prettyPrint)
                     .collect(Collectors.joining(", ")))
-            .addCommandLine(buildCommandLine())
+            .addCommandLine(args)
             .build(ruleContext));
-  }
-
-  private CustomCommandLine buildCommandLine() {
-    return CustomCommandLine.builder()
-        .addExecPath("--output", outputArtifact)
-        .addExecPaths(VectorArg.addBefore("--input").each(jarsToCheck))
-        .addExecPaths(VectorArg.addBefore("--classpath_entry").each(declaredDeps))
-        .addExecPaths(VectorArg.addBefore("--bootclasspath_entry").each(bootclasspath))
-        .addDynamicString(convertErrorFlag(importDepsCheckingLevel))
-        .addExecPath("--jdeps_output", jdepsArtifact)
-        .add("--rule_label", ruleLabel)
-        .build();
   }
 
   private static String convertErrorFlag(ImportDepsCheckingLevel level) {
     switch (level) {
       case ERROR:
-        return "--checking_mode=error";
+      case STRICT_ERROR:
+        return "--fail_on_errors";
       case WARNING:
-        return "--checking_mode=warning";
-      case OFF:
-        return "--checking_mode=silence";
+        return "--nofail_on_errors";
       default:
         throw new RuntimeException("Unhandled deps checking level: " + level);
     }
