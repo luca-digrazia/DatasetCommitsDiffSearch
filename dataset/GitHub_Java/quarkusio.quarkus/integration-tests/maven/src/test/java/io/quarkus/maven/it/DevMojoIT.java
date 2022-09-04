@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -68,11 +67,11 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         // Wait until we get "uuid"
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains(uuid));
 
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(source::isFile);
 
@@ -80,27 +79,8 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         // Wait until we get "carambar"
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains("carambar"));
-    }
-
-    @Test
-    public void testThatTheApplicationIsReloadedOnPomChange() throws MavenInvocationException, IOException {
-        testDir = initProject("projects/classic", "projects/project-classic-run-pom-change");
-        runAndCheck();
-
-        // Edit the pom.xml.
-        File source = new File(testDir, "pom.xml");
-        filter(source, ImmutableMap.of("<!-- insert test dependencies here -->",
-                "        <dependency>\n" +
-                        "            <groupId>io.quarkus</groupId>\n" +
-                        "            <artifactId>quarkus-smallrye-openapi</artifactId>\n" +
-                        "        </dependency>"));
-
-        // Wait until we get "uuid"
-        await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/openapi").contains("hello"));
     }
 
     @Test
@@ -115,11 +95,11 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         // Wait until we get "uuid"
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains(uuid));
 
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(source::isFile);
 
@@ -127,7 +107,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         // Wait until we get "carambar"
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains("carambar"));
 
         // Create a new resource
@@ -136,21 +116,21 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
                 "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
                 "UTF-8");
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES)
                 .until(() -> getHttpResponse("/lorem.txt").contains("Lorem ipsum"));
 
         // Update the resource
         FileUtils.write(source, uuid, "UTF-8");
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES)
                 .until(() -> getHttpResponse("/lorem.txt").contains(uuid));
 
         // Delete the resource
         source.delete();
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES)
                 .until(() -> getHttpResponse("/lorem.txt", 404));
     }
@@ -174,7 +154,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         // Wait until we get "uuid"
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello/greeting").contains(uuid));
 
         greeting = getHttpResponse("/app/hello");
@@ -207,12 +187,12 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         // Wait until we get "bar"
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/foo").contains("bar"));
     }
 
     @Test
-    public void testThatClassFileAreCleanedUp() throws MavenInvocationException, IOException, InterruptedException {
+    public void testThatClassFileAreCleanedUp() throws MavenInvocationException, IOException {
         testDir = initProject("projects/classic", "projects/project-class-file-deletion");
 
         File source = new File(testDir, "src/main/java/org/acme/ClassDeletionResource.java");
@@ -298,9 +278,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         testDir = initProject("projects/classic", "projects/project-classic-run-config-change");
         assertThat(testDir).isDirectory();
         running = new RunningInvoker(testDir, false);
-        final Properties mvnRunProps = new Properties();
-        mvnRunProps.setProperty("debug", "false");
-        running.execute(Arrays.asList("compile", "quarkus:dev"), Collections.emptyMap(), mvnRunProps);
+        running.execute(Arrays.asList("compile", "quarkus:dev"), Collections.emptyMap());
 
         String resp = getHttpResponse();
 
@@ -312,7 +290,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         File source = new File(testDir, "src/main/resources/application.properties");
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(source::isFile);
 
@@ -321,7 +299,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         // Wait until we get "uuid"
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES)
                 .until(() -> getHttpResponse("/app/hello/greeting").contains(uuid));
     }
@@ -331,9 +309,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         testDir = initProject("projects/classic-noconfig", "projects/project-classic-run-noconfig-add-config");
         assertThat(testDir).isDirectory();
         running = new RunningInvoker(testDir, false);
-        final Properties mvnRunProps = new Properties();
-        mvnRunProps.setProperty("debug", "false");
-        running.execute(Arrays.asList("compile", "quarkus:dev"), Collections.emptyMap(), mvnRunProps);
+        running.execute(Arrays.asList("compile", "quarkus:dev"), Collections.emptyMap());
 
         String resp = getHttpResponse();
 
@@ -352,13 +328,13 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
                 "greeting=" + uuid,
                 "UTF-8");
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(configurationFile::isFile);
 
         // Wait until we get "uuid"
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(10, TimeUnit.SECONDS)
                 .until(() -> getHttpResponse("/app/hello/greeting").contains(uuid));
     }
@@ -375,7 +351,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
                 "greeting=" + uuid,
                 "UTF-8");
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(configurationFile::isFile);
 
@@ -383,7 +359,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         // Wait until we get "uuid"
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(60, TimeUnit.SECONDS)
                 .until(() -> getHttpResponse("/app/hello/greeting").contains(uuid));
     }
@@ -399,7 +375,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
                 "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
                 "UTF-8");
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES)
                 .until(() -> getHttpResponse("/lorem.txt").contains("Lorem ipsum"));
 
@@ -407,14 +383,14 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         String uuid = UUID.randomUUID().toString();
         FileUtils.write(source, uuid, "UTF-8");
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES)
                 .until(() -> getHttpResponse("/lorem.txt").contains(uuid));
 
         // Delete the resource
         source.delete();
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES)
                 .until(() -> getHttpResponse("/lorem.txt", 404));
     }
@@ -432,7 +408,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         // Wait until we get "uuid"
         AtomicReference<String> last = new AtomicReference<>();
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> {
                     String content = getHttpResponse("/app/hello", true);
                     last.set(content);
@@ -444,14 +420,14 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
                 .containsIgnoringCase("compile");
 
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(source::isFile);
         filter(source, ImmutableMap.of("\"" + uuid + "\"", "\"carambar\";"));
 
         // Wait until we get "uuid"
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains("carambar"));
     }
 
@@ -467,7 +443,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         // Wait until we get the error page
         AtomicReference<String> last = new AtomicReference<>();
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> {
                     String content = getHttpResponse("/app/hello", true);
                     last.set(content);
@@ -479,7 +455,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         filter(source, ImmutableMap.of("class HelloResource", "public class HelloResource"));
 
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> {
                     String content = getHttpResponse("/app/hello", true);
                     last.set(content);
@@ -516,18 +492,18 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         // Wait until we get "uuid"
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains("message"));
 
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(source::isFile);
 
         filter(source, ImmutableMap.of("message", "foobarbaz"));
 
         await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
+                .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains("foobarbaz"));
     }
 
