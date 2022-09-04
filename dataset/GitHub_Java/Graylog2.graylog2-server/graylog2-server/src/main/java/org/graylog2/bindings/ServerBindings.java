@@ -64,8 +64,8 @@ import org.graylog2.security.ShiroSecurityBinding;
 import org.graylog2.security.ShiroSecurityContextFactory;
 import org.graylog2.security.ldap.LdapConnector;
 import org.graylog2.security.realm.LdapUserAuthenticator;
-import org.graylog2.plugin.BaseConfiguration;
-import org.graylog2.plugin.ServerStatus;
+import org.graylog2.shared.BaseConfiguration;
+import org.graylog2.shared.ServerStatus;
 import org.graylog2.shared.bindings.AsyncHttpClientProvider;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.metrics.jersey2.MetricsDynamicBinding;
@@ -143,8 +143,8 @@ public class ServerBindings extends AbstractModule {
         bind(GracefulShutdown.class).in(Scopes.SINGLETON);
 
         if (configuration.isMessageCacheOffHeap()) {
-            bind(InputCache.class).toProvider(InputCacheProvider.class).asEagerSingleton();
-            bind(OutputCache.class).toProvider(OutputCacheProvider.class).asEagerSingleton();
+            bind(InputCache.class).to(DiskJournalCache.Input.class).in(Scopes.SINGLETON);
+            bind(OutputCache.class).to(DiskJournalCache.Output.class).in(Scopes.SINGLETON);
         } else {
             bind(InputCache.class).to(BasicCache.class).in(Scopes.SINGLETON);
             bind(OutputCache.class).to(BasicCache.class).in(Scopes.SINGLETON);
