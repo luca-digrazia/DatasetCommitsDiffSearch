@@ -393,9 +393,8 @@ public class SpawnIncludeScanner {
       ActionExecutionContext actionExecutionContext,
       Artifact grepIncludes,
       GrepIncludesFileType fileType,
-      boolean isOutputFile)
+      boolean placeNextToFile)
       throws IOException {
-    boolean placeNextToFile = isOutputFile && !file.hasParent();
     Path output =
         getIncludesOutput(
             file, actionExecutionContext.getPathResolver(), fileType, placeNextToFile);
