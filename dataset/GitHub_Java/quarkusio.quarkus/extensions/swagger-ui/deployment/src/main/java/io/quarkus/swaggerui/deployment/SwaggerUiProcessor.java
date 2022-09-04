@@ -25,7 +25,6 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
-import io.quarkus.deployment.builditem.LiveReloadBuildItem;
 import io.quarkus.deployment.index.ClassPathArtifactResolver;
 import io.quarkus.deployment.index.ResolvedArtifact;
 import io.quarkus.deployment.util.FileUtil;
@@ -53,6 +52,9 @@ public class SwaggerUiProcessor {
 
     SmallRyeOpenApiConfig openapi;
 
+    private static String cachedOpenAPIPath;
+    private static String cachedDirectory;
+
     @Inject
     private LaunchModeBuildItem launch;
 
@@ -67,43 +69,46 @@ public class SwaggerUiProcessor {
     @Record(ExecutionTime.STATIC_INIT)
     public void registerSwaggerUiServletExtension(SwaggerUiTemplate template,
             BuildProducer<ServletExtensionBuildItem> servletExtension,
-            BeanContainerBuildItem container,
-            LiveReloadBuildItem liveReloadBuildItem) {
-
+            BeanContainerBuildItem container) {
         if (launch.getLaunchMode().isDevOrTest()) {
-            CachedSwaggerUI cached = liveReloadBuildItem.getContextObject(CachedSwaggerUI.class);
-
-            boolean extractionNeeded = cached == null;
-            if (cached != null && !cached.cachedOpenAPIPath.equals(openapi.path)) {
-                try {
-                    FileUtil.deleteDirectory(Paths.get(cached.cachedDirectory));
-                } catch (IOException e) {
-                    log.error("Failed to clean Swagger UI temp directory on restart", e);
-                }
-                extractionNeeded = true;
+            if (cachedDirectory == null) {
+                Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            FileUtil.deleteDirectory(Paths.get(cachedDirectory));
+                        } catch (IOException e) {
+                            log.error("Failed to clean Swagger UI temp directory on shutdown", e);
+                        }
+                    }
+                }, "Swagger UI Shutdown Hook"));
             }
-            if (extractionNeeded) {
-                if (cached == null) {
-                    cached = new CachedSwaggerUI();
-                    liveReloadBuildItem.setContextObject(CachedSwaggerUI.class, cached);
-                    Runtime.getRuntime().addShutdownHook(new Thread(cached, "Swagger UI Shutdown Hook"));
+            if (cachedDirectory == null || !cachedOpenAPIPath.equals(openapi.path)) {
+                if (cachedDirectory != null) {
+                    try {
+                        FileUtil.deleteDirectory(Paths.get(cachedDirectory));
+                    } catch (IOException e) {
+                        log.error("Failed to clean Swagger UI temp directory on shutdown", e);
+                    }
+                    cachedDirectory = null;
+                    cachedOpenAPIPath = null;
                 }
-                try {
-                    ResolvedArtifact artifact = getSwaggerUiArtifact();
-                    Path tempDir = Files.createTempDirectory(TEMP_DIR_PREFIX);
-                    extractSwaggerUi(artifact, tempDir);
-                    updateApiUrl(tempDir.resolve("index.html"));
-                    cached.cachedDirectory = tempDir.toAbsolutePath().toString();
-                    cached.cachedOpenAPIPath = openapi.path;
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+            }
+            try {
+                ResolvedArtifact artifact = getSwaggerUiArtifact();
+                Path tempDir = Files.createTempDirectory(TEMP_DIR_PREFIX);
+                extractSwaggerUi(artifact, tempDir);
+                updateApiUrl(tempDir.resolve("index.html"));
+                cachedDirectory = tempDir.toAbsolutePath().toString();
+                cachedOpenAPIPath = openapi.path;
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
             servletExtension.produce(
                     new ServletExtensionBuildItem(
                             template.createSwaggerUiExtension(
                                     swaggerUiConfig.path,
-                                    cached.cachedDirectory,
+                                    cachedDirectory,
                                     container.getValue())));
         }
     }
@@ -147,20 +152,5 @@ public class SwaggerUiProcessor {
          */
         @ConfigItem(defaultValue = "/swagger-ui")
         String path;
-    }
-
-    private static final class CachedSwaggerUI implements Runnable {
-
-        String cachedOpenAPIPath;
-        String cachedDirectory;
-
-        @Override
-        public void run() {
-            try {
-                FileUtil.deleteDirectory(Paths.get(cachedDirectory));
-            } catch (IOException e) {
-                log.error("Failed to clean Swagger UI temp directory on shutdown", e);
-            }
-        }
     }
 }

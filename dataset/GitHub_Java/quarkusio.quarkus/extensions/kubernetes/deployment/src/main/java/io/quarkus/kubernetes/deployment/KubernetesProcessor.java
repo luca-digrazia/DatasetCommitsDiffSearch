@@ -9,7 +9,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 import javax.inject.Inject;
@@ -25,8 +24,6 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationInfoBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
-import io.quarkus.kubernetes.spi.KubernetesHealthLivenessPathBuildItem;
-import io.quarkus.kubernetes.spi.KubernetesHealthReadinessPathBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesPortBuildItem;
 
 class KubernetesProcessor {
@@ -40,10 +37,7 @@ class KubernetesProcessor {
     @BuildStep
     public void build(ApplicationInfoBuildItem applicationInfo,
             KubernetesConfig kubernetesConfig,
-            List<KubernetesPortBuildItem> kubernetesPortBuildItems,
-            Optional<KubernetesHealthLivenessPathBuildItem> kubernetesHealthLivenessPathBuildItem,
-            Optional<KubernetesHealthReadinessPathBuildItem> kubernetesHealthReadinessPathBuildItem)
-            throws UnsupportedEncodingException {
+            List<KubernetesPortBuildItem> kubernetesPortBuildItems) throws UnsupportedEncodingException {
 
         if (kubernetesPortBuildItems.isEmpty()) {
             return;
@@ -67,11 +61,7 @@ class KubernetesProcessor {
         session.setWriter(sessionWriter);
 
         final Map<String, Integer> ports = verifyPorts(kubernetesPortBuildItems);
-        enableKubernetes(applicationInfo,
-                kubernetesConfig,
-                ports,
-                kubernetesHealthLivenessPathBuildItem.map(i -> i.getPath()),
-                kubernetesHealthReadinessPathBuildItem.map(i -> i.getPath()));
+        enableKubernetes(applicationInfo, kubernetesConfig, ports);
 
         // write the generated resources to the filesystem
         final Map<String, String> generatedResourcesMap = session.close();
@@ -107,8 +97,7 @@ class KubernetesProcessor {
     }
 
     private void enableKubernetes(ApplicationInfoBuildItem applicationInfo, KubernetesConfig kubernetesConfig,
-            Map<String, Integer> portsMap, Optional<String> httpLivenessProbePath,
-            Optional<String> httpReadinessProbePath) {
+            Map<String, Integer> portsMap) {
         final Map<String, Object> kubernetesProperties = new HashMap<>();
         kubernetesProperties.put("group", kubernetesConfig.group);
         kubernetesProperties.put("name", applicationInfo.getName());
@@ -123,16 +112,6 @@ class KubernetesProcessor {
         }
 
         kubernetesProperties.put("ports", toArray(ports));
-        if (httpLivenessProbePath.isPresent()) {
-            Map<String, Object> livenessProbeProperties = new HashMap<>();
-            livenessProbeProperties.put("httpActionPath", httpLivenessProbePath.get());
-            kubernetesProperties.put("livenessProbe", livenessProbeProperties);
-        }
-        if (httpReadinessProbePath.isPresent()) {
-            Map<String, Object> readinessProbeProperties = new HashMap<>();
-            readinessProbeProperties.put("httpActionPath", httpReadinessProbePath.get());
-            kubernetesProperties.put("readinessProbe", readinessProbeProperties);
-        }
 
         final DefaultKubernetesApplicationGenerator generator = new DefaultKubernetesApplicationGenerator();
         final Map<String, Object> generatorInput = new HashMap<>();

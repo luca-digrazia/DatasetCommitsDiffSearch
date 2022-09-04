@@ -47,7 +47,7 @@ public class ConfiguredBeanTest {
      */
     @Test
     public void validateConfiguredBean() {
-        System.out.printf("validateConfiguredBean, %s%n", configuredBean);
+        System.out.printf("validateConfiguredBean, %s\n", configuredBean);
         Assertions.assertNotNull(configuredBean);
         Assertions.assertNotNull(configuredBean.getBuildTimeConfig());
         Assertions.assertNotNull(configuredBean.getRunTimeConfig());
@@ -212,10 +212,8 @@ public class ConfiguredBeanTest {
                 new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
             String reply = reader.readLine();
             Assertions.assertEquals("testRuntimeXmlConfigService-ack", reply);
-        } finally {
-            os.close();
-            socket.close();
         }
+        socket.close();
     }
 
     @Test
