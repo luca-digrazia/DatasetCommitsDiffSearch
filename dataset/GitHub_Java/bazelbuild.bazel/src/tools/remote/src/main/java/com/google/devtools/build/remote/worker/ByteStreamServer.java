@@ -18,6 +18,7 @@ import static com.google.devtools.build.lib.remote.util.Utils.getFromFuture;
 import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
+import build.bazel.remote.execution.v2.Digest;
 import com.google.bytestream.ByteStreamGrpc.ByteStreamImplBase;
 import com.google.bytestream.ByteStreamProto.ReadRequest;
 import com.google.bytestream.ByteStreamProto.ReadResponse;
@@ -29,12 +30,10 @@ import com.google.devtools.build.lib.remote.SimpleBlobStoreActionCache;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.remoteexecution.v1test.Digest;
 import io.grpc.Status;
 import io.grpc.protobuf.StatusProto;
 import io.grpc.stub.StreamObserver;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -47,7 +46,8 @@ final class ByteStreamServer extends ByteStreamImplBase {
   private final Path workPath;
   private final DigestUtil digestUtil;
 
-  static @Nullable Digest parseDigestFromResourceName(String resourceName) {
+  @Nullable
+  static Digest parseDigestFromResourceName(String resourceName) {
     try {
       String[] tokens = resourceName.split("/");
       if (tokens.length < 2) {
@@ -81,7 +81,7 @@ final class ByteStreamServer extends ByteStreamImplBase {
     try {
       // This still relies on the blob size to be small enough to fit in memory.
       // TODO(olaola): refactor to fix this if the need arises.
-      Chunker c = new Chunker(getFromFuture(cache.downloadBlob(digest)), digestUtil);
+      Chunker c = Chunker.builder().setInput(getFromFuture(cache.downloadBlob(digest))).build();
       while (c.hasNext()) {
         responseObserver.onNext(
             ReadResponse.newBuilder().setData(c.next().getData()).build());
@@ -100,7 +100,7 @@ final class ByteStreamServer extends ByteStreamImplBase {
     Path temp = workPath.getRelative("upload").getRelative(UUID.randomUUID().toString());
     try {
       FileSystemUtils.createDirectoryAndParents(temp.getParentDirectory());
-      temp.getOutputStream().close();
+      FileSystemUtils.createEmptyFile(temp);
     } catch (IOException e) {
       logger.log(SEVERE, "Failed to create temporary file for upload", e);
       responseObserver.onError(StatusUtils.internalError(e));
@@ -231,9 +231,7 @@ final class ByteStreamServer extends ByteStreamImplBase {
 
         try {
           Digest d = digestUtil.compute(temp);
-          try (InputStream in = temp.getInputStream()) {
-            cache.uploadStream(d, in);
-          }
+          getFromFuture(cache.uploadFile(d, temp));
           try {
             temp.delete();
           } catch (IOException e) {

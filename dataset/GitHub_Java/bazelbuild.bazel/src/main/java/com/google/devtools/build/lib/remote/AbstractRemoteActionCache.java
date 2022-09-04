@@ -29,7 +29,6 @@ import build.bazel.remote.execution.v2.SymlinkNode;
 import build.bazel.remote.execution.v2.Tree;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -53,8 +52,6 @@ import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.remote.AbstractRemoteActionCache.ActionResultMetadata.DirectoryMetadata;
 import com.google.devtools.build.lib.remote.AbstractRemoteActionCache.ActionResultMetadata.FileMetadata;
 import com.google.devtools.build.lib.remote.AbstractRemoteActionCache.ActionResultMetadata.SymlinkMetadata;
-import com.google.devtools.build.lib.remote.common.SimpleBlobStore;
-import com.google.devtools.build.lib.remote.common.SimpleBlobStore.ActionKey;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.Utils;
@@ -80,14 +77,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
 
 /** A cache for storing artifacts (input and output) as well as the output of running an action. */
 @ThreadSafety.ThreadSafe
-public abstract class AbstractRemoteActionCache implements MissingDigestsFinder, AutoCloseable {
+public abstract class AbstractRemoteActionCache implements AutoCloseable {
 
   /** See {@link SpawnExecutionContext#lockOutputFiles()}. */
   @FunctionalInterface
@@ -119,11 +115,23 @@ public abstract class AbstractRemoteActionCache implements MissingDigestsFinder,
    * @throws IOException if the remote cache is unavailable.
    */
   @Nullable
-  abstract ActionResult getCachedActionResult(ActionKey actionKey)
+  abstract ActionResult getCachedActionResult(DigestUtil.ActionKey actionKey)
       throws IOException, InterruptedException;
 
-  protected abstract void setCachedActionResult(ActionKey actionKey, ActionResult action)
-      throws IOException, InterruptedException;
+  /**
+   * Upload the result of a locally executed action to the remote cache.
+   *
+   * @throws IOException if there was an error uploading to the remote cache
+   * @throws ExecException if uploading any of the action outputs is not supported
+   */
+  abstract void upload(
+      DigestUtil.ActionKey actionKey,
+      Action action,
+      Command command,
+      Path execRoot,
+      Collection<Path> files,
+      FileOutErr outErr)
+      throws ExecException, IOException, InterruptedException;
 
   /**
    * Uploads a file
@@ -146,113 +154,6 @@ public abstract class AbstractRemoteActionCache implements MissingDigestsFinder,
    * @param data the blob to upload.
    */
   protected abstract ListenableFuture<Void> uploadBlob(Digest digest, ByteString data);
-
-  /**
-   * Upload the result of a locally executed action to the remote cache.
-   *
-   * @throws IOException if there was an error uploading to the remote cache
-   * @throws ExecException if uploading any of the action outputs is not supported
-   */
-  public ActionResult upload(
-      ActionKey actionKey,
-      Action action,
-      Command command,
-      Path execRoot,
-      Collection<Path> outputs,
-      FileOutErr outErr,
-      int exitCode)
-      throws ExecException, IOException, InterruptedException {
-    ActionResult.Builder resultBuilder = ActionResult.newBuilder();
-    uploadOutputs(execRoot, actionKey, action, command, outputs, outErr, resultBuilder);
-    resultBuilder.setExitCode(exitCode);
-    ActionResult result = resultBuilder.build();
-    if (exitCode == 0 && !action.getDoNotCache()) {
-      setCachedActionResult(actionKey, result);
-    }
-    return result;
-  }
-
-  public ActionResult upload(
-      ActionKey actionKey,
-      Action action,
-      Command command,
-      Path execRoot,
-      Collection<Path> outputs,
-      FileOutErr outErr)
-      throws ExecException, IOException, InterruptedException {
-    return upload(actionKey, action, command, execRoot, outputs, outErr, /* exitCode= */ 0);
-  }
-
-  private void uploadOutputs(
-      Path execRoot,
-      ActionKey actionKey,
-      Action action,
-      Command command,
-      Collection<Path> files,
-      FileOutErr outErr,
-      ActionResult.Builder result)
-      throws ExecException, IOException, InterruptedException {
-    UploadManifest manifest =
-        new UploadManifest(
-            digestUtil,
-            result,
-            execRoot,
-            options.incompatibleRemoteSymlinks,
-            options.allowSymlinkUpload);
-    manifest.addFiles(files);
-    manifest.setStdoutStderr(outErr);
-    manifest.addAction(actionKey, action, command);
-
-    Map<Digest, Path> digestToFile = manifest.getDigestToFile();
-    Map<Digest, ByteString> digestToBlobs = manifest.getDigestToBlobs();
-    Collection<Digest> digests = new ArrayList<>();
-    digests.addAll(digestToFile.keySet());
-    digests.addAll(digestToBlobs.keySet());
-
-    ImmutableSet<Digest> digestsToUpload = Utils.getFromFuture(findMissingDigests(digests));
-    ImmutableList.Builder<ListenableFuture<Void>> uploads = ImmutableList.builder();
-    for (Digest digest : digestsToUpload) {
-      Path file = digestToFile.get(digest);
-      if (file != null) {
-        uploads.add(uploadFile(digest, file));
-      } else {
-        ByteString blob = digestToBlobs.get(digest);
-        if (blob == null) {
-          String message = "FindMissingBlobs call returned an unknown digest: " + digest;
-          throw new IOException(message);
-        }
-        uploads.add(uploadBlob(digest, blob));
-      }
-    }
-
-    waitForUploads(uploads.build());
-
-    if (manifest.getStderrDigest() != null) {
-      result.setStderrDigest(manifest.getStderrDigest());
-    }
-    if (manifest.getStdoutDigest() != null) {
-      result.setStdoutDigest(manifest.getStdoutDigest());
-    }
-  }
-
-  private static void waitForUploads(List<ListenableFuture<Void>> uploads)
-      throws IOException, InterruptedException {
-    try {
-      for (ListenableFuture<Void> upload : uploads) {
-        upload.get();
-      }
-    } catch (ExecutionException e) {
-      // TODO(buchgr): Add support for cancellation and factor this method out to be shared
-      // between ByteStreamUploader as well.
-      Throwable cause = e.getCause();
-      Throwables.throwIfInstanceOf(cause, IOException.class);
-      Throwables.throwIfInstanceOf(cause, InterruptedException.class);
-      if (cause != null) {
-        throw new IOException(cause);
-      }
-      throw new IOException(e);
-    }
-  }
 
   /**
    * Downloads a blob with a content hash {@code digest} to {@code out}.
@@ -852,7 +753,7 @@ public abstract class AbstractRemoteActionCache implements MissingDigestsFinder,
      * Adds an action and command protos to upload. They need to be uploaded as part of the action
      * result.
      */
-    public void addAction(SimpleBlobStore.ActionKey actionKey, Action action, Command command) {
+    public void addAction(DigestUtil.ActionKey actionKey, Action action, Command command) {
       digestToBlobs.put(actionKey.getDigest(), action.toByteString());
       digestToBlobs.put(action.getCommandDigest(), command.toByteString());
     }

@@ -24,7 +24,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import build.bazel.remote.execution.v2.Action;
 import build.bazel.remote.execution.v2.ActionResult;
+import build.bazel.remote.execution.v2.Command;
 import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Directory;
 import build.bazel.remote.execution.v2.DirectoryNode;
@@ -36,7 +38,6 @@ import build.bazel.remote.execution.v2.Tree;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -54,9 +55,9 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.clock.JavaClock;
 import com.google.devtools.build.lib.remote.AbstractRemoteActionCache.OutputFilesLocker;
 import com.google.devtools.build.lib.remote.AbstractRemoteActionCache.UploadManifest;
-import com.google.devtools.build.lib.remote.common.SimpleBlobStore.ActionKey;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
+import com.google.devtools.build.lib.remote.util.DigestUtil.ActionKey;
 import com.google.devtools.build.lib.remote.util.Utils;
 import com.google.devtools.build.lib.remote.util.Utils.InMemoryOutput;
 import com.google.devtools.build.lib.util.io.FileOutErr;
@@ -75,6 +76,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -1148,12 +1150,20 @@ public class AbstractRemoteActionCacheTests {
 
     @Nullable
     @Override
-    ActionResult getCachedActionResult(ActionKey actionKey) {
+    ActionResult getCachedActionResult(ActionKey actionKey)
+        throws IOException, InterruptedException {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    protected void setCachedActionResult(ActionKey actionKey, ActionResult action) {
+    void upload(
+        ActionKey actionKey,
+        Action action,
+        Command command,
+        Path execRoot,
+        Collection<Path> files,
+        FileOutErr outErr)
+        throws ExecException, IOException, InterruptedException {
       throw new UnsupportedOperationException();
     }
 
@@ -1164,11 +1174,6 @@ public class AbstractRemoteActionCacheTests {
 
     @Override
     protected ListenableFuture<Void> uploadBlob(Digest digest, ByteString data) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public ListenableFuture<ImmutableSet<Digest>> findMissingDigests(Iterable<Digest> digests) {
       throw new UnsupportedOperationException();
     }
 
