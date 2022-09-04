@@ -21,6 +21,7 @@ import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -44,7 +45,7 @@ public class FilesetManifestTest {
 
   @Before
   public final void createSpawnInputExpander() throws Exception  {
-    fs = new InMemoryFileSystem();
+    fs = new InMemoryFileSystem(DigestHashFunction.MD5);
     execRoot = fs.getPath("/root");
   }
 
@@ -273,10 +274,15 @@ public class FilesetManifestTest {
     ArtifactRoot outputRoot =
         ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
     Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
-    FilesetManifest filesetManifest =
-        FilesetManifest.parseManifestFile(artifact.getExecPath(), execRoot, "workspace", RESOLVE);
-    assertThat(filesetManifest.getEntries()).isEmpty();
-    assertThat(filesetManifest.getArtifactValues()).isEmpty();
+    try {
+      FilesetManifest.parseManifestFile(artifact.getExecPath(), execRoot, "workspace", RESOLVE);
+      fail();
+    } catch (IOException e) {
+      assertThat(e).hasMessageThat()
+          .isEqualTo(
+              "runfiles target 'foo' is a relative symlink, and could not be resolved within the "
+              +  "same Fileset");
+    }
   }
 
   @Test
@@ -292,10 +298,14 @@ public class FilesetManifestTest {
     ArtifactRoot outputRoot =
         ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
     Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
-    FilesetManifest manifest =
-        FilesetManifest.parseManifestFile(artifact.getExecPath(), execRoot, "workspace", RESOLVE);
-    assertThat(manifest.getEntries()).isEmpty();
-    assertThat(manifest.getArtifactValues()).isEmpty();
+    try {
+      FilesetManifest.parseManifestFile(artifact.getExecPath(), execRoot, "workspace", RESOLVE);
+      fail();
+    } catch (IOException e) {
+      assertThat(e).hasMessageThat()
+          .isEqualTo(
+              "runfiles target 'foo' is a relative symlink, and points to another symlink");
+    }
   }
 
   /** Current behavior is first one wins. */

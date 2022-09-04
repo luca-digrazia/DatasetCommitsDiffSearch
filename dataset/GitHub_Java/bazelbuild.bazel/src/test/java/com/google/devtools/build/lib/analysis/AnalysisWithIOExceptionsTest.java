@@ -13,10 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.analysis.util.AnalysisTestCase;
 import com.google.devtools.build.lib.clock.BlazeClock;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
@@ -36,14 +37,14 @@ public class AnalysisWithIOExceptionsTest extends AnalysisTestCase {
 
   @Override
   protected FileSystem createFileSystem() {
-    return new InMemoryFileSystem(BlazeClock.instance()) {
+    return new InMemoryFileSystem(BlazeClock.instance(), DigestHashFunction.MD5) {
       @Override
-      public FileStatus statIfFound(Path path, boolean followSymlinks) throws IOException {
+      public FileStatus stat(Path path, boolean followSymlinks) throws IOException {
         String crash = crashMessage.apply(path);
         if (crash != null) {
           throw new IOException(crash);
         }
-        return super.statIfFound(path, followSymlinks);
+        return super.stat(path, followSymlinks);
       }
     };
   }
@@ -54,6 +55,10 @@ public class AnalysisWithIOExceptionsTest extends AnalysisTestCase {
     scratch.file("a/BUILD", "sh_library(name = 'a', srcs = glob(['a.sh']))");
     crashMessage = path -> path.toString().contains("a.sh") ? "bork" : null;
     reporter.removeHandler(failFastHandler);
-    assertThrows(ViewCreationFailedException.class, () -> update("//b:b"));
+    try {
+      update("//b:b");
+      fail("Expected failure");
+    } catch (ViewCreationFailedException expected) {
+    }
   }
 }

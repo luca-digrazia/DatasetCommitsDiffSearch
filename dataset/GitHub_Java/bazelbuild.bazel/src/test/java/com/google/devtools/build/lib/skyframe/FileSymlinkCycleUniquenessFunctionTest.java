@@ -15,20 +15,24 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.testing.EqualsTester;
-import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-import junit.framework.TestCase;
+@RunWith(JUnit4.class)
+public class FileSymlinkCycleUniquenessFunctionTest {
 
-public class FileSymlinkCycleUniquenessFunctionTest extends TestCase {
-
+  @Test
   public void testHashCodeAndEqualsContract() throws Exception {
-    Path root = new InMemoryFileSystem().getRootDirectory().getRelative("root");
-    RootedPath p1 = RootedPath.toRootedPath(root, new PathFragment("p1"));
-    RootedPath p2 = RootedPath.toRootedPath(root, new PathFragment("p2"));
-    RootedPath p3 = RootedPath.toRootedPath(root, new PathFragment("p3"));
+    Root root = Root.fromPath(new InMemoryFileSystem(DigestHashFunction.MD5).getPath("/root"));
+    RootedPath p1 = RootedPath.toRootedPath(root, PathFragment.create("p1"));
+    RootedPath p2 = RootedPath.toRootedPath(root, PathFragment.create("p2"));
+    RootedPath p3 = RootedPath.toRootedPath(root, PathFragment.create("p3"));
     ImmutableList<RootedPath> cycleA1 = ImmutableList.of(p1);
     ImmutableList<RootedPath> cycleB1 = ImmutableList.of(p2);
     ImmutableList<RootedPath> cycleC1 = ImmutableList.of(p1, p2, p3);

@@ -33,7 +33,6 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.testutil.BlazeTestUtils;
 import com.google.devtools.build.lib.testutil.ManualClock;
-import com.google.devtools.build.lib.vfs.FileSystemUtils.MoveResult;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -57,7 +56,7 @@ public class FileSystemUtilsTest {
   @Before
   public final void initializeFileSystem() throws Exception  {
     clock = new ManualClock();
-    fileSystem = new InMemoryFileSystem(clock);
+    fileSystem = new InMemoryFileSystem(clock, DigestHashFunction.MD5);
     workingDir = fileSystem.getPath("/workingDir");
     workingDir.createDirectory();
   }
@@ -364,7 +363,7 @@ public class FileSystemUtilsTest {
 
     Path moveTarget = file2;
 
-    assertThat(moveFile(originalFile, moveTarget)).isEqualTo(MoveResult.FILE_MOVED);
+    moveFile(originalFile, moveTarget);
 
     assertThat(FileSystemUtils.readContent(moveTarget)).isEqualTo(content);
     assertThat(originalFile.exists()).isFalse();
@@ -373,6 +372,11 @@ public class FileSystemUtilsTest {
   @Test
   public void testMoveFileAcrossDevices() throws Exception {
     class MultipleDeviceFS extends InMemoryFileSystem {
+
+      MultipleDeviceFS() {
+        super(DigestHashFunction.MD5);
+      }
+
       @Override
       public void renameTo(Path source, Path target) throws IOException {
         if (!source.startsWith(target.asFragment().subFragment(0, 1))) {
@@ -391,14 +395,14 @@ public class FileSystemUtilsTest {
 
     FileSystemUtils.writeContent(source, UTF_8, "hello, world");
     source.setLastModifiedTime(142);
-    assertThat(FileSystemUtils.moveFile(source, target)).isEqualTo(MoveResult.FILE_COPIED);
+    FileSystemUtils.moveFile(source, target);
     assertThat(source.exists(Symlinks.NOFOLLOW)).isFalse();
     assertThat(target.isFile(Symlinks.NOFOLLOW)).isTrue();
     assertThat(FileSystemUtils.readContent(target, UTF_8)).isEqualTo("hello, world");
     assertThat(target.getLastModifiedTime()).isEqualTo(142);
 
     source.createSymbolicLink(PathFragment.create("link-target"));
-    assertThat(FileSystemUtils.moveFile(source, target)).isEqualTo(MoveResult.FILE_COPIED);
+    FileSystemUtils.moveFile(source, target);
     assertThat(source.exists(Symlinks.NOFOLLOW)).isFalse();
     assertThat(target.isSymbolicLink()).isTrue();
     assertThat(target.readSymbolicLink()).isEqualTo(PathFragment.create("link-target"));

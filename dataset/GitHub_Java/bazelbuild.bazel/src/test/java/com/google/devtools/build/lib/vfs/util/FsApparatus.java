@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.vfs.util;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.StringUtilities;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -59,7 +60,7 @@ public class FsApparatus {
     Path wd = fs.getPath(TMP_DIR);
 
     try {
-      wd.deleteTree();
+      FileSystemUtils.deleteTree(wd);
     } catch (IOException e) {
       throw new AssertionError(e.getMessage());
     }
@@ -68,7 +69,7 @@ public class FsApparatus {
   }
 
   private FsApparatus() {
-    fileSystem = new InMemoryFileSystem(BlazeClock.instance());
+    fileSystem = new InMemoryFileSystem(BlazeClock.instance(), DigestHashFunction.MD5);
     workingDir = fileSystem.getPath("/");
   }
 

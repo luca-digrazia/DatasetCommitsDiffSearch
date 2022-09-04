@@ -16,15 +16,14 @@ package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.Lists;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
-import com.google.devtools.build.lib.syntax.BuildFileAST;
-import com.google.devtools.build.lib.syntax.LoadStatement;
-import com.google.devtools.build.lib.syntax.Statement;
+import com.google.devtools.build.lib.syntax.SkylarkImport;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
@@ -33,7 +32,6 @@ import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
 import java.io.IOException;
-import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -47,13 +45,17 @@ public class ASTFileLookupFunctionTest extends BuildViewTestCase {
   private class MockFileSystem extends InMemoryFileSystem {
     boolean statThrowsIoException;
 
+    private MockFileSystem() {
+      super(DigestHashFunction.MD5);
+    }
+
     @Override
-    public FileStatus statIfFound(Path path, boolean followSymlinks) throws IOException {
+    public FileStatus stat(Path path, boolean followSymlinks) throws IOException {
       if (statThrowsIoException
           && path.asFragment().getPathString().equals("/workspace/" + preludeLabelRelativePath)) {
         throw new IOException("bork");
       }
-      return super.statIfFound(path, followSymlinks);
+      return super.stat(path, followSymlinks);
     }
   }
 
@@ -124,8 +126,9 @@ public class ASTFileLookupFunctionTest extends BuildViewTestCase {
     EvaluationResult<ASTFileLookupValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), skyKey, /*keepGoing=*/ false, reporter);
-    List<String> loads = getLoads(result.get(skyKey).getAST());
-    assertThat(loads).containsExactly(":ext.bzl");
+    ImmutableList<SkylarkImport> imports = result.get(skyKey).getAST().getImports();
+    assertThat(imports).hasSize(1);
+    assertThat(imports.get(0).getImportString()).isEqualTo(":ext.bzl");
   }
 
   @Test
@@ -149,18 +152,9 @@ public class ASTFileLookupFunctionTest extends BuildViewTestCase {
     EvaluationResult<ASTFileLookupValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), skyKey, /*keepGoing=*/ false, reporter);
-    List<String> loads = getLoads(result.get(skyKey).getAST());
-    assertThat(loads).containsExactly(":ext2.bzl");
-  }
-
-  private static List<String> getLoads(BuildFileAST file) {
-    List<String> loads = Lists.newArrayList();
-    for (Statement stmt : file.getStatements()) {
-      if (stmt instanceof LoadStatement) {
-        loads.add(((LoadStatement) stmt).getImport().getValue());
-      }
-    }
-    return loads;
+    ImmutableList<SkylarkImport> imports = result.get(skyKey).getAST().getImports();
+    assertThat(imports).hasSize(1);
+    assertThat(imports.get(0).getImportString()).isEqualTo(":ext2.bzl");
   }
 
   @Test
@@ -175,6 +169,6 @@ public class ASTFileLookupFunctionTest extends BuildViewTestCase {
     assertThat(result.get(skyKey).getErrorMsg())
     .contains("Unable to load package for '@a_remote_repo//remote_pkg:BUILD'");
     assertThat(result.get(skyKey).getErrorMsg())
-        .contains("The repository '@a_remote_repo' could not be resolved");
+        .contains("The repository could not be resolved");
   }
 }

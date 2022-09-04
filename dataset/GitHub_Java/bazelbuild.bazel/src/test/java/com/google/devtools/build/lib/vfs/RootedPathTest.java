@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs;
 
-import static com.google.common.truth.Truth.assertThat;
-
 import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
@@ -33,12 +31,12 @@ public class RootedPathTest {
 
   @Before
   public final void initializeFileSystem() throws Exception  {
-    filesystem = new InMemoryFileSystem(BlazeClock.instance());
+    filesystem = new InMemoryFileSystem(BlazeClock.instance(), DigestHashFunction.MD5);
     root = filesystem.getPath("/");
   }
 
   @Test
-  public void testEqualsAndHashCodeContract() {
+  public void testEqualsAndHashCodeContract() throws Exception {
     Path pkgRoot1 = root.getRelative("pkgroot1");
     Path pkgRoot2 = root.getRelative("pkgroot2");
     RootedPath rootedPathA1 =
@@ -54,38 +52,10 @@ public class RootedPathTest {
     RootedPath absolutePath2 =
         RootedPath.toRootedPath(Root.fromPath(root), PathFragment.create("pkgroot2/foo/bar"));
     new EqualsTester()
-        .addEqualityGroup(rootedPathA1, rootedPathA2)
-        .addEqualityGroup(rootedPathB1, rootedPathB2)
-        .addEqualityGroup(absolutePath1)
-        .addEqualityGroup(absolutePath2)
-        .testEquals();
-  }
-
-  @Test
-  public void testGetParentDirectory() {
-    RootedPath path = createRootedPath("root/folder", "folder1/folder2");
-
-    RootedPath parent = path.getParentDirectory();
-    assertThat(parent).isNotNull();
-    assertThat(parent.asPath().getPathString()).isEqualTo("/root/folder/folder1");
-    assertThat(parent.getRootRelativePath().getPathString()).isEqualTo("folder1");
-
-    parent = parent.getParentDirectory();
-    assertThat(parent).isNotNull();
-    assertThat(parent.asPath().getPathString()).isEqualTo("/root/folder");
-    assertThat(parent.getRootRelativePath().getPathString()).isEmpty();
-
-    assertThat(parent.getParentDirectory()).isNull();
-  }
-
-  @Test
-  public void testGetParentDirectoryOfRoot() {
-    RootedPath path = createRootedPath("root", "");
-    assertThat(path.getParentDirectory()).isNull();
-  }
-
-  private RootedPath createRootedPath(String relativeRootPath, String relativePath) {
-    return RootedPath.toRootedPath(
-        Root.fromPath(root.getRelative(relativeRootPath)), PathFragment.create(relativePath));
+      .addEqualityGroup(rootedPathA1, rootedPathA2)
+      .addEqualityGroup(rootedPathB1, rootedPathB2)
+      .addEqualityGroup(absolutePath1)
+      .addEqualityGroup(absolutePath2)
+      .testEquals();
   }
 }

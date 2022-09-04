@@ -21,10 +21,7 @@ import java.io.OutputStream;
  */
 public abstract class ReadonlyFileSystemWithCustomStat extends AbstractFileSystemWithCustomStat {
 
-  protected ReadonlyFileSystemWithCustomStat() {
-  }
-
-  public ReadonlyFileSystemWithCustomStat(DigestHashFunction hashFunction) {
+  protected ReadonlyFileSystemWithCustomStat(DigestHashFunction hashFunction) {
     super(hashFunction);
   }
 

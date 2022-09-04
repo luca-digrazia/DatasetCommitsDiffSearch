@@ -13,10 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.analysis.util.AnalysisTestCase;
 import com.google.devtools.build.lib.clock.BlazeClock;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
@@ -38,7 +39,7 @@ public class InterruptedExceptionTest extends AnalysisTestCase {
 
   @Override
   protected FileSystem createFileSystem() {
-    return new InMemoryFileSystem(BlazeClock.instance()) {
+    return new InMemoryFileSystem(BlazeClock.instance(), DigestHashFunction.MD5) {
       @Override
       protected Collection<Dirent> readdir(Path path, boolean followSymlinks) throws IOException {
         if (path.toString().contains("causes_interrupt")) {
@@ -56,7 +57,11 @@ public class InterruptedExceptionTest extends AnalysisTestCase {
     scratch.file("a/causes_interrupt/bar.sh", "testfile");
     reporter.removeHandler(failFastHandler);
 
-    assertThrows(InterruptedException.class, () -> update("//a:a"));
+    try {
+      update("//a:a");
+      fail("Expected interrupted exception");
+    } catch (InterruptedException expected) {
+    }
   }
 
   @Test
@@ -72,6 +77,10 @@ public class InterruptedExceptionTest extends AnalysisTestCase {
     scratch.file("a/causes_interrupt/bar.sh", "testfile");
     reporter.removeHandler(failFastHandler);
 
-    assertThrows(InterruptedException.class, () -> update("//a:a"));
+    try {
+      update("//a:a");
+      fail("Expected interrupted exception");
+    } catch (InterruptedException expected) {
+    }
   }
 }

@@ -17,6 +17,8 @@ package com.google.devtools.build.lib.rules.cpp;
 import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.google.devtools.build.lib.util.io.FileOutErr;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import java.io.ByteArrayOutputStream;
@@ -35,13 +37,14 @@ public class ShowIncludesFilterTest {
   private ByteArrayOutputStream output;
   private FilterOutputStream filterOutputStream;
   private FileSystem fs;
+  private FileOutErr outErr;
 
   @Before
   public void setUpOutputStreams() throws IOException {
     showIncludesFilter = new ShowIncludesFilter("foo.cpp");
     output = new ByteArrayOutputStream();
     filterOutputStream = showIncludesFilter.getFilteredOutputStream(output);
-    fs = new InMemoryFileSystem();
+    fs = new InMemoryFileSystem(DigestHashFunction.MD5);
     fs.getPath("/out").createDirectory();
   }
 
@@ -109,5 +112,18 @@ public class ShowIncludesFilterTest {
     filterOutputStream.write(getBytes(".h"));
     filterOutputStream.flush();
     assertThat(output.toString()).isEqualTo("foo.h");
+  }
+
+  @Test
+  public void testOnFileOutErr() throws IOException {
+    outErr = new FileOutErr(fs.getPath("/out/stdout"), fs.getPath("/out/stderr"));
+    ShowIncludesFilter showIncludesFilterForStdout = new ShowIncludesFilter("foo.cpp");
+    ShowIncludesFilter showIncludesFilterForStderr = new ShowIncludesFilter("foo.cpp");
+    outErr.setOutputFilter(showIncludesFilterForStdout);
+    outErr.setErrorFilter(showIncludesFilterForStderr);
+    outErr.getOutputStream().write(getBytes("Note: including file: bar1.h\n"));
+    outErr.getErrorStream().write(getBytes("Note: including file: bar2.h\n"));
+    assertThat(showIncludesFilterForStdout.getDependencies()).contains("bar1.h");
+    assertThat(showIncludesFilterForStderr.getDependencies()).contains("bar2.h");
   }
 }

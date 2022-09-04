@@ -25,7 +25,6 @@ import static org.mockito.Mockito.when;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.FutureSpawn;
 import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnResult;
@@ -41,6 +40,7 @@ import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.util.io.MessageOutputStream;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.Root;
@@ -66,7 +66,7 @@ public class AbstractSpawnStrategyTest {
   private static final Spawn SIMPLE_SPAWN =
       new SpawnBuilder("/bin/echo", "Hi!").withEnvironment("VARIABLE", "value").build();
 
-  private final FileSystem fs = new InMemoryFileSystem();
+  private final FileSystem fs = new InMemoryFileSystem(DigestHashFunction.MD5);
   private final Path execRoot = fs.getPath("/execroot");
   private Scratch scratch;
   private ArtifactRoot rootDir;
@@ -87,8 +87,8 @@ public class AbstractSpawnStrategyTest {
     when(actionExecutionContext.getExecRoot()).thenReturn(execRoot);
     SpawnResult spawnResult =
         new SpawnResult.Builder().setStatus(Status.SUCCESS).setRunnerName("test").build();
-    when(spawnRunner.execAsync(any(Spawn.class), any(SpawnExecutionContext.class)))
-        .thenReturn(FutureSpawn.immediate(spawnResult));
+    when(spawnRunner.exec(any(Spawn.class), any(SpawnExecutionContext.class)))
+        .thenReturn(spawnResult);
 
     List<SpawnResult> spawnResults =
         new TestedSpawnStrategy(execRoot, spawnRunner).exec(SIMPLE_SPAWN, actionExecutionContext);
@@ -96,7 +96,7 @@ public class AbstractSpawnStrategyTest {
     assertThat(spawnResults).containsExactly(spawnResult);
 
     // Must only be called exactly once.
-    verify(spawnRunner).execAsync(any(Spawn.class), any(SpawnExecutionContext.class));
+    verify(spawnRunner).exec(any(Spawn.class), any(SpawnExecutionContext.class));
   }
 
   @Test
@@ -109,8 +109,7 @@ public class AbstractSpawnStrategyTest {
             .setExitCode(1)
             .setRunnerName("test")
             .build();
-    when(spawnRunner.execAsync(any(Spawn.class), any(SpawnExecutionContext.class)))
-        .thenReturn(FutureSpawn.immediate(result));
+    when(spawnRunner.exec(any(Spawn.class), any(SpawnExecutionContext.class))).thenReturn(result);
 
     try {
       // Ignoring the List<SpawnResult> return value.
@@ -120,7 +119,7 @@ public class AbstractSpawnStrategyTest {
       assertThat(e.getSpawnResult()).isSameAs(result);
     }
     // Must only be called exactly once.
-    verify(spawnRunner).execAsync(any(Spawn.class), any(SpawnExecutionContext.class));
+    verify(spawnRunner).exec(any(Spawn.class), any(SpawnExecutionContext.class));
   }
 
   @Test
@@ -136,7 +135,7 @@ public class AbstractSpawnStrategyTest {
     List<SpawnResult> spawnResults =
         new TestedSpawnStrategy(execRoot, spawnRunner).exec(SIMPLE_SPAWN, actionExecutionContext);
     assertThat(spawnResults).containsExactly(spawnResult);
-    verify(spawnRunner, never()).execAsync(any(Spawn.class), any(SpawnExecutionContext.class));
+    verify(spawnRunner, never()).exec(any(Spawn.class), any(SpawnExecutionContext.class));
   }
 
   @SuppressWarnings("unchecked")
@@ -152,8 +151,8 @@ public class AbstractSpawnStrategyTest {
     when(actionExecutionContext.getExecRoot()).thenReturn(execRoot);
     SpawnResult spawnResult =
         new SpawnResult.Builder().setStatus(Status.SUCCESS).setRunnerName("test").build();
-    when(spawnRunner.execAsync(any(Spawn.class), any(SpawnExecutionContext.class)))
-        .thenReturn(FutureSpawn.immediate(spawnResult));
+    when(spawnRunner.exec(any(Spawn.class), any(SpawnExecutionContext.class)))
+        .thenReturn(spawnResult);
 
     List<SpawnResult> spawnResults =
         new TestedSpawnStrategy(execRoot, spawnRunner).exec(SIMPLE_SPAWN, actionExecutionContext);
@@ -161,7 +160,7 @@ public class AbstractSpawnStrategyTest {
     assertThat(spawnResults).containsExactly(spawnResult);
 
     // Must only be called exactly once.
-    verify(spawnRunner).execAsync(any(Spawn.class), any(SpawnExecutionContext.class));
+    verify(spawnRunner).exec(any(Spawn.class), any(SpawnExecutionContext.class));
     verify(entry).store(eq(spawnResult));
   }
 
@@ -182,8 +181,7 @@ public class AbstractSpawnStrategyTest {
             .setExitCode(1)
             .setRunnerName("test")
             .build();
-    when(spawnRunner.execAsync(any(Spawn.class), any(SpawnExecutionContext.class)))
-        .thenReturn(FutureSpawn.immediate(result));
+    when(spawnRunner.exec(any(Spawn.class), any(SpawnExecutionContext.class))).thenReturn(result);
 
     try {
       // Ignoring the List<SpawnResult> return value.
@@ -193,7 +191,7 @@ public class AbstractSpawnStrategyTest {
       assertThat(e.getSpawnResult()).isSameAs(result);
     }
     // Must only be called exactly once.
-    verify(spawnRunner).execAsync(any(Spawn.class), any(SpawnExecutionContext.class));
+    verify(spawnRunner).exec(any(Spawn.class), any(SpawnExecutionContext.class));
     verify(entry).store(eq(result));
   }
 
@@ -203,14 +201,13 @@ public class AbstractSpawnStrategyTest {
     when(actionExecutionContext.getExecRoot()).thenReturn(execRoot);
     when(actionExecutionContext.getContext(eq(SpawnLogContext.class)))
         .thenReturn(new SpawnLogContext(execRoot, messageOutput));
-    when(spawnRunner.execAsync(any(Spawn.class), any(SpawnExecutionContext.class)))
+    when(spawnRunner.exec(any(Spawn.class), any(SpawnExecutionContext.class)))
         .thenReturn(
-            FutureSpawn.immediate(
-                new SpawnResult.Builder()
-                    .setStatus(Status.NON_ZERO_EXIT)
-                    .setExitCode(23)
-                    .setRunnerName("runner")
-                    .build()));
+            new SpawnResult.Builder()
+                .setStatus(Status.NON_ZERO_EXIT)
+                .setExitCode(23)
+                .setRunnerName("runner")
+                .build());
     when(actionExecutionContext.getMetadataProvider()).thenReturn(mock(MetadataProvider.class));
 
     Artifact input = new Artifact(scratch.file("/execroot/foo", "1"), rootDir);

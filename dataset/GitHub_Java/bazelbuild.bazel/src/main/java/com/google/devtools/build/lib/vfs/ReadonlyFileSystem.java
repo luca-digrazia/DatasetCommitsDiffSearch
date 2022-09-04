@@ -36,11 +36,8 @@ import java.io.OutputStream;
  */
 public abstract class ReadonlyFileSystem extends AbstractFileSystem {
 
-  protected ReadonlyFileSystem() {
-  }
-
-  public ReadonlyFileSystem(DigestHashFunction digestFunction) {
-    super(digestFunction);
+  protected ReadonlyFileSystem(DigestHashFunction hashFunction) {
+    super(hashFunction);
   }
 
   protected IOException modificationException() {

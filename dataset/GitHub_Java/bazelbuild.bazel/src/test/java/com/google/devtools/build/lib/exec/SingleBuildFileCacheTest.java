@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.exec;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.actions.ActionInput;
@@ -57,7 +57,7 @@ public class SingleBuildFileCacheTest {
     calls = new HashMap<>();
     md5Overrides = new HashMap<>();
     fs =
-        new InMemoryFileSystem() {
+        new InMemoryFileSystem(DigestHashFunction.MD5) {
           @Override
           protected InputStream getInputStream(Path path) throws IOException {
             int c = calls.containsKey(path.toString()) ? calls.get(path.toString()) : 0;
@@ -85,10 +85,11 @@ public class SingleBuildFileCacheTest {
   @Test
   public void testNonExistentPath() throws Exception {
     ActionInput empty = ActionInputHelper.fromPath("/noexist");
-    assertThrows(
-        "non existent file should raise exception",
-        IOException.class,
-        () -> underTest.getMetadata(empty));
+    try {
+      underTest.getMetadata(empty);
+      fail("non existent file should raise exception");
+    } catch (IOException expected) {
+    }
   }
 
   @Test
@@ -96,12 +97,12 @@ public class SingleBuildFileCacheTest {
     Path file = fs.getPath("/directory");
     file.createDirectory();
     ActionInput input = ActionInputHelper.fromPath(file.getPathString());
-    DigestOfDirectoryException expected =
-        assertThrows(
-            "directory should raise exception",
-            DigestOfDirectoryException.class,
-            () -> underTest.getMetadata(input));
-    assertThat(expected).hasMessageThat().isEqualTo("Input is a directory: /directory");
+    try {
+      underTest.getMetadata(input);
+      fail("directory should raise exception");
+    } catch (DigestOfDirectoryException expected) {
+      assertThat(expected).hasMessageThat().isEqualTo("Input is a directory: /directory");
+    }
   }
 
   @Test

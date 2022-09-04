@@ -15,19 +15,19 @@
 package com.google.devtools.build.lib.exec;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.shell.Command;
+import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
+import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.ActionInputHelper;
+import com.google.devtools.build.lib.actions.ExecutionRequirements;
+import com.google.devtools.build.lib.actions.Spawn;
+import com.google.devtools.build.lib.exec.util.FakeOwner;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.util.Map;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -35,71 +35,36 @@ import org.junit.runners.JUnit4;
 /** Unit tests for {@link SymlinkTreeHelper}. */
 @RunWith(JUnit4.class)
 public final class SymlinkTreeHelperTest {
-  private final FileSystem fs = new InMemoryFileSystem();
+  private final FileSystem fs = new InMemoryFileSystem(DigestHashFunction.MD5);
 
   @Test
   public void checkCreatedSpawn() {
+    ActionExecutionMetadata owner = new FakeOwner("SymlinkTree", "Creating it");
     Path execRoot = fs.getPath("/my/workspace");
     Path inputManifestPath = execRoot.getRelative("input_manifest");
+    ActionInput inputManifest = ActionInputHelper.fromPath(inputManifestPath.asFragment());
     BinTools binTools =
         BinTools.forUnitTesting(execRoot, ImmutableList.of(SymlinkTreeHelper.BUILD_RUNFILES));
-    Command command =
-        new SymlinkTreeHelper(inputManifestPath, execRoot.getRelative("output/MANIFEST"), false)
-            .createCommand(execRoot, binTools, ImmutableMap.of());
-    assertThat(command.getEnvironmentVariables()).isEmpty();
-    assertThat(command.getWorkingDirectory()).isEqualTo(execRoot.getPathFile());
-    String[] commandLine = command.getCommandLineElements();
-    assertThat(commandLine).hasLength(3);
-    assertThat(commandLine[0]).endsWith(SymlinkTreeHelper.BUILD_RUNFILES);
-    assertThat(commandLine[1]).isEqualTo("input_manifest");
-    assertThat(commandLine[2]).isEqualTo("output/MANIFEST");
-  }
-
-  @Test
-  public void readManifest() throws Exception {
-    Path execRoot = fs.getPath("/my/workspace");
-    execRoot.createDirectoryAndParents();
-    Path inputManifestPath = execRoot.getRelative("input_manifest");
-    FileSystemUtils.writeContentAsLatin1(inputManifestPath, "from to\nmetadata");
-    Map<PathFragment, PathFragment> symlinks =
-        SymlinkTreeHelper.readSymlinksFromFilesetManifest(inputManifestPath);
-    assertThat(symlinks).containsExactly(PathFragment.create("from"), PathFragment.create("to"));
-  }
-
-  @Test
-  public void readMultilineManifest() throws Exception {
-    Path execRoot = fs.getPath("/my/workspace");
-    execRoot.createDirectoryAndParents();
-    Path inputManifestPath = execRoot.getRelative("input_manifest");
-    FileSystemUtils.writeContentAsLatin1(
-        inputManifestPath, "from to\nmetadata\n/foo /bar\nmetadata");
-    Map<PathFragment, PathFragment> symlinks =
-        SymlinkTreeHelper.readSymlinksFromFilesetManifest(inputManifestPath);
-    assertThat(symlinks)
-        .containsExactly(
-            PathFragment.create("from"),
-            PathFragment.create("to"),
-            PathFragment.create("/foo"),
-            PathFragment.create("/bar"));
-  }
-
-  @Test
-  public void readCorruptManifest() throws Exception {
-    Path execRoot = fs.getPath("/my/workspace");
-    execRoot.createDirectoryAndParents();
-    Path inputManifestPath = execRoot.getRelative("input_manifest");
-    FileSystemUtils.writeContentAsLatin1(inputManifestPath, "from to");
-    assertThrows(
-        IOException.class,
-        () -> SymlinkTreeHelper.readSymlinksFromFilesetManifest(inputManifestPath));
-  }
-
-  @Test
-  public void readNonExistentManifestFails() {
-    Path execRoot = fs.getPath("/my/workspace");
-    Path inputManifestPath = execRoot.getRelative("input_manifest");
-    assertThrows(
-        FileNotFoundException.class,
-        () -> SymlinkTreeHelper.readSymlinksFromFilesetManifest(inputManifestPath));
+    Spawn spawn =
+        new SymlinkTreeHelper(
+            inputManifestPath,
+            fs.getPath("/my/workspace/output/MANIFEST"),
+            false)
+        .createSpawn(
+            owner,
+            execRoot,
+            binTools,
+            ImmutableMap.of(),
+            inputManifest);
+    assertThat(spawn.getResourceOwner()).isSameAs(owner);
+    assertThat(spawn.getEnvironment()).isEmpty();
+    assertThat(spawn.getExecutionInfo()).containsExactly(
+        ExecutionRequirements.LOCAL, "",
+        ExecutionRequirements.NO_CACHE, "",
+        ExecutionRequirements.NO_SANDBOX, "");
+    assertThat(spawn.getInputFiles())
+        .containsExactly(inputManifest, binTools.getActionInput(SymlinkTreeHelper.BUILD_RUNFILES));
+    // At this time, the spawn does not declare any output files.
+    assertThat(spawn.getOutputFiles()).isEmpty();
   }
 }

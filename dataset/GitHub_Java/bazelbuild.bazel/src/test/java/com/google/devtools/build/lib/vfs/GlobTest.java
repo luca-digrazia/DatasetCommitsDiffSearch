@@ -37,7 +37,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -52,27 +51,19 @@ public class GlobTest {
   private Path tmpPath;
   private FileSystem fs;
   private Path throwOnReaddir = null;
-  private Path throwOnStat = null;
 
   @Before
   public final void initializeFileSystem() throws Exception  {
-    fs = new InMemoryFileSystem() {
-      @Override
-      public Collection<Dirent> readdir(Path path, boolean followSymlinks) throws IOException {
-        if (path.equals(throwOnReaddir)) {
-          throw new FileNotFoundException(path.getPathString());
-        }
-        return super.readdir(path, followSymlinks);
-      }
-
-      @Override
-      public FileStatus statIfFound(Path path, boolean followSymlinks) throws IOException {
-        if (path.equals(throwOnStat)) {
-          throw new FileNotFoundException(path.getPathString());
-        }
-        return super.statIfFound(path, followSymlinks);
-      }
-    };
+    fs =
+        new InMemoryFileSystem(DigestHashFunction.MD5) {
+          @Override
+          public Collection<Dirent> readdir(Path path, boolean followSymlinks) throws IOException {
+            if (path.equals(throwOnReaddir)) {
+              throw new FileNotFoundException(path.getPathString());
+            }
+            return super.readdir(path, followSymlinks);
+          }
+        };
     tmpPath = fs.getPath("/globtmp");
     for (String dir : ImmutableList.of("foo/bar/wiz",
                          "foo/barnacle/wiz",
@@ -81,11 +72,6 @@ public class GlobTest {
       FileSystemUtils.createDirectoryAndParents(tmpPath.getRelative(dir));
     }
     FileSystemUtils.createEmptyFile(tmpPath.getRelative("foo/bar/wiz/file"));
-  }
-
-  @After
-  public void resetInteruppt() {
-    Thread.interrupted();
   }
 
   @Test
@@ -343,18 +329,6 @@ public class GlobTest {
   }
 
   @Test
-  public void testFastFailureithInterrupt() throws Exception {
-    Thread.currentThread().interrupt();
-    throwOnStat = tmpPath;
-    try {
-      new UnixGlob.Builder(tmpPath).glob();
-      fail();
-    } catch (FileNotFoundException e) {
-      assertThat(e).hasMessageThat().contains("globtmp");
-    }
-  }
-
-  @Test
   public void testCheckCanBeInterrupted() throws Exception {
     final Thread mainThread = Thread.currentThread();
     final ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(10);
@@ -375,7 +349,7 @@ public class GlobTest {
               .addPattern("**")
               .setDirectoryFilter(interrupterPredicate)
               .setThreadPool(executor)
-              .globAsync();
+              .globAsync(true);
       globResult.get();
       fail(); // Should have received InterruptedException
     } catch (InterruptedException e) {

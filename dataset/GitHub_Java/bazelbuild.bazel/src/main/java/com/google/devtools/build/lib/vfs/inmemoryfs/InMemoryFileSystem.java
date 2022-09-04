@@ -59,11 +59,17 @@ public class InMemoryFileSystem extends FileSystem {
   // Maximum number of traversals before ELOOP is thrown.
   private static final int MAX_TRAVERSALS = 256;
 
+  // TODO(b/109764197): Remove the no-arg constructor from Jadep and then remove it here.
+  @VisibleForTesting
+  public InMemoryFileSystem() {
+    this(new JavaClock(), DigestHashFunction.MD5);
+  }
+
   /**
    * Creates a new InMemoryFileSystem with scope checking disabled (all paths are considered to be
    * within scope) and a default clock.
    *
-   * @param hashFunction the function to use for calculating digests.
+   * @param hashFunction
    */
   public InMemoryFileSystem(DigestHashFunction hashFunction) {
     this(new JavaClock(), hashFunction);
@@ -81,30 +87,11 @@ public class InMemoryFileSystem extends FileSystem {
   }
 
   /**
-   * Creates a new InMemoryFileSystem with scope checking disabled (all paths are considered to be
-   * within scope) and a default clock.
-   */
-  @VisibleForTesting
-  public InMemoryFileSystem() {
-    this(new JavaClock());
-  }
-
-  /**
-   * Creates a new InMemoryFileSystem with scope checking disabled (all
-   * paths are considered to be within scope).
-   */
-  @VisibleForTesting
-  public InMemoryFileSystem(Clock clock) {
-    this(clock, (PathFragment) null);
-  }
-
-  /**
    * Creates a new InMemoryFileSystem with scope checking bound to scopeRoot, i.e. any path that's
    * not below scopeRoot is considered to be out of scope.
    */
-  @VisibleForTesting
-  public InMemoryFileSystem(Clock clock, PathFragment scopeRoot) {
-    super(DigestHashFunction.DEFAULT_HASH_FOR_TESTS);
+  public InMemoryFileSystem(Clock clock, PathFragment scopeRoot, DigestHashFunction hashFunction) {
+    super(hashFunction);
     this.scopeRoot = scopeRoot;
     this.clock = clock;
     this.rootInode = newRootInode(clock);

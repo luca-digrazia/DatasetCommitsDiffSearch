@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
@@ -111,7 +112,7 @@ public class TargetMarkerFunctionTest extends BuildViewTestCase {
     String expectedMessage =
         "no such package 'no/such/package': BUILD file not found on "
             + "package path for 'no/such/package'";
-    assertThat(exn).hasMessageThat().isEqualTo(expectedMessage);
+    assertThat(exn).hasMessage(expectedMessage);
   }
 
   @Test
@@ -145,7 +146,7 @@ public class TargetMarkerFunctionTest extends BuildViewTestCase {
     private Map<Path, IOException> stubbedStatExceptions = Maps.newHashMap();
 
     public CustomInMemoryFs() {
-      super(BlazeClock.instance());
+      super(BlazeClock.instance(), DigestHashFunction.MD5);
     }
 
     public void stubStatIOException(Path path, IOException stubbedResult) {
@@ -153,11 +154,11 @@ public class TargetMarkerFunctionTest extends BuildViewTestCase {
     }
 
     @Override
-    public FileStatus statIfFound(Path path, boolean followSymlinks) throws IOException {
+    public FileStatus stat(Path path, boolean followSymlinks) throws IOException {
       if (stubbedStatExceptions.containsKey(path)) {
         throw stubbedStatExceptions.get(path);
       }
-      return super.statIfFound(path, followSymlinks);
+      return super.stat(path, followSymlinks);
     }
   }
 }

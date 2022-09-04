@@ -21,12 +21,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
+import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
@@ -38,10 +38,28 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class HeaderDiscoveryTest {
 
-  private final FileSystem fs = new InMemoryFileSystem();
+  private final FileSystem fs = new InMemoryFileSystem(DigestHashFunction.MD5);
   private final Path execRoot = fs.getPath("/execroot");
   private final Path derivedRoot = execRoot.getRelative("derived");
   private final ArtifactRoot artifactRoot = ArtifactRoot.asDerivedRoot(execRoot, derivedRoot);
+
+  /**
+   * Test that an included header is satisfied (=doesn't cause an error) if it provided by a tree
+   * artifact.
+   */
+  @Test
+  public void treeArtifactInclusionCheck() throws Exception {
+    ArtifactResolver artifactResolver = mock(ArtifactResolver.class);
+
+    checkHeaderInclusion(
+        artifactResolver,
+        ImmutableList.of(
+            derivedRoot.getRelative("tree_artifact/foo.h"),
+            derivedRoot.getRelative("tree_artifact/subdir/foo.h")),
+        ImmutableList.of(treeArtifact(derivedRoot.getRelative("tree_artifact"))));
+
+    // Implicitly check that there are no exceptions thrown.
+  }
 
   @Test
   public void errorsWhenMissingHeaders() {
@@ -55,23 +73,21 @@ public class HeaderDiscoveryTest {
                 ImmutableList.of(
                     derivedRoot.getRelative("tree_artifact1/foo.h"),
                     derivedRoot.getRelative("tree_artifact1/subdir/foo.h")),
-                NestedSetBuilder.create(
-                    Order.STABLE_ORDER, treeArtifact(derivedRoot.getRelative("tree_artifact2")))));
+                ImmutableList.of(treeArtifact(derivedRoot.getRelative("tree_artifact2")))));
   }
 
   private NestedSet<Artifact> checkHeaderInclusion(
       ArtifactResolver artifactResolver,
       ImmutableList<Path> dependencies,
-      NestedSet<Artifact> includedHeaders)
+      ImmutableList<Artifact> includedHeaders)
       throws ActionExecutionException {
     return new HeaderDiscovery.Builder()
         .shouldValidateInclusions()
         .setAction(new ActionsTestUtil.NullAction())
         .setPermittedSystemIncludePrefixes(ImmutableList.of())
-        .setSourceFile(
-            ActionsTestUtil.createArtifact(artifactRoot, derivedRoot.getRelative("foo.cc")))
+        .setSourceFile(new Artifact(derivedRoot.getRelative("foo.cc"), artifactRoot))
         .setDependencies(dependencies)
-        .setAllowedDerivedInputs(includedHeaders)
+        .setAllowedDerivedinputs(includedHeaders)
         .build()
         .discoverInputsFromDependencies(execRoot, artifactResolver);
   }
@@ -80,7 +96,7 @@ public class HeaderDiscoveryTest {
     return new SpecialArtifact(
         artifactRoot,
         artifactRoot.getExecPath().getRelative(artifactRoot.getRoot().relativize(path)),
-        ActionsTestUtil.NULL_ARTIFACT_OWNER,
+        ArtifactOwner.NullArtifactOwner.INSTANCE,
         Artifact.SpecialArtifactType.TREE);
   }
 }

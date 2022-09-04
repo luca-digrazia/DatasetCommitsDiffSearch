@@ -27,11 +27,11 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import org.junit.Before;
 import org.junit.Test;
@@ -41,15 +41,13 @@ public abstract class AbstractPackageLoaderTest {
   protected Path workspaceDir;
   protected StoredEventHandler handler;
   protected FileSystem fs;
-  protected Root root;
   private Reporter reporter;
 
   @Before
   public final void init() throws Exception {
-    fs = new InMemoryFileSystem();
+    fs = new InMemoryFileSystem(DigestHashFunction.MD5);
     workspaceDir = fs.getPath("/workspace/");
     workspaceDir.createDirectoryAndParents();
-    root = Root.fromPath(workspaceDir);
     reporter = new Reporter(new EventBus());
     handler = new StoredEventHandler();
     reporter.addHandler(handler);
