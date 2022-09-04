@@ -37,8 +37,6 @@ class NettyProcessor {
 
     private static final Logger log = Logger.getLogger(NettyProcessor.class);
 
-    private static final int DEFAULT_NETTY_ALLOCATOR_MAX_ORDER = 1;
-
     static {
         InternalLoggerFactory.setDefaultFactory(new JBossNettyLoggerFactory());
     }
@@ -51,11 +49,10 @@ class NettyProcessor {
     }
 
     @BuildStep
-    public SystemPropertyBuildItem limitArenaSize(List<MinNettyAllocatorMaxOrderBuildItem> minMaxOrderBuildItems) {
-        String maxOrder = calculateMaxOrder(minMaxOrderBuildItems);
+    public SystemPropertyBuildItem limitArenaSize() {
         //in native mode we limit the size of the epoll array
         //if the array overflows the selector just moves the overflow to a map
-        return new SystemPropertyBuildItem("io.netty.allocator.maxOrder", maxOrder);
+        return new SystemPropertyBuildItem("io.netty.allocator.maxOrder", "1");
     }
 
     @BuildStep
@@ -73,8 +70,7 @@ class NettyProcessor {
     }
 
     @BuildStep
-    NativeImageConfigBuildItem build(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            List<MinNettyAllocatorMaxOrderBuildItem> minMaxOrderBuildItems) {
+    NativeImageConfigBuildItem build(BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
 
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "io.netty.channel.socket.nio.NioSocketChannel"));
         reflectiveClass
@@ -83,13 +79,11 @@ class NettyProcessor {
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "java.util.LinkedHashMap"));
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, "sun.nio.ch.SelectorImpl"));
 
-        String maxOrder = calculateMaxOrder(minMaxOrderBuildItems);
-
         NativeImageConfigBuildItem.Builder builder = NativeImageConfigBuildItem.builder()
                 //.addNativeImageSystemProperty("io.netty.noUnsafe", "true")
                 // Use small chunks to avoid a lot of wasted space. Default is 16mb * arenas (derived from core count)
                 // Since buffers are cached to threads, the malloc overhead is temporary anyway
-                .addNativeImageSystemProperty("io.netty.allocator.maxOrder", maxOrder)
+                .addNativeImageSystemProperty("io.netty.allocator.maxOrder", "1")
                 .addRuntimeInitializedClass("io.netty.handler.ssl.JdkNpnApplicationProtocolNegotiator")
                 .addRuntimeInitializedClass("io.netty.handler.ssl.ConscryptAlpnSslEngine")
                 .addRuntimeInitializedClass("io.netty.handler.ssl.ReferenceCountedOpenSslEngine")
@@ -256,16 +250,5 @@ class NettyProcessor {
     LogCleanupFilterBuildItem cleanup() {
         return new LogCleanupFilterBuildItem(PlatformDependent.class.getName() + "0", Level.TRACE, "direct buffer constructor",
                 "jdk.internal.misc.Unsafe", "sun.misc.Unsafe");
-    }
-
-    private String calculateMaxOrder(List<MinNettyAllocatorMaxOrderBuildItem> minMaxOrderBuildItems) {
-        int result = DEFAULT_NETTY_ALLOCATOR_MAX_ORDER;
-        for (MinNettyAllocatorMaxOrderBuildItem minMaxOrderBuildItem : minMaxOrderBuildItems) {
-            if (minMaxOrderBuildItem.getMaxOrder() > result) {
-                result = minMaxOrderBuildItem.getMaxOrder();
-            }
-        }
-
-        return Integer.toString(result);
     }
 }
