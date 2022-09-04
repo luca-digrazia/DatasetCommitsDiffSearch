@@ -16,11 +16,9 @@ package com.google.devtools.build.lib.skyframe;
 import static com.google.devtools.build.lib.skyframe.SkyFunctions.TRANSITIVE_TARGET;
 
 import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
@@ -40,9 +38,8 @@ class ConfiguredTargetCycleReporter extends AbstractLabelCycleReporter {
 
   private static final Predicate<SkyKey> IS_CONFIGURED_TARGET_SKY_KEY =
       Predicates.or(
-          SkyFunctions.isSkyFunction(SkyFunctions.CONFIGURED_TARGET),
-          SkyFunctions.isSkyFunction(SkyFunctions.ASPECT),
-          SkyFunctions.isSkyFunction(SkyFunctions.LOAD_SKYLARK_ASPECT));
+        SkyFunctions.isSkyFunction(SkyFunctions.CONFIGURED_TARGET),
+        SkyFunctions.isSkyFunction(SkyFunctions.ASPECT));
 
   private static final Predicate<SkyKey> IS_TRANSITIVE_TARGET_SKY_KEY =
       SkyFunctions.isSkyFunction(TRANSITIVE_TARGET);
@@ -89,13 +86,9 @@ class ConfiguredTargetCycleReporter extends AbstractLabelCycleReporter {
   }
 
   private SkyKey asTransitiveTargetKey(SkyKey key) {
-    if (IS_TRANSITIVE_TARGET_SKY_KEY.apply(key)) {
-      return key;
-    } else if (key.argument() instanceof ActionLookupKey) {
-      return TransitiveTargetKey.of(((ActionLookupKey) key.argument()).getLabel());
-    } else {
-      throw new IllegalArgumentException("Unknown type: " + key);
-    }
+    return IS_TRANSITIVE_TARGET_SKY_KEY.apply(key)
+        ? key
+        : TransitiveTargetKey.of(((ConfiguredTargetKey) key.argument()).getLabel());
   }
 
   @Override
@@ -104,8 +97,6 @@ class ConfiguredTargetCycleReporter extends AbstractLabelCycleReporter {
       return ((ConfiguredTargetKey) key.argument()).prettyPrint();
     } else if (SkyFunctions.isSkyFunction(SkyFunctions.ASPECT).apply(key)) {
       return ((AspectKey) key.argument()).prettyPrint();
-    } else if (key instanceof AspectValue.AspectValueKey) {
-      return ((AspectValue.AspectValueKey) key).getDescription();
     } else {
       return getLabel(key).toString();
     }
@@ -113,12 +104,14 @@ class ConfiguredTargetCycleReporter extends AbstractLabelCycleReporter {
 
   @Override
   public Label getLabel(SkyKey key) {
-    if (key instanceof ActionLookupKey) {
-      return Preconditions.checkNotNull(((ActionLookupKey) key.argument()).getLabel(), key);
+    if (SkyFunctions.isSkyFunction(SkyFunctions.CONFIGURED_TARGET).apply(key)) {
+      return ((ConfiguredTargetKey) key.argument()).getLabel();
+    } else if (SkyFunctions.isSkyFunction(SkyFunctions.ASPECT).apply(key)) {
+      return ((AspectKey) key.argument()).getLabel();
     } else if (SkyFunctions.isSkyFunction(TRANSITIVE_TARGET).apply(key)) {
       return ((TransitiveTargetKey) key).getLabel();
     } else {
-      throw new UnsupportedOperationException(key.toString());
+      throw new UnsupportedOperationException();
     }
   }
 }
