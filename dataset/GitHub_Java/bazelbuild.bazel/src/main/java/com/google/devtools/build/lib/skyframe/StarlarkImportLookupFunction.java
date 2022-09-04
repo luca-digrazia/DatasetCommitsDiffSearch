@@ -178,13 +178,15 @@ public class StarlarkImportLookupFunction implements SkyFunction {
           visitedDepsInToplevelLoad)
       throws InconsistentFilesystemException, StarlarkImportFailedException, InterruptedException {
     Preconditions.checkNotNull(selfInliningManager);
-    // See comments in computeWithSelfInlineCallsInternal for an explanation of the visitedNested
-    // and visitedDepsInToplevelLoad vars.
+
+    // We use the visitedNested set to track if there are any cyclic dependencies when loading the
+    // Starlark file and the visitedDepsInToplevelLoad set to avoid re-registering previously seen
+    // dependencies. Note that the visitedNested set must use insertion order to display the correct
+    // error.
     CachedStarlarkImportLookupValueAndDeps cachedStarlarkImportLookupValueAndDeps =
         computeWithSelfInlineCallsInternal(
             key,
             env,
-            // visitedNested must use insertion order to display the correct error.
             /*visitedNested=*/ new LinkedHashSet<>(),
             /*visitedDepsInToplevelLoad=*/ visitedDepsInToplevelLoad);
     if (cachedStarlarkImportLookupValueAndDeps == null) {
@@ -197,7 +199,7 @@ public class StarlarkImportLookupFunction implements SkyFunction {
   private CachedStarlarkImportLookupValueAndDeps computeWithSelfInlineCallsInternal(
       StarlarkImportLookupValue.Key key,
       Environment env,
-      Set<StarlarkImportLookupValue.Key> visitedNested,
+      Set<Label> visitedNested,
       Map<StarlarkImportLookupValue.Key, CachedStarlarkImportLookupValueAndDeps>
           visitedDepsInToplevelLoad)
       throws InconsistentFilesystemException, StarlarkImportFailedException, InterruptedException {
@@ -237,14 +239,10 @@ public class StarlarkImportLookupFunction implements SkyFunction {
       return cachedStarlarkImportLookupValueAndDeps;
     }
 
-    // visitedNested is keyed on the SkyKey, not the label, because it's possible for distinct keys
-    // to share the same label. Examples include the "@builtins" pseudo-repo vs a real repository
-    // that happens to be named "@builtins", or keys for the same .bzl with different workspace
-    // chunking information. It's unclear whether these particular cycles can arise in practice, but
-    // it doesn't hurt to be robust to future changes that may make that possible.
-    if (!visitedNested.add(key)) {
-      ImmutableList<StarlarkImportLookupValue.Key> cycle =
-          CycleUtils.splitIntoPathAndChain(Predicates.equalTo(key), visitedNested).second;
+    Label label = key.getLabel();
+    if (!visitedNested.add(label)) {
+      ImmutableList<Label> cycle =
+          CycleUtils.splitIntoPathAndChain(Predicates.equalTo(label), visitedNested).second;
       throw new StarlarkImportFailedException("Starlark import cycle: " + cycle);
     }
 
@@ -270,7 +268,7 @@ public class StarlarkImportLookupFunction implements SkyFunction {
             recordingEnv,
             new InliningState(visitedNested, inlineCachedValueBuilder, visitedDepsInToplevelLoad));
     // All imports traversed, this key can no longer be part of a cycle.
-    Preconditions.checkState(visitedNested.remove(key), key);
+    Preconditions.checkState(visitedNested.remove(label), label);
 
     if (value != null) {
       inlineCachedValueBuilder.setValue(value);
@@ -323,13 +321,13 @@ public class StarlarkImportLookupFunction implements SkyFunction {
   }
 
   private static class InliningState {
-    private final Set<StarlarkImportLookupValue.Key> visitedNested;
+    private final Set<Label> visitedNested;
     private final CachedStarlarkImportLookupValueAndDeps.Builder inlineCachedValueBuilder;
     private final Map<StarlarkImportLookupValue.Key, CachedStarlarkImportLookupValueAndDeps>
         visitedDepsInToplevelLoad;
 
     private InliningState(
-        Set<StarlarkImportLookupValue.Key> visitedNested,
+        Set<Label> visitedNested,
         CachedStarlarkImportLookupValueAndDeps.Builder inlineCachedValueBuilder,
         Map<StarlarkImportLookupValue.Key, CachedStarlarkImportLookupValueAndDeps>
             visitedDepsInToplevelLoad) {
