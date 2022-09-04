@@ -5,6 +5,7 @@ import com.codahale.metrics.httpclient.HttpClientMetricNameStrategies;
 import com.codahale.metrics.httpclient.HttpClientMetricNameStrategy;
 import com.codahale.metrics.httpclient.InstrumentedHttpClientConnectionManager;
 import com.codahale.metrics.httpclient.InstrumentedHttpRequestExecutor;
+import com.google.common.annotations.VisibleForTesting;
 import io.dropwizard.client.proxy.AuthConfiguration;
 import io.dropwizard.client.proxy.NonProxyListProxyRoutePlanner;
 import io.dropwizard.client.proxy.ProxyConfiguration;
@@ -45,7 +46,6 @@ import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.protocol.HttpProcessor;
 
-import javax.annotation.Nullable;
 import javax.net.ssl.HostnameVerifier;
 import java.util.List;
 
@@ -64,43 +64,21 @@ public class HttpClientBuilder {
     private static final HttpRequestRetryHandler NO_RETRIES = (exception, executionCount, context) -> false;
 
     private final MetricRegistry metricRegistry;
-
-    @Nullable
     private String environmentName;
-
-    @Nullable
     private Environment environment;
     private HttpClientConfiguration configuration = new HttpClientConfiguration();
     private DnsResolver resolver = new SystemDefaultDnsResolver();
-
-    @Nullable
     private HostnameVerifier verifier;
-
-    @Nullable
     private HttpRequestRetryHandler httpRequestRetryHandler;
-
-    @Nullable
     private Registry<ConnectionSocketFactory> registry;
 
-    @Nullable
-    private CredentialsProvider credentialsProvider;
-
+    private CredentialsProvider credentialsProvider = null;
     private HttpClientMetricNameStrategy metricNameStrategy = HttpClientMetricNameStrategies.METHOD_ONLY;
-
-    @Nullable
-    private HttpRoutePlanner routePlanner;
-
-    @Nullable
+    private HttpRoutePlanner routePlanner = null;
     private RedirectStrategy redirectStrategy;
     private boolean disableContentCompression;
-
-    @Nullable
     private List<? extends Header> defaultHeaders;
-
-    @Nullable
     private HttpProcessor httpProcessor;
-
-    @Nullable
     private ServiceUnavailableRetryStrategy serviceUnavailableRetryStrategy;
 
     public HttpClientBuilder(MetricRegistry metricRegistry) {
@@ -333,7 +311,6 @@ public class HttpClientBuilder {
         final Integer timeout = (int) configuration.getTimeout().toMilliseconds();
         final Integer connectionTimeout = (int) configuration.getConnectionTimeout().toMilliseconds();
         final Integer connectionRequestTimeout = (int) configuration.getConnectionRequestTimeout().toMilliseconds();
-        final boolean normalizeUri = configuration.isNormalizeUriEnabled();
         final long keepAlive = configuration.getKeepAlive().toMilliseconds();
         final ConnectionReuseStrategy reuseStrategy = keepAlive == 0
                 ? new NoConnectionReuseStrategy()
@@ -348,7 +325,6 @@ public class HttpClientBuilder {
                 .setSocketTimeout(timeout)
                 .setConnectTimeout(connectionTimeout)
                 .setConnectionRequestTimeout(connectionRequestTimeout)
-                .setNormalizeUri(normalizeUri)
                 .build();
         final SocketConfig socketConfig = SocketConfig.custom()
                 .setTcpNoDelay(true)
@@ -469,6 +445,7 @@ public class HttpClientBuilder {
         return configureConnectionManager(manager);
     }
 
+    @VisibleForTesting
     Registry<ConnectionSocketFactory> createConfiguredRegistry() {
         if (registry != null) {
             return registry;
@@ -494,6 +471,7 @@ public class HttpClientBuilder {
     }
 
 
+    @VisibleForTesting
     protected InstrumentedHttpClientConnectionManager configureConnectionManager(
             InstrumentedHttpClientConnectionManager connectionManager) {
         connectionManager.setDefaultMaxPerRoute(configuration.getMaxConnectionsPerRoute());

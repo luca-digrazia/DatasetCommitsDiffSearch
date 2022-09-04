@@ -25,7 +25,6 @@ import org.glassfish.jersey.client.rx.RxClient;
 import org.glassfish.jersey.client.rx.RxInvoker;
 import org.glassfish.jersey.client.spi.ConnectorProvider;
 
-import javax.annotation.Nullable;
 import javax.net.ssl.HostnameVerifier;
 import javax.validation.Validator;
 import javax.ws.rs.client.Client;
@@ -66,18 +65,11 @@ public class JerseyClientBuilder {
 
     private HttpClientBuilder apacheHttpClientBuilder;
     private Validator validator = Validators.newValidator();
-
-    @Nullable
     private Environment environment;
-
-    @Nullable
     private ObjectMapper objectMapper;
-
-    @Nullable
     private ExecutorService executorService;
-
-    @Nullable
     private ConnectorProvider connectorProvider;
+    private Duration shutdownGracePeriod = Duration.seconds(5);
 
     public JerseyClientBuilder(Environment environment) {
         this.apacheHttpClientBuilder = new HttpClientBuilder(environment);
@@ -128,6 +120,18 @@ public class JerseyClientBuilder {
      */
     public JerseyClientBuilder withProperty(String propertyName, Object propertyValue) {
         properties.put(propertyName, propertyValue);
+        return this;
+    }
+
+    /**
+     * Sets the shutdown grace period.
+     *
+     * @param shutdownGracePeriod a period of time to await shutdown of the
+     *        configured {ExecutorService}.
+     * @return {@code this}
+     */
+    public JerseyClientBuilder withShutdownGracePeriod(Duration shutdownGracePeriod) {
+        this.shutdownGracePeriod = shutdownGracePeriod;
         return this;
     }
 
@@ -346,16 +350,18 @@ public class JerseyClientBuilder {
             // configuration. The DisposableExecutorService decorator
             // is used to ensure that the service is shut down if the
             // Jersey client disposes of it.
-            executorService = requireNonNull(environment).lifecycle()
-                .executorService("jersey-client-" + name + "-%d")
-                .minThreads(configuration.getMinThreads())
-                .maxThreads(configuration.getMaxThreads())
-                .workQueue(new ArrayBlockingQueue<>(configuration.getWorkQueueSize()))
-                .build();
+            executorService = new DropwizardExecutorProvider.DisposableExecutorService(
+                environment.lifecycle()
+                    .executorService("jersey-client-" + name + "-%d")
+                    .minThreads(configuration.getMinThreads())
+                    .maxThreads(configuration.getMaxThreads())
+                    .workQueue(new ArrayBlockingQueue<>(configuration.getWorkQueueSize()))
+                    .build()
+            );
         }
 
         if (objectMapper == null) {
-            objectMapper = requireNonNull(environment).getObjectMapper();
+            objectMapper = environment.getObjectMapper();
         }
 
         if (environment != null) {
@@ -416,7 +422,7 @@ public class JerseyClientBuilder {
             config.property(property.getKey(), property.getValue());
         }
 
-        config.register(new DropwizardExecutorProvider(threadPool));
+        config.register(new DropwizardExecutorProvider(threadPool, shutdownGracePeriod));
         if (connectorProvider == null) {
             final ConfiguredCloseableHttpClient apacheHttpClient =
                     apacheHttpClientBuilder.buildWithDefaultRequestConfiguration(name);

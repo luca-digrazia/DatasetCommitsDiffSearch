@@ -1,16 +1,25 @@
 package io.dropwizard.client;
 
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.httpclient.HttpClientMetricNameStrategies;
-import com.codahale.metrics.httpclient.InstrumentedHttpClientConnectionManager;
-import com.codahale.metrics.httpclient.InstrumentedHttpRequestExecutor;
-import io.dropwizard.client.proxy.AuthConfiguration;
-import io.dropwizard.client.proxy.ProxyConfiguration;
-import io.dropwizard.client.ssl.TlsConfiguration;
-import io.dropwizard.lifecycle.Managed;
-import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
-import io.dropwizard.setup.Environment;
-import io.dropwizard.util.Duration;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.validateMockitoUsage;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.MockitoAnnotations.initMocks;
+
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.ProxySelector;
+import java.net.SocketAddress;
+import java.net.URI;
+import java.util.List;
+import java.util.Optional;
+
+import javax.net.ssl.HostnameVerifier;
+
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.apache.http.Header;
 import org.apache.http.HeaderIterator;
@@ -54,31 +63,24 @@ import org.apache.http.protocol.BasicHttpContext;
 import org.apache.http.protocol.HTTP;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.protocol.HttpProcessor;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
-import javax.annotation.Nullable;
-import javax.net.ssl.HostnameVerifier;
-import java.io.IOException;
-import java.lang.reflect.Field;
-import java.net.InetSocketAddress;
-import java.net.Proxy;
-import java.net.ProxySelector;
-import java.net.SocketAddress;
-import java.net.URI;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.httpclient.HttpClientMetricNameStrategies;
+import com.codahale.metrics.httpclient.InstrumentedHttpClientConnectionManager;
+import com.codahale.metrics.httpclient.InstrumentedHttpRequestExecutor;
+import com.google.common.collect.ImmutableList;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.validateMockitoUsage;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.mockito.MockitoAnnotations.initMocks;
+import io.dropwizard.client.proxy.AuthConfiguration;
+import io.dropwizard.client.proxy.ProxyConfiguration;
+import io.dropwizard.client.ssl.TlsConfiguration;
+import io.dropwizard.lifecycle.Managed;
+import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
+import io.dropwizard.setup.Environment;
+import io.dropwizard.util.Duration;
 
 
 public class HttpClientBuilderTest {
@@ -115,7 +117,7 @@ public class HttpClientBuilderTest {
         this.httpClientClass = Class.forName("org.apache.http.impl.client.InternalHttpClient");
     }
 
-    @BeforeEach
+    @Before
     public void setUp() {
         final MetricRegistry metricRegistry = new MetricRegistry();
         configuration = new HttpClientConfiguration();
@@ -125,7 +127,7 @@ public class HttpClientBuilderTest {
         initMocks(this);
     }
 
-    @AfterEach
+    @After
     public void validate() {
         validateMockitoUsage();
     }
@@ -314,7 +316,7 @@ public class HttpClientBuilderTest {
         final HttpContext context = mock(HttpContext.class);
         final HttpResponse response = mock(HttpResponse.class);
         final HeaderIterator iterator = new BasicListHeaderIterator(
-                Collections.singletonList(new BasicHeader(HttpHeaders.CONNECTION, "timeout=50")),
+                ImmutableList.of(new BasicHeader(HttpHeaders.CONNECTION, "timeout=50")),
                 HttpHeaders.CONNECTION
         );
         when(response.headerIterator(HTTP.CONN_KEEP_ALIVE)).thenReturn(iterator);
@@ -337,23 +339,6 @@ public class HttpClientBuilderTest {
 
         assertThat(((RequestConfig) spyHttpClientBuilderField("defaultRequestConfig", apacheBuilder)).getCookieSpec())
                 .isEqualTo(CookieSpecs.DEFAULT);
-    }
-
-    @Test
-    public void normalizeUriByDefault() throws Exception {
-        assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
-
-        assertThat(((RequestConfig) spyHttpClientBuilderField("defaultRequestConfig", apacheBuilder)).isNormalizeUri())
-            .isEqualTo(true);
-    }
-
-    @Test
-    public void disableNormalizeUriWhenDisabled() throws Exception {
-        configuration.setNormalizeUriEnabled(false);
-        assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
-
-        assertThat(((RequestConfig) spyHttpClientBuilderField("defaultRequestConfig", apacheBuilder)).isNormalizeUri())
-            .isEqualTo(false);
     }
 
     @Test
@@ -416,7 +401,7 @@ public class HttpClientBuilderTest {
         final HttpRoutePlanner routePlanner = new SystemDefaultRoutePlanner(new ProxySelector() {
             @Override
             public List<Proxy> select(URI uri) {
-                return Collections.singletonList(new Proxy(Proxy.Type.HTTP, new InetSocketAddress("192.168.52.1", 8080)));
+                return ImmutableList.of(new Proxy(Proxy.Type.HTTP, new InetSocketAddress("192.168.52.1", 8080)));
             }
 
             @Override
@@ -451,7 +436,6 @@ public class HttpClientBuilderTest {
             }
 
             @Override
-            @Nullable
             public Credentials getCredentials(AuthScope authscope) {
                 return null;
             }
@@ -526,7 +510,7 @@ public class HttpClientBuilderTest {
     public void usesProxyWithNonProxyHosts() throws Exception {
         HttpClientConfiguration config = new HttpClientConfiguration();
         ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11", 8080);
-        proxy.setNonProxyHosts(Collections.singletonList("*.example.com"));
+        proxy.setNonProxyHosts(ImmutableList.of("*.example.com"));
         config.setProxyConfiguration(proxy);
 
         checkProxy(config, new HttpHost("host.example.com", 80), null);
@@ -536,7 +520,7 @@ public class HttpClientBuilderTest {
     public void usesProxyWithNonProxyHostsAndTargetDoesNotMatch() throws Exception {
         HttpClientConfiguration config = new HttpClientConfiguration();
         ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11");
-        proxy.setNonProxyHosts(Collections.singletonList("*.example.com"));
+        proxy.setNonProxyHosts(ImmutableList.of("*.example.com"));
         config.setProxyConfiguration(proxy);
 
         checkProxy(config, new HttpHost("dropwizard.io", 80), new HttpHost("192.168.52.11"));
@@ -547,8 +531,8 @@ public class HttpClientBuilderTest {
         checkProxy(new HttpClientConfiguration(), new HttpHost("dropwizard.io", 80), null);
     }
 
-    private CloseableHttpClient checkProxy(HttpClientConfiguration config, HttpHost target,
-                                           @Nullable HttpHost expectedProxy) throws Exception {
+    private CloseableHttpClient checkProxy(HttpClientConfiguration config, HttpHost target, HttpHost expectedProxy)
+            throws Exception {
         CloseableHttpClient httpClient = builder.using(config).build("test");
         HttpRoutePlanner routePlanner = (HttpRoutePlanner)
                 FieldUtils.getField(httpClient.getClass(), "routePlanner", true).get(httpClient);
@@ -652,7 +636,6 @@ public class HttpClientBuilderTest {
             }
 
             @Override
-            @Nullable
             public HttpUriRequest getRedirect(HttpRequest httpRequest,
                                               HttpResponse httpResponse,
                                               HttpContext httpContext) throws ProtocolException {
@@ -668,7 +651,7 @@ public class HttpClientBuilderTest {
     @Test
     public void usesDefaultHeaders() throws Exception {
         final ConfiguredCloseableHttpClient client =
-                builder.using(Collections.singletonList(new BasicHeader(HttpHeaders.ACCEPT_LANGUAGE, "de")))
+                builder.using(ImmutableList.of(new BasicHeader(HttpHeaders.ACCEPT_LANGUAGE, "de")))
                         .createClient(apacheBuilder, connectionManager, "test");
         assertThat(client).isNotNull();
 
@@ -713,7 +696,7 @@ public class HttpClientBuilderTest {
     public void allowsCustomBuilderConfiguration() throws Exception {
         CustomBuilder builder = new CustomBuilder(new MetricRegistry());
         assertThat(builder.customized).isFalse();
-        builder.createClient(apacheBuilder, connectionManager, "test");
+        ConfiguredCloseableHttpClient client = builder.createClient(apacheBuilder, connectionManager, "test");
         assertThat(builder.customized).isTrue();
     }
 
