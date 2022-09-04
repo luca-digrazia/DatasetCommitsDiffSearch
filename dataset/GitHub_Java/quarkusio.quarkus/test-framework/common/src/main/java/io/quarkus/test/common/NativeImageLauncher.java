@@ -18,14 +18,9 @@ import java.util.Map;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.ServiceLoader;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
-import org.wildfly.common.lock.Locks;
 
 import io.quarkus.runtime.configuration.ConfigUtils;
 import io.quarkus.runtime.configuration.QuarkusConfigFactory;
@@ -43,7 +38,7 @@ public class NativeImageLauncher implements Closeable {
     private final Class<?> testClass;
     private final String profile;
     private Process quarkusProcess;
-    private int port;
+    private final int port;
     private final int httpsPort;
     private final long imageWaitTime;
     private final Map<String, String> systemProps = new HashMap<>();
@@ -102,8 +97,6 @@ public class NativeImageLauncher implements Closeable {
         args.add(path);
         args.add("-Dquarkus.http.port=" + port);
         args.add("-Dquarkus.http.ssl-port=" + httpsPort);
-        // this won't be correct when using the random port but it's really only used by us for the rest client tests
-        // in the main module, since those tests hit the application itself
         args.add("-Dtest.url=" + TestHTTPResourceManager.getUri());
         args.add("-Dquarkus.log.file.path=" + PropertyTestUtil.getLogFileLocation());
         if (profile != null) {
@@ -116,38 +109,10 @@ public class NativeImageLauncher implements Closeable {
         System.out.println("Executing " + args);
 
         quarkusProcess = Runtime.getRuntime().exec(args.toArray(new String[args.size()]));
-
-        PortCapturingProcessReader portCapturingProcessReader = null;
-        if (port == 0) {
-            // when the port is 0, then the application starts on a random port and the only way for us to figure it out
-            // is to capture the output
-            portCapturingProcessReader = new PortCapturingProcessReader(quarkusProcess.getInputStream());
-        }
-        new Thread(portCapturingProcessReader != null ? portCapturingProcessReader
-                : new ProcessReader(quarkusProcess.getInputStream())).start();
+        new Thread(new ProcessReader(quarkusProcess.getInputStream())).start();
         new Thread(new ProcessReader(quarkusProcess.getErrorStream())).start();
 
-        if (portCapturingProcessReader != null) {
-            try {
-                portCapturingProcessReader.awaitForPort();
-            } catch (InterruptedException ignored) {
-
-            }
-            if (portCapturingProcessReader.port == null) {
-                quarkusProcess.destroy();
-                throw new RuntimeException("Unable to determine actual running port as dynamic port was used");
-            }
-
-            waitForQuarkus(portCapturingProcessReader.port);
-
-            System.setProperty("quarkus.http.port", portCapturingProcessReader.port.toString()); //set the port as a system property in order to have it applied to Config
-            System.setProperty("quarkus.http.test-port", portCapturingProcessReader.port.toString()); // needed for RestAssuredManager
-            port = portCapturingProcessReader.port;
-            installAndGetSomeConfig(); // reinitialize the configuration to make sure the actual port is used
-            System.setProperty("test.url", TestHTTPResourceManager.getUri());
-        } else {
-            waitForQuarkus(port);
-        }
+        waitForQuarkus();
     }
 
     private static String guessPath(Class<?> testClass) {
@@ -233,7 +198,7 @@ public class NativeImageLauncher implements Closeable {
         System.err.println("======================================================================================");
     }
 
-    private void waitForQuarkus(int port) {
+    private void waitForQuarkus() {
         long bailout = System.currentTimeMillis() + imageWaitTime * 1000;
 
         while (System.currentTimeMillis() < bailout) {
@@ -247,41 +212,22 @@ public class NativeImageLauncher implements Closeable {
                         return;
                     }
                 }
-                try {
-                    try (Socket s = new Socket()) {
-                        s.connect(new InetSocketAddress("localhost", port));
-                        //SSL is bound after https
-                        //we add a small delay to make sure SSL is available if installed
-                        Thread.sleep(100);
-                        return;
-                    }
-                } catch (Exception expected) {
-                }
                 try (Socket s = new Socket()) {
-                    s.connect(new InetSocketAddress("localhost", httpsPort));
+                    s.connect(new InetSocketAddress("localhost", port));
                     return;
                 }
             } catch (Exception expected) {
             }
         }
-        quarkusProcess.destroyForcibly();
-        throw new RuntimeException("Unable to start native image in " + imageWaitTime + "s");
-    }
 
-    public boolean isDefaultSsl() {
-        try (Socket s = new Socket()) {
-            s.connect(new InetSocketAddress("localhost", port));
-            return false;
-        } catch (IOException e) {
-            return true;
-        }
+        throw new RuntimeException("Unable to start native image in " + imageWaitTime + "s");
     }
 
     public void addSystemProperties(Map<String, String> systemProps) {
         this.systemProps.putAll(systemProps);
     }
 
-    private static class ProcessReader implements Runnable {
+    private static final class ProcessReader implements Runnable {
 
         private final InputStream inputStream;
 
@@ -291,94 +237,14 @@ public class NativeImageLauncher implements Closeable {
 
         @Override
         public void run() {
-            handleStart();
             byte[] b = new byte[100];
             int i;
             try {
                 while ((i = inputStream.read(b)) > 0) {
-                    String str = new String(b, 0, i, StandardCharsets.UTF_8);
-                    System.out.print(str);
-                    handleString(str);
+                    System.out.print(new String(b, 0, i, StandardCharsets.UTF_8));
                 }
             } catch (IOException e) {
-                handleError(e);
-            }
-        }
-
-        protected void handleStart() {
-
-        }
-
-        protected void handleString(String str) {
-
-        }
-
-        protected void handleError(IOException e) {
-
-        }
-    }
-
-    private static final class PortCapturingProcessReader extends ProcessReader {
-        private Integer port;
-
-        private boolean portDetermined = false;
-        private StringBuilder sb = new StringBuilder();
-        private final Lock lock = Locks.reentrantLock();
-        private final Condition portDeterminedCondition = lock.newCondition();
-        private final Pattern portRegex = Pattern.compile("Listening on:\\s+https?://.*:(\\d+)");
-
-        private PortCapturingProcessReader(InputStream inputStream) {
-            super(inputStream);
-        }
-
-        @Override
-        protected void handleStart() {
-            lock.lock();
-        }
-
-        @Override
-        protected void handleString(String str) {
-            if (portDetermined) { // we are done with determining the port
-                return;
-            }
-            sb.append(str);
-            String currentOutput = sb.toString();
-            Matcher regexMatcher = portRegex.matcher(currentOutput);
-            if (!regexMatcher.find()) { // haven't read enough data yet
-                if (currentOutput.contains("Exception")) {
-                    portDetermined(null);
-                }
-                return;
-            }
-            portDetermined(Integer.valueOf(regexMatcher.group(1)));
-        }
-
-        private void portDetermined(Integer portValue) {
-            this.port = portValue;
-            try {
-                portDetermined = true;
-                sb = null;
-                portDeterminedCondition.signal();
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        @Override
-        protected void handleError(IOException e) {
-            if (!portDetermined) {
-                portDetermined(null);
-            }
-        }
-
-        public void awaitForPort() throws InterruptedException {
-            lock.lock();
-            try {
-                while (!portDetermined) {
-                    portDeterminedCondition.await();
-                }
-            } finally {
-                lock.unlock();
+                //ignore
             }
         }
     }
