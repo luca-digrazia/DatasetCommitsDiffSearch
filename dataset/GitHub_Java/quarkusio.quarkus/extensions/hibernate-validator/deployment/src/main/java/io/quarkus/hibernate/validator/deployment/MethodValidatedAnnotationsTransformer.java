@@ -23,15 +23,15 @@ public class MethodValidatedAnnotationsTransformer implements AnnotationsTransfo
     private static final Logger LOGGER = Logger.getLogger(MethodValidatedAnnotationsTransformer.class.getPackage().getName());
 
     private final Set<DotName> consideredAnnotations;
-    private final Map<DotName, Set<SimpleMethodSignatureKey>> methodsWithInheritedValidation;
+    private final Map<DotName, Set<SimpleMethodSignatureKey>> inheritedAnnotationsToBeValidated;
     private final Map<DotName, Set<SimpleMethodSignatureKey>> jaxRsMethods;
 
     MethodValidatedAnnotationsTransformer(Set<DotName> consideredAnnotations,
             Map<DotName, Set<SimpleMethodSignatureKey>> jaxRsMethods,
-            Map<DotName, Set<SimpleMethodSignatureKey>> methodsWithInheritedValidation) {
+            Map<DotName, Set<SimpleMethodSignatureKey>> inheritedAnnotationsToBeValidated) {
         this.consideredAnnotations = consideredAnnotations;
         this.jaxRsMethods = jaxRsMethods;
-        this.methodsWithInheritedValidation = methodsWithInheritedValidation;
+        this.inheritedAnnotationsToBeValidated = inheritedAnnotationsToBeValidated;
     }
 
     @Override
@@ -67,15 +67,18 @@ public class MethodValidatedAnnotationsTransformer implements AnnotationsTransfo
                 return true;
             }
         }
-
         // This method has no annotations of its own: look for inherited annotations
-
-        Set<SimpleMethodSignatureKey> validatedMethods = methodsWithInheritedValidation.get(method.declaringClass().name());
-        if (validatedMethods == null || validatedMethods.isEmpty()) {
-            return false;
+        ClassInfo clazz = method.declaringClass();
+        SimpleMethodSignatureKey signatureKey = new SimpleMethodSignatureKey(method);
+        for (Map.Entry<DotName, Set<SimpleMethodSignatureKey>> validatedMethod : inheritedAnnotationsToBeValidated.entrySet()) {
+            DotName ifaceOrSuperClass = validatedMethod.getKey();
+            // note: only check the direct superclass since we do not (yet) have the entire ClassInfo hierarchy here
+            if ((clazz.interfaceNames().contains(ifaceOrSuperClass) || ifaceOrSuperClass.equals(clazz.superName()))
+                    && validatedMethod.getValue().contains(signatureKey)) {
+                return true;
+            }
         }
-
-        return validatedMethods.contains(new SimpleMethodSignatureKey(method));
+        return false;
     }
 
     private boolean isJaxrsMethod(MethodInfo method) {

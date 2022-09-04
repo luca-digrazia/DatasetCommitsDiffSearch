@@ -5,6 +5,7 @@ import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
 import java.lang.annotation.Repeatable;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -41,12 +42,10 @@ import org.jboss.jandex.Type;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
-import io.quarkus.arc.deployment.AutoAddScopeBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.processor.BeanInfo;
-import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
@@ -67,7 +66,6 @@ import io.quarkus.hibernate.validator.runtime.HibernateValidatorBuildTimeConfig;
 import io.quarkus.hibernate.validator.runtime.HibernateValidatorRecorder;
 import io.quarkus.hibernate.validator.runtime.ValidatorProvider;
 import io.quarkus.hibernate.validator.runtime.interceptor.MethodValidationInterceptor;
-import io.quarkus.resteasy.common.spi.ResteasyDotNames;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodAnnotationsBuildItem;
 import io.quarkus.runtime.LocalesBuildTimeConfig;
 
@@ -96,6 +94,16 @@ class HibernateValidatorProcessor {
 
     private static final DotName REPEATABLE = DotName.createSimple(Repeatable.class.getName());
 
+    private static final DotName[] JAXRS_METHOD_ANNOTATIONS = {
+            DotName.createSimple("javax.ws.rs.GET"),
+            DotName.createSimple("javax.ws.rs.HEAD"),
+            DotName.createSimple("javax.ws.rs.DELETE"),
+            DotName.createSimple("javax.ws.rs.OPTIONS"),
+            DotName.createSimple("javax.ws.rs.PATCH"),
+            DotName.createSimple("javax.ws.rs.POST"),
+            DotName.createSimple("javax.ws.rs.PUT"),
+    };
+
     private static final Pattern BUILT_IN_CONSTRAINT_REPEATABLE_CONTAINER_PATTERN = Pattern.compile("\\$List$");
 
     @BuildStep
@@ -116,7 +124,6 @@ class HibernateValidatorProcessor {
     @BuildStep
     void registerAdditionalBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans,
             BuildProducer<UnremovableBeanBuildItem> unremovableBean,
-            BuildProducer<AutoAddScopeBuildItem> autoScopes,
             Capabilities capabilities) {
         // The bean encapsulating the Validator and ValidatorFactory
         additionalBeans.produce(new AdditionalBeanBuildItem(ValidatorProvider.class));
@@ -131,10 +138,6 @@ class HibernateValidatorProcessor {
             additionalBeans.produce(new AdditionalBeanBuildItem(
                     "io.quarkus.hibernate.validator.runtime.jaxrs.ResteasyContextLocaleResolver"));
         }
-
-        // A constraint validator with an injection point but no scope is added as @Singleton
-        autoScopes.produce(AutoAddScopeBuildItem.builder().implementsInterface(CONSTRAINT_VALIDATOR).requiresContainerServices()
-                .defaultScope(BuiltinScope.SINGLETON).build());
 
         // Do not remove the Bean Validation beans
         unremovableBean.produce(new UnremovableBeanBuildItem(new Predicate<BeanInfo>() {
@@ -346,8 +349,8 @@ class HibernateValidatorProcessor {
         Map<DotName, Set<SimpleMethodSignatureKey>> jaxRsMethods = new HashMap<>();
 
         Collection<DotName> jaxRsMethodDefiningAnnotations = new ArrayList<>(
-                ResteasyDotNames.JAXRS_METHOD_ANNOTATIONS.size() + additionalJaxRsResourceMethodAnnotations.size());
-        jaxRsMethodDefiningAnnotations.addAll(ResteasyDotNames.JAXRS_METHOD_ANNOTATIONS);
+                JAXRS_METHOD_ANNOTATIONS.length + additionalJaxRsResourceMethodAnnotations.size());
+        jaxRsMethodDefiningAnnotations.addAll(Arrays.asList(JAXRS_METHOD_ANNOTATIONS));
         for (AdditionalJaxRsResourceMethodAnnotationsBuildItem additionalJaxRsResourceMethodAnnotation : additionalJaxRsResourceMethodAnnotations) {
             jaxRsMethodDefiningAnnotations.addAll(additionalJaxRsResourceMethodAnnotation.getAnnotationClasses());
         }
