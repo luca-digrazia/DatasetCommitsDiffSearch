@@ -925,7 +925,7 @@ public class Package {
     private final Package pkg;
 
     private final boolean noImplicitFileExport;
-    private final CallStack.Factory callStackFactory = new CallStack.Factory();
+    private final CallStack.Builder callStackBuilder = new CallStack.Builder();
 
     // The map from each repository to that repository's remappings map.
     // This is only used in the //external package, it is an empty map for all other packages.
@@ -1431,12 +1431,7 @@ public class Package {
         List<StarlarkThread.CallStackEntry> callstack,
         AttributeContainer attributeContainer) { // required by WorkspaceFactory.setParent hack
       return new Rule(
-          pkg,
-          label,
-          ruleClass,
-          location,
-          callStackFactory.createFrom(callstack),
-          attributeContainer);
+          pkg, label, ruleClass, location, callStackBuilder.of(callstack), attributeContainer);
     }
 
     /**
@@ -1456,7 +1451,7 @@ public class Package {
           label,
           ruleClass,
           location,
-          callStackFactory.createFrom(callstack),
+          callStackBuilder.of(callstack),
           AttributeContainer.newMutableInstance(ruleClass),
           implicitOutputsFunction);
     }
