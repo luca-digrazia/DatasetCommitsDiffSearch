@@ -31,8 +31,7 @@ public class BackgroundExecutor {
 
 	private static final String TAG = "BackgroundExecutor";
 
-	public static Executor DEFAULT_EXECUTOR = Executors.newScheduledThreadPool(2 * Runtime.getRuntime().availableProcessors());
-	private static Executor executor = DEFAULT_EXECUTOR;
+	private static Executor executor = Executors.newScheduledThreadPool(2 * Runtime.getRuntime().availableProcessors());
 
 	private static final List<Task> tasks = new ArrayList<Task>();
 
