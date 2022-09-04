@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.commands;
 
@@ -28,8 +28,6 @@ import org.graylog.events.EventsModule;
 import org.graylog.freeenterprise.FreeEnterpriseConfiguration;
 import org.graylog.freeenterprise.FreeEnterpriseModule;
 import org.graylog.grn.GRNTypesModule;
-import org.graylog.metrics.prometheus.PrometheusExporterConfiguration;
-import org.graylog.metrics.prometheus.PrometheusMetricsModule;
 import org.graylog.plugins.cef.CEFInputModule;
 import org.graylog.plugins.map.MapWidgetModule;
 import org.graylog.plugins.netflow.NetFlowPluginModule;
@@ -63,7 +61,6 @@ import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.configuration.EmailConfiguration;
 import org.graylog2.configuration.HttpConfiguration;
 import org.graylog2.configuration.MongoDbConfiguration;
-import org.graylog2.configuration.TLSProtocolsConfiguration;
 import org.graylog2.configuration.VersionCheckConfiguration;
 import org.graylog2.contentpacks.ContentPacksModule;
 import org.graylog2.decorators.DecoratorBindings;
@@ -119,8 +116,6 @@ public class Server extends ServerBootstrap {
     private final ProcessingStatusConfig processingStatusConfig = new ProcessingStatusConfig();
     private final JobSchedulerConfiguration jobSchedulerConfiguration = new JobSchedulerConfiguration();
     private final FreeEnterpriseConfiguration freeEnterpriseConfiguration = new FreeEnterpriseConfiguration();
-    private final PrometheusExporterConfiguration prometheusExporterConfiguration = new PrometheusExporterConfiguration();
-    private final TLSProtocolsConfiguration tlsConfiguration = new TLSProtocolsConfiguration();
 
     public Server() {
         super("server", configuration);
@@ -169,8 +164,7 @@ public class Server extends ServerBootstrap {
                 new EventsModule(),
                 new FreeEnterpriseModule(),
                 new GRNTypesModule(),
-                new SecurityModule(),
-                new PrometheusMetricsModule()
+                new SecurityModule()
         );
 
         return modules.build();
@@ -191,9 +185,7 @@ public class Server extends ServerBootstrap {
                 viewsConfiguration,
                 processingStatusConfig,
                 jobSchedulerConfiguration,
-                freeEnterpriseConfiguration,
-                prometheusExporterConfiguration,
-                tlsConfiguration);
+                freeEnterpriseConfiguration);
     }
 
     @Override
