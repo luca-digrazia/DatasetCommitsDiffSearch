@@ -66,7 +66,6 @@ class EventImpl<T> implements Event<T> {
 
     @Override
     public void fire(T event) {
-        Objects.requireNonNull(event, "Event cannot be null");
         getNotifier(event.getClass()).notify(event, ObserverExceptionHandler.IMMEDIATE_HANDLER, false);
     }
 
