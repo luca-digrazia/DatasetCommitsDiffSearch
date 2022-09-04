@@ -26,13 +26,16 @@ import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
+import com.google.devtools.build.lib.buildeventservice.BuildEventServiceTransport.BuildEventLogger;
 import com.google.devtools.build.lib.buildeventservice.BuildEventServiceTransport.ExitFunction;
 import com.google.devtools.build.lib.buildeventservice.client.BuildEventServiceClient;
 import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
 import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
+import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.Aborted.AbortReason;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
+import com.google.devtools.build.lib.buildeventstream.LargeBuildEventSerializedEvent;
 import com.google.devtools.build.lib.buildeventstream.transports.BuildEventStreamOptions;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -275,6 +278,17 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
       BuildEventServiceClient client = getBesClient(besOptions, authTlsOptions);
       BuildEventArtifactUploader artifactUploader = uploaderSupplier.get();
 
+      BuildEventLogger buildEventLogger =
+          (BuildEventStreamProtos.BuildEvent bepEvent) -> {
+            if (bepEvent.getSerializedSize()
+                > LargeBuildEventSerializedEvent.SIZE_OF_LARGE_BUILD_EVENTS_IN_BYTES) {
+              env.getEventBus()
+                  .post(
+                      new LargeBuildEventSerializedEvent(
+                          bepEvent.getId().toString(), bepEvent.getSerializedSize()));
+            }
+          };
+
       BuildEventServiceProtoUtil besProtoUtil =
           new BuildEventServiceProtoUtil(
               env.getBuildRequestId(),
@@ -287,7 +301,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
           new BuildEventServiceTransport.Builder()
               .closeTimeout(besOptions.besTimeout)
               .publishLifecycleEvents(besOptions.besLifecycleEvents)
-              .setEventBus(env.getEventBus())
+              .buildEventLogger(buildEventLogger)
               .build(
                   client,
                   artifactUploader,
