@@ -1,8 +1,7 @@
 package io.quarkus.resteasy.test;
 
-import static org.hamcrest.Matchers.is;
-
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import org.hamcrest.Matchers;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
@@ -17,21 +16,21 @@ public class RestEasyDevModeTestCase {
 
     @RegisterExtension
     public static final QuarkusDevModeTest test = new QuarkusDevModeTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-                    .addClass(PostResource.class)
-                    .addClass(GreetingResource.class)
-                    .addClass(InterfaceResource.class)
-                    .addClass(InterfaceResourceImpl.class)
-                    .addClass(Service.class)
-                    .addAsResource("config-test.properties", "application.properties"));
+            .setArchiveProducer(new Supplier<JavaArchive>() {
+                @Override
+                public JavaArchive get() {
+                    return ShrinkWrap.create(JavaArchive.class)
+                            .addClass(PostResource.class);
+                }
+            });
 
     @Test
-    public void testRESTEasyHotReplacement() {
+    public void testRESTeasyHotReplacement() {
         RestAssured.given().body("Stuart")
                 .when()
                 .post("/post")
                 .then()
-                .body(Matchers.equalTo("Hello: Stuart"));
+                .content(Matchers.equalTo("Hello: Stuart"));
         test.modifySourceFile(PostResource.class, new Function<String, String>() {
             @Override
             public String apply(String s) {
@@ -42,26 +41,6 @@ public class RestEasyDevModeTestCase {
                 .when()
                 .post("/post")
                 .then()
-                .body(Matchers.equalTo("Hi: Stuart"));
-    }
-
-    @Test
-    public void testConfigHotReplacement() {
-        RestAssured.when().get("/greeting").then()
-                .statusCode(200)
-                .body(is("hello from dev mode"));
-
-        test.modifyResourceFile("application.properties", s -> s.replace("hello", "hi"));
-
-        RestAssured.when().get("/greeting").then()
-                .statusCode(200)
-                .body(is("hi from dev mode"));
-    }
-
-    @Test
-    public void testInterfaceImplementation() {
-        RestAssured.when().get("/inter/hello").then()
-                .statusCode(200)
-                .body(is("hello from impl"));
+                .content(Matchers.equalTo("Hi: Stuart"));
     }
 }
