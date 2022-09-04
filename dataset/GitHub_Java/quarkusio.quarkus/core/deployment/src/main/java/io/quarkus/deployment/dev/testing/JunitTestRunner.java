@@ -107,7 +107,6 @@ public class JunitTestRunner {
     private final Pattern exclude;
     private final boolean displayInConsole;
     private final boolean failingTestsOnly;
-    private final TestType testType;
 
     private volatile boolean testsRunning = false;
     private volatile boolean aborted;
@@ -128,7 +127,6 @@ public class JunitTestRunner {
         this.exclude = builder.exclude;
         this.displayInConsole = builder.displayInConsole;
         this.failingTestsOnly = builder.failingTestsOnly;
-        this.testType = builder.testType;
     }
 
     public void runTests() {
@@ -199,25 +197,18 @@ public class JunitTestRunner {
                 });
 
                 Map<String, Map<UniqueId, TestResult>> resultsByClass = new HashMap<>();
+
                 launcher.execute(testPlan, new TestExecutionListener() {
 
                     @Override
                     public void executionStarted(TestIdentifier testIdentifier) {
-                        if (aborted) {
-                            return;
-                        }
                         String className = "";
-                        Class<?> clazz = null;
                         if (testIdentifier.getSource().isPresent()) {
                             if (testIdentifier.getSource().get() instanceof MethodSource) {
-                                clazz = ((MethodSource) testIdentifier.getSource().get()).getJavaClass();
+                                className = ((MethodSource) testIdentifier.getSource().get()).getClassName();
                             } else if (testIdentifier.getSource().get() instanceof ClassSource) {
-                                clazz = ((ClassSource) testIdentifier.getSource().get()).getJavaClass();
+                                className = ((ClassSource) testIdentifier.getSource().get()).getClassName();
                             }
-                        }
-                        if (clazz != null) {
-                            className = clazz.getName();
-                            Thread.currentThread().setContextClassLoader(clazz.getClassLoader());
                         }
                         for (TestRunListener listener : listeners) {
                             listener.testStarted(testIdentifier, className);
@@ -481,16 +472,15 @@ public class JunitTestRunner {
             unitTestClasses.add(name);
         }
 
-        List<Class<?>> itClasses = new ArrayList<>();
-        List<Class<?>> utClasses = new ArrayList<>();
+        List<Class<?>> qtClasses = new ArrayList<>();
         for (String i : quarkusTestClasses) {
             try {
-                itClasses.add(Thread.currentThread().getContextClassLoader().loadClass(i));
+                qtClasses.add(Thread.currentThread().getContextClassLoader().loadClass(i));
             } catch (ClassNotFoundException e) {
                 throw new RuntimeException(e);
             }
         }
-        itClasses.sort(Comparator.comparing(new Function<Class<?>, String>() {
+        qtClasses.sort(Comparator.comparing(new Function<Class<?>, String>() {
             @Override
             public String apply(Class<?> aClass) {
                 ClassInfo def = index.getClassByName(DotName.createSimple(aClass.getName()));
@@ -523,30 +513,17 @@ public class JunitTestRunner {
                 }
 
             }
-            cl = testApplication.createRuntimeClassLoader(testApplication.getAugmentClassLoader(), Collections.emptyMap(),
-                    transformedClasses);
+            cl = testApplication.createRuntimeClassLoader(Collections.emptyMap(), transformedClasses);
             for (String i : unitTestClasses) {
                 try {
-                    utClasses.add(cl.loadClass(i));
+                    qtClasses.add(cl.loadClass(i));
                 } catch (ClassNotFoundException exception) {
                     throw new RuntimeException(exception);
                 }
             }
 
         }
-        if (testType == TestType.ALL) {
-            //run unit style tests first
-            //before the quarkus tests have started
-            //which stops quarkus interfering with WireMock
-            List<Class<?>> ret = new ArrayList<>(utClasses.size() + itClasses.size());
-            ret.addAll(utClasses);
-            ret.addAll(itClasses);
-            return new DiscoveryResult(cl, ret);
-        } else if (testType == TestType.UNIT) {
-            return new DiscoveryResult(cl, utClasses);
-        } else {
-            return new DiscoveryResult(cl, itClasses);
-        }
+        return new DiscoveryResult(cl, qtClasses);
     }
 
     private static Set<DotName> collectTestAnnotations(Index index) {
@@ -625,7 +602,6 @@ public class JunitTestRunner {
     }
 
     static class Builder {
-        private TestType testType = TestType.ALL;
         private TestState testState;
         private long runId = -1;
         private DevModeContext devModeContext;
@@ -643,11 +619,6 @@ public class JunitTestRunner {
 
         public Builder setRunId(long runId) {
             this.runId = runId;
-            return this;
-        }
-
-        public Builder setTestType(TestType testType) {
-            this.testType = testType;
             return this;
         }
 

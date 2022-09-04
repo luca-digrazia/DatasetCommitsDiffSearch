@@ -23,7 +23,6 @@ import io.quarkus.vertx.http.deployment.NonApplicationRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.console.ContinuousTestingWebSocketListener;
 import io.quarkus.vertx.http.runtime.devmode.DevConsoleRecorder;
-import io.quarkus.vertx.http.runtime.devmode.Json;
 import io.vertx.core.Handler;
 import io.vertx.core.MultiMap;
 import io.vertx.core.json.JsonObject;
@@ -82,10 +81,10 @@ public class TestsProcessor {
                 testStatus.setRunning(status.getRunning());
                 if (status.getLastRun() > 0) {
                     TestRunResults result = ts.get().getResults();
-                    testStatus.setTestsFailed(result.getCurrentFailedCount());
-                    testStatus.setTestsPassed(result.getCurrentPassedCount());
-                    testStatus.setTestsSkipped(result.getCurrentSkippedCount());
-                    testStatus.setTestsRun(result.getFailedCount() + result.getPassedCount());
+                    testStatus.setTestsFailed(result.getTestsFailed());
+                    testStatus.setTestsPassed(result.getTestsPassed());
+                    testStatus.setTestsSkipped(result.getTestsSkipped());
+                    testStatus.setTestsRun(result.getTestsFailed() + result.getTestsPassed());
                 }
                 event.response().end(JsonObject.mapFrom(testStatus).encode());
             }
@@ -106,19 +105,13 @@ public class TestsProcessor {
                 } else {
                     ts.get().start();
                 }
-
-                Json.JsonObjectBuilder object = Json.object();
-                object.put("running", ts.get().isRunning());
-                event.response().putHeader("Content-Type", "application/json; charset=utf-8").end(object.build());
             }
         }));
         routeProducer.produce(new DevConsoleRouteBuildItem("tests/toggle-broken-only", "POST", new Handler<RoutingContext>() {
             @Override
             public void handle(RoutingContext event) {
-                boolean brokenOnlyMode = ts.get().toggleBrokenOnlyMode();
-                Json.JsonObjectBuilder object = Json.object();
-                object.put("brokenOnlyMode", brokenOnlyMode);
-                event.response().putHeader("Content-Type", "application/json; charset=utf-8").end(object.build());
+                boolean running = ts.get().toggleBrokenOnlyMode();
+                event.response().end(Boolean.toString(running));
             }
         }));
     }
@@ -137,69 +130,6 @@ public class TestsProcessor {
             @Override
             public void handle(RoutingContext event) {
                 ts.get().runAllTests();
-            }
-        });
-    }
-
-    @BuildStep(onlyIf = IsDevelopment.class)
-    DevConsoleRouteBuildItem runFailedTests(LaunchModeBuildItem launchModeBuildItem) {
-        Optional<TestSupport> ts = TestSupport.instance();
-        if (testsDisabled(launchModeBuildItem, ts)) {
-            return null;
-        }
-        return new DevConsoleRouteBuildItem("tests/toggle-test-output", "POST", new Handler<RoutingContext>() {
-            @Override
-            public void handle(RoutingContext event) {
-
-                boolean isTestOutput = ts.get().toggleTestOutput();
-                Json.JsonObjectBuilder object = Json.object();
-                object.put("isTestOutput", isTestOutput);
-                event.response().putHeader("Content-Type", "application/json; charset=utf-8").end(object.build());
-            }
-        });
-    }
-
-    @BuildStep(onlyIf = IsDevelopment.class)
-    DevConsoleRouteBuildItem toggleTestOutput(LaunchModeBuildItem launchModeBuildItem) {
-        Optional<TestSupport> ts = TestSupport.instance();
-        if (testsDisabled(launchModeBuildItem, ts)) {
-            return null;
-        }
-        return new DevConsoleRouteBuildItem("tests/runfailed", "POST", new Handler<RoutingContext>() {
-            @Override
-            public void handle(RoutingContext event) {
-                ts.get().runFailedTests();
-            }
-        });
-    }
-
-    @BuildStep(onlyIf = IsDevelopment.class)
-    DevConsoleRouteBuildItem printfailures(LaunchModeBuildItem launchModeBuildItem) {
-        Optional<TestSupport> ts = TestSupport.instance();
-        if (testsDisabled(launchModeBuildItem, ts)) {
-            return null;
-        }
-        return new DevConsoleRouteBuildItem("tests/printfailures", "POST", new Handler<RoutingContext>() {
-            @Override
-            public void handle(RoutingContext event) {
-                ts.get().printFullResults();
-            }
-        });
-    }
-
-    @BuildStep(onlyIf = IsDevelopment.class)
-    DevConsoleRouteBuildItem toggleInstrumentation(LaunchModeBuildItem launchModeBuildItem) {
-        Optional<TestSupport> ts = TestSupport.instance();
-        if (testsDisabled(launchModeBuildItem, ts)) {
-            return null;
-        }
-        return new DevConsoleRouteBuildItem("tests/toggle-instrumentation", "POST", new Handler<RoutingContext>() {
-            @Override
-            public void handle(RoutingContext event) {
-                boolean instrumentationEnabled = ts.get().toggleInstrumentation();
-                Json.JsonObjectBuilder object = Json.object();
-                object.put("instrumentationEnabled", instrumentationEnabled);
-                event.response().putHeader("Content-Type", "application/json; charset=utf-8").end(object.build());
             }
         });
     }

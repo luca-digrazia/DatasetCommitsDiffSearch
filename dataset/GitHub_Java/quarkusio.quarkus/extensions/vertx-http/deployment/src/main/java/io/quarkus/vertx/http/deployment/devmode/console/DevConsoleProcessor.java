@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLDecoder;
@@ -59,6 +58,7 @@ import io.quarkus.deployment.ide.Ide;
 import io.quarkus.deployment.logging.LoggingSetupBuildItem;
 import io.quarkus.deployment.pkg.builditem.BuildSystemTargetBuildItem;
 import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
+import io.quarkus.deployment.recording.BytecodeRecorderImpl;
 import io.quarkus.deployment.util.ArtifactInfoUtil;
 import io.quarkus.deployment.util.WebJarUtil;
 import io.quarkus.dev.console.DevConsoleManager;
@@ -78,6 +78,7 @@ import io.quarkus.qute.RawString;
 import io.quarkus.qute.ReflectionValueResolver;
 import io.quarkus.qute.ResultMapper;
 import io.quarkus.qute.Results;
+import io.quarkus.qute.Results.Result;
 import io.quarkus.qute.TemplateException;
 import io.quarkus.qute.TemplateLocator;
 import io.quarkus.qute.TemplateNode.Origin;
@@ -104,10 +105,8 @@ import io.vertx.core.http.impl.Http1xServerConnection;
 import io.vertx.core.impl.EventLoopContext;
 import io.vertx.core.impl.VertxInternal;
 import io.vertx.core.net.impl.VertxHandler;
-import io.vertx.ext.web.Route;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
-import io.vertx.ext.web.handler.BodyHandler;
 
 public class DevConsoleProcessor {
 
@@ -317,16 +316,10 @@ public class DevConsoleProcessor {
         for (DevConsoleRouteBuildItem i : routes) {
             Entry<String, String> groupAndArtifact = i.groupIdAndArtifactId(curateOutcomeBuildItem);
             // deployment side handling
-            if (i.isDeploymentSide()) {
-                Route route = router
-                        .route("/" + groupAndArtifact.getKey() + "." + groupAndArtifact.getValue() + "/" + i.getPath());
-                if (i.getMethod() != null) {
-                    route = route.method(HttpMethod.valueOf(i.getMethod()));
-                }
-                if (i.isBodyHandlerRequired()) {
-                    route.handler(BodyHandler.create());
-                }
-                route.handler(i.getHandler());
+            if (!(i.getHandler() instanceof BytecodeRecorderImpl.ReturnedProxy)) {
+                router.route(HttpMethod.valueOf(i.getMethod()),
+                        "/" + groupAndArtifact.getKey() + "." + groupAndArtifact.getValue() + "/" + i.getPath())
+                        .handler(i.getHandler());
             }
         }
 
@@ -375,7 +368,7 @@ public class DevConsoleProcessor {
             Entry<String, String> groupAndArtifact = i.groupIdAndArtifactId(curateOutcomeBuildItem);
             // if the handler is a proxy, then that means it's been produced by a recorder and therefore belongs in the regular runtime Vert.x instance
             // otherwise this is handled in the setupDeploymentSideHandling method
-            if (!i.isDeploymentSide()) {
+            if (i.getHandler() instanceof BytecodeRecorderImpl.ReturnedProxy) {
                 routeBuildItemBuildProducer.produce(nonApplicationRootPathBuildItem.routeBuilder()
                         .routeFunction(
                                 "dev/" + groupAndArtifact.getKey() + "." + groupAndArtifact.getValue() + "/" + i.getPath(),
@@ -427,14 +420,14 @@ public class DevConsoleProcessor {
                 .addNamespaceResolver(NamespaceResolver.builder("info").resolve(ctx -> {
                     String ext = DevConsole.currentExtension.get();
                     if (ext == null) {
-                        return Results.NotFound.from(ctx);
+                        return Results.Result.NOT_FOUND;
                     }
                     Map<String, Object> map = DevConsoleManager.getTemplateInfo().get(ext);
                     if (map == null) {
-                        return Results.NotFound.from(ctx);
+                        return Results.Result.NOT_FOUND;
                     }
                     Object result = map.get(ctx.getName());
-                    return result == null ? Results.NotFound.from(ctx) : result;
+                    return result == null ? Results.Result.NOT_FOUND : result;
                 }).build());
 
         // Create map of resolved paths
@@ -453,17 +446,17 @@ public class DevConsoleProcessor {
         builder.addNamespaceResolver(NamespaceResolver.builder("config").resolveAsync(ctx -> {
             List<Expression> params = ctx.getParams();
             if (params.size() != 1 || (!ctx.getName().equals("property") && !ctx.getName().equals("http-path"))) {
-                return Results.notFound(ctx);
+                return Results.NOT_FOUND;
             }
             if (ctx.getName().equals("http-path")) {
                 return ctx.evaluate(params.get(0)).thenCompose(propertyName -> {
                     String value = resolvedPaths.get(propertyName.toString());
-                    return CompletableFuture.completedFuture(value != null ? value : Results.NotFound.from(ctx));
+                    return CompletableFuture.completedFuture(value != null ? value : Result.NOT_FOUND);
                 });
             } else {
                 return ctx.evaluate(params.get(0)).thenCompose(propertyName -> {
                     Optional<String> val = ConfigProvider.getConfig().getOptionalValue(propertyName.toString(), String.class);
-                    return CompletableFuture.completedFuture(val.isPresent() ? val.get() : Results.NotFound.from(ctx));
+                    return CompletableFuture.completedFuture(val.isPresent() ? val.get() : Result.NOT_FOUND);
                 });
             }
         }).build());
@@ -492,7 +485,7 @@ public class DevConsoleProcessor {
 
             @Override
             public boolean appliesTo(Origin origin, Object result) {
-                return Results.isNotFound(result);
+                return result.equals(Result.NOT_FOUND);
             }
 
             @Override
@@ -588,46 +581,28 @@ public class DevConsoleProcessor {
             ClassLoader classLoader = DevConsoleProcessor.class.getClassLoader();
             Enumeration<URL> devTemplateURLs = classLoader.getResources("/dev-templates");
             while (devTemplateURLs.hasMoreElements()) {
-                URL devTemplatesURL = devTemplateURLs.nextElement();
-                String devTemplatesURLStr = devTemplatesURL.toExternalForm();
-                if (devTemplatesURLStr.startsWith("jar:file:") && devTemplatesURLStr.endsWith("!/dev-templates")) {
-                    String jarPath = devTemplatesURLStr.substring(9, devTemplatesURLStr.length() - 15);
+                String devTemplatesURL = devTemplateURLs.nextElement().toExternalForm();
+                if (devTemplatesURL.startsWith("jar:file:") && devTemplatesURL.endsWith("!/dev-templates")) {
+                    String jarPath = devTemplatesURL.substring(9, devTemplatesURL.length() - 15);
                     if (File.separatorChar == '\\') {
                         // on Windows this will be /C:/some/path, so turn it into C:\some\path
                         jarPath = jarPath.substring(1).replace('/', '\\');
                     }
                     try (FileSystem fs = FileSystems
                             .newFileSystem(Paths.get(URLDecoder.decode(jarPath, StandardCharsets.UTF_8.name())), classLoader)) {
-                        scanTemplates(fs, null, fs.getRootDirectories(), devTemplatePaths);
-                    }
-                } else if ("file".equals(devTemplatesURL.getProtocol())) {
-                    // This can happen if you run an example app in dev mode 
-                    // and this app is part of a multi-module project which also declares the extension
-                    // Just try to locate the pom.properties file in the target/maven-archiver directory
-                    // Note that this hack will not work if addMavenDescriptor=false or if the pomPropertiesFile is overriden
-                    Path classes = Paths.get(devTemplatesURL.toURI()).getParent();
-                    Path target = classes != null ? classes.getParent() : null;
-                    if (target != null) {
-                        Path mavenArchiver = target.resolve("maven-archiver");
-                        if (mavenArchiver.toFile().canRead()) {
-                            scanTemplates(null, mavenArchiver, Collections.singleton(classes), devTemplatePaths);
-                        }
+                        scanTemplates(fs, devTemplatePaths);
                     }
                 }
             }
-        } catch (IOException | URISyntaxException e) {
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private void scanTemplates(FileSystem fs, Path pomPropertiesPath, Iterable<Path> rootDirectories,
-            BuildProducer<DevTemplatePathBuildItem> devTemplatePaths)
-            throws IOException {
-        Entry<String, String> entry = fs != null ? ArtifactInfoUtil.groupIdAndArtifactId(fs)
-                : ArtifactInfoUtil.groupIdAndArtifactId(pomPropertiesPath);
+    private void scanTemplates(FileSystem fs, BuildProducer<DevTemplatePathBuildItem> devTemplatePaths) throws IOException {
+        Entry<String, String> entry = ArtifactInfoUtil.groupIdAndArtifactId(fs);
         if (entry == null) {
-            throw new RuntimeException("Missing pom metadata [fileSystem: " + fs + ", rootDirectories: " + rootDirectories
-                    + ", pomPath: " + pomPropertiesPath + "]");
+            throw new RuntimeException("Artifact at " + fs + " is missing pom metadata");
         }
         String prefix;
         // don't move stuff for our "root" dev console artifact, since it includes the main template
@@ -636,13 +611,12 @@ public class DevConsoleProcessor {
             prefix = "";
         else
             prefix = entry.getKey() + "." + entry.getValue() + "/";
-
-        for (Path root : rootDirectories) {
-            Path devTemplatesPath = root.resolve("dev-templates");
+        for (Path root : fs.getRootDirectories()) {
+            Path devTemplatesPath = fs.getPath("/dev-templates");
             Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
                 @Override
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                    if (dir.equals(root) || dir.toString().equals("/") || dir.startsWith(devTemplatesPath))
+                    if (dir.toString().equals("/") || dir.startsWith(devTemplatesPath))
                         return FileVisitResult.CONTINUE;
                     return FileVisitResult.SKIP_SUBTREE;
                 }
@@ -653,9 +627,6 @@ public class DevConsoleProcessor {
                     // don't move tags yet, since we don't know how to use them afterwards
                     String relativePath = devTemplatesPath.relativize(file).toString();
                     String correctedPath;
-                    if (File.separatorChar == '\\') {
-                        relativePath = relativePath.replace('\\', '/');
-                    }
                     if (relativePath.startsWith(DevTemplatePathBuildItem.TAGS))
                         correctedPath = relativePath;
                     else
@@ -789,7 +760,7 @@ public class DevConsoleProcessor {
                     }
                     return "/io.quarkus.quarkus-vertx-http/openInIDE";
             }
-            return Results.notFound(ctx);
+            return Results.Result.NOT_FOUND;
         }
 
         /**

@@ -32,7 +32,6 @@ import io.quarkus.deployment.builditem.TransformedClassesBuildItem;
 import io.quarkus.deployment.configuration.RunTimeConfigurationGenerator;
 import io.quarkus.dev.appstate.ApplicationStateNotification;
 import io.quarkus.runtime.Quarkus;
-import io.quarkus.runtime.configuration.RuntimeOverrideConfigSource;
 
 public class StartupActionImpl implements StartupAction {
 
@@ -140,11 +139,6 @@ public class StartupActionImpl implements StartupAction {
             Thread.currentThread().setContextClassLoader(old);
         }
 
-    }
-
-    @Override
-    public void overrideConfig(Map<String, String> config) {
-        RuntimeOverrideConfigSource.setConfig(runtimeClassLoader, config);
     }
 
     /**
