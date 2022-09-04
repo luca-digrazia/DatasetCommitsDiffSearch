@@ -1,15 +1,16 @@
 package org.graylog.plugins.enterprise.search.rest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.util.concurrent.Uninterruptibles;
+import com.google.common.collect.ImmutableMap;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog.plugins.enterprise.search.Search;
-import org.graylog.plugins.enterprise.search.SearchJob;
-import org.graylog.plugins.enterprise.search.db.SearchDbService;
-import org.graylog.plugins.enterprise.search.db.SearchJobService;
+import org.graylog.plugins.enterprise.search.Query;
+import org.graylog.plugins.enterprise.search.QueryJob;
+import org.graylog.plugins.enterprise.search.QueryResult;
+import org.graylog.plugins.enterprise.search.db.QueryDbService;
+import org.graylog.plugins.enterprise.search.db.QueryJobService;
 import org.graylog.plugins.enterprise.search.engine.QueryEngine;
 import org.graylog2.plugin.rest.PluginRestResource;
 import org.graylog2.shared.rest.resources.RestResource;
@@ -17,15 +18,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
-import javax.ws.rs.InternalServerErrorException;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -33,9 +31,7 @@ import javax.ws.rs.core.UriInfo;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 // TODO permission system
@@ -49,32 +45,31 @@ public class SearchResource extends RestResource implements PluginRestResource {
     private static final String BASE_PATH = "plugins/org.graylog.plugins.enterprise/search";
 
     private final QueryEngine queryEngine;
-    private final SearchDbService searchDbService;
-    private final SearchJobService searchJobService;
+    private final QueryDbService queryDbService;
+    private final QueryJobService queryJobService;
     private final ObjectMapper objectMapper;
 
     @Inject
-    public SearchResource(QueryEngine queryEngine,
-                          SearchDbService searchDbService,
-                          SearchJobService searchJobService,
-                          ObjectMapper objectMapper) {
+    public SearchResource(QueryEngine queryEngine, QueryDbService queryDbService, QueryJobService queryJobService, ObjectMapper objectMapper) {
         this.queryEngine = queryEngine;
-        this.searchDbService = searchDbService;
-        this.searchJobService = searchJobService;
+        this.queryDbService = queryDbService;
+        this.queryJobService = queryJobService;
         this.objectMapper = objectMapper;
     }
 
     @POST
-    @ApiOperation(value = "Create a search query", response = Search.class, code = 201)
-    public Response createSearch(@ApiParam Search search) {
+    @ApiOperation(value = "Create a search query", response = Query.class, code = 201)
+    public Response createQuery(@ApiParam Query query) {
 
-        final Search saved = searchDbService.save(search);
+        // TODO validate query
+        query = query.withSearchTypeIds();
+
+        final Query saved = queryDbService.save(query);
         if (saved == null || saved.id() == null) {
             return Response.serverError().build();
         }
         LOG.info("Created new search object {}", saved.id());
-//        final Query annotated = saved.withInfo(queryEngine.parse(saved));
-        Search annotated = saved;
+        final Query annotated = saved.withInfo(queryEngine.parse(saved));
         //noinspection ConstantConditions
         return Response.created(URI.create(annotated.id())).entity(annotated).build();
     }
@@ -82,18 +77,18 @@ public class SearchResource extends RestResource implements PluginRestResource {
     @GET
     @ApiOperation(value = "Retrieve a search query")
     @Path("{id}")
-    public Search getSearch(@ApiParam(name = "id") @PathParam("id") String queryId) {
-        return searchDbService.get(queryId)
-//                .map(query -> query.withInfo(queryEngine.parse(query)))
+    public Query getQuery(@ApiParam(name = "id") @PathParam("id") String queryId) {
+        return queryDbService.get(queryId)
+                .map(query -> query.withInfo(queryEngine.parse(query)))
                 .orElseThrow(() -> new NotFoundException("No such search query " + queryId));
     }
 
     @GET
     @ApiOperation(value = "Get all current search queries in the system")
-    public List<Search> getAllSearches() {
+    public List<Query> getAllQueries() {
         // TODO should be paginated and limited to own (or visible queries)
-        return searchDbService.streamAll()
-//                .map(query -> query.withInfo(queryEngine.parse(query)))
+        return queryDbService.streamAll()
+                .map(query -> query.withInfo(queryEngine.parse(query)))
                 .collect(Collectors.toList());
     }
 
@@ -104,15 +99,15 @@ public class SearchResource extends RestResource implements PluginRestResource {
     public Response executeQuery(@Context UriInfo uriInfo,
                                  @ApiParam(name = "id") @PathParam("id") String id,
                                  @ApiParam Map<String, Object> executionState) {
-        Search search = getSearch(id);
-        search = search.applyExecutionState(objectMapper, executionState);
+        Query query = getQuery(id);
+        query = query.applyExecutionState(objectMapper, executionState);
 
-        final SearchJob searchJob = searchJobService.create(search);
+        final QueryJob queryJob = queryJobService.create(query);
 
-        final SearchJob runningSearchJob = queryEngine.execute(searchJob);
+        queryEngine.execute(queryJob);
 
-        return Response.created(URI.create(BASE_PATH + "/status/" + runningSearchJob.getId()))
-                .entity(runningSearchJob)
+        return Response.created(URI.create(BASE_PATH + "/status/" + queryJob.getId()))
+                .entity(ImmutableMap.of("job_id", queryJob.getId()))
                 .build();
     }
 
@@ -120,30 +115,11 @@ public class SearchResource extends RestResource implements PluginRestResource {
     @GET
     @ApiOperation(value = "Retrieve the status of an executed query")
     @Path("status/{jobId}")
-    public SearchJob jobStatus(@ApiParam(name = "jobId") @PathParam("jobId") String jobId) {
-        final SearchJob searchJob = searchJobService.load(jobId).orElseThrow(NotFoundException::new);
-        try {
-            // force a "conditional join", to catch fast responses without having to poll
-            Uninterruptibles.getUninterruptibly(searchJob.getResultFuture(),5, TimeUnit.MILLISECONDS);
-        } catch (ExecutionException | TimeoutException ignore) {
-        }
-        return searchJob;
-    }
+    public QueryResult jobStatus(@ApiParam(name = "jobId") @PathParam("jobId") String jobId) {
+        final QueryJob queryJob = queryJobService.load(jobId).orElseThrow(NotFoundException::new);
 
-    @POST
-    @ApiOperation(value = "Execute a new synchronous search", notes = "Executes a new search and waits for its result")
-    @Path("sync")
-    public SearchJob executeSyncJob(@ApiParam Search search,
-                                    @ApiParam(name = "timeout", defaultValue = "60000")
-                                    @QueryParam("timeout") @DefaultValue("60000") long timeout) {
-        final SearchJob searchJob = queryEngine.execute(searchJobService.create(search));
+        final CompletableFuture<QueryResult> future = queryJob.getResultFuture();
 
-        try {
-            Uninterruptibles.getUninterruptibly(searchJob.getResultFuture(), timeout, TimeUnit.MILLISECONDS);
-        } catch (ExecutionException | TimeoutException e) {
-            throw new InternalServerErrorException("Timeout while executing search job");
-        }
-
-        return searchJob;
+        return future.join();
     }
 }

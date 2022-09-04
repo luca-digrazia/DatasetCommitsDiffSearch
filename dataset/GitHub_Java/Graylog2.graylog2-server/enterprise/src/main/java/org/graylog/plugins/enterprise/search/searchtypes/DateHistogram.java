@@ -22,7 +22,6 @@ public abstract class DateHistogram implements SearchType {
     @Override
     public abstract String type();
 
-    @Override
     @Nullable
     @JsonProperty
     public abstract String id();
@@ -72,12 +71,6 @@ public abstract class DateHistogram implements SearchType {
         @Override
         @JsonProperty
         public abstract String id();
-
-        @Override
-        @JsonProperty
-        public String type() {
-            return NAME;
-        }
 
         @JsonProperty
         public abstract Map<Long, Long> results();

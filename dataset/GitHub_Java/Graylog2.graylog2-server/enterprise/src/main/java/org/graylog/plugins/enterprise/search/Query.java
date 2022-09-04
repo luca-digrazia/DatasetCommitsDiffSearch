@@ -1,46 +1,45 @@
 package org.graylog.plugins.enterprise.search;
 
+import com.eaio.uuid.UUID;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import com.google.auto.value.AutoValue;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import org.graylog.plugins.enterprise.search.engine.BackendQuery;
-import org.graylog.plugins.enterprise.search.engine.EmptyTimeRange;
 import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 import org.mongojack.Id;
+import org.mongojack.ObjectId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
-
-import static com.google.common.collect.ImmutableSortedSet.of;
+import java.util.stream.Collectors;
 
 @AutoValue
 @JsonAutoDetect
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonDeserialize(builder = Query.Builder.class)
+@JsonDeserialize(builder = AutoValue_Query.Builder.class)
 public abstract class Query {
     private static final Logger LOG = LoggerFactory.getLogger(Query.class);
 
     /**
-     * Implicitly created by {@link Builder#build} to make looking up search types easier and quicker. Simply a unique index by ID.
+     * Implicitely created by {@link Builder#build} to make looking up search types easier and quicker. Simply a unique index by ID.
      */
     @JsonIgnore
     private ImmutableMap<String, SearchType> searchTypesIndex;
 
     @Id
+    @ObjectId
+    @Nullable
     @JsonProperty
     public abstract String id();
 
@@ -51,17 +50,17 @@ public abstract class Query {
     @JsonProperty
     public abstract Filter filter();
 
-    @Nonnull
+    @Nullable
     @JsonProperty
     public abstract BackendQuery query();
 
-    @Nonnull
+    @Nullable
     @JsonProperty("search_types")
-    public abstract ImmutableSet<SearchType> searchTypes();
+    public abstract ImmutableList<SearchType> searchTypes();
 
-    @Nonnull
+    @Nullable
     @JsonProperty
-    public abstract ImmutableSet<Parameter> parameters();
+    public abstract Map<String, ParameterBinding> parameters();
 
     @Nullable
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
@@ -70,9 +69,7 @@ public abstract class Query {
     public abstract Builder toBuilder();
 
     public static Builder builder() {
-        return new AutoValue_Query.Builder()
-                .searchTypes(of())
-                .parameters(of());
+        return new AutoValue_Query.Builder();
     }
 
     public Query applyExecutionState(ObjectMapper objectMapper, Map<String, Object> state) {
@@ -103,9 +100,30 @@ public abstract class Query {
                     final SearchType updatedSearchType = searchType.applyExecutionContext(objectMapper, (Map<String, Object>) stateEntry.getValue());
                     updatedSearchTypes.put(id, updatedSearchType);
                 }
-                builder.searchTypes(ImmutableSet.copyOf(updatedSearchTypes.values()));
+                builder.searchTypes(ImmutableList.copyOf(updatedSearchTypes.values()));
             }
             return builder.build();
+        }
+        return this;
+    }
+
+    /**
+     * Search queries require
+     *
+     * @return a Query instance with IDs assigned to each of its search types.
+     */
+    public Query withSearchTypeIds() {
+        final List<SearchType> searchTypes = searchTypes();
+        if (searchTypes != null) {
+            return this.toBuilder().searchTypes(searchTypes.stream()
+                    .map(searchType -> {
+                        if (searchType.id() == null) {
+                            return searchType.withId(new UUID().toString());
+                        } else {
+                            return searchType;
+                        }
+                    })
+                    .collect(Collectors.toList())).build();
         }
         return this;
     }
@@ -114,18 +132,7 @@ public abstract class Query {
         return toBuilder().info(queryInfo).build();
     }
 
-    public static Query emptyRoot() {
-        return Query.builder()
-                .id("")
-                .timerange(EmptyTimeRange.emptyTimeRange())
-                .query(new BackendQuery.Fallback())
-                .filter(null)
-                .info(null)
-                .build();
-    }
-
     @AutoValue.Builder
-    @JsonPOJOBuilder(withPrefix = "")
     public abstract static class Builder {
         @Id
         @JsonProperty
@@ -141,24 +148,22 @@ public abstract class Query {
         public abstract Builder query(BackendQuery query);
 
         @JsonProperty("search_types")
-        public abstract Builder searchTypes(@Nullable Set<SearchType> searchTypes);
+        public abstract Builder searchTypes(@Nullable List<SearchType> searchTypes);
 
         @JsonProperty
-        public abstract Builder parameters(ImmutableSet<Parameter> parameters);
+        public abstract Builder parameters(Map<String, ParameterBinding> parameters);
 
         @JsonIgnore
         public abstract Builder info(@Nullable QueryInfo info);
 
         abstract Query autoBuild();
 
-        @JsonCreator
-        public static Builder createWithDefaults() {
-            return Query.builder().parameters(ImmutableSet.of());
-        }
-
         public Query build() {
             final Query query = autoBuild();
-            query.searchTypesIndex = Maps.uniqueIndex(query.searchTypes(), SearchType::id);
+            final ImmutableList<SearchType> searchTypes = query.searchTypes();
+            if (searchTypes != null) {
+                query.searchTypesIndex = Maps.uniqueIndex(searchTypes, SearchType::id);
+            }
             return query;
         }
     }
