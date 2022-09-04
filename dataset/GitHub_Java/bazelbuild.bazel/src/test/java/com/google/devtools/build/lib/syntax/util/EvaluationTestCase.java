@@ -115,21 +115,20 @@ public class EvaluationTestCase {
 
   /**
    * Sets the specified {@code TestMode} and tries to create the appropriate {@code Environment}
-   *
    * @param testMode
    * @throws Exception
    */
-  protected void setMode(TestMode testMode, String... skylarkOptions) throws Exception {
+  protected void setMode(TestMode testMode) throws Exception {
     this.testMode = testMode;
-    env = newEnvironmentWithSkylarkOptions(skylarkOptions);
+    env = newEnvironment();
   }
 
-  protected void enableSkylarkMode(String... skylarkOptions) throws Exception {
-    setMode(TestMode.SKYLARK, skylarkOptions);
+  protected void enableSkylarkMode() throws Exception {
+    setMode(TestMode.SKYLARK);
   }
 
-  protected void enableBuildMode(String... skylarkOptions) throws Exception {
-    setMode(TestMode.BUILD, skylarkOptions);
+  protected void enableBuildMode() throws Exception {
+    setMode(TestMode.BUILD);
   }
 
   public EventHandler getEventHandler() {
@@ -561,15 +560,11 @@ public class EvaluationTestCase {
    * A class that runs all tests in Skylark mode
    */
   protected class SkylarkTest extends ModalTestCase {
-    private final String[] skylarkOptions;
-
-    public SkylarkTest(String... skylarkOptions) {
-      this.skylarkOptions = skylarkOptions;
-    }
+    public SkylarkTest() {}
 
     @Override
     protected void run(Testable testable) throws Exception {
-      enableSkylarkMode(skylarkOptions);
+      enableSkylarkMode();
       testable.run();
     }
   }
