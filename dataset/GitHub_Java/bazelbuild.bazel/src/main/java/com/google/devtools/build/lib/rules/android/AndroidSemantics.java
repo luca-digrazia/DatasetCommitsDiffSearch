@@ -112,8 +112,4 @@ public interface AndroidSemantics {
       Artifact classesDexZip,
       ProguardOutput proguardOutput)
       throws InterruptedException;
-
-  default AndroidDataContext makeContextForNative(RuleContext ruleContext) {
-    return AndroidDataContext.forNative(ruleContext);
-  }
 }
