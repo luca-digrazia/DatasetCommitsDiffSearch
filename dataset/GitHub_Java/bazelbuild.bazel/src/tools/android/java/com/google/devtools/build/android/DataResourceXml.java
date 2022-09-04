@@ -46,6 +46,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import javax.xml.stream.FactoryConfigurationError;
 import javax.xml.stream.XMLEventReader;
@@ -173,7 +174,7 @@ public class DataResourceXml implements DataResource {
       Value protoValue,
       DataSource source,
       ResourceType resourceType,
-      Map<String, Boolean> fullyQualifiedNames)
+      Map<String, Entry<FullyQualifiedName, Boolean>> fullyQualifiedNames)
       throws InvalidProtocolBufferException {
     DataResourceXml dataResourceXml =
         createWithNamespaces(
@@ -211,7 +212,9 @@ public class DataResourceXml implements DataResource {
   }
 
   private static XmlResourceValue valueFromProto(
-      Value proto, ResourceType resourceType, Map<String, Boolean> qualifiedReferenceToInlineStatus)
+      Value proto,
+      ResourceType resourceType,
+      Map<String, Entry<FullyQualifiedName, Boolean>> fullyQualifiedNames)
       throws InvalidProtocolBufferException {
     switch (resourceType) {
       case STYLE:
@@ -223,7 +226,7 @@ public class DataResourceXml implements DataResource {
       case ATTR:
         return AttrXmlResourceValue.from(proto);
       case STYLEABLE:
-        return StyleableXmlResourceValue.from(proto, qualifiedReferenceToInlineStatus);
+        return StyleableXmlResourceValue.from(proto, fullyQualifiedNames);
       case ID:
         return IdXmlResourceValue.of();
       case DIMEN:
@@ -388,7 +391,7 @@ public class DataResourceXml implements DataResource {
   }
 
   @Override
-  public int serializeTo(DataSourceTable sourceTable, OutputStream outStream)
+  public int serializeTo(DataKey key, DataSourceTable sourceTable, OutputStream outStream)
       throws IOException {
     return xml.serializeTo(sourceTable.getSourceId(source), namespaces, outStream);
   }
