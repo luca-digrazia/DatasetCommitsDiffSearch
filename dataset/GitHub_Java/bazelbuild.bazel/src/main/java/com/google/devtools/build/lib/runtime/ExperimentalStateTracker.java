@@ -15,9 +15,7 @@ package com.google.devtools.build.lib.runtime;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionCompletionEvent;
 import com.google.devtools.build.lib.actions.ActionStartedEvent;
@@ -44,16 +42,14 @@ import com.google.devtools.build.lib.util.io.PositionAwareAnsiTerminalWriter;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import java.io.IOException;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 /**
  * An experimental state tracker for the new experimental UI.
@@ -81,24 +77,21 @@ class ExperimentalStateTracker {
   // Non-positive values indicate not to aim for a particular width.
   private final int targetWidth;
 
-  private static class ActionState {
-    public final Action action;
-    public final long nanoStartTime;
-    public final boolean executing;
-    public final String status;
+  // currently running actions, using the path of the primary
+  // output as unique identifier.
+  private final LinkedHashSet<String> nonExecutingActions;
+  private final LinkedHashSet<String> executingActions;
+  private final Map<String, Action> actions;
+  private final Map<String, String> actionStatus;
+  // Time the action entered its current status.
+  private final Map<String, Long> actionNanoStartTimes;
+  // As sometimes the executing stategy might be sent before the action started,
+  // we have to keep track of a small number of executing, but not yet started
+  // actions.
+  private final Set<String> notStartedExecutingActions;
 
-    private ActionState(Action action, long nanoStartTime, boolean executing, String status) {
-      this.action = action;
-      this.nanoStartTime = nanoStartTime;
-      this.executing = executing;
-      this.status = status;
-    }
-  }
-
-  private final Map<String, ActionState> activeActions;
-  private final Map<String, String> notStartedActionStatus;
-
-  // running downloads are identified by the original URL they were trying to access.
+  // running downloads are identified by the original URL they were trying to
+  // access.
   private final Deque<String> runningDownloads;
   private final Map<String, Long> downloadNanoStartTimes;
   private final Map<String, FetchProgress> downloads;
@@ -109,7 +102,7 @@ class ExperimentalStateTracker {
   // was discovered as a test.
   private final Map<Label, Set<String>> testActions;
 
-  private final AtomicInteger actionsCompleted;
+  private int actionsCompleted;
   private int totalTests;
   private int completedTests;
   private TestSummary mostRecentTest;
@@ -126,17 +119,19 @@ class ExperimentalStateTracker {
   private long bepTransportClosingStartTimeMillis;
 
   ExperimentalStateTracker(Clock clock, int targetWidth) {
-    this.activeActions = new ConcurrentHashMap<>();
-    this.notStartedActionStatus = new ConcurrentHashMap<>();
-
-    this.actionsCompleted = new AtomicInteger();
-    this.testActions = new ConcurrentHashMap<>();
+    this.nonExecutingActions = new LinkedHashSet<>();
+    this.executingActions = new LinkedHashSet<>();
+    this.actions = new TreeMap<>();
+    this.actionNanoStartTimes = new TreeMap<>();
+    this.actionStatus = new TreeMap<>();
+    this.testActions = new TreeMap<>();
     this.runningDownloads = new ArrayDeque<>();
     this.downloads = new TreeMap<>();
     this.downloadNanoStartTimes = new TreeMap<>();
     this.ok = true;
     this.clock = clock;
     this.targetWidth = targetWidth;
+    this.notStartedExecutingActions = new TreeSet<>();
   }
 
   ExperimentalStateTracker(Clock clock) {
@@ -174,6 +169,10 @@ class ExperimentalStateTracker {
     }
   }
 
+  synchronized int totalNumberOfActions() {
+    return nonExecutingActions.size() + executingActions.size();
+  }
+
   /**
    * Make the state tracker aware of the fact that the analyis has finished. Return a summary of the
    * work done in the analysis phase.
@@ -201,7 +200,6 @@ class ExperimentalStateTracker {
 
     if (event.getResult().getSuccess()) {
       status = "INFO";
-      int actionsCompleted = this.actionsCompleted.get();
       if (failedTests == 0) {
         additionalMessage =
             additionalInfo + "Build completed successfully, "
@@ -242,17 +240,21 @@ class ExperimentalStateTracker {
     }
   }
 
-  void actionStarted(ActionStartedEvent event) {
+  synchronized void actionStarted(ActionStartedEvent event) {
     Action action = event.getAction();
     String name = action.getPrimaryOutput().getPath().getPathString();
     Long nanoStartTime = event.getNanoTimeStart();
 
-    String status = notStartedActionStatus.remove(name);
-    boolean nowExecuting = status != null;
-    activeActions.put(
-        name,
-        new ActionState(action, nanoStartTime, nowExecuting, nowExecuting ? status : null));
-
+    // We might already know about the action, if the status message was sent over the
+    // bus before the start notification. In this case the action is already executing,
+    // otherwise not yet.
+    if (notStartedExecutingActions.remove(name)) {
+      executingActions.add(name);
+    } else {
+      nonExecutingActions.add(name);
+    }
+    actions.put(name, action);
+    actionNanoStartTimes.put(name, nanoStartTime);
     if (action.getOwner() != null) {
       Label owner = action.getOwner().getLabel();
       if (owner != null) {
@@ -264,39 +266,41 @@ class ExperimentalStateTracker {
     }
   }
 
-  void actionStatusMessage(ActionStatusMessage event) {
+  synchronized void actionStatusMessage(ActionStatusMessage event) {
     String strategy = event.getStrategy();
     String name = event.getActionMetadata().getPrimaryOutput().getPath().getPathString();
+    executingActions.remove(name);
+    nonExecutingActions.remove(name);
 
-    ActionState state = activeActions.remove(name);
-
+    actionNanoStartTimes.put(name, clock.nanoTime());
     if (strategy != null) {
-      if (state != null) {
-        activeActions.put(
-            name, new ActionState(state.action, clock.nanoTime(), /*executing=*/ true, strategy));
+      actionStatus.put(name, strategy);
+      // only add the action, if we already know about it being started
+      if (actions.get(name) != null) {
+        executingActions.add(name);
       } else {
-        notStartedActionStatus.put(name, strategy);
+        notStartedExecutingActions.add(name);
       }
     } else {
-      if (state != null) {
-        activeActions.put(
-            name,
-            new ActionState(
-                state.action, clock.nanoTime(), /*executing=*/ false, event.getMessage()));
+      String message = event.getMessage();
+      actionStatus.put(name, message);
+      // only add the action, if we already know about it being started
+      if (actions.get(name) != null) {
+        nonExecutingActions.add(name);
       }
-      notStartedActionStatus.remove(name);
+      notStartedExecutingActions.remove(name);
     }
   }
 
-  void actionCompletion(ActionCompletionEvent event) {
-    actionsCompleted.incrementAndGet();
+  synchronized void actionCompletion(ActionCompletionEvent event) {
+    actionsCompleted++;
     Action action = event.getAction();
     String name = action.getPrimaryOutput().getPath().getPathString();
-    activeActions.remove(name);
-    Preconditions.checkState(
-        !notStartedActionStatus.containsKey(name),
-        "Should not complete an action before starting it: %s",
-        name);
+    executingActions.remove(name);
+    nonExecutingActions.remove(name);
+    actions.remove(name);
+    actionNanoStartTimes.remove(name);
+    actionStatus.remove(name);
 
     if (action.getOwner() != null) {
       Label owner = action.getOwner().getLabel();
@@ -386,33 +390,30 @@ class ExperimentalStateTracker {
     }
 
     String sep = "";
-    boolean allReported = true;
+    int count = 0;
     for (String action : allActions) {
-      ActionState actionState = activeActions.get(action);
-      if (actionState == null) {
-        // This action must have completed while we were constructing this output. Skip it.
-        continue;
-      }
-      long nanoRuntime = nanoTime - actionState.nanoStartTime;
+      long nanoRuntime = nanoTime - actionNanoStartTimes.get(action);
       long runtimeSeconds = nanoRuntime / NANOS_PER_SECOND;
       String text = sep + runtimeSeconds + "s";
       if (remainingWidth < text.length()) {
-        allReported = false;
         break;
       }
       message.append(text);
       remainingWidth -= text.length();
+      count++;
       sep = ", ";
     }
-    return message.append(allReported ? "]" : postfix).toString();
+    if (count == allActions.size()) {
+      postfix = "]";
+    }
+    return message.append(postfix).toString();
   }
 
   // Describe an action by a string of the desired length; if describing that action includes
   // describing other actions, add those to the to set of actions to skip in further samples of
   // actions.
-  private String describeAction(
-      ActionState actionState, long nanoTime, int desiredWidth, Set<String> toSkip) {
-    Action action = actionState.action;
+  private String describeAction(String name, long nanoTime, int desiredWidth, Set<String> toSkip) {
+    Action action = actions.get(name);
     if (action.getOwner() != null) {
       Label owner = action.getOwner().getLabel();
       if (owner != null) {
@@ -428,13 +429,13 @@ class ExperimentalStateTracker {
 
     String postfix = "";
     String prefix = "";
-    long nanoRuntime = nanoTime - actionState.nanoStartTime;
+    long nanoRuntime = nanoTime - actionNanoStartTimes.get(name);
     long runtimeSeconds = nanoRuntime / NANOS_PER_SECOND;
     String strategy = null;
-    if (actionState.executing) {
-      strategy = actionState.status;
+    if (executingActions.contains(name)) {
+      strategy = actionStatus.get(name);
     } else {
-      String status = actionState.status;
+      String status = actionStatus.get(name);
       if (status == null) {
         status = NO_STATUS;
       }
@@ -507,37 +508,23 @@ class ExperimentalStateTracker {
     return prefix + message + postfix;
   }
 
-  private ActionState getOldestAction() {
-    long minStart = Long.MAX_VALUE;
-    ActionState result = null;
-    for (ActionState action : activeActions.values()) {
-      if (action.nanoStartTime < minStart) {
-        minStart = action.nanoStartTime;
-        result = action;
-      }
-    }
-    return result;
+  /**
+   * Stream of actions in decreasing order of importance for the UI. I.e., first have all executing
+   * actions and then all non-executing actions, each time in order of increasing start time for
+   * that state.
+   */
+  private Stream<String> sortedActions() {
+    return Stream.concat(executingActions.stream(), nonExecutingActions.stream());
   }
 
-  private String countActions() {
-    // TODO(djasper): Iterating over the actions here is slow, but it's only done once per refresh
-    // and thus might be faster than trying to update these values in the critical path.
-    // Re-investigate if this ever turns up in a profile.
-    int actionsCount = 0;
-    int executingActionsCount = 0;
-    for (ActionState actionState : activeActions.values()) {
-      actionsCount++;
-      if (actionState.executing) {
-        executingActionsCount++;
-      }
-    }
-
+  private synchronized String countActions() {
+    int actionsCount = totalNumberOfActions();
     if (actionsCount == 1) {
-      return " 1 action running";
-    } else if (actionsCount == executingActionsCount) {
+      return " 1 action";
+    } else if (actionsCount == executingActions.size()) {
       return "" + actionsCount + " actions running";
     } else {
-      return "" + actionsCount + " actions, " + executingActionsCount + " running";
+      return "" + actionsCount + " actions, " + executingActions.size() + " running";
     }
   }
 
@@ -545,15 +532,11 @@ class ExperimentalStateTracker {
     int count = 0;
     int totalCount = 0;
     long nanoTime = clock.nanoTime();
-    int actionCount = activeActions.size();
+    int actionCount = totalNumberOfActions();
     Set<String> toSkip = new TreeSet<>();
-    ArrayList<Map.Entry<String, ActionState>> copy = new ArrayList<>(activeActions.entrySet());
-    copy.sort(
-        Comparator.comparing((Map.Entry<String, ActionState> entry) -> !entry.getValue().executing)
-            .thenComparing(entry -> entry.getValue().nanoStartTime));
-    for (Map.Entry<String, ActionState> entry : copy) {
+    for (String action : (Iterable<String>) sortedActions()::iterator) {
       totalCount++;
-      if (toSkip.contains(entry.getKey())) {
+      if (toSkip.contains(action)) {
         continue;
       }
       count++;
@@ -563,9 +546,7 @@ class ExperimentalStateTracker {
       }
       int width =
           targetWidth - 4 - ((count >= sampleSize && count < actionCount) ? AND_MORE.length() : 0);
-      terminalWriter
-          .newline()
-          .append("    " + describeAction(entry.getValue(), nanoTime, width, toSkip));
+      terminalWriter.newline().append("    " + describeAction(action, nanoTime, width, toSkip));
     }
     if (totalCount < actionCount) {
       terminalWriter.append(AND_MORE);
@@ -577,7 +558,7 @@ class ExperimentalStateTracker {
       totalTests = event.getTestTargets().size();
       for (ConfiguredTarget target : event.getTestTargets()) {
         if (target.getLabel() != null) {
-          testActions.put(target.getLabel(), Sets.newConcurrentHashSet());
+          testActions.put(target.getLabel(), new LinkedHashSet<String>());
         }
       }
     }
@@ -621,7 +602,7 @@ class ExperimentalStateTracker {
     if (status != null) {
       return false;
     }
-    if (activeActions.size() >= 1) {
+    if (totalNumberOfActions() >= 1) {
       return true;
     }
     return false;
@@ -786,7 +767,7 @@ class ExperimentalStateTracker {
       throws IOException {
     PositionAwareAnsiTerminalWriter terminalWriter =
         new PositionAwareAnsiTerminalWriter(rawTerminalWriter);
-    int actionsCount = activeActions.size();
+    int actionsCount = totalNumberOfActions();
     if (timestamp != null) {
       terminalWriter.append(timestamp);
     }
@@ -833,10 +814,7 @@ class ExperimentalStateTracker {
       }
       terminalWriter.append(";");
     }
-    // Get the oldest action. Note that actions might have finished in the meantime and thus there
-    // might not be one.
-    ActionState oldestAction = getOldestAction();
-    if (actionsCount == 0 || oldestAction == null) {
+    if (actionsCount == 0) {
       terminalWriter.normal().append(" no action");
       maybeShowRecentTest(terminalWriter, shortVersion, targetWidth - terminalWriter.getPosition());
     } else if (actionsCount == 1) {
@@ -848,12 +826,13 @@ class ExperimentalStateTracker {
         maybeShowRecentTest(
             terminalWriter, shortVersion, targetWidth - terminalWriter.getPosition());
         String statusMessage =
-            describeAction(oldestAction, clock.nanoTime(), targetWidth - 4, null);
+            describeAction(
+                sortedActions().findFirst().get(), clock.nanoTime(), targetWidth - 4, null);
         terminalWriter.normal().newline().append("    " + statusMessage);
       } else {
         String statusMessage =
             describeAction(
-                oldestAction,
+                sortedActions().findFirst().get(),
                 clock.nanoTime(),
                 targetWidth - terminalWriter.getPosition() - 1,
                 null);
@@ -863,7 +842,10 @@ class ExperimentalStateTracker {
       if (shortVersion) {
         String statusMessage =
             describeAction(
-                oldestAction, clock.nanoTime(), targetWidth - terminalWriter.getPosition(), null);
+                sortedActions().findFirst().get(),
+                clock.nanoTime(),
+                targetWidth - terminalWriter.getPosition(),
+                null);
         statusMessage += " ... (" + countActions() + ")";
         terminalWriter.normal().append(" " + statusMessage);
       } else {
