@@ -176,6 +176,20 @@ public final class BuildOptions implements Cloneable, Serializable {
   }
 
   /**
+   * Returns true if actions should be enabled for this configuration.
+   */
+  public boolean enableActions() {
+    // It's not necessarily safe to cache this value. This is because BuildOptions is not immutable.
+    // So caching the value correctly would require keeping it updated after relevant changes.
+    for (FragmentOptions fragment : fragmentOptionsMap.values()) {
+      if (!fragment.enableActions()) {
+        return false;
+      }
+    }
+    return true;
+   }
+
+  /**
    * The cache key for the options collection. Recomputes cache key every time it's called.
    */
   public String computeCacheKey() {
@@ -412,19 +426,10 @@ public final class BuildOptions implements Cloneable, Serializable {
     }
     LinkedHashMap<Class<? extends FragmentOptions>, Map<String, Object>> differingOptions =
         new LinkedHashMap<>(diff.differingOptions.keySet().size());
-    for (Class<? extends FragmentOptions> clazz :
-        diff.differingOptions
-            .keySet()
-            .stream()
-            .sorted(lexicalFragmentOptionsComparator)
-            .collect(Collectors.toList())) {
+    for (Class<? extends FragmentOptions> clazz : diff.differingOptions.keySet()) {
       Collection<OptionDefinition> fields = diff.differingOptions.get(clazz);
       LinkedHashMap<String, Object> valueMap = new LinkedHashMap<>(fields.size());
-      for (OptionDefinition optionDefinition :
-          fields
-              .stream()
-              .sorted(Comparator.comparing(o -> o.getField().getName()))
-              .collect(Collectors.toList())) {
+      for (OptionDefinition optionDefinition : fields) {
         Object secondValue;
         try {
           secondValue = Iterables.getOnlyElement(diff.second.get(optionDefinition));
@@ -443,14 +448,8 @@ public final class BuildOptions implements Cloneable, Serializable {
     first.maybeInitializeFingerprintAndHashCode();
     return new OptionsDiffForReconstruction(
         differingOptions,
-        diff.extraFirstFragments
-            .stream()
-            .sorted(lexicalFragmentOptionsComparator)
-            .collect(ImmutableSet.toImmutableSet()),
-        diff.extraSecondFragments
-            .stream()
-            .sorted(Comparator.comparing(o -> o.getClass().getName()))
-            .collect(ImmutableList.toImmutableList()),
+        ImmutableSet.copyOf(diff.extraFirstFragments),
+        ImmutableList.copyOf(diff.extraSecondFragments),
         first.fingerprint,
         second.computeChecksum());
   }
@@ -481,14 +480,14 @@ public final class BuildOptions implements Cloneable, Serializable {
       extraSecondFragments.add(options);
     }
 
-    @VisibleForTesting
-    Set<Class<? extends FragmentOptions>> getExtraFirstFragmentClassesForTesting() {
+    /** Return the extra fragments classes from the first configuration. */
+    public Set<Class<? extends FragmentOptions>> getExtraFirstFragmentClasses() {
       return extraFirstFragments;
     }
 
-    @VisibleForTesting
-    Set<FragmentOptions> getExtraSecondFragmentsForTesting() {
-      return extraSecondFragments;
+    /** Return the extra fragments classes from the second configuration. */
+    public Set<Class<?>> getExtraSecondFragmentClasses() {
+      return extraSecondFragments.stream().map(Object::getClass).collect(Collectors.toSet());
     }
 
     public Map<OptionDefinition, Object> getFirst() {
