@@ -25,14 +25,12 @@ import com.google.devtools.build.lib.profiler.memory.AllocationTracker.RuleBytes
 import com.google.devtools.build.lib.syntax.Debug;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.FileOptions;
 import com.google.devtools.build.lib.syntax.HasBinary;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInput;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkCallable;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.SyntaxError;
 import com.google.devtools.build.lib.syntax.TokenKind;
@@ -189,19 +187,20 @@ public final class AllocationTrackerTest {
     assertThat(rules).containsExactly("myrule", new RuleBytes("myrule").addBytes(128L));
   }
 
-  private void exec(String... lines)
-      throws SyntaxError.Exception, EvalException, InterruptedException {
-    ParserInput input = ParserInput.fromString(Joiner.on("\n").join(lines), "a.star");
-    Module module =
-        Module.withPredeclared(
-            StarlarkSemantics.DEFAULT,
-            ImmutableMap.of(
-                "sample", new SamplerValue(),
-                "myrule", new MyRuleFunction()));
-    try (Mutability mu = Mutability.create("test")) {
-      StarlarkThread thread = new StarlarkThread(mu, StarlarkSemantics.DEFAULT);
-      EvalUtils.exec(input, FileOptions.DEFAULT, module, thread);
-    }
+  private void exec(String... lines) throws SyntaxError, EvalException, InterruptedException {
+    Mutability mu = Mutability.create("test");
+    StarlarkThread thread =
+        StarlarkThread.builder(mu)
+            .useDefaultSemantics()
+            .setGlobals(
+                Module.createForBuiltins(
+                    ImmutableMap.of(
+                        "sample", new SamplerValue(),
+                        "myrule", new MyRuleFunction())))
+            .build();
+    ParserInput input = ParserInput.create(Joiner.on("\n").join(lines), "a.star");
+    Module module = thread.getGlobals();
+    EvalUtils.exec(input, module, thread);
   }
 
   // A fake Bazel rule. The allocation tracker reports retained memory broken down by rule class.

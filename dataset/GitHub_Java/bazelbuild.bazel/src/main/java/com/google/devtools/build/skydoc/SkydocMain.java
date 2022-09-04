@@ -55,6 +55,7 @@ import com.google.devtools.build.lib.skylarkbuildapi.repository.RepositoryBootst
 import com.google.devtools.build.lib.skylarkbuildapi.stubs.ProviderStub;
 import com.google.devtools.build.lib.skylarkbuildapi.stubs.SkylarkAspectStub;
 import com.google.devtools.build.lib.skylarkbuildapi.test.TestingBootstrap;
+import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
@@ -64,7 +65,6 @@ import com.google.devtools.build.lib.syntax.LoadStatement;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInput;
-import com.google.devtools.build.lib.syntax.Resolver;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkCallable;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
@@ -79,10 +79,10 @@ import com.google.devtools.build.skydoc.fakebuildapi.FakeBuildApiGlobals;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeConfigApi;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeDefaultInfoProvider;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeOutputGroupInfo.FakeOutputGroupInfoProvider;
+import com.google.devtools.build.skydoc.fakebuildapi.FakeSkylarkAttrApi;
+import com.google.devtools.build.skydoc.fakebuildapi.FakeSkylarkCommandLineApi;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeSkylarkNativeModuleApi;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeSkylarkRuleFunctionsApi;
-import com.google.devtools.build.skydoc.fakebuildapi.FakeStarlarkAttrModuleApi;
-import com.google.devtools.build.skydoc.fakebuildapi.FakeStarlarkCommandLineApi;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeStructApi;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeStructApi.FakeStructProviderApi;
 import com.google.devtools.build.skydoc.fakebuildapi.android.FakeAndroidApplicationResourceInfo.FakeAndroidApplicationResourceInfoProvider;
@@ -107,8 +107,8 @@ import com.google.devtools.build.skydoc.fakebuildapi.java.FakeJavaCommon;
 import com.google.devtools.build.skydoc.fakebuildapi.java.FakeJavaInfo.FakeJavaInfoProvider;
 import com.google.devtools.build.skydoc.fakebuildapi.java.FakeJavaProtoCommon;
 import com.google.devtools.build.skydoc.fakebuildapi.platform.FakePlatformCommon;
-import com.google.devtools.build.skydoc.fakebuildapi.proto.FakeProtoCommon;
-import com.google.devtools.build.skydoc.fakebuildapi.proto.FakeProtoInfo.FakeProtoInfoProvider;
+import com.google.devtools.build.skydoc.fakebuildapi.proto.FakeProtoInfoApiProvider;
+import com.google.devtools.build.skydoc.fakebuildapi.proto.FakeProtoModule;
 import com.google.devtools.build.skydoc.fakebuildapi.python.FakePyInfo.FakePyInfoProvider;
 import com.google.devtools.build.skydoc.fakebuildapi.python.FakePyRuntimeInfo.FakePyRuntimeInfoProvider;
 import com.google.devtools.build.skydoc.fakebuildapi.python.FakePyStarlarkTransitions;
@@ -144,10 +144,10 @@ import java.util.stream.Collectors;
 /**
  * Main entry point for the Skydoc binary.
  *
- * <p>Skydoc generates human-readable documentation for relevant details of Starlark files by
- * running a Starlark interpreter with a fake implementation of the build API.
+ * <p>Skydoc generates human-readable documentation for relevant details of skylark files by running
+ * a skylark interpreter with a fake implementation of the build API.
  *
- * <p>Currently, Skydoc generates documentation for Starlark rule definitions (discovered by
+ * <p>Currently, Skydoc generates documentation for skylark rule definitions (discovered by
  * invocations of the build API function {@code rule()}.
  *
  * <p>Usage:
@@ -156,9 +156,9 @@ import java.util.stream.Collectors;
  *   skydoc {target_skylark_file_label} {output_file} [symbol_name]...
  * </pre>
  *
- * <p>Generates documentation for all exported symbols of the target Starlark file that are
- * specified in the list of symbol names. If no symbol names are supplied, outputs documentation for
- * all exported symbols in the target Starlark file.
+ * <p>Generates documentation for all exported symbols of the target skylark file that are specified
+ * in the list of symbol names. If no symbol names are supplied, outputs documentation for all
+ * exported symbols in the target skylark file.
  */
 public class SkydocMain {
 
@@ -190,6 +190,7 @@ public class SkydocMain {
             .build();
     parser.parseAndExitUponError(args);
     StarlarkSemanticsOptions semanticsOptions = parser.getOptions(StarlarkSemanticsOptions.class);
+    semanticsOptions.incompatibleDepsetUnion = false;
     semanticsOptions.incompatibleDisableDeprecatedAttrParams = false;
     semanticsOptions.incompatibleNewActionsApi = false;
     SkydocOptions skydocOptions = parser.getOptions(SkydocOptions.class);
@@ -275,11 +276,11 @@ public class SkydocMain {
   }
 
   /**
-   * Evaluates/interprets the Starlark file at a given path and its transitive Starlark dependencies
+   * Evaluates/interprets the skylark file at a given path and its transitive skylark dependencies
    * using a fake build API and collects information about all rule definitions made in the root
-   * Starlark file.
+   * skylark file.
    *
-   * @param label the label of the Starlark file to evaluate
+   * @param label the label of the skylark file to evaluate
    * @param ruleInfoMap a map builder to be populated with rule definition information for named
    *     rules. Keys are exported names of rules, and values are their {@link RuleInfo} rule
    *     descriptions. For example, 'my_rule = rule(...)' has key 'my_rule'
@@ -293,9 +294,9 @@ public class SkydocMain {
    * @param aspectInfoMap a map builder to be populated with aspect definition information for named
    *     aspects. Keys are exported names of aspects, and values are the {@link AspectInfo} asepct
    *     descriptions. For example, 'my_aspect = aspect(...)' has key 'my_aspect'
-   * @param moduleDocMap a map builder to be populated with module docstrings for Starlark file.
-   *     Keys are labels of Starlark files and values are their module docstrings. If the module has
-   *     no docstring, an empty string will be printed.
+   * @param moduleDocMap a map builder to be populated with module docstrings for skylark file. Keys
+   *     are labels of skylark files and values are their module docstrings. If the module has no
+   *     docstring, an empty string will be printed.
    * @throws InterruptedException if evaluation is interrupted
    */
   public StarlarkThread eval(
@@ -319,16 +320,16 @@ public class SkydocMain {
         recursiveEval(
             semantics, label, ruleInfoList, providerInfoList, aspectInfoList, moduleDocMap);
 
-    Map<StarlarkCallable, RuleInfoWrapper> ruleFunctions =
+    Map<BaseFunction, RuleInfoWrapper> ruleFunctions =
         ruleInfoList.stream()
             .collect(
                 Collectors.toMap(RuleInfoWrapper::getIdentifierFunction, Functions.identity()));
 
-    Map<StarlarkCallable, ProviderInfoWrapper> providerInfos =
+    Map<BaseFunction, ProviderInfoWrapper> providerInfos =
         providerInfoList.stream()
             .collect(Collectors.toMap(ProviderInfoWrapper::getIdentifier, Functions.identity()));
 
-    Map<StarlarkCallable, AspectInfoWrapper> aspectFunctions =
+    Map<BaseFunction, AspectInfoWrapper> aspectFunctions =
         aspectInfoList.stream()
             .collect(
                 Collectors.toMap(AspectInfoWrapper::getIdentifierFunction, Functions.identity()));
@@ -409,11 +410,11 @@ public class SkydocMain {
   }
 
   /**
-   * Recursively evaluates/interprets the Starlark file at a given path and its transitive skylark
+   * Recursively evaluates/interprets the skylark file at a given path and its transitive skylark
    * dependencies using a fake build API and collects information about all rule definitions made in
    * those files.
    *
-   * @param label the label of the Starlark file to evaluate
+   * @param label the label of the skylark file to evaluate
    * @param ruleInfoList a collection of all rule definitions made so far (using rule()); this
    *     method will add to this list as it evaluates additional files
    * @throws InterruptedException if evaluation is interrupted
@@ -426,7 +427,7 @@ public class SkydocMain {
       List<AspectInfoWrapper> aspectInfoList,
       ImmutableMap.Builder<Label, String> moduleDocMap)
       throws InterruptedException, IOException, LabelSyntaxException, StarlarkEvaluationException {
-    Path path = pathOfLabel(label, semantics);
+    Path path = pathOfLabel(label);
 
     if (pending.contains(path)) {
       throw new StarlarkEvaluationException("cycle with " + path);
@@ -461,7 +462,7 @@ public class SkydocMain {
           throw new StarlarkEvaluationException(
               String.format(
                   "File %s imported '%s', yet %s was not found, even at roots %s.",
-                  path, module, pathOfLabel(relativeLabel, semantics), depRoots),
+                  path, module, pathOfLabel(relativeLabel), depRoots),
               noSuchFileException);
         }
       }
@@ -476,11 +477,10 @@ public class SkydocMain {
     return thread;
   }
 
-  private Path pathOfLabel(Label label, StarlarkSemantics semantics) {
+  private Path pathOfLabel(Label label) {
     String workspacePrefix = "";
-    if (!label.getWorkspaceRoot(semantics).isEmpty()
-        && !label.getWorkspaceName().equals(workspaceName)) {
-      workspacePrefix = label.getWorkspaceRoot(semantics) + "/";
+    if (!label.getWorkspaceRoot().isEmpty() && !label.getWorkspaceName().equals(workspaceName)) {
+      workspacePrefix = label.getWorkspaceRoot() + "/";
     }
 
     return Paths.get(workspacePrefix + label.toPathFragment());
@@ -497,7 +497,7 @@ public class SkydocMain {
     throw new NoSuchFileException(bzlWorkspacePath);
   }
 
-  /** Evaluates the AST from a single Starlark file, given the already-resolved imports. */
+  /** Evaluates the AST from a single skylark file, given the already-resolved imports. */
   private StarlarkThread evalSkylarkBody(
       StarlarkSemantics semantics,
       StarlarkFile file,
@@ -513,11 +513,6 @@ public class SkydocMain {
             globalFrame(ruleInfoList, providerInfoList, aspectInfoList),
             imports);
     Module module = thread.getGlobals();
-
-    Resolver.resolveFile(file, module);
-    if (!file.ok()) {
-      throw new StarlarkEvaluationException(file.errors().get(0).toString());
-    }
 
     try {
       EvalUtils.exec(file, module, thread);
@@ -546,8 +541,8 @@ public class SkydocMain {
     TopLevelBootstrap topLevelBootstrap =
         new TopLevelBootstrap(
             new FakeBuildApiGlobals(),
-            new FakeStarlarkAttrModuleApi(),
-            new FakeStarlarkCommandLineApi(),
+            new FakeSkylarkAttrApi(),
+            new FakeSkylarkCommandLineApi(),
             new FakeSkylarkNativeModuleApi(),
             new FakeSkylarkRuleFunctionsApi(ruleInfoList, providerInfoList, aspectInfoList),
             new FakeStructProviderApi(),
@@ -585,8 +580,8 @@ public class SkydocMain {
     PlatformBootstrap platformBootstrap = new PlatformBootstrap(new FakePlatformCommon());
     ProtoBootstrap protoBootstrap =
         new ProtoBootstrap(
-            new FakeProtoInfoProvider(),
-            new FakeProtoCommon(),
+            new FakeProtoInfoApiProvider(),
+            new FakeProtoModule(),
             new SkylarkAspectStub(),
             new ProviderStub());
     PyBootstrap pyBootstrap =
@@ -606,20 +601,6 @@ public class SkydocMain {
     ImmutableMap.Builder<String, Object> envBuilder = ImmutableMap.builder();
 
     envBuilder.putAll(Starlark.UNIVERSE);
-
-    // Add stub declarations for Blaze-only things as a quick fix
-    // for a broken test; see b/155126966 and b/155178103.
-    // TODO(adonovan): fix properly ASAP.
-    for (String name :
-        new String[] {
-          "DataBindingV2Info",
-          "PintoModuleLegacyDepsMgmtProvider",
-          "ProguardSpecProvider",
-          "js_common",
-          "pkg_common",
-        }) {
-      envBuilder.put(name, Starlark.NONE);
-    }
 
     // Declare a fake implementation of select that just returns the first
     // value in the dict. (This program is forbidden from depending on the real

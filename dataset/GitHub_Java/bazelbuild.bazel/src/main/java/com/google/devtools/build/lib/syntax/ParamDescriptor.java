@@ -85,7 +85,8 @@ final class ParamDescriptor {
         type,
         generic,
         noneable,
-        param.named(),
+        param.named()
+            || (param.legacyNamed() && !starlarkSemantics.incompatibleRestrictNamedParams()),
         param.positional(),
         getType(type, generic, param.allowedTypes(), noneable),
         disabledByFlag);
@@ -214,7 +215,7 @@ final class ParamDescriptor {
       // See https://docs.oracle.com/javase/specs/jls/se12/html/jls-12.html#jls-12.4
       thread.ignoreThreadInterrupts();
 
-      x = EvalUtils.eval(ParserInput.fromLines(expr), FileOptions.DEFAULT, module, thread);
+      x = EvalUtils.eval(ParserInput.fromLines(expr), module, thread);
     } catch (InterruptedException ex) {
       throw new IllegalStateException(ex); // can't happen
     } catch (SyntaxError | EvalException ex) {
