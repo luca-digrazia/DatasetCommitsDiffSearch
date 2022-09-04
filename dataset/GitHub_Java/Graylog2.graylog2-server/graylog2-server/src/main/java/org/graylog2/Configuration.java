@@ -17,9 +17,7 @@
 package org.graylog2;
 
 import com.github.joschi.jadconfig.Parameter;
-import com.github.joschi.jadconfig.converters.TrimmedStringSetConverter;
 import com.github.joschi.jadconfig.util.Duration;
-import com.github.joschi.jadconfig.validators.DirectoryPathReadableValidator;
 import com.github.joschi.jadconfig.validators.PositiveDurationValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.github.joschi.jadconfig.validators.PositiveLongValidator;
@@ -27,10 +25,6 @@ import org.graylog2.plugin.BaseConfiguration;
 import org.joda.time.DateTimeZone;
 
 import java.net.URI;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Collections;
-import java.util.Set;
 
 import static org.graylog2.plugin.Tools.getUriWithDefaultPath;
 import static org.graylog2.plugin.Tools.getUriWithPort;
@@ -50,9 +44,6 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "rest_listen_uri", required = true)
     private URI restListenUri = URI.create("http://127.0.0.1:" + GRAYLOG2_DEFAULT_PORT + "/");
 
-    @Parameter(value = "web_listen_uri", required = true)
-    private URI webListenUri = URI.create("http://127.0.0.1:" + GRAYLOG2_DEFAULT_WEB_PORT + "/");
-
     @Parameter(value = "output_batch_size", required = true, validator = PositiveIntegerValidator.class)
     private int outputBatchSize = 500;
 
@@ -70,6 +61,9 @@ public class Configuration extends BaseConfiguration {
 
     @Parameter(value = "outputbuffer_processor_keep_alive_time", validator = PositiveIntegerValidator.class)
     private int outputBufferProcessorKeepAliveTime = 5000;
+
+    @Parameter(value = "dead_letters_enabled")
+    private boolean deadLettersEnabled = false;
 
     @Parameter("rules_file")
     private String droolsRulesFile;
@@ -146,18 +140,6 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "user_password_bcrypt_salt_size", validator = PositiveIntegerValidator.class)
     private int userPasswordBCryptSaltSize = 10;
 
-    @Parameter(value = "content_packs_loader_enabled")
-    private boolean contentPacksLoaderEnabled = true;
-
-    @Parameter(value = "content_packs_dir", validators = DirectoryPathReadableValidator.class)
-    private Path contentPacksDir = Paths.get("data", "contentpacks");
-
-    @Parameter(value = "content_packs_auto_load", converter = TrimmedStringSetConverter.class)
-    private Set<String> contentPacksAutoLoad = Collections.emptySet();
-
-    @Parameter(value = "index_ranges_cleanup_interval", validator = PositiveDurationValidator.class)
-    private Duration indexRangesCleanupInterval = Duration.hours(1L);
-
     public boolean isMaster() {
         return isMaster;
     }
@@ -207,11 +189,6 @@ public class Configuration extends BaseConfiguration {
         return getUriWithDefaultPath(getUriWithPort(getUriWithScheme(restListenUri, getRestUriScheme()), GRAYLOG2_DEFAULT_PORT), "/");
     }
 
-    @Override
-    public URI getWebListenUri() {
-        return getUriWithDefaultPath(getUriWithPort(getUriWithScheme(webListenUri, getWebUriScheme()), GRAYLOG2_DEFAULT_WEB_PORT), "/");
-    }
-
     public String getRootUsername() {
         return rootUsername;
     }
@@ -238,6 +215,10 @@ public class Configuration extends BaseConfiguration {
 
     public boolean isMetricsCollectionEnabled() {
         return metricsCollectionEnabled;
+    }
+
+    public boolean isDeadLettersEnabled() {
+        return deadLettersEnabled;
     }
 
     public int getLoadBalancerRecognitionPeriodSeconds() {
@@ -302,21 +283,5 @@ public class Configuration extends BaseConfiguration {
 
     public int getUserPasswordBCryptSaltSize() {
         return userPasswordBCryptSaltSize;
-    }
-
-    public boolean isContentPacksLoaderEnabled() {
-        return contentPacksLoaderEnabled;
-    }
-
-    public Path getContentPacksDir() {
-        return contentPacksDir;
-    }
-
-    public Set<String> getContentPacksAutoLoad() {
-        return contentPacksAutoLoad;
-    }
-
-    public Duration getIndexRangesCleanupInterval() {
-        return indexRangesCleanupInterval;
     }
 }
