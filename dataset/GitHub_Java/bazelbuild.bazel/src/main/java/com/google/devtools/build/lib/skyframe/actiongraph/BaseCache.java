@@ -37,17 +37,22 @@ abstract class BaseCache<K, P> {
     return data;
   }
 
-  String dataToId(K data) {
+  String dataToId(K data) throws InterruptedException {
     K key = transformToKey(data);
-    return cache.computeIfAbsent(key, k -> {
-      String id = generateNextId();
+    String id = cache.get(key);
+    if (id == null) {
+      // Note that this cannot be replaced by computeIfAbsent since createProto is a recursive
+      // operation for the case of nested sets which will call dataToId on the same object and thus
+      // computeIfAbsent again.
+      id = generateNextId();
+      cache.put(key, id);
       P proto = createProto(data, id);
       addToActionGraphBuilder(proto);
-      return id;
-    });
+    }
+    return id;
   }
 
-  abstract P createProto(K key, String id);
+  abstract P createProto(K key, String id) throws InterruptedException;
 
   abstract void addToActionGraphBuilder(P proto);
 }
