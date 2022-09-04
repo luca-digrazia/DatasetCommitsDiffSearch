@@ -5,7 +5,6 @@ import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableContext;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javax.enterprise.context.spi.Contextual;
@@ -22,12 +21,14 @@ abstract class AbstractSharedContext implements InjectableContext, InjectableCon
     @SuppressWarnings("unchecked")
     @Override
     public <T> T get(Contextual<T> contextual, CreationalContext<T> creationalContext) {
+        checkContextualParameter(contextual);
         return (T) instances.getValue(new Key<>(contextual, creationalContext)).get();
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public <T> T get(Contextual<T> contextual) {
+        checkContextualParameter(contextual);
         ContextInstanceHandle<?> handle = instances.getValueIfPresent(new Key<>(contextual, null));
         return handle != null ? (T) handle.get() : null;
     }
@@ -79,19 +80,28 @@ abstract class AbstractSharedContext implements InjectableContext, InjectableCon
         return new ContextInstanceHandleImpl(bean, bean.create(key.creationalContext), key.creationalContext);
     }
 
-    private static final class Key<T> {
+    private void checkContextualParameter(Contextual<?> contextual) {
+        if (contextual == null) {
+            throw new IllegalArgumentException("Contextual parameter must not be null");
+        }
+    }
+
+    private static class Key<T> {
 
         private final Contextual<T> contextual;
         private final CreationalContext<T> creationalContext;
 
         Key(Contextual<T> contextual, CreationalContext<T> creationalContext) {
-            this.contextual = Objects.requireNonNull(contextual);
+            this.contextual = contextual;
             this.creationalContext = creationalContext;
         }
 
         @Override
         public int hashCode() {
-            return contextual.hashCode();
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + ((contextual == null) ? 0 : contextual.hashCode());
+            return result;
         }
 
         @SuppressWarnings("rawtypes")
@@ -107,7 +117,11 @@ abstract class AbstractSharedContext implements InjectableContext, InjectableCon
                 return false;
             }
             Key other = (Key) obj;
-            if (!contextual.equals(other.contextual)) {
+            if (contextual == null) {
+                if (other.contextual != null) {
+                    return false;
+                }
+            } else if (!contextual.equals(other.contextual)) {
                 return false;
             }
             return true;
@@ -115,7 +129,7 @@ abstract class AbstractSharedContext implements InjectableContext, InjectableCon
 
         @Override
         public String toString() {
-            return "Key for " + contextual;
+            return "Key [contextual=" + contextual + "]";
         }
 
     }
