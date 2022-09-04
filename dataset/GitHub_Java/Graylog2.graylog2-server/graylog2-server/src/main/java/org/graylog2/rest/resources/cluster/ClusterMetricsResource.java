@@ -34,7 +34,7 @@ import org.graylog2.rest.models.system.metrics.responses.MetricsSummaryResponse;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.rest.resources.system.RemoteMetricsResource;
 import org.graylog2.shared.security.RestPermissions;
-import retrofit2.Response;
+import retrofit.Response;
 
 import javax.inject.Inject;
 import javax.validation.Valid;
@@ -52,7 +52,7 @@ import java.io.IOException;
 import java.util.List;
 
 @RequiresAuthentication
-@Api(value = "Cluster/Metrics", description = "Cluster-wide Internal Graylog metrics")
+@Api(value = "Cluster/Metrics", description = "Cluster-wide Internal Graylog2 metrics")
 @Path("/cluster/{nodeId}/metrics")
 @Produces(MediaType.APPLICATION_JSON)
 public class ClusterMetricsResource extends RestResource {
@@ -89,7 +89,7 @@ public class ClusterMetricsResource extends RestResource {
         if (result.isSuccess()) {
             return result.body();
         } else {
-            throw new WebApplicationException(result.message(), 503);
+            throw new WebApplicationException(result.message(), result.code());
         }
     }
 
