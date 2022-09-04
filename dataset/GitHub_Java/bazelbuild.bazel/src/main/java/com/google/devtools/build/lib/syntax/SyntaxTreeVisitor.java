@@ -56,6 +56,9 @@ public class SyntaxTreeVisitor {
   }
 
   public void visit(FuncallExpression node) {
+    if (node.getObject() != null) {
+      visit(node.getObject());
+    }
     visit(node.getFunction());
     visitAll(node.getArguments());
   }
