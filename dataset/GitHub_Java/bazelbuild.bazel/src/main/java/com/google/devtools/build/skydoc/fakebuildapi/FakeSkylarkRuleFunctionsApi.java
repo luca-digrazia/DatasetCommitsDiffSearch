@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkType;
-import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.skydoc.rendering.AspectInfoWrapper;
 import com.google.devtools.build.skydoc.rendering.ProviderInfoWrapper;
 import com.google.devtools.build.skydoc.rendering.RuleInfoWrapper;
@@ -128,7 +127,7 @@ public class FakeSkylarkRuleFunctionsApi implements SkylarkRuleFunctionsApi<File
 
   @Override
   public BaseFunction rule(
-      StarlarkFunction implementation,
+      BaseFunction implementation,
       Boolean test,
       Object attrs,
       Object implicitOutputs,
@@ -193,7 +192,7 @@ public class FakeSkylarkRuleFunctionsApi implements SkylarkRuleFunctionsApi<File
 
   @Override
   public SkylarkAspectApi aspect(
-      StarlarkFunction implementation,
+      BaseFunction implementation,
       SkylarkList<?> attributeAspects,
       Object attrs,
       SkylarkList<?> requiredAspectProvidersArg,
@@ -202,7 +201,6 @@ public class FakeSkylarkRuleFunctionsApi implements SkylarkRuleFunctionsApi<File
       SkylarkList<?> hostFragments,
       SkylarkList<?> toolchains,
       String doc,
-      Boolean applyToFiles,
       FuncallExpression ast,
       Environment funcallEnv,
       StarlarkContext context)
