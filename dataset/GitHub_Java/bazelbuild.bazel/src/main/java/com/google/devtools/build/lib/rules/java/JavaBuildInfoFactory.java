@@ -20,12 +20,8 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoCollection;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
-import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.java.WriteBuildInfoPropertiesAction.TimestampFormatter;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
@@ -69,56 +65,49 @@ public abstract class JavaBuildInfoFactory implements BuildInfoFactory {
   private static final TimestampFormatter DEFAULT_FORMATTER = new DefaultTimestampFormatter();
 
   @Override
-  public final BuildInfoCollection create(
-      BuildInfoContext context,
-      BuildConfiguration config,
-      Artifact stableStatus,
-      Artifact volatileStatus,
-      RepositoryName repositoryName) {
-    WriteBuildInfoPropertiesAction redactedInfo =
-        getHeader(
-            context,
-            config,
-            BUILD_INFO_REDACTED_PROPERTIES_NAME,
-            NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-            createRedactedTranslator(),
-            true,
-            true,
-            repositoryName);
-    WriteBuildInfoPropertiesAction nonvolatileInfo =
-        getHeader(
-            context,
-            config,
-            BUILD_INFO_NONVOLATILE_PROPERTIES_NAME,
-            NestedSetBuilder.create(Order.STABLE_ORDER, stableStatus),
-            createNonVolatileTranslator(),
-            false,
-            true,
-            repositoryName);
-    WriteBuildInfoPropertiesAction volatileInfo =
-        getHeader(
-            context,
-            config,
-            BUILD_INFO_VOLATILE_PROPERTIES_NAME,
-            NestedSetBuilder.create(Order.STABLE_ORDER, volatileStatus),
-            createVolatileTranslator(),
-            true,
-            false,
-            repositoryName);
+  public final BuildInfoCollection create(BuildInfoContext context, BuildConfiguration config,
+      Artifact stableStatus, Artifact volatileStatus, RepositoryName repositoryName) {
+    WriteBuildInfoPropertiesAction redactedInfo = getHeader(context,
+        config,
+        BUILD_INFO_REDACTED_PROPERTIES_NAME,
+        Artifact.NO_ARTIFACTS,
+        createRedactedTranslator(),
+        true,
+        true,
+        repositoryName);
+    WriteBuildInfoPropertiesAction nonvolatileInfo = getHeader(context,
+        config,
+        BUILD_INFO_NONVOLATILE_PROPERTIES_NAME,
+        ImmutableList.of(stableStatus),
+        createNonVolatileTranslator(),
+        false,
+        true,
+        repositoryName);
+    WriteBuildInfoPropertiesAction volatileInfo = getHeader(context,
+        config,
+        BUILD_INFO_VOLATILE_PROPERTIES_NAME,
+        ImmutableList.of(volatileStatus),
+        createVolatileTranslator(),
+        true,
+        false,
+        repositoryName);
     List<Action> actions = new ArrayList<>(3);
     actions.add(redactedInfo);
     actions.add(nonvolatileInfo);
     actions.add(volatileInfo);
-    return new BuildInfoCollection(
-        actions,
+    return new BuildInfoCollection(actions,
         ImmutableList.of(nonvolatileInfo.getPrimaryOutput(), volatileInfo.getPrimaryOutput()),
         ImmutableList.of(redactedInfo.getPrimaryOutput()));
   }
 
-  /** Creates a {@link BuildInfoPropertiesTranslator} to use for volatile keys. */
+  /**
+   * Creates a {@link BuildInfoPropertiesTranslator} to use for volatile keys.
+   */
   protected abstract BuildInfoPropertiesTranslator createVolatileTranslator();
 
-  /** Creates a {@link BuildInfoPropertiesTranslator} to use for non-volatile keys. */
+  /**
+   * Creates a {@link BuildInfoPropertiesTranslator} to use for non-volatile keys.
+   */
   protected abstract BuildInfoPropertiesTranslator createNonVolatileTranslator();
 
   /**
@@ -127,30 +116,31 @@ public abstract class JavaBuildInfoFactory implements BuildInfoFactory {
    */
   protected abstract BuildInfoPropertiesTranslator createRedactedTranslator();
 
-  /** Specifies the {@link TimestampFormatter} to use to output dates in the properties file. */
+  /**
+   * Specifies the {@link TimestampFormatter} to use to output dates in the properties file.
+   */
   protected TimestampFormatter getTimestampFormatter() {
     return DEFAULT_FORMATTER;
   }
 
-  private WriteBuildInfoPropertiesAction getHeader(
-      BuildInfoContext context,
+  private WriteBuildInfoPropertiesAction getHeader(BuildInfoContext context,
       BuildConfiguration config,
       PathFragment propertyFileName,
-      NestedSet<Artifact> inputs,
+      ImmutableList<Artifact> inputs,
       BuildInfoPropertiesTranslator translator,
       boolean includeVolatile,
       boolean includeNonVolatile,
       RepositoryName repositoryName) {
     ArtifactRoot outputPath = config.getIncludeDirectory(repositoryName);
-    final Artifact output =
-        context.getBuildInfoArtifact(
-            propertyFileName,
-            outputPath,
-            includeVolatile && !inputs.isEmpty()
-                ? BuildInfoType.NO_REBUILD
-                : BuildInfoType.FORCE_REBUILD_IF_CHANGED);
-    return new WriteBuildInfoPropertiesAction(
-        inputs, output, translator, includeVolatile, includeNonVolatile, getTimestampFormatter());
+    final Artifact output = context.getBuildInfoArtifact(propertyFileName, outputPath,
+        includeVolatile && !inputs.isEmpty() ? BuildInfoType.NO_REBUILD
+            : BuildInfoType.FORCE_REBUILD_IF_CHANGED);
+    return new WriteBuildInfoPropertiesAction(inputs,
+        output,
+        translator,
+        includeVolatile,
+        includeNonVolatile,
+        getTimestampFormatter());
   }
 
   @Override

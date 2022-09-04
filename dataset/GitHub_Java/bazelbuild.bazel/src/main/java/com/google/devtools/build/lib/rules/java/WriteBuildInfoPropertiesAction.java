@@ -198,11 +198,13 @@ public class WriteBuildInfoPropertiesAction extends AbstractFileWriteAction {
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-    fp.addString(GUID);
-    fp.addString(keyTranslations.computeKey());
-    fp.addBoolean(includeVolatile);
-    fp.addBoolean(includeNonVolatile);
+  protected String computeKey(ActionKeyContext actionKeyContext) {
+    Fingerprint f = new Fingerprint();
+    f.addString(GUID);
+    f.addString(keyTranslations.computeKey());
+    f.addBoolean(includeVolatile);
+    f.addBoolean(includeNonVolatile);
+    return f.hexDigestAndReset();
   }
 
   @Override
