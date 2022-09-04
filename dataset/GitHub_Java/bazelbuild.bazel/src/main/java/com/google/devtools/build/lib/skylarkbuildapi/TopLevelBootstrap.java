@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.skylarkbuildapi;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.skylarkbuildapi.OutputGroupInfoApi.OutputGroupInfoApiProvider;
 import com.google.devtools.build.lib.syntax.Runtime;
 
 /**
@@ -28,7 +27,6 @@ public class TopLevelBootstrap implements Bootstrap {
   private final Class<? extends SkylarkNativeModuleApi> skylarkNativeModuleApi;
   private final Class<? extends SkylarkRuleFunctionsApi<?>> skylarkRuleFunctionsApi;
   private final StructApi.StructProviderApi structProvider;
-  private final OutputGroupInfoApiProvider outputGroupInfoProvider;
 
   public TopLevelBootstrap(
       Class<? extends SkylarkBuildApiGlobals> skylarkBuildApiGlobals,
@@ -36,15 +34,13 @@ public class TopLevelBootstrap implements Bootstrap {
       Class<? extends SkylarkCommandLineApi> skylarkCommandLineApi,
       Class<? extends SkylarkNativeModuleApi> skylarkNativeModuleApi,
       Class<? extends SkylarkRuleFunctionsApi<?>> skylarkRuleFunctionsApi,
-      StructApi.StructProviderApi structProvider,
-      OutputGroupInfoApiProvider outputGroupInfoProvider) {
+      StructApi.StructProviderApi structProvider) {
     this.skylarkAttrApi = skylarkAttrApi;
     this.skylarkBuildApiGlobals = skylarkBuildApiGlobals;
     this.skylarkCommandLineApi = skylarkCommandLineApi;
     this.skylarkNativeModuleApi = skylarkNativeModuleApi;
     this.skylarkRuleFunctionsApi = skylarkRuleFunctionsApi;
     this.structProvider = structProvider;
-    this.outputGroupInfoProvider = outputGroupInfoProvider;
   }
 
   @Override
@@ -55,6 +51,5 @@ public class TopLevelBootstrap implements Bootstrap {
     Runtime.setupModuleGlobals(builder, skylarkNativeModuleApi);
     Runtime.setupModuleGlobals(builder, skylarkRuleFunctionsApi);
     builder.put("struct", structProvider);
-    builder.put("OutputGroupInfo", outputGroupInfoProvider);
   }
 }

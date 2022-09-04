@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
@@ -1142,7 +1141,7 @@ public final class PackageFactory {
    */
   public static PackageContext getContext(Environment env, Location location)
       throws EvalException {
-    PackageContext value = (PackageContext) env.dynamicLookup(PKG_CONTEXT);
+    PackageContext value = (PackageContext) env.lookup(PKG_CONTEXT);
     if (value == null) {
       // if PKG_CONTEXT is missing, we're not called from a BUILD file. This happens if someone
       // uses native.some_func() in the wrong place.
@@ -1246,17 +1245,11 @@ public final class PackageFactory {
     // Run the lexer and parser with a local reporter, so that errors from other threads do not
     // show up below.
     BuildFileAST buildFileAST =
-        parseBuildFile(
-            packageId,
-            input,
-            preludeStatements,
-            /* repositoryMapping= */ ImmutableMap.of(),
-            localReporterForParsing);
+        parseBuildFile(packageId, input, preludeStatements, localReporterForParsing);
     AstParseResult astParseResult =
         new AstParseResult(buildFileAST, localReporterForParsing);
     return createPackageFromAst(
         workspaceName,
-        /* repositoryMapping= */ ImmutableMap.of(),
         packageId,
         buildFile,
         astParseResult,
@@ -1271,19 +1264,16 @@ public final class PackageFactory {
       PackageIdentifier packageId,
       ParserInputSource in,
       List<Statement> preludeStatements,
-      ImmutableMap<RepositoryName, RepositoryName> repositoryMapping,
       ExtendedEventHandler eventHandler) {
     // Logged messages are used as a testability hook tracing the parsing progress
     logger.fine("Starting to parse " + packageId);
-    BuildFileAST buildFileAST =
-        BuildFileAST.parseBuildFile(in, preludeStatements, repositoryMapping, eventHandler);
+    BuildFileAST buildFileAST = BuildFileAST.parseBuildFile(in, preludeStatements, eventHandler);
     logger.fine("Finished parsing of " + packageId);
     return buildFileAST;
   }
 
   public Package.Builder createPackageFromAst(
       String workspaceName,
-      ImmutableMap<RepositoryName, RepositoryName> repositoryMapping,
       PackageIdentifier packageId,
       Path buildFile,
       AstParseResult astParseResult,
@@ -1307,8 +1297,7 @@ public final class PackageFactory {
           defaultVisibility,
           skylarkSemantics,
           imports,
-          skylarkFileDependencies,
-          repositoryMapping);
+          skylarkFileDependencies);
     } catch (InterruptedException e) {
       globber.onInterrupt();
       throw e;
@@ -1380,10 +1369,10 @@ public final class PackageFactory {
                 packageId,
                 buildFile,
                 input,
-                /* preludeStatements= */ ImmutableList.<Statement>of(),
-                /* imports= */ ImmutableMap.<String, Extension>of(),
-                /* skylarkFileDependencies= */ ImmutableList.<Label>of(),
-                /* defaultVisibility= */ ConstantRuleVisibility.PUBLIC,
+                /*preludeStatements=*/ ImmutableList.<Statement>of(),
+                /*imports=*/ ImmutableMap.<String, Extension>of(),
+                /*skylarkFileDependencies=*/ ImmutableList.<Label>of(),
+                /*defaultVisibility=*/ ConstantRuleVisibility.PUBLIC,
                 semantics,
                 globber)
             .build();
@@ -1610,8 +1599,7 @@ public final class PackageFactory {
       RuleVisibility defaultVisibility,
       SkylarkSemantics skylarkSemantics,
       Map<String, Extension> imports,
-      ImmutableList<Label> skylarkFileDependencies,
-      ImmutableMap<RepositoryName, RepositoryName> repositoryMapping)
+      ImmutableList<Label> skylarkFileDependencies)
       throws InterruptedException {
     Package.Builder pkgBuilder = new Package.Builder(packageBuilderHelper.createFreshPackage(
         packageId, ruleClassProvider.getRunfilesPrefix()));
@@ -1634,8 +1622,7 @@ public final class PackageFactory {
           // set default_visibility once, be reseting the PackageBuilder.defaultVisibilitySet flag.
           .setDefaultVisibilitySet(false)
           .setSkylarkFileDependencies(skylarkFileDependencies)
-          .setWorkspaceName(workspaceName)
-          .setRepositoryMapping(repositoryMapping);
+          .setWorkspaceName(workspaceName);
 
       Event.replayEventsOn(eventHandler, pastEvents);
       for (Postable post : pastPosts) {

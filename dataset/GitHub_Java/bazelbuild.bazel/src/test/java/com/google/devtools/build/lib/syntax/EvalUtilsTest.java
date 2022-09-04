@@ -18,6 +18,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.junit.Assert.fail;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.StructProvider;
@@ -55,6 +56,18 @@ public class EvalUtilsTest extends EvaluationTestCase {
   @Test
   public void testStringToIterable() throws Exception {
     assertThat(EvalUtils.toIterable("abc", null, null)).hasSize(3);
+  }
+
+  @Test
+  public void testSize() throws Exception {
+    assertThat(EvalUtils.size("abc")).isEqualTo(3);
+    assertThat(EvalUtils.size(ImmutableMap.of(1, 2, 3, 4))).isEqualTo(2);
+    assertThat(EvalUtils.size(SkylarkList.Tuple.of(1, 2, 3))).isEqualTo(3);
+    SkylarkNestedSet set = SkylarkNestedSet.of(
+        Object.class,
+        NestedSetBuilder.stableOrder().add(1).add(2).add(3).build());
+    assertThat(EvalUtils.size(set)).isEqualTo(3);
+    assertThat(EvalUtils.size(ImmutableList.of(1, 2, 3))).isEqualTo(3);
   }
 
   /** MockClassA */
@@ -173,10 +186,8 @@ public class EvalUtilsTest extends EvaluationTestCase {
         assertThrows(
             IllegalArgumentException.class,
             () -> EvalUtils.getSkylarkType(NonSkylarkValueSubclass.class));
-    assertThat(expected)
-        .hasMessageThat()
-        .contains(
-            "class com.google.devtools.build.lib.syntax.EvalUtilsTest$NonSkylarkValueSubclass "
-                + "is not allowed as a Starlark value");
+    assertThat(expected).hasMessageThat().contains(
+        "class com.google.devtools.build.lib.syntax.EvalUtilsTest$NonSkylarkValueSubclass "
+            + "is not allowed as a Skylark value");
   }
 }

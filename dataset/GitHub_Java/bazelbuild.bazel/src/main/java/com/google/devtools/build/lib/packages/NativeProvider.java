@@ -44,7 +44,7 @@ import javax.annotation.Nullable;
  */
 @Immutable
 @Deprecated
-public abstract class NativeProvider<V extends InfoInterface> extends ProviderFromFunction {
+public abstract class NativeProvider<V extends Info> extends ProviderFromFunction {
   private final NativeKey key;
   private final String errorMessageFormatForUnknownField;
 
@@ -128,7 +128,7 @@ public abstract class NativeProvider<V extends InfoInterface> extends ProviderFr
   }
 
   @Override
-  protected InfoInterface createInstanceFromSkylark(Object[] args, Environment env, Location loc)
+  protected Info createInstanceFromSkylark(Object[] args, Environment env, Location loc)
       throws EvalException {
     throw new EvalException(
         loc, String.format("'%s' cannot be constructed from Skylark", getPrintableName()));
