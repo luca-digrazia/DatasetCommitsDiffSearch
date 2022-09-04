@@ -39,11 +39,12 @@ import java.util.regex.Matcher;
 public class TokenizerFilter implements MessageFilter {
 
     private static final Logger LOG = Logger.getLogger(TokenizerFilter.class);
-    private static final Pattern p = Pattern.compile("[a-zA-Z0-9_-]*");
-    private static final Pattern kvPattern = Pattern.compile("\\s?=\\s?");
-    private static final Pattern spacePattern = Pattern.compile(" ");
-    private static final Pattern quotedValuePattern = Pattern.compile("([a-zA-Z0-9_-]+=\"[^\"]+\")");
-    private static final Timer processTime = Metrics.newTimer(TokenizerFilter.class, "ProcessTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS);
+
+    private final Pattern p = Pattern.compile("[a-zA-Z0-9_-]*");
+    private final Pattern kvPattern = Pattern.compile("\\s?=\\s?");
+    private final Pattern spacePattern = Pattern.compile(" ");
+    private final Pattern quotedValuePattern = Pattern.compile("([a-zA-Z0-9_-]+=\"[^\"]+\")");
+    private final Timer processTime = Metrics.newTimer(TokenizerFilter.class, "ProcessTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS);
 
     /*
      * Extract out only true k=v pairs, not everything separated by a = character.
@@ -59,7 +60,7 @@ public class TokenizerFilter implements MessageFilter {
      */
 
     @Override
-    public boolean filter(LogMessage msg, GraylogServer server) {
+    public void filter(LogMessage msg, GraylogServer server) {
         TimerContext tcx = processTime.time();
 
         int extracted = 0;
@@ -98,10 +99,11 @@ public class TokenizerFilter implements MessageFilter {
         LOG.debug("Extracted <" + extracted + "> additional fields from message <" + msg.getId() + "> k=v pairs.");
 
         tcx.stop();
+    }
+
+    @Override
+    public boolean discard() {
         return false;
     }
-    
-    @Override
-    public String getName() {
-        return "Tokenizer";
-    }}
+
+}
