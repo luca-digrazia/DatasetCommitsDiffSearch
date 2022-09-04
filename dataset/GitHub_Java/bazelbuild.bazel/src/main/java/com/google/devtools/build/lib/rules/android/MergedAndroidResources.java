@@ -17,6 +17,7 @@ import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
+import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import java.util.Objects;
 import java.util.Optional;
 import javax.annotation.Nullable;
@@ -165,7 +166,8 @@ public class MergedAndroidResources extends ParsedAndroidResources {
    * Validates and packages this rule's resources.
    *
    * <p>See {@link ValidatedAndroidResources#validateFrom(AndroidDataContext,
-   * MergedAndroidResources)}. This method is a convenience method for calling that one.
+   * MergedAndroidResources, AndroidAaptVersion)}. This method is a convenience method for calling
+   * that one.
    */
   public ValidatedAndroidResources validate(AndroidDataContext dataContext)
       throws InterruptedException {

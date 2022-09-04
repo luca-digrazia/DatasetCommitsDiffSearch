@@ -24,26 +24,12 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import org.junit.Test;
-import org.junit.experimental.runners.Enclosed;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 /** Tests {@link AndroidAssets} */
-@RunWith(Enclosed.class)
-public abstract class AndroidAssetsTest extends ResourceTestBase {
-  /** Use legacy toolchain resolution. */
-  @RunWith(JUnit4.class)
-  public static class WithoutPlatforms extends AndroidAssetsTest {}
-
-  /** Use platform-based toolchain resolution. */
-  @RunWith(JUnit4.class)
-  public static class WithPlatforms extends AndroidAssetsTest {
-    @Override
-    protected boolean platformBasedToolchains() {
-      return true;
-    }
-  }
-
+@RunWith(JUnit4.class)
+public class AndroidAssetsTest extends ResourceTestBase {
   @Test
   public void testParseAapt2() throws Exception {
     RuleContext ruleContext = getRuleContext();
@@ -83,10 +69,10 @@ public abstract class AndroidAssetsTest extends ResourceTestBase {
     assertThat(info.getLabel()).isEqualTo(merged.getLabel());
 
     // The provider just has the local values
-    assertThat(info.getAssets().toList()).containsExactlyElementsIn(merged.getAssets()).inOrder();
-    assertThat(info.getSymbols().toList()).containsExactly(merged.getSymbols());
-    assertThat(info.getDirectParsedAssets().toList()).containsExactly(parsed);
-    assertThat(info.getTransitiveParsedAssets().toList()).isEmpty();
+    assertThat(info.getAssets()).containsExactlyElementsIn(merged.getAssets()).inOrder();
+    assertThat(info.getSymbols()).containsExactly(merged.getSymbols());
+    assertThat(info.getDirectParsedAssets()).containsExactly(parsed);
+    assertThat(info.getTransitiveParsedAssets()).isEmpty();
   }
 
   @Test
@@ -101,11 +87,11 @@ public abstract class AndroidAssetsTest extends ResourceTestBase {
     assertThat(info.getLabel()).isEqualTo(merged.getLabel());
 
     // The provider should be empty because of neverlinking
-    assertThat(info.getAssets().toList()).isEmpty();
-    assertThat(info.getSymbols().toList()).isEmpty();
-    assertThat(info.getDirectParsedAssets().toList()).isEmpty();
-    assertThat(info.getTransitiveParsedAssets().toList()).isEmpty();
-    assertThat(info.getCompiledSymbols().toList()).isEmpty();
+    assertThat(info.getAssets()).isEmpty();
+    assertThat(info.getSymbols()).isEmpty();
+    assertThat(info.getDirectParsedAssets()).isEmpty();
+    assertThat(info.getTransitiveParsedAssets()).isEmpty();
+    assertThat(info.getCompiledSymbols()).isEmpty();
   }
 
   @Test
@@ -120,25 +106,22 @@ public abstract class AndroidAssetsTest extends ResourceTestBase {
     assertThat(info.getLabel()).isEqualTo(merged.getLabel());
 
     // The provider should have transitive and direct deps
-    assertThat(info.getAssets().toList())
-        .containsExactlyElementsIn(
-            Iterables.concat(parsed.getAssets(), deps.getTransitiveAssets().toList()))
+    assertThat(info.getAssets())
+        .containsExactlyElementsIn(Iterables.concat(parsed.getAssets(), deps.getTransitiveAssets()))
         .inOrder();
-    assertThat(info.getSymbols().toList())
+    assertThat(info.getSymbols())
         .containsExactlyElementsIn(
-            Iterables.concat(
-                ImmutableList.of(parsed.getSymbols()), deps.getTransitiveSymbols().toList()))
+            Iterables.concat(ImmutableList.of(parsed.getSymbols()), deps.getTransitiveSymbols()))
         .inOrder();
-    assertThat(info.getCompiledSymbols().toList())
+    assertThat(info.getCompiledSymbols())
         .containsExactlyElementsIn(
             Iterables.concat(
                 ImmutableList.of(parsed.getCompiledSymbols()),
-                deps.getTransitiveCompiledSymbols().toList()));
-    assertThat(info.getDirectParsedAssets().toList()).containsExactly(parsed).inOrder();
-    assertThat(info.getTransitiveParsedAssets().toList())
+                deps.getTransitiveCompiledSymbols()));
+    assertThat(info.getDirectParsedAssets()).containsExactly(parsed).inOrder();
+    assertThat(info.getTransitiveParsedAssets())
         .containsExactlyElementsIn(
-            Iterables.concat(
-                deps.getTransitiveParsedAssets().toList(), deps.getDirectParsedAssets().toList()))
+            Iterables.concat(deps.getTransitiveParsedAssets(), deps.getDirectParsedAssets()))
         .inOrder();
   }
 
@@ -190,8 +173,8 @@ public abstract class AndroidAssetsTest extends ResourceTestBase {
         /* inputs = */ ImmutableList.<Artifact>builder()
             .addAll(merged.getAssets())
             .add(merged.getSymbols())
-            .addAll(deps.getTransitiveAssets().toList())
-            .addAll(deps.getTransitiveSymbols().toList())
+            .addAll(deps.getTransitiveAssets())
+            .addAll(deps.getTransitiveSymbols())
             .build(),
         /* outputs = */ ImmutableList.of(merged.getMergedAssets()));
 

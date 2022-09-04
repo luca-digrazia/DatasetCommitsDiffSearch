@@ -14,56 +14,66 @@
 package com.google.devtools.build.lib.rules.android;
 
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.skylarkbuildapi.android.ParsedAndroidAssetsApi;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import java.util.Objects;
+import javax.annotation.Nullable;
 
 /** Parsed Android assets which can be merged together with assets from dependencies. */
-public class ParsedAndroidAssets extends AndroidAssets implements MergableAndroidData {
+public class ParsedAndroidAssets extends AndroidAssets implements ParsedAndroidAssetsApi {
+
+  public static final SkylarkType TYPE = SkylarkType.of(ParsedAndroidAssets.class);
+
   private final Artifact symbols;
+  @Nullable private final Artifact compiledSymbols;
   private final Label label;
 
-  public static ParsedAndroidAssets parseFrom(RuleContext ruleContext, AndroidAssets assets)
+  public static ParsedAndroidAssets parseFrom(AndroidDataContext dataContext, AndroidAssets assets)
       throws InterruptedException {
-    return new AndroidResourceParsingActionBuilder(ruleContext)
-        .setOutput(ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_ASSET_SYMBOLS))
-        .build(assets);
+    AndroidResourceParsingActionBuilder builder =
+        new AndroidResourceParsingActionBuilder()
+            .setOutput(dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_ASSET_SYMBOLS))
+            .setCompiledSymbolsOutput(
+                dataContext.createOutputArtifact(
+                    AndroidRuleClasses.ANDROID_ASSET_COMPILED_SYMBOLS));
+
+    return builder.build(dataContext, assets);
   }
 
-  public static ParsedAndroidAssets of(AndroidAssets assets, Artifact symbols, Label label) {
-    return new ParsedAndroidAssets(assets, symbols, label);
+  public static ParsedAndroidAssets of(
+      AndroidAssets assets, Artifact symbols, @Nullable Artifact compiledSymbols, Label label) {
+    return new ParsedAndroidAssets(assets, symbols, compiledSymbols, label);
   }
 
   ParsedAndroidAssets(ParsedAndroidAssets other) {
-    this(other, other.symbols, other.label);
+    this(other, other.symbols, other.compiledSymbols, other.label);
   }
 
-  private ParsedAndroidAssets(AndroidAssets other, Artifact symbols, Label label) {
+  private ParsedAndroidAssets(
+      AndroidAssets other, Artifact symbols, @Nullable Artifact compiledSymbols, Label label) {
     super(other);
     this.symbols = symbols;
+    this.compiledSymbols = compiledSymbols;
     this.label = label;
   }
 
-  /** Merges these assets with assets from dependencies. */
-  public MergedAndroidAssets merge(RuleContext ruleContext, boolean neverlink)
+  MergedAndroidAssets merge(AndroidDataContext dataContext, AssetDependencies assetDeps)
       throws InterruptedException {
-    return MergedAndroidAssets.mergeFrom(
-        ruleContext, this, AssetDependencies.fromRuleDeps(ruleContext, neverlink));
+    return MergedAndroidAssets.mergeFrom(dataContext, this, assetDeps);
   }
 
-  MergedAndroidAssets merge(RuleContext ruleContext, AssetDependencies assetDeps)
-      throws InterruptedException {
-    return MergedAndroidAssets.mergeFrom(ruleContext, this, assetDeps);
-  }
-
-  @Override
   public Label getLabel() {
     return label;
   }
 
-  @Override
   public Artifact getSymbols() {
     return symbols;
+  }
+
+  @Nullable
+  public Artifact getCompiledSymbols() {
+    return compiledSymbols;
   }
 
   @Override

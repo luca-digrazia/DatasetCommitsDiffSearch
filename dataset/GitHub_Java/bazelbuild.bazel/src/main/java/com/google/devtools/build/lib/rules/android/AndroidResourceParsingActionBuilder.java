@@ -13,125 +13,137 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import com.google.common.base.Function;
-import com.google.common.base.Functions;
-import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
+import static java.util.stream.Collectors.joining;
+
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.ArrayList;
-import java.util.List;
+import javax.annotation.Nullable;
 
-/**
- * Builder for creating $android_resource_parser action.
- */
-class AndroidResourceParsingActionBuilder {
+/** Builder for creating $android_resource_parser action. */
+public class AndroidResourceParsingActionBuilder {
 
-  private static final ResourceContainerToArtifacts RESOURCE_CONTAINER_TO_ARTIFACTS =
-      new ResourceContainerToArtifacts();
+  // These are only needed when parsing resources with data binding
+  @Nullable private Artifact manifest;
+  @Nullable private String javaPackage;
 
-  private static final ResourceContainerToArg RESOURCE_CONTAINER_TO_ARG =
-      new ResourceContainerToArg();
+  private AndroidResources resources = AndroidResources.empty();
+  private AndroidAssets assets = AndroidAssets.empty();
 
-  private final RuleContext ruleContext;
-  private LocalResourceContainer primary;
-  private Artifact output;
+  // The symbols file is a required output
+  @Nullable private Artifact output;
 
-  /**
-   * @param ruleContext The RuleContext that was used to create the SpawnAction.Builder.
-   */
-  public AndroidResourceParsingActionBuilder(RuleContext ruleContext) {
-    this.ruleContext = ruleContext;
-  }
+  // Optional outputs
+  @Nullable private Artifact compiledSymbols;
+  @Nullable private Artifact dataBindingInfoZip;
 
-  /**
-   * Set the resource container to parse.
-   */
-  public AndroidResourceParsingActionBuilder setParse(LocalResourceContainer primary) {
-    this.primary = primary;
-    return this;
-  }
-
-  /**
-   * Set the artifact location for the output protobuf.
-   */
+  /** Set the artifact location for the output protobuf. */
   public AndroidResourceParsingActionBuilder setOutput(Artifact output) {
     this.output = output;
     return this;
   }
 
-  private static class ResourceContainerToArg implements Function<LocalResourceContainer, String> {
-
-    public ResourceContainerToArg() {
-    }
-
-    @Override
-    public String apply(LocalResourceContainer container) {
-      return new StringBuilder()
-          .append(convertRoots(container.getResourceRoots()))
-          .append(":")
-          .append(convertRoots(container.getAssetRoots()))
-          .toString();
-    }
+  /** Sets the manifest. Will be ignored except when parsing resources with data binding. */
+  public AndroidResourceParsingActionBuilder setManifest(@Nullable Artifact manifest) {
+    this.manifest = manifest;
+    return this;
   }
 
-  private static class ResourceContainerToArtifacts
-      implements Function<LocalResourceContainer, NestedSet<Artifact>> {
+  /** Sets the Java package. Will be ignored except when parsing resources with data binding. */
+  public AndroidResourceParsingActionBuilder setJavaPackage(@Nullable String javaPackage) {
+    this.javaPackage = javaPackage;
+    return this;
+  }
 
-    public ResourceContainerToArtifacts() {
-    }
+  public AndroidResourceParsingActionBuilder setResources(AndroidResources resources) {
+    this.resources = resources;
+    return this;
+  }
 
-    @Override
-    public NestedSet<Artifact> apply(LocalResourceContainer container) {
-      NestedSetBuilder<Artifact> artifacts = NestedSetBuilder.naiveLinkOrder();
-      artifacts.addAll(container.getAssets());
-      artifacts.addAll(container.getResources());
-      return artifacts.build();
-    }
+  public AndroidResourceParsingActionBuilder setAssets(AndroidAssets assets) {
+    this.assets = assets;
+    return this;
+  }
+
+  public AndroidResourceParsingActionBuilder setCompiledSymbolsOutput(
+      @Nullable Artifact compiledSymbols) {
+    this.compiledSymbols = compiledSymbols;
+    return this;
+  }
+
+  public AndroidResourceParsingActionBuilder setDataBindingInfoZip(Artifact dataBindingInfoZip) {
+    this.dataBindingInfoZip = dataBindingInfoZip;
+    return this;
   }
 
   private static String convertRoots(Iterable<PathFragment> roots) {
-    return Joiner.on("#").join(Iterables.transform(roots, Functions.toStringFunction()));
+    return Streams.stream(roots).map(Object::toString).collect(joining("#"));
   }
 
-  public Artifact build(ActionConstructionContext context) {
-    CustomCommandLine.Builder builder = new CustomCommandLine.Builder();
+  private void build(AndroidDataContext dataContext) {
+    String resourceDirectories =
+        convertRoots(resources.getResourceRoots()) + ":" + convertRoots(assets.getAssetRoots());
+    Iterable<Artifact> resourceArtifacts =
+        Iterables.concat(assets.getAssets(), resources.getResources());
 
-    NestedSetBuilder<Artifact> inputs = NestedSetBuilder.naiveLinkOrder();
-    inputs.addAll(ruleContext.getExecutablePrerequisite("$android_resource_parser", Mode.HOST)
-        .getRunfilesSupport()
-        .getRunfilesArtifactsWithoutMiddlemen());
+    if (output != null) {
+      BusyBoxActionBuilder.create(dataContext, "PARSE")
+          .addInput("--primaryData", resourceDirectories, resourceArtifacts)
+          .addOutput("--output", output)
+          .buildAndRegister("Parsing Android resources", "AndroidResourceParser");
+    }
 
-    Preconditions.checkNotNull(primary);
-    builder.add("--primaryData").add(RESOURCE_CONTAINER_TO_ARG.apply(primary));
-    inputs.addTransitive(RESOURCE_CONTAINER_TO_ARTIFACTS.apply(primary));
+    if (compiledSymbols != null) {
+      BusyBoxActionBuilder compiledBuilder =
+          BusyBoxActionBuilder.create(dataContext, "COMPILE_LIBRARY_RESOURCES")
+              .addAapt()
+              .addInput("--resources", resourceDirectories, resourceArtifacts)
+              .addOutput("--output", compiledSymbols);
 
-    List<Artifact> outs = new ArrayList<>();
-    Preconditions.checkNotNull(output);
-    builder.addExecPath("--output", output);
-    outs.add(output);
+      if (dataBindingInfoZip != null) {
+        compiledBuilder
+            .addInput("--manifest", manifest)
+            .maybeAddFlag("--packagePath", javaPackage)
+            .addOutput("--dataBindingInfoOut", dataBindingInfoZip);
+      }
 
-    SpawnAction.Builder spawnActionBuilder = new SpawnAction.Builder();
-    // Create the spawn action.
-    ruleContext.registerAction(
-        spawnActionBuilder
-            .addTransitiveInputs(inputs.build())
-            .addOutputs(ImmutableList.copyOf(outs))
-            .setCommandLine(builder.build())
-            .setExecutable(
-                ruleContext.getExecutablePrerequisite("$android_resource_parser", Mode.HOST))
-            .setProgressMessage("Parsing Android resources for " + ruleContext.getLabel())
-            .setMnemonic("AndroidResourceParser")
-            .build(context));
-    return output;
+      compiledBuilder.buildAndRegister("Compiling Android resources", "AndroidResourceCompiler");
+    }
+  }
+
+  /**
+   * Builds and registers the action, and returns a copy of the passed resources with artifacts for
+   * parsed and compiled information.
+   */
+  public ParsedAndroidResources build(
+      AndroidDataContext dataContext,
+      AndroidResources androidResources,
+      StampedAndroidManifest manifest,
+      DataBindingContext dataBindingContext) {
+    if (dataBindingInfoZip != null) {
+      // Manifest information is needed for data binding
+      setManifest(manifest.getManifest());
+      setJavaPackage(manifest.getPackage());
+    }
+
+    setResources(androidResources);
+    build(dataContext);
+
+    return ParsedAndroidResources.of(
+        androidResources,
+        output,
+        compiledSymbols,
+        dataContext.getLabel(),
+        manifest,
+        dataBindingContext);
+  }
+
+  public ParsedAndroidAssets build(AndroidDataContext dataContext, AndroidAssets assets) {
+    setAssets(assets);
+    build(dataContext);
+
+    return ParsedAndroidAssets.of(assets, output, compiledSymbols, dataContext.getLabel());
   }
 }

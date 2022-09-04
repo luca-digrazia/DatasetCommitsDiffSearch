@@ -24,7 +24,8 @@ public class ResourceShrinkerActionBuilder {
   private Artifact resourceFilesZip;
   private Artifact shrunkJar;
   private Artifact proguardMapping;
-  private Artifact rTxt;
+  private ValidatedAndroidResources primaryResources;
+  private ResourceDependencies dependencyResources;
   private Artifact resourceApkOut;
   private Artifact shrunkResourcesOut;
   private Artifact resourceOptimizationConfigOut;
@@ -64,9 +65,21 @@ public class ResourceShrinkerActionBuilder {
     return this;
   }
 
-  /** @param rTxt The R.txt file produced during resource packaging. */
-  public ResourceShrinkerActionBuilder withRTxt(Artifact rTxt) {
-    this.rTxt = rTxt;
+  /**
+   * @param primary The fully processed {@link ValidatedAndroidResources} of the resources to be
+   *     shrunk. Must contain both an R.txt and merged manifest.
+   */
+  public ResourceShrinkerActionBuilder withPrimary(ValidatedAndroidResources primary) {
+    checkNotNull(primary);
+    checkNotNull(primary.getManifest());
+    checkNotNull(primary.getRTxt());
+    this.primaryResources = primary;
+    return this;
+  }
+
+  /** @param resourceDeps The full dependency tree of resources. */
+  public ResourceShrinkerActionBuilder withDependencies(ResourceDependencies resourceDeps) {
+    this.dependencyResources = resourceDeps;
     return this;
   }
 
@@ -100,7 +113,9 @@ public class ResourceShrinkerActionBuilder {
     checkNotNull(resourceFilesZip);
     checkNotNull(shrunkJar);
     checkNotNull(proguardMapping);
-    checkNotNull(rTxt);
+    checkNotNull(primaryResources);
+    checkNotNull(primaryResources.getRTxt());
+    checkNotNull(primaryResources.getManifest());
     checkNotNull(resourceApkOut);
 
     BusyBoxActionBuilder builder = BusyBoxActionBuilder.create(dataContext, "SHRINK_AAPT2");
@@ -112,7 +127,7 @@ public class ResourceShrinkerActionBuilder {
         .addInput("--resources", resourceFilesZip)
         .addInput("--shrunkJar", shrunkJar)
         .addInput("--proguardMapping", proguardMapping)
-        .addInput("--rTxt", rTxt)
+        .addInput("--rTxt", primaryResources.getRTxt())
         .addOutput("--shrunkResourceApk", resourceApkOut)
         .addOutput("--shrunkResources", shrunkResourcesOut)
         .maybeAddOutput("--resourcesConfigOutput", resourceOptimizationConfigOut)

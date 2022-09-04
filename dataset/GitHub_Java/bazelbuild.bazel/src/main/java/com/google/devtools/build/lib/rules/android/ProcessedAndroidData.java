@@ -164,8 +164,7 @@ public class ProcessedAndroidData {
       AndroidAssets assets,
       ResourceDependencies resourceDeps,
       AssetDependencies assetDeps,
-      List<String> noCompressExtensions,
-      ResourceFilterFactory resourceFilterFactory)
+      List<String> noCompressExtensions)
       throws InterruptedException {
 
     return builderForNonIncrementalTopLevelTarget(dataContext, manifest, manifestValues)
@@ -177,7 +176,6 @@ public class ProcessedAndroidData {
         .withResourceDependencies(resourceDeps)
         .withAssetDependencies(assetDeps)
         .setUncompressedExtensions(noCompressExtensions)
-        .setResourceFilterFactory(resourceFilterFactory)
         .build(dataContext, resources, assets, manifest, dataBindingContext);
   }
 
