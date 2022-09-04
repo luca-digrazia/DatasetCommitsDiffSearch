@@ -1,6 +1,5 @@
 package io.quarkus.qute;
 
-import io.quarkus.qute.Expression.Part;
 import io.quarkus.qute.Results.Result;
 import io.quarkus.qute.SectionHelperFactory.ParametersInfo;
 import io.quarkus.qute.TemplateNode.Origin;
@@ -29,9 +28,6 @@ class Parser implements Function<String, Expression> {
 
     private static final Logger LOGGER = Logger.getLogger(Parser.class);
     private static final String ROOT_HELPER_NAME = "$root";
-
-    static final Origin SYNTHETIC_ORIGIN = new OriginImpl(0, 0, "<<synthetic>>", "<<synthetic>>", Optional.empty());
-
     private final EngineImpl engine;
 
     private static final char START_DELIMITER = '{';
@@ -48,6 +44,8 @@ class Parser implements Function<String, Expression> {
 
     static final char START_COMPOSITE_PARAM = '(';
     static final char END_COMPOSITE_PARAM = ')';
+
+    static final String TYPE_CHECK_NAMESPACE = "[" + Expressions.TYPECHECK_NAMESPACE_PLACEHOLDER + "].";
 
     private StringBuilder buffer;
     private State state;
@@ -241,7 +239,7 @@ class Parser implements Function<String, Expression> {
 
     private void flushTag() {
         state = State.TEXT;
-        String content = buffer.toString().trim();
+        String content = buffer.toString();
         String tag = START_DELIMITER + content + END_DELIMITER;
 
         if (content.charAt(0) == Tag.SECTION.command) {
@@ -369,7 +367,7 @@ class Parser implements Function<String, Expression> {
             int spaceIdx = content.indexOf(" ");
             String key = content.substring(spaceIdx + 1, content.length());
             String value = content.substring(1, spaceIdx);
-            typeInfos.put(key, Expressions.TYPE_INFO_SEPARATOR + value + Expressions.TYPE_INFO_SEPARATOR);
+            typeInfos.put(key, "[" + value + "]");
 
         } else {
             sectionBlockStack.peek().addNode(new ExpressionNode(apply(content), engine, origin()));
@@ -538,7 +536,8 @@ class Parser implements Function<String, Expression> {
         EXPRESSION(null),
         SECTION('#'),
         SECTION_END('/'),
-        PARAM('@'),;
+        PARAM('@'),
+        ;
 
         final Character command;
 
@@ -567,65 +566,45 @@ class Parser implements Function<String, Expression> {
 
     }
 
-    static ExpressionImpl parseExpression(String value, Map<String, String> typeInfos, Origin origin) {
+    public static Expression parseExpression(String value, Map<String, String> typeInfos, Origin origin) {
         if (value == null || value.isEmpty()) {
-            return ExpressionImpl.EMPTY;
+            return Expression.EMPTY;
         }
         if (typeInfos == null) {
             typeInfos = Collections.emptyMap();
         }
         String namespace = null;
+        List<String> parts;
+        Object literal = Result.NOT_FOUND;
         int namespaceIdx = value.indexOf(':');
         int spaceIdx = value.indexOf(' ');
         int bracketIdx = value.indexOf('(');
-
-        List<String> strParts;
+        String typeCheckInfo = null;
         if (namespaceIdx != -1 && (spaceIdx == -1 || namespaceIdx < spaceIdx)
                 && (bracketIdx == -1 || namespaceIdx < bracketIdx)) {
-            // Expression that starts with a namespace
-            strParts = Expressions.splitParts(value.substring(namespaceIdx + 1, value.length()));
+            parts = Expressions.splitParts(value.substring(namespaceIdx + 1, value.length()));
             namespace = value.substring(0, namespaceIdx);
         } else {
-            strParts = Expressions.splitParts(value);
-            if (strParts.size() == 1) {
-                String literal = strParts.get(0);
-                Object literalValue = LiteralSupport.getLiteralValue(literal);
-                if (!Result.NOT_FOUND.equals(literalValue)) {
-                    return ExpressionImpl.literal(literal, literalValue, origin);
+            parts = Expressions.splitParts(value);
+            if (parts.size() == 1) {
+                literal = LiteralSupport.getLiteral(parts.get(0));
+            }
+        }
+        if (literal == Result.NOT_FOUND) {
+            if (namespace != null) {
+                typeCheckInfo = TYPE_CHECK_NAMESPACE + parts.stream().collect(Collectors.joining("."));
+            } else if (typeInfos.containsKey(parts.get(0))) {
+                typeCheckInfo = typeInfos.get(parts.get(0));
+                if (typeCheckInfo != null) {
+                    if (parts.size() == 2) {
+                        typeCheckInfo += "." + parts.get(1);
+                    } else if (parts.size() > 2) {
+                        typeCheckInfo += "." + parts.stream().skip(1).collect(Collectors.joining("."));
+                    }
                 }
             }
         }
-        List<Part> parts = new ArrayList<>(strParts.size());
-        Part first = null;
-        for (String strPart : strParts) {
-            Part part = createPart(namespace, first, strPart, typeInfos, origin);
-            if (first == null) {
-                first = part;
-            }
-            parts.add(part);
-        }
-        return new ExpressionImpl(namespace, parts, Result.NOT_FOUND, origin);
-    }
-
-    private static Part createPart(String namespace, Part first, String value, Map<String, String> typeInfos, Origin origin) {
-        if (Expressions.isVirtualMethod(value)) {
-            String name = Expressions.parseVirtualMethodName(value);
-            List<String> strParams = new ArrayList<>(Expressions.parseVirtualMethodParams(value));
-            List<Expression> params = new ArrayList<>(strParams.size());
-            for (String strParam : strParams) {
-                params.add(parseExpression(strParam.trim(), typeInfos, origin));
-            }
-            return new ExpressionImpl.VirtualMethodExpressionPartImpl(name, params);
-        }
-        String typeInfo = null;
-        if (namespace != null) {
-            typeInfo = value;
-        } else if (first == null) {
-            typeInfo = typeInfos.get(value);
-        } else if (first.getTypeInfo() != null) {
-            typeInfo = value;
-        }
-        return new ExpressionImpl.ExpressionPartImpl(value, typeInfo);
+        return new Expression(namespace, parts, literal, typeCheckInfo, origin);
     }
 
     static boolean isSeparator(char candidate) {
@@ -642,16 +621,12 @@ class Parser implements Function<String, Expression> {
         return character == '"' || character == '\'';
     }
 
-    static boolean isLeftBracket(char character) {
-        return character == '(';
-    }
-
-    static boolean isRightBracket(char character) {
-        return character == ')';
+    static boolean isBracket(char character) {
+        return character == '(' || character == ')';
     }
 
     @Override
-    public ExpressionImpl apply(String value) {
+    public Expression apply(String value) {
         return parseExpression(value, typeInfoStack.peek(), origin());
     }
 

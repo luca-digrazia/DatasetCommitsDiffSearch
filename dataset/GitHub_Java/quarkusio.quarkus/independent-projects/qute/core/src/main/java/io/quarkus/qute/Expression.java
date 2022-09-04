@@ -1,120 +1,122 @@
 package io.quarkus.qute;
 
+import io.quarkus.qute.Results.Result;
 import io.quarkus.qute.TemplateNode.Origin;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Represents a value expression. It could be a literal such as {@code 'foo'}. It could have a namespace such as {@code data}
  * for {@code data:name}. It could have several parts such as {@code item} and {@code name} for {@code item.name}.
+ * <p>
+ * An expression may have a "type check information" attached. The string has a form {@code [TYPE_INFO]<SECTION_HINT>.foo.baz}
+ * where TYPE_INFO represent the fully qualified type name (including type parameters) and SECTION_HINT represents an optional
+ * hint set by the corresponding section helper. For example the expression {@code foo.name} may have the following type check
+ * info: {@code [org.acme.Foo].name} and the expression {@code it.name} may have
+ * {@code [java.util.List<org.acme.Label>]<for-element>.name}.
  * 
  * @see Evaluator
  */
-public interface Expression {
+public final class Expression {
+
+    static final Expression EMPTY = new Expression(null, Collections.emptyList(), null, null, null);
 
     /**
      * 
-     * @return the namespace, may be {@code null}
+     * @param value
+     * @return a non-contextual expression
      */
-    String getNamespace();
-
-    default boolean hasNamespace() {
-        return getNamespace() != null;
-    }
-
-    /**
-     * 
-     * @return the list of parts, is never {@code null}
-     */
-    List<Part> getParts();
-
-    /**
-     * 
-     * @return true if it represents a literal
-     */
-    boolean isLiteral();
-
-    /**
-     * 
-     * @return the literal value, or null
-     */
-    CompletableFuture<Object> getLiteralValue();
-
-    /**
-     * 
-     * @return the origin
-     */
-    Origin getOrigin();
-
-    /**
-     * 
-     * @return the original value as defined in the template
-     */
-    String toOriginalString();
-
-    default String collectTypeInfo() {
-        if (!hasTypeInfo()) {
-            return null;
+    public static Expression from(String value) {
+        if (value == null || value.isEmpty()) {
+            return EMPTY;
         }
-        return getParts().stream().map(Part::getTypeInfo).collect(Collectors.joining("."));
+        return Parser.parseExpression(value, Collections.emptyMap(), null);
     }
 
-    default boolean hasTypeInfo() {
-        return getParts().get(0).getTypeInfo() != null;
+    public static Expression literal(String value) {
+        if (value == null || value.isEmpty()) {
+            return EMPTY;
+        }
+        Object literal = LiteralSupport.getLiteral(value);
+        if (literal == null) {
+            throw new IllegalArgumentException("Not a literal value: " + value);
+        }
+        return new Expression(null, Collections.singletonList(value), literal, null, null);
     }
 
-    /**
-     * The id must be unique for the template.
-     * 
-     * @return the generated id or {@code -1} for an expression that was not created by a parser
-     */
-    int getGeneratedId();
+    public final String namespace;
+    public final List<String> parts;
+    public final CompletableFuture<Object> literal;
+    public final String typeCheckInfo;
+    public final Origin origin;
 
-    /**
-     * 
-     * @see Expression#getParts()
-     */
-    interface Part {
+    Expression(String namespace, List<String> parts, Object literal, String typeCheckInfo, Origin origin) {
+        this.namespace = namespace;
+        this.parts = parts;
+        this.literal = literal != Result.NOT_FOUND ? CompletableFuture.completedFuture(literal) : null;
+        this.typeCheckInfo = typeCheckInfo;
+        this.origin = origin;
+    }
 
-        /**
-         * 
-         * @return the name of a property or virtual method
-         */
-        String getName();
+    @Override
+    public int hashCode() {
+        return Objects.hash(literalValue(), namespace, parts, typeCheckInfo, origin);
+    }
 
-        /**
-         * An expression part may have a "type check information" attached. The string can be one of the following:
-         * <ul>
-         * <li>type info that represents a fully qualified type name (including type parameters) -
-         * {@code |TYPE_INFO|<section-hint>};
-         * for example {@code |org.acme.Foo|},
-         * {@code |java.util.List<org.acme.Label>|} and {@code |org.acme.Foo|<when#123>}</li>
-         * <li>property; for example {@code foo} and {@code foo<loop#123>}</li>
-         * <li>virtual method; for example {@code foo.call(|org.acme.Bar|)}</li>
-         * </ul>
-         * 
-         * @return the type check info
-         */
-        String getTypeInfo();
-
-        default boolean isVirtualMethod() {
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null) {
             return false;
         }
-
-        default VirtualMethodPart asVirtualMethod() {
-            throw new IllegalArgumentException("Not a virtual method");
+        if (getClass() != obj.getClass()) {
+            return false;
         }
-
+        Expression other = (Expression) obj;
+        return Objects.equals(literalValue(), other.literalValue()) && Objects.equals(namespace, other.namespace)
+                && Objects.equals(parts, other.parts) && Objects.equals(typeCheckInfo, other.typeCheckInfo)
+                && Objects.equals(origin, other.origin);
     }
 
-    /**
-     * Part that represents a virtual method.
-     */
-    interface VirtualMethodPart extends Part {
+    @Override
+    public String toString() {
+        StringBuilder builder = new StringBuilder();
+        builder.append("Expression [namespace=").append(namespace).append(", parts=").append(parts).append(", literal=")
+                .append(literalValue()).append(", typeCheckInfo=")
+                .append(typeCheckInfo).append("]");
+        return builder.toString();
+    }
 
-        List<Expression> getParameters();
+    public String toOriginalString() {
+        StringBuilder builder = new StringBuilder();
+        if (namespace != null) {
+            builder.append(namespace);
+            builder.append(":");
+        }
+        for (Iterator<String> iterator = parts.iterator(); iterator.hasNext();) {
+            builder.append(iterator.next());
+            if (iterator.hasNext()) {
+                builder.append(".");
+            }
+        }
+        return builder.toString();
+    }
 
+    private Object literalValue() {
+        if (literal != null) {
+            try {
+                return literal.get();
+            } catch (InterruptedException | ExecutionException e) {
+                return null;
+            }
+        }
+        return null;
     }
 
 }

@@ -62,11 +62,11 @@ public interface SectionHelperFactory<T extends SectionHelper> {
     /**
      * Initialize a section block.
      * 
-     * @return a new scope if this section introduces a new scope, or the outer scope
+     * @return a map of name to type infos
      * @see BlockInfo#addExpression(String, String)
      */
-    default Scope initializeBlock(Scope outerScope, BlockInfo block) {
-        return outerScope;
+    default Map<String, String> initializeBlock(Map<String, String> outerNameTypeInfos, BlockInfo block) {
+        return Collections.emptyMap();
     }
 
     interface ParserDelegate {
@@ -89,14 +89,6 @@ public interface SectionHelperFactory<T extends SectionHelper> {
             return getParameters().containsKey(name);
         }
 
-        /**
-         * Parse and register an expression for the specified parameter.
-         * 
-         * @param param
-         * @param value
-         * @return a new expression
-         * @see SectionInitContext#getExpression(String)
-         */
         Expression addExpression(String param, String value);
 
     }
@@ -106,41 +98,25 @@ public interface SectionHelperFactory<T extends SectionHelper> {
      */
     public interface SectionInitContext extends ParserDelegate {
 
-        /**
-         * 
-         * @return the parameters of the main block
-         */
-        default public Map<String, String> getParameters() {
+        default Map<String, String> getParameters() {
             return getBlocks().get(0).parameters;
         }
 
-        default public boolean hasParameter(String name) {
+        default boolean hasParameter(String name) {
             return getParameters().containsKey(name);
         }
 
-        default public String getParameter(String name) {
+        default String getParameter(String name) {
             return getParameters().get(name);
         }
 
-        /**
-         * 
-         * @param parameterName
-         * @return an expression registered for the specified param name, or {@code null}
-         * @see BlockInfo#addExpression(String, String)
-         */
-        public Expression getExpression(String parameterName);
+        Expression getExpression(String parameterName);
 
-        /**
-         * Parse the specified value. The expression is not registered in the template.
-         * 
-         * @param value
-         * @return a new expression
-         */
-        public Expression parseValue(String value);
+        Expression parseValue(String value);
 
-        public List<SectionBlock> getBlocks();
+        List<SectionBlock> getBlocks();
 
-        public Engine getEngine();
+        Engine getEngine();
 
     }
 

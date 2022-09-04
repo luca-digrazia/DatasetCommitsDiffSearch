@@ -1,5 +1,13 @@
 package io.quarkus.qute;
 
+import static io.quarkus.qute.ValueResolvers.collectionResolver;
+import static io.quarkus.qute.ValueResolvers.mapEntryResolver;
+import static io.quarkus.qute.ValueResolvers.mapResolver;
+import static io.quarkus.qute.ValueResolvers.mapperResolver;
+import static io.quarkus.qute.ValueResolvers.orResolver;
+import static io.quarkus.qute.ValueResolvers.thisResolver;
+import static io.quarkus.qute.ValueResolvers.trueResolver;
+
 import java.io.Reader;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -13,15 +21,12 @@ import java.util.function.Supplier;
  */
 public final class EngineBuilder {
 
-    final Map<String, SectionHelperFactory<?>> sectionHelperFactories;
-    final List<ValueResolver> valueResolvers;
-    final List<NamespaceResolver> namespaceResolvers;
-    final List<TemplateLocator> locators;
-    final List<ResultMapper> resultMappers;
-    Function<String, SectionHelperFactory<?>> sectionHelperFunc;
-    final List<ParserHook> parserHooks;
-    boolean removeStandaloneLines;
-    boolean strictRendering;
+    private final Map<String, SectionHelperFactory<?>> sectionHelperFactories;
+    private final List<ValueResolver> valueResolvers;
+    private final List<NamespaceResolver> namespaceResolvers;
+    private final List<TemplateLocator> locators;
+    private final List<ResultMapper> resultMappers;
+    private Function<String, SectionHelperFactory<?>> sectionHelperFunc;
 
     EngineBuilder() {
         this.sectionHelperFactories = new HashMap<>();
@@ -29,8 +34,6 @@ public final class EngineBuilder {
         this.namespaceResolvers = new ArrayList<>();
         this.locators = new ArrayList<>();
         this.resultMappers = new ArrayList<>();
-        this.parserHooks = new ArrayList<>();
-        this.strictRendering = true;
     }
 
     public EngineBuilder addSectionHelper(SectionHelperFactory<?> factory) {
@@ -56,7 +59,7 @@ public final class EngineBuilder {
     public EngineBuilder addDefaultSectionHelpers() {
         return addSectionHelpers(new IfSectionHelper.Factory(), new LoopSectionHelper.Factory(),
                 new WithSectionHelper.Factory(), new IncludeSectionHelper.Factory(), new InsertSectionHelper.Factory(),
-                new SetSectionHelper.Factory(), new WhenSectionHelper.Factory(), new EvalSectionHelper.Factory());
+                new SetSectionHelper.Factory());
     }
 
     public EngineBuilder addValueResolver(Supplier<ValueResolver> resolverSupplier) {
@@ -81,11 +84,8 @@ public final class EngineBuilder {
      * @return self
      */
     public EngineBuilder addDefaultValueResolvers() {
-        return addValueResolvers(ValueResolvers.mapResolver(), ValueResolvers.mapperResolver(),
-                ValueResolvers.mapEntryResolver(), ValueResolvers.collectionResolver(), ValueResolvers.listResolver(),
-                ValueResolvers.thisResolver(), ValueResolvers.orResolver(), ValueResolvers.trueResolver(),
-                ValueResolvers.logicalAndResolver(), ValueResolvers.logicalOrResolver(), ValueResolvers.orEmpty(),
-                ValueResolvers.arrayResolver());
+        return addValueResolvers(mapResolver(), mapperResolver(), mapEntryResolver(), collectionResolver(),
+                thisResolver(), orResolver(), trueResolver());
     }
 
     public EngineBuilder addDefaults() {
@@ -93,14 +93,10 @@ public final class EngineBuilder {
     }
 
     public EngineBuilder addNamespaceResolver(NamespaceResolver resolver) {
-        String namespace = Namespaces.requireValid(resolver.getNamespace());
-        for (NamespaceResolver nsResolver : namespaceResolvers) {
-            if (nsResolver.getNamespace().equals(namespace)
-                    && resolver.getPriority() == nsResolver.getPriority()) {
+        for (NamespaceResolver namespaceResolver : namespaceResolvers) {
+            if (namespaceResolver.getNamespace().equals(resolver.getNamespace())) {
                 throw new IllegalArgumentException(
-                        String.format(
-                                "Namespace [%s] may not be handled by multiple resolvers of the same priority [%s]: %s and %s",
-                                namespace, resolver.getPriority(), nsResolver, resolver));
+                        String.format("Namespace %s is already handled by %s", resolver.getNamespace()));
             }
         }
         this.namespaceResolvers.add(resolver);
@@ -119,11 +115,6 @@ public final class EngineBuilder {
         return this;
     }
 
-    public EngineBuilder addParserHook(ParserHook parserHook) {
-        this.parserHooks.add(parserHook);
-        return this;
-    }
-
     /**
      * 
      * @param resultMapper
@@ -139,40 +130,9 @@ public final class EngineBuilder {
         return this;
     }
 
-    /**
-     * Specify whether the parser should remove standalone lines from the output.
-     * <p>
-     * A standalone line is a line that contains at least one section tag, parameter declaration, or comment but no expression
-     * and no non-whitespace character.
-     * 
-     * @param value
-     * @return self
-     */
-    public EngineBuilder removeStandaloneLines(boolean value) {
-        this.removeStandaloneLines = value;
-        return this;
-    }
-
-    /**
-     * If set to {@code true} then any expression that is evaluated to a {@link Results.NotFound} will always result in a
-     * {@link TemplateException} and the rendering is aborted.
-     * <p>
-     * Strict rendering is enabled by default.
-     * 
-     * @param value
-     * @return self
-     */
-    public EngineBuilder strictRendering(boolean value) {
-        this.strictRendering = value;
-        return this;
-    }
-
-    /**
-     * 
-     * @return a new engine instance
-     */
     public Engine build() {
-        return new EngineImpl(this);
+        return new EngineImpl(sectionHelperFactories, valueResolvers, namespaceResolvers, locators, resultMappers,
+                sectionHelperFunc);
     }
 
 }
