@@ -515,10 +515,6 @@ public class Indices {
         return getClosedIndices(Collections.singleton(indexSet.getIndexWildcard()));
     }
 
-    public boolean isClosed(final String indexName) {
-        return getClosedIndices(Collections.singleton(indexName)).contains(indexName);
-    }
-
     /**
      * Retrieve the response for the <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/cat-indices.html">cat indices</a> request from Elasticsearch.
      *

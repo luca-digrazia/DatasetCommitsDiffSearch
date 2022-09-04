@@ -123,14 +123,22 @@ public class IndexerOverviewResource extends RestResource {
         final List<String> indexNames = new ArrayList<>();
         indexStats.fieldNames().forEachRemaining(indexNames::add);
         final Map<String, Boolean> areReopened = indices.areReopened(indexNames);
-        final Map<String, IndexSummary> indicesSummaries = buildIndexSummaries(deflectorSummary, indexSet, indexRanges, indexStats, areReopened);
+        final Map<String, IndexSummary> indicesSummaries = buildIndexSummaries(deflectorSummary, indexRanges, indexStats, areReopened);
+
+        indices.getClosedIndices(indexSet).forEach(indexName -> indicesSummaries.put(indexName, IndexSummary.create(
+                null,
+                indexRanges.stream().filter((indexRangeSummary) -> indexRangeSummary.indexName().equals(indexName)).findFirst().orElse(null),
+                indexName.equals(deflectorSummary.currentTarget()),
+                true,
+                false
+        )));
 
         return IndexerOverview.create(deflectorSummary,
                 IndexerClusterOverview.create(indexerClusterResource.clusterHealth(), indexerClusterResource.clusterName().name()),
                 countResource.total(indexSetId), indicesSummaries);
     }
 
-    private Map<String, IndexSummary> buildIndexSummaries(DeflectorSummary deflectorSummary, IndexSet indexSet, List<IndexRangeSummary> indexRanges, JsonNode indexStats, Map<String, Boolean> areReopened) {
+    private Map<String, IndexSummary> buildIndexSummaries(DeflectorSummary deflectorSummary, List<IndexRangeSummary> indexRanges, JsonNode indexStats, Map<String, Boolean> areReopened) {
         final Iterator<Map.Entry<String, JsonNode>> fields = indexStats.fields();
         final ImmutableMap.Builder<String, IndexSummary> indexSummaries = ImmutableMap.builder();
         while (fields.hasNext()) {
@@ -138,13 +146,6 @@ public class IndexerOverviewResource extends RestResource {
             indexSummaries.put(entry.getKey(), buildIndexSummary(entry, indexRanges, deflectorSummary, areReopened));
 
         }
-        indices.getClosedIndices(indexSet).forEach(indexName -> indexSummaries.put(indexName, IndexSummary.create(
-                null,
-                indexRanges.stream().filter((indexRangeSummary) -> indexRangeSummary.indexName().equals(indexName)).findFirst().orElse(null),
-                indexName.equals(deflectorSummary.currentTarget()),
-                true,
-                false
-        )));
         return indexSummaries.build();
     }
 

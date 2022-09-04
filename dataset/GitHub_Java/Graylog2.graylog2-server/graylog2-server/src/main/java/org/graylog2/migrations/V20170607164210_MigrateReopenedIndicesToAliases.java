@@ -19,16 +19,20 @@ package org.graylog2.migrations;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.zafarkhaja.semver.Version;
 import com.google.common.collect.ImmutableSet;
+import io.searchbox.client.JestClient;
+import io.searchbox.client.JestResult;
+import io.searchbox.cluster.State;
 import org.graylog2.indexer.ElasticsearchException;
 import org.graylog2.indexer.IndexSet;
 import org.graylog2.indexer.MongoIndexSet;
 import org.graylog2.indexer.cluster.Node;
+import org.graylog2.indexer.cluster.jest.JestUtils;
 import org.graylog2.indexer.indexset.IndexSetService;
 import org.graylog2.indexer.indices.Indices;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import javax.inject.Inject;
 import java.time.ZonedDateTime;
 import java.util.Collection;
@@ -41,27 +45,23 @@ public class V20170607164210_MigrateReopenedIndicesToAliases extends Migration {
     private static final Logger LOG = LoggerFactory.getLogger(V20170607164210_MigrateReopenedIndicesToAliases.class);
     private static final String REOPENED_INDEX_SETTING = "graylog2_reopened";
 
-    private final Node node;
+    private Node node;
     private final IndexSetService indexSetService;
     private final MongoIndexSet.Factory mongoIndexSetFactory;
     private final Indices indices;
-    private final ClusterState clusterState;
-
-    public interface ClusterState {
-        JsonNode getForIndices(Collection<String> indices);
-    }
+    private final JestClient jestClient;
 
     @Inject
     public V20170607164210_MigrateReopenedIndicesToAliases(Node node,
                                                            IndexSetService indexSetService,
                                                            MongoIndexSet.Factory mongoIndexSetFactory,
                                                            Indices indices,
-                                                           ClusterState clusterState) {
+                                                           JestClient jestClient) {
         this.node = node;
         this.indexSetService = indexSetService;
         this.mongoIndexSetFactory = mongoIndexSetFactory;
         this.indices = indices;
-        this.clusterState = clusterState;
+        this.jestClient = jestClient;
     }
 
     @Override
@@ -73,18 +73,20 @@ public class V20170607164210_MigrateReopenedIndicesToAliases extends Migration {
     @Override
     public void upgrade() {
         this.indexSetService.findAll()
-                .stream()
-                .map(mongoIndexSetFactory::create)
-                .flatMap(indexSet -> getReopenedIndices(indexSet).stream())
-                .peek(indexName -> LOG.debug("Marking index {} to be reopened using alias.", indexName))
+            .stream()
+            .map(mongoIndexSetFactory::create)
+            .flatMap(indexSet -> getReopenedIndices(indexSet).stream())
+            .map(indexName -> { LOG.debug("Marking index {} to be reopened using alias.", indexName); return indexName; })
             .forEach(indices::markIndexReopened);
     }
 
     private Set<String> getReopenedIndices(final Collection<String> indices) {
         final Version elasticsearchVersion = node.getVersion().orElseThrow(() -> new ElasticsearchException("Unable to retrieve Elasticsearch version."));
+        final String indexList = String.join(",", indices);
+        final State request = new State.Builder().withMetadata().indices(indexList).build();
 
-        final JsonNode clusterStateJson = clusterState.getForIndices(indices);
-
+        final JestResult jestResult = JestUtils.execute(jestClient, request, () -> "Couldn't read cluster state for reopened indices " + indices);
+        final JsonNode clusterStateJson = jestResult.getJsonObject();
         final JsonNode indicesJson = clusterStateJson.path("metadata").path("indices");
 
         final ImmutableSet.Builder<String> reopenedIndices = ImmutableSet.builder();
@@ -115,18 +117,18 @@ public class V20170607164210_MigrateReopenedIndicesToAliases extends Migration {
         return reopenedIndices.build();
     }
 
-    private boolean checkForReopened(@Nonnull JsonNode indexSettings, Version elasticsearchVersion) {
+    private boolean checkForReopened(@Nullable JsonNode indexSettings, Version elasticsearchVersion) {
         final JsonNode settings;
         if (elasticsearchVersion.satisfies(">=2.1.0 & <5.0.0")) {
             settings = indexSettings;
-        } else if (elasticsearchVersion.satisfies("^5.0.0 | ^6.0.0 | ^7.0.0")) {
+        } else if (elasticsearchVersion.satisfies("^5.0.0")) {
             settings = indexSettings.path("archived");
         } else {
             throw new ElasticsearchException("Unsupported Elasticsearch version: " + elasticsearchVersion);
         }
 
-        // if this is a missing node, asBoolean() returns false
-        return settings.path("index").path(REOPENED_INDEX_SETTING).asBoolean();
+        final JsonNode reopened = settings.path("index").path(REOPENED_INDEX_SETTING);
+        return reopened.isMissingNode() ? false : reopened.asBoolean();
     }
 
     private Set<String> getReopenedIndices(final IndexSet indexSet) {
