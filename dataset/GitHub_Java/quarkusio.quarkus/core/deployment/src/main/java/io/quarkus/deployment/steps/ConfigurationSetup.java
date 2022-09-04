@@ -5,8 +5,6 @@ import static io.quarkus.deployment.util.ReflectUtil.toError;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.UndeclaredThrowableException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -140,9 +138,9 @@ public class ConfigurationSetup {
 
     private static final MethodDescriptor BTCF_GET_CONFIG_SOURCE = MethodDescriptor.ofMethod(BuildTimeConfigFactory.class,
             "getBuildTimeConfigSource", ConfigSource.class);
-    private static final MethodDescriptor ECS_CACHE_CONSTRUCT = MethodDescriptor.ofConstructor(ExpandingConfigSource.Cache.class);
-    private static final MethodDescriptor ECS_WRAPPER = MethodDescriptor.ofMethod(ExpandingConfigSource.class, "wrapper", UnaryOperator.class, ExpandingConfigSource.Cache.class);
 
+    private static final FieldDescriptor ECS_WRAPPER = FieldDescriptor.of(ExpandingConfigSource.class, "WRAPPER",
+            UnaryOperator.class);
     private static final String CONFIG_ROOTS_LIST = "META-INF/quarkus-config-roots.list";
 
     public ConfigurationSetup() {
@@ -228,16 +226,14 @@ public class ConfigurationSetup {
         // now prepare & load the build configuration
         SmallRyeConfigBuilder builder = new SmallRyeConfigBuilder();
         // expand properties
-        final ExpandingConfigSource.Cache cache = new ExpandingConfigSource.Cache();
-        builder.withWrapper(ExpandingConfigSource.wrapper(cache));
+        builder.withWrapper(ExpandingConfigSource::new);
         builder.addDefaultSources();
         final ApplicationPropertiesConfigSource.InJar inJar = new ApplicationPropertiesConfigSource.InJar();
         builder.withSources(inJar);
         for (ConfigurationCustomConverterBuildItem converter : converters) {
             withConverterHelper(builder, converter.getType(), converter.getPriority(), converter.getConverter());
         }
-        final SmallRyeConfig src = (SmallRyeConfig) builder.addDefaultSources()
-                .addDiscoveredSources().addDiscoveredConverters().build();
+        final SmallRyeConfig src = (SmallRyeConfig) builder.build();
         SmallRyeConfigProviderResolver.instance().registerConfig(src, Thread.currentThread().getContextClassLoader());
         final Set<String> unmatched = new HashSet<>();
         ConfigDefinition.loadConfiguration(src, unmatched,
@@ -286,26 +282,12 @@ public class ConfigurationSetup {
     private static <T> void withConverterHelper(final SmallRyeConfigBuilder builder, final Class<T> type, final int priority,
             final Class<? extends Converter<?>> converterClass) {
         try {
-            builder.withConverter(type, priority,
-                    ((Class<? extends Converter<T>>) converterClass).getDeclaredConstructor().newInstance());
+            builder.withConverter(type, priority, ((Class<? extends Converter<T>>) converterClass).newInstance());
         } catch (InstantiationException e) {
             throw toError(e);
         } catch (IllegalAccessException e) {
             throw toError(e);
-        } catch (NoSuchMethodException e) {
-            throw toError(e);
-        } catch (InvocationTargetException e) {
-            try {
-                throw e.getCause();
-            } catch (RuntimeException | Error e2) {
-                throw e2;
-            } catch (Throwable t) {
-                throw new UndeclaredThrowableException(t);
-            }
         }
-        // Constructor.newInstance() can also throw an IllegalArgumentException,
-        // or a SecurityException, both of which already are RuntimeException,
-        // so we do not catch those and just let them propagate.
     }
 
     /**
@@ -507,8 +489,7 @@ public class ConfigurationSetup {
                 }
 
                 // property expansion
-                final ResultHandle cache = carc.newInstance(ECS_CACHE_CONSTRUCT);
-                final ResultHandle wrapper = carc.invokeStaticMethod(ECS_WRAPPER, cache);
+                final ResultHandle wrapper = carc.readStaticField(ECS_WRAPPER);
                 carc.invokeVirtualMethod(SRCB_WITH_WRAPPER, builder, wrapper);
 
                 // write out loader for converter types
@@ -619,9 +600,8 @@ public class ConfigurationSetup {
             final StringBuilder methodName, final Map<String, MethodDescriptor> parseMethodCache) {
         final String methodNameStr = methodName.toString();
         final MethodDescriptor existing = parseMethodCache.get(methodNameStr);
-        if (existing != null) {
+        if (existing != null)
             return existing;
-        }
         try (MethodCreator body = cc.getMethodCreator(methodName.toString(), void.class, SmallRyeConfig.class,
                 NameIterator.class)) {
             body.setModifiers(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC);
