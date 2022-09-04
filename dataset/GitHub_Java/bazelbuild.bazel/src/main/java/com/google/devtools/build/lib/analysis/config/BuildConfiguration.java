@@ -79,10 +79,10 @@ import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
-import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.TriState;
+import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
+import com.google.devtools.common.options.proto.OptionFilters.OptionMetadataTag;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -463,16 +463,6 @@ public final class BuildConfiguration implements BuildEvent {
    * simplest way to ensure that is to return the input string.
    */
   public static class Options extends FragmentOptions implements Cloneable {
-    @Option(
-      name = "experimental_separate_genfiles_directory",
-      defaultValue = "true",
-      category = "semantics",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = { OptionEffectTag.AFFECTS_OUTPUTS },
-      help = "Whether to have a separate genfiles directory or fold it into the bin directory"
-    )
-
-    public boolean separateGenfilesDirectory;
     @Option(
       name = "define",
       converter = Converters.AssignmentConverter.class,
@@ -1144,7 +1134,6 @@ public final class BuildConfiguration implements BuildEvent {
       host.useDynamicConfigurations = useDynamicConfigurations;
       host.commandLineBuildVariables = commandLineBuildVariables;
       host.enforceConstraints = enforceConstraints;
-      host.separateGenfilesDirectory = separateGenfilesDirectory;
 
       if (fallback) {
         // In the fallback case, we have already tried the target options and they didn't work, so
@@ -1304,8 +1293,6 @@ public final class BuildConfiguration implements BuildEvent {
   private final Root coverageDirectoryForMainRepository;
   private final Root testlogsDirectoryForMainRepository;
   private final Root middlemanDirectoryForMainRepository;
-
-  private final boolean separateGenfilesDirectory;
 
   // Cache this value for quicker access. We don't cache it inside BuildOptions because BuildOptions
   // is mutable, so a cached value there could fall out of date when it's updated.
@@ -1532,7 +1519,6 @@ public final class BuildConfiguration implements BuildEvent {
     this.buildOptions = buildOptions.clone();
     this.actionsEnabled = buildOptions.enableActions();
     this.options = buildOptions.get(Options.class);
-    this.separateGenfilesDirectory = options.separateGenfilesDirectory;
     this.mainRepositoryName = RepositoryName.createFromValidStrippedName(repositoryName);
     this.dynamicTransitionMapper = dynamicTransitionMapper;
 
@@ -2248,10 +2234,6 @@ public final class BuildConfiguration implements BuildEvent {
   }
 
   public Root getGenfilesDirectory(RepositoryName repositoryName) {
-    if (!separateGenfilesDirectory) {
-      return getBinDirectory(repositoryName);
-    }
-
     return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
         ? genfilesDirectoryForMainRepository
         : OutputDirectory.GENFILES.getRoot(
@@ -2576,7 +2558,7 @@ public final class BuildConfiguration implements BuildEvent {
     return options.useLLVMCoverageMapFormat;
   }
 
-  /** If false, AnalysisEnvironment doesn't register any actions created by the ConfiguredTarget. */
+  /** If false, AnalysisEnviroment doesn't register any actions created by the ConfiguredTarget. */
   public boolean isActionsEnabled() {
     return actionsEnabled;
   }
