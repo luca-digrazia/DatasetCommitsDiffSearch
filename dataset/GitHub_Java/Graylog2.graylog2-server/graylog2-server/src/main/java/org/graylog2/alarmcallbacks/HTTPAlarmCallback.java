@@ -19,11 +19,11 @@ package org.graylog2.alarmcallbacks;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+import com.squareup.okhttp.MediaType;
+import com.squareup.okhttp.OkHttpClient;
+import com.squareup.okhttp.Request;
+import com.squareup.okhttp.RequestBody;
+import com.squareup.okhttp.Response;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallbackConfigurationException;
@@ -78,7 +78,6 @@ public class HTTPAlarmCallback implements AlarmCallback {
                     .post(RequestBody.create(CONTENT_TYPE, body))
                     .build();
             r = httpClient.newCall(request).execute();
-            r.body().close();
         } catch (JsonProcessingException e) {
             throw new AlarmCallbackException("Unable to serialize alarm", e);
         } catch (MalformedURLException e) {
@@ -116,13 +115,12 @@ public class HTTPAlarmCallback implements AlarmCallback {
 
     @Override
     public void checkConfiguration() throws ConfigurationException {
-        final String url = configuration.getString(CK_URL);
-        if (isNullOrEmpty(url)) {
+        if (isNullOrEmpty(configuration.getString(CK_URL))) {
             throw new ConfigurationException("URL parameter is missing!");
         }
 
         try {
-            new URL(url);
+            new URL(configuration.getString(CK_URL));
         } catch (MalformedURLException e) {
             throw new ConfigurationException("Malformed URL", e);
         }
