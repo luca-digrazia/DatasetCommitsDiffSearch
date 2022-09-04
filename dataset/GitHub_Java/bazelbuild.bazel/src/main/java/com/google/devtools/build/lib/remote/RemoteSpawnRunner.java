@@ -66,20 +66,16 @@ import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
-import com.google.devtools.build.lib.remote.common.NetworkTime;
-import com.google.devtools.build.lib.remote.common.OperationObserver;
-import com.google.devtools.build.lib.remote.common.RemoteActionExecutionContext;
-import com.google.devtools.build.lib.remote.common.RemoteActionExecutionContextImpl;
+import com.google.devtools.build.lib.remote.GrpcRemoteExecutor.ExecuteOperationUpdateReceiver;
 import com.google.devtools.build.lib.remote.common.RemoteCacheClient.ActionKey;
-import com.google.devtools.build.lib.remote.common.RemoteExecutionClient;
 import com.google.devtools.build.lib.remote.merkletree.MerkleTree;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.options.RemoteOutputsMode;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
+import com.google.devtools.build.lib.remote.util.NetworkTime;
 import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import com.google.devtools.build.lib.remote.util.Utils;
 import com.google.devtools.build.lib.remote.util.Utils.InMemoryOutput;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers;
 import com.google.devtools.build.lib.server.FailureDetails;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -87,13 +83,19 @@ import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.longrunning.Operation;
+import com.google.protobuf.Any;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.util.Durations;
 import com.google.protobuf.util.Timestamps;
+import com.google.rpc.PreconditionFailure;
+import com.google.rpc.PreconditionFailure.Violation;
 import io.grpc.Context;
 import io.grpc.Status.Code;
+import io.grpc.protobuf.StatusProto;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -111,6 +113,38 @@ import javax.annotation.Nullable;
 @ThreadSafe
 public class RemoteSpawnRunner implements SpawnRunner {
 
+  private static final String VIOLATION_TYPE_MISSING = "MISSING";
+
+  private static boolean retriableExecErrors(Exception e) {
+    if (BulkTransferException.isOnlyCausedByCacheNotFoundException(e)) {
+      return true;
+    }
+    if (!RemoteRetrierUtils.causedByStatus(e, Code.FAILED_PRECONDITION)) {
+      return false;
+    }
+    com.google.rpc.Status status = StatusProto.fromThrowable(e);
+    if (status == null || status.getDetailsCount() == 0) {
+      return false;
+    }
+    for (Any details : status.getDetailsList()) {
+      PreconditionFailure f;
+      try {
+        f = details.unpack(PreconditionFailure.class);
+      } catch (InvalidProtocolBufferException protoEx) {
+        return false;
+      }
+      if (f.getViolationsCount() == 0) {
+        return false; // Generally shouldn't happen
+      }
+      for (Violation v : f.getViolationsList()) {
+        if (!v.getType().equals(VIOLATION_TYPE_MISSING)) {
+          return false;
+        }
+      }
+    }
+    return true; // if *all* > 0 violations have type MISSING
+  }
+
   private final Path execRoot;
   private final RemoteOptions remoteOptions;
   private final ExecutionOptions executionOptions;
@@ -118,7 +152,7 @@ public class RemoteSpawnRunner implements SpawnRunner {
 
   @Nullable private final Reporter cmdlineReporter;
   private final RemoteExecutionCache remoteCache;
-  private final RemoteExecutionClient remoteExecutor;
+  @Nullable private final GrpcRemoteExecutor remoteExecutor;
   private final RemoteRetrier retrier;
   private final String buildRequestId;
   private final String commandId;
@@ -143,7 +177,7 @@ public class RemoteSpawnRunner implements SpawnRunner {
       String buildRequestId,
       String commandId,
       RemoteExecutionCache remoteCache,
-      RemoteExecutionClient remoteExecutor,
+      GrpcRemoteExecutor remoteExecutor,
       ListeningScheduledExecutorService retryService,
       DigestUtil digestUtil,
       Path logDir,
@@ -168,7 +202,7 @@ public class RemoteSpawnRunner implements SpawnRunner {
     return "remote";
   }
 
-  class ExecutingStatusReporter implements OperationObserver {
+  class ExecutingStatusReporter implements ExecuteOperationUpdateReceiver {
     private boolean reportedExecuting = false;
     private final SpawnExecutionContext context;
 
@@ -177,7 +211,7 @@ public class RemoteSpawnRunner implements SpawnRunner {
     }
 
     @Override
-    public void onNext(Operation o) throws IOException {
+    public void onNextOperation(Operation o) throws IOException {
       if (!reportedExecuting) {
         if (o.getMetadata().is(ExecuteOperationMetadata.class)) {
           ExecuteOperationMetadata metadata =
@@ -246,15 +280,9 @@ public class RemoteSpawnRunner implements SpawnRunner {
     NetworkTime networkTime = new NetworkTime();
     // Look up action cache, and reuse the action output if it is found.
     ActionKey actionKey = digestUtil.computeActionKey(action);
-
-    RemoteActionExecutionContext remoteActionExecutionContext =
-        new RemoteActionExecutionContextImpl(
-            TracingMetadataUtils.buildMetadata(
-                buildRequestId, commandId, actionKey.getDigest().getHash()),
-            networkTime);
     Context withMetadata =
         TracingMetadataUtils.contextWithMetadata(buildRequestId, commandId, actionKey)
-            .withValue(NetworkTimeInterceptor.CONTEXT_KEY, networkTime);
+            .withValue(NetworkTime.CONTEXT_KEY, networkTime);
     Context previous = withMetadata.attach();
     Profiler prof = Profiler.instance();
     try {
@@ -264,8 +292,7 @@ public class RemoteSpawnRunner implements SpawnRunner {
         try (SilentCloseable c = prof.profile(ProfilerTask.REMOTE_CACHE_CHECK, "check cache hit")) {
           cachedResult =
               acceptCachedResult
-                  ? remoteCache.downloadActionResult(
-                      remoteActionExecutionContext, actionKey, /* inlineOutErr= */ false)
+                  ? remoteCache.downloadActionResult(actionKey, /* inlineOutErr= */ false)
                   : null;
         }
         if (cachedResult != null) {
@@ -298,15 +325,7 @@ public class RemoteSpawnRunner implements SpawnRunner {
         }
       } catch (IOException e) {
         return execLocallyAndUploadOrFail(
-            remoteActionExecutionContext,
-            spawn,
-            context,
-            inputMap,
-            actionKey,
-            action,
-            command,
-            uploadLocalResults,
-            e);
+            spawn, context, inputMap, actionKey, action, command, uploadLocalResults, e);
       }
 
       ExecuteRequest.Builder requestBuilder =
@@ -391,15 +410,7 @@ public class RemoteSpawnRunner implements SpawnRunner {
             });
       } catch (IOException e) {
         return execLocallyAndUploadOrFail(
-            remoteActionExecutionContext,
-            spawn,
-            context,
-            inputMap,
-            actionKey,
-            action,
-            command,
-            uploadLocalResults,
-            e);
+            spawn, context, inputMap, actionKey, action, command, uploadLocalResults, e);
       }
     } finally {
       withMetadata.detach(previous);
@@ -527,7 +538,13 @@ public class RemoteSpawnRunner implements SpawnRunner {
       if (actionInput instanceof ParamFileActionInput) {
         ParamFileActionInput paramFileActionInput = (ParamFileActionInput) actionInput;
         Path outputPath = execRoot.getRelative(paramFileActionInput.getExecPath());
-        SandboxHelpers.atomicallyWriteVirtualInput(paramFileActionInput, outputPath, ".remote");
+        if (outputPath.exists()) {
+          outputPath.delete();
+        }
+        outputPath.getParentDirectory().createDirectoryAndParents();
+        try (OutputStream out = outputPath.getOutputStream()) {
+          paramFileActionInput.writeTo(out);
+        }
       }
     }
   }
@@ -572,7 +589,6 @@ public class RemoteSpawnRunner implements SpawnRunner {
   }
 
   private SpawnResult execLocallyAndUploadOrFail(
-      RemoteActionExecutionContext remoteActionExecutionContext,
       Spawn spawn,
       SpawnExecutionContext context,
       SortedMap<PathFragment, ActionInput> inputMap,
@@ -589,14 +605,7 @@ public class RemoteSpawnRunner implements SpawnRunner {
     }
     if (remoteOptions.remoteLocalFallback && !RemoteRetrierUtils.causedByExecTimeout(cause)) {
       return execLocallyAndUpload(
-          remoteActionExecutionContext,
-          spawn,
-          context,
-          inputMap,
-          actionKey,
-          action,
-          command,
-          uploadLocalResults);
+          spawn, context, inputMap, actionKey, action, command, uploadLocalResults);
     }
     return handleError(cause, context.getFileOutErr(), actionKey, context);
   }
@@ -652,10 +661,12 @@ public class RemoteSpawnRunner implements SpawnRunner {
       catastrophe = false;
     }
 
-    String errorMessage = Utils.grpcAwareErrorMessage(exception);
-    if (verboseFailures) {
+    final String errorMessage;
+    if (!verboseFailures) {
+      errorMessage = Utils.grpcAwareErrorMessage(exception);
+    } else {
       // On --verbose_failures print the whole stack trace
-      errorMessage += "\n" + Throwables.getStackTraceAsString(exception);
+      errorMessage = Throwables.getStackTraceAsString(exception);
     }
 
     return new SpawnResult.Builder()
@@ -748,7 +759,6 @@ public class RemoteSpawnRunner implements SpawnRunner {
 
   @VisibleForTesting
   SpawnResult execLocallyAndUpload(
-      RemoteActionExecutionContext remoteActionExecutionContext,
       Spawn spawn,
       SpawnExecutionContext context,
       SortedMap<PathFragment, ActionInput> inputMap,
@@ -776,13 +786,7 @@ public class RemoteSpawnRunner implements SpawnRunner {
     Collection<Path> outputFiles = resolveActionInputs(execRoot, spawn.getOutputFiles());
     try (SilentCloseable c = Profiler.instance().profile(UPLOAD_TIME, "upload outputs")) {
       remoteCache.upload(
-          remoteActionExecutionContext,
-          actionKey,
-          action,
-          command,
-          execRoot,
-          outputFiles,
-          context.getFileOutErr());
+          actionKey, action, command, execRoot, outputFiles, context.getFileOutErr());
     } catch (IOException e) {
       if (verboseFailures) {
         report(Event.debug("Upload to remote cache failed: " + e.getMessage()));
@@ -818,7 +822,12 @@ public class RemoteSpawnRunner implements SpawnRunner {
 
   private static RemoteRetrier createExecuteRetrier(
       RemoteOptions options, ListeningScheduledExecutorService retryService) {
-    return new ExecuteRetrier(
-        options.remoteMaxRetryAttempts, retryService, Retrier.ALLOW_ALL_CALLS);
+    return new RemoteRetrier(
+        options.remoteMaxRetryAttempts > 0
+            ? () -> new Retrier.ZeroBackoff(options.remoteMaxRetryAttempts)
+            : () -> Retrier.RETRIES_DISABLED,
+        RemoteSpawnRunner::retriableExecErrors,
+        retryService,
+        Retrier.ALLOW_ALL_CALLS);
   }
 }

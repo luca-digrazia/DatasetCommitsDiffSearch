@@ -15,10 +15,7 @@ package com.google.devtools.build.lib.remote.util;
 
 import build.bazel.remote.execution.v2.ActionResult;
 import build.bazel.remote.execution.v2.Digest;
-import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.util.concurrent.AsyncCallable;
 import com.google.common.util.concurrent.FluentFuture;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -29,7 +26,6 @@ import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnMetrics;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.SpawnResult.Status;
-import com.google.devtools.build.lib.authandtls.CallCredentialsProvider;
 import com.google.devtools.build.lib.remote.common.CacheNotFoundException;
 import com.google.devtools.build.lib.remote.common.RemoteCacheClient.ActionKey;
 import com.google.devtools.build.lib.remote.options.RemoteOutputsMode;
@@ -44,13 +40,12 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 import javax.annotation.Nullable;
 
 /** Utility methods for the remote package. * */
-public final class Utils {
+public class Utils {
 
   private Utils() {}
 
@@ -173,13 +168,13 @@ public final class Utils {
         .catching(CacheNotFoundException.class, (e) -> null, MoreExecutors.directExecutor());
   }
 
-  public static void verifyBlobContents(Digest expected, Digest actual) throws IOException {
-    if (!expected.equals(actual)) {
+  public static void verifyBlobContents(String expectedHash, String actualHash) throws IOException {
+    if (!expectedHash.equals(actualHash)) {
       String msg =
           String.format(
-              "Output download failed: Expected digest '%s/%d' does not match "
-                  + "received digest '%s/%d'.",
-              expected.getHash(), expected.getSizeBytes(), actual.getHash(), actual.getSizeBytes());
+              "An output download failed, because the expected hash"
+                  + "'%s' did not match the received hash '%s'.",
+              expectedHash, actualHash);
       throw new IOException(msg);
     }
   }
@@ -200,75 +195,6 @@ public final class Utils {
 
     public ByteString getContents() {
       return contents;
-    }
-  }
-
-  /**
-   * Call an asynchronous code block. If the block throws unauthenticated error, refresh the
-   * credentials using {@link CallCredentialsProvider} and call it again.
-   *
-   * <p>If any other exception thrown by the code block, it will be caught and wrapped in the
-   * returned {@link ListenableFuture}.
-   */
-  public static <V> ListenableFuture<V> refreshIfUnauthenticatedAsync(
-      AsyncCallable<V> call, CallCredentialsProvider callCredentialsProvider) {
-    Preconditions.checkNotNull(call);
-    Preconditions.checkNotNull(callCredentialsProvider);
-
-    try {
-      return Futures.catchingAsync(
-          call.call(),
-          Throwable.class,
-          (e) -> refreshIfUnauthenticatedAsyncOnException(e, call, callCredentialsProvider),
-          MoreExecutors.directExecutor());
-    } catch (Throwable t) {
-      return refreshIfUnauthenticatedAsyncOnException(t, call, callCredentialsProvider);
-    }
-  }
-
-  private static <V> ListenableFuture<V> refreshIfUnauthenticatedAsyncOnException(
-      Throwable t, AsyncCallable<V> call, CallCredentialsProvider callCredentialsProvider) {
-    io.grpc.Status status = io.grpc.Status.fromThrowable(t);
-    if (status != null
-        && (status.getCode() == io.grpc.Status.Code.UNAUTHENTICATED
-            || status.getCode() == io.grpc.Status.Code.PERMISSION_DENIED)) {
-      try {
-        callCredentialsProvider.refresh();
-        return call.call();
-      } catch (Throwable tt) {
-        t.addSuppressed(tt);
-      }
-    }
-
-    return Futures.immediateFailedFuture(t);
-  }
-
-  /** Same as {@link #refreshIfUnauthenticatedAsync} but calling a synchronous code block. */
-  public static <V> V refreshIfUnauthenticated(
-      Callable<V> call, CallCredentialsProvider callCredentialsProvider)
-      throws IOException, InterruptedException {
-    Preconditions.checkNotNull(call);
-    Preconditions.checkNotNull(callCredentialsProvider);
-
-    try {
-      return call.call();
-    } catch (Exception e) {
-      io.grpc.Status status = io.grpc.Status.fromThrowable(e);
-      if (status != null
-          && (status.getCode() == io.grpc.Status.Code.UNAUTHENTICATED
-              || status.getCode() == io.grpc.Status.Code.PERMISSION_DENIED)) {
-        try {
-          callCredentialsProvider.refresh();
-          return call.call();
-        } catch (Exception ex) {
-          e.addSuppressed(ex);
-        }
-      }
-
-      Throwables.throwIfInstanceOf(e, IOException.class);
-      Throwables.throwIfInstanceOf(e, InterruptedException.class);
-      Throwables.throwIfUnchecked(e);
-      throw new AssertionError(e);
     }
   }
 }
