@@ -12,10 +12,14 @@ public interface DOMProvider {
   @Nullable
   public Object getRootElement();
 
-  @Nullable
-  public NodeDescriptor getNodeDescriptor(@Nullable Object element);
+  public NodeDescriptor getNodeDescriptor(Object element);
 
-  public void highlightElement(Object element, int color);
+  public void highlightElement(
+      Object element,
+      int contentColor,
+      int paddingColor,
+      int borderColor,
+      int marginColor);
 
   public void hideHighlight();
 

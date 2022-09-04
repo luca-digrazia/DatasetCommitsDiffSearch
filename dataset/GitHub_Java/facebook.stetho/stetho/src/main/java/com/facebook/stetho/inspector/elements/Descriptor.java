@@ -2,34 +2,24 @@
 
 package com.facebook.stetho.inspector.elements;
 
-import com.facebook.stetho.common.Util;
-
 import javax.annotation.Nullable;
 
 public abstract class Descriptor implements NodeDescriptor {
-  private Host mHost;
+
+  private Listener mListener;
 
   protected Descriptor() {
   }
 
-  void initialize(Host host) {
-    Util.throwIfNull(host);
-    Util.throwIfNotNull(mHost);
-    mHost = host;
+  void setListener(Listener listener) {
+    mListener = listener;
   }
 
-  boolean isInitialized() {
-    return mHost != null;
+  protected final Listener getListener() {
+    return mListener;
   }
 
-  protected final Host getHost() {
-    return mHost;
-  }
-
-  public interface Host {
-    @Nullable
-    public Descriptor getDescriptor(@Nullable Object element);
-
+  public interface Listener {
     public void onAttributeModified(
         Object element,
         String name,

@@ -6,16 +6,34 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.facebook.stetho.common.Util;
-import com.facebook.stetho.common.android.FragmentApiUtil;
-import com.facebook.stetho.common.android.ViewGroupUtil;
 import com.facebook.stetho.inspector.elements.ChainedDescriptor;
 
+import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.Map;
 
 final class ViewGroupDescriptor extends ChainedDescriptor<ViewGroup> {
+  // TODO: We're probably going to switch to another way of determining structural
+  //       changes in the View tree. So this gizmo with chaining OnHierarchyChangeListener
+  //       via reflection should go away soon.
+
+  private static final Field sOnHierarchyChangeListenerField;
+  static {
+    Field field;
+    try {
+      field = ViewGroup.class.getDeclaredField("mOnHierarchyChangeListener");
+    } catch (NoSuchFieldException ex) {
+      field = null;
+    }
+
+    sOnHierarchyChangeListenerField = field;
+
+    if (sOnHierarchyChangeListenerField != null) {
+      sOnHierarchyChangeListenerField.setAccessible(true);
+    }
+  }
+
   private final Map<ViewGroup, ElementContext> mElementToContextMap =
       Collections.synchronizedMap(new HashMap<ViewGroup, ElementContext>());
 
@@ -42,32 +60,64 @@ final class ViewGroupDescriptor extends ChainedDescriptor<ViewGroup> {
 
   @Override
   protected Object onGetChildAt(ViewGroup element, int index) {
-    ElementContext context = mElementToContextMap.get(element);
-    return context.getChildAt(element, index);
+    if (index < 0 || index >= element.getChildCount()) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    return element.getChildAt(index);
+  }
+
+  private static ViewGroup.OnHierarchyChangeListener getOnHierarchyChangeListenerHack(
+      ViewGroup viewGroup) throws NoSuchFieldException {
+    if (sOnHierarchyChangeListenerField == null) {
+      throw new NoSuchFieldException();
+    }
+
+    try {
+      return (ViewGroup.OnHierarchyChangeListener) sOnHierarchyChangeListenerField.get(viewGroup);
+    } catch (IllegalAccessException ex) {
+      // should not happen since we called setAccessible(true)
+      throw new IllegalAccessError(ex.getMessage());
+    }
+  }
+
+  private static int findChildIndex(ViewGroup parent, View child) {
+    int count = parent.getChildCount();
+    for (int i = 0; i < count; ++i) {
+      if (parent.getChildAt(i) == child) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   private final class ElementContext implements ViewGroup.OnHierarchyChangeListener {
-    // This is a cache that maps from a View to the Fragment that contains it. If the
-    // View isn't contained by a Fragment, then this maps the View to itself.
-    // For Views contained by Fragments, we emit the Fragment instead, and then let
-    // the Fragment's descriptor emit the View as its sole child. This allows us to
-    // see Fragments in the inspector as part of the UI tree.
-    private final Map<View, Object> mViewToElementMap =
-        Collections.synchronizedMap(new IdentityHashMap<View, Object>());
 
     private ViewGroup mElement;
     private ViewGroup.OnHierarchyChangeListener mInnerListener;
 
     public void hook(ViewGroup element) {
       mElement = Util.throwIfNull(element);
-      mInnerListener = ViewGroupUtil.tryGetOnHierarchyChangeListenerHack(mElement);
+
+      ViewGroup.OnHierarchyChangeListener innerListener;
+      try {
+        innerListener = getOnHierarchyChangeListenerHack(mElement);
+      } catch (NoSuchFieldException ex) {
+        innerListener = null;
+      }
+      mInnerListener = innerListener;
+
       mElement.setOnHierarchyChangeListener(this);
     }
 
     public void unhook() {
       if (mElement != null) {
-        ViewGroup.OnHierarchyChangeListener currentListener =
-            ViewGroupUtil.tryGetOnHierarchyChangeListenerHack(mElement);
+        ViewGroup.OnHierarchyChangeListener currentListener;
+        try {
+          currentListener = getOnHierarchyChangeListenerHack(mElement);
+        } catch (NoSuchFieldException ex) {
+          currentListener = null;
+        }
 
         if (currentListener == this) {
           mElement.setOnHierarchyChangeListener(mInnerListener);
@@ -77,37 +127,6 @@ final class ViewGroupDescriptor extends ChainedDescriptor<ViewGroup> {
 
         mInnerListener = null;
         mElement = null;
-
-        mViewToElementMap.clear();
-      }
-    }
-
-    public Object getChildAt(ViewGroup element, int index) {
-      if (index < 0 || index >= element.getChildCount()) {
-        throw new IndexOutOfBoundsException();
-      }
-
-      View view = element.getChildAt(index);
-      return getElementForView(view);
-    }
-
-    private Object getElementForView(View view) {
-      if (view == null) {
-        return null;
-      }
-
-      Object element = mViewToElementMap.get(view);
-      if (element != null) {
-        return element;
-      }
-
-      Object fragment = FragmentApiUtil.findFragmentForView(view);
-      if (fragment != null) {
-        mViewToElementMap.put(view, fragment);
-        return fragment;
-      } else {
-        mViewToElementMap.put(view, view);
-        return view;
       }
     }
 
@@ -123,14 +142,9 @@ final class ViewGroupDescriptor extends ChainedDescriptor<ViewGroup> {
 
       if (parent instanceof ViewGroup) {
         final ViewGroup parentGroup = (ViewGroup)parent;
-
-        int childIndex = ViewGroupUtil.findChildIndex(parentGroup, child);
-        View previousChild = (childIndex == 0) ? null : parentGroup.getChildAt(childIndex - 1);
-
-        Object childElement = getElementForView(child);
-        Object previousElement = getElementForView(previousChild);
-
-        getHost().onChildInserted(parent, previousElement, childElement);
+        int index = findChildIndex(parentGroup, child);
+        View previousChild = (index == 0) ? null : parentGroup.getChildAt(index - 1);
+        getListener().onChildInserted(parent, previousChild, child);
       }
     }
 
@@ -144,10 +158,7 @@ final class ViewGroupDescriptor extends ChainedDescriptor<ViewGroup> {
         mInnerListener.onChildViewRemoved(parent, child);
       }
 
-      Object childElement = getElementForView(child);
-      getHost().onChildRemoved(parent, childElement);
-
-      mViewToElementMap.remove(child);
+      getListener().onChildRemoved(parent, child);
     }
   }
 }

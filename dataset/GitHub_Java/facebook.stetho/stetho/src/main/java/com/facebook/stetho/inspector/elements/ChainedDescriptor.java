@@ -9,22 +9,14 @@ import javax.annotation.Nullable;
 public abstract class ChainedDescriptor<E> extends Descriptor {
   private Descriptor mSuper;
 
-  // This is used by DescriptorMap to hook us up to whatever handles E's super class.
-  // This method is idempotent in the sense that once you call it with a specific
-  // reference you must either 1) never call it again, or 2) call it again with that
-  // same reference.
+  // This is used by DescriptorMap to hook us up to whatever handles E's super class
   final void setSuper(Descriptor superDescriptor) {
     Util.throwIfNull(superDescriptor);
-
-    if (superDescriptor != mSuper) {
-      if (mSuper != null) {
-        throw new IllegalStateException();
-      }
-      mSuper = superDescriptor;
-    }
+    Util.throwIfNotNull(mSuper);
+    mSuper = superDescriptor;
   }
 
-  public final Descriptor getSuper() {
+  protected final Descriptor getSuper() {
     return mSuper;
   }
 
@@ -128,11 +120,39 @@ public abstract class ChainedDescriptor<E> extends Descriptor {
 
   @Override
   @SuppressWarnings("unchecked")
-  public final void copyAttributes(Object element, AttributeAccumulator attributes) {
-    mSuper.copyAttributes(element, attributes);
-    onCopyAttributes((E)element, attributes);
+  public final int getAttributeCount(Object element) {
+    int superCount = mSuper.getAttributeCount(element);
+    int thisCount = onGetAttributeCount((E)element);
+    return superCount + thisCount;
   }
 
-  protected void onCopyAttributes(E element, AttributeAccumulator attributes) {
+  protected int onGetAttributeCount(E element) {
+    return 0;
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public final void copyAttributeAt(Object element, int index, NodeAttribute outAttribute) {
+    if (index < 0) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    int superCount = mSuper.getChildCount(element);
+    if (index < superCount) {
+      mSuper.copyAttributeAt(element, index, outAttribute);
+      return;
+    }
+
+    int thisCount = onGetAttributeCount((E)element);
+    int thisIndex = index - superCount;
+    if (thisIndex < 0 || thisIndex >= thisCount) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    onCopyAttributeAt((E)element, thisIndex, outAttribute);
+  }
+
+  protected void onCopyAttributeAt(E element, int index, NodeAttribute outAttribute) {
+    throw new IndexOutOfBoundsException();
   }
 }

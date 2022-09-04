@@ -7,8 +7,8 @@ import android.text.TextWatcher;
 import android.widget.TextView;
 
 import com.facebook.stetho.common.Util;
-import com.facebook.stetho.inspector.elements.AttributeAccumulator;
 import com.facebook.stetho.inspector.elements.ChainedDescriptor;
+import com.facebook.stetho.inspector.elements.NodeAttribute;
 
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -33,10 +33,22 @@ final class TextViewDescriptor extends ChainedDescriptor<TextView> {
   }
 
   @Override
-  protected void onCopyAttributes(TextView element, AttributeAccumulator attributes) {
+  protected int onGetAttributeCount(TextView element) {
+    return (element.getText().length() == 0) ? 0 : 1;
+  }
+
+  @Override
+  protected void onCopyAttributeAt(TextView element, int index, NodeAttribute outAttribute) {
+    if (index != 0) {
+      throw new IndexOutOfBoundsException();
+    }
+
     CharSequence text = element.getText();
-    if (text.length() != 0) {
-      attributes.add(TEXT_ATTRIBUTE_NAME, text.toString());
+    if (text.length() == 0) {
+      throw new IndexOutOfBoundsException();
+    } else {
+      outAttribute.name = TEXT_ATTRIBUTE_NAME;
+      outAttribute.value = text.toString();
     }
   }
 
@@ -66,9 +78,9 @@ final class TextViewDescriptor extends ChainedDescriptor<TextView> {
     @Override
     public void afterTextChanged(Editable s) {
       if (s.length() == 0) {
-        getHost().onAttributeRemoved(mElement, TEXT_ATTRIBUTE_NAME);
+        getListener().onAttributeRemoved(mElement, TEXT_ATTRIBUTE_NAME);
       } else {
-        getHost().onAttributeModified(mElement, TEXT_ATTRIBUTE_NAME, s.toString());
+        getListener().onAttributeModified(mElement, TEXT_ATTRIBUTE_NAME, s.toString());
       }
     }
   }

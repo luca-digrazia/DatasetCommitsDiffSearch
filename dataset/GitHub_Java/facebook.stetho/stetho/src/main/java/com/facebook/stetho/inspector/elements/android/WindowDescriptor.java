@@ -22,6 +22,8 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 
 final class WindowDescriptor extends ChainedDescriptor<Window> {
+  private static final String TAG = "WindowDescriptor";
+
   private final Map<Window, ElementContext> mElementToContextMap =
       Collections.synchronizedMap(new IdentityHashMap<Window, ElementContext>());
 
@@ -64,6 +66,7 @@ final class WindowDescriptor extends ChainedDescriptor<Window> {
       return new ElementContextHCMR1();
     } else {
       LogUtil.w(
+          TAG,
           "Running on pre-HCMR1: must manually reload inspector after Window installs DecorView");
 
       return new ElementContext();

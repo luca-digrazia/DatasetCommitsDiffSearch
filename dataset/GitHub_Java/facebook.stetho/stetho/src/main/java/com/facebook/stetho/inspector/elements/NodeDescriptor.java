@@ -1,12 +1,8 @@
-// Copyright 2004-present Facebook. All Rights Reserved.
-
 package com.facebook.stetho.inspector.elements;
-
-import com.facebook.stetho.common.ThreadBound;
 
 import javax.annotation.Nullable;
 
-public interface NodeDescriptor extends ThreadBound {
+public interface NodeDescriptor {
   public void hook(Object element);
 
   public void unhook(Object element);
@@ -24,5 +20,7 @@ public interface NodeDescriptor extends ThreadBound {
 
   public Object getChildAt(Object element, int index);
 
-  public void copyAttributes(Object element, AttributeAccumulator attributes);
+  public int getAttributeCount(Object element);
+
+  public void copyAttributeAt(Object element, int index, NodeAttribute outAttribute);
 }
