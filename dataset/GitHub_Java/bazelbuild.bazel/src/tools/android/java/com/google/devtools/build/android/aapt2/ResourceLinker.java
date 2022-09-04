@@ -406,7 +406,7 @@ public class ResourceLinker {
                         : IS_FLAT_FILE.and(USE_DEFAULT)),
                 workingDirectory)
             // Never compress apks.
-            .add("-0", ".apk")
+            .add("-0", "apk")
             // Add custom no-compress extensions.
             .addRepeated("-0", uncompressedExtensions)
             // Filter by resource configuration type.
@@ -428,7 +428,7 @@ public class ResourceLinker {
 
   private Path combineApks(Path protoApk, Path binaryApk, Path workingDirectory)
       throws IOException {
-    // Linking against apk as a static library elides assets, among other things.
+    // Linking against apk as a static library elides assets, amoung other things.
     // So, copy the missing details to the new apk.
     profiler.startTask("combine");
     final Path combined = workingDirectory.resolve("combined.apk");
