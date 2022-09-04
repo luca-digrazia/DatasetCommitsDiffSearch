@@ -42,27 +42,6 @@ public interface BaseVector<T, TS, S extends BaseStream<TS, S>> extends Serializ
     int size();
 
     /**
-     * Returns the array that backs this vector.
-     * This is mostly for smile internal use for high performance.
-     * The application developers should not use this method.
-     */
-    Object array();
-
-    /**
-     * Returns a double array of this vector.
-     */
-    default double[] toDoubleArray() {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Returns an integer array of this vector.
-     */
-    default int[] toIntArray() {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
      * Returns the value at position i, which may be null.
      */
     T get(int i);

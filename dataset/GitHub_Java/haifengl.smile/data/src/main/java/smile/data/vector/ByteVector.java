@@ -40,30 +40,10 @@ public interface ByteVector extends BaseVector<Byte, Integer, IntStream> {
     /** Sets the (optional) scale of measure. */
     void setScale(DiscreteMeasure scale);
 
-    @Override
-    default short getShort(int i) {
-        return getByte(i);
-    }
-
-    @Override
-    default int getInt(int i) {
-        return getByte(i);
-    }
-
-    @Override
-    default long getLong(int i) {
-        return getByte(i);
-    }
-
-    @Override
-    default float getFloat(int i) {
-        return getByte(i);
-    }
-
-    @Override
-    default double getDouble(int i) {
-        return getByte(i);
-    }
+    /**
+     * Returns the value at position i.
+     */
+    byte getByte(int i);
 
     /**
      * Returns the string representation of vector.
