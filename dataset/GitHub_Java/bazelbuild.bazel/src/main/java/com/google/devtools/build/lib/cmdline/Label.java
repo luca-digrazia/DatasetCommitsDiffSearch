@@ -539,8 +539,9 @@ public final class Label
       return false;
     }
     Label otherLabel = (Label) other;
-    // Package identifiers are interned so we compare them first.
-    return packageIdentifier.equals(otherLabel.packageIdentifier) && name.equals(otherLabel.name);
+    // Perform the equality comparisons in order from least likely to most likely.
+    return name.equals(otherLabel.name)
+        && packageIdentifier.equals(otherLabel.packageIdentifier);
   }
 
   /**
