@@ -17,8 +17,6 @@ package smile.projection;
 
 import java.io.Serializable;
 import smile.math.Math;
-import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.Matrix;
 
 /**
  * Generalized Hebbian Algorithm. GHA is a linear feed-forward neural
@@ -72,7 +70,7 @@ public class GHA implements Projection<double[]>, Serializable {
     /**
      * Projection matrix.
      */
-    private DenseMatrix projection;
+    private double[][] projection;
     /**
      * Workspace for W * x.
      */
@@ -103,10 +101,10 @@ public class GHA implements Projection<double[]>, Serializable {
 
         y = new double[p];
         wy = new double[n];
-        projection = Matrix.zeros(p, n);
+        projection = new double[p][n];
         for (int i = 0; i < p; i++) {
             for (int j = 0; j < n; j++) {
-                projection.set(i, j, 0.1 * Math.random());
+                projection[i][j] = 0.1 * Math.random();
             }
         }
     }
@@ -123,7 +121,7 @@ public class GHA implements Projection<double[]>, Serializable {
 
         y = new double[p];
         wy = new double[n];
-        projection = Matrix.newInstance(w);
+        projection = w;
     }
 
     /**
@@ -131,7 +129,7 @@ public class GHA implements Projection<double[]>, Serializable {
      * matrix are the first p eigenvectors of covariance matrix, ordered by decreasing
      * eigenvalues. The dimension reduced data can be obtained by y = W * x.
      */
-    public DenseMatrix getProjection() {
+    public double[][] getProjection() {
         return projection;
     }
 
@@ -157,7 +155,7 @@ public class GHA implements Projection<double[]>, Serializable {
         }
 
         double[] wx = new double[p];
-        projection.ax(x, wx);
+        Math.ax(projection, x, wx);
         return wx;
     }
 
@@ -169,7 +167,7 @@ public class GHA implements Projection<double[]>, Serializable {
 
         double[][] wx = new double[x.length][p];
         for (int i = 0; i < x.length; i++) {
-            projection.ax(x[i], wx[i]);
+            Math.ax(projection, x[i], wx[i]);
         }
         return wx;
     }
@@ -184,24 +182,24 @@ public class GHA implements Projection<double[]>, Serializable {
             throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x.length, n));
         }
 
-        projection.ax(x, y);
+        Math.ax(projection, x, y);
 
         for (int j = 0; j < p; j++) {
             for (int i = 0; i < n; i++) {
                 double delta = x[i];
                 for (int l = 0; l <= j; l++) {
-                    delta -= projection.get(l, i) * y[l];
+                    delta -= projection[l][i] * y[l];
                 }
-                projection.add(j, i, r * y[j] * delta);
+                projection[j][i] += r * y[j] * delta;
 
-                if (Double.isInfinite(projection.get(j, i))) {
+                if (Double.isInfinite(projection[j][i])) {
                     throw new IllegalStateException("GHA lost convergence. Lower learning rate?");
                 }
             }
         }
 
-        projection.ax(x, y);
-        projection.atx(y, wy);
+        Math.ax(projection, x, y);
+        Math.atx(projection, y, wy);
         return Math.squaredDistance(x, wy);
     }
 }

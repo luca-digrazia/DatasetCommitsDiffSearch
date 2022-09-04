@@ -15,6 +15,7 @@
  *******************************************************************************/
 package smile.clustering;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -22,9 +23,6 @@ import java.util.concurrent.Callable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import smile.math.Math;
-import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.Matrix;
-import smile.math.matrix.PowerIteration;
 import smile.util.MulticoreExecutor;
 
 /**
@@ -47,7 +45,7 @@ import smile.util.MulticoreExecutor;
  * 
  * @author Haifeng Li
  */
-public class DeterministicAnnealing extends KMeans {
+public class DeterministicAnnealing extends KMeans implements Serializable {
     private static final long serialVersionUID = 1L;
     private static final Logger logger = LoggerFactory.getLogger(DeterministicAnnealing.class);
 
@@ -130,10 +128,10 @@ public class DeterministicAnnealing extends KMeans {
 
         priori[0] = priori[1] = 0.5;
 
-        DenseMatrix cov = Matrix.newInstance(Math.cov(data, centroids[0]));
+        double[][] cov = Math.cov(data, centroids[0]);
         double[] ev = new double[d];
         Arrays.fill(ev, 1.0);
-        double lambda = PowerIteration.eigen(cov, ev, 1E-4);
+        double lambda = Math.eigen(cov, ev, 1E-4);
         double T = 2.0 * lambda + 0.01;
         
         k = 2;

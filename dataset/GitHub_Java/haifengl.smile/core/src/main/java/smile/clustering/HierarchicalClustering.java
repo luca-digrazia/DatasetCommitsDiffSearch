@@ -77,7 +77,8 @@ public class HierarchicalClustering implements Serializable {
      * includes the proximity matrix of data.
      */
     public HierarchicalClustering(Linkage linkage) {
-        int n = linkage.size();
+        double[][] proximity = linkage.getProximity();
+        int n = proximity.length;
 
         merge = new int[n - 1][2];
         int[] id = new int[n];
@@ -89,7 +90,7 @@ public class HierarchicalClustering implements Serializable {
             id[i] = i;
         }
 
-        FastPair fp = new FastPair(points, linkage);
+        FastPair fp = new FastPair(points, proximity);
         for (int i = 0; i < n - 1; i++) {
             height[i] = fp.getNearestPair(merge[i]);
             linkage.merge(merge[i][0], merge[i][1]);     // merge clusters into one

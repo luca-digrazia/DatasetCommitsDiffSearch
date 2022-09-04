@@ -44,7 +44,7 @@ public class MahalanobisDistance implements Metric<double[]>, Serializable {
             System.arraycopy(cov[i], 0, sigma[i], 0, cov.length);
         }
 
-        sigmaInv = Math.inverse(sigma).array();
+        sigmaInv = Math.inverse(sigma);
     }
 
     @Override

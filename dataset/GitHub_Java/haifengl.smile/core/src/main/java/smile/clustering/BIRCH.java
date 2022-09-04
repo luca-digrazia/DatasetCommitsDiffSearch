@@ -82,8 +82,7 @@ public class BIRCH implements Clustering<double[]>, Serializable {
     /**
      * Internal node of CF tree.
      */
-    class Node implements Serializable {
-        private static final long serialVersionUID = 1L;
+    class Node {
 
         /**
          * The number of observations

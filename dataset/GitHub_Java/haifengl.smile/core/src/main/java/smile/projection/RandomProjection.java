@@ -17,8 +17,6 @@ package smile.projection;
 
 import java.io.Serializable;
 import smile.math.Math;
-import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.Matrix;
 import smile.stat.distribution.GaussianDistribution;
 
 /**
@@ -70,7 +68,7 @@ public class RandomProjection implements Projection<double[]>, Serializable {
     /**
      * Projection matrix.
      */
-    private DenseMatrix projection;
+    private double[][] projection;
 
     /**
      * Constructor. Generate a non-sparse random projection.
@@ -99,34 +97,32 @@ public class RandomProjection implements Projection<double[]>, Serializable {
         this.n = n;
         this.p = p;
 
+        projection = new double[p][n];
         if (sparse) {
-            projection = Matrix.zeros(p, n);
             double scale = Math.sqrt(3);
             for (int i = 0; i < p; i++) {
                 for (int j = 0; j < n; j++) {
-                    projection.set(i, j, scale * (Math.random(prob) - 1));
+                    projection[i][j] = scale * (Math.random(prob) - 1);
                 }
             }
         } else {
-            double[][] proj = new double[p][n];
             GaussianDistribution gauss = GaussianDistribution.getInstance();
             for (int i = 0; i < p; i++) {
                 for (int j = 0; j < n; j++) {
-                    proj[i][j] = gauss.rand();
+                    projection[i][j] = gauss.rand();
                 }
             }
 
             // Make the columns of the projection matrix orthogonal
             // by modified Gram-Schmidt algorithm.
-            Math.unitize(proj[0]);
+            Math.unitize(projection[0]);
             for (int i = 1; i < p; i++) {
                 for (int j = 0; j < i; j++) {
-                    double t = -Math.dot(proj[i], proj[j]);
-                    Math.axpy(t, proj[j], proj[i]);
+                    double t = -Math.dot(projection[i], projection[j]);
+                    Math.axpy(t, projection[j], projection[i]);
                 }
-                Math.unitize(proj[i]);
+                Math.unitize(projection[i]);
             }
-            projection = Matrix.newInstance(proj);
         }
     }
 
@@ -134,7 +130,7 @@ public class RandomProjection implements Projection<double[]>, Serializable {
      * Returns the projection matrix. The dimension reduced data can be obtained
      * by y = W * x.
      */
-    public DenseMatrix getProjection() {
+    public double[][] getProjection() {
         return projection;
     }
 
@@ -145,7 +141,7 @@ public class RandomProjection implements Projection<double[]>, Serializable {
         }
 
         double[] y = new double[p];
-        projection.ax(x, y);
+        Math.ax(projection, x, y);
         return y;
     }
 
@@ -157,7 +153,7 @@ public class RandomProjection implements Projection<double[]>, Serializable {
 
         double[][] y = new double[x.length][p];
         for (int i = 0; i < x.length; i++) {
-            projection.ax(x[i], y[i]);
+            Math.ax(projection, x[i], y[i]);
         }
         return y;
     }

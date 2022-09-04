@@ -17,6 +17,7 @@
 package smile.math.kernel;
 
 import java.lang.Math;
+import java.io.Serializable;
 
 /**
  * The Thin Plate Spline Kernel. k(u, v) = (||u-v|| / &sigma;)<sup>2</sup> log (||u-v|| / &sigma;),
@@ -25,7 +26,7 @@ import java.lang.Math;
  * 
  * @author Haifeng Li
  */
-public class BinarySparseThinPlateSplineKernel implements MercerKernel<int[]> {
+public class BinarySparseThinPlateSplineKernel implements MercerKernel<int[]>, Serializable {
     private static final long serialVersionUID = 1L;
 
     /**

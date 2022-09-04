@@ -20,12 +20,10 @@ import java.util.Arrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import smile.math.Math;
-import smile.math.matrix.Matrix;
-import smile.math.matrix.NaiveMatrix;
-import smile.math.matrix.RowMajorMatrix;
 import smile.math.matrix.SparseMatrix;
-import smile.math.matrix.BiconjugateGradient;
-import smile.math.matrix.Preconditioner;
+import smile.math.matrix.IMatrix;
+import smile.math.matrix.Matrix;
+import smile.math.matrix.RowMajorMatrix;
 import smile.math.special.Beta;
 
 /**
@@ -211,7 +209,7 @@ public class LASSO  implements Regression<double[]>, Serializable {
             return new LASSO(x, y, lambda, tol, maxIter);
         }
 
-        public LASSO train(Matrix x, double[] y) {
+        public LASSO train(IMatrix x, double[] y) {
             return new LASSO(x, y, lambda, tol, maxIter);
         }
     }
@@ -274,7 +272,7 @@ public class LASSO  implements Regression<double[]>, Serializable {
         }
 
         b = ym - Math.dot(w, center);
-        fitness(new NaiveMatrix(x), y);
+        fitness(new Matrix(x), y);
     }
 
     /**
@@ -284,7 +282,7 @@ public class LASSO  implements Regression<double[]>, Serializable {
      * @param y the response values.
      * @param lambda the shrinkage/regularization parameter.
      */
-    public LASSO(Matrix x, double[] y, double lambda) {
+    public LASSO(IMatrix x, double[] y, double lambda) {
         this(x, y, lambda, 1E-4, 1000);
     }
     
@@ -297,12 +295,12 @@ public class LASSO  implements Regression<double[]>, Serializable {
      * @param tol the tolerance for stopping iterations (relative target duality gap).
      * @param maxIter the maximum number of IPM (Newton) iterations.
      */
-    public LASSO(Matrix x, double[] y, double lambda, double tol, int maxIter) {
+    public LASSO(IMatrix x, double[] y, double lambda, double tol, int maxIter) {
         train(x, y, lambda, tol, maxIter);
         fitness(x, y);
     }
 
-    private void train(Matrix x, double[] y, double lambda, double tol, int maxIter) {
+    private void train(IMatrix x, double[] y, double lambda, double tol, int maxIter) {
         if (x.nrows() != y.length) {
             throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.nrows(), y.length));
         }
@@ -385,7 +383,7 @@ public class LASSO  implements Regression<double[]>, Serializable {
         double[] prb = new double[p];
         double[] prs = new double[p];
 
-        PCGMatrix pcg = new PCGMatrix(x, d1, d2, prb, prs);
+        IMatrix pcg = new PCGMatrix(x, d1, d2, prb, prs);
 
         // MAIN LOOP
         int ntiter = 0;
@@ -457,7 +455,7 @@ public class LASSO  implements Regression<double[]>, Serializable {
             }
 
             // preconditioned conjugate gradient
-            double error = BiconjugateGradient.solve(pcg, pcg, grad, dxu, pcgtol, 1, pcgmaxi);
+            double error = Math.solve(pcg, grad, dxu, pcgtol, 1, pcgmaxi);
             if (error > pcgtol) {
                 pitr = pcgmaxi;
             }
@@ -511,7 +509,7 @@ public class LASSO  implements Regression<double[]>, Serializable {
         }
     }
 
-    private void fitness(Matrix x, double[] y) {
+    private void fitness(IMatrix x, double[] y) {
         int n = y.length;
         double[] yhat = new double[n];
         x.ax(w, yhat);
@@ -557,11 +555,11 @@ public class LASSO  implements Regression<double[]>, Serializable {
 
         return sum;
     }
+    
+    class PCGMatrix implements IMatrix {
 
-    class PCGMatrix implements Matrix, Preconditioner {
-
-        Matrix A;
-        Matrix AtA;
+        IMatrix A;
+        IMatrix AtA;
         double[] d1;
         double[] d2;
         double[] prb;
@@ -569,13 +567,13 @@ public class LASSO  implements Regression<double[]>, Serializable {
         double[] ax;
         double[] atax;
 
-        PCGMatrix(Matrix A, double[] d1, double[] d2, double[] prb, double[] prs) {
+        PCGMatrix(IMatrix A, double[] d1, double[] d2, double[] prb, double[] prs) {
             this.A = A;
             this.d1 = d1;
             this.d2 = d2;
             this.prb = prb;
             this.prs = prs;
-
+            
             int n = A.nrows();
             ax = new double[n];
             atax = new double[p];
@@ -595,7 +593,7 @@ public class LASSO  implements Regression<double[]>, Serializable {
         }
 
         @Override
-        public double[] ax(double[] x, double[] y) {
+        public void ax(double[] x, double[] y) {
             // COMPUTE AX (PCG)
             // 
             // y = hessphi * x,
@@ -613,13 +611,11 @@ public class LASSO  implements Regression<double[]>, Serializable {
                 y[i]     = 2 * atax[i] + d1[i] * x[i] + d2[i] * x[i + p];
                 y[i + p] =               d2[i] * x[i] + d1[i] * x[i + p];
             }
-
-            return y;
         }
 
         @Override
-        public double[] atx(double[] x, double[] y) {
-            return ax(x, y);
+        public void atx(double[] x, double[] y) {
+            ax(x, y);
         }
 
         @Override
@@ -634,17 +630,17 @@ public class LASSO  implements Regression<double[]>, Serializable {
         }
 
         @Override
-        public Matrix transpose() {
+        public IMatrix transpose() {
             throw new UnsupportedOperationException("Not supported yet.");
         }
 
         @Override
-        public Matrix aat() {
+        public IMatrix aat() {
             throw new UnsupportedOperationException("Not supported yet.");
         }
 
         @Override
-        public Matrix ata() {
+        public IMatrix ata() {
             throw new UnsupportedOperationException("Not supported yet.");
         }
 
@@ -659,22 +655,22 @@ public class LASSO  implements Regression<double[]>, Serializable {
         }
 
         @Override
-        public double[] axpy(double[] x, double[] y) {
+        public void axpy(double[] x, double[] y) {
             throw new UnsupportedOperationException("Not supported yet.");
         }
 
         @Override
-        public double[] axpy(double[] x, double[] y, double b) {
+        public void axpy(double[] x, double[] y, double b) {
             throw new UnsupportedOperationException("Not supported yet.");
         }
 
         @Override
-        public double[] atxpy(double[] x, double[] y) {
+        public void atxpy(double[] x, double[] y) {
             throw new UnsupportedOperationException("Not supported yet.");
         }
 
         @Override
-        public double[] atxpy(double[] x, double[] y, double b) {
+        public void atxpy(double[] x, double[] y, double b) {
             throw new UnsupportedOperationException("Not supported yet.");
         }
     }

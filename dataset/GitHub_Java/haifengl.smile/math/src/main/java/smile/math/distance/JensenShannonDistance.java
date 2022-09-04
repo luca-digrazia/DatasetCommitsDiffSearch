@@ -43,7 +43,7 @@ public class JensenShannonDistance implements Metric<double[]>, Serializable {
     /**
      * Constructor.
      */
-    public JensenShannonDistance() {
+    private JensenShannonDistance() {
     }
 
     @Override

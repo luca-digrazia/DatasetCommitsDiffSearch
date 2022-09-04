@@ -21,7 +21,9 @@ import java.util.Arrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import smile.math.Math;
-import smile.math.matrix.*;
+import smile.math.matrix.CholeskyDecomposition;
+import smile.math.matrix.SingularValueDecomposition;
+import smile.math.matrix.QRDecomposition;
 import smile.math.special.Beta;
 
 /**
@@ -184,17 +186,16 @@ public class OLS implements Regression<double[]>, Serializable {
 
         // weights and intercept
         double[] w1 = new double[p+1];
-        ColumnMajorMatrix X = new ColumnMajorMatrix(n, p+1);
+        double[][] X = new double[n][p+1];
         for (int i = 0; i < n; i++) {
-            for (int j = 0; j < p; j++)
-                X.set(i, j, x[i][j]);
-            X.set(i, p, 1.0);
+            System.arraycopy(x[i], 0, X[i], 0, p);
+            X[i][p] = 1.0;
         }
 
         QRDecomposition qr = null;
         SingularValueDecomposition svd = null;
         if (SVD) {
-            svd = new SingularValueDecomposition(X);
+            svd = SingularValueDecomposition.decompose(X);
             svd.solve(y, w1);
         } else {
             try {
@@ -203,8 +204,12 @@ public class OLS implements Regression<double[]>, Serializable {
             } catch (RuntimeException e) {
                 logger.warn("Matrix is not of full rank, try SVD instead");
                 SVD = true;
-                svd = new SingularValueDecomposition(X);
                 Arrays.fill(w1, 0.0);
+                for (int i = 0; i < n; i++) {
+                    System.arraycopy(x[i], 0, X[i], 0, p);
+                    X[i][p] = 1.0;
+                }
+                svd = SingularValueDecomposition.decompose(X);
                 svd.solve(y, w1);
             }
         }
@@ -258,11 +263,11 @@ public class OLS implements Regression<double[]>, Serializable {
         } else {
             CholeskyDecomposition cholesky = qr.toCholesky();
 
-            DenseMatrix inv = cholesky.inverse();
+            double[][] inv = cholesky.inverse();
 
             for (int i = 0; i <= p; i++) {
                 coefficients[i][0] = w1[i];
-                double se = error * Math.sqrt(inv.get(i, i));
+                double se = error * Math.sqrt(inv[i][i]);
                 coefficients[i][1] = se;
                 double t = w1[i] / se;
                 coefficients[i][2] = t;

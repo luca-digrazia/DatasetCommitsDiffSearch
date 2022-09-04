@@ -240,7 +240,7 @@ public class RegressionTree implements Regression<double[]>, Serializable {
     /**
      * Regression tree node.
      */
-    class Node implements Serializable {
+    class Node {
 
         /**
          * Predicted real value for this node.

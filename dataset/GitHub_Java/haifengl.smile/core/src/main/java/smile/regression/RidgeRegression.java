@@ -19,7 +19,6 @@ package smile.regression;
 import java.io.Serializable;
 import smile.math.Math;
 import smile.math.matrix.CholeskyDecomposition;
-import smile.math.matrix.DenseMatrix;
 import smile.math.special.Beta;
 
 /**
@@ -266,12 +265,12 @@ public class RidgeRegression implements Regression<double[]>, Serializable {
         int df2 = n - p - 1;
         pvalue = Beta.regularizedIncompleteBetaFunction(0.5 * df2, 0.5 * df1, df2 / (df2 + df1 * F));
 
-        DenseMatrix inv = cholesky.inverse();
+        double[][] inv = cholesky.inverse();
 
         coefficients = new double[p][4];
         for (int i = 0; i < p; i++) {
             coefficients[i][0] = w[i];
-            double se = error * Math.sqrt(inv.get(i, i));
+            double se = error * Math.sqrt(inv[i][i]);
             coefficients[i][1] = se;
             double t = w[i] / se;
             coefficients[i][2] = t;
