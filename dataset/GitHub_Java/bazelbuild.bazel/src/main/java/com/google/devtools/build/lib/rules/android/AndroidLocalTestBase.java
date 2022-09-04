@@ -16,12 +16,12 @@ package com.google.devtools.build.lib.rules.android;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.rules.java.DeployArchiveBuilder.Compression.COMPRESSED;
 import static com.google.devtools.build.lib.vfs.FileSystemUtils.replaceExtension;
-import static java.util.stream.Collectors.toCollection;
 
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Streams;
+import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
@@ -61,9 +61,7 @@ import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistry
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.stream.Stream;
 
 /**
  * An base implementation for the "android_local_test" rule.
@@ -83,20 +81,6 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     // (-source 7 -target 7 and no TWR) is unnecessary for robolectric tests
     // since they run on a JVM, not an android device.
     JavaTargetAttributes.Builder attributesBuilder = javaCommon.initCommon();
-
-    if (ruleContext.getFragment(AndroidConfiguration.class).generateRobolectricRClass()) {
-      // Add reconciled R classes for all dependencies with resources to the classpath before the
-      // dependency jars. Must use a NestedSet to have it appear in the correct place on the
-      // classpath.
-      attributesBuilder.addRuntimeClassPathEntries(
-          RobolectricResourceSymbolsActionBuilder.create(
-              ResourceDependencies.fromRuleDeps(ruleContext, false))
-              .setSdk(AndroidSdkProvider.fromRuleContext(ruleContext))
-              .setJarOut(
-                  ruleContext.getImplicitOutputArtifact(
-                      AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR))
-              .buildAsClassPathEntry(ruleContext));
-    }
 
     String testClass =
         getAndCheckTestClass(ruleContext, ImmutableList.copyOf(attributesBuilder.getSourceFiles()));
@@ -216,14 +200,12 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     NestedSet<Artifact> filesToBuild = filesToBuildBuilder.build();
 
     Iterable<AndroidLibraryAarProvider> androidAarProviders =
-        Stream.concat(
-                Streams.stream(
-                    ruleContext.getPrerequisites(
-                        "runtime_deps", Mode.TARGET, AndroidLibraryAarProvider.class)),
-                Streams.stream(
-                    ruleContext.getPrerequisites(
-                        "deps", Mode.TARGET, AndroidLibraryAarProvider.class)))
-            .collect(toCollection(LinkedHashSet::new));
+        Sets.newLinkedHashSet(
+            Iterables.concat(
+                ruleContext.getPrerequisites(
+                    "runtime_deps", Mode.TARGET, AndroidLibraryAarProvider.class),
+                ruleContext.getPrerequisites(
+                    "deps", Mode.TARGET, AndroidLibraryAarProvider.class)));
 
     NestedSetBuilder<Aar> transitiveAarsBuilder = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Aar> strictAarsBuilder = NestedSetBuilder.naiveLinkOrder();
@@ -245,11 +227,27 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     CustomCommandLine.Builder cmdLineArgs = CustomCommandLine.builder();
     if (!transitiveAars.isEmpty()) {
       cmdLineArgs.addJoinValues(
-          "--android_libraries", ",", transitiveAars, AndroidLocalTestBase::aarCmdLineArg);
+          "--android_libraries",
+          ",",
+          transitiveAars,
+          new Function<Aar, String>() {
+            @Override
+            public String apply(Aar aar) {
+              return aarCmdLineArg(aar);
+            }
+          });
     }
     if (!strictAars.isEmpty()) {
       cmdLineArgs.addJoinValues(
-          "--strict_libraries", ",", strictAars, AndroidLocalTestBase::aarCmdLineArg);
+          "--strict_libraries",
+          ",",
+          strictAars,
+          new Function<Aar, String>() {
+            @Override
+            public String apply(Aar aar) {
+              return aarCmdLineArg(aar);
+            }
+          });
     }
     RunfilesSupport runfilesSupport =
         RunfilesSupport.withExecutable(
@@ -292,9 +290,13 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     addExtraProviders(builder, javaCommon, classJar, srcJar, genClassJar, genSourceJar);
 
     JavaRuleOutputJarsProvider ruleOutputJarsProvider = javaRuleOutputJarsProviderBuilder.build();
+    JavaSkylarkApiProvider.Builder skylarkApiProvider =
+        JavaSkylarkApiProvider.builder()
+            .setRuleOutputJarsProvider(ruleOutputJarsProvider)
+            .setSourceJarsProvider(sourceJarsProvider);
 
-    javaCommon.addTransitiveInfoProviders(builder, filesToBuild, classJar);
-    javaCommon.addGenJarsProvider(builder, genClassJar, genSourceJar);
+    javaCommon.addTransitiveInfoProviders(builder, skylarkApiProvider, filesToBuild, classJar);
+    javaCommon.addGenJarsProvider(builder, skylarkApiProvider, genClassJar, genSourceJar);
 
     // No need to use the flag map here - just confirming that dynamic configurations are in use.
     // TODO(mstaib): remove when static configurations are removed.
@@ -302,8 +304,7 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
 
     return builder
         .setFilesToBuild(filesToBuild)
-        .addSkylarkTransitiveInfo(
-            JavaSkylarkApiProvider.NAME, JavaSkylarkApiProvider.fromRuleContext())
+        .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, skylarkApiProvider.build())
         .addProvider(ruleOutputJarsProvider)
         .addProvider(
             RunfilesProvider.class,

@@ -147,14 +147,6 @@ public final class QueryCommand implements BlazeCommand {
           .handle(Event.error(null, "Error while parsing '" + query + "': " + e.getMessage()));
       return ExitCode.COMMAND_LINE_ERROR;
     }
-
-    try {
-      formatter.verifyCompatible(queryEnv, expr);
-    } catch (QueryException e) {
-      env.getReporter().handle(Event.error(e.getMessage()));
-      return ExitCode.COMMAND_LINE_ERROR;
-    }
-
     expr = queryEnv.transformParsedQuery(expr);
 
     OutputStream out = env.getReporter().getOutErr().getOutputStream();
@@ -167,7 +159,7 @@ public final class QueryCommand implements BlazeCommand {
           queryOptions.aspectDeps.createResolver(env.getPackageManager(), env.getReporter()));
       callback = streamedFormatter.createStreamCallback(out, queryOptions, queryEnv);
     } else {
-      callback = QueryUtil.newOrderedAggregateAllOutputFormatterCallback(queryEnv);
+      callback = QueryUtil.newOrderedAggregateAllOutputFormatterCallback();
     }
     boolean catastrophe = true;
     try {
@@ -207,12 +199,11 @@ public final class QueryCommand implements BlazeCommand {
       }
     }
 
-    env.getEventBus().post(new NoBuildEvent(env.getCommandName(), env.getCommandStartTime()));
+    env.getEventBus().post(new NoBuildEvent());
     if (!streamResults) {
       disableAnsiCharactersFiltering(env);
       try {
-        Set<Target> targets =
-            ((AggregateAllOutputFormatterCallback<Target, ?>) callback).getResult();
+        Set<Target> targets = ((AggregateAllOutputFormatterCallback<Target>) callback).getResult();
         QueryOutputUtils.output(
             queryOptions,
             result,
