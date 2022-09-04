@@ -147,8 +147,7 @@ public class DatabasePeerManager extends ChromePeerManager {
         return executeUpdateDelete(database, query, handler);
       } else if (firstWord.equalsIgnoreCase("INSERT")) {
         return executeInsert(database, query, handler);
-      } else if (firstWord.equalsIgnoreCase("SELECT") ||
-          firstWord.equalsIgnoreCase("PRAGMA")) {
+      } else if (firstWord.equalsIgnoreCase("SELECT")) {
         return executeSelect(database, query, handler);
       } else {
         return executeRawQuery(database, query, handler);
@@ -203,7 +202,6 @@ public class DatabasePeerManager extends ChromePeerManager {
     database.execSQL(query);
     return handler.handleRawQuery();
   }
-
   private SQLiteDatabase openDatabase(String databaseName) throws SQLiteException {
     Util.throwIfNull(databaseName);
     File databaseFile = mContext.getDatabasePath(databaseName);
