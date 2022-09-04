@@ -337,8 +337,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
       Object envUnchecked,
       Object executionRequirementsUnchecked,
       Object inputManifestsUnchecked,
-      Object execGroupUnchecked,
-      Object shadowedActionUnchecked)
+      Object execGroupUnchecked)
       throws EvalException {
     context.checkMutable("actions.run");
     StarlarkAction.Builder builder = new StarlarkAction.Builder();
@@ -373,7 +372,6 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
         executionRequirementsUnchecked,
         inputManifestsUnchecked,
         execGroupUnchecked,
-        shadowedActionUnchecked,
         builder);
   }
 
@@ -426,8 +424,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
       Object envUnchecked,
       Object executionRequirementsUnchecked,
       Object inputManifestsUnchecked,
-      Object execGroupUnchecked,
-      Object shadowedActionUnchecked)
+      Object execGroupUnchecked)
       throws EvalException {
     context.checkMutable("actions.run_shell");
     RuleContext ruleContext = getRuleContext();
@@ -494,7 +491,6 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
         executionRequirementsUnchecked,
         inputManifestsUnchecked,
         execGroupUnchecked,
-        shadowedActionUnchecked,
         builder);
   }
 
@@ -540,7 +536,6 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
       Object executionRequirementsUnchecked,
       Object inputManifestsUnchecked,
       Object execGroupUnchecked,
-      Object shadowedActionUnchecked,
       StarlarkAction.Builder builder)
       throws EvalException {
     Iterable<Artifact> inputArtifacts;
@@ -635,10 +630,6 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
         throw Starlark.errorf("Action declared for non-existent exec group '%s'.", execGroup);
       }
       builder.setExecGroup(execGroup);
-    }
-
-    if (shadowedActionUnchecked != Starlark.NONE) {
-      builder.setShadowedAction(Optional.of((Action) shadowedActionUnchecked));
     }
 
     // Always register the action

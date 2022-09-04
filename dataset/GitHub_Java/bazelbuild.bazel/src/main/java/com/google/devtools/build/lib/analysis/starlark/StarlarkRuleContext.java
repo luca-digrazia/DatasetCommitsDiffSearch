@@ -60,7 +60,6 @@ import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.ComputedDefault;
-import com.google.devtools.build.lib.packages.BuildSetting;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.StarlarkImplicitOutputsFunction;
@@ -593,15 +592,14 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
     ImmutableMap<Label, Object> starlarkFlagSettings =
         ruleContext.getConfiguration().getOptions().getStarlarkOptions();
 
-    BuildSetting buildSetting = ruleContext.getRule().getRuleClassObject().getBuildSetting();
+    Type<?> buildSettingType =
+        ruleContext.getRule().getRuleClassObject().getBuildSetting().getType();
     if (starlarkFlagSettings.containsKey(ruleContext.getLabel())) {
       return starlarkFlagSettings.get(ruleContext.getLabel());
     } else {
-      Object defaultValue =
-          ruleContext
-              .attributes()
-              .get(STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, buildSetting.getType());
-      return buildSetting.allowsMultiple() ? ImmutableList.of(defaultValue) : defaultValue;
+      return ruleContext
+          .attributes()
+          .get(STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, buildSettingType);
     }
   }
 

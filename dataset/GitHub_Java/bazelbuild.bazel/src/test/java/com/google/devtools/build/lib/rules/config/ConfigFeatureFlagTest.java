@@ -15,32 +15,18 @@
 package com.google.devtools.build.lib.rules.config;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER;
-import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_KEYED_STRING_DICT;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.common.base.Predicates;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.RuleDefinition;
-import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.Builder;
-import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
-import com.google.devtools.build.lib.rules.SkylarkRuleContext;
-import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
+import com.google.devtools.build.lib.analysis.starlark.StarlarkRuleContext;
+import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
+import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.starlark.util.BazelEvaluationTestCase;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import org.junit.Before;
 import org.junit.Test;
@@ -49,66 +35,25 @@ import org.junit.runners.JUnit4;
 
 /** Tests for the config_feature_flag rule. */
 @RunWith(JUnit4.class)
-public final class ConfigFeatureFlagTest extends SkylarkTestCase {
+public final class ConfigFeatureFlagTest extends BuildViewTestCase {
 
-  /** Rule introducing a transition to set feature flags for dependencies. */
-  public static final class FeatureFlagSetter
-      implements RuleDefinition, RuleConfiguredTargetFactory {
+  private final BazelEvaluationTestCase ev = new BazelEvaluationTestCase();
 
-    @Override
-    public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
-      return builder
-          .requiresConfigurationFragments(ConfigFeatureFlagConfiguration.class)
-          .cfg(new ConfigFeatureFlagTransitionFactory("flag_values"))
-          .add(attr("deps", LABEL_LIST).allowedFileTypes())
-          .add(
-              attr("exports_flag", LABEL)
-                  .allowedRuleClasses("config_feature_flag")
-                  .allowedFileTypes())
-          .add(
-              attr("flag_values", LABEL_KEYED_STRING_DICT)
-                  .allowedRuleClasses("config_feature_flag")
-                  .allowedFileTypes()
-                  .nonconfigurable("used in RuleTransitionFactory")
-                  .value(ImmutableMap.<Label, String>of()))
-          .build();
-    }
-
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("feature_flag_setter")
-          .ancestors(BaseRuleClasses.BaseRule.class)
-          .factoryClass(FeatureFlagSetter.class)
-          .build();
-    }
-
-    @Override
-    public ConfiguredTarget create(RuleContext ruleContext)
-        throws InterruptedException, RuleErrorException {
-      TransitiveInfoCollection dep = ruleContext.getPrerequisite("exports_flag", Mode.TARGET);
-      ConfigFeatureFlagProvider exportedProvider =
-          dep != null ? ConfigFeatureFlagProvider.fromTarget(dep) : null;
-      RuleConfiguredTargetBuilder builder =
-          new RuleConfiguredTargetBuilder(ruleContext)
-              .setFilesToBuild(NestedSetBuilder.<Artifact>emptySet(STABLE_ORDER))
-              .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY);
-      if (exportedProvider != null) {
-        builder.addNativeDeclaredProvider(exportedProvider);
-      }
-      return builder.build();
-    }
+  private StarlarkRuleContext createRuleContext(String label) throws Exception {
+    return new StarlarkRuleContext(getRuleContextForStarlark(getConfiguredTarget(label)), null);
   }
 
   @Before
-  public void useDynamicConfigurations() throws Exception {
-    useConfiguration("--experimental_dynamic_configs=on");
+  public void useTrimmedConfigurations() throws Exception {
+    useConfiguration(
+        "--experimental_dynamic_configs=on",
+        "--enforce_transitive_configs_for_config_feature_flag");
   }
 
   @Override
-  protected ConfiguredRuleClassProvider getRuleClassProvider() {
+  protected ConfiguredRuleClassProvider createRuleClassProvider() {
     ConfiguredRuleClassProvider.Builder builder =
-        new ConfiguredRuleClassProvider.Builder().addRuleDefinition(new FeatureFlagSetter());
+        new ConfiguredRuleClassProvider.Builder().addRuleDefinition(new FeatureFlagSetterRule());
     TestRuleClassProvider.addStandardRules(builder);
     return builder.build();
   }
@@ -136,18 +81,78 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
         "    flag_values = {",
         "        ':flag': 'configured',",
         "    },",
+        "    transitive_configs = [':flag'],",
+        ")",
+        "config_feature_flag(",
+        "    name = 'flag',",
+        "    allowed_values = ['default', 'configured', 'other'],",
+        ")");
+    assertThat(
+            ConfigFeatureFlagProvider.fromTarget(getConfiguredTarget("//test:top")).getFlagValue())
+        .isEqualTo("configured");
+  }
+
+  @Test
+  public void configFeatureFlagProvider_usesConfiguredValueOverDefault() throws Exception {
+    scratch.file(
+        "test/BUILD",
+        "feature_flag_setter(",
+        "    name = 'top',",
+        "    exports_flag = ':flag',",
+        "    flag_values = {",
+        "        ':flag': 'configured',",
+        "    },",
+        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
         "    allowed_values = ['default', 'configured', 'other'],",
         "    default_value = 'default',",
         ")");
-    assertThat(ConfigFeatureFlagProvider.fromTarget(getConfiguredTarget("//test:top")).getValue())
+    assertThat(
+            ConfigFeatureFlagProvider.fromTarget(getConfiguredTarget("//test:top")).getFlagValue())
         .isEqualTo("configured");
   }
 
   @Test
-  public void configFeatureFlagProvider_valueIsAccessibleFromSkylark() throws Exception {
+  public void configFeatureFlagProvider_starlarkConstructor() throws Exception {
+    scratch.file(
+        "test/wrapper.bzl",
+        "def _flag_reading_wrapper_impl(ctx):",
+        "  pass",
+        "flag_reading_wrapper = rule(",
+        "  implementation = _flag_reading_wrapper_impl,",
+        "  attrs = {'flag': attr.label()},",
+        ")",
+        "def _flag_propagating_wrapper_impl(ctx):",
+        "  return [config_common.FeatureFlagInfo(value='hello')]",
+        "flag_propagating_wrapper = rule(",
+        "  implementation = _flag_propagating_wrapper_impl,",
+        ")");
+    scratch.file(
+        "test/BUILD",
+        "load(':wrapper.bzl', 'flag_propagating_wrapper')",
+        "flag_propagating_wrapper(",
+        "    name = 'propagator',",
+        ")",
+        "config_setting(name = 'hello_setting',",
+        "    flag_values = {':propagator': 'hello'})",
+        "genrule(",
+        "    name = 'gen',",
+        "    srcs = [],",
+        "    outs = ['out'],",
+        "    cmd = select({",
+        "       ':hello_setting': 'hello',",
+        "       '//conditions:default': 'error'",
+        "    }))");
+
+    ConfiguredTargetAndData ctad = getConfiguredTargetAndData("//test:gen");
+    ConfiguredAttributeMapper attributeMapper = getMapperFromConfiguredTargetAndTarget(ctad);
+    assertThat(attributeMapper.get("cmd", Type.STRING)).isEqualTo("hello");
+  }
+
+  @Test
+  public void configFeatureFlagProvider_valueIsAccessibleFromStarlark() throws Exception {
     scratch.file(
         "test/wrapper.bzl",
         "def _flag_reading_wrapper_impl(ctx):",
@@ -165,10 +170,12 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
         "    flag_values = {",
         "        ':flag': 'configured',",
         "    },",
+        "    transitive_configs = [':flag'],",
         ")",
         "flag_reading_wrapper(",
         "    name = 'wrapper',",
         "    flag = ':flag',",
+        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -178,10 +185,10 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
     ConfiguredTarget top = getConfiguredTarget("//test:top");
     ConfiguredTarget wrapper =
         (ConfiguredTarget) Iterables.getOnlyElement(getPrerequisites(top, "deps"));
-    SkylarkRuleContext ctx = new SkylarkRuleContext(getRuleContextForSkylark(wrapper), null);
-    update("ruleContext", ctx);
-    update("config_common", new ConfigSkylarkCommon());
-    String value = (String) eval("ruleContext.attr.flag[config_common.FeatureFlagInfo].value");
+    StarlarkRuleContext ctx = new StarlarkRuleContext(getRuleContextForStarlark(wrapper), null);
+    ev.update("ruleContext", ctx);
+    ev.update("config_common", new ConfigStarlarkCommon());
+    String value = (String) ev.eval("ruleContext.attr.flag[config_common.FeatureFlagInfo].value");
     assertThat(value).isEqualTo("configured");
   }
 
@@ -207,7 +214,7 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
   }
 
   @Test
-  public void configFeatureFlagProvider_valueValidationIsPossibleFromSkylark() throws Exception {
+  public void configFeatureFlagProvider_valueValidationIsPossibleFromStarlark() throws Exception {
     scratch.file(
         "test/wrapper.bzl",
         "def _flag_reading_wrapper_impl(ctx):",
@@ -222,23 +229,24 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
         "flag_reading_wrapper(",
         "    name = 'wrapper',",
         "    flag = ':flag',",
+        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
         "    allowed_values = ['default', 'configured', 'other'],",
         "    default_value = 'default',",
         ")");
-    SkylarkRuleContext ctx = createRuleContext("//test:wrapper");
-    update("ruleContext", ctx);
-    update("config_common", new ConfigSkylarkCommon());
+    StarlarkRuleContext ctx = createRuleContext("//test:wrapper");
+    ev.update("ruleContext", ctx);
+    ev.update("config_common", new ConfigStarlarkCommon());
     String provider = "ruleContext.attr.flag[config_common.FeatureFlagInfo]";
-    Boolean isDefaultValid = (Boolean) eval(provider + ".is_valid_value('default')");
-    Boolean isConfiguredValid = (Boolean) eval(provider + ".is_valid_value('configured')");
-    Boolean isOtherValid = (Boolean) eval(provider + ".is_valid_value('other')");
-    Boolean isAbsentValid = (Boolean) eval(provider + ".is_valid_value('absent')");
+    Boolean isDefaultValid = (Boolean) ev.eval(provider + ".is_valid_value('default')");
+    Boolean isConfiguredValid = (Boolean) ev.eval(provider + ".is_valid_value('configured')");
+    Boolean isOtherValid = (Boolean) ev.eval(provider + ".is_valid_value('other')");
+    Boolean isAbsentValid = (Boolean) ev.eval(provider + ".is_valid_value('absent')");
     Boolean isIncorrectCapitalizationValid =
-        (Boolean) eval(provider + ".is_valid_value('conFigured')");
-    Boolean isIncorrectSpacingValid = (Boolean) eval(provider + ".is_valid_value('  other')");
+        (Boolean) ev.eval(provider + ".is_valid_value('conFigured')");
+    Boolean isIncorrectSpacingValid = (Boolean) ev.eval(provider + ".is_valid_value('  other')");
 
     assertThat(isDefaultValid).isTrue();
     assertThat(isConfiguredValid).isTrue();
@@ -260,6 +268,7 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
         "    flag_values = {",
         "        ':other': 'configured',",
         "    },",
+        "    transitive_configs = [':flag', ':other'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -271,8 +280,38 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
         "    allowed_values = ['default', 'configured', 'other'],",
         "    default_value = 'default',",
         ")");
-    assertThat(ConfigFeatureFlagProvider.fromTarget(getConfiguredTarget("//test:top")).getValue())
+    assertThat(ConfigFeatureFlagProvider.fromTarget(getConfiguredTarget("//test:top"))
+               .getFlagValue())
         .isEqualTo("default");
+  }
+
+  @Test
+  public void configFeatureFlagProvider_throwsErrorIfNeitherDefaultNorConfiguredValueSet()
+      throws Exception {
+    reporter.removeHandler(failFastHandler); // expecting an error
+    scratch.file(
+        "test/BUILD",
+        "feature_flag_setter(",
+        "    name = 'top',",
+        "    exports_flag = ':flag',",
+        "    flag_values = {",
+        "        ':other': 'configured',",
+        "    },",
+        "    transitive_configs = [':flag', ':other'],",
+        ")",
+        "config_feature_flag(",
+        "    name = 'flag',",
+        "    allowed_values = ['other', 'configured'],",
+        ")",
+        "config_feature_flag(",
+        "    name = 'other',",
+        "    allowed_values = ['default', 'configured', 'other'],",
+        "    default_value = 'default',",
+        ")");
+    assertThat(getConfiguredTarget("//test:flag")).isNull();
+    assertContainsEvent(
+        "in config_feature_flag rule //test:flag: "
+            + "flag has no default and must be set, but was not set");
   }
 
   @Test
@@ -304,11 +343,11 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
     assertThat(getConfiguredTarget("//test:flag")).isNull();
     assertContainsEvent(
         "in allowed_values attribute of config_feature_flag rule //test:flag: "
-            + "cannot contain duplicates, but contained multiple of ['double']");
+            + "cannot contain duplicates, but contained multiple of [\"double\"]");
   }
 
   @Test
-  public void defaultValueAttribute_mustBeMemberOfAllowedValues() throws Exception {
+  public void defaultValueAttribute_mustBeMemberOfAllowedValuesIfPresent() throws Exception {
     reporter.removeHandler(failFastHandler); // expecting an error
     scratch.file(
         "test/BUILD",
@@ -318,6 +357,7 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
         "    flag_values = {",
         "        ':flag': 'legal',",
         "    },",
+        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -327,11 +367,11 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
     assertThat(getConfiguredTarget("//test:top")).isNull();
     assertContainsEvent(
         "in default_value attribute of config_feature_flag rule //test:flag: "
-            + "must be one of ['eagle', 'legal'], but was 'beagle'");
+            + "must be one of [\"eagle\", \"legal\"], but was \"beagle\"");
   }
 
   @Test
-  public void configurationValue_mustBeMemberOfAllowedValues() throws Exception {
+  public void configurationValue_mustBeMemberOfAllowedValuesIfPresent() throws Exception {
     reporter.removeHandler(failFastHandler); // expecting an error
     scratch.file(
         "test/BUILD",
@@ -341,6 +381,7 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
         "    flag_values = {",
         "        ':flag': 'invalid',",
         "    },",
+        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -348,9 +389,59 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
         "    default_value = 'default',",
         ")");
     assertThat(getConfiguredTarget("//test:top")).isNull();
-    // TODO(mstaib): when configurationError is implemented, switch to testing for that
+    // TODO(b/140635901): when configurationError is implemented, switch to testing for that
     assertContainsEvent(
         "in config_feature_flag rule //test:flag: "
-            + "value must be one of ['configured', 'default', 'other'], but was 'invalid'");
+            + "value must be one of [\"configured\", \"default\", \"other\"], but was \"invalid\"");
+  }
+
+  @Test
+  public void policy_mustContainRulesPackage() throws Exception {
+    reporter.removeHandler(failFastHandler); // expecting an error
+    scratch.overwriteFile(
+        "tools/allowlists/config_feature_flag/BUILD",
+        "package_group(name = 'config_feature_flag', packages = ['//some/other'])");
+    scratch.file(
+        "test/BUILD",
+        "config_feature_flag(",
+        "    name = 'flag',",
+        "    allowed_values = ['default', 'configured', 'other'],",
+        "    default_value = 'default',",
+        ")");
+    assertThat(getConfiguredTarget("//test:flag")).isNull();
+    assertContainsEvent(
+        "in config_feature_flag rule //test:flag: the config_feature_flag rule is not available in "
+        + "package 'test'");
+  }
+
+  @Test
+  public void policy_doesNotBlockRuleIfInPackageGroup() throws Exception {
+    scratch.overwriteFile(
+        "tools/allowlists/config_feature_flag/BUILD",
+        "package_group(name = 'config_feature_flag', packages = ['//test'])");
+    scratch.file(
+        "test/BUILD",
+        "config_feature_flag(",
+        "    name = 'flag',",
+        "    allowed_values = ['default', 'configured', 'other'],",
+        "    default_value = 'default',",
+        ")");
+    assertThat(getConfiguredTarget("//test:flag")).isNotNull();
+    assertNoEvents();
+  }
+
+  @Test
+  public void equalsTester() {
+    new EqualsTester()
+        .addEqualityGroup(
+            // Basic case.
+            ConfigFeatureFlagProvider.create("flag1", Predicates.<String>alwaysTrue()))
+        .addEqualityGroup(
+            // Will be distinct from the first group because CFFP instances are all distinct.
+            ConfigFeatureFlagProvider.create("flag1", Predicates.<String>alwaysTrue()))
+        .addEqualityGroup(
+            // Change the value, still distinct from the above.
+            ConfigFeatureFlagProvider.create("flag2", Predicates.<String>alwaysTrue()))
+        .testEquals();
   }
 }

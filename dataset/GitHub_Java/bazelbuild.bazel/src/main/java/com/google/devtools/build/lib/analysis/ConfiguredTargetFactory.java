@@ -371,6 +371,7 @@ public final class ConfiguredTargetFactory {
               StarlarkRuleConfiguredTargetUtil.buildRule(
                   ruleContext,
                   rule.getRuleClassObject().getAdvertisedProviders(),
+                  rule.getLocation(),
                   ruleClassProvider.getToolsRepository());
 
           return target != null ? target : erroredConfiguredTarget(ruleContext);
