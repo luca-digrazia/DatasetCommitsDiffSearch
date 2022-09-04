@@ -18,7 +18,6 @@ import static com.google.devtools.build.lib.syntax.Type.STRING;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.Whitelist;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.EmptyToNullLabelConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
@@ -28,6 +27,7 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactor
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.skylark.annotations.SkylarkConfigurationField;
+import com.google.devtools.build.lib.analysis.whitelisting.Whitelist;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
@@ -36,6 +36,7 @@ import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidA
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppOptions.DynamicModeConverter;
 import com.google.devtools.build.lib.rules.cpp.CppOptions.LibcTopLabelConverter;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidConfigurationApi;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.EnumConverter;
@@ -47,6 +48,7 @@ import java.util.List;
 import javax.annotation.Nullable;
 
 /** Configuration fragment for Android rules. */
+@AutoCodec
 @Immutable
 public class AndroidConfiguration extends BuildConfiguration.Fragment
     implements AndroidConfigurationApi {
@@ -583,21 +585,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     )
     public List<String> dexoptsSupportedInDexMerger;
 
-    // Do not use on the command line.
-    // This flag is intended to be updated as we add supported flags to the incremental dexing tools
-    @Option(
-        name = "dexopts_supported_in_dexsharder",
-        converter = Converters.CommaSeparatedOptionListConverter.class,
-        defaultValue = "--minimal-main-dex",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {
-            OptionEffectTag.ACTION_COMMAND_LINES,
-            OptionEffectTag.LOADING_AND_ANALYSIS,
-        },
-        help = "dx flags supported in tool that groups classes for inclusion in final .dex files."
-    )
-    public List<String> dexoptsSupportedInDexSharder;
-
     @Option(
       name = "use_workers_with_dexbuilder",
       defaultValue = "true",
@@ -923,7 +910,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
       host.nonIncrementalPerTargetDexopts = nonIncrementalPerTargetDexopts;
       host.dexoptsSupportedInIncrementalDexing = dexoptsSupportedInIncrementalDexing;
       host.dexoptsSupportedInDexMerger = dexoptsSupportedInDexMerger;
-      host.dexoptsSupportedInDexSharder = dexoptsSupportedInDexSharder;
       host.useWorkersWithDexbuilder = useWorkersWithDexbuilder;
       host.manifestMerger = manifestMerger;
       host.androidAaptVersion = androidAaptVersion;
@@ -966,7 +952,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   private final ImmutableList<String> dexoptsSupportedInIncrementalDexing;
   private final ImmutableList<String> targetDexoptsThatPreventIncrementalDexing;
   private final ImmutableList<String> dexoptsSupportedInDexMerger;
-  private final ImmutableList<String> dexoptsSupportedInDexSharder;
   private final boolean useWorkersWithDexbuilder;
   private final boolean desugarJava8;
   private final boolean desugarJava8Libs;
@@ -992,7 +977,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   private final boolean dataBindingV2;
   private final boolean persistentBusyboxTools;
 
-  private AndroidConfiguration(Options options) throws InvalidConfigurationException {
+  AndroidConfiguration(Options options) throws InvalidConfigurationException {
     this.sdk = options.sdk;
     this.useIncrementalNativeLibs = options.incrementalNativeLibs;
     this.cpu = options.cpu;
@@ -1007,7 +992,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     this.targetDexoptsThatPreventIncrementalDexing =
         ImmutableList.copyOf(options.nonIncrementalPerTargetDexopts);
     this.dexoptsSupportedInDexMerger = ImmutableList.copyOf(options.dexoptsSupportedInDexMerger);
-    this.dexoptsSupportedInDexSharder = ImmutableList.copyOf(options.dexoptsSupportedInDexSharder);
     this.useWorkersWithDexbuilder = options.useWorkersWithDexbuilder;
     this.desugarJava8 = options.desugarJava8;
     this.desugarJava8Libs = options.desugarJava8Libs;
@@ -1048,6 +1032,83 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
       throw new InvalidConfigurationException(
           "Java 8 library support requires --desugar_java8 to be enabled.");
     }
+  }
+
+  @AutoCodec.Instantiator
+  AndroidConfiguration(
+      Label sdk,
+      String cpu,
+      boolean useIncrementalNativeLibs,
+      ConfigurationDistinguisher configurationDistinguisher,
+      boolean incrementalDexing,
+      int incrementalDexingShardsAfterProguard,
+      boolean incrementalDexingUseDexSharder,
+      boolean incrementalDexingAfterProguardByDefault,
+      boolean assumeMinSdkVersion,
+      ImmutableList<String> dexoptsSupportedInIncrementalDexing,
+      ImmutableList<String> targetDexoptsThatPreventIncrementalDexing,
+      ImmutableList<String> dexoptsSupportedInDexMerger,
+      boolean useWorkersWithDexbuilder,
+      boolean desugarJava8,
+      boolean desugarJava8Libs,
+      boolean checkDesugarDeps,
+      boolean useRexToCompressDexFiles,
+      boolean allowAndroidLibraryDepsWithoutSrcs,
+      boolean useAndroidResourceShrinking,
+      boolean useAndroidResourceCycleShrinking,
+      AndroidManifestMerger manifestMerger,
+      ApkSigningMethod apkSigningMethod,
+      boolean useSingleJarApkBuilder,
+      boolean compressJavaResources,
+      boolean exportsManifestDefault,
+      AndroidAaptVersion androidAaptVersion,
+      boolean useAapt2ForRobolectric,
+      boolean throwOnResourceConflict,
+      boolean useParallelDex2Oat,
+      boolean skipParsingAction,
+      boolean fixedResourceNeverlinking,
+      AndroidRobolectricTestDeprecationLevel robolectricTestDeprecationLevel,
+      boolean checkForMigrationTag,
+      boolean oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest,
+      boolean dataBindingV2,
+      boolean persistentBusyboxTools) {
+    this.sdk = sdk;
+    this.cpu = cpu;
+    this.useIncrementalNativeLibs = useIncrementalNativeLibs;
+    this.configurationDistinguisher = configurationDistinguisher;
+    this.incrementalDexing = incrementalDexing;
+    this.incrementalDexingShardsAfterProguard = incrementalDexingShardsAfterProguard;
+    this.incrementalDexingUseDexSharder = incrementalDexingUseDexSharder;
+    this.incrementalDexingAfterProguardByDefault = incrementalDexingAfterProguardByDefault;
+    this.assumeMinSdkVersion = assumeMinSdkVersion;
+    this.dexoptsSupportedInIncrementalDexing = dexoptsSupportedInIncrementalDexing;
+    this.targetDexoptsThatPreventIncrementalDexing = targetDexoptsThatPreventIncrementalDexing;
+    this.dexoptsSupportedInDexMerger = dexoptsSupportedInDexMerger;
+    this.useWorkersWithDexbuilder = useWorkersWithDexbuilder;
+    this.desugarJava8 = desugarJava8;
+    this.desugarJava8Libs = desugarJava8Libs;
+    this.checkDesugarDeps = checkDesugarDeps;
+    this.useRexToCompressDexFiles = useRexToCompressDexFiles;
+    this.allowAndroidLibraryDepsWithoutSrcs = allowAndroidLibraryDepsWithoutSrcs;
+    this.useAndroidResourceShrinking = useAndroidResourceShrinking;
+    this.useAndroidResourceCycleShrinking = useAndroidResourceCycleShrinking;
+    this.manifestMerger = manifestMerger;
+    this.apkSigningMethod = apkSigningMethod;
+    this.useSingleJarApkBuilder = useSingleJarApkBuilder;
+    this.compressJavaResources = compressJavaResources;
+    this.exportsManifestDefault = exportsManifestDefault;
+    this.androidAaptVersion = androidAaptVersion;
+    this.useAapt2ForRobolectric = useAapt2ForRobolectric;
+    this.throwOnResourceConflict = throwOnResourceConflict;
+    this.useParallelDex2Oat = useParallelDex2Oat;
+    this.skipParsingAction = skipParsingAction;
+    this.fixedResourceNeverlinking = fixedResourceNeverlinking;
+    this.robolectricTestDeprecationLevel = robolectricTestDeprecationLevel;
+    this.checkForMigrationTag = checkForMigrationTag;
+    this.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest =
+        oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
+    this.dataBindingV2 = dataBindingV2;
+    this.persistentBusyboxTools = persistentBusyboxTools;
   }
 
   @Override
@@ -1112,11 +1173,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   @Override
   public ImmutableList<String> getDexoptsSupportedInDexMerger() {
     return dexoptsSupportedInDexMerger;
-  }
-
-  /** dx flags supported in dexmerger actions. */
-  public ImmutableList<String> getDexoptsSupportedInDexSharder() {
-    return dexoptsSupportedInDexSharder;
   }
 
   /**

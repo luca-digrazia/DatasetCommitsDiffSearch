@@ -285,7 +285,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
               .addDeps(ImmutableList.of(CppHelper.mallocForTarget(ruleContext)))
               .enableInterfaceSharedObjects()
               .setAlwayslink(false);
-      ccLinkingOutputs = linkingHelper.link(ccCompilationOutputs);
+      ccLinkingOutputs =
+          linkingHelper.link(ccCompilationOutputs, ccCompilationContext).getCcLinkingOutputs();
     }
 
     CcLinkParams linkParams =
