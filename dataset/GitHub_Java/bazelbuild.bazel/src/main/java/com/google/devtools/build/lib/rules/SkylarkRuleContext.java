@@ -1010,11 +1010,11 @@ public final class SkylarkRuleContext implements SkylarkValue {
         new ConfigurationMakeVariableContext(
             ruleContext, ruleContext.getRule().getPackage(), ruleContext.getConfiguration()) {
           @Override
-          public String lookupMakeVariable(String variableName) throws ExpansionException {
-            if (additionalSubstitutions.containsKey(variableName)) {
-              return additionalSubstitutions.get(variableName);
+          public String lookupMakeVariable(String name) throws ExpansionException {
+            if (additionalSubstitutions.containsKey(name)) {
+              return additionalSubstitutions.get(name);
             } else {
-              return super.lookupMakeVariable(variableName);
+              return super.lookupMakeVariable(name);
             }
           }
         });

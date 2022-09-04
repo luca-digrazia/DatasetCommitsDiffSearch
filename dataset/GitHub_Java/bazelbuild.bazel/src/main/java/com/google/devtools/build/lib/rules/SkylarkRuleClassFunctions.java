@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.analysis.ActionsProvider;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.DefaultProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
-import com.google.devtools.build.lib.analysis.PlatformSemantics;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
@@ -126,11 +125,10 @@ public class SkylarkRuleClassFunctions {
   /** Parent rule class for non-executable non-test Skylark rules. */
   public static final RuleClass baseRule =
       BaseRuleClasses.commonCoreAndSkylarkAttributes(
-              PlatformSemantics.platformAttributes(
-                  BaseRuleClasses.nameAttribute(
-                          new RuleClass.Builder("$base_rule", RuleClassType.ABSTRACT, true))
-                      .add(attr("expect_failure", STRING))))
-          .build();
+          BaseRuleClasses.nameAttribute(
+            new RuleClass.Builder("$base_rule", RuleClassType.ABSTRACT, true))
+            .add(attr("expect_failure", STRING)))
+            .build();
 
   /** Parent rule class for executable non-test Skylark rules. */
   public static final RuleClass binaryBaseRule =
@@ -764,14 +762,13 @@ public class SkylarkRuleClassFunctions {
               "Cannot instantiate a rule when loading a .bzl file. Rules can only be called from "
                   + "a BUILD file (possibly via a macro).");
         }
-        RuleFactory.createAndAddRule(
+        return RuleFactory.createAndAddRule(
             pkgContext,
             ruleClass,
             attributeValues,
             ast,
             env,
             pkgContext.getAttributeContainerFactory().apply(ruleClass));
-        return Runtime.NONE;
       } catch (InvalidRuleException | NameConflictException e) {
         throw new EvalException(ast.getLocation(), e.getMessage());
       }
