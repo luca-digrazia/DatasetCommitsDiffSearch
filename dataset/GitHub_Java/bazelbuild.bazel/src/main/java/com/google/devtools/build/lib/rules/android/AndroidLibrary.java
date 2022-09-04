@@ -116,8 +116,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
           ResourceDependencies.fromRuleResourceAndDeps(ruleContext, false /* neverlink */));
     }
 
-    AndroidConfiguration androidConfig = ruleContext.getFragment(AndroidConfiguration.class);
-    if (!androidConfig.allowSrcsLessAndroidLibraryDeps()
+    if (!ruleContext.getFragment(AndroidConfiguration.class).allowSrcsLessAndroidLibraryDeps()
         && !definesLocalResources
         && ruleContext.attributes().get("srcs", BuildType.LABEL_LIST).isEmpty()
         && ruleContext.attributes().get("idl_srcs", BuildType.LABEL_LIST).isEmpty()
@@ -131,8 +130,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         resourceApk,
         false /* addCoverageSupport */,
         true /* collectJavaCompilationArgs */,
-        false /* isBinary */,
-        androidConfig.includeLibraryResourceJars());
+        false /* isBinary */);
     if (javaTargetAttributes == null) {
       return null;
     }

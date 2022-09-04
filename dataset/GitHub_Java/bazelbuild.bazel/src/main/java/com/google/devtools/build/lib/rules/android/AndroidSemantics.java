@@ -88,8 +88,7 @@ public interface AndroidSemantics {
    * Configures the builder for generating the output jar used to configure the main dex file.
    * @throws InterruptedException
    */
-  void addMainDexListActionArguments(
-      RuleContext ruleContext, SpawnAction.Builder builder, Artifact proguardMap)
+  void addMainDexListActionArguments(RuleContext ruleContext, SpawnAction.Builder builder)
       throws InterruptedException;
 
   /**

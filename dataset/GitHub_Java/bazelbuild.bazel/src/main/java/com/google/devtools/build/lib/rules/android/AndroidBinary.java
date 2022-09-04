@@ -504,8 +504,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                 androidCommon,
                 resourceApk.getMainDexProguardConfig(),
                 resourceClasses,
-                derivedJarFunction,
-                proguardOutputMap);
+                derivedJarFunction);
 
     NestedSet<Artifact> nativeLibsZips =
         AndroidCommon.collectTransitiveNativeLibsZips(ruleContext).build();
@@ -1221,8 +1220,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       AndroidCommon common,
       @Nullable Artifact mainDexProguardSpec,
       JavaTargetAttributes attributes,
-      Function<Artifact, Artifact> derivedJarFunction,
-      @Nullable  Artifact proguardOutputMap)
+      Function<Artifact, Artifact> derivedJarFunction)
       throws InterruptedException, RuleErrorException {
     List<String> dexopts = ruleContext.getTokenizedStringListAttr("dexopts");
     MultidexMode multidexMode = getMultidexMode(ruleContext);
@@ -1279,7 +1277,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       if (multidexMode == MultidexMode.LEGACY) {
         // For legacy multidex, we need to generate a list for the dexer's --main-dex-list flag.
         mainDexList = createMainDexListAction(
-            ruleContext, androidSemantics, proguardedJar, mainDexProguardSpec, proguardOutputMap);
+            ruleContext, androidSemantics, proguardedJar, mainDexProguardSpec);
       }
 
       Artifact classesDex = getDxArtifact(ruleContext, "classes.dex.zip");
@@ -1678,8 +1676,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       RuleContext ruleContext,
       AndroidSemantics androidSemantics,
       Artifact jar,
-      @Nullable Artifact mainDexProguardSpec,
-      @Nullable Artifact proguardOutputMap)
+      @Nullable Artifact mainDexProguardSpec)
       throws InterruptedException {
     // Process the input jar through Proguard into an intermediate, streamlined jar.
     Artifact strippedJar = AndroidBinary.getDxArtifact(ruleContext, "main_dex_intermediate.jar");
@@ -1717,8 +1714,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       streamlinedBuilder.addInputArgument(spec);
     }
 
-    androidSemantics
-        .addMainDexListActionArguments(ruleContext, streamlinedBuilder, proguardOutputMap);
+    androidSemantics.addMainDexListActionArguments(ruleContext, streamlinedBuilder);
 
     ruleContext.registerAction(streamlinedBuilder.build(ruleContext));
 
