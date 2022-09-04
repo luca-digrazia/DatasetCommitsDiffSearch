@@ -75,7 +75,6 @@ import org.infinispan.quarkus.hibernate.cache.QuarkusInfinispanRegionFactory;
 
 import io.quarkus.hibernate.orm.runtime.BuildTimeSettings;
 import io.quarkus.hibernate.orm.runtime.IntegrationSettings;
-import io.quarkus.hibernate.orm.runtime.boot.xml.RecordableXmlMapping;
 import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrationStaticDescriptor;
 import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrationStaticInitListener;
 import io.quarkus.hibernate.orm.runtime.proxies.PreGeneratedProxies;
@@ -127,7 +126,7 @@ public class FastBootMetadataBuilder {
 
         final RecordableBootstrap ssrBuilder = RecordableBootstrapFactory.createRecordableBootstrapBuilder(puDefinition);
 
-        final MergedSettings mergedSettings = mergeSettings(puDefinition);
+        final MergedSettings mergedSettings = mergeSettings(persistenceUnit);
         this.buildTimeSettings = new BuildTimeSettings(mergedSettings.getConfigurationValues());
 
         // Build the "standard" service registry
@@ -161,12 +160,6 @@ public class FastBootMetadataBuilder {
 
         final MetadataSources metadataSources = new MetadataSources(ssrBuilder.getBootstrapServiceRegistry());
         // No need to populate annotatedClassNames/annotatedPackages: they are populated through scanning
-        // XML mappings, however, cannot be contributed through the scanner,
-        // which only allows specifying mappings as files/resources,
-        // and we really don't want any XML parsing here...
-        for (RecordableXmlMapping mapping : puDefinition.getXmlMappings()) {
-            metadataSources.addXmlBinding(mapping.toHibernateOrmBinding());
-        }
 
         this.metamodelBuilder = (MetadataBuilderImplementor) metadataSources
                 .getMetadataBuilder(standardServiceRegistry);
@@ -204,8 +197,7 @@ public class FastBootMetadataBuilder {
      * java.util.Map, org.hibernate.boot.registry.StandardServiceRegistryBuilder)
      */
     @SuppressWarnings({ "unchecked", "rawtypes" })
-    private MergedSettings mergeSettings(QuarkusPersistenceUnitDefinition puDefinition) {
-        PersistenceUnitDescriptor persistenceUnit = puDefinition.getActualHibernateDescriptor();
+    private MergedSettings mergeSettings(PersistenceUnitDescriptor persistenceUnit) {
         final MergedSettings mergedSettings = new MergedSettings();
         final Map cfg = mergedSettings.configurationValues;
 
@@ -269,29 +261,20 @@ public class FastBootMetadataBuilder {
         }
         cfg.put(WRAP_RESULT_SETS, "false");
 
-        // XML mapping support can be costly, so we only enable it when XML mappings are actually used
-        // or when integrations (e.g. Envers) need it.
+        // Hibernate Envers (and others) require XML_MAPPING_ENABLED to be activated,
+        // but we don't want to enable this for any other use:
         List<String> integrationsRequiringXmlMapping = integrationStaticDescriptors.stream()
                 .filter(HibernateOrmIntegrationStaticDescriptor::isXmlMappingRequired)
                 .map(HibernateOrmIntegrationStaticDescriptor::getIntegrationName).collect(Collectors.toList());
-        Optional<Boolean> xmlMappingEnabledOptional = readOptionalBooleanConfigurationValue(cfg, XML_MAPPING_ENABLED);
-        if (!puDefinition.getXmlMappings().isEmpty() || !integrationsRequiringXmlMapping.isEmpty()) {
-            if (xmlMappingEnabledOptional.isPresent() && !xmlMappingEnabledOptional.get()) {
-                // Explicitly disabled even though we need it...
-                LOG.warnf("XML mapping is necessary in persistence unit '%s':"
-                        + " %d XML mapping files are used, and %d extensions require XML mapping (%s)."
-                        + " Setting '%s' to false.",
-                        persistenceUnit.getName(), XML_MAPPING_ENABLED,
-                        puDefinition.getXmlMappings().size(), integrationsRequiringXmlMapping.size(),
+        if (integrationStaticDescriptors.stream().anyMatch(HibernateOrmIntegrationStaticDescriptor::isXmlMappingRequired)) {
+            if (readBooleanConfigurationValue(cfg, XML_MAPPING_ENABLED)) {
+                LOG.warnf(
+                        "XML mapping is not supported. It will be partially activated to allow compatibility with %s, but this support is temporary",
                         integrationsRequiringXmlMapping);
             }
-            cfg.put(XML_MAPPING_ENABLED, "true");
         } else {
-            if (xmlMappingEnabledOptional.isPresent() && xmlMappingEnabledOptional.get()) {
-                // Explicitly enabled even though we do not need it...
-                LOG.warnf("XML mapping is not necessary in persistence unit '%s'."
-                        + " Setting '%s' to false.",
-                        persistenceUnit.getName(), XML_MAPPING_ENABLED);
+            if (readBooleanConfigurationValue(cfg, XML_MAPPING_ENABLED)) {
+                LOG.warn("XML mapping is not supported. Setting " + XML_MAPPING_ENABLED + " to false.");
             }
             cfg.put(XML_MAPPING_ENABLED, "false");
         }
@@ -454,12 +437,6 @@ public class FastBootMetadataBuilder {
     private boolean readBooleanConfigurationValue(Map configurationValues, String propertyName) {
         Object propertyValue = configurationValues.get(propertyName);
         return propertyValue != null && Boolean.parseBoolean(propertyValue.toString());
-    }
-
-    @SuppressWarnings("rawtypes")
-    private Optional<Boolean> readOptionalBooleanConfigurationValue(Map configurationValues, String propertyName) {
-        Object propertyValue = configurationValues.get(propertyName);
-        return propertyValue == null ? Optional.empty() : Optional.of(Boolean.parseBoolean(propertyValue.toString()));
     }
 
     private CacheRegionDefinition parseCacheRegionDefinitionEntry(String role, String value,
