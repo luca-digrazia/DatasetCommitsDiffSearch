@@ -42,7 +42,7 @@ public class IsDockerWorking implements BooleanSupplier {
         try {
             OutputFilter filter = new OutputFilter();
             if (ExecUtil.exec(new File("."), filter, "docker", "version", "--format", "'{{.Server.Version}}'")) {
-                LOGGER.debugf("Docker daemon found. Version: %s", filter.getOutput());
+                LOGGER.info("Docker daemon found. Version:" + filter.getOutput());
                 return true;
             } else {
                 if (!silent) {
