@@ -105,7 +105,7 @@ class Skylark {
       System.err.println(e.print());
       return 1;
     } catch (Exception e) {
-      e.printStackTrace(System.err);
+      System.err.println(e);
       return 1;
     }
   }
