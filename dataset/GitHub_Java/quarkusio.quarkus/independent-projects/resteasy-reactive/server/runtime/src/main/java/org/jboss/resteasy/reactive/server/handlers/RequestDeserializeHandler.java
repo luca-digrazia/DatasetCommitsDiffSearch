@@ -78,8 +78,7 @@ public class RequestDeserializeHandler implements ServerRestHandler {
                     }
                 } catch (Exception e) {
                     log.debug("Error occurred during deserialization of input", e);
-                    requestContext.handleException(e, true);
-                    requestContext.resume();
+                    requestContext.resume(e);
                     return;
                 }
                 requestContext.setRequestEntity(result);

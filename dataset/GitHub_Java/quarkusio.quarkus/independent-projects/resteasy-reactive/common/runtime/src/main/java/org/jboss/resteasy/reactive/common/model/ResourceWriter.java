@@ -73,14 +73,18 @@ public class ResourceWriter {
         if (mediaTypes == null) {
             //todo: does this actually need to be threadsafe?
             synchronized (this) {
-                List<MediaType> mts = new ArrayList<>(mediaTypeStrings.size());
-                for (int i = 0; i < mediaTypeStrings.size(); i++) {
-                    mts.add(MediaType.valueOf(mediaTypeStrings.get(i)));
+                List<MediaType> ret = new ArrayList<>();
+                for (String i : mediaTypeStrings) {
+                    ret.add(MediaType.valueOf(i));
                 }
-                mediaTypes = Collections.unmodifiableList(mts);
+                mediaTypes = Collections.unmodifiableList(ret);
             }
         }
         return mediaTypes;
+    }
+
+    public List<MediaType> modifiableMediaTypes() {
+        return new ArrayList<>(mediaTypes());
     }
 
     public ServerMediaType serverMediaType() {

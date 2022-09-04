@@ -137,7 +137,7 @@ public class ClassRoutingHandler implements ServerRestHandler {
                     } else {
                         acceptsMediaTypes = Collections.singletonList(toMediaType(accepts));
                     }
-                    if (MediaTypeHelper.getFirstMatch(Arrays.asList(target.value.getProduces().getSortedOriginalMediaTypes()),
+                    if (MediaTypeHelper.getFirstMatch(Arrays.asList(target.value.getProduces().getSortedMediaTypes()),
                             acceptsMediaTypes) == null) {
                         throw new NotAcceptableException();
                     }

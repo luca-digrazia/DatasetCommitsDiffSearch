@@ -81,9 +81,7 @@ public class DynamicEntityWriter implements EntityWriter {
                 }
             }
         } else {
-            writers = serialisers
-                    .findWriters(null, entity.getClass(), MediaTypeHelper.withSuffixAsSubtype(producesMediaType.getMediaType()),
-                            RuntimeType.SERVER)
+            writers = serialisers.findWriters(null, entity.getClass(), producesMediaType.getMediaType(), RuntimeType.SERVER)
                     .toArray(ServerSerialisers.NO_WRITER);
         }
         for (MessageBodyWriter<?> w : writers) {

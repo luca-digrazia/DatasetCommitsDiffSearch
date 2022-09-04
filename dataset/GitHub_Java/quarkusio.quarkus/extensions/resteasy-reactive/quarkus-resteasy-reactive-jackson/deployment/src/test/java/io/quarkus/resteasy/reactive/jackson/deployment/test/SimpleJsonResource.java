@@ -12,7 +12,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 
 import com.fasterxml.jackson.annotation.JsonView;
 
@@ -51,17 +50,6 @@ public class SimpleJsonResource extends SuperClass<Person> {
             throw new RuntimeException("should not have dispatched");
         }
         return person;
-    }
-
-    @POST
-    @Path("/person-custom-mt-response")
-    @Produces("application/vnd.quarkus.person-v1+json")
-    @Consumes("application/vnd.quarkus.person-v1+json")
-    public Response getPersonCustomMediaTypeResponse(Person person) {
-        if (BlockingOperationControl.isBlockingAllowed()) {
-            throw new RuntimeException("should not have dispatched");
-        }
-        return Response.ok(person).status(201).build();
     }
 
     @POST
