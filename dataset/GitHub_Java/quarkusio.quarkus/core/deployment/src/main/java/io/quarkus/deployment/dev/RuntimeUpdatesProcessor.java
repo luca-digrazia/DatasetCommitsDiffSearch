@@ -31,7 +31,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -82,8 +81,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
      * {@link RuntimeUpdatesProcessor#checkIfFileModified(Path, Map, boolean)} during the first scan.
      */
     private volatile boolean firstScanDone = false;
-
-    private static volatile boolean instrumentationLogPrinted = false;
 
     private final Map<Path, Long> sourceFileTimestamps = new ConcurrentHashMap<>();
     private final Map<Path, Long> watchedFileTimestamps = new ConcurrentHashMap<>();
@@ -258,16 +255,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                 || (IsolatedDevModeMain.deploymentProblem != null && userInitiated) || configFileRestartNeeded);
         if (restartNeeded) {
             restartCallback.accept(filesChanged, changedClassResults);
-            long timeNanoSeconds = System.nanoTime() - startNanoseconds;
-            log.infof("Live reload total time: %ss ", Timing.convertToBigDecimalSeconds(timeNanoSeconds));
-            if (TimeUnit.SECONDS.convert(timeNanoSeconds, TimeUnit.NANOSECONDS) >= 4 && !instrumentationEnabled()) {
-                if (!instrumentationLogPrinted) {
-                    instrumentationLogPrinted = true;
-                    log.info(
-                            "Live reload took more than 4 seconds, you may want to enable instrumentation based reload (quarkus.live-reload.instrumentation=true). This allows small changes to take effect without restarting Quarkus.");
-                }
-            }
-
+            log.infof("Hot replace total time: %ss ", Timing.convertToBigDecimalSeconds(System.nanoTime() - startNanoseconds));
             return true;
         } else if (!filesChanged.isEmpty()) {
             for (Consumer<Set<String>> consumer : noRestartChangesConsumers) {
