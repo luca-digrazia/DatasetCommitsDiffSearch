@@ -44,6 +44,7 @@ public final class WriteAdbArgsAction extends AbstractFileWriteAction {
   public static final class Options extends OptionsBase {
     @Option(
       name = "adb",
+      category = "mobile-install",
       defaultValue = "",
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {OptionEffectTag.CHANGES_INPUTS},
@@ -56,6 +57,7 @@ public final class WriteAdbArgsAction extends AbstractFileWriteAction {
 
     @Option(
       name = "adb_arg",
+      category = "mobile-install",
       allowMultiple = true,
       defaultValue = "",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
@@ -66,6 +68,7 @@ public final class WriteAdbArgsAction extends AbstractFileWriteAction {
 
     @Option(
       name = "device",
+      category = "mobile-install",
       defaultValue = "",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
@@ -75,6 +78,7 @@ public final class WriteAdbArgsAction extends AbstractFileWriteAction {
 
     @Option(
       name = "incremental_install_verbosity",
+      category = "mobile-install",
       defaultValue = "",
       documentationCategory = OptionDocumentationCategory.LOGGING,
       effectTags = {OptionEffectTag.BAZEL_MONITORING},
@@ -84,6 +88,7 @@ public final class WriteAdbArgsAction extends AbstractFileWriteAction {
 
     @Option(
       name = "start",
+      category = "mobile-install",
       converter = StartTypeConverter.class,
       defaultValue = "NO",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
@@ -96,6 +101,7 @@ public final class WriteAdbArgsAction extends AbstractFileWriteAction {
 
     @Option(
       name = "start_app",
+      category = "mobile-install",
       defaultValue = "null",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = {OptionEffectTag.EXECUTION},
@@ -106,6 +112,7 @@ public final class WriteAdbArgsAction extends AbstractFileWriteAction {
 
     @Option(
       name = "debug_app",
+      category = "mobile-install",
       defaultValue = "null",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = {OptionEffectTag.EXECUTION},

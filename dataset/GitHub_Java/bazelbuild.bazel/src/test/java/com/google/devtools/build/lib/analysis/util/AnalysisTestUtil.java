@@ -194,11 +194,6 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public ImmutableSet<Artifact> getTreeArtifactsConflictingWithFiles() {
-      return original.getTreeArtifactsConflictingWithFiles();
-    }
-
-    @Override
     public ActionKeyContext getActionKeyContext() {
       return original.getActionKeyContext();
     }
@@ -403,12 +398,7 @@ public final class AnalysisTestUtil {
 
     @Override
     public ImmutableSet<Artifact> getOrphanArtifacts() {
-      return ImmutableSet.of();
-    }
-
-    @Override
-    public ImmutableSet<Artifact> getTreeArtifactsConflictingWithFiles() {
-      return ImmutableSet.of();
+      return ImmutableSet.<Artifact>of();
     }
 
     @Override

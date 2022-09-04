@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Fingerprint;
 
 /**
@@ -32,7 +31,6 @@ import com.google.devtools.build.lib.util.Fingerprint;
  * Used to generate runfiles and fileset symlink farms.
  */
 @Immutable
-@AutoCodec
 public final class SymlinkTreeAction extends AbstractAction {
 
   private static final String GUID = "63412bda-4026-4c8e-a3ad-7deb397728d4";
@@ -53,7 +51,6 @@ public final class SymlinkTreeAction extends AbstractAction {
    * @param filesetTree true if this is fileset symlink tree,
    * @param enableRunfiles true is the actual symlink tree needs to be created.
    */
-  @AutoCodec.Instantiator
   public SymlinkTreeAction(
       ActionOwner owner,
       Artifact inputManifest,
@@ -102,9 +99,9 @@ public final class SymlinkTreeAction extends AbstractAction {
   @Override
   public ActionResult execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
-    actionExecutionContext
-        .getContext(SymlinkTreeActionContext.class)
-        .createSymlinks(this, actionExecutionContext, shellEnvironment, enableRunfiles);
-    return ActionResult.EMPTY;
+    return ActionResult.create(
+        actionExecutionContext
+            .getContext(SymlinkTreeActionContext.class)
+            .createSymlinks(this, actionExecutionContext, shellEnvironment, enableRunfiles));
   }
 }

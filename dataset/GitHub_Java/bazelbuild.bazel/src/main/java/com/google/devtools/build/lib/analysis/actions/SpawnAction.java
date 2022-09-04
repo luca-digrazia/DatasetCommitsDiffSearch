@@ -55,7 +55,6 @@ import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.actions.extra.SpawnInfo;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.analysis.ShellConfiguration;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -258,8 +257,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
    */
   protected List<SpawnResult> internalExecute(ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException, CommandLineExpansionException {
-    Spawn spawn = getSpawn(actionExecutionContext.getClientEnv());
-    return getContext(actionExecutionContext, spawn).exec(spawn, actionExecutionContext);
+    return getContext(actionExecutionContext)
+        .exec(getSpawn(actionExecutionContext.getClientEnv()), actionExecutionContext);
   }
 
   @Override
@@ -450,9 +449,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     return executionInfo;
   }
 
-  protected SpawnActionContext getContext(
-      ActionExecutionContext actionExecutionContext, Spawn spawn) {
-    return actionExecutionContext.getSpawnActionContext(spawn);
+  protected SpawnActionContext getContext(ActionExecutionContext actionExecutionContext) {
+    return actionExecutionContext.getSpawnActionContext(getMnemonic());
   }
 
   /**
@@ -679,8 +677,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
         AnalysisEnvironment analysisEnvironment,
         BuildConfiguration configuration,
         List<Action> paramFileActions) {
-      ImmutableList<String> executableArgs = buildExecutableArgs(
-          configuration.getFragment(ShellConfiguration.class).getShellExecutable());
+      ImmutableList<String> executableArgs =
+          buildExecutableArgs(configuration.getShellExecutable());
       boolean hasConditionalParamFile =
           commandLines.stream().anyMatch(c -> c.paramFileInfo != null && !c.paramFileInfo.always());
       boolean spillToParamFiles = false;

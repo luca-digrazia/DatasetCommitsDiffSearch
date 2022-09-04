@@ -75,7 +75,7 @@ public final class LauncherFileWriteAction extends AbstractFileWriteAction {
     // single-machine execution environment, but problematic with remote execution.
     Preconditions.checkState(OS.getCurrent() == OS.WINDOWS);
     return out -> {
-      InputStream in = ctx.getInputPath(this.launcher).getInputStream();
+      InputStream in = this.launcher.getPath().getInputStream();
       ByteStreams.copy(in, out);
       long dataLength = this.launchInfo.write(out);
       ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);

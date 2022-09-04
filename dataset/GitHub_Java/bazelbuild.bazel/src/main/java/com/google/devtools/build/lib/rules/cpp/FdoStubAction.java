@@ -16,10 +16,13 @@ package com.google.devtools.build.lib.rules.cpp;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
+import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
+import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.ResourceSet;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 
 /**
@@ -29,8 +32,14 @@ import com.google.devtools.build.lib.vfs.Path;
  * <p>This is needed because the extraction is currently not a bona fide action, therefore, Blaze
  * would complain that these files have no generating action if we did not set it to an instance of
  * this class.
+ *
+ * <p>These actions are all owned by the {@code cc_toolchain} rule. It's possible that they are
+ * shared actions since the FDO path is the same regardless of the configuration of the rule that
+ * created it, but in practice this shouldn't happen very often, because we usually have only one
+ * FDO optimized configuration.
  */
-public class FdoStubAction extends AbstractAction {
+@Immutable
+public final class FdoStubAction extends AbstractAction {
   public FdoStubAction(ActionOwner owner, Artifact output) {
     // TODO(bazel-team): Make extracting the zip file a honest-to-God action so that we can do away
     // with this ugliness.
@@ -38,12 +47,8 @@ public class FdoStubAction extends AbstractAction {
   }
 
   @Override
-  public String describeStrategy(Executor executor) {
-    return "";
-  }
-
-  @Override
-  public void execute(ActionExecutionContext actionExecutionContext) {
+  public ActionResult execute(ActionExecutionContext actionExecutionContext) {
+    return ActionResult.EMPTY;
   }
 
   @Override
@@ -52,17 +57,12 @@ public class FdoStubAction extends AbstractAction {
   }
 
   @Override
-  protected String computeKey() {
-    return "fdoStubAction";
+  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
+    fp.addString("fdoStubAction");
   }
 
   @Override
-  public ResourceSet estimateResourceConsumption(Executor executor) {
-    return ResourceSet.ZERO;
-  }
-
-  @Override
-  public void prepare(Path execRoot) {
+  public void prepare(FileSystem fileSystem, Path execRoot) {
     // The superclass would delete the output files here. We can't let that happen, since this
     // action does not in fact create those files; it is only a placeholder and the actual files
     // are created *before* the execution phase in FdoSupport.extractFdoZip()

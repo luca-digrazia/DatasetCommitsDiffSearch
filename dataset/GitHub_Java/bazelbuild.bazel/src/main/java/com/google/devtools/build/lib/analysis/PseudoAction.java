@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.protobuf.GeneratedMessage.GeneratedExtension;
 import com.google.protobuf.MessageLite;
@@ -36,12 +35,9 @@ import java.util.UUID;
  * about rules to extra_actions.
  */
 public class PseudoAction<InfoType extends MessageLite> extends AbstractAction {
-  @AutoCodec.VisibleForSerialization protected final UUID uuid;
+  private final UUID uuid;
   private final String mnemonic;
-
-  @AutoCodec.VisibleForSerialization
-  protected final GeneratedExtension<ExtraActionInfo, InfoType> infoExtension;
-
+  private final GeneratedExtension<ExtraActionInfo, InfoType> infoExtension;
   private final InfoType info;
 
   public PseudoAction(UUID uuid, ActionOwner owner,

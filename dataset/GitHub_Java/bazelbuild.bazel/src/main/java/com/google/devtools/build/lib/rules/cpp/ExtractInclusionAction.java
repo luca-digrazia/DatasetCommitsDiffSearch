@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,41 +18,42 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
+import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
+import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.ResourceSet;
-
+import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.util.Fingerprint;
 import java.io.IOException;
 
 /**
- * An action which greps for includes over a given .cc or .h file.
- * This is a part of the work required for C++ include scanning.
+ * An action which greps for includes over a given .cc or .h file. This is a part of the work
+ * required for C++ include scanning.
  *
- * <p>Note that this may run grep-includes over-optimistically, where we previously
- * had not. For example, consider a cc_library of generated headers. If another
- * library depends on it, and only references one of the headers, the other
- * grep-includes will have been wasted.
+ * <p>For generated files, it is advantageous to do this remotely, to avoid having to download the
+ * generated file.
+ *
+ * <p>Note that this may run grep-includes over-optimistically, where we previously had not. For
+ * example, consider a cc_library of generated headers. If another library depends on it, and only
+ * references one of the headers, the other grep-includes will have been wasted.
  */
+@AutoCodec
+@Immutable
 final class ExtractInclusionAction extends AbstractAction {
 
   private static final String GUID = "45b43e5a-4734-43bb-a05e-012313808142";
 
-  /**
-   * Constructs a new action.
-   */
-  public ExtractInclusionAction(ActionOwner owner, Artifact input, Artifact output) {
-    super(owner, ImmutableList.of(input), ImmutableList.of(output));
+  /** Constructs a new action. */
+  public ExtractInclusionAction(
+      ActionOwner owner, Artifact primaryInput, Artifact primaryOutput) {
+    super(owner, ImmutableList.of(primaryInput), ImmutableList.of(primaryOutput));
   }
 
   @Override
-  protected String computeKey() {
-    return GUID;
-  }
-
-  @Override
-  public String describeStrategy(Executor executor) {
-    return executor.getContext(CppCompileActionContext.class).strategyLocality();
+  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
+    fp.addString(GUID);
   }
 
   @Override
@@ -66,20 +67,18 @@ final class ExtractInclusionAction extends AbstractAction {
   }
 
   @Override
-  public ResourceSet estimateResourceConsumption(Executor executor) {
-    return ResourceSet.ZERO;
-  }
-
-  @Override
-  public void execute(ActionExecutionContext actionExecutionContext)
+  public ActionResult execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
-    Executor executor = actionExecutionContext.getExecutor();
-    IncludeScanningContext context = executor.getContext(IncludeScanningContext.class);
+    CppIncludeExtractionContext context =
+        actionExecutionContext.getContext(CppIncludeExtractionContext.class);
     try {
       context.extractIncludes(actionExecutionContext, this, getPrimaryInput(),
           getPrimaryOutput());
     } catch (IOException e) {
       throw new ActionExecutionException(e, this, false);
+    } catch (ExecException e) {
+      throw e.toActionExecutionException(this);
     }
+    return ActionResult.EMPTY;
   }
 }

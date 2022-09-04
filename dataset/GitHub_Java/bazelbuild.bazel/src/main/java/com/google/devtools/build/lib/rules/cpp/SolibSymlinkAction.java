@@ -62,7 +62,7 @@ public final class SolibSymlinkAction extends AbstractAction {
   @Override
   public ActionResult execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException {
-    Path mangledPath = actionExecutionContext.getInputPath(symlink);
+    Path mangledPath = symlink.getPath();
     try {
       mangledPath.createSymbolicLink(target);
     } catch (IOException e) {
