@@ -47,7 +47,7 @@ public final class ProcessWrapperTest {
   }
 
   @Test
-  public void testProcessWrapperCommandLineBuilder_buildsWithoutOptionalArguments()
+  public void testProcessWrapperCommandLineBuilder_BuildsWithoutOptionalArguments()
       throws IOException {
     ImmutableList<String> commandArguments = ImmutableList.of("echo", "hello, world");
 
@@ -63,7 +63,7 @@ public final class ProcessWrapperTest {
   }
 
   @Test
-  public void testProcessWrapperCommandLineBuilder_buildsWithOptionalArguments()
+  public void testProcessWrapperCommandLineBuilder_BuildsWithOptionalArguments()
       throws IOException {
     ImmutableList<String> extraFlags = ImmutableList.of("--debug");
     ImmutableList<String> commandArguments = ImmutableList.of("echo", "hello, world");

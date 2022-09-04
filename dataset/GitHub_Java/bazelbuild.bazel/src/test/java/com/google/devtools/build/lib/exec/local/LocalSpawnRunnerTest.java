@@ -254,7 +254,8 @@ public class LocalSpawnRunnerTest {
     }
 
     @Override
-    public SortedMap<PathFragment, ActionInput> getInputMapping() {
+    public SortedMap<PathFragment, ActionInput> getInputMapping(
+        boolean expandTreeArtifactsInRunfiles) {
       return inputMapping;
     }
 
@@ -313,7 +314,9 @@ public class LocalSpawnRunnerTest {
 
   private static ProcessWrapper makeProcessWrapper(FileSystem fs, LocalExecutionOptions options) {
     return new ProcessWrapper(
-        fs.getPath("/process-wrapper"), options.getLocalSigkillGraceSeconds(), ImmutableList.of());
+        fs.getPath("/process-wrapper"),
+        options.getLocalSigkillGraceSeconds(),
+        options.processWrapperExtraFlags);
   }
 
   /**
