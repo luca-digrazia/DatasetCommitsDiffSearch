@@ -50,15 +50,12 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.BuiltinFunction;
-import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.Runtime.NoneType;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
-import com.google.devtools.build.lib.syntax.SkylarkMutable;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
@@ -68,7 +65,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import javax.annotation.Nullable;
 
 /**
  * Provides a Skylark interface for all action creation needs.
@@ -873,8 +869,9 @@ public class SkylarkActionFactory implements SkylarkValue {
             + "# ]"
             + "</pre>"
   )
-  static class Args extends SkylarkMutable {
-    private final Mutability mutability;
+  static class Args implements SkylarkValue {
+
+    private final SkylarkRuleContext context;
     private final SkylarkCustomCommandLine.Builder commandLine;
     private ParameterFileType parameterFileType = ParameterFileType.SHELL_QUOTED;
     private String flagFormatString;
@@ -1104,11 +1101,11 @@ public class SkylarkActionFactory implements SkylarkValue {
       this.parameterFileType = parameterFileType;
     }
 
-    private Args(
-        @Nullable Mutability mutability,
+    public Args(
+        SkylarkRuleContext context,
         SkylarkSemanticsOptions skylarkSemantics,
         EventHandler eventHandler) {
-      this.mutability = mutability != null ? mutability : Mutability.IMMUTABLE;
+      this.context = context;
       this.commandLine = new SkylarkCustomCommandLine.Builder(skylarkSemantics, eventHandler);
     }
 
@@ -1117,8 +1114,8 @@ public class SkylarkActionFactory implements SkylarkValue {
     }
 
     @Override
-    public Mutability mutability() {
-      return mutability;
+    public boolean isImmutable() {
+      return context.isImmutable();
     }
 
     @Override
@@ -1131,28 +1128,14 @@ public class SkylarkActionFactory implements SkylarkValue {
     }
   }
 
-  @SkylarkSignature(
+  @SkylarkCallable(
     name = "args",
-    doc = "returns an Args object that can be used to build memory-efficient command lines.",
-    objectType = SkylarkActionFactory.class,
-    returnType = Args.class,
-    parameters = {
-        @Param(
-            name = "self",
-            type = SkylarkActionFactory.class,
-            doc = "This 'actions' object."
-        )
-    },
-    useEnvironment = true
+    doc = "returns an Args object that can be used to build memory-efficient command lines."
   )
-  public static final BuiltinFunction args =
-      new BuiltinFunction("args") {
-        public Args invoke(SkylarkActionFactory self, Environment env) {
-          return new Args(env.mutability(),
-              env.getSemantics(),
-              self.ruleContext.getAnalysisEnvironment().getEventHandler());
-        }
-      };
+  public Args args() {
+    return new Args(
+        context, skylarkSemanticsOptions, ruleContext.getAnalysisEnvironment().getEventHandler());
+  }
 
   @Override
   public boolean isImmutable() {
@@ -1167,9 +1150,5 @@ public class SkylarkActionFactory implements SkylarkValue {
 
   void nullify() {
     ruleContext = null;
-  }
-
-  static {
-    SkylarkSignatureProcessor.configureSkylarkFunctions(SkylarkActionFactory.class);
   }
 }
