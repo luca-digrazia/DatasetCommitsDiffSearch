@@ -1,6 +1,5 @@
 package com.shuyu.gsyvideoplayer;
 
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.util.AttributeSet;
 import android.widget.ImageView;
@@ -11,13 +10,7 @@ import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
  * Created by shuyu on 2016/12/6.
  */
 
-@SuppressLint("AppCompatCustomView")
 public class GSYImageCover extends ImageView {
-
-
-    private boolean fullView;
-
-    private int originW, originH;
 
     public GSYImageCover(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -44,11 +37,8 @@ public class GSYImageCover extends ImageView {
         int widthS = getDefaultSize(videoWidth, widthMeasureSpec);
         int heightS = getDefaultSize(videoHeight, heightMeasureSpec);
 
-        if (originW == 0 || originH == 0) {
-            originW = widthS;
-            originH = heightS;
-        }
-
+        ///Debuger.printfError("******** video size " + getRotation() + " " + videoHeight + " *****1 " + videoWidth);
+        //Debuger.printfError("******** widget size " + widthS + " *****2 " + heightS);
         if (videoWidth > 0 && videoHeight > 0) {
 
             int widthSpecMode = MeasureSpec.getMode(widthMeasureSpec);
@@ -93,8 +83,9 @@ public class GSYImageCover extends ImageView {
             // no size yet, just adopt the given spec sizes
         }
 
-        boolean rotate = (getRotation() != 0 && getRotation() % 90 == 0 && Math.abs(getRotation()) != 180);
-        if (rotate) {
+        //Debuger.printfError("******** rotate before " + width + " *****3 " + height);
+
+        if (getRotation() != 0 && getRotation() % 90 == 0 && Math.abs(getRotation()) != 180) {
             if (widthS < heightS) {
                 if (width > height) {
                     width = (int) (width * (float) widthS / height);
@@ -113,10 +104,11 @@ public class GSYImageCover extends ImageView {
                 }
             }
 
+            //Debuger.printfError("******** real size before " + width + " *****3 " + height);
             //如果旋转后的高度大于宽度
             if (width > height) {
                 //如果视频的旋转后，width（高度）大于控件高度，需要压缩下高度
-                if (originH < originW) {
+                if (heightS < widthS) {
                     if (width > heightS) {
                         height = (int) (height * ((float) width / heightS));
                         width = heightS;
@@ -136,6 +128,7 @@ public class GSYImageCover extends ImageView {
             }
         }
 
+        //Debuger.printfError("******** real size " + width + " *****3 " + height);
         //如果设置了比例
         if (GSYVideoType.getShowType() == GSYVideoType.SCREEN_TYPE_16_9) {
             if (height > width) {
@@ -150,50 +143,6 @@ public class GSYImageCover extends ImageView {
                 height = width * 3 / 4;
             }
         }
-
-        fullView = (GSYVideoType.getShowType() == GSYVideoType.SCREEN_TYPE_FULL);
-
-        //上面会调整一变全屏，这里如果要全屏裁减，就整另外一边
-        if (fullView) {
-            if (rotate && getRotation() != 0) {
-                if (width > height) {
-                    if (height < originW) {
-                        width = (int) (width * ((float) originW / height));
-                        height = originW;
-                    } else if (width < originH) {
-                        height = (int) (height * ((float) originH / width));
-                        width = originH;
-                    }
-                } else {
-                    if (width < originH) {
-                        height = (int) (height * ((float) originH / width));
-                        width = originH;
-                    } else if (height < originW) {
-                        width = (int) (width * ((float) originW / height));
-                        height = originW;
-                    }
-                }
-            } else {
-                if (height > width) {
-                    if (width < widthS) {
-                        height = (int) (height * ((float) widthS / width));
-                        width = widthS;
-                    } else {
-                        width = (int) (width * ((float) heightS / height));
-                        height = heightS;
-                    }
-                } else {
-                    if (height < heightS) {
-                        width = (int) (width * ((float) heightS / height));
-                        height = heightS;
-                    } else {
-                        height = (int) (height * ((float) widthS / width));
-                        width = widthS;
-                    }
-                }
-            }
-        }
-
         setMeasuredDimension(width, height);
     }
 
