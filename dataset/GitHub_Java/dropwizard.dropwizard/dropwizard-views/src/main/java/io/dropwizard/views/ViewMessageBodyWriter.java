@@ -67,7 +67,7 @@ public class ViewMessageBodyWriter implements MessageBodyWriter<View> {
                         Annotation[] annotations,
                         MediaType mediaType,
                         MultivaluedMap<String, Object> httpHeaders,
-                        OutputStream entityStream) throws IOException {
+                        OutputStream entityStream) throws IOException, WebApplicationException {
         final Timer.Context context = metricRegistry.timer(name(t.getClass(), "rendering")).time();
         try {
             for (ViewRenderer renderer : renderers) {
