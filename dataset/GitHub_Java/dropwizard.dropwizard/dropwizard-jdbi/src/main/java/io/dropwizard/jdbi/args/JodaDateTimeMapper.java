@@ -1,22 +1,21 @@
 package io.dropwizard.jdbi.args;
 
+import com.google.common.base.Function;
+import com.google.common.base.Optional;
 import org.joda.time.DateTime;
-import org.skife.jdbi.v2.StatementContext;
-import org.skife.jdbi.v2.tweak.ResultColumnMapper;
+import org.skife.jdbi.v2.util.TypedMapper;
 
-import javax.annotation.Nullable;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
-import java.util.Optional;
 import java.util.TimeZone;
 
 /**
- * A {@link ResultColumnMapper} to map Joda {@link DateTime} objects.
+ * A {@link TypedMapper} to map Joda {@link DateTime} objects.
  */
-public class JodaDateTimeMapper implements ResultColumnMapper<DateTime> {
+public class JodaDateTimeMapper extends TypedMapper<DateTime> {
 
     /**
      * <p>{@link Calendar} for representing a database time zone.<p>
@@ -28,11 +27,16 @@ public class JodaDateTimeMapper implements ResultColumnMapper<DateTime> {
     private Optional<Calendar> calendar;
 
     public JodaDateTimeMapper() {
-        calendar = Optional.empty();
+        calendar = Optional.absent();
     }
 
     public JodaDateTimeMapper(Optional<TimeZone> timeZone) {
-        calendar = timeZone.map(GregorianCalendar::new);
+        calendar = timeZone.transform(new Function<TimeZone, Calendar>() {
+            @Override
+            public Calendar apply(TimeZone tz) {
+                return new GregorianCalendar(tz);
+            }
+        });
     }
 
     /**
@@ -46,16 +50,14 @@ public class JodaDateTimeMapper implements ResultColumnMapper<DateTime> {
      *
      * @return a clone of calendar, representing a database time zone
      */
-    private Optional<Calendar> cloneCalendar() {
-        return calendar.map(Calendar::clone).map(x -> (Calendar) x);
+    private Calendar cloneCalendar() {
+        return (Calendar) calendar.get().clone();
     }
 
     @Override
-    @Nullable
-    public DateTime mapColumn(ResultSet r, int columnNumber, StatementContext ctx) throws SQLException {
-        final Optional<Calendar> instance = cloneCalendar();
-        final Timestamp timestamp = instance.isPresent() ? r.getTimestamp(columnNumber, instance.get()) :
-            r.getTimestamp(columnNumber);
+    protected DateTime extractByName(final ResultSet r, final String name) throws SQLException {
+        final Timestamp timestamp = calendar.isPresent() ? r.getTimestamp(name, cloneCalendar()) :
+                r.getTimestamp(name);
         if (timestamp == null) {
             return null;
         }
@@ -63,11 +65,9 @@ public class JodaDateTimeMapper implements ResultColumnMapper<DateTime> {
     }
 
     @Override
-    @Nullable
-    public DateTime mapColumn(ResultSet r, String columnLabel, StatementContext ctx) throws SQLException {
-        final Optional<Calendar> instance = cloneCalendar();
-        final Timestamp timestamp = instance.isPresent() ? r.getTimestamp(columnLabel, instance.get()) :
-            r.getTimestamp(columnLabel);
+    protected DateTime extractByIndex(final ResultSet r, final int index) throws SQLException {
+        final Timestamp timestamp = calendar.isPresent() ? r.getTimestamp(index, cloneCalendar()) :
+                r.getTimestamp(index);
         if (timestamp == null) {
             return null;
         }
