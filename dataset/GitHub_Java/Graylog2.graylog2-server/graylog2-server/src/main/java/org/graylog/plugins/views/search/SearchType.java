@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
 import org.graylog.plugins.views.search.engine.BackendQuery;
-import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
@@ -56,12 +55,15 @@ public interface SearchType {
     @JsonProperty("id")
     String id();
 
+    @JsonProperty
+    Optional<String> name();
+
     @Nullable
     @JsonProperty("filter")
     Filter filter();
 
     @JsonProperty
-    Optional<TimeRange> timerange();
+    Optional<DerivedTimeRange> timerange();
 
     @JsonProperty
     Optional<BackendQuery> query();
@@ -70,10 +72,6 @@ public interface SearchType {
     Set<String> streams();
 
     SearchType applyExecutionContext(ObjectMapper objectMapper, JsonNode state);
-
-    default Set<String> effectiveStreams() {
-        return streams();
-    }
 
     /**
      * Each search type should declare an implementation of its result conforming to this interface.
@@ -89,6 +87,9 @@ public interface SearchType {
          */
         @JsonProperty("type")
         String type();
+
+        @JsonProperty
+        Optional<String> name();
     }
 
     @JsonAutoDetect
@@ -100,6 +101,9 @@ public interface SearchType {
         @JsonProperty
         private String id;
 
+        @JsonProperty
+        private Optional<String> name;
+
         private Map<String, Object> props = Maps.newHashMap();
 
         @Nullable
@@ -108,7 +112,7 @@ public interface SearchType {
 
         @Nullable
         @JsonProperty
-        private TimeRange timeRange;
+        private DerivedTimeRange timeRange;
 
         @Nullable
         @JsonProperty
@@ -128,12 +132,17 @@ public interface SearchType {
         }
 
         @Override
+        public Optional<String> name() {
+            return name;
+        }
+
+        @Override
         public Filter filter() {
             return filter;
         }
 
         @Override
-        public Optional<TimeRange> timerange() {
+        public Optional<DerivedTimeRange> timerange() {
             return Optional.ofNullable(this.timeRange);
         }
 
