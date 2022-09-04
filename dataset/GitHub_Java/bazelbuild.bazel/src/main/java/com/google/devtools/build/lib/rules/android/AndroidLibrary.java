@@ -218,13 +218,10 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         return null;
       }
     } else {
-      resourceApk =
-          ResourceApk.fromTransitiveResources(
-              ResourceDependencies.fromRuleResourceAndDeps(
-                  ruleContext,
-                  ruleContext.getFragment(AndroidConfiguration.class).fixedResourceNeverlinking()
-                      && JavaCommon.isNeverLink(ruleContext)));
+      resourceApk = ResourceApk.fromTransitiveResources(
+          ResourceDependencies.fromRuleResourceAndDeps(ruleContext, false /* neverlink */));
     }
+
 
     JavaTargetAttributes javaTargetAttributes = androidCommon.init(
         javaSemantics,
