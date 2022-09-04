@@ -5,7 +5,6 @@ import com.yammer.dropwizard.json.Json;
 import com.yammer.dropwizard.logging.Log;
 import com.yammer.dropwizard.validation.InvalidEntityException;
 import com.yammer.dropwizard.validation.Validator;
-import org.codehaus.jackson.annotate.JsonIgnoreType;
 import org.eclipse.jetty.io.EofException;
 
 import javax.validation.Valid;
@@ -83,8 +82,7 @@ public class JacksonMessageBodyProvider implements MessageBodyReader<Object>,
                                Type genericType,
                                Annotation[] annotations,
                                MediaType mediaType) {
-        final JsonIgnoreType ignore = type.getAnnotation(JsonIgnoreType.class);
-        return !((ignore != null) && ignore.value()) && json.canSerialize(type);
+        return json.canSerialize(type);
     }
 
     @Override
