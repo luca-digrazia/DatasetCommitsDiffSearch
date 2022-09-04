@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.exec.AbstractSpawnStrategy;
 import com.google.devtools.build.lib.exec.SpawnRunner;
-import com.google.devtools.build.lib.vfs.Path;
 
 /** Strategy that uses sandboxing to execute a process, for Darwin */
 //TODO(ulfjack): This class only exists for this annotation. Find a better way to handle this!
@@ -27,8 +26,8 @@ import com.google.devtools.build.lib.vfs.Path;
   contextType = SpawnActionContext.class
 )
 final class DarwinSandboxedStrategy extends AbstractSpawnStrategy {
-  DarwinSandboxedStrategy(Path execRoot, SpawnRunner spawnRunner) {
-    super(execRoot, spawnRunner);
+  DarwinSandboxedStrategy(SpawnRunner spawnRunner) {
+    super(spawnRunner);
   }
 
   @Override
