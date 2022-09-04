@@ -25,11 +25,11 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.query2.ActionGraphProtoOutputFormatterCallback.OutputType;
 import com.google.devtools.build.lib.query2.engine.Callback;
 import com.google.devtools.build.lib.query2.engine.KeyExtractor;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
@@ -140,19 +140,17 @@ public class ActionGraphQueryEnvironment
   public ImmutableList<NamedThreadSafeOutputFormatterCallback<ConfiguredTargetValue>>
       getDefaultOutputFormatters(
           TargetAccessor<ConfiguredTargetValue> accessor,
-          ExtendedEventHandler eventHandler,
-          OutputStream out,
+          Reporter reporter,
           SkyframeExecutor skyframeExecutor,
           BuildConfiguration hostConfiguration,
           @Nullable RuleTransitionFactory trimmingTransitionFactory,
           PackageManager packageManager) {
+    OutputStream out = reporter.getOutErr().getOutputStream();
     return ImmutableList.of(
         new ActionGraphProtoOutputFormatterCallback(
-            eventHandler, aqueryOptions, out, skyframeExecutor, accessor, OutputType.BINARY),
-        new ActionGraphProtoOutputFormatterCallback(
-            eventHandler, aqueryOptions, out, skyframeExecutor, accessor, OutputType.TEXT),
+            reporter, aqueryOptions, out, skyframeExecutor, accessor),
         new ActionGraphTextOutputFormatterCallback(
-            eventHandler, aqueryOptions, out, skyframeExecutor, accessor));
+            reporter, aqueryOptions, out, skyframeExecutor, accessor));
   }
 
   @Override

@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Location;
@@ -37,14 +36,7 @@ public abstract class EventHandlingErrorReporter implements RuleErrorConsumer {
     this.env = env;
   }
 
-  private void reportError(Location location, String message) {
-    // TODO(ulfjack): Consider generating the error message from the root cause event rather than
-    // the other way round.
-    if (!hasErrors()) {
-      // We must not report duplicate events, so we only report the first one for now.
-      env.getEventHandler()
-          .post(new AnalysisRootCauseEvent(getConfiguration(), getLabel(), message));
-    }
+  public void reportError(Location location, String message) {
     env.getEventHandler().handle(Event.error(location, message));
   }
 
@@ -55,7 +47,7 @@ public abstract class EventHandlingErrorReporter implements RuleErrorConsumer {
 
   @Override
   public void attributeError(String attrName, String message) {
-    reportError(getRuleLocation(), completeAttributeMessage(attrName, message));
+    reportError(getAttributeLocation(attrName), completeAttributeMessage(attrName, message));
   }
 
   @Override
@@ -74,7 +66,7 @@ public abstract class EventHandlingErrorReporter implements RuleErrorConsumer {
 
   @Override
   public void attributeWarning(String attrName, String message) {
-    reportWarning(getRuleLocation(), completeAttributeMessage(attrName, message));
+    reportWarning(getAttributeLocation(attrName), completeAttributeMessage(attrName, message));
   }
 
   private String prefixRuleMessage(String message) {
@@ -106,7 +98,7 @@ public abstract class EventHandlingErrorReporter implements RuleErrorConsumer {
 
   protected abstract Label getLabel();
 
-  protected abstract BuildConfiguration getConfiguration();
-
   protected abstract Location getRuleLocation();
+
+  protected abstract Location getAttributeLocation(String attrName);
 }

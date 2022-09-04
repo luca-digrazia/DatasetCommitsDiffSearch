@@ -25,11 +25,11 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.query2.ProtoOutputFormatterCallback.OutputType;
 import com.google.devtools.build.lib.query2.engine.Callback;
 import com.google.devtools.build.lib.query2.engine.KeyExtractor;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
@@ -155,21 +155,21 @@ public class ConfiguredTargetQueryEnvironment
   public ImmutableList<NamedThreadSafeOutputFormatterCallback<ConfiguredTarget>>
       getDefaultOutputFormatters(
           TargetAccessor<ConfiguredTarget> accessor,
-          ExtendedEventHandler eventHandler,
-          OutputStream out,
+          Reporter reporter,
           SkyframeExecutor skyframeExecutor,
           BuildConfiguration hostConfiguration,
           @Nullable RuleTransitionFactory trimmingTransitionFactory,
           PackageManager packageManager) {
     AspectResolver aspectResolver =
-        cqueryOptions.aspectDeps.createResolver(packageManager, eventHandler);
+        cqueryOptions.aspectDeps.createResolver(packageManager, reporter);
+    OutputStream out = reporter.getOutErr().getOutputStream();
     return new ImmutableList.Builder<NamedThreadSafeOutputFormatterCallback<ConfiguredTarget>>()
         .add(
             new LabelAndConfigurationOutputFormatterCallback(
-                eventHandler, cqueryOptions, out, skyframeExecutor, accessor))
+                reporter, cqueryOptions, out, skyframeExecutor, accessor))
         .add(
             new TransitionsOutputFormatterCallback(
-                eventHandler,
+                reporter,
                 cqueryOptions,
                 out,
                 skyframeExecutor,
@@ -178,22 +178,7 @@ public class ConfiguredTargetQueryEnvironment
                 trimmingTransitionFactory))
         .add(
             new ProtoOutputFormatterCallback(
-                eventHandler,
-                cqueryOptions,
-                out,
-                skyframeExecutor,
-                accessor,
-                aspectResolver,
-                OutputType.BINARY))
-        .add(
-            new ProtoOutputFormatterCallback(
-                eventHandler,
-                cqueryOptions,
-                out,
-                skyframeExecutor,
-                accessor,
-                aspectResolver,
-                OutputType.TEXT))
+                reporter, cqueryOptions, out, skyframeExecutor, accessor, aspectResolver))
         .build();
   }
 

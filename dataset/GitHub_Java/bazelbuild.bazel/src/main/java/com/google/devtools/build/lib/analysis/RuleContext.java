@@ -85,6 +85,7 @@ import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.RequiredProviders;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
@@ -93,7 +94,6 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.LabelClass;
 import com.google.devtools.build.lib.util.FileTypeSet;
-import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -181,7 +181,7 @@ public final class RuleContext extends TargetContext
   private final BuildConfiguration hostConfiguration;
   private final ConfigurationFragmentPolicy configurationFragmentPolicy;
   private final ImmutableList<Class<? extends BuildConfiguration.Fragment>> universalFragments;
-  private final RuleErrorConsumer reporter;
+  private final ErrorReporter reporter;
   @Nullable private final ToolchainContext toolchainContext;
   private final ConstraintSemantics constraintSemantics;
 
@@ -294,22 +294,6 @@ public final class RuleContext extends TargetContext
   }
 
   /**
-   * If this target's configuration suppresses analysis failures, this returns a list
-   * of strings, where each string corresponds to a description of an error that occurred during
-   * processing this target.
-   *
-   * @throws IllegalStateException if this target's configuration does not suppress analysis
-   *     failures (if {@code getConfiguration().allowAnalysisFailures()} is false)
-   */
-  public List<String> getSuppressedErrorMessages() {
-    Preconditions.checkState(getConfiguration().allowAnalysisFailures(),
-        "Error messages can only be retrieved via RuleContext if allow_analysis_failures is true");
-    Preconditions.checkState(reporter instanceof SuppressingErrorReporter,
-        "Unexpected error reporter");
-    return ((SuppressingErrorReporter) reporter).getErrorMessages();
-  }
-
-  /**
    * If this <code>RuleContext</code> is for an aspect implementation, returns that aspect.
    * (it is the last aspect in the list of aspects applied to a target; all other aspects
    * are the ones main aspect sees as specified by its "required_aspect_providers")
@@ -371,6 +355,13 @@ public final class RuleContext extends TargetContext
   @Override
   public boolean hasErrors() {
     return getAnalysisEnvironment().hasErrors();
+  }
+
+  @Override
+  public void assertNoErrors() throws RuleErrorException {
+    if (hasErrors()) {
+      throw new RuleErrorException();
+    }
   }
 
   /**
@@ -511,6 +502,12 @@ public final class RuleContext extends TargetContext
     reporter.ruleError(message);
   }
 
+  @Override
+  public RuleErrorException throwWithRuleError(String message) throws RuleErrorException {
+    reporter.ruleError(message);
+    throw new RuleErrorException();
+  }
+
   /**
    * Convenience function for subclasses to report non-attribute-specific
    * warnings in the current rule.
@@ -532,6 +529,13 @@ public final class RuleContext extends TargetContext
     reporter.attributeError(attrName, message);
   }
 
+  @Override
+  public RuleErrorException throwWithAttributeError(String attrName, String message)
+      throws RuleErrorException {
+    reporter.attributeError(attrName, message);
+    throw new RuleErrorException();
+  }
+
   /**
    * Like attributeError, but does not mark the configured target as errored.
    *
@@ -550,31 +554,7 @@ public final class RuleContext extends TargetContext
    * which this target (which must be an OutputFile or a Rule) is associated.
    */
   public Artifact createOutputArtifact() {
-    Target target = getTarget();
-    PathFragment rootRelativePath = getPackageDirectory()
-        .getRelative(PathFragment.create(target.getName()));
-
-    return internalCreateOutputArtifact(rootRelativePath, target, OutputFile.Kind.FILE);
-  }
-
-  /**
-   * Returns an artifact beneath the root of either the "bin" or "genfiles"
-   * tree, whose path is based on the name of this target and the current
-   * configuration, with a script suffix appropriate for the current host platform. ({@code .cmd}
-   * for Windows, otherwise {@code .sh}). The choice of which tree to use is based on the rule with
-   * which this target (which must be an OutputFile or a Rule) is associated.
-   */
-  public Artifact createOutputArtifactScript() {
-    Target target = getTarget();
-    // TODO(laszlocsomor): Use the execution platform, not the host platform.
-    boolean isExecutedOnWindows = OS.getCurrent() == OS.WINDOWS;
-
-    String fileExtension = isExecutedOnWindows ? ".cmd" : ".sh";
-
-    PathFragment rootRelativePath = getPackageDirectory()
-        .getRelative(PathFragment.create(target.getName() + fileExtension));
-
-    return internalCreateOutputArtifact(rootRelativePath, target, OutputFile.Kind.FILE);
+    return internalCreateOutputArtifact(getTarget(), OutputFile.Kind.FILE);
   }
 
   /**
@@ -583,9 +563,7 @@ public final class RuleContext extends TargetContext
    * @see #createOutputArtifact()
    */
   public Artifact createOutputArtifact(OutputFile out) {
-    PathFragment packageRelativePath = getPackageDirectory()
-        .getRelative(PathFragment.create(out.getName()));
-    return internalCreateOutputArtifact(packageRelativePath, out, out.getKind());
+    return internalCreateOutputArtifact(out, out.getKind());
   }
 
   /**
@@ -594,19 +572,19 @@ public final class RuleContext extends TargetContext
    * {@link #createOutputArtifact(OutputFile)} can have a more specific
    * signature.
    */
-  private Artifact internalCreateOutputArtifact(PathFragment rootRelativePath,
-      Target target, OutputFile.Kind outputFileKind) {
+  private Artifact internalCreateOutputArtifact(Target target, OutputFile.Kind outputFileKind) {
     Preconditions.checkState(
         target.getLabel().getPackageIdentifier().equals(getLabel().getPackageIdentifier()),
         "Creating output artifact for target '%s' in different package than the rule '%s' "
             + "being analyzed", target.getLabel(), getLabel());
     ArtifactRoot root = getBinOrGenfilesDirectory();
-
+    PathFragment packageRelativePath = getPackageDirectory()
+        .getRelative(PathFragment.create(target.getName()));
     switch (outputFileKind) {
       case FILE:
-        return getDerivedArtifact(rootRelativePath, root);
+        return getDerivedArtifact(packageRelativePath, root);
       case FILESET:
-        return getAnalysisEnvironment().getFilesetArtifact(rootRelativePath, root);
+        return getAnalysisEnvironment().getFilesetArtifact(packageRelativePath, root);
       default:
         throw new IllegalStateException();
     }
@@ -665,7 +643,14 @@ public final class RuleContext extends TargetContext
         relative, getConfiguration().getGenfilesDirectory(rule.getRepository()));
   }
 
-  @Override
+  /**
+   * Returns an artifact that can be an output of shared actions. Only use when there is no other
+   * option.
+   *
+   * <p>This artifact can be created anywhere in the output tree, which, in addition to making
+   * sharing possible, opens up the possibility of action conflicts and makes it impossible to infer
+   * the label of the rule creating the artifact from the path of the artifact.
+   */
   public Artifact getShareableArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
     return getAnalysisEnvironment().getDerivedArtifact(rootRelativePath, root);
   }
@@ -1451,7 +1436,7 @@ public final class RuleContext extends TargetContext
     private final BuildConfiguration configuration;
     private final BuildConfiguration hostConfiguration;
     private final PrerequisiteValidator prerequisiteValidator;
-    private final RuleErrorConsumer reporter;
+    private final ErrorReporter reporter;
     private OrderedSetMultimap<Attribute, ConfiguredTargetAndData> prerequisiteMap;
     private ImmutableMap<Label, ConfigMatchingProvider> configConditions;
     private NestedSet<PackageGroupContents> visibility;
@@ -1476,11 +1461,7 @@ public final class RuleContext extends TargetContext
       this.configuration = Preconditions.checkNotNull(configuration);
       this.hostConfiguration = Preconditions.checkNotNull(hostConfiguration);
       this.prerequisiteValidator = prerequisiteValidator;
-      if (configuration.allowAnalysisFailures()) {
-        reporter = new SuppressingErrorReporter();
-      } else {
-        reporter = new ErrorReporter(env, target.getAssociatedRule(), getRuleClassNameForLogging());
-      }
+      reporter = new ErrorReporter(env, target.getAssociatedRule(), getRuleClassNameForLogging());
     }
 
     @VisibleForTesting
@@ -1713,8 +1694,24 @@ public final class RuleContext extends TargetContext
     }
 
     @Override
+    public RuleErrorException throwWithRuleError(String message) throws RuleErrorException {
+      throw reporter.throwWithRuleError(message);
+    }
+
+    @Override
+    public RuleErrorException throwWithAttributeError(String attrName, String message)
+        throws RuleErrorException {
+      throw reporter.throwWithAttributeError(attrName, message);
+    }
+
+    @Override
     public boolean hasErrors() {
       return reporter.hasErrors();
+    }
+
+    @Override
+    public void assertNoErrors() throws RuleErrorException {
+      reporter.assertNoErrors();
     }
 
     private String badPrerequisiteMessage(
@@ -2029,41 +2026,6 @@ public final class RuleContext extends TargetContext
     protected Location getAttributeLocation(String attrName) {
       return rule.getAttributeLocation(attrName);
     }
-  }
 
-  /**
-   * Implementation of an error consumer which does not post any events, saves rule and attribute
-   * errors for future consumption, and drops warnings.
-   */
-  public static final class SuppressingErrorReporter implements RuleErrorConsumer {
-    private final List<String> errorMessages = Lists.newArrayList();
-
-    @Override
-    public void ruleWarning(String message) {}
-
-    @Override
-    public void ruleError(String message) {
-      errorMessages.add(message);
-    }
-
-    @Override
-    public void attributeWarning(String attrName, String message) {}
-
-    @Override
-    public void attributeError(String attrName, String message) {
-      errorMessages.add(message);
-    }
-
-    @Override
-    public boolean hasErrors() {
-      return !errorMessages.isEmpty();
-    }
-
-    /**
-     * Returns the error message strings reported to this error consumer.
-     */
-    public List<String> getErrorMessages() {
-      return errorMessages;
-    }
   }
 }
