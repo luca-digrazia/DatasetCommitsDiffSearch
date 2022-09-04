@@ -25,6 +25,7 @@ import javax.ws.rs.core.UriInfo;
 import javax.ws.rs.ext.ReaderInterceptor;
 import javax.ws.rs.ext.WriterInterceptor;
 import org.jboss.resteasy.reactive.common.core.AbstractResteasyReactiveContext;
+import org.jboss.resteasy.reactive.common.util.EmptyInputStream;
 import org.jboss.resteasy.reactive.common.util.Encode;
 import org.jboss.resteasy.reactive.common.util.PathSegmentImpl;
 import org.jboss.resteasy.reactive.server.core.serialization.EntityWriter;
@@ -127,7 +128,7 @@ public abstract class ResteasyReactiveRequestContext
     /**
      * The input stream, if an entity is present.
      */
-    private InputStream inputStream;
+    private InputStream inputStream = EmptyInputStream.INSTANCE;
 
     /**
      * used for {@link UriInfo#getMatchedURIs()}
@@ -568,10 +569,6 @@ public abstract class ResteasyReactiveRequestContext
         this.additionalAnnotations = additionalAnnotations;
     }
 
-    public boolean hasGenericReturnType() {
-        return this.genericReturnType != null;
-    }
-
     public Type getGenericReturnType() {
         if (genericReturnType == null) {
             if (target == null) {
@@ -633,7 +630,6 @@ public abstract class ResteasyReactiveRequestContext
 
     @Override
     protected void requestScopeDeactivated() {
-        CurrentRequestManager.set(null);
     }
 
     @Override
@@ -698,14 +694,7 @@ public abstract class ResteasyReactiveRequestContext
         return matchedURIs;
     }
 
-    public boolean hasInputStream() {
-        return inputStream != null;
-    }
-
     public InputStream getInputStream() {
-        if (inputStream == null) {
-            inputStream = serverRequest().createInputStream();
-        }
         return inputStream;
     }
 
@@ -886,22 +875,13 @@ public abstract class ResteasyReactiveRequestContext
         return securityContext;
     }
 
-    public boolean isSecurityContextSet() {
-        return securityContext != null;
-    }
-
     protected SecurityContext createSecurityContext() {
         throw new UnsupportedOperationException();
     }
 
     public ResteasyReactiveRequestContext setSecurityContext(SecurityContext securityContext) {
         this.securityContext = securityContext;
-        securityContextUpdated(securityContext);
         return this;
-    }
-
-    protected void securityContextUpdated(SecurityContext securityContext) {
-
     }
 
     public void setOutputStream(OutputStream outputStream) {

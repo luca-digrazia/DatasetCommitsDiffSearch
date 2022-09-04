@@ -31,18 +31,17 @@ public class SubResourceRequestFilterTest {
                 @Override
                 public JavaArchive get() {
                     JavaArchive war = ShrinkWrap.create(JavaArchive.class);
-                    war.addClasses(RestResource.class, RestSubResource.class, SingleExecutionFilter.class,
-                            MiddleRestResource.class);
+                    war.addClasses(RestResource.class, RestSubResource.class, SingleExecutionFilter.class);
                     return war;
                 }
             });
 
     @Test
-    public void testSubResourceFilter() {
-        RestAssured.get("/sub-resource/Bob/Builder")
+    public void testAbortingRequestFilter() {
+        RestAssured.get("/sub-resource/geo")
                 .then()
                 .header("single-filter", Matchers.equalTo("once"))
-                .body(Matchers.equalTo("Bob Builder"))
+                .body(Matchers.equalTo("geo"))
                 .statusCode(200);
     }
 
@@ -50,23 +49,10 @@ public class SubResourceRequestFilterTest {
     public static class RestResource {
 
         @Inject
-        MiddleRestResource restSubResource;
-
-        @Path("sub-resource/{first}")
-        public MiddleRestResource hello(String first) {
-            return restSubResource;
-        }
-    }
-
-    @ApplicationScoped
-    @Path("/")
-    public static class MiddleRestResource {
-
-        @Inject
         RestSubResource restSubResource;
 
-        @Path("{last}")
-        public RestSubResource hello() {
+        @Path("sub-resource/{name}")
+        public RestSubResource hello(String name) {
             return restSubResource;
         }
     }
@@ -75,8 +61,8 @@ public class SubResourceRequestFilterTest {
     public static class RestSubResource {
 
         @GET
-        public Response hello(HttpHeaders headers, @RestPath String first, @RestPath String last) {
-            return Response.ok(first + " " + last).header("single-filter", headers.getHeaderString("single-filter")).build();
+        public Response hello(HttpHeaders headers, @RestPath String name) {
+            return Response.ok(name).header("single-filter", headers.getHeaderString("single-filter")).build();
         }
     }
 
