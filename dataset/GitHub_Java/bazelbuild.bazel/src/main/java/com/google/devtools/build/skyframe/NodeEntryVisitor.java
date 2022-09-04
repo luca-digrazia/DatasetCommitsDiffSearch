@@ -14,17 +14,19 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Function;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.concurrent.ErrorClassifier;
-import com.google.devtools.build.lib.concurrent.ForkJoinQuiescingExecutor;
+import com.google.devtools.build.lib.concurrent.MultiThreadPoolsQuiescingExecutor;
+import com.google.devtools.build.lib.concurrent.MultiThreadPoolsQuiescingExecutor.ThreadPoolType;
 import com.google.devtools.build.lib.concurrent.QuiescingExecutor;
+import com.google.devtools.build.skyframe.ParallelEvaluatorContext.RunnableMaker;
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -52,43 +54,19 @@ class NodeEntryVisitor {
 
   private final QuiescingExecutor quiescingExecutor;
   private final AtomicBoolean preventNewEvaluations = new AtomicBoolean(false);
-  private final Set<SkyKey> inflightNodes = Sets.newConcurrentHashSet();
   private final Set<RuntimeException> crashes = Sets.newConcurrentHashSet();
-  private final DirtyKeyTracker dirtyKeyTracker;
-  private final EvaluationProgressReceiver progressReceiver;
+  private final DirtyTrackingProgressReceiver progressReceiver;
   /**
    * Function that allows this visitor to execute the appropriate {@link Runnable} when given a
    * {@link SkyKey} to evaluate.
    */
-  private final Function<SkyKey, Runnable> runnableMaker;
+  private final RunnableMaker runnableMaker;
 
   NodeEntryVisitor(
-      ForkJoinPool forkJoinPool,
-      DirtyKeyTracker dirtyKeyTracker,
-      EvaluationProgressReceiver progressReceiver,
-      Function<SkyKey, Runnable> runnableMaker) {
-    quiescingExecutor =
-        new ForkJoinQuiescingExecutor(forkJoinPool, NODE_ENTRY_VISITOR_ERROR_CLASSIFIER);
-    this.dirtyKeyTracker = dirtyKeyTracker;
-    this.progressReceiver = progressReceiver;
-    this.runnableMaker = runnableMaker;
-  }
-
-  NodeEntryVisitor(
-      int threadCount,
-      DirtyKeyTracker dirtyKeyTracker,
-      EvaluationProgressReceiver progressReceiver,
-      Function<SkyKey, Runnable> runnableMaker) {
-    quiescingExecutor =
-        new AbstractQueueVisitor(
-            /*concurrent*/ true,
-            threadCount,
-            /*keepAliveTime=*/ 1,
-            TimeUnit.SECONDS,
-            /*failFastOnException*/ true,
-            "skyframe-evaluator",
-            NODE_ENTRY_VISITOR_ERROR_CLASSIFIER);
-    this.dirtyKeyTracker = dirtyKeyTracker;
+      QuiescingExecutor quiescingExecutor,
+      DirtyTrackingProgressReceiver progressReceiver,
+      RunnableMaker runnableMaker) {
+    this.quiescingExecutor = quiescingExecutor;
     this.progressReceiver = progressReceiver;
     this.runnableMaker = runnableMaker;
   }
@@ -97,31 +75,85 @@ class NodeEntryVisitor {
     quiescingExecutor.awaitQuiescence(/*interruptWorkers=*/ true);
   }
 
-  void enqueueEvaluation(SkyKey key) {
-    // We unconditionally add the key to the set of in-flight nodes because even if evaluation is
-    // never scheduled we still want to remove the previously created NodeEntry from the graph.
-    // Otherwise we would leave the graph in a weird state (wasteful garbage in the best case and
-    // inconsistent in the worst case).
-    boolean newlyEnqueued = inflightNodes.add(key);
-    // All nodes enqueued for evaluation will be either verified clean, re-evaluated, or cleaned
-    // up after being in-flight when an error happens in nokeep_going mode or in the event of an
-    // interrupt. In any of these cases, they won't be dirty anymore.
-    if (newlyEnqueued) {
-      dirtyKeyTracker.notDirty(key);
-    }
-    if (preventNewEvaluations.get()) {
+  /**
+   * Enqueue {@code key} for evaluation, at {@code evaluationPriority} if this visitor is using a
+   * priority queue.
+   *
+   * <p>{@code evaluationPriority} is used to minimize evaluation "sprawl": inefficiencies coming
+   * from incompletely evaluating many nodes, versus focusing on finishing the evaluation of nodes
+   * that have already started evaluating. Sprawl can be expensive because an incompletely evaluated
+   * node keeps state in Skyframe, and often in external caches, that uses memory.
+   *
+   * <p>In general, {@code evaluationPriority} should be higher when restarting a node that has
+   * already started evaluation, and lower when enqueueing a node that no other tasks depend on.
+   * Setting {@code evaluationPriority} to the same value for all children of a parent has good
+   * results experimentally, since it prioritizes batches of work that can be used together.
+   * Similarly, prioritizing deeper nodes (depth-first search of the evaluation graph) also has good
+   * results experimentally, since it minimizes sprawl.
+   */
+  void enqueueEvaluation(SkyKey key, int evaluationPriority) {
+    if (shouldPreventNewEvaluations()) {
+      // If an error happens in nokeep_going mode, we still want to mark these nodes as inflight,
+      // otherwise cleanup will not happen properly.
+      progressReceiver.enqueueAfterError(key);
       return;
     }
-    if (newlyEnqueued && progressReceiver != null) {
-      progressReceiver.enqueueing(key);
+    progressReceiver.enqueueing(key);
+    if (quiescingExecutor instanceof MultiThreadPoolsQuiescingExecutor) {
+      ThreadPoolType threadPoolType =
+          key instanceof CPUHeavySkyKey ? ThreadPoolType.CPU_HEAVY : ThreadPoolType.REGULAR;
+      ((MultiThreadPoolsQuiescingExecutor) quiescingExecutor)
+          .execute(runnableMaker.make(key, evaluationPriority), threadPoolType);
+    } else {
+      quiescingExecutor.execute(runnableMaker.make(key, evaluationPriority));
     }
-    quiescingExecutor.execute(runnableMaker.apply(key));
+  }
+
+  /**
+   * Registers a listener with all passed futures that causes the node to be re-enqueued (at the
+   * given {@code evaluationPriority}) when all futures are completed.
+   */
+  void registerExternalDeps(
+      SkyKey skyKey,
+      NodeEntry entry,
+      List<ListenableFuture<?>> externalDeps,
+      int evaluationPriority)
+      throws InterruptedException {
+    // Generally speaking, there is no ordering guarantee for listeners registered with a single
+    // listenable future. If we used a listener here, there would be a potential race condition
+    // between re-enqueuing the key and notifying the quiescing executor, in which case the executor
+    // could shut down even though the work is not done yet. That would be bad.
+    //
+    // However, the whenAllComplete + run API guarantees that the Runnable is run before the
+    // returned future completes, i.e., before the quiescing executor is notified.
+    ListenableFuture<?> future =
+        Futures.whenAllComplete(externalDeps)
+            .run(
+                () -> {
+                  if (entry.signalDep(entry.getVersion(), null)) {
+                    enqueueEvaluation(skyKey, evaluationPriority);
+                  }
+                },
+                MoreExecutors.directExecutor());
+    quiescingExecutor.dependOnFuture(future);
+  }
+
+  /**
+   * Returns whether any new evaluations should be prevented.
+   *
+   * <p>If called from within node evaluation, the caller may use the return value to determine
+   * whether it is responsible for throwing an exception to halt evaluation at the executor level.
+   */
+  boolean shouldPreventNewEvaluations() {
+    return preventNewEvaluations.get();
   }
 
   /**
    * Stop any new evaluations from being enqueued. Returns whether this was the first thread to
-   * request a halt. If true, this thread should proceed to throw an exception. If false, another
-   * thread already requested a halt and will throw an exception, and so this thread can simply end.
+   * request a halt.
+   *
+   * <p>If called from within node evaluation, the caller may use the return value to determine
+   * whether it is responsible for throwing an exception to halt evaluation at the executor level.
    */
   boolean preventNewEvaluations() {
     return preventNewEvaluations.compareAndSet(false, true);
@@ -133,18 +165,6 @@ class NodeEntryVisitor {
 
   Collection<RuntimeException> getCrashes() {
     return crashes;
-  }
-
-  void notifyDone(SkyKey key) {
-    inflightNodes.remove(key);
-  }
-
-  boolean isInflight(SkyKey key) {
-    return inflightNodes.contains(key);
-  }
-
-  Set<SkyKey> getInflightNodes() {
-    return inflightNodes;
   }
 
   @VisibleForTesting
