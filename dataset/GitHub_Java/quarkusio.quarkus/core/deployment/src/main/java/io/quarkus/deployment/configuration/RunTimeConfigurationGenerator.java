@@ -559,8 +559,6 @@ public final class RunTimeConfigurationGenerator {
             }
 
             // generate ensure-initialized method
-            // the point of this method is simply to initialize the Config class
-            // thus initializing the config infrastructure before anything requests it
             try (MethodCreator mc = cc.getMethodCreator(C_ENSURE_INITIALIZED)) {
                 mc.setModifiers(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC);
                 mc.returnValue(null);
