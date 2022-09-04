@@ -1,13 +1,9 @@
 package io.quarkus.oidc.common.runtime;
 
 import java.io.InputStream;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.security.KeyStore;
 import java.security.PrivateKey;
-import java.util.Base64;
-import java.util.Map;
 import java.util.Optional;
 
 import javax.crypto.SecretKey;
@@ -24,63 +20,30 @@ import io.smallrye.jwt.util.ResourceUtils;
 import io.vertx.core.http.HttpClientOptions;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.ProxyOptions;
-import io.vertx.mutiny.core.MultiMap;
-import io.vertx.mutiny.core.buffer.Buffer;
 
 public class OidcCommonUtils {
-    static final byte AMP = '&';
-    static final byte EQ = '=';
-
     private OidcCommonUtils() {
 
     }
 
-    public static void verifyCommonConfiguration(OidcCommonConfig oidcConfig, boolean isServerConfig) {
-        final String configPrefix = isServerConfig ? "quarkus.oidc." : "quarkus.oidc-client.";
+    public static void verifyCommonConfiguration(OidcCommonConfig oidcConfig) {
         if (!oidcConfig.getAuthServerUrl().isPresent() || !oidcConfig.getClientId().isPresent()) {
-            throw new ConfigurationException(
-                    String.format("Both '%1$sauth-server-url' and '%1$sclient-id' properties must be configured",
-                            configPrefix));
+            throw new ConfigurationException("Both 'auth-server-url' and 'client-id' properties must be configured");
         }
 
         Credentials creds = oidcConfig.getCredentials();
         if (creds.secret.isPresent() && creds.clientSecret.value.isPresent()) {
             throw new ConfigurationException(
-                    String.format(
-                            "'%1$scredentials.secret' and '%1$scredentials.client-secret' properties are mutually exclusive",
-                            configPrefix));
+                    "'credentials.secret' and 'credentials.client-secret' properties are mutually exclusive");
         }
         if ((creds.secret.isPresent() || creds.clientSecret.value.isPresent()) && creds.jwt.secret.isPresent()) {
             throw new ConfigurationException(
-                    String.format(
-                            "Use only '%1$scredentials.secret' or '%1$scredentials.client-secret' or '%1$scredentials.jwt.secret' property",
-                            configPrefix));
+                    "Use only 'credentials.secret' or 'credentials.client-secret' or 'credentials.jwt.secret' property");
         }
     }
 
     public static String prependSlash(String path) {
         return !path.startsWith("/") ? "/" + path : path;
-    }
-
-    public static Buffer encodeForm(MultiMap form) {
-        Buffer buffer = Buffer.buffer();
-        for (Map.Entry<String, String> entry : form) {
-            if (buffer.length() != 0) {
-                buffer.appendByte(AMP);
-            }
-            buffer.appendString(entry.getKey());
-            buffer.appendByte(EQ);
-            buffer.appendString(urlEncode(entry.getValue()));
-        }
-        return buffer;
-    }
-
-    public static String urlEncode(String value) {
-        try {
-            return URLEncoder.encode(value, StandardCharsets.UTF_8.name());
-        } catch (Exception ex) {
-            throw new RuntimeException(ex);
-        }
     }
 
     public static void setHttpClientOptions(OidcCommonConfig oidcConfig, TlsConfig tlsConfig, HttpClientOptions options) {
@@ -116,6 +79,12 @@ public class OidcCommonUtils {
     public static long getConnectionRetryCount(OidcCommonConfig oidcConfig) {
         final long connectionDelayInSecs = getConnectionDelay(oidcConfig);
         return connectionDelayInSecs > 1 ? connectionDelayInSecs / 2 : 1;
+    }
+
+    public static long getMaximumConnectionDelay(OidcCommonConfig oidcConfig) {
+        final long connectionDelayInSecs = getConnectionDelay(oidcConfig);
+        final long connectionRetryCountSecs = connectionDelayInSecs > 1 ? connectionDelayInSecs / 2 : 1;
+        return connectionDelayInSecs + connectionRetryCountSecs * oidcConfig.getConnectionTimeout().getSeconds();
     }
 
     private static long getConnectionDelay(OidcCommonConfig oidcConfig) {
@@ -220,23 +189,5 @@ public class OidcCommonUtils {
                     + configKey + "' and '" + configId.get() + "'");
         }
 
-    }
-
-    public static String initClientSecretBasicAuth(OidcCommonConfig oidcConfig) {
-        if (OidcCommonUtils.isClientSecretBasicAuthRequired(oidcConfig.credentials)) {
-            return OidcConstants.BASIC_SCHEME + " "
-                    + Base64.getEncoder().encodeToString(
-                            (oidcConfig.getClientId().get() + ":"
-                                    + OidcCommonUtils.clientSecret(oidcConfig.credentials))
-                                            .getBytes(StandardCharsets.UTF_8));
-        }
-        return null;
-    }
-
-    public static Key initClientJwtKey(OidcCommonConfig oidcConfig) {
-        if (OidcCommonUtils.isClientJwtAuthRequired(oidcConfig.credentials)) {
-            return OidcCommonUtils.clientJwtKey(oidcConfig.credentials);
-        }
-        return null;
     }
 }
