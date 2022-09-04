@@ -14,40 +14,108 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.cpp;
 
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
+import com.google.devtools.build.lib.collect.nestedset.Depset;
+import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
+import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
+import net.starlark.java.annot.StarlarkBuiltin;
+import net.starlark.java.annot.StarlarkDocumentationCategory;
+import net.starlark.java.annot.StarlarkMethod;
 
 /**
  * Interface for a store of information needed for C++ compilation aggregated across dependencies.
  */
-@SkylarkModule(
+@StarlarkBuiltin(
     name = "CompilationContext",
-    documented = false,
-    category = SkylarkModuleCategory.PROVIDER,
+    category = StarlarkDocumentationCategory.PROVIDER,
     doc =
         "Immutable store of information needed for C++ compilation that is aggregated across "
             + "dependencies.")
-public interface CcCompilationContextApi {
-  @SkylarkCallable(
+public interface CcCompilationContextApi<FileT extends FileApi> extends StarlarkValue {
+  @StarlarkMethod(
       name = "defines",
-      documented = false,
-      allowReturnNones = true,
+      doc =
+          "Returns the set of defines needed to compile this target. Each define is a string."
+              + " These values are propagated to the target's transitive dependencies.",
       structField = true)
-  SkylarkNestedSet getSkylarkDefines();
+  Depset getStarlarkDefines();
 
-  @SkylarkCallable(
+  @StarlarkMethod(
+      name = "local_defines",
+      doc =
+          "Returns the set of defines needed to compile this target. Each define is a string."
+              + " These values are not propagated to the target's transitive dependencies.",
+      structField = true)
+  Depset getStarlarkNonTransitiveDefines();
+
+  @StarlarkMethod(
       name = "headers",
-      documented = false,
-      allowReturnNones = true,
+      doc = "Returns the set of headers needed to compile this target.",
       structField = true)
-  SkylarkNestedSet getSkylarkHeaders();
+  Depset getStarlarkHeaders();
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "system_includes",
-      documented = false,
-      allowReturnNones = true,
+      doc =
+          "Returns the set of search paths (as strings) for header files referenced by angle"
+              + " brackets, e.g. #include &lt;foo/bar/header.h&gt;. They can be either relative to"
+              + " the exec root or absolute. Usually passed with -isystem.",
       structField = true)
-  SkylarkNestedSet getSkylarkDeclaredIncludeDirs();
+  Depset getStarlarkSystemIncludeDirs();
+
+  @StarlarkMethod(
+      name = "framework_includes",
+      doc =
+          "Returns the set of search paths (as strings) for framework header files. Usually passed"
+              + " with -F.",
+      structField = true)
+  Depset getStarlarkFrameworkIncludeDirs();
+
+  @StarlarkMethod(
+      name = "includes",
+      doc =
+          "Returns the set of search paths (as strings) for header files referenced both by angle"
+              + " bracket and quotes. Usually passed with -I.",
+      structField = true)
+  Depset getStarlarkIncludeDirs();
+
+  @StarlarkMethod(
+      name = "quote_includes",
+      doc =
+          "Returns the set of search paths (as strings) for header files referenced by quotes,"
+              + " e.g. #include \"foo/bar/header.h\". They can be either relative to the exec root"
+              + " or absolute. Usually passed with -iquote.",
+      structField = true)
+  Depset getStarlarkQuoteIncludeDirs();
+
+  @StarlarkMethod(
+      name = "direct_headers",
+      doc =
+          "Returns the list of modular headers that are declared by this target. This includes both"
+              + " public headers (such as those listed in \"hdrs\") and private headers (such as"
+              + " those listed in \"srcs\").",
+      structField = true)
+  StarlarkList<FileT> getStarlarkDirectModularHeaders();
+
+  @StarlarkMethod(
+      name = "direct_public_headers",
+      doc =
+          "Returns the list of modular public headers (those listed in \"hdrs\") that are declared"
+              + " by this target.",
+      structField = true)
+  StarlarkList<FileT> getStarlarkDirectPublicHeaders();
+
+  @StarlarkMethod(
+      name = "direct_private_headers",
+      doc =
+          "Returns the list of modular private headers (those listed in \"srcs\") that are"
+              + " declared by this target.",
+      structField = true)
+  StarlarkList<FileT> getStarlarkDirectPrivateHeaders();
+
+  @StarlarkMethod(
+      name = "direct_textual_headers",
+      doc = "Returns the list of textual headers that are declared by this target.",
+      structField = true)
+  StarlarkList<FileT> getStarlarkDirectTextualHeaders();
 }
