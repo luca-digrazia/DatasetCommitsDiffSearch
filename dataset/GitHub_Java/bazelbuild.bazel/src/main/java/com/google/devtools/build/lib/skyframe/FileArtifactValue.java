@@ -17,9 +17,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.cache.DigestUtils;
-import com.google.devtools.build.lib.actions.cache.Metadata;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.Path;
@@ -42,9 +39,8 @@ import javax.annotation.Nullable;
  * </ul>
  */
 // TODO(janakr): make this an interface once JDK8 allows us to have static methods on interfaces.
-@Immutable @ThreadSafe
-public abstract class FileArtifactValue implements SkyValue, Metadata {
-  private static final class SingletonMarkerValue extends FileArtifactValue implements Singleton {
+public abstract class FileArtifactValue implements SkyValue {
+  private static final class SingletonMarkerValue extends FileArtifactValue {
     @Nullable
     @Override
     public byte[] getDigest() {
@@ -52,7 +48,7 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
     }
 
     @Override
-    public boolean isFile() {
+    boolean isFile() {
       return false;
     }
 
@@ -72,33 +68,6 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
     }
   }
 
-  private static final class OmittedFileValue extends FileArtifactValue implements Singleton {
-    @Override
-    public byte[] getDigest() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public boolean isFile() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public long getSize() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public long getModifiedTime() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public String toString() {
-      return "OMITTED_FILE_MARKER";
-    }
-  }
-
   static final FileArtifactValue DEFAULT_MIDDLEMAN = new SingletonMarkerValue();
   /** Data that marks that a file is not present on the filesystem. */
   @VisibleForTesting
@@ -108,7 +77,33 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
    * Represents an omitted file -- we are aware of it but it doesn't exist. All access methods are
    * unsupported.
    */
-  static final FileArtifactValue OMITTED_FILE_MARKER = new OmittedFileValue();
+  static final FileArtifactValue OMITTED_FILE_MARKER =
+      new FileArtifactValue() {
+        @Override
+        public byte[] getDigest() {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        boolean isFile() {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public long getSize() {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public long getModifiedTime() {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public String toString() {
+          return "OMITTED_FILE_MARKER";
+        }
+      };
 
   private static final class DirectoryArtifactValue extends FileArtifactValue {
     private final long mtime;
@@ -139,6 +134,18 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
     }
 
     @Override
+    public int hashCode() {
+      return (int) mtime;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      return (this == other)
+          || ((other instanceof DirectoryArtifactValue)
+              && this.mtime == ((DirectoryArtifactValue) other).mtime);
+    }
+
+    @Override
     public String toString() {
       return MoreObjects.toStringHelper(this).add("mtime", mtime).toString();
     }
@@ -159,7 +166,7 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
     }
 
     @Override
-    public boolean isFile() {
+    boolean isFile() {
       return true;
     }
 
@@ -172,6 +179,29 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
     public long getModifiedTime() {
       throw new UnsupportedOperationException(
           "regular file's mtime should never be called. (" + this + ")");
+    }
+
+    @Override
+    public int hashCode() {
+      // Hash digest by content, not reference.
+      return 37 * (int) size + Arrays.hashCode(digest);
+    }
+
+    /**
+     * Two RegularFileArtifactValues will only compare equal if they have the same content. This
+     * differs from the {@code Metadata#equivalence} method, which allows for comparison using mtime
+     * if one object does not have a digest available.
+     */
+    @Override
+    public boolean equals(Object other) {
+      if (this == other) {
+        return true;
+      }
+      if (!(other instanceof RegularFileArtifactValue)) {
+        return false;
+      }
+      RegularFileArtifactValue that = (RegularFileArtifactValue) other;
+      return this.size == that.size && Arrays.equals(this.digest, that.digest);
     }
 
     @Override
@@ -209,16 +239,8 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
     return createNormalFile(digest, size);
   }
 
-  public static FileArtifactValue createNormalFile(byte[] digest, long size) {
+  static FileArtifactValue createNormalFile(byte[] digest, long size) {
     return new RegularFileArtifactValue(digest, size);
-  }
-
-  static FileArtifactValue createNormalFile(FileValue fileValue) {
-    return new RegularFileArtifactValue(fileValue.getDigest(), fileValue.getSize());
-  }
-
-  public static FileArtifactValue createDirectory(long mtime) {
-    return new DirectoryArtifactValue(mtime);
   }
 
   /**
@@ -230,48 +252,16 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
     return createNormalFile(digest, /*size=*/ 0);
   }
 
-  @Override
-  public abstract boolean isFile();
-
+  /** Returns the digest of this value. Null for non-files, non-null for files. */
   @Nullable
-  @Override
   public abstract byte[] getDigest();
 
-  @Override
+  /** @return true if this is a file or a symlink to an existing file */
+  abstract boolean isFile();
+
+  /** Gets the size of the file. Non-files (including directories) have size 0. */
   public abstract long getSize();
 
-  @Override
-  public abstract long getModifiedTime();
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (!(o instanceof Metadata)) {
-      return false;
-    }
-    if ((this instanceof Singleton) || (o instanceof Singleton)) {
-      return false;
-    }
-    Metadata m = (Metadata) o;
-    if (isFile()) {
-      return m.isFile() && Arrays.equals(getDigest(), m.getDigest()) && getSize() == m.getSize();
-    } else {
-      return !m.isFile() && getModifiedTime() == m.getModifiedTime();
-    }
-  }
-
-  @Override
-  public int hashCode() {
-    if (this instanceof Singleton) {
-      return System.identityHashCode(this);
-    }
-    // Hash digest by content, not reference.
-    if (isFile()) {
-      return 37 * Long.hashCode(getSize()) + Arrays.hashCode(getDigest());
-    } else {
-      return Long.hashCode(getModifiedTime());
-    }
-  }
+  /** Gets last modified time of file. Should only be called if this is not a file. */
+  abstract long getModifiedTime();
 }
