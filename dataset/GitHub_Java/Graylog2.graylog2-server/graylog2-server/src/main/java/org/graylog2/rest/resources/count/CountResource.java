@@ -21,29 +21,27 @@ package org.graylog2.rest.resources.count;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
-import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.rest.documentation.annotations.Api;
-import org.graylog2.rest.documentation.annotations.ApiOperation;
+import org.graylog2.indexer.Indexer;
+import org.graylog2.indexer.results.DateHistogramResult;
 import org.graylog2.rest.resources.RestResource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
+import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@RequiresAuthentication
-@Api(value = "Counts", description = "Message counts")
 @Path("/count")
 public class CountResource extends RestResource {
+	
+    private static final Logger LOG = LoggerFactory.getLogger(CountResource.class);
 
     @GET @Path("/total") @Timed
-    @ApiOperation(value = "Total number of messages in all your indices.")
     @Produces(MediaType.APPLICATION_JSON)
-    public String total() {
+    public String total(@QueryParam("pretty") boolean prettyPrint) {
         Map<String, Long> result = Maps.newHashMap();
         result.put("events", core.getIndexer().counts().total());
 

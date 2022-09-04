@@ -23,14 +23,4 @@ package org.graylog2.indexer.searches.timeranges;
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class InvalidRangeParametersException extends Exception {
-
-    public InvalidRangeParametersException() {
-        super();
-    }
-
-    public InvalidRangeParametersException(String msg) {
-        super(msg);
-    }
-
 }
-

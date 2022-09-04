@@ -25,13 +25,9 @@ import java.util.Set;
 import com.google.common.collect.Lists;
 import org.elasticsearch.index.query.FilterBuilder;
 import org.elasticsearch.index.query.FilterBuilders;
-import org.graylog2.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
 import org.graylog2.plugin.Tools;
-import org.joda.time.DateTime;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -66,33 +62,25 @@ public class IndexHelper {
 
         switch (range.getType()) {
             case RELATIVE:
-                return relativeFilterBuilder((RelativeRange) range);
+                return buildRelativeFilterBuilder(range);
             case ABSOLUTE:
-                return absoluteFilterBuilder((AbsoluteRange) range);
+                throw new RuntimeException("Implement range type: absolute");
+            case KEYWORD:
+                throw new RuntimeException("Implement range type: keyword");
             default:
                 throw new RuntimeException("No such range type: [" + range.getType() + "]");
         }
     }
 
-    private static FilterBuilder absoluteFilterBuilder(AbsoluteRange range) {
-        // Parse to DateTime first because it is intelligent and can deal with missing microseconds for example.
-        DateTime fromDate = DateTime.parse(range.getFrom(), Tools.timeFormatterWithOptionalMilliseconds());
-        DateTime toDate = DateTime.parse(range.getTo(), Tools.timeFormatterWithOptionalMilliseconds());
-
-        return FilterBuilders.rangeFilter("timestamp")
-                .gte(Tools.buildElasticSearchTimeFormatFromDateTime(fromDate))
-                .lte(Tools.buildElasticSearchTimeFormatFromDateTime(toDate));
-    }
-
-    private static FilterBuilder relativeFilterBuilder(RelativeRange range) {
+    private static FilterBuilder buildRelativeFilterBuilder(TimeRange range) {
+        RelativeRange rr = (RelativeRange) range;
         int from = 0;
-        if (range.getRange() > 0) {
-            from = Tools.getUTCTimestamp()-range.getRange();
+        if (rr.getRange() > 0) {
+            from = Tools.getUTCTimestamp()-rr.getRange();
         }
 
         String fromDate = Tools.buildElasticSearchTimeFormatFromDouble(from);
-        return FilterBuilders.rangeFilter("timestamp")
-                .gte(fromDate);
+        return FilterBuilders.rangeFilter("timestamp").from(fromDate);
     }
 
     private static String getPrefix(Set<String> names) {

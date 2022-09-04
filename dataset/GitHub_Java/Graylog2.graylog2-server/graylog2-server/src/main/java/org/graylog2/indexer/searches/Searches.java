@@ -70,16 +70,16 @@ public class Searches {
 		this.c = client;
 	}
 	
-	public SearchResult search(String query, TimeRange range, int limit, int offset) throws IndexHelper.InvalidRangeFormatException {
+	public SearchResult search(String query, TimeRange range, int limit) {
         if(limit <= 0) {
             limit = LIMIT;
         }
 
-		SearchResponse r = c.search(standardSearchRequest(query, limit, offset, range, SortOrder.DESC).request()).actionGet();
+		SearchResponse r = c.search(standardSearchRequest(query, limit, range, SortOrder.DESC).request()).actionGet();
 		return new SearchResult(r.getHits(), query, r.getTook());
 	}
 
-    public TermsResult terms(String field, int size, String query, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
+    public TermsResult terms(String field, int size, String query, TimeRange range) {
         if (size == 0) {
             size = 50;
         }
@@ -103,7 +103,7 @@ public class Searches {
         );
     }
 
-    public FieldStatsResult fieldStats(String field, String query, TimeRange range) throws FieldTypeException, IndexHelper.InvalidRangeFormatException {
+    public FieldStatsResult fieldStats(String field, String query, TimeRange range) throws FieldTypeException {
         SearchRequestBuilder srb = standardSearchRequest(query);
 
         StatisticalFacetBuilder stats = new StatisticalFacetBuilder(STATS_FACET_NAME);
@@ -127,7 +127,7 @@ public class Searches {
         );
     }
 	
-	public DateHistogramResult histogram(String query, Indexer.DateHistogramInterval interval, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
+	public DateHistogramResult histogram(String query, Indexer.DateHistogramInterval interval, TimeRange range) {
         DateHistogramFacetBuilder fb = FacetBuilders.dateHistogramFacet("histogram")
 				.field("timestamp")
 				.facetFilter(IndexHelper.getTimestampRangeFilter(range))
@@ -150,15 +150,14 @@ public class Searches {
         return oneOfIndex(index, matchAllQuery(), SortOrder.ASC);
     }
 
-    private SearchRequestBuilder standardSearchRequest(String query) throws IndexHelper.InvalidRangeFormatException {
-        return standardSearchRequest(query, 0, 0, null, null);
+    private SearchRequestBuilder standardSearchRequest(String query) {
+        return standardSearchRequest(query, 0, null, null);
     }
 
-    private SearchRequestBuilder standardSearchRequest(String query, int limit, int offset, TimeRange range, SortOrder sort) throws IndexHelper.InvalidRangeFormatException {
+    private SearchRequestBuilder standardSearchRequest(String query, int limit, TimeRange range, SortOrder sort) {
         SearchRequestBuilder srb = c.prepareSearch();
         srb.setIndices(server.getDeflector().getAllDeflectorIndexNames()); // XXX 020: have a method that builds time ranged index requests
         srb.setQuery(queryString(query));
-        srb.setFrom(offset);
 
         if (limit > 0) {
             srb.setSize(limit);
