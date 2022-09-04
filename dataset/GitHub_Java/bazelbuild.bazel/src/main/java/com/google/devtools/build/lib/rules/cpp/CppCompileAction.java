@@ -175,7 +175,6 @@ public class CppCompileAction extends AbstractAction
    */
   private final NestedSet<Artifact> prunableInputs;
 
-  @Nullable private final Artifact grepIncludes;
   private final boolean shouldScanIncludes;
   private final boolean shouldPruneModules;
   private final boolean usePic;
@@ -194,6 +193,7 @@ public class CppCompileAction extends AbstractAction
   private final ImmutableList<Artifact> additionalIncludeScanningRoots;
   @VisibleForTesting public final CompileCommandLine compileCommandLine;
   private final ImmutableMap<String, String> executionInfo;
+  private final ImmutableMap<String, String> environment;
   private final String actionName;
 
   private final FeatureConfiguration featureConfiguration;
@@ -255,6 +255,7 @@ public class CppCompileAction extends AbstractAction
    * @param lipoScannables List of artifacts to include-scan when this action is a lipo action
    * @param additionalIncludeScanningRoots list of additional artifacts to include-scan
    * @param actionClassId TODO(bazel-team): Add parameter description
+   * @param environment TODO(bazel-team): Add parameter description
    * @param actionName a string giving the name of this action for the purpose of toolchain
    *     evaluation
    * @param cppSemantics C++ compilation semantics
@@ -289,10 +290,10 @@ public class CppCompileAction extends AbstractAction
       ImmutableList<Artifact> additionalIncludeScanningRoots,
       UUID actionClassId,
       ImmutableMap<String, String> executionInfo,
+      ImmutableMap<String, String> environment,
       String actionName,
       CppSemantics cppSemantics,
-      CcToolchainProvider cppProvider,
-      @Nullable Artifact grepIncludes) {
+      CcToolchainProvider cppProvider) {
     this(
         owner,
         allInputs,
@@ -330,6 +331,7 @@ public class CppCompileAction extends AbstractAction
             .setVariables(variables)
             .build(),
         executionInfo,
+        environment,
         actionName,
         featureConfiguration,
         actionClassId,
@@ -341,8 +343,7 @@ public class CppCompileAction extends AbstractAction
         /*overwrittenVariables=*/ null,
         cppSemantics.needsDotdInputPruning(),
         cppSemantics.needsIncludeValidation(),
-        cppSemantics.getIncludeProcessing(),
-        grepIncludes);
+        cppSemantics.getIncludeProcessing());
     Preconditions.checkArgument(!shouldPruneModules || shouldScanIncludes);
   }
 
@@ -370,6 +371,7 @@ public class CppCompileAction extends AbstractAction
       ImmutableList<Artifact> additionalIncludeScanningRoots,
       CompileCommandLine compileCommandLine,
       ImmutableMap<String, String> executionInfo,
+      ImmutableMap<String, String> environment,
       String actionName,
       FeatureConfiguration featureConfiguration,
       UUID actionClassId,
@@ -381,8 +383,7 @@ public class CppCompileAction extends AbstractAction
       CcToolchainFeatures.Variables overwrittenVariables,
       boolean needsDotdInputPruning,
       boolean needsIncludeValidation,
-      IncludeProcessing includeProcessing,
-      @Nullable Artifact grepIncludes) {
+      IncludeProcessing includeProcessing) {
     super(owner, inputs, outputs);
     this.localShellEnvironment = localShellEnvironment;
     this.outputFile = outputFile;
@@ -402,6 +403,7 @@ public class CppCompileAction extends AbstractAction
     this.additionalIncludeScanningRoots = additionalIncludeScanningRoots;
     this.compileCommandLine = compileCommandLine;
     this.executionInfo = executionInfo;
+    this.environment = environment;
     this.actionName = actionName;
     this.featureConfiguration = featureConfiguration;
     this.needsDotdInputPruning = needsDotdInputPruning;
@@ -414,7 +416,6 @@ public class CppCompileAction extends AbstractAction
     this.usedModules = usedModules;
     this.topLevelModules = topLevelModules;
     this.overwrittenVariables = overwrittenVariables;
-    this.grepIncludes = grepIncludes;
   }
 
   /**
@@ -643,12 +644,6 @@ public class CppCompileAction extends AbstractAction
     return Collections.unmodifiableMap(legalOuts);
   }
 
-  @Override
-  @Nullable
-  public Artifact getGrepIncludes() {
-    return grepIncludes;
-  }
-
   /**
    * Returns the path where gcc should put the discovered dependency
    * information.
@@ -765,7 +760,9 @@ public class CppCompileAction extends AbstractAction
       environment.put("PWD", "/proc/self/cwd");
     }
 
+    environment.putAll(this.environment);
     environment.putAll(compileCommandLine.getEnvironment());
+
     return ImmutableMap.copyOf(environment);
   }
 
@@ -995,12 +992,17 @@ public class CppCompileAction extends AbstractAction
     }
   }
 
-  /** Recalculates this action's live input collection, including sources, middlemen. */
-  @VisibleForTesting // productionVisibility = Visibility.PRIVATE
+  /**
+   * Recalculates this action's live input collection, including sources, middlemen.
+   *
+   * @throws ActionExecutionException iff any errors happen during update.
+   */
+  @VisibleForTesting  // productionVisibility = Visibility.PRIVATE
   @ThreadCompatible
-  public final void updateActionInputs(NestedSet<Artifact> discoveredInputs) {
+  public final void updateActionInputs(NestedSet<Artifact> discoveredInputs)
+      throws ActionExecutionException {
     NestedSetBuilder<Artifact> inputs = NestedSetBuilder.stableOrder();
-    Profiler.instance().startTask(ProfilerTask.ACTION_UPDATE, describe());
+    Profiler.instance().startTask(ProfilerTask.ACTION_UPDATE, this);
     try {
       inputs.addTransitive(mandatoryInputs);
       if (optionalSourceFile != null) {

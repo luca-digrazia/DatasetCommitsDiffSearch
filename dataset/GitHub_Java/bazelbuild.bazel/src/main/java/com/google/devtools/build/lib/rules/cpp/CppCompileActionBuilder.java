@@ -78,7 +78,6 @@ public class CppCompileActionBuilder {
   private Map<String, String> environment = new LinkedHashMap<>();
   private CppSemantics cppSemantics;
   private CcToolchainProvider ccToolchain;
-  @Nullable private final Artifact grepIncludes;
   private final ImmutableMap<String, String> localShellEnvironment;
   private final boolean codeCoverageEnabled;
   @Nullable private String actionName;
@@ -91,7 +90,11 @@ public class CppCompileActionBuilder {
    * rule.
    */
   public CppCompileActionBuilder(RuleContext ruleContext, CcToolchainProvider ccToolchain) {
-    this(ruleContext, ccToolchain, ruleContext.getConfiguration());
+    this(
+        ruleContext.getActionOwner(),
+        ruleContext.getConfiguration(),
+        getLipoScannableMap(ruleContext, ccToolchain),
+        ccToolchain);
   }
 
   /** Creates a builder from a rule and configuration. */
@@ -103,10 +106,7 @@ public class CppCompileActionBuilder {
         ruleContext.getActionOwner(),
         configuration,
         getLipoScannableMap(ruleContext, ccToolchain),
-        ccToolchain,
-        ruleContext.attributes().has("$grep_includes")
-            ? ruleContext.getPrerequisiteArtifact("$grep_includes", Mode.HOST)
-            : null);
+        ccToolchain);
   }
 
   /** Creates a builder from a rule and configuration. */
@@ -114,8 +114,7 @@ public class CppCompileActionBuilder {
       ActionOwner actionOwner,
       BuildConfiguration configuration,
       Map<Artifact, IncludeScannable> lipoScannableMap,
-      CcToolchainProvider ccToolchain,
-      @Nullable Artifact grepIncludes) {
+      CcToolchainProvider ccToolchain) {
     this.owner = actionOwner;
     this.configuration = configuration;
     this.cppConfiguration = configuration.getFragment(CppConfiguration.class);
@@ -126,7 +125,6 @@ public class CppCompileActionBuilder {
     this.localShellEnvironment = configuration.getLocalShellEnvironment();
     this.codeCoverageEnabled = configuration.isCodeCoverageEnabled();
     this.ccToolchain = ccToolchain;
-    this.grepIncludes = grepIncludes;
   }
 
   /**
@@ -166,7 +164,6 @@ public class CppCompileActionBuilder {
     this.cppSemantics = other.cppSemantics;
     this.ccToolchain = other.ccToolchain;
     this.actionName = other.actionName;
-    this.grepIncludes = other.grepIncludes;
   }
 
   private static ImmutableMap<Artifact, IncludeScannable> getLipoScannableMap(
@@ -387,8 +384,7 @@ public class CppCompileActionBuilder {
               getLipoScannables(realMandatoryInputs),
               cppSemantics,
               ccToolchain,
-              ImmutableMap.copyOf(executionInfo),
-              grepIncludes);
+              ImmutableMap.copyOf(executionInfo));
     } else {
       action =
           new CppCompileAction(
@@ -423,8 +419,7 @@ public class CppCompileActionBuilder {
               ImmutableMap.copyOf(environment),
               getActionName(),
               cppSemantics,
-              ccToolchain,
-              grepIncludes);
+              ccToolchain);
     }
 
     if (cppSemantics.needsIncludeValidation()) {
@@ -455,9 +450,6 @@ public class CppCompileActionBuilder {
     }
     realMandatoryInputsBuilder.addTransitive(ccCompilationInfo.getAdditionalInputs());
     realMandatoryInputsBuilder.add(Preconditions.checkNotNull(sourceFile));
-    if (grepIncludes != null) {
-      realMandatoryInputsBuilder.add(grepIncludes);
-    }
     return realMandatoryInputsBuilder.build();
   }
 
@@ -717,13 +709,5 @@ public class CppCompileActionBuilder {
       Iterable<Artifact> inputsForInvalidation) {
     this.inputsForInvalidation = Preconditions.checkNotNull(inputsForInvalidation);
     return this;
-  }
-
-  public PathFragment getRealOutputFilePath() {
-    if (getTempOutputFile() != null) {
-      return getTempOutputFile();
-    } else {
-      return getOutputFile().getExecPath();
-    }
   }
 }
