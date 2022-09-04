@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.java;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
-import static com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType.UNQUOTED;
 import static com.google.devtools.build.lib.rules.java.JavaCompileActionBuilder.UTF8_ENVIRONMENT;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
@@ -25,15 +24,11 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.actions.AbstractAction;
-import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.CommandLines;
-import com.google.devtools.build.lib.actions.CompositeRunfilesSupplier;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ParamFileInfo;
-import com.google.devtools.build.lib.actions.RunfilesSupplier;
+import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -47,7 +42,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.java.JavaCompileAction.ProgressMessage;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
 import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider.JavaPluginInfo;
-import com.google.devtools.build.lib.util.LazyString;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.proto.Deps;
@@ -70,9 +64,6 @@ import javax.annotation.Nullable;
  * //src/java_tools/buildjar/java/com/google/devtools/build/java/turbine}.
  */
 public class JavaHeaderCompileActionBuilder {
-
-  private static final ParamFileInfo PARAM_FILE_INFO =
-      ParamFileInfo.builder(UNQUOTED).setCharset(ISO_8859_1).build();
 
   private final RuleContext ruleContext;
 
@@ -257,52 +248,51 @@ public class JavaHeaderCompileActionBuilder {
                 .getHeaderCompilerBuiltinProcessors()
                 .containsAll(plugins.processorClasses().toSet());
 
-    ActionEnvironment actionEnvironment =
-        ruleContext.getConfiguration().getActionEnvironment().addFixedVariables(UTF8_ENVIRONMENT);
+    SpawnAction.Builder builder = new SpawnAction.Builder();
 
-    LazyString progressMessage =
+    builder.setEnvironment(
+        ruleContext.getConfiguration().getActionEnvironment().addFixedVariables(UTF8_ENVIRONMENT));
+
+    builder.setProgressMessage(
         new ProgressMessage(
             /* prefix= */ "Compiling Java headers",
             /* output= */ outputJar,
             /* sourceFiles= */ sourceFiles,
             /* sourceJars= */ sourceJars,
-            /* plugins= */ plugins);
+            /* plugins= */ plugins));
 
-    NestedSet<Artifact> outputs =
-        NestedSetBuilder.create(Order.STABLE_ORDER, outputJar, outputDepsProto);
+    builder.addTransitiveTools(toolsJars);
 
-    NestedSetBuilder<Artifact> mandatoryInputs =
-        NestedSetBuilder.<Artifact>stableOrder()
-            .addTransitive(additionalInputs)
-            .addAll(bootclasspathEntries)
-            .addAll(sourceJars)
-            .addAll(sourceFiles);
+    builder.addOutput(outputJar);
+    builder.addOutput(outputDepsProto);
 
-    ImmutableList<RunfilesSupplier> runfilesSuppliers = ImmutableList.of();
+    builder.addTransitiveInputs(additionalInputs);
+    builder.addInputs(bootclasspathEntries);
+    builder.addInputs(sourceJars);
+    builder.addInputs(sourceFiles);
+
     FilesToRunProvider headerCompiler =
         useHeaderCompilerDirect
             ? javaToolchain.getHeaderCompilerDirect()
             : javaToolchain.getHeaderCompiler();
     // The header compiler is either a jar file that needs to be executed using
     // `java -jar <path>`, or an executable that can be run directly.
-    CustomCommandLine executableLine;
     if (!headerCompiler.getExecutable().getExtension().equals("jar")) {
-      runfilesSuppliers = ImmutableList.of(headerCompiler.getRunfilesSupplier());
-      mandatoryInputs.addTransitive(headerCompiler.getFilesToRun());
-      executableLine =
-          CustomCommandLine.builder().addExecPath(headerCompiler.getExecutable()).build();
+      builder.addRunfilesSupplier(headerCompiler.getRunfilesSupplier());
+      builder.addTransitiveInputs(headerCompiler.getFilesToRun());
+      builder.setExecutable(headerCompiler.getExecutable());
     } else {
-      mandatoryInputs
-          .addTransitive(hostJavabase.javaBaseInputsMiddleman())
-          .add(headerCompiler.getExecutable());
-      executableLine =
-          CustomCommandLine.builder()
-              .addPath(hostJavabase.javaBinaryExecPath())
-              .add("-Xverify:none")
-              .addAll(javaToolchain.getJvmOptions())
-              .add("-jar")
-              .addExecPath(headerCompiler.getExecutable())
-              .build();
+      builder
+          .addTransitiveInputs(hostJavabase.javaBaseInputsMiddleman())
+          .addInput(headerCompiler.getExecutable());
+      builder.setExecutable(hostJavabase.javaBinaryExecPath());
+      builder
+          .executableArguments()
+          .add("-Xverify:none")
+          .addAll(javaToolchain.getJvmOptions())
+          .add("-jar")
+          .addExecPath(headerCompiler.getExecutable())
+          .build();
     }
 
     CustomCommandLine.Builder commandLine =
@@ -335,16 +325,14 @@ public class JavaHeaderCompileActionBuilder {
 
     JavaConfiguration javaConfiguration =
         ruleContext.getConfiguration().getFragment(JavaConfiguration.class);
-    ImmutableMap<String, String> executionInfo = ImmutableMap.of();
-    Consumer<Pair<ActionExecutionContext, List<SpawnResult>>> resultConsumer = null;
     if (javaConfiguration.getReduceJavaClasspath() == JavaClasspathMode.BAZEL) {
       if (javaConfiguration.inmemoryJdepsFiles()) {
-        executionInfo =
+        builder.setExecutionInfo(
             ImmutableMap.of(
                 ExecutionRequirements.REMOTE_EXECUTION_INLINE_OUTPUTS,
-                outputDepsProto.getExecPathString());
+                outputDepsProto.getExecPathString()));
       }
-      resultConsumer = createResultConsumer(outputDepsProto);
+      builder.addResultConsumer(createResultConsumer(outputDepsProto));
     }
 
     if (useDirectClasspath) {
@@ -354,35 +342,17 @@ public class JavaHeaderCompileActionBuilder {
       } else {
         classpath = classpathEntries;
       }
-      mandatoryInputs.addTransitive(classpath);
+      builder.addTransitiveInputs(classpath);
 
       commandLine.addExecPaths("--classpath", classpath);
       commandLine.add("--nojavac_fallback");
 
       ruleContext.registerAction(
-          new SpawnAction(
-              /* owner= */ ruleContext.getActionOwner(),
-              /* tools= */ toolsJars,
-              /* inputs= */ mandatoryInputs.build(),
-              /* outputs= */ outputs,
-              /* primaryOutput= */ outputJar,
-              /* resourceSet= */ AbstractAction.DEFAULT_RESOURCE_SET,
-              /* commandLines= */ CommandLines.builder()
-                  .addCommandLine(executableLine)
-                  .addCommandLine(commandLine.build(), PARAM_FILE_INFO)
-                  .build(),
-              /* commandLineLimits= */ ruleContext.getConfiguration().getCommandLineLimits(),
-              /* isShellCommand= */ false,
-              /* env= */ actionEnvironment,
-              /* executionInfo= */ ruleContext
-                  .getConfiguration()
-                  .modifiedExecutionInfo(executionInfo, "Turbine"),
-              /* progressMessage= */ progressMessage,
-              /* runfilesSupplier= */ CompositeRunfilesSupplier.fromSuppliers(runfilesSuppliers),
-              /* mnemonic= */ "Turbine",
-              /* executeUnconditionally= */ false,
-              /* extraActionInfoSupplier= */ null,
-              /* resultConsumer= */ resultConsumer));
+          builder
+              .addCommandLine(
+                  commandLine.build(), ParamFileInfo.builder(ParameterFileType.UNQUOTED).build())
+              .setMnemonic("Turbine")
+              .build(ruleContext));
       return;
     }
 
@@ -390,12 +360,12 @@ public class JavaHeaderCompileActionBuilder {
     // flags needed for the javac-based header compiler implementations that supports
     // annotation processing.
 
-    mandatoryInputs.addTransitive(classpathEntries);
+    builder.addTransitiveInputs(classpathEntries);
     if (!useHeaderCompilerDirect) {
-      mandatoryInputs.addTransitive(plugins.processorClasspath());
-      mandatoryInputs.addTransitive(plugins.data());
+      builder.addTransitiveInputs(plugins.processorClasspath());
+      builder.addTransitiveInputs(plugins.data());
     }
-    mandatoryInputs.addTransitive(compileTimeDependencyArtifacts);
+    builder.addTransitiveInputs(compileTimeDependencyArtifacts);
 
     commandLine.addExecPaths("--classpath", classpathEntries);
     commandLine.addAll("--processors", plugins.processorClasses());
@@ -421,29 +391,12 @@ public class JavaHeaderCompileActionBuilder {
     }
 
     ruleContext.registerAction(
-        new SpawnAction(
-            /* owner= */ ruleContext.getActionOwner(),
-            /* tools= */ toolsJars,
-            /* inputs= */ mandatoryInputs.build(),
-            /* outputs= */ outputs,
-            /* primaryOutput= */ outputJar,
-            /* resourceSet= */ AbstractAction.DEFAULT_RESOURCE_SET,
-            /* commandLines= */ CommandLines.builder()
-                .addCommandLine(executableLine)
-                .addCommandLine(commandLine.build(), PARAM_FILE_INFO)
-                .build(),
-            /* commandLineLimits= */ ruleContext.getConfiguration().getCommandLineLimits(),
-            /* isShellCommand= */ false,
-            /* env= */ actionEnvironment,
-            /* executionInfo= */ ruleContext
-                .getConfiguration()
-                .modifiedExecutionInfo(executionInfo, "JavacTurbine"),
-            /* progressMessage= */ progressMessage,
-            /* runfilesSupplier= */ CompositeRunfilesSupplier.fromSuppliers(runfilesSuppliers),
-            /* mnemonic= */ "JavacTurbine",
-            /* executeUnconditionally= */ false,
-            /* extraActionInfoSupplier= */ null,
-            /* resultConsumer= */ resultConsumer));
+        builder
+            .addCommandLine(
+                commandLine.build(),
+                ParamFileInfo.builder(ParameterFileType.UNQUOTED).setCharset(ISO_8859_1).build())
+            .setMnemonic("JavacTurbine")
+            .build(ruleContext));
   }
 
   /**
