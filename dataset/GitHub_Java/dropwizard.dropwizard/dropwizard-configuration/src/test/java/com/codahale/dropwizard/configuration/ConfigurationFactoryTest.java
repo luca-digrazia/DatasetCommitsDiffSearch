@@ -31,7 +31,7 @@ public class ConfigurationFactoryTest {
 
     private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
     private final ConfigurationFactory<Example> factory =
-            new ConfigurationFactory<>(Example.class, validator, Jackson.newObjectMapper());
+            new ConfigurationFactory<>(Example.class, validator, Jackson.newObjectMapper(), "dw");
     private File malformedFile;
     private File invalidFile;
     private File validFile;
@@ -68,8 +68,9 @@ public class ConfigurationFactoryTest {
         } catch (ConfigurationException e) {
             if ("en".equals(Locale.getDefault().getLanguage())) {
                 assertThat(e.getMessage())
-                        .endsWith("factory-test-invalid.yml has the following errors:\n" +
-                                          "  * name must match \"[\\w]+[\\s]+[\\w]+\" (was Boop)\n");
+                        .endsWith(String.format(
+                                "factory-test-invalid.yml has the following errors:%n" +
+                                        "  * name must match \"[\\w]+[\\s]+[\\w]+\" (was Boop)%n"));
             }
         }
     }

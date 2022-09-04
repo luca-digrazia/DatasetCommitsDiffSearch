@@ -26,11 +26,6 @@ public class ConfigurationException extends Exception {
         this.constraintViolations = ConstraintViolations.copyOf(errors);
     }
 
-    /**
-     * Returns the set of constraint violations in the configuration.
-     *
-     * @return the set of constraint violations
-     */
     public ImmutableSet<ConstraintViolation<?>> getConstraintViolations() {
         return constraintViolations;
     }
