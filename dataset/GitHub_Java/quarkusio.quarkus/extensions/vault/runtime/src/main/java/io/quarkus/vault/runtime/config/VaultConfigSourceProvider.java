@@ -10,15 +10,14 @@ public class VaultConfigSourceProvider implements ConfigSourceProvider {
 
     private static final Logger log = Logger.getLogger(VaultConfigSourceProvider.class);
 
-    private VaultBootstrapConfig vaultBootstrapConfig;
+    private VaultRuntimeConfig vaultRuntimeConfig;
 
-    public VaultConfigSourceProvider(VaultBootstrapConfig vaultBootstrapConfig) {
-        this.vaultBootstrapConfig = vaultBootstrapConfig;
+    public VaultConfigSourceProvider(VaultRuntimeConfig vaultRuntimeConfig) {
+        this.vaultRuntimeConfig = vaultRuntimeConfig;
     }
 
     @Override
     public Iterable<ConfigSource> getConfigSources(ClassLoader forClassLoader) {
-        // 270 is higher than the file system or jar ordinals, but lower than env vars
-        return Arrays.asList(new VaultConfigSource(270, vaultBootstrapConfig));
+        return Arrays.asList(new VaultConfigSource(150, vaultRuntimeConfig));
     }
 }
