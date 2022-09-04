@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.concurrent.QuiescingExecutor;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
-import com.google.devtools.build.skyframe.ThinNodeEntry.DirtyType;
 import com.google.devtools.build.skyframe.ThinNodeEntry.MarkedDirtyResult;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -476,8 +475,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends QueryableGraph> {
                 // This entry remains in the graph in this dirty state until it is re-evaluated.
                 MarkedDirtyResult markedDirtyResult;
                 try {
-                  markedDirtyResult =
-                      entry.markDirty(isChanged ? DirtyType.CHANGE : DirtyType.DIRTY);
+                  markedDirtyResult = entry.markDirty(isChanged);
                 } catch (InterruptedException e) {
                   Thread.currentThread().interrupt();
                   // This can only happen if the main thread has been interrupted, and so the
@@ -485,8 +483,13 @@ public abstract class InvalidatingNodeVisitor<TGraph extends QueryableGraph> {
                   // visitation, so we can resume next time.
                   return;
                 }
-                if (markedDirtyResult == null) {
-                  // Another thread has already dirtied this node. Don't do anything in this thread.
+                Preconditions.checkState(
+                    !markedDirtyResult.wasCallRedundant(),
+                    "Node unexpectedly marked dirty or changed twice: %s",
+                    entry);
+                if (!markedDirtyResult.wasClean()) {
+                  // Another thread has already handled this node's rdeps. Don't do anything in this
+                  // thread.
                   if (supportInterruptions) {
                     pendingVisitations.remove(Pair.of(key, invalidationType));
                   }
@@ -494,10 +497,13 @@ public abstract class InvalidatingNodeVisitor<TGraph extends QueryableGraph> {
                 }
                 // Propagate dirtiness upwards and mark this node dirty/changed. Reverse deps should
                 // only be marked dirty (because only a dependency of theirs has changed).
-                visit(markedDirtyResult.getReverseDepsUnsafe(), InvalidationType.DIRTIED, key);
+                visit(
+                    markedDirtyResult.getReverseDepsUnsafeIfWasClean(),
+                    InvalidationType.DIRTIED,
+                    key);
 
-                progressReceiver.invalidated(
-                    key, EvaluationProgressReceiver.InvalidationState.DIRTY);
+                progressReceiver.invalidated(key,
+                    EvaluationProgressReceiver.InvalidationState.DIRTY);
                 // Remove the node from the set as the last operation.
                 if (supportInterruptions) {
                   pendingVisitations.remove(Pair.of(key, invalidationType));
