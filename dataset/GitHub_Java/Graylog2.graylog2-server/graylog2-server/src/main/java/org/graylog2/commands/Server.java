@@ -83,25 +83,11 @@ public class Server extends ServerBootstrap {
         super("server", configuration);
     }
 
-    @Option(name = {"-t", "--configtest"}, description = "Validate Graylog configuration and exit")
-    private boolean configTest = false;
-
     @Option(name = {"-l", "--local"}, description = "Run Graylog in local mode. Only interesting for Graylog developers.")
     private boolean local = false;
 
-    @Option(name = {"-r", "--no-retention"}, description = "Do not automatically remove messages from index that are older than the retention time")
-    private boolean noRetention = false;
-
-    public boolean isConfigTest() {
-        return configTest;
-    }
-
     public boolean isLocal() {
         return local;
-    }
-
-    public boolean performRetention() {
-        return !noRetention;
     }
 
     @Override
@@ -179,6 +165,16 @@ public class Server extends ServerBootstrap {
                 LOG.warn("Stale master has gone. Starting as master.");
             }
         }
+    }
+
+    @Override
+    protected boolean validateConfiguration() {
+        if (configuration.getPasswordSecret().isEmpty()) {
+            LOG.error("No password secret set. Please define \"password_secret\" in your Graylog configuration.");
+            return false;
+        }
+
+        return true;
     }
 
     private static class ShutdownHook implements Runnable {
