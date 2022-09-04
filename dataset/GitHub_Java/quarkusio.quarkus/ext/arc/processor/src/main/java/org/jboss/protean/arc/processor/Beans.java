@@ -28,15 +28,7 @@ import java.util.stream.Collectors;
 import javax.enterprise.inject.AmbiguousResolutionException;
 import javax.enterprise.inject.UnsatisfiedResolutionException;
 
-import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationTarget;
-import org.jboss.jandex.AnnotationValue;
-import org.jboss.jandex.ClassInfo;
-import org.jboss.jandex.DotName;
-import org.jboss.jandex.FieldInfo;
-import org.jboss.jandex.IndexView;
-import org.jboss.jandex.MethodInfo;
-import org.jboss.jandex.Type;
+import org.jboss.jandex.*;
 import org.jboss.jandex.Type.Kind;
 import org.jboss.protean.arc.processor.InjectionPointInfo.TypeAndQualifiers;
 
@@ -58,35 +50,14 @@ final class Beans {
         Integer alternativePriority = null;
         boolean isAlternative = false;
         List<StereotypeInfo> stereotypes = new ArrayList<>();
-        String name = null;
 
         for (AnnotationInstance annotation : beanDeployment.getAnnotations(beanClass)) {
             if (beanDeployment.getQualifier(annotation.name()) != null) {
                 qualifiers.add(annotation);
-                if (DotNames.NAMED.equals(annotation.name())) {
-                    AnnotationValue nameValue = annotation.value();
-                    if (nameValue != null) {
-                        name = nameValue.asString();
-                    } else {
-                        // Default bean name
-                        StringBuilder defaultName = new StringBuilder();
-                        if (beanClass.simpleName() == null) {
-                            name = DotNames.simpleName(beanClass.name());
-                        } else {
-                            defaultName.append(beanClass.simpleName());
-                        }
-                        // URLMatcher becomes uRLMatcher
-                        defaultName.setCharAt(0, Character.toLowerCase(defaultName.charAt(0)));
-                        name = defaultName.toString();
-                    }
-                }
-            } else if (annotation.name()
-                    .equals(DotNames.ALTERNATIVE)) {
+            } else if (annotation.name().equals(DotNames.ALTERNATIVE)) {
                 isAlternative = true;
-            } else if (annotation.name()
-                    .equals(DotNames.PRIORITY)) {
-                alternativePriority = annotation.value()
-                        .asInt();
+            } else if (annotation.name().equals(DotNames.PRIORITY)) {
+                alternativePriority = annotation.value().asInt();
             } else {
                 if (scope == null) {
                     scope = ScopeInfo.from(annotation.name());
@@ -106,10 +77,10 @@ final class Beans {
         }
 
         BeanInfo bean = new BeanInfo(beanClass, beanDeployment, scope, types, qualifiers, Injection.forBean(beanClass, beanDeployment), null, null,
-                isAlternative ? alternativePriority : null, stereotypes, name);
+                isAlternative ? alternativePriority : null, stereotypes);
         return bean;
     }
- 
+
     /**
      *
      * @param producerMethod
@@ -125,26 +96,11 @@ final class Beans {
         Integer alternativePriority = null;
         boolean isAlternative = false;
         List<StereotypeInfo> stereotypes = new ArrayList<>();
-        String name = null;
 
         for (AnnotationInstance annotation : producerMethod.annotations()) {
             if (beanDeployment.getQualifier(annotation.name()) != null) {
                 qualifiers.add(annotation);
-                if (DotNames.NAMED.equals(annotation.name())) {
-                    AnnotationValue nameValue = annotation.value();
-                    if (nameValue != null) {
-                        name = nameValue.asString();
-                    } else {
-                        String propertyName = getPropertyName(producerMethod.name());
-                        if (propertyName != null) {
-                         // getURLMatcher() becomes URLMatcher
-                            name = propertyName;
-                        } else {
-                            name = producerMethod.name();
-                        }
-                    }
-                }
-            } else if (DotNames.ALTERNATIVE.equals(annotation.name())) {
+            } else if (annotation.name().equals(DotNames.ALTERNATIVE)) {
                 isAlternative = true;
             } else {
                 if (scope == null) {
@@ -174,7 +130,7 @@ final class Beans {
         }
 
         BeanInfo bean = new BeanInfo(producerMethod, beanDeployment, scope, types, qualifiers, Injection.forBean(producerMethod, beanDeployment), declaringBean,
-                disposer, alternativePriority, stereotypes, name);
+                disposer, alternativePriority, stereotypes);
         return bean;
     }
 
@@ -193,19 +149,10 @@ final class Beans {
         Integer alternativePriority = null;
         boolean isAlternative = false;
         List<StereotypeInfo> stereotypes = new ArrayList<>();
-        String name = null;
 
         for (AnnotationInstance annotation : producerField.annotations()) {
             if (beanDeployment.getQualifier(annotation.name()) != null) {
                 qualifiers.add(annotation);
-                if (DotNames.NAMED.equals(annotation.name())) {
-                    AnnotationValue nameValue = annotation.value();
-                    if (nameValue != null) {
-                        name = nameValue.asString();
-                    } else {
-                        name = producerField.name();
-                    }
-                }
             } else {
                 if (scope == null) {
                     scope = ScopeInfo.from(annotation.name());
@@ -234,7 +181,7 @@ final class Beans {
         }
 
         BeanInfo bean = new BeanInfo(producerField, beanDeployment, scope, types, qualifiers, Collections.emptyList(), declaringBean, disposer,
-                alternativePriority, stereotypes, name);
+                alternativePriority, stereotypes);
         return bean;
     }
 
@@ -419,34 +366,5 @@ final class Beans {
             }
         }
     }
-    
-    
-    private static String getPropertyName(String methodName) {
-        final String get = "get";
-        final String is = "is";
-        if (methodName.startsWith(get)) {
-            return decapitalize(methodName.substring(get.length()));
-        } else if (methodName.startsWith(is)) {
-            return decapitalize(methodName.substring(is.length()));
-        } else {
-            // The method is not a JavaBean property
-            return null;
-        }
-
-    }
-    
-    private static String decapitalize(String name) {
-        if (name == null || name.length() == 0) {
-            return name;
-        }
-        if (name.length() > 1 && Character.isUpperCase(name.charAt(1)) && Character.isUpperCase(name.charAt(0))) {
-            // "URL" stays "URL"
-            return name;
-        }
-        StringBuilder decapitalized = new StringBuilder(name);
-        decapitalized.setCharAt(0, Character.toLowerCase(decapitalized.charAt(0)));
-        return decapitalized.toString();
-    }
-
 
 }
