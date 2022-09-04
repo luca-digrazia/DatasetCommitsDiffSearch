@@ -25,18 +25,15 @@ import com.google.devtools.build.android.AndroidDataWritingVisitor;
 import com.google.devtools.build.android.AndroidDataWritingVisitor.ValuesResourceDefinition;
 import com.google.devtools.build.android.AndroidResourceSymbolSink;
 import com.google.devtools.build.android.DataSource;
-import com.google.devtools.build.android.DependencyInfo;
 import com.google.devtools.build.android.FullyQualifiedName;
 import com.google.devtools.build.android.XmlResourceValue;
 import com.google.devtools.build.android.XmlResourceValues;
 import com.google.devtools.build.android.proto.SerializeFormat;
-import com.google.devtools.build.android.resources.Visibility;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import javax.annotation.concurrent.Immutable;
 import javax.xml.namespace.QName;
@@ -91,20 +88,15 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
     }
   }
 
-  private final Visibility visibility;
   private final ImmutableList<String> values;
   private final ArrayType arrayType;
   private final ImmutableMap<String, String> attributes;
 
   private ArrayXmlResourceValue(
-      Visibility visibility,
-      ArrayType arrayType,
-      List<String> values,
-      Map<String, String> attributes) {
-    this.visibility = visibility;
+      ArrayType arrayType, ImmutableList<String> values, ImmutableMap<String, String> attributes) {
     this.arrayType = arrayType;
-    this.values = ImmutableList.copyOf(values);
-    this.attributes = ImmutableMap.copyOf(attributes);
+    this.values = values;
+    this.attributes = attributes;
   }
 
   @VisibleForTesting
@@ -118,7 +110,7 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
 
   public static XmlResourceValue of(
       ArrayType arrayType, List<String> values, ImmutableMap<String, String> attributes) {
-    return new ArrayXmlResourceValue(Visibility.UNKNOWN, arrayType, values, attributes);
+    return new ArrayXmlResourceValue(arrayType, ImmutableList.copyOf(values), attributes);
   }
 
   @SuppressWarnings("deprecation")
@@ -129,7 +121,7 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
         ImmutableMap.copyOf(proto.getAttribute()));
   }
 
-  public static XmlResourceValue from(Value proto, Visibility visibility) {
+  public static XmlResourceValue from(Value proto) {
     Array array = proto.getCompoundValue().getArray();
     List<String> items = new ArrayList<>();
 
@@ -137,7 +129,8 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
       Item item = entry.getItem();
 
       if (item.hasPrim()) {
-        items.add(SimpleXmlResourceValue.convertPrimitiveToString(item.getPrim()));
+        String stringValue = "#" + Integer.toHexString(item.getPrim().getData());
+        items.add(stringValue);
       } else if (item.hasRef()) {
         items.add("@" + item.getRef().getName());
       } else if (item.hasStr()) {
@@ -145,7 +138,10 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
       }
     }
 
-    return new ArrayXmlResourceValue(visibility, ArrayType.ARRAY, items, ImmutableMap.of());
+    return of(
+        ArrayType.ARRAY,
+        items,
+        ImmutableMap.of());
   }
 
   @Override
@@ -185,7 +181,7 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
 
   @Override
   public int hashCode() {
-    return Objects.hash(visibility, arrayType, values, attributes);
+    return Objects.hash(arrayType, values, attributes);
   }
 
   @Override
@@ -194,8 +190,7 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
       return false;
     }
     ArrayXmlResourceValue other = (ArrayXmlResourceValue) obj;
-    return Objects.equals(visibility, other.visibility)
-        && Objects.equals(arrayType, other.arrayType)
+    return Objects.equals(arrayType, other.arrayType)
         && Objects.equals(values, other.values)
         && Objects.equals(attributes, other.attributes);
   }
@@ -220,9 +215,8 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
   }
 
   @Override
-  public void writeResourceToClass(
-      DependencyInfo dependencyInfo, FullyQualifiedName key, AndroidResourceSymbolSink sink) {
-    sink.acceptSimpleResource(dependencyInfo, visibility, key.type(), key.name());
+  public void writeResourceToClass(FullyQualifiedName key, AndroidResourceSymbolSink sink) {
+    sink.acceptSimpleResource(key.type(), key.name());
   }
 
   public static XmlResourceValue parseArray(

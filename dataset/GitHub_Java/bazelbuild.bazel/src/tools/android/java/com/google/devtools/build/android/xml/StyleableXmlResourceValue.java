@@ -33,6 +33,7 @@ import com.google.devtools.build.android.proto.SerializeFormat.DataValueXml.XmlT
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.AbstractMap.SimpleEntry;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -163,7 +164,7 @@ public class StyleableXmlResourceValue implements XmlResourceValue {
   }
 
   public static XmlResourceValue from(Value proto, ReferenceResolver packageResolver) {
-    Map<FullyQualifiedName, Boolean> attributes = new LinkedHashMap<>();
+    Map<FullyQualifiedName, Boolean> attributes = new HashMap<>();
 
     Styleable styleable = proto.getCompoundValue().getStyleable();
     for (Styleable.Entry entry : styleable.getEntryList()) {

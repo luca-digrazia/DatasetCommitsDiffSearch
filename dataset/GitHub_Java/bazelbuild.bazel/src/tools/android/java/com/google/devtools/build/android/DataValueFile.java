@@ -14,16 +14,13 @@
 package com.google.devtools.build.android;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.hash.HashCode;
 import com.google.devtools.build.android.AndroidResourceMerger.MergingException;
 import com.google.devtools.build.android.proto.SerializeFormat;
-import com.google.devtools.build.android.resources.Visibility;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Path;
 import java.util.Objects;
-import javax.annotation.Nullable;
 
 /**
  * Represents a file based android resource or asset.
@@ -32,29 +29,21 @@ import javax.annotation.Nullable;
  */
 public class DataValueFile implements DataResource, DataAsset {
 
-  private final Visibility visibility;
   private final DataSource source;
-  @Nullable private final HashCode fingerprint;
 
-  private DataValueFile(Visibility visibility, DataSource source, @Nullable HashCode fingerprint) {
-    this.visibility = visibility;
+  private DataValueFile(DataSource source) {
     this.source = source;
-    this.fingerprint = fingerprint;
   }
 
-  @Deprecated
   public static DataValueFile of(Path source) {
-    return of(
-        Visibility.UNKNOWN, DataSource.of(DependencyInfo.UNKNOWN, source), /*fingerprint=*/ null);
+    return of(DataSource.of(source));
   }
 
-  public static DataValueFile of(
-      Visibility visibility, DataSource source, @Nullable HashCode fingerprint) {
-    return new DataValueFile(visibility, source, fingerprint);
+  public static DataValueFile of(DataSource source) {
+    return new DataValueFile(source);
   }
 
   /** Creates a {@link DataValueFile} from a {@link SerializeFormat#DataValue}. */
-  @Deprecated
   public static DataValueFile from(Path source) {
     return of(source);
   }
@@ -70,9 +59,7 @@ public class DataValueFile implements DataResource, DataAsset {
       return false;
     }
     DataValueFile resource = (DataValueFile) obj;
-    return Objects.equals(visibility, resource.visibility)
-        && Objects.equals(source, resource.source)
-        && Objects.equals(fingerprint, resource.fingerprint);
+    return Objects.equals(source, resource.source);
   }
 
   @Override
@@ -117,7 +104,7 @@ public class DataValueFile implements DataResource, DataAsset {
     if (equals(resource)) {
       return this;
     }
-    return new DataValueFile(visibility, source.overwrite(resource.source()), fingerprint);
+    return of(source.overwrite(resource.source()));
   }
 
   @Override
@@ -125,17 +112,17 @@ public class DataValueFile implements DataResource, DataAsset {
     if (equals(asset)) {
       return this;
     }
-    return new DataValueFile(visibility, source.overwrite(asset.source()), fingerprint);
+    return of(source.overwrite(asset.source()));
   }
 
   @Override
   public void writeResourceToClass(FullyQualifiedName key, AndroidResourceSymbolSink sink) {
-    sink.acceptSimpleResource(source().getDependencyInfo(), visibility, key.type(), key.name());
+    sink.acceptSimpleResource(key.type(), key.name());
   }
 
   @Override
   public DataValue update(DataSource source) {
-    return new DataValueFile(visibility, source, fingerprint);
+    return of(source);
   }
 
   @Override
@@ -145,23 +132,7 @@ public class DataValueFile implements DataResource, DataAsset {
 
   @Override
   public boolean valueEquals(DataValue value) {
-    if (!(value instanceof DataValueFile)) {
-      return false;
-    }
-    DataValueFile other = (DataValueFile) value;
-    if (!Objects.equals(visibility, other.visibility)) {
-      return false;
-    }
-    // Just check the path, ignoring other components of DataSource.  Build label is not
-    // relevant to whether something is a conflict.
-    if (Objects.equals(source.getPath(), other.source.getPath())) {
-      return true;
-    }
-    // fingerprint==null && other.fingerprint==null shouldn't count as equality.
-    if (fingerprint != null && Objects.equals(fingerprint, other.fingerprint)) {
-      return true;
-    }
-    return false;
+    return equals(value);
   }
 
   @Override

@@ -45,6 +45,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.function.BiConsumer;
 import java.util.logging.Logger;
 import javax.annotation.concurrent.Immutable;
 import javax.annotation.concurrent.NotThreadSafe;
@@ -144,9 +145,7 @@ public class ParsedAndroidData {
   }
 
   /** A Consumer style interface that will accept a DataKey and DataValue. */
-  interface KeyValueConsumer<K extends DataKey, V extends DataValue> {
-    void accept(K key, V value);
-  }
+  interface KeyValueConsumer<K extends DataKey, V extends DataValue> extends BiConsumer<K, V> {}
 
   @VisibleForTesting
   static class CombiningConsumer implements KeyValueConsumer<DataKey, DataResource> {
