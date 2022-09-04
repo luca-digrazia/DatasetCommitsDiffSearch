@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -28,19 +29,14 @@ public class TemplateExtensionMethodsTest {
     static final QuarkusUnitTest config = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
                     .addClasses(Foo.class, Extensions.class, PrioritizedExtensions.class)
-                    .addAsResource(
-                            new StringAsset("{foo.name.toLower} {foo.name.ignored ?: 'NOT_FOUND'} {foo.callMe(1)} {foo.baz}"),
+                    .addAsResource(new StringAsset("{foo.name.toLower} {foo.name.ignored} {foo.callMe(1)} {foo.baz}"),
                             "templates/foo.txt")
                     .addAsResource(new StringAsset("{baz.setScale(baz.defaultScale,roundingMode)}"),
                             "templates/baz.txt")
                     .addAsResource(new StringAsset("{anyInt.foo('bing')}"),
                             "templates/any.txt")
                     .addAsResource(new StringAsset("{foo.pong}::{foo.name}"),
-                            "templates/priority.txt")
-                    .addAsResource(new StringAsset("{num.twice}"),
-                            "templates/assignability.txt")
-                    .addAsResource(new StringAsset("{myArray.getLast}"),
-                            "templates/arrays.txt"));
+                            "templates/priority.txt"));
 
     @Inject
     Template foo;
@@ -81,7 +77,7 @@ public class TemplateExtensionMethodsTest {
         map.put("charlie", "3");
         assertEquals("3:1:NOT_FOUND:1:false:true",
                 engine.parse(
-                        "{myMap.size}:{myMap.alpha}:{myMap.missing ?: 'NOT_FOUND'}:{myMap.get(key)}:{myMap.empty}:{myMap.containsKey('charlie')}")
+                        "{myMap.size}:{myMap.alpha}:{myMap.missing}:{myMap.get(key)}:{myMap.empty}:{myMap.containsKey('charlie')}")
                         .data("myMap", map).data("key", "alpha").render());
 
     }
@@ -92,15 +88,9 @@ public class TemplateExtensionMethodsTest {
     }
 
     @Test
-    public void testMatchTypeAssignability() {
-        assertEquals("20",
-                engine.getTemplate("assignability").data("num", 10.1).render());
-    }
-
-    @Test
-    public void testArrayMatchType() {
-        assertEquals("last",
-                engine.getTemplate("arrays").data("myArray", new String[] { "first", "second", "last" }).render());
+    public void testListGetByIndex() {
+        assertEquals("true=true=NOT_FOUND",
+                engine.parse("{list.0}={list[0]}={list[100]}").data("list", Collections.singletonList(true)).render());
     }
 
     @TemplateExtension
@@ -139,14 +129,6 @@ public class TemplateExtensionMethodsTest {
         @TemplateExtension(matchRegex = "(bar|bravo)")
         static String fooRegex(Foo foo, String name) {
             return name.toUpperCase();
-        }
-
-        static int twice(Number number) {
-            return number.intValue() * 2;
-        }
-
-        static Object getLast(Object[] array) {
-            return array[array.length - 1];
         }
     }
 
