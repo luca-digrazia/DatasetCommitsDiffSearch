@@ -23,14 +23,12 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.truth.IterableSubject;
 import com.google.devtools.build.lib.actions.Action;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.mock.BazelAnalysisMock;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
@@ -41,8 +39,6 @@ import com.google.devtools.build.lib.bazel.rules.ToolchainRules;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
-import com.google.devtools.build.lib.packages.util.MockCcSupport;
-import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.rules.core.CoreRules;
 import com.google.devtools.build.lib.rules.platform.PlatformRules;
 import com.google.devtools.build.lib.rules.repository.CoreWorkspaceRules;
@@ -53,7 +49,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
 import com.google.devtools.common.options.InvocationPolicyEnforcer;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.Before;
@@ -285,32 +280,12 @@ public class CcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testStartEndLibThroughFeature() throws Exception {
-    AnalysisMock.get()
-        .ccSupport()
-        .setupCrosstool(mockToolsConfig, MockCcSupport.SUPPORTS_START_END_LIB_FEATURE);
-    useConfiguration("--start_end_lib");
-    scratch.file(
-        "test/BUILD",
-        "cc_library(name='lib', srcs=['lib.c'])",
-        "cc_binary(name='bin', srcs=['bin.c'])");
-
-    ConfiguredTarget target = getConfiguredTarget("//test:bin");
-    CppLinkAction action = (CppLinkAction) getGeneratingAction(getExecutable(target));
-    for (Artifact input : action.getInputs()) {
-      String name = input.getFilename();
-      assertThat(!CppFileTypes.ARCHIVE.matches(name) && !CppFileTypes.PIC_ARCHIVE.matches(name))
-          .isTrue();
-    }
-  }
-
-  @Test
   public void testTempsWithDifferentExtensions() throws Exception {
     useConfiguration("--cpu=k8", "--save_temps");
     scratch.file(
         "ananas/BUILD",
         "cc_library(name='ananas',",
-        "           srcs=['1.c', '2.cc', '3.cpp', '4.S', '5.h', '6.hpp', '7.inc', '8.inl'])");
+        "           srcs=['1.c', '2.cc', '3.cpp', '4.S', '5.h', '6.hpp'])");
 
     ConfiguredTarget ananas = getConfiguredTarget("//ananas:ananas");
     Iterable<String> temps =
@@ -985,110 +960,6 @@ public class CcCommonTest extends BuildViewTestCase {
     assertContainsEvent("Symbol a is provided by all of the following features: a1 a2");
   }
 
-  @Test
-  public void testSupportsPicFeatureResultsInPICObjectGenerated() throws Exception {
-    getAnalysisMock()
-        .ccSupport()
-        .setupCrosstool(
-            mockToolsConfig,
-            MockCcSupport.NO_LEGACY_FEATURES_FEATURE,
-            MockCcSupport.EMPTY_STATIC_LIBRARY_ACTION_CONFIG,
-            MockCcSupport.EMPTY_COMPILE_ACTION_CONFIG,
-            MockCcSupport.EMPTY_DYNAMIC_LIBRARY_ACTION_CONFIG,
-            "needsPic: false",
-            "feature { name: 'supports_pic' enabled: true }");
-    useConfiguration();
-
-    scratch.file("x/BUILD", "cc_library(name = 'foo', srcs = ['a.cc'])");
-    scratch.file("x/a.cc");
-
-    RuleConfiguredTarget ccLibrary = (RuleConfiguredTarget) getConfiguredTarget("//x:foo");
-    ImmutableList<ActionAnalysisMetadata> actions = ccLibrary.getActions();
-    ImmutableList<String> outputs =
-        actions.stream()
-            .map(ActionAnalysisMetadata::getPrimaryOutput)
-            .map(Artifact::getFilename)
-            .collect(ImmutableList.toImmutableList());
-    assertThat(outputs).contains("a.pic.o");
-  }
-
-  @Test
-  public void testWhenSupportsPicDisabledPICObjectAreNotGenerated() throws Exception {
-    getAnalysisMock()
-        .ccSupport()
-        .setupCrosstool(
-            mockToolsConfig,
-            MockCcSupport.NO_LEGACY_FEATURES_FEATURE,
-            MockCcSupport.EMPTY_STATIC_LIBRARY_ACTION_CONFIG,
-            MockCcSupport.EMPTY_COMPILE_ACTION_CONFIG,
-            MockCcSupport.EMPTY_DYNAMIC_LIBRARY_ACTION_CONFIG,
-            "needsPic: false",
-            "feature { name: 'supports_pic' }");
-    useConfiguration();
-
-    scratch.file("x/BUILD", "cc_library(name = 'foo', srcs = ['a.cc'])");
-    scratch.file("x/a.cc");
-
-    RuleConfiguredTarget ccLibrary = (RuleConfiguredTarget) getConfiguredTarget("//x:foo");
-    ImmutableList<ActionAnalysisMetadata> actions = ccLibrary.getActions();
-    ImmutableList<String> outputs =
-        actions.stream()
-            .map(ActionAnalysisMetadata::getPrimaryOutput)
-            .map(Artifact::getFilename)
-            .collect(ImmutableList.toImmutableList());
-    assertThat(outputs).doesNotContain("a.pic.o");
-  }
-
-  @Test
-  public void testWhenSupportsPicDisabledButForcePicSetPICAreGenerated() throws Exception {
-    getAnalysisMock()
-        .ccSupport()
-        .setupCrosstool(
-            mockToolsConfig,
-            MockCcSupport.NO_LEGACY_FEATURES_FEATURE,
-            MockCcSupport.EMPTY_STATIC_LIBRARY_ACTION_CONFIG,
-            MockCcSupport.EMPTY_COMPILE_ACTION_CONFIG,
-            MockCcSupport.EMPTY_DYNAMIC_LIBRARY_ACTION_CONFIG,
-            "needsPic: false",
-            "feature { name: 'supports_pic' }");
-    useConfiguration("--force_pic");
-
-    scratch.file("x/BUILD", "cc_library(name = 'foo', srcs = ['a.cc'])");
-    scratch.file("x/a.cc");
-
-    RuleConfiguredTarget ccLibrary = (RuleConfiguredTarget) getConfiguredTarget("//x:foo");
-    ImmutableList<ActionAnalysisMetadata> actions = ccLibrary.getActions();
-    ImmutableList<String> outputs =
-        actions.stream()
-            .map(ActionAnalysisMetadata::getPrimaryOutput)
-            .map(Artifact::getFilename)
-            .collect(ImmutableList.toImmutableList());
-    assertThat(outputs).contains("a.pic.o");
-  }
-
-  @Test
-  public void testWhenSupportsPicNotPresentAndForcePicPassedIsError() throws Exception {
-    reporter.removeHandler(failFastHandler);
-    getAnalysisMock()
-        .ccSupport()
-        .setupCrosstool(
-            mockToolsConfig,
-            MockCcSupport.NO_LEGACY_FEATURES_FEATURE,
-            MockCcSupport.EMPTY_STATIC_LIBRARY_ACTION_CONFIG,
-            MockCcSupport.EMPTY_DYNAMIC_LIBRARY_ACTION_CONFIG,
-            MockCcSupport.EMPTY_COMPILE_ACTION_CONFIG,
-            "needsPic: false");
-    useConfiguration("--force_pic");
-
-    scratch.file("x/BUILD", "cc_library(name = 'foo', srcs = ['a.cc'])");
-    scratch.file("x/a.cc");
-
-    getConfiguredTarget("//x:foo");
-    assertContainsEvent(
-        "PIC compilation is requested but the toolchain does not support it"
-            + " (feature named 'supports_pic' is not enabled");
-  }
-
   /**
    * Tests for the case where there are only C++ rules defined.
    */
@@ -1121,19 +992,6 @@ public class CcCommonTest extends BuildViewTestCase {
         @Override
         public boolean isThisBazel() {
           return true;
-        }
-
-        @Override
-        public List<String> getWorkspaceContents(MockToolsConfig config) {
-          String bazelToolWorkspace = config.getPath("/bazel_tools_workspace").getPathString();
-          return new ArrayList<>(
-              ImmutableList.of(
-                  "local_repository(name = 'bazel_tools', path = '" + bazelToolWorkspace + "')",
-                  "local_repository(name = 'local_config_xcode', path = '/local_config_xcode')",
-                  "local_repository(name = 'com_google_protobuf', path = '/protobuf')",
-                  "bind(name = 'android/sdk', actual='@bazel_tools//tools/android:sdk')",
-                  "bind(name = 'tools/python', actual='//tools/python')",
-                  "register_toolchains('@bazel_tools//tools/cpp:all')"));
         }
       };
     }
