@@ -16,9 +16,9 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.PackageFactory;
-import com.google.devtools.build.lib.packages.PackageFactory.InjectionException;
 import com.google.devtools.build.lib.skyframe.BzlLoadFunction.BzlLoadFailedException;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -48,10 +48,16 @@ import javax.annotation.Nullable;
 // to migrate by adding a load()). Combine tombstones with reading the current incompatible flags
 // within @builtins for awesomeness.
 
-// TODO(#11437, #11954, #11983): To the extent that BUILD-loaded .bzls and WORKSPACE-loaded .bzls
-// have the same environment, builtins injection should apply to both of them, not just to
-// BUILD-loaded .bzls. The same can be said for BUILD and WORKSPACE files themselves if we end up
-// unifying those environments as well.
+// TODO(#11437): Currently, BUILD-loaded .bzls and WORKSPACE-loaded .bzls have the same initial
+// static environment. Therefore, we should apply injection of top-level symbols to both
+// environments, not just BUILD .bzls. Likewise for builtins that are shared by BUILD and WORKSPACE
+// files, and for when the dynamic `native` values of the two .bzl dialects are unified. This can be
+// facilitated by 1) making PackageFactory better understand the similarities between BUILD and
+// WORKSPACE, e.g. by refactoring things like WorkspaceFactory#createWorkspaceFunctions into
+// PackageFactory; and 2) making PackageFactory responsible for performing the actual injection
+// (given the override mappings from exports.bzl) and returning the modified environments. Then any
+// refactoring to unify BUILD with WORKPSACE and BUILD-bzl with WORKSPACE-bzl can proceed in
+// PackageFactory without regard to this file.
 
 /**
  * A Skyframe function that evaluates the {@code @builtins} pseudo-repository and reports the values
@@ -162,6 +168,8 @@ public class StarlarkBuiltinsFunction implements SkyFunction {
       }
     } catch (BzlLoadFailedException ex) {
       throw BuiltinsFailedException.errorEvaluatingBuiltinsBzls(ex);
+    } catch (InconsistentFilesystemException ex) {
+      throw BuiltinsFailedException.errorEvaluatingBuiltinsBzls(ex);
     }
     if (exportsValue == null) {
       return null;
@@ -177,7 +185,7 @@ public class StarlarkBuiltinsFunction implements SkyFunction {
       ImmutableMap<String, Object> predeclared =
           packageFactory.createBuildBzlEnvUsingInjection(exportedToplevels, exportedRules);
       return new StarlarkBuiltinsValue(predeclared, exportedToJava, transitiveDigest);
-    } catch (EvalException | InjectionException ex) {
+    } catch (EvalException ex) {
       throw BuiltinsFailedException.errorApplyingExports(ex);
     }
   }
@@ -228,6 +236,11 @@ public class StarlarkBuiltinsFunction implements SkyFunction {
     }
 
     static BuiltinsFailedException errorEvaluatingBuiltinsBzls(
+        InconsistentFilesystemException cause) {
+      return errorEvaluatingBuiltinsBzls(cause, Transience.PERSISTENT);
+    }
+
+    static BuiltinsFailedException errorEvaluatingBuiltinsBzls(
         Exception cause, Transience transience) {
       return new BuiltinsFailedException(
           String.format("Failed to load builtins sources: %s", cause.getMessage()),
@@ -235,7 +248,7 @@ public class StarlarkBuiltinsFunction implements SkyFunction {
           transience);
     }
 
-    static BuiltinsFailedException errorApplyingExports(Exception cause) {
+    static BuiltinsFailedException errorApplyingExports(EvalException cause) {
       return new BuiltinsFailedException(
           String.format("Failed to apply declared builtins: %s", cause.getMessage()),
           cause,

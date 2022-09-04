@@ -13,8 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
+import com.google.common.base.Throwables;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
@@ -39,14 +41,12 @@ import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.StarlarkExportable;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue;
-import com.google.devtools.build.lib.skyframe.ASTFileLookupFunction.ASTLookupFailedException;
 import com.google.devtools.build.lib.skyframe.StarlarkBuiltinsFunction.BuiltinsFailedException;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.LoadStatement;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
-import com.google.devtools.build.lib.syntax.Program;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
@@ -167,6 +167,8 @@ public class BzlLoadFunction implements SkyFunction {
     BzlLoadValue.Key key = (BzlLoadValue.Key) skyKey.argument();
     try {
       return computeInternal(key, env, /*inliningState=*/ null);
+    } catch (InconsistentFilesystemException e) {
+      throw new BzlLoadFunctionException(e, Transience.PERSISTENT);
     } catch (BzlLoadFailedException e) {
       throw new BzlLoadFunctionException(e);
     }
@@ -235,7 +237,7 @@ public class BzlLoadFunction implements SkyFunction {
   // TODO(brandjon): Pick one of the nouns "load" and "bzl" and use that term consistently.
   @Nullable
   BzlLoadValue computeInline(BzlLoadValue.Key key, Environment env, InliningState inliningState)
-      throws BzlLoadFailedException, InterruptedException {
+      throws InconsistentFilesystemException, BzlLoadFailedException, InterruptedException {
     // Note to refactorors: No Skyframe calls may be made before the RecordingSkyFunctionEnvironment
     // is set up below in computeInlineForCacheMiss.
     Preconditions.checkNotNull(cachedBzlLoadDataManager);
@@ -259,7 +261,7 @@ public class BzlLoadFunction implements SkyFunction {
   @Nullable
   private CachedBzlLoadData computeInlineCachedData(
       BzlLoadValue.Key key, Environment env, InliningState inliningState)
-      throws BzlLoadFailedException, InterruptedException {
+      throws InconsistentFilesystemException, BzlLoadFailedException, InterruptedException {
     // Note to refactorors: No Skyframe calls may be made before the RecordingSkyFunctionEnvironment
     // is set up below in computeInlineForCacheMiss.
 
@@ -309,7 +311,7 @@ public class BzlLoadFunction implements SkyFunction {
   @Nullable
   private CachedBzlLoadData computeInlineForCacheMiss(
       BzlLoadValue.Key key, Environment env, InliningState inliningState)
-      throws BzlLoadFailedException, InterruptedException {
+      throws InconsistentFilesystemException, BzlLoadFailedException, InterruptedException {
     // We use an instrumented Skyframe env to capture Skyframe deps in the CachedBzlLoadData. This
     // generally includes transitive Skyframe deps, but specifically excludes deps underneath
     // recursively loaded .bzls. We unwrap the instrumented env right before recursively calling
@@ -457,7 +459,7 @@ public class BzlLoadFunction implements SkyFunction {
   @Nullable
   private BzlLoadValue computeInternal(
       BzlLoadValue.Key key, Environment env, @Nullable InliningState inliningState)
-      throws BzlLoadFailedException, InterruptedException {
+      throws InconsistentFilesystemException, BzlLoadFailedException, InterruptedException {
     Label label = key.getLabel();
     PathFragment filePath = label.toPathFragment();
 
@@ -468,8 +470,8 @@ public class BzlLoadFunction implements SkyFunction {
     ASTFileLookupValue astLookup;
     try {
       astLookup = astManager.getASTFileLookupValue(astKey, env);
-    } catch (ASTLookupFailedException e) {
-      throw BzlLoadFailedException.errorReadingBzl(filePath, e);
+    } catch (ErrorReadingStarlarkExtensionException e) {
+      throw BzlLoadFailedException.errorReadingFile(filePath, e);
     }
     if (astLookup == null) {
       return null;
@@ -497,7 +499,8 @@ public class BzlLoadFunction implements SkyFunction {
    */
   @Nullable
   private static ASTFileLookupValue.Key validatePackageAndGetASTKey(
-      BzlLoadValue.Key key, Environment env) throws BzlLoadFailedException, InterruptedException {
+      BzlLoadValue.Key key, Environment env)
+      throws BzlLoadFailedException, InconsistentFilesystemException, InterruptedException {
     Label label = key.getLabel();
 
     // Do package lookup.
@@ -512,8 +515,9 @@ public class BzlLoadFunction implements SkyFunction {
                   ContainingPackageLookupValue.key(dirId),
                   BuildFileNotFoundException.class,
                   InconsistentFilesystemException.class);
-    } catch (BuildFileNotFoundException | InconsistentFilesystemException e) {
-      throw BzlLoadFailedException.errorFindingPackage(label.toPathFragment(), e);
+    } catch (BuildFileNotFoundException e) {
+      throw BzlLoadFailedException.errorReadingFile(
+          label.toPathFragment(), new ErrorReadingStarlarkExtensionException(e));
     }
     if (packageLookup == null) {
       return null;
@@ -552,7 +556,7 @@ public class BzlLoadFunction implements SkyFunction {
       ASTFileLookupValue astLookup,
       Environment env,
       @Nullable InliningState inliningState)
-      throws BzlLoadFailedException, InterruptedException {
+      throws InconsistentFilesystemException, BzlLoadFailedException, InterruptedException {
     Label label = key.getLabel();
     PathFragment filePath = label.toPathFragment();
 
@@ -587,7 +591,9 @@ public class BzlLoadFunction implements SkyFunction {
     // loads.
     // TODO(bazel-team): In case of a failed load(), we should report the location of the load()
     // statement in the requesting file, e.g. using
-    // file.getLoadStatements().get(...).getStartLocation().
+    // file.getLoadStatements().get(...).getStartLocation(). We should also probably catch and
+    // rethrow InconsistentFilesystemException with location info in the non-bzl-inlining code path
+    // so the error message is the same in both code paths.
     List<BzlLoadValue> loadValues =
         inliningState == null
             ? computeBzlLoadsWithSkyframe(env, loadKeys, file)
@@ -628,23 +634,10 @@ public class BzlLoadFunction implements SkyFunction {
     module.setClientData(
         BazelModuleContext.create(
             label, file.getStartLocation().file(), ImmutableMap.copyOf(loadMap), transitiveDigest));
-
-    // compile
-    //
-    // Note: file is shared: it belongs the to caller, which already resolved it
-    // (see skyframe.ASTFileLookupFunction.java:154).
-    // Can we compile it there too? Is the Module env consistent?
-    // If we move this step into caller, the runtime module must match resolver module:
-    // Validation (there) uses packageFactory.getRuleClassProvider().getEnvironment();
-    // Compilation (here) uses getAndDigestPredeclaredEnvironment, which is complex.
-    //
-    // For now, Program temporarily gives us a way to compile an already-resolved file:
-    Program prog = Program.compileResolvedFile(file);
-
     // executeBzlFile may post events to the Environment's handler, but events do not matter when
     // caching BzlLoadValues. Note that executing the code mutates the module.
     executeBzlFile(
-        prog, key.getLabel(), module, loadMap, starlarkSemantics, env.getListener(), repoMapping);
+        file, key.getLabel(), module, loadMap, starlarkSemantics, env.getListener(), repoMapping);
     return new BzlLoadValue(module, transitiveDigest);
   }
 
@@ -779,7 +772,7 @@ public class BzlLoadFunction implements SkyFunction {
       List<BzlLoadValue.Key> keys,
       StarlarkFile requestingFile,
       InliningState inliningState)
-      throws BzlLoadFailedException, InterruptedException {
+      throws InterruptedException, BzlLoadFailedException, InconsistentFilesystemException {
     String filePathForErrors = requestingFile.getStartLocation().file();
     Preconditions.checkState(
         env instanceof RecordingSkyFunctionEnvironment,
@@ -800,7 +793,7 @@ public class BzlLoadFunction implements SkyFunction {
     //
     // This approach assumes --keep_going; determinism is not guaranteed otherwise. It also assumes
     // InterruptedException does not occur, since we don't catch and defer it.
-    BzlLoadFailedException deferredException = null;
+    Exception deferredException = null;
     boolean valuesMissing = false;
     // NOTE: Iterating over loads in the order listed in the file.
     for (BzlLoadValue.Key key : keys) {
@@ -808,9 +801,11 @@ public class BzlLoadFunction implements SkyFunction {
       try {
         cachedData = computeInlineCachedData(key, strippedEnv, inliningState);
       } catch (BzlLoadFailedException e) {
-        if (deferredException == null) {
-          deferredException = BzlLoadFailedException.whileLoadingDep(filePathForErrors, e);
-        }
+        e = BzlLoadFailedException.whileLoadingDep(filePathForErrors, e);
+        deferredException = MoreObjects.firstNonNull(deferredException, e);
+        continue;
+      } catch (InconsistentFilesystemException e) {
+        deferredException = MoreObjects.firstNonNull(deferredException, e);
         continue;
       }
       if (cachedData == null) {
@@ -827,7 +822,10 @@ public class BzlLoadFunction implements SkyFunction {
       }
     }
     if (deferredException != null) {
-      throw deferredException;
+      Throwables.throwIfInstanceOf(deferredException, BzlLoadFailedException.class);
+      Throwables.throwIfInstanceOf(deferredException, InconsistentFilesystemException.class);
+      throw new IllegalStateException(
+          "caught a checked exception of unexpected type", deferredException);
     }
     return valuesMissing ? null : bzlLoads;
   }
@@ -886,9 +884,9 @@ public class BzlLoadFunction implements SkyFunction {
     }
   }
 
-  /** Executes the compiled .bzl file defining the module to be loaded. */
+  /** Executes the .bzl file defining the module to be loaded. */
   private void executeBzlFile(
-      Program prog,
+      StarlarkFile file,
       Label label,
       Module module,
       Map<String, Module> loadedModules,
@@ -904,7 +902,7 @@ public class BzlLoadFunction implements SkyFunction {
       packageFactory
           .getRuleClassProvider()
           .setStarlarkThreadContext(thread, label, repositoryMapping);
-      execAndExport(prog, label, starlarkEventHandler, module, thread);
+      execAndExport(file, label, starlarkEventHandler, module, thread);
 
       Event.replayEventsOn(skyframeEventHandler, starlarkEventHandler.getEvents());
       for (Postable post : starlarkEventHandler.getPosts()) {
@@ -916,10 +914,11 @@ public class BzlLoadFunction implements SkyFunction {
     }
   }
 
+  // Precondition: file is validated and error-free.
   // Precondition: thread has a valid transitiveDigest.
   // TODO(adonovan): executeBzlFile would make a better public API than this function.
   public static void execAndExport(
-      Program prog, Label label, EventHandler handler, Module module, StarlarkThread thread)
+      StarlarkFile file, Label label, EventHandler handler, Module module, StarlarkThread thread)
       throws InterruptedException {
 
     // Intercept execution after every assignment at top level
@@ -940,7 +939,7 @@ public class BzlLoadFunction implements SkyFunction {
         });
 
     try {
-      Starlark.execFileProgram(prog, module, thread);
+      EvalUtils.exec(file, module, thread);
     } catch (EvalException ex) {
       handler.handle(Event.error(null, ex.getMessageWithStack()));
     }
@@ -951,6 +950,84 @@ public class BzlLoadFunction implements SkyFunction {
     return null;
   }
 
+  static final class BzlLoadFailedException extends Exception implements SaneAnalysisException {
+    private final Transience transience;
+
+    private BzlLoadFailedException(String errorMessage) {
+      super(errorMessage);
+      this.transience = Transience.PERSISTENT;
+    }
+
+    private BzlLoadFailedException(String errorMessage, Exception cause, Transience transience) {
+      super(errorMessage, cause);
+      this.transience = transience;
+    }
+
+    Transience getTransience() {
+      return transience;
+    }
+
+    // TODO(bazel-team): This exception should hold a Location of the requesting file's load
+    // statement, and code that catches it should use the location in the Event they create.
+    static BzlLoadFailedException whileLoadingDep(
+        String requestingFile, BzlLoadFailedException cause) {
+      // Don't chain exception cause, just incorporate the message with a prefix.
+      return new BzlLoadFailedException("in " + requestingFile + ": " + cause.getMessage());
+    }
+
+    static BzlLoadFailedException errors(PathFragment file) {
+      return new BzlLoadFailedException(String.format("Extension file '%s' has errors", file));
+    }
+
+    static BzlLoadFailedException errorReadingFile(
+        PathFragment file, ErrorReadingStarlarkExtensionException cause) {
+      return new BzlLoadFailedException(
+          String.format(
+              "Encountered error while reading extension file '%s': %s", file, cause.getMessage()),
+          cause,
+          cause.getTransience());
+    }
+
+    static BzlLoadFailedException noBuildFile(Label file, @Nullable String reason) {
+      if (reason != null) {
+        return new BzlLoadFailedException(
+            String.format("Unable to find package for %s: %s.", file, reason));
+      }
+      return new BzlLoadFailedException(
+          String.format(
+              "Every .bzl file must have a corresponding package, but '%s' does not have one."
+                  + " Please create a BUILD file in the same or any parent directory. Note that"
+                  + " this BUILD file does not need to do anything except exist.",
+              file));
+    }
+
+    static BzlLoadFailedException labelCrossesPackageBoundary(
+        Label label, ContainingPackageLookupValue containingPackageLookupValue) {
+      return new BzlLoadFailedException(
+          ContainingPackageLookupValue.getErrorMessageForLabelCrossingPackageBoundary(
+              // We don't actually know the proper Root to pass in here (since we don't e.g. know
+              // the root of the bzl/BUILD file that is trying to load 'label'). Therefore we just
+              // pass in the Root of the containing package in order to still get a useful error
+              // message for the user.
+              containingPackageLookupValue.getContainingPackageRoot(),
+              label,
+              containingPackageLookupValue));
+    }
+
+    static BzlLoadFailedException starlarkErrors(PathFragment file) {
+      return new BzlLoadFailedException(String.format("Extension '%s' has errors", file));
+    }
+
+    static BzlLoadFailedException builtinsFailed(Label file, BuiltinsFailedException cause) {
+      return new BzlLoadFailedException(
+          String.format(
+              "Internal error while loading Starlark builtins for %s: %s",
+              file, cause.getMessage()),
+          cause,
+          cause.getTransience());
+    }
+  }
+
   /**
    * A manager abstracting over the method for obtaining {@code ASTFileLookupValue}s. See comment in
    * {@link #create}.
@@ -958,7 +1035,8 @@ public class BzlLoadFunction implements SkyFunction {
   private interface ASTManager {
     @Nullable
     ASTFileLookupValue getASTFileLookupValue(ASTFileLookupValue.Key key, Environment env)
-        throws ASTLookupFailedException, InterruptedException;
+        throws InconsistentFilesystemException, InterruptedException,
+            ErrorReadingStarlarkExtensionException;
 
     void doneWithASTFileLookupValue(ASTFileLookupValue.Key key);
   }
@@ -970,8 +1048,13 @@ public class BzlLoadFunction implements SkyFunction {
     @Nullable
     @Override
     public ASTFileLookupValue getASTFileLookupValue(ASTFileLookupValue.Key key, Environment env)
-        throws ASTLookupFailedException, InterruptedException {
-      return (ASTFileLookupValue) env.getValueOrThrow(key, ASTLookupFailedException.class);
+        throws InconsistentFilesystemException, InterruptedException,
+            ErrorReadingStarlarkExtensionException {
+      return (ASTFileLookupValue)
+          env.getValueOrThrow(
+              key,
+              ErrorReadingStarlarkExtensionException.class,
+              InconsistentFilesystemException.class);
     }
 
     @Override
@@ -1003,7 +1086,8 @@ public class BzlLoadFunction implements SkyFunction {
     @Nullable
     @Override
     public ASTFileLookupValue getASTFileLookupValue(ASTFileLookupValue.Key key, Environment env)
-        throws ASTLookupFailedException, InterruptedException {
+        throws InconsistentFilesystemException, InterruptedException,
+            ErrorReadingStarlarkExtensionException {
       ASTFileLookupValue value = astFileLookupValueCache.getIfPresent(key);
       if (value == null) {
         value = ASTFileLookupFunction.computeInline(key, env, packageFactory, digestHashFunction);
@@ -1054,95 +1138,13 @@ public class BzlLoadFunction implements SkyFunction {
     }
   }
 
-  static final class BzlLoadFailedException extends Exception implements SaneAnalysisException {
-    private final Transience transience;
-
-    private BzlLoadFailedException(String errorMessage) {
-      super(errorMessage);
-      this.transience = Transience.PERSISTENT;
-    }
-
-    private BzlLoadFailedException(String errorMessage, Exception cause, Transience transience) {
-      super(errorMessage, cause);
-      this.transience = transience;
-    }
-
-    Transience getTransience() {
-      return transience;
-    }
-
-    // TODO(bazel-team): This exception should hold a Location of the requesting file's load
-    // statement, and code that catches it should use the location in the Event they create.
-    static BzlLoadFailedException whileLoadingDep(
-        String requestingFile, BzlLoadFailedException cause) {
-      // Don't chain exception cause, just incorporate the message with a prefix.
-      return new BzlLoadFailedException("in " + requestingFile + ": " + cause.getMessage());
-    }
-
-    static BzlLoadFailedException errors(PathFragment file) {
-      return new BzlLoadFailedException(String.format("Extension file '%s' has errors", file));
-    }
-
-    static BzlLoadFailedException errorFindingPackage(PathFragment file, Exception cause) {
-      return new BzlLoadFailedException(
-          String.format(
-              "Encountered error while reading extension file '%s': %s", file, cause.getMessage()),
-          cause,
-          Transience.PERSISTENT);
-    }
-
-    static BzlLoadFailedException errorReadingBzl(
-        PathFragment file, ASTLookupFailedException cause) {
-      return new BzlLoadFailedException(
-          String.format(
-              "Encountered error while reading extension file '%s': %s", file, cause.getMessage()),
-          cause,
-          cause.getTransience());
-    }
-
-    static BzlLoadFailedException noBuildFile(Label file, @Nullable String reason) {
-      if (reason != null) {
-        return new BzlLoadFailedException(
-            String.format("Unable to find package for %s: %s.", file, reason));
-      }
-      return new BzlLoadFailedException(
-          String.format(
-              "Every .bzl file must have a corresponding package, but '%s' does not have one."
-                  + " Please create a BUILD file in the same or any parent directory. Note that"
-                  + " this BUILD file does not need to do anything except exist.",
-              file));
-    }
-
-    static BzlLoadFailedException labelCrossesPackageBoundary(
-        Label label, ContainingPackageLookupValue containingPackageLookupValue) {
-      return new BzlLoadFailedException(
-          ContainingPackageLookupValue.getErrorMessageForLabelCrossingPackageBoundary(
-              // We don't actually know the proper Root to pass in here (since we don't e.g. know
-              // the root of the bzl/BUILD file that is trying to load 'label'). Therefore we just
-              // pass in the Root of the containing package in order to still get a useful error
-              // message for the user.
-              containingPackageLookupValue.getContainingPackageRoot(),
-              label,
-              containingPackageLookupValue));
-    }
-
-    static BzlLoadFailedException starlarkErrors(PathFragment file) {
-      return new BzlLoadFailedException(String.format("Extension '%s' has errors", file));
-    }
-
-    static BzlLoadFailedException builtinsFailed(Label file, BuiltinsFailedException cause) {
-      return new BzlLoadFailedException(
-          String.format(
-              "Internal error while loading Starlark builtins for %s: %s",
-              file, cause.getMessage()),
-          cause,
-          cause.getTransience());
-    }
-  }
-
   private static final class BzlLoadFunctionException extends SkyFunctionException {
     private BzlLoadFunctionException(BzlLoadFailedException cause) {
       super(cause, cause.transience);
+    }
+
+    private BzlLoadFunctionException(InconsistentFilesystemException e, Transience transience) {
+      super(e, transience);
     }
   }
 }
