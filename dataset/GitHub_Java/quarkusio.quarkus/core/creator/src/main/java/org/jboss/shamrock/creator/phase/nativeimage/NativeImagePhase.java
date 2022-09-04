@@ -44,7 +44,6 @@ import org.jboss.shamrock.creator.outcome.OutcomeProviderRegistration;
 import org.jboss.shamrock.creator.phase.augment.AugmentOutcome;
 import org.jboss.shamrock.creator.phase.runnerjar.RunnerJarOutcome;
 import org.jboss.shamrock.creator.util.IoUtils;
-
 import io.smallrye.config.SmallRyeConfigProviderResolver;
 
 /**
@@ -57,8 +56,6 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
     private static final Logger log = Logger.getLogger(NativeImagePhase.class);
 
     private static final String GRAALVM_HOME = "GRAALVM_HOME";
-
-    private static final String SHAMROCK_PREFIX = "shamrock.";
 
     private Path outputDir;
 
@@ -293,18 +290,12 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
             }
             // TODO this is a temp hack
             final Path propsFile = ctx.resolveOutcome(AugmentOutcome.class).getAppClassesDir().resolve("native-image.properties");
-
-            boolean enableSslNative = false;
             if (Files.exists(propsFile)) {
                 final Properties properties = new Properties();
                 try (BufferedReader reader = Files.newBufferedReader(propsFile, StandardCharsets.UTF_8)) {
                     properties.load(reader);
                 }
                 for (String propertyName : properties.stringPropertyNames()) {
-                    if (propertyName.startsWith(SHAMROCK_PREFIX)) {
-                        continue;
-                    }
-
                     final String propertyValue = properties.getProperty(propertyName);
                     // todo maybe just -D is better than -J-D in this case
                     if (propertyValue == null) {
@@ -313,14 +304,13 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
                         command.add("-J-D" + propertyName + "=" + propertyValue);
                     }
                 }
-
-                enableSslNative = properties.getProperty("shamrock.ssl.native") != null ? Boolean.parseBoolean(properties.getProperty("shamrock.ssl.native"))
-                        : false;
             }
-            if (enableSslNative) {
-                enableHttpsUrlHandler = true;
-                enableJni = true;
-                enableAllSecurityServices = true;
+            if(config != null) {
+                if(config.getOptionalValue("shamrock.ssl.native", Boolean.class).orElse(false)) {
+                    enableHttpsUrlHandler = true;
+                    enableJni = true;
+                    enableAllSecurityServices = true;
+                }
             }
             if (additionalBuildArgs != null) {
                 additionalBuildArgs.forEach(command::add);
