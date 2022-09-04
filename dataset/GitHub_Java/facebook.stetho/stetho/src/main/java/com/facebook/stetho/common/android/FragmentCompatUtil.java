@@ -1,11 +1,4 @@
-/*
- * Copyright (c) 2014-present, Facebook, Inc.
- * All rights reserved.
- *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.common.android;
 
@@ -18,22 +11,6 @@ import javax.annotation.Nullable;
 
 public final class FragmentCompatUtil {
   private FragmentCompatUtil() {
-  }
-
-  public static boolean isDialogFragment(Object fragment) {
-    FragmentCompat supportLib = FragmentCompat.getSupportLibInstance();
-    if (supportLib != null &&
-        supportLib.getDialogFragmentClass().isInstance(fragment)) {
-      return true;
-    }
-
-    FragmentCompat framework = FragmentCompat.getFrameworkInstance();
-    if (framework != null &&
-        framework.getDialogFragmentClass().isInstance(fragment)) {
-      return true;
-    }
-
-    return false;
   }
 
   @Nullable
@@ -78,12 +55,10 @@ public final class FragmentCompatUtil {
       FragmentCompat compat,
       Activity activity,
       View view) {
-    Object fragmentManager = compat.forFragmentActivity().getFragmentManager(activity);
-    if (fragmentManager != null) {
-      return findFragmentForViewInFragmentManager(compat, fragmentManager, view);
-    } else {
-      return null;
-    }
+    return findFragmentForViewInFragmentManager(
+        compat,
+        compat.forFragmentActivity().getFragmentManager(activity),
+        view);
   }
 
   @Nullable
@@ -94,7 +69,7 @@ public final class FragmentCompatUtil {
     List<?> fragments = compat.forFragmentManager().getAddedFragments(fragmentManager);
 
     if (fragments != null) {
-      for (int i = 0, N = fragments.size(); i < N; ++i) {
+      for (int i = 0; i < fragments.size(); ++i) {
         Object fragment = fragments.get(i);
         Object result = findFragmentForViewInFragment(compat, fragment, view);
         if (result != null) {
