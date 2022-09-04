@@ -196,7 +196,7 @@ public abstract class AbstractService<T extends Configuration> {
      * @return an instanceof Json
      */
     public Json getJson() {
-        final Json json = new Json();
+        Json json = new Json();
         for (Module module : getJacksonModules()) {
             json.registerModule(module);
         }
