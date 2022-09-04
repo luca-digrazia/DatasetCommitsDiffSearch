@@ -202,7 +202,6 @@ public class NativeImageMojo extends AbstractMojo {
                     })
                     .pushOutcome(RunnerJarOutcome.class, new RunnerJarOutcome() {
                         final Path runnerJar = buildDir.toPath().resolve(finalName + "-runner.jar");
-                        final Path originalJar = buildDir.toPath().resolve(finalName + ".jar");
 
                         @Override
                         public Path getRunnerJar() {
@@ -212,11 +211,6 @@ public class NativeImageMojo extends AbstractMojo {
                         @Override
                         public Path getLibDir() {
                             return runnerJar.getParent().resolve("lib");
-                        }
-
-                        @Override
-                        public Path getOriginalJar() {
-                            return originalJar;
                         }
                     })
                     // resolve the outcome of the native image phase
