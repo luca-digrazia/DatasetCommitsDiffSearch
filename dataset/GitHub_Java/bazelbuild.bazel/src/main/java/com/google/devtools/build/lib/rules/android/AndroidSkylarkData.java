@@ -14,254 +14,611 @@
 package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
-import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
+import com.google.devtools.build.lib.analysis.skylark.SkylarkErrorReporter;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.packages.BazelStarlarkContext;
+import com.google.devtools.build.lib.packages.BuiltinProvider;
+import com.google.devtools.build.lib.packages.NativeInfo;
+import com.google.devtools.build.lib.packages.NativeProvider;
+import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.rules.android.AndroidLibraryAarInfo.Aar;
+import com.google.devtools.build.lib.rules.android.databinding.DataBinding;
+import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
+import com.google.devtools.build.lib.rules.java.JavaCompilationInfoProvider;
+import com.google.devtools.build.lib.rules.java.JavaInfo;
+import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
+import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
+import com.google.devtools.build.lib.rules.java.ProguardSpecProvider;
+import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidBinaryDataSettingsApi;
+import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidDataProcessingApi;
+import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import javax.annotation.Nullable;
 
 /** Skylark-visible methods for working with Android data (manifests, resources, and assets). */
-@SkylarkModule(
-    name = "android_data",
-    doc =
-        "Utilities for working with Android data (manifests, resources, and assets). "
-            + "This API is non-final and subject to change without warning; do not rely on it.")
-public class AndroidSkylarkData {
+public abstract class AndroidSkylarkData
+    implements AndroidDataProcessingApi<
+        AndroidDataContext,
+        ConfiguredTarget,
+        Artifact,
+        SpecialArtifact,
+        AndroidAssetsInfo,
+        AndroidResourcesInfo,
+        AndroidManifestInfo,
+        AndroidLibraryAarInfo,
+        AndroidBinaryDataInfo,
+        ValidatedAndroidResources> {
 
-  /**
-   * Skylark API for stamping an Android manifest
-   *
-   * <p>TODO(b/79159379): Stop passing SkylarkRuleContext here
-   *
-   * @param ctx the SkylarkRuleContext. We will soon change to using an ActionConstructionContext
-   *     instead. See b/79159379
-   */
-  @SkylarkCallable(
-      name = "stamp_manifest",
-      mandatoryPositionals = 1, // SkylarkRuleContext ctx is mandatory
-      parameters = {
-        @Param(
-            name = "manifest",
-            positional = false,
-            defaultValue = "None",
-            type = Artifact.class,
-            noneable = true,
-            named = true,
-            doc = "The manifest to stamp. If not passed, a dummy manifest will be generated"),
-        @Param(
-            name = "custom_package",
-            positional = false,
-            defaultValue = "None",
-            type = String.class,
-            noneable = true,
-            named = true,
-            doc =
-                "The Android application package to stamp the manifest with. If not provided, the"
-                    + " current Java package, derived from the location of this target's BUILD"
-                    + " file, will be used. For example, given a BUILD file in"
-                    + " 'java/com/foo/bar/BUILD', the package would be 'com.foo.bar'."),
-        @Param(
-            name = "exports_manifest",
-            positional = false,
-            defaultValue = "False",
-            type = Boolean.class,
-            named = true,
-            doc =
-                "Defaults to False. If passed as True, this manifest will be exported to and"
-                    + " eventually merged into targets that depend on it. Otherwise, it won't be"
-                    + " inherited."),
-      },
-      doc = "Stamps a manifest with package information.")
-  public AndroidManifestInfo stampAndroidManifest(
-      SkylarkRuleContext ctx, Object manifest, Object customPackage, boolean exported) {
-    String pkg = fromNoneable(customPackage, String.class);
-    if (pkg == null) {
-      pkg = AndroidManifest.getDefaultPackage(ctx.getRuleContext());
-    }
+  public abstract AndroidSemantics getAndroidSemantics();
 
-    Artifact primaryManifest = fromNoneable(manifest, Artifact.class);
-    if (primaryManifest == null) {
-      return StampedAndroidManifest.createEmpty(ctx.getRuleContext(), pkg, exported).toProvider();
-    }
-
-    return new AndroidManifest(primaryManifest, pkg, exported)
-        .stamp(ctx.getRuleContext())
-        .toProvider();
+  @Override
+  public AndroidAssetsInfo assetsFromDeps(
+      Sequence<?> deps, // <AndroidAssetsInfo>
+      boolean neverlink,
+      StarlarkThread thread)
+      throws EvalException {
+    // We assume this is an analysis-phase thread.
+    Label label = BazelStarlarkContext.from(thread).getAnalysisRuleLabel();
+    return AssetDependencies.fromProviders(
+            deps.getContents(AndroidAssetsInfo.class, "deps"), neverlink)
+        .toInfo(label);
   }
 
-  /**
-   * Skylark API for merging android_library assets
-   *
-   * <p>TODO(b/79159379): Stop passing SkylarkRuleContext here
-   *
-   * @param ctx the SkylarkRuleContext. We will soon change to using an ActionConstructionContext
-   *     instead. See b/79159379
-   */
-  @SkylarkCallable(
-      name = "merge_assets",
-      mandatoryPositionals = 1, // context
-      parameters = {
-        @Param(
-            name = "assets",
-            positional = false,
-            defaultValue = "None",
-            type = SkylarkList.class,
-            generic1 = ConfiguredTarget.class,
-            noneable = true,
-            named = true,
-            doc =
-                "Targets containing raw assets for this target. If passed, 'assets_dir' must also"
-                    + " be passed."),
-        @Param(
-            name = "assets_dir",
-            positional = false,
-            defaultValue = "None",
-            type = String.class,
-            noneable = true,
-            named = true,
-            doc =
-                "Directory the assets are contained in. Must be passed if and only if 'assets' is"
-                    + " passed. This path will be split off of the asset paths on the device."),
-        @Param(
-            name = "deps",
-            positional = false,
-            defaultValue = "[]",
-            type = SkylarkList.class,
-            generic1 = AndroidAssetsInfo.class,
-            named = true,
-            doc =
-                "Providers containing assets from dependencies. These assets will be merged"
-                    + " together with each other and this target's assets."),
-        @Param(
-            name = "neverlink",
-            positional = false,
-            defaultValue = "False",
-            type = Boolean.class,
-            named = true,
-            doc =
-                "Defaults to False. If passed as True, these assets will not be inherited by"
-                    + " targets that depend on this one.")
-      },
-      doc =
-          "Merges this target's assets together with assets inherited from dependencies. Note that,"
-              + " by default, actions for validating the merge are created but may not be called."
-              + " You may want to force these actions to be called - see the 'validation_result'"
-              + " field in AndroidAssetsInfo")
+  @Override
+  public AndroidResourcesInfo resourcesFromDeps(
+      AndroidDataContext ctx,
+      Sequence<?> deps, // <AndroidResourcesInfo>
+      Sequence<?> assets, // <AndroidAssetsInfo>
+      boolean neverlink,
+      String customPackage)
+      throws InterruptedException, EvalException {
+    try (SkylarkErrorReporter errorReporter =
+        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer())) {
+      return ResourceApk.processFromTransitiveLibraryData(
+              ctx,
+              DataBinding.getDisabledDataBindingContext(ctx),
+              ResourceDependencies.fromProviders(
+                  deps.getContents(AndroidResourcesInfo.class, "deps"),
+                  /* neverlink = */ neverlink),
+              AssetDependencies.fromProviders(
+                  assets.getContents(AndroidAssetsInfo.class, "assets"),
+                  /* neverlink = */ neverlink),
+              StampedAndroidManifest.createEmpty(
+                  ctx.getActionConstructionContext(), customPackage, /* exported = */ false))
+          .toResourceInfo(ctx.getLabel());
+    }
+  }
+
+  @Override
+  public AndroidManifestInfo stampAndroidManifest(
+      AndroidDataContext ctx, Object manifest, Object customPackage, boolean exported)
+      throws InterruptedException, EvalException {
+    String pkg = fromNoneable(customPackage, String.class);
+    try (SkylarkErrorReporter errorReporter =
+        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer())) {
+      return AndroidManifest.from(
+              ctx,
+              errorReporter,
+              fromNoneable(manifest, Artifact.class),
+              getAndroidSemantics(),
+              pkg,
+              exported)
+          .stamp(ctx)
+          .toProvider();
+    }
+  }
+
+  @Override
   public AndroidAssetsInfo mergeAssets(
-      SkylarkRuleContext ctx,
+      AndroidDataContext ctx,
       Object assets,
       Object assetsDir,
-      SkylarkList<AndroidAssetsInfo> deps,
+      Sequence<?> deps, // <AndroidAssetsInfo>
       boolean neverlink)
       throws EvalException, InterruptedException {
+    SkylarkErrorReporter errorReporter = SkylarkErrorReporter.from(ctx.getRuleErrorConsumer());
     try {
       return AndroidAssets.from(
-              ctx.getRuleContext(),
+              errorReporter,
               listFromNoneable(assets, ConfiguredTarget.class),
               isNone(assetsDir) ? null : PathFragment.create(fromNoneable(assetsDir, String.class)))
-          .parse(ctx.getRuleContext())
-          .merge(
-              ctx.getRuleContext(),
-              AssetDependencies.fromProviders(deps.getImmutableList(), neverlink))
+          .process(
+              ctx,
+              AssetDependencies.fromProviders(
+                  deps.getContents(AndroidAssetsInfo.class, "deps"), neverlink))
           .toProvider();
     } catch (RuleErrorException e) {
-      throw new EvalException(Location.BUILTIN, e);
+      throw handleRuleException(errorReporter, e);
     }
   }
 
-  /**
-   * Skylark API for merging android_library resources
-   *
-   * <p>TODO(b/79159379): Stop passing SkylarkRuleContext here
-   *
-   * @param ctx the SkylarkRuleContext. We will soon change to using an ActionConstructionContext
-   *     instead. See b/79159379
-   */
-  @SkylarkCallable(
-      name = "merge_resources",
-      mandatoryPositionals = 2, // context, manifest
-      parameters = {
-        @Param(
-            name = "resources",
-            positional = false,
-            defaultValue = "[]",
-            type = SkylarkList.class,
-            generic1 = FileProvider.class,
-            named = true,
-            doc = "Providers of this target's resources"),
-        @Param(
-            name = "deps",
-            positional = false,
-            defaultValue = "[]",
-            type = SkylarkList.class,
-            generic1 = AndroidResourcesInfo.class,
-            named = true,
-            doc =
-                "Targets containing raw resources from dependencies. These resources will be merged"
-                    + " together with each other and this target's resources."),
-        @Param(
-            name = "neverlink",
-            positional = false,
-            defaultValue = "False",
-            type = Boolean.class,
-            named = true,
-            doc =
-                "Defaults to False. If passed as True, these resources will not be inherited by"
-                    + " targets that depend on this one."),
-      },
-      doc =
-          "Merges this target's resources together with resources inherited from dependencies. The"
-              + " passed manifest provider is used to get Android package information and to"
-              + " validate that all resources it refers to are available. Note that this method"
-              + " might do additional processing to this manifest, so in the future, you may want"
-              + " to use the manifest contained in this method's output instead of this one.")
-  public AndroidResourcesInfo mergeResources(
-      SkylarkRuleContext ctx,
+  @Override
+  public ValidatedAndroidResources mergeRes(
+      AndroidDataContext ctx,
       AndroidManifestInfo manifest,
-      SkylarkList<ConfiguredTarget> resources,
-      SkylarkList<AndroidResourcesInfo> deps,
+      Sequence<?> resources, // <ConfiguredTarget>
+      Sequence<?> deps, // <AndroidResourcesInfo>
+      boolean neverlink,
+      boolean enableDataBinding)
+      throws EvalException, InterruptedException {
+    SkylarkErrorReporter errorReporter = SkylarkErrorReporter.from(ctx.getRuleErrorConsumer());
+    try {
+      return AndroidResources.from(
+              errorReporter,
+              getFileProviders(resources.getContents(ConfiguredTarget.class, "resources")),
+              "resources")
+          .process(
+              ctx,
+              manifest.asStampedManifest(),
+              ResourceDependencies.fromProviders(
+                  deps.getContents(AndroidResourcesInfo.class, "deps"), neverlink),
+              DataBinding.contextFrom(
+                  enableDataBinding, ctx.getActionConstructionContext(), ctx.getAndroidConfig()));
+    } catch (RuleErrorException e) {
+      throw handleRuleException(errorReporter, e);
+    }
+  }
+
+  @Override
+  public Dict<Provider, NativeInfo> mergeResources(
+      AndroidDataContext ctx,
+      AndroidManifestInfo manifest,
+      Sequence<?> resources, // <ConfiguredTarget>
+      Sequence<?> deps, // <AndroidResourcesInfo>
+      boolean neverlink,
+      boolean enableDataBinding)
+      throws EvalException, InterruptedException {
+    ValidatedAndroidResources validated =
+        mergeRes(ctx, manifest, resources, deps, neverlink, enableDataBinding);
+    JavaInfo javaInfo =
+        getJavaInfoForRClassJar(validated.getClassJar(), validated.getJavaSourceJar());
+    return Dict.of(
+        (Mutability) null,
+        AndroidResourcesInfo.PROVIDER,
+        validated.toProvider(),
+        JavaInfo.PROVIDER,
+        javaInfo);
+  }
+
+  @Override
+  public AndroidLibraryAarInfo makeAar(
+      AndroidDataContext ctx,
+      AndroidResourcesInfo resourcesInfo,
+      AndroidAssetsInfo assetsInfo,
+      Artifact libraryClassJar,
+      Sequence<?> localProguardSpecs, // <Artifact>
+      Sequence<?> deps, // <AndroidLibraryAarInfo>
       boolean neverlink)
       throws EvalException, InterruptedException {
+    if (neverlink) {
+      return AndroidLibraryAarInfo.create(
+          null,
+          NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER),
+          NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER));
+    }
 
-    ImmutableList<FileProvider> fileProviders =
-        resources
-            .stream()
-            .map(target -> target.getProvider(FileProvider.class))
-            .filter(Objects::nonNull)
-            .collect(ImmutableList.toImmutableList());
+    // Get the target's local resources, if defined, from the provider
+    Optional<? extends AndroidResources> resources =
+        resourcesInfo.getDirectAndroidResources().toList().stream()
+            .filter(r -> r.getLabel().equals(ctx.getLabel()))
+            .findFirst();
+    boolean definesLocalResources = resources.isPresent();
+
+    // Get the target's local assets, if defined, from the provider
+    Optional<? extends AndroidAssets> assets =
+        assetsInfo.getDirectParsedAssets().toList().stream()
+            .filter(a -> a.getLabel().equals(ctx.getLabel()))
+            .findFirst();
+    // The target might still define an empty list of assets, in which case its information is not
+    // propagated for efficiency. If this is the case, we will still have an artifact for the
+    // merging output.
+    boolean definesLocalAssets = assets.isPresent() || assetsInfo.getValidationResult() != null;
+
+    if (definesLocalResources != definesLocalAssets) {
+      throw new EvalException(
+          Location.BUILTIN,
+          "Must define either both or none of assets and resources. Use the merge_assets and"
+              + " merge_resources methods to define them, or assets_from_deps and"
+              + " resources_from_deps to inherit without defining them.");
+    }
+
+    return Aar.makeAar(
+            ctx,
+            resources.isPresent() ? resources.get() : AndroidResources.empty(),
+            assets.isPresent() ? assets.get() : AndroidAssets.empty(),
+            resourcesInfo.getManifest(),
+            resourcesInfo.getRTxt(),
+            libraryClassJar,
+            ImmutableList.copyOf(
+                localProguardSpecs.getContents(Artifact.class, "local_proguard_specs")))
+        .toProvider(deps.getContents(AndroidLibraryAarInfo.class, "deps"), definesLocalResources);
+  }
+
+  @Override
+  public Dict<Provider, NativeInfo> processAarImportData(
+      AndroidDataContext ctx,
+      SpecialArtifact resources,
+      SpecialArtifact assets,
+      Artifact androidManifestArtifact,
+      Sequence<?> deps) // <ConfiguredTarget>
+      throws InterruptedException, EvalException {
+    List<ConfiguredTarget> depsTargets = deps.getContents(ConfiguredTarget.class, "deps");
+
+    ValidatedAndroidResources validatedResources =
+        AndroidResources.forAarImport(resources)
+            .process(
+                ctx,
+                AndroidManifest.forAarImport(androidManifestArtifact),
+                ResourceDependencies.fromProviders(
+                    getProviders(depsTargets, AndroidResourcesInfo.PROVIDER),
+                    /* neverlink = */ false),
+                DataBinding.getDisabledDataBindingContext(ctx));
+
+    MergedAndroidAssets mergedAssets =
+        AndroidAssets.forAarImport(assets)
+            .process(
+                ctx,
+                AssetDependencies.fromProviders(
+                    getProviders(depsTargets, AndroidAssetsInfo.PROVIDER),
+                    /* neverlink = */ false));
+
+    ResourceApk resourceApk = ResourceApk.of(validatedResources, mergedAssets, null, null);
+
+    return getNativeInfosFrom(resourceApk, ctx.getLabel());
+  }
+
+  @Override
+  public Dict<Provider, NativeInfo> processLocalTestData(
+      AndroidDataContext ctx,
+      Object manifest,
+      Sequence<?> resources, // <ConfiguredTarget>
+      Object assets,
+      Object assetsDir,
+      Object customPackage,
+      String aaptVersionString,
+      Dict<?, ?> manifestValues, // <String, String>
+      Sequence<?> deps, // <ConfiguredTarget>
+      Sequence<?> noCompressExtensions, // <String>
+      Sequence<?> resourceConfigurationFilters, // <String>
+      Sequence<?> densities) // <String>)
+      throws InterruptedException, EvalException {
+    SkylarkErrorReporter errorReporter = SkylarkErrorReporter.from(ctx.getRuleErrorConsumer());
+    List<ConfiguredTarget> depsTargets = deps.getContents(ConfiguredTarget.class, "deps");
 
     try {
-      return AndroidResources.from(ctx.getRuleContext(), fileProviders, "resources")
-          .parse(ctx.getRuleContext(), manifest.asStampedManifest())
-          .merge(ctx.getRuleContext(), ResourceDependencies.fromProviders(deps, neverlink))
-          .validate(ctx.getRuleContext())
-          .toProvider();
+      AndroidManifest rawManifest =
+          AndroidManifest.from(
+              ctx,
+              errorReporter,
+              fromNoneable(manifest, Artifact.class),
+              fromNoneable(customPackage, String.class),
+              /* exportsManifest = */ false);
+
+      ResourceApk resourceApk =
+          AndroidLocalTestBase.buildResourceApk(
+              ctx,
+              getAndroidSemantics(),
+              errorReporter,
+              DataBinding.getDisabledDataBindingContext(ctx),
+              rawManifest,
+              AndroidResources.from(
+                  errorReporter,
+                  getFileProviders(resources.getContents(ConfiguredTarget.class, "resource_files")),
+                  "resource_files"),
+              AndroidAssets.from(
+                  errorReporter,
+                  listFromNoneable(assets, ConfiguredTarget.class),
+                  isNone(assetsDir)
+                      ? null
+                      : PathFragment.create(fromNoneable(assetsDir, String.class))),
+              ResourceDependencies.fromProviders(
+                  getProviders(depsTargets, AndroidResourcesInfo.PROVIDER),
+                  /* neverlink = */ false),
+              AssetDependencies.fromProviders(
+                  getProviders(depsTargets, AndroidAssetsInfo.PROVIDER), /* neverlink = */ false),
+              manifestValues.getContents(String.class, String.class, "manifest_values"),
+              noCompressExtensions.getContents(String.class, "nocompress_extensions"),
+              ResourceFilterFactory.from(
+                  resourceConfigurationFilters.getContents(
+                      String.class, "resource_configuration_filters"),
+                  densities.getContents(String.class, "densities")));
+
+      ImmutableMap.Builder<Provider, NativeInfo> builder = ImmutableMap.builder();
+      builder.putAll(getNativeInfosFrom(resourceApk, ctx.getLabel()));
+      builder.put(
+          AndroidBinaryDataInfo.PROVIDER,
+          AndroidBinaryDataInfo.of(
+              resourceApk.getArtifact(),
+              resourceApk.getResourceProguardConfig(),
+              resourceApk.toResourceInfo(ctx.getLabel()),
+              resourceApk.toAssetsInfo(ctx.getLabel()),
+              resourceApk.toManifestInfo().get()));
+      return Dict.copyOf((Mutability) null, builder.build());
     } catch (RuleErrorException e) {
-      throw new EvalException(Location.BUILTIN, e);
+      throw handleRuleException(errorReporter, e);
     }
+  }
+
+  private static IllegalStateException handleRuleException(
+      SkylarkErrorReporter errorReporter, RuleErrorException exception) throws EvalException {
+    // The error reporter should have been notified of the rule error, and thus closing it will
+    // throw an EvalException.
+    errorReporter.close();
+    // It's a catastrophic state error if the errorReporter did not pick up the error.
+    throw new IllegalStateException("Unhandled RuleErrorException", exception);
+  }
+
+  @Override
+  public BinaryDataSettings makeBinarySettings(
+      AndroidDataContext ctx,
+      Object shrinkResources,
+      Sequence<?> resourceConfigurationFilters, // <String>
+      Sequence<?> densities, // <String>
+      Sequence<?> noCompressExtensions) // <String>
+      throws EvalException {
+    return new BinaryDataSettings(
+        fromNoneableOrDefault(
+            shrinkResources, Boolean.class, ctx.getAndroidConfig().useAndroidResourceShrinking()),
+        ResourceFilterFactory.from(
+            resourceConfigurationFilters.getContents(
+                String.class, "resource_configuration_filters"),
+            densities.getContents(String.class, "densities")),
+        ImmutableList.copyOf(
+            noCompressExtensions.getContents(String.class, "nocompress_extensions")));
+  }
+
+  @Override
+  public Artifact resourcesFromValidatedRes(ValidatedAndroidResources resources) {
+    return resources.getMergedResources();
+  }
+
+  /**
+   * Helper method to get default {@link
+   * com.google.devtools.build.lib.rules.android.AndroidSkylarkData.BinaryDataSettings}.
+   */
+  private BinaryDataSettings defaultBinaryDataSettings(AndroidDataContext ctx)
+      throws EvalException {
+    return makeBinarySettings(
+        ctx, Starlark.NONE, StarlarkList.empty(), StarlarkList.empty(), StarlarkList.empty());
+  }
+
+  private static class BinaryDataSettings implements AndroidBinaryDataSettingsApi {
+    private final boolean shrinkResources;
+    private final ResourceFilterFactory resourceFilterFactory;
+    private final ImmutableList<String> noCompressExtensions;
+
+    private BinaryDataSettings(
+        boolean shrinkResources,
+        ResourceFilterFactory resourceFilterFactory,
+        ImmutableList<String> noCompressExtensions) {
+      this.shrinkResources = shrinkResources;
+      this.resourceFilterFactory = resourceFilterFactory;
+      this.noCompressExtensions = noCompressExtensions;
+    }
+  }
+
+  @Override
+  public AndroidBinaryDataInfo processBinaryData(
+      AndroidDataContext ctx,
+      Sequence<?> resources,
+      Object assets,
+      Object assetsDir,
+      Object manifest,
+      Object customPackage,
+      Dict<?, ?> manifestValues, // <String, String>
+      Sequence<?> deps, // <ConfiguredTarget>
+      String manifestMerger,
+      Object maybeSettings,
+      boolean crunchPng,
+      boolean dataBindingEnabled)
+      throws InterruptedException, EvalException {
+    SkylarkErrorReporter errorReporter = SkylarkErrorReporter.from(ctx.getRuleErrorConsumer());
+    List<ConfiguredTarget> depsTargets = deps.getContents(ConfiguredTarget.class, "deps");
+    Map<String, String> manifestValueMap =
+        manifestValues.getContents(String.class, String.class, "manifest_values");
+
+    try {
+      BinaryDataSettings settings =
+          fromNoneableOrDefault(
+              maybeSettings, BinaryDataSettings.class, defaultBinaryDataSettings(ctx));
+
+      AndroidManifest rawManifest =
+          AndroidManifest.from(
+              ctx,
+              errorReporter,
+              fromNoneable(manifest, Artifact.class),
+              getAndroidSemantics(),
+              fromNoneable(customPackage, String.class),
+              /* exportsManifest = */ false);
+
+      ResourceDependencies resourceDeps =
+          ResourceDependencies.fromProviders(
+              getProviders(depsTargets, AndroidResourcesInfo.PROVIDER), /* neverlink = */ false);
+
+      StampedAndroidManifest stampedManifest =
+          rawManifest.mergeWithDeps(
+              ctx,
+              getAndroidSemantics(),
+              errorReporter,
+              resourceDeps,
+              manifestValueMap,
+              manifestMerger);
+
+      ResourceApk resourceApk =
+          ProcessedAndroidData.processBinaryDataFrom(
+                  ctx,
+                  errorReporter,
+                  stampedManifest,
+                  AndroidBinary.shouldShrinkResourceCycles(
+                      ctx.getAndroidConfig(), errorReporter, settings.shrinkResources),
+                  manifestValueMap,
+                  AndroidResources.from(
+                      errorReporter,
+                      getFileProviders(
+                          resources.getContents(ConfiguredTarget.class, "resource_files")),
+                      "resource_files"),
+                  AndroidAssets.from(
+                      errorReporter,
+                      listFromNoneable(assets, ConfiguredTarget.class),
+                      isNone(assetsDir)
+                          ? null
+                          : PathFragment.create(fromNoneable(assetsDir, String.class))),
+                  resourceDeps,
+                  AssetDependencies.fromProviders(
+                      getProviders(depsTargets, AndroidAssetsInfo.PROVIDER),
+                      /* neverlink = */ false),
+                  settings.resourceFilterFactory,
+                  settings.noCompressExtensions,
+                  crunchPng,
+                  DataBinding.contextFrom(
+                      dataBindingEnabled,
+                      ctx.getActionConstructionContext(),
+                      ctx.getAndroidConfig()))
+              .generateRClass(ctx);
+
+      return AndroidBinaryDataInfo.of(
+          resourceApk.getArtifact(),
+          resourceApk.getResourceProguardConfig(),
+          resourceApk.toResourceInfo(ctx.getLabel()),
+          resourceApk.toAssetsInfo(ctx.getLabel()),
+          resourceApk.toManifestInfo().get());
+
+    } catch (RuleErrorException e) {
+      throw handleRuleException(errorReporter, e);
+    }
+  }
+
+  @Override
+  public AndroidBinaryDataInfo shrinkDataApk(
+      AndroidDataContext ctx,
+      AndroidBinaryDataInfo binaryDataInfo,
+      Artifact proguardOutputJar,
+      Artifact proguardMapping,
+      Object maybeSettings,
+      Sequence<?> deps, // <ConfiguredTarget>
+      Sequence<?> localProguardSpecs, // <ConfiguredTarget>
+      Sequence<?> extraProguardSpecs) // <ConfiguredTarget>
+      throws EvalException, InterruptedException {
+    BinaryDataSettings settings =
+        fromNoneableOrDefault(
+            maybeSettings, BinaryDataSettings.class, defaultBinaryDataSettings(ctx));
+    List<ConfiguredTarget> depsTargets = deps.getContents(ConfiguredTarget.class, "deps");
+
+    if (!settings.shrinkResources) {
+      return binaryDataInfo;
+    }
+
+    ImmutableList<Artifact> proguardSpecs =
+        AndroidBinary.getProguardSpecs(
+            ctx,
+            getAndroidSemantics(),
+            binaryDataInfo.getResourceProguardConfig(),
+            binaryDataInfo.getManifestInfo().getManifest(),
+            filesFromConfiguredTargets(
+                localProguardSpecs.getContents(ConfiguredTarget.class, "proguard_specs")),
+            filesFromConfiguredTargets(
+                extraProguardSpecs.getContents(ConfiguredTarget.class, "extra_proguard_specs")),
+            getProviders(depsTargets, ProguardSpecProvider.PROVIDER));
+
+    // TODO(asteinb): There should never be more than one direct resource exposed in the provider.
+    // Can we adjust its structure to take this into account?
+    if (!binaryDataInfo.getResourcesInfo().getDirectAndroidResources().isSingleton()) {
+      throw new EvalException(
+          Location.BUILTIN,
+          "Expected exactly 1 direct android resource container, but found: "
+              + binaryDataInfo.getResourcesInfo().getDirectAndroidResources());
+    }
+
+    if (!proguardSpecs.isEmpty()) {
+      Artifact shrunkApk =
+          AndroidBinary.shrinkResources(
+              ctx,
+              binaryDataInfo.getResourcesInfo().getDirectAndroidResources().toList().get(0),
+              ResourceDependencies.fromProviders(
+                  getProviders(depsTargets, AndroidResourcesInfo.PROVIDER),
+                  /* neverlink = */ false),
+              proguardOutputJar,
+              proguardMapping,
+              settings.resourceFilterFactory,
+              settings.noCompressExtensions);
+      return binaryDataInfo.withShrunkApk(shrunkApk);
+    }
+
+    return binaryDataInfo;
+  }
+
+  public static Dict<Provider, NativeInfo> getNativeInfosFrom(
+      ResourceApk resourceApk, Label label) {
+    ImmutableMap.Builder<Provider, NativeInfo> builder = ImmutableMap.builder();
+
+    builder
+        .put(AndroidResourcesInfo.PROVIDER, resourceApk.toResourceInfo(label))
+        .put(AndroidAssetsInfo.PROVIDER, resourceApk.toAssetsInfo(label));
+
+    resourceApk.toManifestInfo().ifPresent(info -> builder.put(AndroidManifestInfo.PROVIDER, info));
+
+    builder.put(
+        JavaInfo.PROVIDER,
+        getJavaInfoForRClassJar(
+            resourceApk.getResourceJavaClassJar(), resourceApk.getResourceJavaSrcJar()));
+
+    return Dict.copyOf((Mutability) null, builder.build());
+  }
+
+  private static JavaInfo getJavaInfoForRClassJar(Artifact rClassJar, Artifact rClassSrcJar) {
+    return JavaInfo.Builder.create()
+        .setNeverlink(true)
+        .addProvider(
+            JavaSourceJarsProvider.class,
+            JavaSourceJarsProvider.builder().addSourceJar(rClassSrcJar).build())
+        .addProvider(
+            JavaRuleOutputJarsProvider.class,
+            JavaRuleOutputJarsProvider.builder()
+                .addOutputJar(rClassJar, null, null, ImmutableList.of(rClassSrcJar))
+                .build())
+        .addProvider(
+            JavaCompilationArgsProvider.class,
+            JavaCompilationArgsProvider.builder()
+                .addDirectCompileTimeJar(rClassJar, rClassJar)
+                .build())
+        .addProvider(
+            JavaCompilationInfoProvider.class,
+            new JavaCompilationInfoProvider.Builder()
+                .setCompilationClasspath(NestedSetBuilder.create(Order.NAIVE_LINK_ORDER, rClassJar))
+                .build())
+        .build();
   }
 
   /** Checks if a "Noneable" object passed by Skylark is "None", which Java should treat as null. */
-  private static boolean isNone(Object object) {
-    return object == Runtime.NONE;
+  public static boolean isNone(Object object) {
+    return object == Starlark.NONE;
   }
 
   /**
    * Converts a "Noneable" Object passed by Skylark to an nullable object of the appropriate type.
    *
    * <p>Skylark "Noneable" types are passed in as an Object that may be either the correct type or a
-   * Runtime.NONE object. Skylark will handle type checking, based on the appropriate @param
+   * Starlark.NONE object. Skylark will handle type checking, based on the appropriate @param
    * annotation, but we still need to do the actual cast (or conversion to null) ourselves.
    *
    * @param object the Noneable object
@@ -270,7 +627,7 @@ public class AndroidSkylarkData {
    * @return {@code null}, if the noneable argument was None, or the cast object, otherwise.
    */
   @Nullable
-  private static <T> T fromNoneable(Object object, Class<T> clazz) {
+  public static <T> T fromNoneable(Object object, Class<T> clazz) {
     if (isNone(object)) {
       return null;
     }
@@ -278,19 +635,69 @@ public class AndroidSkylarkData {
     return clazz.cast(object);
   }
 
+  public static <T> T fromNoneableOrDefault(Object object, Class<T> clazz, T defaultValue) {
+    T value = fromNoneable(object, clazz);
+    if (value == null) {
+      return defaultValue;
+    }
+
+    return value;
+  }
+
   /**
    * Converts a "Noneable" Object passed by Skylark to a List of the appropriate type.
    *
-   * <p>This first calls {@link #fromNoneable(Object, Class)} to get a SkylarkList<?>, then safely
+   * <p>This first calls {@link #fromNoneable(Object, Class)} to get a Sequence<?>, then safely
    * casts it to a list with the appropriate generic.
    */
   @Nullable
-  private static <T> List<T> listFromNoneable(Object object, Class<T> clazz) throws EvalException {
-    SkylarkList<?> asList = fromNoneable(object, SkylarkList.class);
+  public static <T> List<T> listFromNoneable(Object object, Class<T> clazz) throws EvalException {
+    Sequence<?> asList = fromNoneable(object, Sequence.class);
     if (asList == null) {
       return null;
     }
 
-    return SkylarkList.castList(asList, clazz, null);
+    return Sequence.castList(asList, clazz, null);
+  }
+
+  private static ImmutableList<Artifact> filesFromConfiguredTargets(
+      List<ConfiguredTarget> targets) {
+    ImmutableList.Builder<Artifact> builder = ImmutableList.builder();
+    for (FileProvider provider : getFileProviders(targets)) {
+      builder.addAll(provider.getFilesToBuild().toList());
+    }
+
+    return builder.build();
+  }
+
+  private static ImmutableList<FileProvider> getFileProviders(List<ConfiguredTarget> targets) {
+    return getProviders(targets, FileProvider.class);
+  }
+
+  private static <T extends TransitiveInfoProvider> ImmutableList<T> getProviders(
+      List<ConfiguredTarget> targets, Class<T> clazz) {
+    return targets
+        .stream()
+        .map(target -> target.getProvider(clazz))
+        .filter(Objects::nonNull)
+        .collect(ImmutableList.toImmutableList());
+  }
+
+  public static <T extends NativeInfo> Sequence<T> getProviders(
+      List<ConfiguredTarget> targets, NativeProvider<T> provider) {
+    return StarlarkList.immutableCopyOf(
+        targets.stream()
+            .map(target -> target.get(provider))
+            .filter(Objects::nonNull)
+            .collect(ImmutableList.toImmutableList()));
+  }
+
+  protected static <T extends NativeInfo> Sequence<T> getProviders(
+      List<ConfiguredTarget> targets, BuiltinProvider<T> provider) {
+    return StarlarkList.immutableCopyOf(
+        targets.stream()
+            .map(target -> target.get(provider))
+            .filter(Objects::nonNull)
+            .collect(ImmutableList.toImmutableList()));
   }
 }
