@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -42,8 +42,8 @@ import com.sun.codemodel.JVar;
 
 public abstract class MethodProcessor implements ElementProcessor {
 
-	protected final RestImplementationsHolder restImplementationsHolder;
-	protected final RestAnnotationHelper restAnnotationHelper;
+	protected final RestImplementationsHolder	restImplementationsHolder;
+	protected final RestAnnotationHelper		restAnnotationHelper;
 
 	public MethodProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationHolder) {
 		this.restImplementationsHolder = restImplementationHolder;
@@ -51,15 +51,16 @@ public abstract class MethodProcessor implements ElementProcessor {
 	}
 
 	protected void generateRestTemplateCallBlock(MethodProcessorHolder methodHolder) {
+
 		RestImplementationHolder holder = restImplementationsHolder.getEnclosingHolder(methodHolder.getElement());
 		ExecutableElement executableElement = (ExecutableElement) methodHolder.getElement();
+		
 		JClass expectedClass = methodHolder.getExpectedClass();
 		JClass generatedReturnType = methodHolder.getGeneratedReturnType();
 
 		JMethod method;
 		String methodName = executableElement.getSimpleName().toString();
-		boolean methodReturnVoid = generatedReturnType == null && expectedClass == null;
-		if (methodReturnVoid) {
+		if (generatedReturnType == null && expectedClass == null) {
 			method = holder.restImplementationClass.method(JMod.PUBLIC, void.class, methodName);
 		} else {
 			method = holder.restImplementationClass.method(JMod.PUBLIC, methodHolder.getGeneratedReturnType(), methodName);
@@ -76,10 +77,9 @@ public abstract class MethodProcessor implements ElementProcessor {
 
 		JClass httpMethod = holder.refClass(ProcessorConstants.HTTP_METHOD);
 		// add method type param
-		String restMethodInCapitalLetters = getTarget().getSimpleName().toUpperCase();
-		restCall.arg(httpMethod.staticRef(restMethodInCapitalLetters));
+		restCall.arg(httpMethod.staticRef(getTarget().getSimpleName().toUpperCase()));
 
-		TreeMap<String, JVar> methodParams = (TreeMap<String, JVar>) generateMethodParamsVar(method, executableElement, holder);
+		TreeMap<String, JVar> methodParams = (TreeMap<String, JVar>) generateMethodParametersVar(method, executableElement, holder);
 
 		// update method holder
 		methodHolder.setBody(body);
@@ -90,14 +90,15 @@ public abstract class MethodProcessor implements ElementProcessor {
 		restCall = addHttpEntityVar(restCall, methodHolder);
 		restCall = addResponseEntityArg(restCall, methodHolder);
 
-		boolean hasParametersInUrl = hashMapVar != null;
-		if (hasParametersInUrl) {
+		// add hashMap param containing url variables
+		if (hashMapVar != null) {
 			restCall.arg(hashMapVar);
 		}
-
+		
 		restCall = addResultCallMethod(restCall, methodHolder);
 
-		insertRestCallInBody(body, restCall, methodReturnVoid);
+		boolean returnResult = generatedReturnType == null && expectedClass == null;
+		insertRestCallInBody(body, restCall, returnResult);
 	}
 
 	protected abstract JInvocation addHttpEntityVar(JInvocation restCall, MethodProcessorHolder methodHolder);
@@ -105,21 +106,22 @@ public abstract class MethodProcessor implements ElementProcessor {
 	protected abstract JInvocation addResponseEntityArg(JInvocation restCall, MethodProcessorHolder methodHolder);
 
 	protected abstract JInvocation addResultCallMethod(JInvocation restCall, MethodProcessorHolder methodHolder);
-
-	private void insertRestCallInBody(JBlock body, JInvocation restCall, boolean methodReturnVoid) {
-		if (methodReturnVoid)
+	
+	private void insertRestCallInBody(JBlock body, JInvocation restCall, boolean returnResult) {
+		if (returnResult)
 			body.add(restCall);
 		else
 			body._return(restCall);
 	}
-
+	
 	private JVar generateHashMapVar(MethodProcessorHolder methodHolder) {
 		ExecutableElement element = (ExecutableElement) methodHolder.getElement();
 		JCodeModel codeModel = methodHolder.getCodeModel();
 		JBlock body = methodHolder.getBody();
 		TreeMap<String, JVar> methodParams = methodHolder.getMethodParams();
 		JVar hashMapVar = null;
-
+		
+		// retrieve url place holder
 		List<String> urlVariables = restAnnotationHelper.extractUrlVariableNames(element);
 		JClass hashMapClass = codeModel.ref(HashMap.class).narrow(String.class, Object.class);
 		if (!urlVariables.isEmpty()) {
@@ -139,7 +141,7 @@ public abstract class MethodProcessor implements ElementProcessor {
 		JClass httpEntity = holder.refClass(ProcessorConstants.HTTP_ENTITY);
 		JInvocation newHttpEntityVarCall;
 		JClass expectedClass = methodHolder.getExpectedClass();
-
+		
 		boolean hasEntitySentToServer = expectedClass != null;
 		if (hasEntitySentToServer) {
 			newHttpEntityVarCall = JExpr._new(httpEntity.narrow(expectedClass));
@@ -149,19 +151,18 @@ public abstract class MethodProcessor implements ElementProcessor {
 
 		JBlock body = methodHolder.getBody();
 		JVar httpHeadersVar = generateHttpHeadersVar(body, executableElement);
-
+		
 		boolean hasHeaders = httpHeadersVar != null;
 		TreeMap<String, JVar> methodParams = methodHolder.getMethodParams();
 		if (hasHeaders) {
 			if (!methodParams.isEmpty()) {
-				JVar entitySentToServer = methodParams.firstEntry().getValue();
-				newHttpEntityVarCall.arg(entitySentToServer);
+				newHttpEntityVarCall.arg(methodParams.firstEntry().getValue());
 			}
 			newHttpEntityVarCall.arg(httpHeadersVar);
+
 		} else {
 			if (!methodParams.isEmpty()) {
-				JVar entitySentToServer = methodParams.firstEntry().getValue();
-				newHttpEntityVarCall.arg(entitySentToServer);
+				newHttpEntityVarCall.arg(methodParams.firstEntry().getValue());
 			} else {
 				newHttpEntityVarCall.arg(JExpr._null());
 			}
@@ -177,6 +178,8 @@ public abstract class MethodProcessor implements ElementProcessor {
 
 		return httpEntityVar;
 	}
+	
+	protected abstract JVar addHttpHeadersVar(JBlock body, ExecutableElement executableElement);
 
 	protected JVar generateHttpHeadersVar(JBlock body, ExecutableElement executableElement) {
 		RestImplementationHolder holder = restImplementationsHolder.getEnclosingHolder(executableElement);
@@ -186,15 +189,14 @@ public abstract class MethodProcessor implements ElementProcessor {
 		httpHeadersVar = body.decl(httpHeadersClass, "httpHeaders", JExpr._new(httpHeadersClass));
 
 		String mediaType = retrieveAcceptAnnotationValue(executableElement);
-		boolean hasMediaTypeDefined = mediaType != null;
-		if (hasMediaTypeDefined) {
+		if (mediaType != null) {
 			JClass collectionsClass = holder.refClass(ProcessorConstants.COLLECTIONS);
 			JClass mediaTypeClass = holder.refClass(ProcessorConstants.MEDIA_TYPE);
-
+	
 			JInvocation mediaTypeListParam = collectionsClass.staticInvoke("singletonList").arg(mediaTypeClass.staticRef(mediaType));
 			body.add(JExpr.invoke(httpHeadersVar, "setAccept").arg(mediaTypeListParam));
 		}
-
+		
 		return httpHeadersVar;
 	}
 
@@ -210,10 +212,10 @@ public abstract class MethodProcessor implements ElementProcessor {
 		}
 	}
 
-	private Map<String, JVar> generateMethodParamsVar(JMethod method, ExecutableElement executableElement, RestImplementationHolder holder) {
-		List<? extends VariableElement> params = executableElement.getParameters();
+	private Map<String, JVar> generateMethodParametersVar(JMethod method, ExecutableElement executableElement, RestImplementationHolder holder) {
+		List<? extends VariableElement> parameters = executableElement.getParameters();
 		TreeMap<String, JVar> methodParams = new TreeMap<String, JVar>();
-		for (VariableElement parameter : params) {
+		for (VariableElement parameter : parameters) {
 			String paramName = parameter.getSimpleName().toString();
 			String paramType = parameter.asType().toString();
 
@@ -225,8 +227,6 @@ public abstract class MethodProcessor implements ElementProcessor {
 
 		return methodParams;
 	}
-	
-	protected abstract JVar addHttpHeadersVar(JBlock body, ExecutableElement executableElement);
 
 	@Override
 	public abstract Class<? extends Annotation> getTarget();
