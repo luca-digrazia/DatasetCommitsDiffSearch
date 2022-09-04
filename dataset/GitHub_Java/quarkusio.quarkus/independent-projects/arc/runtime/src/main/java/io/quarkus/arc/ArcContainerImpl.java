@@ -304,10 +304,10 @@ class ArcContainerImpl implements ArcContainer {
             boolean resetCurrentInjectionPoint) {
         if (bean != null) {
             if (parentContext == null && Dependent.class.equals(bean.getScope())) {
-                parentContext = new CreationalContextImpl<>(null);
+                parentContext = new CreationalContextImpl<>();
             }
-            CreationalContextImpl<T> creationalContext = parentContext != null ? parentContext.child(bean)
-                    : new CreationalContextImpl<>(bean);
+            CreationalContextImpl<T> creationalContext = parentContext != null ? parentContext.child()
+                    : new CreationalContextImpl<>();
             InjectionPoint prev = null;
             if (resetCurrentInjectionPoint) {
                 prev = InjectionPointProvider.set(CurrentInjectionPointProvider.EMPTY);
@@ -405,20 +405,8 @@ class ArcContainerImpl implements ArcContainer {
         } else if (matching.size() == 1) {
             return Collections.singleton(matching.get(0));
         }
-
         // Try to resolve the ambiguity
         List<InjectableBean<?>> resolved = new ArrayList<>(matching);
-
-        for (Iterator<InjectableBean<?>> iterator = resolved.iterator(); iterator.hasNext();) {
-            InjectableBean<?> beanInfo = iterator.next();
-            if (beanInfo.isDefaultBean()) {
-                iterator.remove();
-            }
-        }
-        if (resolved.size() == 1) {
-            return Collections.singleton(resolved.get(0));
-        }
-
         for (Iterator<InjectableBean<?>> iterator = resolved.iterator(); iterator.hasNext();) {
             InjectableBean<?> bean = iterator.next();
             if (bean.getAlternativePriority() == null
