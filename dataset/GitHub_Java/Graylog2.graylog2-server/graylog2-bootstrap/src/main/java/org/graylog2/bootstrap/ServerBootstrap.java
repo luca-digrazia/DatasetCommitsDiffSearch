@@ -74,8 +74,7 @@ public abstract class ServerBootstrap extends CmdLineTool {
 
     @Override
     protected void startCommand() {
-        LOG.info("Graylog {} {} starting up (JRE: {}, installed from: {})", commandName, version,
-                Tools.getSystemInformation(), configuration.getInstallationSource());
+        LOG.info("Graylog " + commandName + " {} starting up. (JRE: {})", version, Tools.getSystemInformation());
 
         // Do not use a PID file if the user requested not to
         if (!isNoPidFile()) {

@@ -19,11 +19,10 @@ package org.graylog2.alarmcallbacks;
 import com.google.inject.Injector;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.runners.MockitoJUnitRunner;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -34,10 +33,8 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.class)
 public class AlarmCallbackFactoryTest {
-    @Rule
-    public final MockitoRule mockitoRule = MockitoJUnit.rule();
-
     private AlarmCallbackFactory alarmCallbackFactory;
     @Mock
     private Injector injector;

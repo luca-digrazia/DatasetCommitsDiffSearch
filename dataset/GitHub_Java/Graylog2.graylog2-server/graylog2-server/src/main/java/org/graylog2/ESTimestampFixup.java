@@ -34,9 +34,7 @@ import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Scopes;
 import com.google.inject.Stage;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.log4j.Level;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
@@ -62,7 +60,6 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -152,9 +149,9 @@ public class ESTimestampFixup {
         jCommander.setProgramName("graylog2-es-fixup");
 
         if (commandLineOptions.isDebug()) {
-            initializeLogging(Level.DEBUG);
+            org.apache.log4j.Logger.getLogger(ESTimestampFixup.class).setLevel(Level.DEBUG);
         } else {
-            initializeLogging(Level.INFO);
+            org.apache.log4j.Logger.getLogger(ESTimestampFixup.class).setLevel(Level.INFO);
         }
 
         if (commandLineOptions.isHelp()) {
@@ -173,16 +170,6 @@ public class ESTimestampFixup {
 
         final Injector injector = Guice.createInjector(Stage.PRODUCTION, new Bindings(configuration));
         injector.getInstance(ESTimestampFixup.class).run(commandLineOptions, args);
-    }
-
-    private static void initializeLogging(final Level logLevel) {
-        final LoggerContext context = (LoggerContext) LogManager.getContext(false);
-        final org.apache.logging.log4j.core.config.Configuration config = context.getConfiguration();
-
-        config.getLoggerConfig(LogManager.ROOT_LOGGER_NAME).setLevel(logLevel);
-        config.getLoggerConfig(ESTimestampFixup.class.getCanonicalName()).setLevel(logLevel);
-
-        context.updateLoggers(config);
     }
 
     private final Node node;
@@ -244,7 +231,7 @@ public class ESTimestampFixup {
             }
 
             processBulk(bulk, commandLineOptions.isFix());
-            LOG.info("Changed {} of total {} documents ({}% checked)", changedCount, totalCount, String.format(Locale.ENGLISH, "%.2f", ((double) processedCount / totalCount) * 100));
+            LOG.info("Changed {} of total {} documents ({}% checked)", changedCount, totalCount, String.format("%.2f", ((double) processedCount / totalCount) * 100));
         }
 
         stopEsNode();
