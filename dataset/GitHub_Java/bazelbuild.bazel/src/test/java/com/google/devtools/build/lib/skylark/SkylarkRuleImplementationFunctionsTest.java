@@ -46,7 +46,9 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.Substitution;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.analysis.skylark.Args;
+import com.google.devtools.build.lib.analysis.skylark.SkylarkActionFactory;
+import com.google.devtools.build.lib.analysis.skylark.SkylarkActionFactory.Args;
+import com.google.devtools.build.lib.analysis.skylark.SkylarkCustomCommandLine;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
@@ -56,9 +58,8 @@ import com.google.devtools.build.lib.packages.SkylarkProvider.SkylarkKey;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
 import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
-import com.google.devtools.build.lib.syntax.CallUtils;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
+import com.google.devtools.build.lib.syntax.BuiltinFunction;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
@@ -86,18 +87,15 @@ import org.junit.runners.JUnit4;
 
 /** Tests for skylark functions relating to rule implemenetation. */
 @RunWith(JUnit4.class)
-@SkylarkGlobalLibrary // needed for CallUtils.getBuiltinCallable, sadly
 public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
-
   @Rule public ExpectedException thrown = ExpectedException.none();
 
-  // def mock(mandatory, optional=None, *, mandatory_key, optional_key='x')
-  @SkylarkCallable(
+  @SkylarkSignature(
       name = "mock",
       documented = false,
       parameters = {
-        @Param(name = "mandatory", doc = "", named = true),
-        @Param(name = "optional", doc = "", defaultValue = "None", noneable = true, named = true),
+        @Param(name = "mandatory", doc = ""),
+        @Param(name = "optional", doc = "", defaultValue = "None"),
         @Param(name = "mandatory_key", doc = "", positional = false, named = true),
         @Param(
             name = "optional_key",
@@ -107,23 +105,14 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
             named = true)
       },
       useStarlarkThread = true)
-  public Object mock(
-      Object mandatory,
-      Object optional,
-      Object mandatoryKey,
-      Object optionalKey,
-      StarlarkThread thread) {
-    return EvalUtils.optionMap(
-        thread,
-        "mandatory",
-        mandatory,
-        "optional",
-        optional,
-        "mandatory_key",
-        mandatoryKey,
-        "optional_key",
-        optionalKey);
-  }
+  private BuiltinFunction mockFunc;
+
+  /**
+   * Used for {@link #testStackTraceWithoutOriginalMessage()} and {@link
+   * #testNoStackTraceOnInterrupt}.
+   */
+  @SkylarkSignature(name = "throw", documented = false)
+  BuiltinFunction throwFunction;
 
   @Before
   public final void createBuildFile() throws Exception {
@@ -187,16 +176,40 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   }
 
   private void setupSkylarkFunction(String line) throws Exception {
-    update("mock", CallUtils.getBuiltinCallable(this, "mock"));
+    mockFunc =
+        new BuiltinFunction("mock") {
+          @SuppressWarnings("unused")
+          public Object invoke(
+              Object mandatory,
+              Object optional,
+              Object mandatoryKey,
+              Object optionalKey,
+              StarlarkThread thread) {
+            return EvalUtils.optionMap(
+                thread,
+                "mandatory",
+                mandatory,
+                "optional",
+                optional,
+                "mandatory_key",
+                mandatoryKey,
+                "optional_key",
+                optionalKey);
+          }
+        };
+    assertThat(mockFunc.isConfigured()).isFalse();
+    mockFunc.configure(
+        SkylarkRuleImplementationFunctionsTest.class
+            .getDeclaredField("mockFunc")
+            .getAnnotation(SkylarkSignature.class));
+    update("mock", mockFunc);
     exec(line);
   }
 
-  private void checkSkylarkFunctionError(String errorSubstring, String line) throws Exception {
+  private void checkSkylarkFunctionError(String errorMsg, String line) throws Exception {
     EvalException e = assertThrows(EvalException.class, () -> setupSkylarkFunction(line));
-    assertThat(e).hasMessageThat().contains(errorSubstring);
+    assertThat(e).hasMessageThat().isEqualTo(errorMsg);
   }
-
-  // TODO(adonovan): move these tests of the interpreter core into lib.syntax.
 
   @Test
   public void testSkylarkFunctionPosArgs() throws Exception {
@@ -221,20 +234,25 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   @Test
   public void testSkylarkFunctionTooFewArguments() throws Exception {
     checkSkylarkFunctionError(
-        "parameter 'mandatory' has no default value", "mock(mandatory_key='y')");
+        "insufficient arguments received by mock("
+            + "mandatory, optional = None, *, mandatory_key, optional_key = \"x\") "
+            + "(got 0, expected at least 1)",
+        "mock()");
   }
 
   @Test
   public void testSkylarkFunctionTooManyArguments() throws Exception {
     checkSkylarkFunctionError(
-        "expected no more than 2 positional arguments, but got 3",
-        "mock('a', 'b', 'c', mandatory_key='y')");
+        "too many (3) positional arguments in call to "
+            + "mock(mandatory, optional = None, *, mandatory_key, optional_key = \"x\")",
+        "mock('a', 'b', 'c')");
   }
 
   @Test
   public void testSkylarkFunctionAmbiguousArguments() throws Exception {
     checkSkylarkFunctionError(
-        "got multiple values for keyword argument 'mandatory'",
+        "argument 'mandatory' passed both by position and by name "
+            + "in call to mock(mandatory, optional = None, *, mandatory_key, optional_key = \"x\")",
         "mock('by position', mandatory='by_key', mandatory_key='c')");
   }
 
@@ -1876,37 +1894,30 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     }
   }
 
-  @SkylarkCallable(name = "throw1", documented = false)
-  public Object throw1() throws Exception {
-    class ThereIsNoMessageException extends EvalException {
-      ThereIsNoMessageException() {
-        super(null, "This is not the message you are looking for."); // Unused dummy message
-      }
-
-      @Override
-      public String getMessage() {
-        return "";
-      }
-    }
-    throw new ThereIsNoMessageException();
-  }
-
   @Test
   public void testStackTraceWithoutOriginalMessage() throws Exception {
-    update("throw", CallUtils.getBuiltinCallable(this, "throw1"));
+    setupThrowFunction(
+        new BuiltinFunction("throw") {
+          @SuppressWarnings("unused")
+          public Object invoke() throws Exception {
+            throw new ThereIsNoMessageException();
+          }
+        });
+
     checkEvalErrorContains(
         "There Is No Message: SkylarkRuleImplementationFunctionsTest",
         "throw()");
   }
 
-  @SkylarkCallable(name = "throw2", documented = false)
-  public Object throw2() throws Exception {
-    throw new InterruptedException();
-  }
-
   @Test
   public void testNoStackTraceOnInterrupt() throws Exception {
-    update("throw", CallUtils.getBuiltinCallable(this, "throw2"));
+    setupThrowFunction(
+        new BuiltinFunction("throw") {
+          @SuppressWarnings("unused")
+          public Object invoke() throws Exception {
+            throw new InterruptedException();
+          }
+        });
     assertThrows(InterruptedException.class, () -> eval("throw()"));
   }
 
@@ -2902,7 +2913,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   public void testSkylarkCustomCommandLineKeyComputation() throws Exception {
     setRuleContext(createRuleContext("//foo:foo"));
 
-    ImmutableList.Builder<CommandLine> commandLines = ImmutableList.builder();
+    ImmutableList.Builder<SkylarkCustomCommandLine> commandLines = ImmutableList.builder();
 
     commandLines.add(getCommandLine("args = ruleContext.actions.args()"));
     commandLines.add(getCommandLine("args = ruleContext.actions.args()", "args.add('foo')"));
@@ -2965,12 +2976,12 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
     // Ensure all these command lines have distinct keys
     ActionKeyContext actionKeyContext = new ActionKeyContext();
-    Map<String, CommandLine> digests = new HashMap<>();
-    for (CommandLine commandLine : commandLines.build()) {
+    Map<String, SkylarkCustomCommandLine> digests = new HashMap<>();
+    for (SkylarkCustomCommandLine commandLine : commandLines.build()) {
       Fingerprint fingerprint = new Fingerprint();
       commandLine.addToFingerprint(actionKeyContext, fingerprint);
       String digest = fingerprint.hexDigestAndReset();
-      CommandLine previous = digests.putIfAbsent(digest, commandLine);
+      SkylarkCustomCommandLine previous = digests.putIfAbsent(digest, commandLine);
       if (previous != null) {
         fail(
             String.format(
@@ -2982,7 +2993,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     }
 
     // Ensure errors are handled
-    CommandLine commandLine =
+    SkylarkCustomCommandLine commandLine =
         getCommandLine(
             "args = ruleContext.actions.args()",
             "def _bad_fn(s): return s.doesnotexist()",
@@ -2993,9 +3004,9 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         () -> commandLine.addToFingerprint(actionKeyContext, new Fingerprint()));
   }
 
-  private CommandLine getCommandLine(String... lines) throws Exception {
+  private SkylarkCustomCommandLine getCommandLine(String... lines) throws Exception {
     exec(lines);
-    return ((Args) eval("args")).build();
+    return ((SkylarkActionFactory.Args) eval("args")).build();
   }
 
   @Test
@@ -3121,5 +3132,23 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     ActionAnalysisMetadata action =
         ctx.getRuleContext().getAnalysisEnvironment().getLocalGeneratingAction(params);
     assertThat(action.getInputs()).contains(directory);
+  }
+
+  private void setupThrowFunction(BuiltinFunction func) throws Exception {
+    throwFunction = func;
+    throwFunction.configure(
+        getClass().getDeclaredField("throwFunction").getAnnotation(SkylarkSignature.class));
+    update("throw", throwFunction);
+  }
+
+  private static class ThereIsNoMessageException extends EvalException {
+    public ThereIsNoMessageException() {
+      super(null, "This is not the message you are looking for."); // Unused dummy message
+    }
+
+    @Override
+    public String getMessage() {
+      return "";
+    }
   }
 }

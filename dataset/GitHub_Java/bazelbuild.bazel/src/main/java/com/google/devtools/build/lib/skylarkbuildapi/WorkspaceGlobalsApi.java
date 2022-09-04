@@ -68,6 +68,7 @@ public interface WorkspaceGlobalsApi {
             name = "managed_directories",
             type = SkylarkDict.class,
             generic1 = String.class,
+            noneable = true,
             named = true,
             positional = false,
             defaultValue = "{}",
