@@ -120,7 +120,7 @@ public class Size implements Comparable<Size> {
             return false;
         }
         final Size size = (Size) obj;
-        return this.compareTo(size) == 0;
+        return (count == size.count) && (unit == size.unit);
     }
 
     @Override
