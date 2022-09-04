@@ -699,7 +699,6 @@ public abstract class AbstractServerFactory implements ServerFactory {
         return gzip.isEnabled() ? gzip.build(handler) : handler;
     }
 
-    @SuppressWarnings("Slf4jFormatShouldBeConst")
     protected void printBanner(String name) {
         String msg = "Starting " + name;
         final URL resource = Thread.currentThread().getContextClassLoader().getResource("banner.txt");
@@ -709,7 +708,7 @@ public abstract class AbstractServerFactory implements ServerFactory {
                  final BufferedReader bufferedReader = new BufferedReader(inputStreamReader)) {
                 final String banner = bufferedReader
                         .lines()
-                        .collect(Collectors.joining(System.lineSeparator()));
+                        .collect(Collectors.joining(String.format("%n")));
                 msg = String.format("Starting %s%n%s", name, banner);
             } catch (IllegalArgumentException | IOException ignored) {
             }
