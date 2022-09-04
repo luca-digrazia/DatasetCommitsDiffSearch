@@ -28,8 +28,6 @@ import org.graylog2.Log;
 import org.graylog2.Main;
 import org.graylog2.Tools;
 import org.graylog2.database.MongoBridge;
-import org.graylog2.messagehandlers.common.MessageCounterHook;
-import org.graylog2.messagehandlers.common.ReceiveHookManager;
 import org.productivity.java.syslog4j.server.SyslogServerEventHandlerIF;
 import org.productivity.java.syslog4j.server.SyslogServerEventIF;
 import org.productivity.java.syslog4j.server.SyslogServerIF;
@@ -50,10 +48,8 @@ public class SyslogEventHandler implements SyslogServerEventHandlerIF {
             // Connect to database.
             MongoBridge m = new MongoBridge();
 
-            m.insert(event);
 
-            // This is doing the upcounting for RRD.
-            ReceiveHookManager.postProcess(new MessageCounterHook());
+            m.insert(event);
         } catch (Exception e) {
             Log.crit("Could not insert syslog event into database: " + e.toString());
         }
