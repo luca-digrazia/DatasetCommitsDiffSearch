@@ -116,7 +116,7 @@ public class ProtoCommon {
 
     for (ProtoSourcesProvider provider :
         ruleContext.getPrerequisites("deps", Mode.TARGET, ProtoSourcesProvider.class)) {
-      protoPath.addTransitive(provider.getTransitiveProtoSourceRoots());
+      protoPath.addTransitive(provider.getTransitiveProtoPathFlags());
     }
 
     return protoPath.build();
