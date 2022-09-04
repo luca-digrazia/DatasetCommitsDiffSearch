@@ -57,8 +57,6 @@ public class ListVideoUtil {
     private boolean hideActionBar; //是否隐藏有状态ActionBar
     private boolean isLoop;//循环
     private boolean hideKey = true;//隐藏按键
-    private boolean needLockFull = true;//隐藏按键
-    protected boolean needShowWifiTip = true; //是否需要显示流量提示
 
 
     private int[] listItemRect;//当前item框的屏幕位置
@@ -133,10 +131,6 @@ public class ListVideoUtil {
         gsyVideoPlayer.setLooping(isLoop);
 
         gsyVideoPlayer.setSpeed(speed);
-
-        gsyVideoPlayer.setNeedShowWifiTip(needShowWifiTip);
-
-        gsyVideoPlayer.setNeedLockFull(needLockFull);
 
         gsyVideoPlayer.setUp(url, true, cachePath, mapHeadData, objects);
 
@@ -262,6 +256,7 @@ public class ListVideoUtil {
      * 处理正常逻辑
      */
     private void resolveToNormal() {
+        CommonUtil.showSupportActionBar(context, hideActionBar, hideStatusBar);
         int delay = orientationUtils.backToProtVideo();
         handler.postDelayed(new Runnable() {
             @Override
@@ -285,7 +280,6 @@ public class ListVideoUtil {
                 if (hideKey) {
                     showNavKey(context, systemUiVisibility);
                 }
-                CommonUtil.showSupportActionBar(context, hideActionBar, hideStatusBar);
             }
         }, delay);
     }
@@ -608,28 +602,6 @@ public class ListVideoUtil {
      */
     public void setHideKey(boolean hideKey) {
         this.hideKey = hideKey;
-    }
-
-    public boolean isNeedLockFull() {
-        return needLockFull;
-    }
-
-    /**
-     * 是否需要全屏锁定屏幕功能
-     */
-    public void setNeedLockFull(boolean needLoadFull) {
-        this.needLockFull = needLoadFull;
-    }
-
-    public boolean isNeedShowWifiTip() {
-        return needShowWifiTip;
-    }
-
-    /**
-     * 是否需要显示流量提示,默认true
-     */
-    public void setNeedShowWifiTip(boolean needShowWifiTip) {
-        this.needShowWifiTip = needShowWifiTip;
     }
 
 }

@@ -30,6 +30,7 @@ import com.shuyu.gsyvideoplayer.utils.StorageUtils;
 import com.shuyu.gsyvideoplayer.video.GSYBaseVideoPlayer;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -67,9 +68,18 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
     public static boolean WIFI_TIP_DIALOG_SHOWED = false;
 
+
     protected Timer UPDATE_PROGRESS_TIMER;
 
+
+    protected View mStartButton;
+    protected SeekBar mProgressBar;
+    protected ImageView mFullscreenButton;
+    protected TextView mCurrentTimeTextView, mTotalTimeTextView;
+    protected ViewGroup mTopContainer, mBottomContainer;
+    protected GSYTextureView mTextureView;
     protected Surface mSurface;
+    protected ImageView mBackButton;
 
     protected ProgressTimerTask mProgressTimerTask;
 
@@ -150,7 +160,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         mStartButton = findViewById(R.id.start);
         mSmallClose = findViewById(R.id.small_close);
         mBackButton = (ImageView) findViewById(R.id.back);
-        mCoverImageView = (ImageView) findViewById(R.id.cover);
         mFullscreenButton = (ImageView) findViewById(R.id.fullscreen);
         mProgressBar = (SeekBar) findViewById(R.id.progress);
         mCurrentTimeTextView = (TextView) findViewById(R.id.current);
@@ -249,7 +258,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
                 if (isCurrentMediaListener()) {
                     cancelProgressTimer();
                     GSYVideoManager.instance().releaseMediaPlayer();
-                    releasePauseCoverAndBitmap();
                 }
                 if (mAudioManager != null) {
                     mAudioManager.abandonAudioFocus(onAudioFocusChangeListener);
@@ -481,8 +489,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
         mSurface = new Surface(surface);
         GSYVideoManager.instance().setDisplay(mSurface);
-        //显示暂停切换显示的图片
-        showPauseCover();
     }
 
     @Override
@@ -500,8 +506,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
     @Override
     public void onSurfaceTextureUpdated(SurfaceTexture surface) {
-        //如果播放的是暂停全屏了
-        releasePauseCover();
+
     }
 
     /**
@@ -633,55 +638,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         return false;
     }
 
-    /**
-     * 显示暂停切换显示的bitmap
-     */
-    protected void showPauseCover() {
-        try {
-            if (mCurrentState == CURRENT_STATE_PAUSE && mFullPauseBitmap != null
-                    && !mFullPauseBitmap.isRecycled()) {
-                mCoverImageView.setImageBitmap(mFullPauseBitmap);
-                mCoverImageView.setVisibility(VISIBLE);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    /**
-     * 销毁暂停切换显示的bitmap
-     */
-    protected void releasePauseCover() {
-        try {
-            if (mCurrentState != CURRENT_STATE_PAUSE && mFullPauseBitmap != null
-                    && !mFullPauseBitmap.isRecycled()) {
-                mCoverImageView.setImageResource(R.drawable.empty_drawable);
-                mCoverImageView.setVisibility(GONE);
-                //如果在这里销毁，可能会draw a recycler bitmap error
-                mFullPauseBitmap = null;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    /**
-     * 销毁暂停切换显示的bitmap
-     */
-    protected void releasePauseCoverAndBitmap() {
-        try {
-            if (mCurrentState != CURRENT_STATE_PAUSE && mFullPauseBitmap != null
-                    && !mFullPauseBitmap.isRecycled()) {
-                mCoverImageView.setImageResource(R.drawable.empty_drawable);
-                mCoverImageView.setVisibility(GONE);
-                mFullPauseBitmap.recycle();
-                mFullPauseBitmap = null;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
 
     protected void showProgressDialog(float deltaX,
                                       String seekTime, int seekTimePosition,
@@ -736,7 +692,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
                 mVideoAllCallBack.onClickSeekbar(mUrl, mObjects);
             }
         }
-        if (GSYVideoManager.instance().getMediaPlayer() != null && mHadPlay) {
+        if (GSYVideoManager.instance().getMediaPlayer() != null && GSYVideoManager.instance().getMediaPlayer().isPlaying()) {
             int time = seekBar.getProgress() * getDuration() / 100;
             GSYVideoManager.instance().getMediaPlayer().seekTo(time);
         }
@@ -824,12 +780,12 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         if (mCurrentState != CURRENT_STATE_NORMAL && mCurrentState != CURRENT_STATE_PREPAREING) {
             if (percent != 0) {
                 setTextAndProgress(percent);
-                Debuger.printfLog("Net speed: " + getNetSpeedText() + " percent " + percent);
             }
             //循环清除进度
             if (mLooping && mHadPlay && percent == 0 && mProgressBar.getProgress() >= (mProgressBar.getMax() - 1)) {
                 loopSetProgressAndTime();
             }
+            Debuger.printfLog("Net speed: " + getNetSpeedText() + " percent " + percent);
         }
     }
 
@@ -995,9 +951,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
             if (progress != 0) mProgressBar.setProgress(progress);
         }
         if (secProgress > 95) secProgress = 100;
-        if (secProgress != 0 && !mCacheFile) {
-            mProgressBar.setSecondaryProgress(secProgress);
-        }
+        if (secProgress != 0) mProgressBar.setSecondaryProgress(progress);
         mTotalTimeTextView.setText(CommonUtil.stringForTime(totalTime));
         if (currentTime > 0)
             mCurrentTimeTextView.setText(CommonUtil.stringForTime(currentTime));

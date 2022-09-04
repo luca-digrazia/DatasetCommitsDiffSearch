@@ -2,7 +2,6 @@ package com.shuyu.gsyvideoplayer.video;
 
 import android.app.Activity;
 import android.content.Context;
-import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Point;
 import android.os.Handler;
@@ -15,7 +14,6 @@ import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 
-import com.shuyu.gsyvideoplayer.GSYTextureView;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.R;
@@ -67,8 +65,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
     protected int mCurrentState = -1; //当前的播放状态
 
-    private int mSystemUiVisibility;
-
     protected float mSpeed = 1;//播放速度，只支持6.0以上
 
     protected boolean mRotateViewAuto = true; //是否自动旋转
@@ -97,18 +93,13 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
     protected VideoAllCallBack mVideoAllCallBack;
 
-    protected Map<String, String> mMapHeadData = new HashMap<>();
-
-    protected GSYTextureView mTextureView;
-
-    protected ImageView mCoverImageView; //内部使用，请勿操作哟~
-
-    protected Bitmap mFullPauseBitmap = null;//暂停时的全屏图片；
-
-
     private OrientationUtils mOrientationUtils; //旋转工具类
 
+    protected Map<String, String> mMapHeadData = new HashMap<>();
+
     private Handler mHandler = new Handler();
+
+    private int mSystemUiVisibility;
 
 
     public GSYBaseVideoPlayer(Context context) {
@@ -195,7 +186,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
      * 恢复
      */
     private void resolveNormalVideoShow(View oldF, ViewGroup vp, GSYVideoPlayer gsyVideoPlayer) {
-
         if (oldF != null && oldF.getParent() != null) {
             ViewGroup viewGroup = (ViewGroup) oldF.getParent();
             vp.removeView(viewGroup);
@@ -248,9 +238,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
         removeVideo(vp, FULLSCREEN_ID);
 
-        //处理暂停的逻辑
-        pauseFullCoverLogic();
-
         if (mTextureViewContainer.getChildCount() > 0) {
             mTextureViewContainer.removeAllViews();
         }
@@ -290,7 +277,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
                 resolveFullVideoShow(context, gsyVideoPlayer);
             }
             gsyVideoPlayer.mHadPlay = mHadPlay;
-            gsyVideoPlayer.mFullPauseBitmap = mFullPauseBitmap;
             gsyVideoPlayer.setUp(mUrl, mCache, mCachePath, mMapHeadData, mObjects);
             gsyVideoPlayer.setStateAndUi(mCurrentState);
             gsyVideoPlayer.addTextureView();
@@ -325,7 +311,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
      * 退出window层播放全屏效果
      */
     public void clearFullscreenLayout() {
-        mIfCurrentIsFullscreen = false;
         int delay = mOrientationUtils.backToProtVideo();
         mOrientationUtils.setEnable(false);
         if (mOrientationUtils != null)
@@ -350,8 +335,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
         final GSYVideoPlayer gsyVideoPlayer;
         if (oldF != null) {
             gsyVideoPlayer = (GSYVideoPlayer) oldF;
-            //如果暂停了
-            pauseFullBackCoverLogic(gsyVideoPlayer);
             if (mShowFullAnimation) {
                 TransitionManager.beginDelayedTransition(vp);
 
@@ -377,37 +360,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
             resolveNormalVideoShow(null, vp, null);
         }
     }
-
-    /**
-     * 全屏的暂停的时候返回页面不黑色
-     */
-    private void pauseFullCoverLogic() {
-        if (mCurrentState == GSYVideoPlayer.CURRENT_STATE_PAUSE && mTextureView != null
-                && (mFullPauseBitmap == null || mFullPauseBitmap.isRecycled())) {
-            Point point = CommonUtil.getPauseBitmapSize(getWidth(), getHeight());
-            mFullPauseBitmap = mTextureView.getBitmap(point.x, point.y);
-        }
-    }
-
-    /**
-     * 全屏的暂停返回的时候返回页面不黑色
-     */
-    private void pauseFullBackCoverLogic(GSYBaseVideoPlayer gsyVideoPlayer) {
-        //如果是暂停状态
-        if (gsyVideoPlayer.mCurrentState == GSYVideoPlayer.CURRENT_STATE_PAUSE
-                && gsyVideoPlayer.mTextureView != null) {
-            //全屏的位图还在，说明没播放，直接用原来的
-            if (gsyVideoPlayer.mFullPauseBitmap != null
-                    && !gsyVideoPlayer.mFullPauseBitmap.isRecycled()) {
-                mFullPauseBitmap = gsyVideoPlayer.mFullPauseBitmap;
-            } else {
-                Point point = CommonUtil.getPauseBitmapSize(getWidth(), getHeight());
-                //不在了说明已经播放过，还是暂停的话，我们拿回来就好
-                mFullPauseBitmap = gsyVideoPlayer.mTextureView.getBitmap(point.x, point.y);
-            }
-        }
-    }
-
 
     /**
      * 显示小窗口
@@ -632,7 +584,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
     }
 
     /**
-     * 全屏隐藏虚拟按键，默认打开
+     * 隐藏虚拟按键
      */
     public void setHideKey(boolean hideKey) {
         this.mHideKey = hideKey;
