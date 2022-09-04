@@ -790,11 +790,10 @@ public final class RuleContext extends TargetContext
     SplitTransition transition =
         attributeDefinition.getSplitTransition(
             ConfiguredAttributeMapper.of(rule, configConditions));
-    BuildOptions fromOptions = getConfiguration().getOptions();
-    List<BuildOptions> splitOptions = transition.checkedSplit(fromOptions);
+    List<BuildOptions> splitOptions = transition.split(getConfiguration().getOptions());
     List<ConfiguredTargetAndData> deps = getConfiguredTargetAndTargetDeps(attributeName);
 
-    if (SplitTransition.equals(fromOptions, splitOptions)) {
+    if (splitOptions.isEmpty()) {
       // The split transition is not active. Defer the decision on which CPU to use.
       return ImmutableMap.of(Optional.<String>absent(), deps);
     }
