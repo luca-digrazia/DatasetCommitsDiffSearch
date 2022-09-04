@@ -14,7 +14,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
@@ -59,12 +58,11 @@ final class Methods {
         return (method.flags() & SYNTHETIC) != 0;
     }
 
-    static void addDelegatingMethods(IndexView index, ClassInfo classInfo, Map<MethodKey, MethodInfo> methods,
-            Set<NameAndDescriptor> methodsFromWhichToRemoveFinal, boolean transformUnproxyableClasses) {
+    static void addDelegatingMethods(IndexView index, ClassInfo classInfo, Map<Methods.MethodKey, MethodInfo> methods) {
         // TODO support interfaces default methods
         if (classInfo != null) {
             for (MethodInfo method : classInfo.methods()) {
-                if (skipForClientProxy(method, transformUnproxyableClasses, methodsFromWhichToRemoveFinal)) {
+                if (skipForClientProxy(method)) {
                     continue;
                 }
                 methods.computeIfAbsent(new Methods.MethodKey(method), key -> {
@@ -84,22 +82,19 @@ final class Methods {
             for (Type interfaceType : classInfo.interfaceTypes()) {
                 ClassInfo interfaceClassInfo = getClassByName(index, interfaceType.name());
                 if (interfaceClassInfo != null) {
-                    addDelegatingMethods(index, interfaceClassInfo, methods, methodsFromWhichToRemoveFinal,
-                            transformUnproxyableClasses);
+                    addDelegatingMethods(index, interfaceClassInfo, methods);
                 }
             }
             if (classInfo.superClassType() != null) {
                 ClassInfo superClassInfo = getClassByName(index, classInfo.superName());
                 if (superClassInfo != null) {
-                    addDelegatingMethods(index, superClassInfo, methods, methodsFromWhichToRemoveFinal,
-                            transformUnproxyableClasses);
+                    addDelegatingMethods(index, superClassInfo, methods);
                 }
             }
         }
     }
 
-    private static boolean skipForClientProxy(MethodInfo method, boolean transformUnproxyableClasses,
-            Set<NameAndDescriptor> methodsFromWhichToRemoveFinal) {
+    private static boolean skipForClientProxy(MethodInfo method) {
         if (Modifier.isStatic(method.flags()) || Modifier.isPrivate(method.flags())) {
             return true;
         }
@@ -113,11 +108,6 @@ final class Methods {
         if (Modifier.isFinal(method.flags())) {
             String className = method.declaringClass().name().toString();
             if (!className.startsWith("java.")) {
-                if (transformUnproxyableClasses && (methodsFromWhichToRemoveFinal != null)) {
-                    methodsFromWhichToRemoveFinal.add(NameAndDescriptor.fromMethodInfo(method));
-                    return false;
-                }
-
                 LOGGER.warn(String.format(
                         "Final method %s.%s() is ignored during proxy generation and should never be invoked upon the proxy instance!",
                         className, method.name()));
@@ -135,35 +125,23 @@ final class Methods {
             Map<MethodKey, Set<AnnotationInstance>> candidates,
             List<AnnotationInstance> classLevelBindings, Consumer<BytecodeTransformer> bytecodeTransformerConsumer,
             boolean transformUnproxyableClasses) {
-        return addInterceptedMethodCandidates(beanDeployment, classInfo, candidates, classLevelBindings,
-                bytecodeTransformerConsumer, transformUnproxyableClasses, Methods::skipForSubclass, false);
-    }
-
-    static Set<MethodInfo> addInterceptedMethodCandidates(BeanDeployment beanDeployment, ClassInfo classInfo,
-            Map<MethodKey, Set<AnnotationInstance>> candidates,
-            List<AnnotationInstance> classLevelBindings, Consumer<BytecodeTransformer> bytecodeTransformerConsumer,
-            boolean transformUnproxyableClasses, Predicate<MethodInfo> skipPredicate, boolean ignoreMethodLevelBindings) {
 
         Set<NameAndDescriptor> methodsFromWhichToRemoveFinal = new HashSet<>();
         Set<MethodInfo> finalMethodsFoundAndNotChanged = new HashSet<>();
         for (MethodInfo method : classInfo.methods()) {
-            if (skipPredicate.test(method)) {
+            if (skipForSubclass(method)) {
                 continue;
             }
+            Collection<AnnotationInstance> methodAnnnotations = beanDeployment.getAnnotations(method);
+            List<AnnotationInstance> methodLevelBindings = methodAnnnotations.stream()
+                    .filter(a -> beanDeployment.getInterceptorBinding(a.name()) != null)
+                    .collect(Collectors.toList());
             Set<AnnotationInstance> merged = new HashSet<>();
-            if (ignoreMethodLevelBindings) {
-                merged.addAll(classLevelBindings);
-            } else {
-                Collection<AnnotationInstance> methodAnnnotations = beanDeployment.getAnnotations(method);
-                List<AnnotationInstance> methodLevelBindings = methodAnnnotations.stream()
-                        .filter(a -> beanDeployment.getInterceptorBinding(a.name()) != null)
-                        .collect(Collectors.toList());
-                merged.addAll(methodLevelBindings);
-                for (AnnotationInstance classLevelBinding : classLevelBindings) {
-                    if (methodLevelBindings.isEmpty()
-                            || methodLevelBindings.stream().noneMatch(a -> classLevelBinding.name().equals(a.name()))) {
-                        merged.add(classLevelBinding);
-                    }
+            merged.addAll(methodLevelBindings);
+            for (AnnotationInstance classLevelBinding : classLevelBindings) {
+                if (methodLevelBindings.isEmpty()
+                        || methodLevelBindings.stream().noneMatch(a -> classLevelBinding.name().equals(a.name()))) {
+                    merged.add(classLevelBinding);
                 }
             }
             if (!merged.isEmpty()) {
@@ -183,10 +161,24 @@ final class Methods {
         }
         if (!methodsFromWhichToRemoveFinal.isEmpty()) {
             bytecodeTransformerConsumer.accept(
-                    new BytecodeTransformer(classInfo.name().toString(),
-                            new RemoveFinalFromMethod(classInfo.name().toString(), methodsFromWhichToRemoveFinal)));
+                    new BytecodeTransformer(classInfo.name().toString(), new BiFunction<String, ClassVisitor, ClassVisitor>() {
+                        @Override
+                        public ClassVisitor apply(String s, ClassVisitor classVisitor) {
+                            return new ClassVisitor(Gizmo.ASM_API_VERSION, classVisitor) {
+                                @Override
+                                public MethodVisitor visitMethod(int access, String name, String descriptor, String signature,
+                                        String[] exceptions) {
+                                    if (methodsFromWhichToRemoveFinal.contains(new NameAndDescriptor(name, descriptor))) {
+                                        access = access & (~Opcodes.ACC_FINAL);
+                                        LOGGER.debug("final modifier removed from method " + name + " of class "
+                                                + classInfo.name().toString());
+                                    }
+                                    return super.visitMethod(access, name, descriptor, signature, exceptions);
+                                }
+                            };
+                        }
+                    }));
         }
-
         if (classInfo.superClassType() != null) {
             ClassInfo superClassInfo = getClassByName(beanDeployment.getIndex(), classInfo.superName());
             if (superClassInfo != null) {
@@ -194,33 +186,18 @@ final class Methods {
                         classLevelBindings, bytecodeTransformerConsumer, transformUnproxyableClasses));
             }
         }
-
-        // Interface default methods can be intercepted too
         for (DotName i : classInfo.interfaceNames()) {
             ClassInfo interfaceInfo = getClassByName(beanDeployment.getIndex(), i);
             if (interfaceInfo != null) {
                 //interfaces can't have final methods
                 addInterceptedMethodCandidates(beanDeployment, interfaceInfo, candidates,
-                        classLevelBindings, bytecodeTransformerConsumer, transformUnproxyableClasses,
-                        Methods::skipForDefaultMethods, true);
+                        classLevelBindings, bytecodeTransformerConsumer, transformUnproxyableClasses);
             }
         }
         return finalMethodsFoundAndNotChanged;
     }
 
-    private static boolean skipForDefaultMethods(MethodInfo method) {
-        if (skipForSubclass(method)) {
-            return true;
-        }
-        if (Modifier.isInterface(method.declaringClass().flags()) && Modifier.isPublic(method.flags())
-                && !Modifier.isAbstract(method.flags()) && !Modifier.isStatic(method.flags())) {
-            // Do not skip default methods - public non-abstract instance methods declared in an interface
-            return false;
-        }
-        return true;
-    }
-
-    static class NameAndDescriptor {
+    private static class NameAndDescriptor {
         private final String name;
         private final String descriptor;
 
@@ -369,32 +346,6 @@ final class Methods {
             case WILDCARD_TYPE:
             default:
                 return DotNames.OBJECT;
-        }
-    }
-
-    static class RemoveFinalFromMethod implements BiFunction<String, ClassVisitor, ClassVisitor> {
-
-        private final String classToTransform;
-        private final Set<NameAndDescriptor> methodsFromWhichToRemoveFinal;
-
-        public RemoveFinalFromMethod(String classToTransform, Set<NameAndDescriptor> methodsFromWhichToRemoveFinal) {
-            this.classToTransform = classToTransform;
-            this.methodsFromWhichToRemoveFinal = methodsFromWhichToRemoveFinal;
-        }
-
-        @Override
-        public ClassVisitor apply(String s, ClassVisitor classVisitor) {
-            return new ClassVisitor(Gizmo.ASM_API_VERSION, classVisitor) {
-                @Override
-                public MethodVisitor visitMethod(int access, String name, String descriptor, String signature,
-                        String[] exceptions) {
-                    if (methodsFromWhichToRemoveFinal.contains(new NameAndDescriptor(name, descriptor))) {
-                        access = access & (~Opcodes.ACC_FINAL);
-                        LOGGER.debug("final modifier removed from method " + name + " of class " + classToTransform);
-                    }
-                    return super.visitMethod(access, name, descriptor, signature, exceptions);
-                }
-            };
         }
     }
 

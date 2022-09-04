@@ -10,33 +10,104 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
+import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
 
+/**
+ * Neither the class nor its methods are considered a public API and should only be used internally.
+ */
 public final class Reflections {
+
+    // Note that we intentionally do not use weak references for keys/values
+    // The reason is that:
+    // (1) ArC does not support multiple deployments on the classpath
+    // (2) the caches are cleared when the container is shut down
+    private static final ComputingCache<FieldKey, Field> FIELDS_CACHE = new ComputingCache<>(new Function<FieldKey, Field>() {
+        @Override
+        public Field apply(FieldKey key) {
+            return findFieldInternal(key.clazz, key.fieldName);
+        }
+    });
+    private static final ComputingCache<MethodKey, Method> METHODS_CACHE = new ComputingCache<>(
+            new Function<MethodKey, Method>() {
+                @Override
+                public Method apply(MethodKey key) {
+                    return findMethodInternal(key.clazz, key.methodName, key.parameterTypes);
+                }
+            });
+
+    static void clearCaches() {
+        FIELDS_CACHE.clear();
+        METHODS_CACHE.clear();
+    }
 
     private Reflections() {
     }
 
+    /**
+     *
+     * @param clazz
+     * @param fieldName
+     * @return the field declared in the class hierarchy
+     */
     public static Field findField(Class<?> clazz, String fieldName) {
+        return FIELDS_CACHE.getValue(new FieldKey(clazz, fieldName));
+    }
+
+    private static Field findFieldInternal(Class<?> clazz, String fieldName) {
         try {
             return clazz.getDeclaredField(fieldName);
         } catch (NoSuchFieldException e) {
             if (clazz.getSuperclass() != null) {
-                return findField(clazz.getSuperclass(), fieldName);
+                return findFieldInternal(clazz.getSuperclass(), fieldName);
             }
             throw new IllegalArgumentException(e);
         }
     }
 
+    /**
+     *
+     * @param clazz
+     * @param methodName
+     * @param parameterTypes
+     * @return the method declared in the class hierarchy
+     */
     public static Method findMethod(Class<?> clazz, String methodName, Class<?>... parameterTypes) {
-        try {
-            return clazz.getDeclaredMethod(methodName, parameterTypes);
-        } catch (NoSuchMethodException e) {
-            if (clazz.getSuperclass() != null) {
-                return findMethod(clazz.getSuperclass(), methodName, parameterTypes);
+        return METHODS_CACHE.getValue(new MethodKey(clazz, methodName, parameterTypes));
+    }
+
+    private static Method findMethodInternal(Class<?> clazz, String methodName, Class<?>... parameterTypes) {
+        Class<?> theClass = clazz;
+        Deque<Class<?>> interfaces = new ArrayDeque<>();
+        while (theClass != null) {
+            try {
+                return theClass.getDeclaredMethod(methodName, parameterTypes);
+            } catch (NoSuchMethodException e) {
+                interfaces.addAll(Arrays.asList(theClass.getInterfaces()));
+                theClass = theClass.getSuperclass();
             }
-            throw new IllegalArgumentException(e);
         }
+        //look for default methods on interfaces
+        Set<Class<?>> seen = new HashSet<>(interfaces);
+        while (!interfaces.isEmpty()) {
+            Class<?> iface = interfaces.pop();
+            try {
+                return iface.getDeclaredMethod(methodName, parameterTypes);
+            } catch (NoSuchMethodException ex) {
+                //ignore
+            }
+            for (Class<?> extra : iface.getInterfaces()) {
+                if (seen.add(extra)) {
+                    interfaces.add(extra);
+                }
+            }
+        }
+        throw new IllegalArgumentException("Cannot find method " + methodName + Arrays.asList(parameterTypes) + " on " + clazz);
     }
 
     public static Constructor<?> findConstructor(Class<?> clazz, Class<?>... parameterTypes) {
@@ -146,6 +217,86 @@ public final class Reflections {
         } else {
             return getRawType(bounds[0]);
         }
+    }
+
+    static final class MethodKey {
+
+        final Class<?> clazz;
+        final String methodName;
+        final Class<?>[] parameterTypes;
+        final int hashCode;
+
+        public MethodKey(Class<?> clazz, String methodName, Class<?>[] parameterTypes) {
+            this.clazz = clazz;
+            this.methodName = methodName;
+            this.parameterTypes = parameterTypes;
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + Arrays.hashCode(parameterTypes);
+            result = prime * result + ((clazz == null) ? 0 : clazz.hashCode());
+            result = prime * result + ((methodName == null) ? 0 : methodName.hashCode());
+            this.hashCode = result;
+        }
+
+        @Override
+        public int hashCode() {
+            return hashCode;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
+            MethodKey other = (MethodKey) obj;
+            return Objects.equals(clazz, other.clazz) && Objects.equals(methodName, other.methodName)
+                    && Arrays.equals(parameterTypes, other.parameterTypes);
+        }
+
+    }
+
+    static final class FieldKey {
+
+        final Class<?> clazz;
+        final String fieldName;
+        final int hashCode;
+
+        public FieldKey(Class<?> clazz, String fieldName) {
+            this.clazz = clazz;
+            this.fieldName = fieldName;
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + ((clazz == null) ? 0 : clazz.hashCode());
+            result = prime * result + ((fieldName == null) ? 0 : fieldName.hashCode());
+            this.hashCode = result;
+        }
+
+        @Override
+        public int hashCode() {
+            return hashCode;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
+            FieldKey other = (FieldKey) obj;
+            return Objects.equals(clazz, other.clazz) && Objects.equals(fieldName, other.fieldName);
+        }
+
     }
 
 }

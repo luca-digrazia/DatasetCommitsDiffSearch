@@ -6,13 +6,7 @@ import javax.enterprise.context.ApplicationScoped;
 @ABinding
 public class DefaultMethodBean implements DefaultMethodInterface {
 
-    @NextBinding
     public String hello() {
         return "hello";
-    }
-
-    @Override
-    public String ping() {
-        return "pong";
     }
 }
