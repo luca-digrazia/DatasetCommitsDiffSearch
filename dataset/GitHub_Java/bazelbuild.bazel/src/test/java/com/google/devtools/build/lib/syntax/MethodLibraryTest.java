@@ -211,10 +211,12 @@ public class MethodLibraryTest extends EvaluationTestCase {
 
   @Test
   public void testGetAttrWithMethods() throws Exception {
-    String msg = "object of type 'string' has no attribute 'cnt'";
+    String msg =
+        "object of type 'string' has no attribute 'count', however, "
+            + "a method of that name exists";
     new SkylarkTest()
-        .testIfExactError(msg, "getattr('a string', 'cnt')")
-        .testStatement("getattr('a string', 'cnt', 'default')", "default");
+        .testIfExactError(msg, "getattr('a string', 'count')")
+        .testStatement("getattr('a string', 'count', 'default')", "default");
   }
 
   @Test
@@ -247,9 +249,6 @@ public class MethodLibraryTest extends EvaluationTestCase {
         .testEval("sorted([True, False, True])", "[False, True, True]")
         .testEval("sorted(['a','x','b','z'])", "[\"a\", \"b\", \"x\", \"z\"]")
         .testEval("sorted({1: True, 5: True, 4: False})", "[1, 4, 5]")
-        .testEval("sorted([3, 2, 1, 0], reverse=True)", "[3, 2, 1, 0]")
-        .testEval("sorted([[1], [], [1, 2]], key=len, reverse=True)", "[[1, 2], [1], []]")
-        .testEval("sorted([[0, 5], [4, 1], [1, 7]], key=max)", "[[4, 1], [0, 5], [1, 7]]")
         .testIfExactError("Cannot compare function with function", "sorted([sorted, sorted])");
   }
 
@@ -536,7 +535,7 @@ public class MethodLibraryTest extends EvaluationTestCase {
     new BothModesTest()
         .testIfErrorContains(
             "expected value of type 'sequence' for parameter 'list', "
-                + "for call to function enumerate(list, start = 0)",
+                + "for call to function enumerate(list)",
             "enumerate('a')");
   }
 
@@ -713,7 +712,7 @@ public class MethodLibraryTest extends EvaluationTestCase {
         // Parameters which may be specified by keyword but are not explicitly 'named'.
         .testStatement("all(elements=[True, True])", Boolean.TRUE)
         .testStatement("any(elements=[True, False])", Boolean.TRUE)
-        .testEval("sorted(self=[3, 0, 2], key=None, reverse=False)", "[0, 2, 3]")
+        .testEval("sorted(self=[3, 0, 2])", "[0, 2, 3]")
         .testEval("reversed(sequence=[3, 2, 0])", "[0, 2, 3]")
         .testEval("tuple(x=[1, 2])", "(1, 2)")
         .testEval("list(x=(1, 2))", "[1, 2]")
@@ -729,7 +728,7 @@ public class MethodLibraryTest extends EvaluationTestCase {
         .testEval("range(start_or_stop=3, stop_or_none=9, step=2)", "range(3, 9, 2)")
         .testStatement("hasattr(x=depset(), name='union')", Boolean.TRUE)
         .testStatement("bool(x=3)", Boolean.TRUE)
-        .testStatement("getattr(x='hello', name='cnt', default='default')", "default")
+        .testStatement("getattr(x='hello', name='count', default='default')", "default")
         .testEval(
             "dir(x={})",
             "[\"clear\", \"get\", \"items\", \"keys\","
@@ -765,28 +764,5 @@ public class MethodLibraryTest extends EvaluationTestCase {
   public void testStringJoinDoesNotRequireStrings() throws Exception {
     new SkylarkTest("--incompatible_string_join_requires_strings=false")
         .testEval("', '.join(['foo', 2])", "'foo, 2'");
-  }
-
-  @Test
-  public void testDepsetItemsKeywordAndPositional() throws Exception {
-    new SkylarkTest("--incompatible_disable_depset_items=false")
-        .testIfErrorContains(
-            "parameter 'items' cannot be specified both positionally and by keyword",
-            "depset([0, 1], 'default', items=[0,1])");
-  }
-
-  @Test
-  public void testDisableDepsetItems() throws Exception {
-    new SkylarkTest("--incompatible_disable_depset_items")
-        .setUp("x = depset([0])", "y = depset(direct = [1])")
-        .testEval("depset([2, 3], transitive = [x, y]).to_list()", "[0, 1, 2, 3]")
-        .testIfErrorContains(
-            "parameter 'direct' cannot be specified both positionally and by keyword",
-            "depset([0, 1], 'default', direct=[0,1])")
-        .testIfErrorContains(
-            "parameter 'items' is deprecated and will be removed soon. "
-                + "It may be temporarily re-enabled by setting "
-                + "--incompatible_disable_depset_inputs=false",
-            "depset(items=[0,1])");
   }
 }
