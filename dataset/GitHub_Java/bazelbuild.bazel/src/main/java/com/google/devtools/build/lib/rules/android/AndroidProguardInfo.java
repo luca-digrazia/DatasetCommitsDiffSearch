@@ -51,15 +51,13 @@ public final class AndroidProguardInfo extends NativeInfo
   public static class Provider extends BuiltinProvider<AndroidProguardInfo>
       implements AndroidProguardInfoApi.Provider<Artifact> {
     private Provider() {
-      super(NAME, AndroidProguardInfo.class);
+      super(PROVIDER_NAME, AndroidProguardInfo.class);
     }
 
     @Override
-    public AndroidProguardInfo createInfo(SkylarkList<?> localProguardSpecs) // <Artifact>
+    public AndroidProguardInfo createInfo(SkylarkList<Artifact> localProguardSpecs)
         throws EvalException {
-      return new AndroidProguardInfo(
-          ImmutableList.copyOf(
-              localProguardSpecs.getContents(Artifact.class, "local_proguard_specs")));
+      return new AndroidProguardInfo(localProguardSpecs.getImmutableList());
     }
   }
 }
