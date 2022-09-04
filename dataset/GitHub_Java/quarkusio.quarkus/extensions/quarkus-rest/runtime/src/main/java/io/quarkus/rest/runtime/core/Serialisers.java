@@ -555,7 +555,7 @@ public class Serialisers {
                 }
             }
             List<ResourceWriter> matchingWritersByType = writers.get(klass);
-            serverResourceWriterLookup(request, matchingWritersByType, result);
+            MediaType lookupResult = serverResourceWriterLookup(request, matchingWritersByType, result);
             toProcess.addAll(Arrays.asList(klass.getInterfaces()));
             klass = klass.getSuperclass();
         } while (klass != null);
@@ -563,10 +563,10 @@ public class Serialisers {
         return result;
     }
 
-    private void serverResourceWriterLookup(HttpServerRequest request,
+    private MediaType serverResourceWriterLookup(HttpServerRequest request,
             List<ResourceWriter> candidates, BestMatchingServerWriterResult result) {
         if (candidates == null) {
-            return;
+            return null;
         }
         for (ResourceWriter resourceWriter : candidates) {
             if (!resourceWriter.matchesRuntimeType(RuntimeType.SERVER)) {
@@ -578,6 +578,7 @@ public class Serialisers {
                 result.add(resourceWriter.getInstance(), bestMediaType);
             }
         }
+        return null;
     }
 
     private void writerLookup(RuntimeType runtimeType, List<MediaType> mt, List<MessageBodyWriter<?>> ret,
