@@ -31,7 +31,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.persistence.PersistenceException;
 import javax.persistence.spi.PersistenceUnitTransactionType;
 
-import org.hibernate.MultiTenancyStrategy;
 import org.hibernate.boot.CacheRegionDefinition;
 import org.hibernate.boot.MetadataBuilder;
 import org.hibernate.boot.MetadataSources;
@@ -42,6 +41,7 @@ import org.hibernate.boot.model.process.spi.ManagedResources;
 import org.hibernate.boot.model.process.spi.MetadataBuildingProcess;
 import org.hibernate.boot.registry.BootstrapServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistry;
+import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
 import org.hibernate.boot.registry.internal.BootstrapServiceRegistryImpl;
 import org.hibernate.boot.registry.selector.spi.StrategySelector;
@@ -52,7 +52,6 @@ import org.hibernate.cache.internal.CollectionCacheInvalidator;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.beanvalidation.BeanValidationIntegrator;
 import org.hibernate.dialect.Dialect;
-import org.hibernate.engine.jdbc.connections.spi.MultiTenantConnectionProvider;
 import org.hibernate.engine.jdbc.dialect.spi.DialectFactory;
 import org.hibernate.engine.transaction.jta.platform.spi.JtaPlatform;
 import org.hibernate.id.factory.spi.MutableIdentifierGeneratorFactory;
@@ -66,6 +65,7 @@ import org.hibernate.jpa.boot.spi.TypeContributorList;
 import org.hibernate.jpa.internal.util.LogHelper;
 import org.hibernate.jpa.internal.util.PersistenceUnitTransactionTypeHelper;
 import org.hibernate.jpa.spi.IdentifierGeneratorStrategyProvider;
+import org.hibernate.resource.jdbc.spi.PhysicalConnectionHandlingMode;
 import org.hibernate.resource.transaction.backend.jdbc.internal.JdbcResourceLocalTransactionCoordinatorBuilderImpl;
 import org.hibernate.resource.transaction.backend.jta.internal.JtaTransactionCoordinatorBuilderImpl;
 import org.hibernate.service.Service;
@@ -86,7 +86,6 @@ import io.quarkus.hibernate.orm.runtime.recording.RecordableBootstrap;
 import io.quarkus.hibernate.orm.runtime.recording.RecordedState;
 import io.quarkus.hibernate.orm.runtime.recording.RecordingDialectFactory;
 import io.quarkus.hibernate.orm.runtime.service.FlatClassLoaderService;
-import io.quarkus.hibernate.orm.runtime.tenant.HibernateMultiTenantConnectionProvider;
 
 /**
  * Alternative to EntityManagerFactoryBuilderImpl so to have full control of how MetadataBuilderImplementor
@@ -105,12 +104,10 @@ public class FastBootMetadataBuilder {
     private final Collection<Class<? extends Integrator>> additionalIntegrators;
     private final Collection<ProvidedService> providedServices;
     private final PreGeneratedProxies preGeneratedProxies;
-    private final MultiTenancyStrategy multiTenancyStrategy;
 
     @SuppressWarnings("unchecked")
     public FastBootMetadataBuilder(final PersistenceUnitDescriptor persistenceUnit, Scanner scanner,
-            Collection<Class<? extends Integrator>> additionalIntegrators, PreGeneratedProxies preGeneratedProxies,
-            MultiTenancyStrategy strategy) {
+            Collection<Class<? extends Integrator>> additionalIntegrators, PreGeneratedProxies preGeneratedProxies) {
         this.persistenceUnit = persistenceUnit;
         this.additionalIntegrators = additionalIntegrators;
         this.preGeneratedProxies = preGeneratedProxies;
@@ -189,12 +186,6 @@ public class FastBootMetadataBuilder {
         // for the time being we want to revoke access to the temp ClassLoader if one
         // was passed
         metamodelBuilder.applyTempClassLoader(null);
-
-        if (strategy != null && strategy != MultiTenancyStrategy.NONE) {
-            ssrBuilder.addService(MultiTenantConnectionProvider.class, new HibernateMultiTenantConnectionProvider());
-        }
-        this.multiTenancyStrategy = strategy;
-
     }
 
     private void addPUManagedClassNamesToMetadataSources(PersistenceUnitDescriptor persistenceUnit,
@@ -266,6 +257,21 @@ public class FastBootMetadataBuilder {
         }
         //Agroal already does disable auto-commit, so Hibernate ORM should trust that:
         cfg.put(AvailableSettings.CONNECTION_PROVIDER_DISABLES_AUTOCOMMIT, Boolean.TRUE.toString());
+
+        /**
+         * Set CONNECTION_HANDLING to DELAYED_ACQUISITION_AND_RELEASE_BEFORE_TRANSACTION_COMPLETION
+         * as it generally performs better, at no known drawbacks.
+         * This is a new mode in Hibernate ORM, it might become the default in the future.
+         *
+         * @see org.hibernate.resource.jdbc.spi.PhysicalConnectionHandlingMode
+         */
+        {
+            final Object explicitSetting = cfg.get(AvailableSettings.CONNECTION_HANDLING);
+            if (explicitSetting == null) {
+                cfg.put(AvailableSettings.CONNECTION_HANDLING,
+                        PhysicalConnectionHandlingMode.DELAYED_ACQUISITION_AND_RELEASE_BEFORE_TRANSACTION_COMPLETION);
+            }
+        }
 
         if (readBooleanConfigurationValue(cfg, WRAP_RESULT_SETS)) {
             LOG.warn("Wrapping result sets is not supported. Setting " + WRAP_RESULT_SETS + " to false.");
@@ -342,7 +348,7 @@ public class FastBootMetadataBuilder {
         destroyServiceRegistry(fullMeta);
         ProxyDefinitions proxyClassDefinitions = ProxyDefinitions.createFromMetadata(storeableMetadata, preGeneratedProxies);
         return new RecordedState(dialect, jtaPlatform, storeableMetadata, buildTimeSettings, getIntegrators(),
-                providedServices, integrationSettingsBuilder.build(), proxyClassDefinitions, multiTenancyStrategy);
+                providedServices, integrationSettingsBuilder.build(), proxyClassDefinitions);
     }
 
     private void destroyServiceRegistry(MetadataImplementor fullMeta) {
