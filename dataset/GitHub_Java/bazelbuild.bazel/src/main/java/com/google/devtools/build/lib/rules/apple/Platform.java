@@ -15,9 +15,8 @@
 package com.google.devtools.build.lib.rules.apple;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.packages.ClassObjectConstructor;
-import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
+import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
@@ -174,7 +173,8 @@ public enum Platform {
 
   /** Returns a Skylark struct that contains the instances of this enum. */
   public static SkylarkClassObject getSkylarkStruct() {
-    ClassObjectConstructor constructor = new NativeClassObjectConstructor("platforms") { };
+    SkylarkClassObjectConstructor constructor =
+        SkylarkClassObjectConstructor.createNative("platforms");
     HashMap<String, Object> fields = new HashMap<>();
     for (Platform type : values()) {
       fields.put(type.skylarkKey, type);
@@ -229,7 +229,8 @@ public enum Platform {
 
     /** Returns a Skylark struct that contains the instances of this enum. */
     public static SkylarkClassObject getSkylarkStruct() {
-      ClassObjectConstructor constructor = new NativeClassObjectConstructor("platform_types") { };
+      SkylarkClassObjectConstructor constructor =
+          SkylarkClassObjectConstructor.createNative("platform_types");
       HashMap<String, Object> fields = new HashMap<>();
       for (PlatformType type : values()) {
         fields.put(type.skylarkKey, type);
