@@ -74,7 +74,7 @@ public class MLPTest {
 
         MathEx.setSeed(19650218); // to get repeatable results.
         ClassificationValidations<MLP> result = CrossValidation.classification(10, x, PenDigits.y, (xi, yi) -> {
-            MLP model = new MLP(Layer.input(p),
+            MLP model = new MLP(p,
                     Layer.sigmoid(50),
                     Layer.mle(k, OutputFunction.SIGMOID)
             );
@@ -107,7 +107,7 @@ public class MLPTest {
 
         MathEx.setSeed(19650218); // to get repeatable results.
         ClassificationValidations<MLP> result = CrossValidation.classification(10, x, BreastCancer.y, (xi, yi) -> {
-            MLP model = new MLP(Layer.input(p),
+            MLP model = new MLP(p,
                     Layer.sigmoid(60),
                     Layer.mle(1, OutputFunction.SIGMOID)
             );
@@ -142,7 +142,7 @@ public class MLPTest {
         int k = MathEx.max(Segment.y) + 1;
 
         System.out.format("----- Online Learning -----%n");
-        MLP model = new MLP(Layer.input(p),
+        MLP model = new MLP(p,
                 Layer.sigmoid(50),
                 Layer.mle(k, OutputFunction.SOFTMAX)
         );
@@ -164,7 +164,7 @@ public class MLPTest {
         assertEquals(30, error);
 
         System.out.format("----- Mini-Batch Learning -----%n");
-        model = new MLP(Layer.input(p),
+        model = new MLP(p,
                 Layer.sigmoid(50),
                 Layer.mle(k, OutputFunction.SOFTMAX)
         );
@@ -210,7 +210,7 @@ public class MLPTest {
         int p = x[0].length;
         int k = MathEx.max(USPS.y) + 1;
 
-        MLP model = new MLP(Layer.input(p),
+        MLP model = new MLP(p,
                 Layer.rectifier(768),
                 Layer.rectifier(192),
                 Layer.rectifier(30),
@@ -249,7 +249,7 @@ public class MLPTest {
         int p = x[0].length;
         int k = MathEx.max(USPS.y) + 1;
 
-        MLP model = new MLP(Layer.input(p),
+        MLP model = new MLP(p,
                 Layer.sigmoid(768),
                 Layer.sigmoid(192),
                 Layer.sigmoid(30),

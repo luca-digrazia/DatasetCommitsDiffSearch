@@ -78,7 +78,7 @@ public class MaxAbsScaler implements FeatureTransform {
     }
 
     /**
-     * Fits the transformation parameters.
+     * Learns transformation parameters from a dataset.
      * @param data The training data.
      * @return the model.
      */
@@ -106,7 +106,7 @@ public class MaxAbsScaler implements FeatureTransform {
     }
 
     /**
-     * Fits the transformation parameters.
+     * Learns transformation parameters from a dataset.
      * @param data The training data.
      * @return the model.
      */
