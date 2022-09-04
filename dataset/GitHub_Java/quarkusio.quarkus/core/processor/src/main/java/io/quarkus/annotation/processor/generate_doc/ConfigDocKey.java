@@ -21,9 +21,6 @@ final public class ConfigDocKey implements ConfigDocElement, Comparable<ConfigDo
     private boolean optional;
     private boolean list;
     private boolean passThroughMap;
-    private boolean withinAConfigGroup;
-    // if a key is "quarkus.kubernetes.part-of", then the value of this would be "kubernetes"
-    private String topLevelGrouping;
 
     public ConfigDocKey() {
     }
@@ -58,19 +55,6 @@ final public class ConfigDocKey implements ConfigDocElement, Comparable<ConfigDo
 
     public void setKey(String key) {
         this.key = key;
-
-        int firstDotIndex = key.indexOf('.');
-        if (firstDotIndex == -1) {
-            this.topLevelGrouping = key;
-            return;
-        }
-        String withoutFirstDotIndex = key.substring(firstDotIndex + 1);
-        int secondDotIndex = withoutFirstDotIndex.indexOf('.');
-        if (secondDotIndex == -1) {
-            this.topLevelGrouping = withoutFirstDotIndex;
-            return;
-        }
-        this.topLevelGrouping = withoutFirstDotIndex.substring(0, secondDotIndex);
     }
 
     public String getConfigDoc() {
@@ -171,18 +155,6 @@ final public class ConfigDocKey implements ConfigDocElement, Comparable<ConfigDo
         this.passThroughMap = passThroughMap;
     }
 
-    public boolean isWithinAConfigGroup() {
-        return withinAConfigGroup;
-    }
-
-    public void setWithinAConfigGroup(boolean withinAConfigGroup) {
-        this.withinAConfigGroup = withinAConfigGroup;
-    }
-
-    public String getTopLevelGrouping() {
-        return topLevelGrouping;
-    }
-
     @Override
     public void accept(Writer writer, DocFormatter docFormatter) throws IOException {
         docFormatter.format(writer, this);
@@ -204,7 +176,6 @@ final public class ConfigDocKey implements ConfigDocElement, Comparable<ConfigDo
                 optional == that.optional &&
                 list == that.list &&
                 passThroughMap == that.passThroughMap &&
-                withinAConfigGroup == that.withinAConfigGroup &&
                 Objects.equals(type, that.type) &&
                 Objects.equals(key, that.key) &&
                 Objects.equals(configDoc, that.configDoc) &&
@@ -218,7 +189,7 @@ final public class ConfigDocKey implements ConfigDocElement, Comparable<ConfigDo
     @Override
     public int hashCode() {
         return Objects.hash(type, key, configDoc, withinAMap, defaultValue, javaDocSiteLink, docMapKey, configPhase,
-                acceptedValues, optional, list, passThroughMap, withinAConfigGroup);
+                acceptedValues, optional, list, passThroughMap);
     }
 
     @Override
@@ -236,7 +207,6 @@ final public class ConfigDocKey implements ConfigDocElement, Comparable<ConfigDo
                 ", optional=" + optional +
                 ", list=" + list +
                 ", passThroughMap=" + passThroughMap +
-                ", withinAConfigGroup=" + withinAConfigGroup +
                 '}';
     }
 }
