@@ -69,6 +69,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
@@ -82,8 +83,10 @@ public class AndroidCommon {
   public static final InstrumentationSpec ANDROID_COLLECTION_SPEC = JavaCommon.JAVA_COLLECTION_SPEC
       .withDependencyAttributes("deps", "data", "exports", "runtime_deps", "binary_under_test");
 
-  public static final ImmutableSet<String> TRANSITIVE_ATTRIBUTES =
-      ImmutableSet.of("deps", "exports");
+  public static final Set<String> TRANSITIVE_ATTRIBUTES = ImmutableSet.of(
+      "deps",
+      "exports"
+  );
 
   public static final <T extends TransitiveInfoProvider> Iterable<T> getTransitivePrerequisites(
       RuleContext ruleContext, Mode mode, final Class<T> classType) {
@@ -944,11 +947,7 @@ public class AndroidCommon {
 
     ImmutableList<Artifact> srcs =
         ruleContext.getPrerequisiteArtifacts("srcs", RuleConfiguredTarget.Mode.TARGET).list();
-    if (useDataBinding
-        && LocalResourceContainer.definesAndroidResources(ruleContext.attributes())) {
-      // Add this rule's annotation processor input if this rule has direct resources. If it
-      // doesn't have direct resources, it doesn't produce data binding output so there's no
-      // input for the annotation processor.
+    if (useDataBinding) {
       srcs = ImmutableList.<Artifact>builder().addAll(srcs)
           .add(DataBinding.createAnnotationFile(ruleContext, isLibrary)).build();
     }

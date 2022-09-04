@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.SkylarkApiProvider;
 import com.google.devtools.build.lib.rules.android.ResourceContainer.ResourceType;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
@@ -43,7 +42,6 @@ import javax.annotation.Nullable;
       "Provides access to information about Android rules. Every Android-related target provides "
           + "this struct, accessible as a 'android' field on a Target struct."
 )
-@Immutable
 public class AndroidSkylarkApiProvider extends SkylarkApiProvider {
   /** The name of the field in Skylark used to access this class. */
   public static final String NAME = "android";
@@ -179,7 +177,6 @@ public class AndroidSkylarkApiProvider extends SkylarkApiProvider {
     category = SkylarkModuleCategory.NONE,
     doc = "Provides access to information about Android rules."
   )
-  @Immutable
   public class IdlInfo {
     @SkylarkCallable(
         name = "import_root",

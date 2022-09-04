@@ -191,8 +191,8 @@ public class JavaImport implements RuleConfiguredTargetFactory {
     if (srcJar != null) {
       transitiveJavaSourceJarBuilder.add(srcJar);
     }
-    for (JavaSourceJarsProvider other : JavaProvider.getProvidersFromListOfTargets(
-        JavaSourceJarsProvider.class, ruleContext.getPrerequisites("exports", Mode.TARGET))) {
+    for (JavaSourceJarsProvider other :
+        ruleContext.getPrerequisites("exports", Mode.TARGET, JavaSourceJarsProvider.class)) {
       transitiveJavaSourceJarBuilder.addTransitive(other.getTransitiveSourceJars());
     }
     return transitiveJavaSourceJarBuilder.build();
