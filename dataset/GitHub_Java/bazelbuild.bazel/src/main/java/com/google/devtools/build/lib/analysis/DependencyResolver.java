@@ -342,12 +342,10 @@ public abstract class DependencyResolver {
       collectPropagatingAspects(
           aspects, attribute.getName(), entry.getKey().getOwningAspect(), propagatingAspects);
 
-      // TODO(https://github.com/bazelbuild/bazel/issues/7814): Unify this and get rid of the
-      // check for splits, to directly use TransitionFactory.
       ConfigurationTransition attributeTransition =
           attribute.hasSplitConfigurationTransition()
               ? attribute.getSplitTransition(attributeMap)
-              : attribute.getConfigurationTransition(attributeMap);
+              : attribute.getConfigurationTransition();
       partiallyResolvedDeps.put(
           entry.getKey(),
           PartiallyResolvedDependency.of(toLabel, attributeTransition, propagatingAspects.build()));
@@ -393,7 +391,9 @@ public abstract class DependencyResolver {
 
       outgoingEdges.put(
           entry.getKey(),
-          Dependency.withTransitionAndAspects(dep.getLabel(), transition, requiredAspects));
+          transition == NullTransition.INSTANCE
+              ? Dependency.withNullConfiguration(dep.getLabel())
+              : Dependency.withTransitionAndAspects(dep.getLabel(), transition, requiredAspects));
     }
     return outgoingEdges;
   }

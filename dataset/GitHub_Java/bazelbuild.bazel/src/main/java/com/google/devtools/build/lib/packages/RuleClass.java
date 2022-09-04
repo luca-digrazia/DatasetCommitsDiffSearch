@@ -2382,25 +2382,13 @@ public class RuleClass {
             PredicateWithMessage<Object> allowedValues = attrOfAspect.getAllowedValues();
             Object value = attrOfAspect.getDefaultValue(rule);
             if (!allowedValues.apply(value)) {
-              if (RawAttributeMapper.of(rule).isConfigurable(attrOfAspect.getName())) {
-                rule.reportError(
-                    String.format(
-                        "%s: attribute '%s' has a select() and aspect %s also declares "
-                            + "'%s'. Aspect attributes don't currently support select().",
-                        rule.getLabel(),
-                        attrOfAspect.getName(),
-                        aspect.getDefinition().getName(),
-                        rule.getLabel()),
-                    eventHandler);
-              } else {
-                rule.reportError(
-                    String.format(
-                        "%s: invalid value in '%s' attribute: %s",
-                        rule.getLabel(),
-                        attrOfAspect.getName(),
-                        allowedValues.getErrorReason(value)),
-                    eventHandler);
-              }
+              rule.reportError(
+                  String.format(
+                      "%s: invalid value in '%s' attribute: %s",
+                      rule.getLabel(),
+                      attrOfAspect.getName(),
+                      allowedValues.getErrorReason(value)),
+                  eventHandler);
             }
           }
         }

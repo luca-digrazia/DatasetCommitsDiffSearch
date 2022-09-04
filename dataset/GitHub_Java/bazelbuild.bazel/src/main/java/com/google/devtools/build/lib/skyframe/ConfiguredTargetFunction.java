@@ -508,14 +508,16 @@ public final class ConfiguredTargetFunction implements SkyFunction {
 
     // Trim each dep's configuration so it only includes the fragments needed by its transitive
     // closure.
-    depValueNames =
-        ConfigurationResolver.resolveConfigurations(
-            env,
-            ctgValue,
-            depValueNames,
-            hostConfiguration,
-            ruleClassProvider,
-            defaultBuildOptions);
+    if (ctgValue.getConfiguration() != null) {
+      depValueNames =
+          ConfigurationResolver.resolveConfigurations(
+              env,
+              ctgValue,
+              depValueNames,
+              hostConfiguration,
+              ruleClassProvider,
+              defaultBuildOptions);
+    }
 
     // Return early in case packages were not loaded yet. In theory, we could start configuring
     // dependent targets in loaded packages. However, that creates an artificial sync boundary
@@ -697,20 +699,11 @@ public final class ConfiguredTargetFunction implements SkyFunction {
                 aliasDepsToRedo.add(dep);
                 continue;
               } else {
-                pkgValue = (PackageValue) packageResult.get();
-                if (pkgValue == null) {
-                  // In a race, the getValuesOrThrow call above may have retrieved the package
-                  // before it was done but the configured target after it was done. However, the
-                  // configured target being done implies that the package is now done, so we can
-                  // retrieve it from the graph.
-                  pkgValue =
-                      Preconditions.checkNotNull(
-                          (PackageValue) env.getValue(packageKey),
-                          "Package should have been loaded during dep resolution: %s (%s %s %s)",
-                          dep,
-                          depValue,
-                          packageResult);
-                }
+                pkgValue =
+                    Preconditions.checkNotNull(
+                        (PackageValue) packageResult.get(),
+                        "Package should have been loaded during dep resolution: %s",
+                        dep);
               }
             } else {
               // We were doing AliasConfiguredTarget mop-up.
