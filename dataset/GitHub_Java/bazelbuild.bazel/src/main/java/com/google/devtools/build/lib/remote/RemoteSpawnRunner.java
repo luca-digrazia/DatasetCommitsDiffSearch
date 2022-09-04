@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.remote;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
-import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.Spawns;
@@ -144,22 +143,12 @@ final class RemoteSpawnRunner implements SpawnRunner {
       if (options.remoteLocalFallback) {
         return execLocally(spawn, policy, remoteCache, actionKey);
       }
-
-      io.grpc.Status grpcStatus = io.grpc.Status.fromThrowable(e);
-      final String message;
-      if (io.grpc.Status.UNAVAILABLE.getCode().equals(grpcStatus.getCode())) {
-        message = "The remote executor/cache is unavailable: " + grpcStatus.getDescription();
-      } else {
-        message = "I/O Error in remote cache/executor: " + e.getMessage();
-      }
-      throw new EnvironmentalExecException(message, true);
+      throw e;
     } catch (CacheNotFoundException e) {
       if (options.remoteLocalFallback) {
         return execLocally(spawn, policy, remoteCache, actionKey);
       }
-
-      String message = "Failed to download from remote cache: " + e.getMessage();
-      throw new EnvironmentalExecException(message, true);
+      throw new IOException(e);
     }
   }
 

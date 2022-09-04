@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.actions;
 import com.google.devtools.build.lib.util.CommandDescriptionForm;
 import com.google.devtools.build.lib.util.CommandFailureUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import java.time.Duration;
 import java.util.Collection;
 import java.util.Map;
 
@@ -35,13 +34,13 @@ public final class Spawns {
   /**
    * Parse the timeout key in the spawn execution info, if it exists. Otherwise, return -1.
    */
-  public static Duration getTimeout(Spawn spawn) throws ExecException {
+  public static int getTimeoutSeconds(Spawn spawn) throws ExecException {
     String timeoutStr = spawn.getExecutionInfo().get("timeout");
     if (timeoutStr == null) {
-      return Duration.ZERO;
+      return -1;
     }
     try {
-      return Duration.ofSeconds(Integer.parseInt(timeoutStr));
+      return Integer.parseInt(timeoutStr);
     } catch (NumberFormatException e) {
       throw new UserExecException("could not parse timeout: ", e);
     }
