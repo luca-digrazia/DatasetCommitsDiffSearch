@@ -339,7 +339,8 @@ public class CompilationSupport {
                             .getCoptsForCompilationMode())
                     .addAll(extraCompileArgs)
                     .build())
-            .addFrameworkIncludeDirs(frameworkHeaderSearchPathFragments(objcProvider))
+            .addFrameworkIncludeDirs(
+                frameworkHeaderSearchPathFragments(objcProvider, ruleContext, buildConfiguration))
             .addIncludeDirs(priorityHeaders)
             .addIncludeDirs(objcProvider.get(INCLUDE))
             .addSystemIncludeDirs(objcProvider.get(INCLUDE_SYSTEM))
@@ -703,7 +704,8 @@ public class CompilationSupport {
   }
 
   /** Returns a list of framework header search path fragments. */
-  static ImmutableList<PathFragment> frameworkHeaderSearchPathFragments(ObjcProvider provider)
+  static ImmutableList<PathFragment> frameworkHeaderSearchPathFragments(
+      ObjcProvider provider, RuleContext ruleContext, BuildConfiguration buildConfiguration)
       throws InterruptedException {
     ImmutableList.Builder<PathFragment> searchPaths = new ImmutableList.Builder<>();
     return searchPaths
@@ -712,18 +714,21 @@ public class CompilationSupport {
   }
 
   /** Returns a list of framework header search paths. */
-  static ImmutableList<String> frameworkHeaderSearchPaths(ObjcProvider provider)
+  static ImmutableList<String> frameworkHeaderSearchPaths(
+      ObjcProvider provider, RuleContext ruleContext, BuildConfiguration buildConfiguration)
       throws InterruptedException {
     ImmutableList.Builder<String> searchPaths = new ImmutableList.Builder<>();
     return searchPaths
         .addAll(
             Iterables.transform(
-                frameworkHeaderSearchPathFragments(provider), PathFragment::getSafePathString))
+                frameworkHeaderSearchPathFragments(provider, ruleContext, buildConfiguration),
+                PathFragment::getSafePathString))
         .build();
   }
 
   /** Returns a list of framework library search paths. */
-  static ImmutableList<String> frameworkLibrarySearchPaths(ObjcProvider provider)
+  static ImmutableList<String> frameworkLibrarySearchPaths(
+      ObjcProvider provider, RuleContext ruleContext, BuildConfiguration buildConfiguration)
       throws InterruptedException {
     ImmutableList.Builder<String> searchPaths = new ImmutableList.Builder<>();
     return searchPaths
@@ -1067,7 +1072,8 @@ public class CompilationSupport {
             .setCompilationArtifacts(compilationArtifacts)
             .setIntermediateArtifacts(intermediateArtifacts)
             .setConfiguration(buildConfiguration)
-            .setFrameworkSearchPath(frameworkHeaderSearchPaths(objcProvider));
+            .setFrameworkSearchPath(
+                frameworkHeaderSearchPaths(objcProvider, ruleContext, buildConfiguration));
 
     Pair<CcCompilationOutputs, ImmutableMap<String, NestedSet<Artifact>>> compilationInfo;
 
@@ -1206,7 +1212,8 @@ public class CompilationSupport {
             .setConfiguration(buildConfiguration)
             .setIntermediateArtifacts(intermediateArtifacts)
             .setFrameworkNames(frameworkNames(objcProvider))
-            .setFrameworkSearchPath(frameworkLibrarySearchPaths(objcProvider))
+            .setFrameworkSearchPath(
+                frameworkLibrarySearchPaths(objcProvider, ruleContext, buildConfiguration))
             .setLibraryNames(libraryNames(objcProvider))
             .setForceLoadArtifacts(getForceLoadArtifacts(objcProvider))
             .setAttributeLinkopts(attributes.linkopts())
@@ -1388,7 +1395,8 @@ public class CompilationSupport {
             .setObjcProvider(objcProvider)
             .setConfiguration(buildConfiguration)
             .setIntermediateArtifacts(intermediateArtifacts)
-            .setFrameworkSearchPath(frameworkHeaderSearchPaths(objcProvider))
+            .setFrameworkSearchPath(
+                frameworkHeaderSearchPaths(objcProvider, ruleContext, buildConfiguration))
             .setFullyLinkArchive(outputArchive)
             .addVariableCategory(VariableCategory.FULLY_LINK_VARIABLES)
             .build();
