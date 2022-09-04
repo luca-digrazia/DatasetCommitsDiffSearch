@@ -20,11 +20,15 @@ import com.google.devtools.build.lib.skyframe.serialization.DeserializationConte
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationConstant;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.strings.StringCodecs;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrintable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Set;
 import javax.annotation.Nullable;
 
@@ -50,13 +54,14 @@ import javax.annotation.Nullable;
  */
 public final class PathFragment
     implements Comparable<PathFragment>,
+        Serializable,
         FileType.HasFileType,
+        SkylarkPrintable,
         CommandLineItem {
   private static final OsPathPolicy OS = OsPathPolicy.getFilePathOs();
 
-  @SerializationConstant public static final PathFragment EMPTY_FRAGMENT = new PathFragment("", 0);
-  public static final char SEPARATOR_CHAR = '/';
-  private static final char ADDITIONAL_SEPARATOR_CHAR = OS.additionalSeparator();
+  @AutoCodec public static final PathFragment EMPTY_FRAGMENT = new PathFragment("", 0);
+  public static final char SEPARATOR_CHAR = OS.getSeparator();
   public static final int INVALID_SEGMENT = -1;
 
   private final String normalizedPath;
@@ -92,6 +97,7 @@ public final class PathFragment
    *
    * <p>Should only be used internally.
    */
+  @AutoCodec.Instantiator
   static PathFragment createAlreadyNormalized(String normalizedPath, int driveStrLength) {
     if (normalizedPath.isEmpty()) {
       return EMPTY_FRAGMENT;
@@ -342,6 +348,11 @@ public final class PathFragment
   @Override
   public String toString() {
     return normalizedPath;
+  }
+
+  @Override
+  public void repr(SkylarkPrinter printer) {
+    printer.append(normalizedPath);
   }
 
   @Override
@@ -740,20 +751,18 @@ public final class PathFragment
     if (baseName.equals(".") || baseName.equals("..")) {
       throw new IllegalArgumentException("baseName must not be '" + baseName + "'");
     }
-    if (baseName.indexOf(SEPARATOR_CHAR) != -1) {
-      throw new IllegalArgumentException(
-          "baseName must not contain " + SEPARATOR_CHAR + ": '" + baseName + "'");
-    }
-    if (ADDITIONAL_SEPARATOR_CHAR != 0) {
-      if (baseName.indexOf(ADDITIONAL_SEPARATOR_CHAR) != -1) {
-        throw new IllegalArgumentException(
-            "baseName must not contain " + ADDITIONAL_SEPARATOR_CHAR + ": '" + baseName + "'");
-      }
+    if (baseName.indexOf('/') != -1) {
+      throw new IllegalArgumentException("baseName must not contain a slash: '" + baseName + "'");
     }
   }
 
-  @SuppressWarnings("unused") // found by CLASSPATH-scanning magic
+  private Object writeReplace() {
+    return new PathFragmentSerializationProxy(normalizedPath);
+  }
+
   private static class Codec implements ObjectCodec<PathFragment> {
+    private final ObjectCodec<String> stringCodec = StringCodecs.asciiOptimized();
+
     @Override
     public Class<? extends PathFragment> getEncodedClass() {
       return PathFragment.class;
@@ -763,13 +772,13 @@ public final class PathFragment
     public void serialize(
         SerializationContext context, PathFragment obj, CodedOutputStream codedOut)
         throws SerializationException, IOException {
-      context.serialize(obj.normalizedPath, codedOut);
+      stringCodec.serialize(context, obj.normalizedPath, codedOut);
     }
 
     @Override
     public PathFragment deserialize(DeserializationContext context, CodedInputStream codedIn)
         throws SerializationException, IOException {
-      return PathFragment.createAlreadyNormalized(context.deserialize(codedIn));
+      return PathFragment.createAlreadyNormalized(stringCodec.deserialize(context, codedIn));
     }
   }
 }
