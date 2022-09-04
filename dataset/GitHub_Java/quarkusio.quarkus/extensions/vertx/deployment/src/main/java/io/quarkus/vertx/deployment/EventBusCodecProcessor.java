@@ -7,7 +7,6 @@ import static io.quarkus.vertx.deployment.VertxConstants.LOCAL_EVENT_BUS_CODEC;
 import static io.quarkus.vertx.deployment.VertxConstants.MESSAGE;
 import static io.quarkus.vertx.deployment.VertxConstants.MUTINY_MESSAGE;
 import static io.quarkus.vertx.deployment.VertxConstants.RX_MESSAGE;
-import static io.quarkus.vertx.deployment.VertxConstants.UNI;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -134,7 +133,7 @@ public class EventBusCodecProcessor {
         } else if (returnType.kind() == Type.Kind.PARAMETERIZED_TYPE) {
             ParameterizedType returnedParamType = returnType.asParameterizedType();
             if (!returnedParamType.arguments().isEmpty()
-                    && (returnedParamType.name().equals(COMPLETION_STAGE) || returnedParamType.name().equals(UNI))) {
+                    && (returnedParamType.name().equals(COMPLETION_STAGE))) {
                 return returnedParamType.arguments().get(0);
             } else {
                 return returnedParamType;

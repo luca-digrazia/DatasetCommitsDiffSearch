@@ -17,7 +17,6 @@ class BootstrapModelBuilderFactory extends DefaultModelBuilderFactory {
 
             @Override
             public void validateEffectiveModel(Model model, ModelBuildingRequest request, ModelProblemCollector problems) {
-            }
-        };
+            }};
     }
 }
