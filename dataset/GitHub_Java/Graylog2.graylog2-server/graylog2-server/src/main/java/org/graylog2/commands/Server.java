@@ -41,7 +41,6 @@ import org.graylog2.configuration.MongoDbConfiguration;
 import org.graylog2.configuration.VersionCheckConfiguration;
 import org.graylog2.indexer.retention.RetentionStrategyBindings;
 import org.graylog2.indexer.rotation.RotationStrategyBindings;
-import org.graylog2.messageprocessors.MessageProcessorModule;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.KafkaJournalConfiguration;
@@ -106,7 +105,6 @@ public class Server extends ServerBootstrap {
                 new ServerBindings(configuration),
                 new PersistenceServicesBindings(),
                 new MessageFilterBindings(),
-                new MessageProcessorModule(),
                 new AlarmCallbackBindings(),
                 new InitializerBindings(),
                 new MessageOutputBindings(configuration),
