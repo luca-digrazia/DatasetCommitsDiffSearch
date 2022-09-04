@@ -36,9 +36,6 @@ import io.quarkus.creator.phase.nativeimage.NativeImageOutcome;
 import io.quarkus.creator.phase.nativeimage.NativeImagePhase;
 import io.quarkus.creator.phase.runnerjar.RunnerJarOutcome;
 
-/**
- * Build a native executable of your application.
- */
 @Mojo(name = "native-image", defaultPhase = LifecyclePhase.PACKAGE, requiresDependencyResolution = ResolutionScope.RUNTIME)
 public class NativeImageMojo extends AbstractMojo {
 
@@ -132,6 +129,9 @@ public class NativeImageMojo extends AbstractMojo {
     @Parameter(defaultValue = "false")
     private boolean addAllCharsets;
 
+    @Parameter(defaultValue = "false")
+    private boolean enableFallbackImages;
+
     public NativeImageMojo() {
         MojoLogger.logSupplier = this::getLog;
     }
@@ -161,6 +161,7 @@ public class NativeImageMojo extends AbstractMojo {
                         .setDumpProxies(dumpProxies)
                         .setEnableAllSecurityServices(enableAllSecurityServices)
                         .setEnableCodeSizeReporting(enableCodeSizeReporting)
+                        .setEnableFallbackImages(enableFallbackImages)
                         .setEnableHttpsUrlHandler(enableHttpsUrlHandler)
                         .setEnableHttpUrlHandler(enableHttpUrlHandler)
                         .setEnableIsolates(enableIsolates)

@@ -64,7 +64,6 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
     private static final String QUARKUS_PREFIX = "quarkus.";
 
     private static final boolean IS_LINUX = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("linux");
-    private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows");
 
     private Path outputDir;
 
@@ -102,7 +101,7 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
 
     private String nativeImageXmx;
 
-    private String builderImage = "quay.io/quarkus/centos-quarkus-native-image:graalvm-1.0.0-rc16";
+    private String builderImage = "quay.io/quarkus/centos-quarkus-native-image:graalvm-1.0.0-rc15";
 
     private String containerRuntime = "";
 
@@ -346,13 +345,12 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
                     throw new AppCreatorException("GRAALVM_HOME was not set");
                 }
             }
-            String imageName = IS_WINDOWS ? "native-image.cmd" : "native-image";
-            nativeImage = Collections.singletonList(graalvmHome + File.separator + "bin" + File.separator + imageName);
-
+            nativeImage = Collections.singletonList(graalvmHome + File.separator + "bin" + File.separator + "native-image");
         }
 
         try {
-            List<String> command = new ArrayList<>(nativeImage);
+            List<String> command = new ArrayList<>();
+            command.addAll(nativeImage);
             if (cleanupServer) {
                 List<String> cleanup = new ArrayList<>(nativeImage);
                 cleanup.add("--server-shutdown");
@@ -398,7 +396,7 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
                 enableAllSecurityServices = true;
             }
             if (additionalBuildArgs != null) {
-                command.addAll(additionalBuildArgs);
+                additionalBuildArgs.forEach(command::add);
             }
             command.add("-H:InitialCollectionPolicy=com.oracle.svm.core.genscavenge.CollectionPolicy$BySpaceAndTime"); //the default collection policy results in full GC's 50% of the time
             command.add("-jar");
@@ -470,7 +468,7 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
             } else {
                 command.add("-H:-JNI");
             }
-            if (!enableServer && !IS_WINDOWS) {
+            if (!enableServer) {
                 command.add("--no-server");
             }
             if (enableVMInspection) {
@@ -523,11 +521,10 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
     private boolean isThisGraalVMRCObsolete() {
         final String vmName = System.getProperty("java.vm.name");
         log.info("Running Quarkus native-image plugin on " + vmName);
-        final List<String> obsoleteGraalVmVersions = Arrays.asList("-rc9", "-rc10", "-rc11", "-rc12", "-rc13", "-rc14",
-                "-rc15");
+        final List<String> obsoleteGraalVmVersions = Arrays.asList("-rc9", "-rc10", "-rc11", "-rc12", "-rc13", "-rc14");
         final boolean vmVersionIsObsolete = obsoleteGraalVmVersions.stream().anyMatch(vmName::contains);
         if (vmVersionIsObsolete) {
-            log.error("Out of date RC build of GraalVM detected! Please upgrade to GraalVM RC16");
+            log.error("Out of date RC build of GraalVM detected! Please upgrade to GraalVM RC15");
             return true;
         }
         return false;

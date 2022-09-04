@@ -86,8 +86,6 @@ public class QuarkusNative extends QuarkusTask {
 
     private boolean addAllCharsets = false;
 
-    private boolean reportExceptionStackTraces = false;
-
     public QuarkusNative() {
         super("Building a native image");
     }
@@ -374,17 +372,6 @@ public class QuarkusNative extends QuarkusTask {
         this.additionalBuildArgs = additionalBuildArgs;
     }
 
-    @Optional
-    @Input
-    public boolean isReportExceptionStackTraces() {
-        return reportExceptionStackTraces;
-    }
-
-    @Option(description = "Show exception stack traces for exceptions during image building", option = "report-exception-stack-traces")
-    public void setReportExceptionStackTraces(boolean reportExceptionStackTraces) {
-        this.reportExceptionStackTraces = reportExceptionStackTraces;
-    }
-
     @TaskAction
     public void buildNative() {
         getLogger().lifecycle("building native image");
@@ -416,8 +403,7 @@ public class QuarkusNative extends QuarkusTask {
                         .setFullStackTraces(isFullStackTraces())
                         .setGraalvmHome(getGraalvmHome())
                         .setNativeImageXmx(getNativeImageXmx())
-                        .setReportErrorsAtRuntime(isReportErrorsAtRuntime())
-                        .setReportExceptionStackTraces(isReportExceptionStackTraces()))
+                        .setReportErrorsAtRuntime(isReportErrorsAtRuntime()))
 
                 .build()) {
 
