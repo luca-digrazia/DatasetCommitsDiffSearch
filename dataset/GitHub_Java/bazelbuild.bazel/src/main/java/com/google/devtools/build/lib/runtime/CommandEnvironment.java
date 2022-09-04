@@ -216,7 +216,7 @@ public class CommandEnvironment {
 
     this.repoEnv.putAll(clientEnv);
     if (command.builds()) {
-      // Compute the set of environment variables that are allowlisted on the commandline
+      // Compute the set of environment variables that are whitelisted on the commandline
       // for inheritance.
       for (Map.Entry<String, String> entry :
           options.getOptions(CoreOptions.class).actionEnvironment) {
@@ -318,7 +318,6 @@ public class CommandEnvironment {
     return directories;
   }
 
-  @Nullable
   public PathPackageLocator getPackageLocator() {
     return packageLocator;
   }
@@ -359,18 +358,18 @@ public class CommandEnvironment {
   }
 
   /**
-   * Return an ordered version of the client environment restricted to those variables allowlisted
+   * Return an ordered version of the client environment restricted to those variables whitelisted
    * by the command-line options to be inheritable by actions.
    */
-  public Map<String, String> getAllowlistedActionEnv() {
+  public Map<String, String> getWhitelistedActionEnv() {
     return filterClientEnv(visibleActionEnv);
   }
 
   /**
-   * Return an ordered version of the client environment restricted to those variables allowlisted
+   * Return an ordered version of the client environment restricted to those variables whitelisted
    * by the command-line options to be inheritable by actions.
    */
-  public Map<String, String> getAllowlistedTestEnv() {
+  public Map<String, String> getWhitelistedTestEnv() {
     return filterClientEnv(visibleTestEnv);
   }
 
