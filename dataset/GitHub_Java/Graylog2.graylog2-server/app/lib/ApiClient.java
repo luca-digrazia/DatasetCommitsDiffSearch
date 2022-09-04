@@ -205,6 +205,14 @@ public class ApiClient {
             return queryParam(name, Integer.toString(value));
         }
 
+        public ApiRequestBuilder<T> queryParams(Map<String, String> params) {
+            for(Map.Entry<String, String> p : params.entrySet()) {
+                queryParam(p.getKey(), p.getValue());
+            }
+
+            return this;
+        }
+
         public ApiRequestBuilder<T> credentials(String username, String password) {
             this.username = username;
             this.password = password;
@@ -336,8 +344,6 @@ public class ApiClient {
                 }
                 requestBuilder.addHeader("Content-Type", "application/json");
                 requestBuilder.setBody(body.toJson());
-            } else if(method == Method.POST) {
-                log.warn("POST without body, this doesn't make sense,", new IllegalStateException());
             }
             // TODO: should we always insist on things being wrapped in json?
             if (!responseClass.equals(String.class)) {
