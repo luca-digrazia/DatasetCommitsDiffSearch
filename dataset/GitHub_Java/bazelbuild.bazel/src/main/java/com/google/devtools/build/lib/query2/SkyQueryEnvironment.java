@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2;
 
-import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -32,7 +31,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
-import com.google.common.collect.Streams;
 import com.google.common.util.concurrent.AsyncCallable;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
@@ -139,7 +137,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     implements StreamableQueryEnvironment<Target> {
   // 10k is likely a good balance between using batch efficiently and not blowing up memory.
   // TODO(janakr): Unify with RecursivePackageProviderBackedTargetPatternResolver's constant.
-  protected static final int BATCH_CALLBACK_SIZE = 10000;
+  static final int BATCH_CALLBACK_SIZE = 10000;
   protected static final int DEFAULT_THREAD_COUNT = Runtime.getRuntime().availableProcessors();
   private static final int MAX_QUERY_EXPRESSION_LOG_CHARS = 1000;
   private static final Logger logger = Logger.getLogger(SkyQueryEnvironment.class.getName());
@@ -1047,26 +1045,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     }
     return result;
   }
-
-  void getBuildFileTargetsForPackageKeysAndProcessViaCallback(
-      Iterable<SkyKey> packageKeys, Callback<Target> callback)
-      throws QueryException, InterruptedException {
-    Set<PackageIdentifier> pkgIds =
-          Streams.stream(packageKeys)
-              .map(SkyQueryEnvironment.PACKAGE_SKYKEY_TO_PACKAGE_IDENTIFIER)
-              .collect(toImmutableSet());
-    packageSemaphore.acquireAll(pkgIds);
-    try {
-      Iterable<SkyValue> packageValues = graph.getSuccessfulValues(packageKeys).values();
-      Iterable<Target> buildFileTargets = getBuildFileTargetsFromPackageValues(packageValues);
-      callback.process(buildFileTargets);
-    } finally {
-      packageSemaphore.releaseAll(pkgIds);
-    }
-  }
-
-  protected Iterable<Target> getBuildFileTargetsFromPackageValues(
-      Iterable<SkyValue> packageValues) {
+  static Iterable<Target> getBuildFilesForPackageValues(Iterable<SkyValue> packageValues) {
     // TODO(laurentlb): Use streams?
     return Iterables.transform(
         Iterables.filter(
@@ -1083,7 +1062,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
         safeSubmit(
             () -> {
               ParallelSkyQueryUtils.getRBuildFilesParallel(
-                  SkyQueryEnvironment.this, fileIdentifiers, callback);
+                  SkyQueryEnvironment.this, fileIdentifiers, callback, packageSemaphore);
               return null;
             }));
   }
@@ -1124,12 +1103,14 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
         }
         if (resultKeys.size() >= BATCH_CALLBACK_SIZE) {
           for (Iterable<SkyKey> batch : Iterables.partition(resultKeys, BATCH_CALLBACK_SIZE)) {
-            getBuildFileTargetsForPackageKeysAndProcessViaCallback(batch, callback);
+            callback.process(
+                getBuildFilesForPackageValues(graph.getSuccessfulValues(batch).values()));
           }
           resultKeys.clear();
         }
       }
-      getBuildFileTargetsForPackageKeysAndProcessViaCallback(resultKeys, callback);
+      callback.process(
+          getBuildFilesForPackageValues(graph.getSuccessfulValues(resultKeys).values()));
       return immediateSuccessfulFuture(null);
     } catch (QueryException e) {
       return immediateFailedFuture(e);
@@ -1208,9 +1189,6 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   // TODO(nharmata): For queries with less than {@code batchThreshold} results, this batching
   // strategy probably hurts performance since we can only start formatting results once the entire
   // query is finished.
-  // TODO(nharmata): This batching strategy is also potentially harmful from a memory perspective
-  // since when the Targets being output are backed by Package instances, we're delaying GC of the
-  // Package instances until the output batch size is met.
   private static class BatchStreamedCallback extends ThreadSafeOutputFormatterCallback<Target>
       implements Callback<Target> {
 

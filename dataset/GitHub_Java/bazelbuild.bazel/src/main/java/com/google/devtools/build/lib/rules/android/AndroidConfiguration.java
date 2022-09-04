@@ -560,7 +560,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
     @Option(
       name = "experimental_android_resource_filtering_method",
-      converter = ResourceFilterFactory.Converter.class,
+      converter = ResourceFilter.Converter.class,
       defaultValue = "filter_in_execution",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.UNKNOWN},
@@ -575,10 +575,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
               + "in analysis, possibly making the build even faster (especially in systems that "
               + "do not cache the results of those dependencies)."
     )
-    // The ResourceFilterFactory object holds the filtering behavior as well as settings for which
+    // The ResourceFilter object holds the filtering behavior as well as settings for which
     // resources should be filtered. The filtering behavior is set from the command line, but the
     // other settings default to empty and are set or modified via dynamic configuration.
-    public ResourceFilterFactory resourceFilterFactory;
+    public ResourceFilter resourceFilter;
 
     @Option(
       name = "experimental_android_compress_java_resources",
@@ -662,17 +662,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     )
     public boolean allowResourcesAttr;
 
-    @Option(
-        name = "experimental_android_inherit_resources_in_tests",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-        help = "If true, local_resource_files indicates that resource files should be inherited"
-            + "from deps in android_test targets. Otherwise, resources will not be inherited from"
-            + " deps for those targets."
-    )
-    public boolean inheritResourcesInTests;
-
     @Override
     public FragmentOptions getHost() {
       Options host = (Options) super.getHost();
@@ -743,7 +732,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final AndroidManifestMerger manifestMerger;
   private final ApkSigningMethod apkSigningMethod;
   private final boolean useSingleJarApkBuilder;
-  private final ResourceFilterFactory resourceFilterFactory;
+  private final ResourceFilter resourceFilter;
   private final boolean compressJavaResources;
   private final boolean includeLibraryResourceJars;
   private final boolean exportsManifestDefault;
@@ -754,7 +743,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final boolean useManifestFromResourceApk;
   private final boolean allowAndroidResources;
   private final boolean allowResourcesAttr;
-  private final boolean inheritResourcesInTests;
 
 
   AndroidConfiguration(Options options) throws InvalidConfigurationException {
@@ -781,7 +769,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.apkSigningMethod = options.apkSigningMethod;
     this.useSingleJarApkBuilder = options.useSingleJarApkBuilder;
     this.useRexToCompressDexFiles = options.useRexToCompressDexFiles;
-    this.resourceFilterFactory = options.resourceFilterFactory;
+    this.resourceFilter = options.resourceFilter;
     this.compressJavaResources = options.compressJavaResources;
     this.includeLibraryResourceJars = options.includeLibraryResourceJars;
     this.exportsManifestDefault = options.exportsManifestDefault;
@@ -792,7 +780,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.useManifestFromResourceApk = options.useManifestFromResourceApk;
     this.allowAndroidResources = options.allowAndroidResources;
     this.allowResourcesAttr = options.allowResourcesAttr;
-    this.inheritResourcesInTests = options.inheritResourcesInTests;
 
     if (!dexoptsSupportedInIncrementalDexing.contains("--no-locals")) {
       // TODO(bazel-team): Still needed? See DexArchiveAspect
@@ -907,8 +894,8 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     return useSingleJarApkBuilder;
   }
 
-  public ResourceFilterFactory getResourceFilterFactory() {
-    return resourceFilterFactory;
+  public ResourceFilter getResourceFilter() {
+    return resourceFilter;
   }
 
   public boolean useParallelDex2Oat() {
@@ -947,10 +934,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     return this.allowResourcesAttr;
   }
 
-  public boolean inheritResourcesInTests() {
-    return this.inheritResourcesInTests;
-  }
-
   @Override
   public void addGlobalMakeVariables(ImmutableMap.Builder<String, String> globalMakeEnvBuilder) {
     globalMakeEnvBuilder.put("ANDROID_CPU", cpu);
@@ -960,7 +943,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   public String getOutputDirectoryName() {
     // We expect this value to be null most of the time - it will only become non-null when a
     // dynamically configured transition changes the configuration's resource filter object.
-    String resourceFilterSuffix = resourceFilterFactory.getOutputDirectorySuffix();
+    String resourceFilterSuffix = resourceFilter.getOutputDirectorySuffix();
 
     if (configurationDistinguisher.suffix == null) {
       return resourceFilterSuffix;
@@ -976,7 +959,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   @Nullable
   @Override
   public PatchTransition topLevelConfigurationHook(Target toTarget) {
-    return resourceFilterFactory.getTopLevelPatchTransition(
+    return resourceFilter.getTopLevelPatchTransition(
         toTarget.getAssociatedRule().getRuleClass(),
         AggregatingAttributeMapper.of(toTarget.getAssociatedRule()));
   }
