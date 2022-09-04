@@ -8,7 +8,6 @@ import ch.qos.logback.classic.jmx.JMXConfigurator;
 import ch.qos.logback.classic.jul.LevelChangePropagator;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.ConsoleAppender;
-import ch.qos.logback.core.encoder.LayoutWrappingEncoder;
 import ch.qos.logback.core.util.StatusPrinter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.logback.InstrumentedAppender;
@@ -54,10 +53,7 @@ public class LoggingFactory {
         final ConsoleAppender<ILoggingEvent> appender = new ConsoleAppender<>();
         appender.addFilter(filter);
         appender.setContext(root.getLoggerContext());
-
-        LayoutWrappingEncoder<ILoggingEvent> layoutEncoder = new LayoutWrappingEncoder<>();
-        layoutEncoder.setLayout(formatter);
-        appender.setEncoder(layoutEncoder);
+        appender.setLayout(formatter);
         appender.start();
 
         root.addAppender(appender);
