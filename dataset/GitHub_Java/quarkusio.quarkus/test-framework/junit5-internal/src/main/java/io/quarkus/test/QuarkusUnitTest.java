@@ -86,8 +86,6 @@ public class QuarkusUnitTest
     private static final Timer timeoutTimer = new Timer("Test thread dump timer");
     private volatile TimerTask timeoutTask;
     private Properties customApplicationProperties;
-    private Runnable beforeAllCustomizer;
-    private Runnable afterAllCustomizer;
 
     private final RestAssuredURLManager restAssuredURLManager;
 
@@ -132,18 +130,6 @@ public class QuarkusUnitTest
 
     public QuarkusUnitTest setLogFileName(String logFileName) {
         this.logFileName = logFileName;
-        return this;
-    }
-
-    // set a Runnable that will run before ANYTHING else is done
-    public QuarkusUnitTest setBeforeAllCustomizer(Runnable beforeAllCustomizer) {
-        this.beforeAllCustomizer = beforeAllCustomizer;
-        return this;
-    }
-
-    // set a Runnable that will run after EVERYTHING else is done
-    public QuarkusUnitTest setAfterAllCustomizer(Runnable afterAllCustomizer) {
-        this.afterAllCustomizer = afterAllCustomizer;
         return this;
     }
 
@@ -215,9 +201,6 @@ public class QuarkusUnitTest
 
     @Override
     public void beforeAll(ExtensionContext extensionContext) throws Exception {
-        if (beforeAllCustomizer != null) {
-            beforeAllCustomizer.run();
-        }
         timeoutTask = new TimerTask() {
             @Override
             public void run() {
@@ -393,9 +376,6 @@ public class QuarkusUnitTest
                     }
                 });
             }
-        }
-        if (afterAllCustomizer != null) {
-            afterAllCustomizer.run();
         }
     }
 
