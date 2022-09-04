@@ -1112,7 +1112,15 @@ public final class EvalUtils {
   /** Executes a parsed, validated Starlark file in a given StarlarkThread. */
   public static void exec(StarlarkFile file, StarlarkThread thread)
       throws EvalException, InterruptedException {
-    Eval.execFile(thread, file);
+    for (Statement stmt : file.getStatements()) {
+      execToplevelStatement(stmt, thread);
+    }
+  }
+
+  /** Executes a statement in a given StarlarkThread. */
+  public static void execToplevelStatement(Statement stmt, StarlarkThread thread)
+      throws EvalException, InterruptedException {
+    Eval.execToplevelStatement(thread, stmt);
   }
 
   /**

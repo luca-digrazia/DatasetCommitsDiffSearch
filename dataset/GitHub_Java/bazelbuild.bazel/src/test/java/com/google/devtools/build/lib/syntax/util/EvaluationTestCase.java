@@ -17,6 +17,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.truth.Ordered;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventCollector;
 import com.google.devtools.build.lib.events.EventKind;
@@ -35,6 +36,7 @@ import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.SkylarkUtils.Phase;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.syntax.SyntaxError;
 import com.google.devtools.build.lib.syntax.ValidationEnvironment;
 import com.google.devtools.build.lib.testutil.TestConstants;
@@ -148,9 +150,33 @@ public class EvaluationTestCase {
   public StarlarkThread getStarlarkThread() {
     return thread;
   }
+
+  protected final StarlarkFile parseStarlarkFileWithoutValidation(String... lines) {
+    ParserInput input = ParserInput.fromLines(lines);
+    StarlarkFile file = StarlarkFile.parse(input);
+    Event.replayEventsOn(getEventHandler(), file.errors());
+    return file;
+  }
+
+  private StarlarkFile parseStarlarkFile(String... lines) {
+    ParserInput input = ParserInput.fromLines(lines);
+    StarlarkFile file = EvalUtils.parseAndValidateSkylark(input, thread);
+    Event.replayEventsOn(getEventHandler(), file.errors());
+    return file;
+  }
+
+  /** Parses and validates a file and returns its statements. */
   // TODO(adonovan): don't let subclasses inherit vaguely specified "helpers".
   // Separate all the tests clearly into tests of the scanner, parser, resolver,
   // and evaluation.
+  protected List<Statement> parseFile(String... lines) {
+    return parseStarlarkFile(lines).getStatements();
+  }
+
+  /** Parses a statement, without validation. */
+  protected final Statement parseStatement(String... lines) {
+    return parseStarlarkFileWithoutValidation(lines).getStatements().get(0);
+  }
 
   /** Parses an expression. */
   protected final Expression parseExpression(String... lines) throws SyntaxError {
@@ -166,20 +192,14 @@ public class EvaluationTestCase {
     return thread.moduleLookup(varname);
   }
 
-  /** Joins the lines, parses them as an expression, and evaluates it. */
-  public final Object eval(String... lines) throws Exception {
-    ParserInput input = ParserInput.fromLines(lines);
-    return EvalUtils.eval(input, thread);
-  }
-
-  /** Joins the lines, parses them as a file, and executes it. */
-  // TODO(adonovan): this function does too much:
+  // TODO(adonovan): this function does far too much:
+  // - two forms, exec(file) or exec(file)+eval(expression).
   // - two modes, BUILD vs Skylark.
   // - parse + validate + BUILD dialect checks + execute.
   // Break the tests down into tests of just the scanner, parser, validator, build dialect checks,
   // or execution, and assert that all passes except the one of interest succeed.
   // All BUILD-dialect stuff belongs in bazel proper (lib.packages), not here.
-  public final void exec(String... lines) throws Exception {
+  public Object eval(String... lines) throws Exception {
     ParserInput input = ParserInput.fromLines(lines);
     StarlarkFile file = StarlarkFile.parse(input);
     ValidationEnvironment.validateFile(
@@ -194,12 +214,12 @@ public class EvaluationTestCase {
       Event.replayEventsOn(getEventHandler(), file.errors());
       PackageFactory.checkBuildSyntax(file, getEventHandler());
     }
-    EvalUtils.exec(file, thread);
+    return EvalUtils.execOrEval(file, thread);
   }
 
   public void checkEvalError(String msg, String... input) throws Exception {
     try {
-      exec(input);
+      eval(input);
       fail("Expected error '" + msg + "' but got no error");
     } catch (SyntaxError | EvalException | EventCollectionApparatus.FailFastException e) {
       assertThat(e).hasMessageThat().isEqualTo(msg);
@@ -208,7 +228,7 @@ public class EvaluationTestCase {
 
   public void checkEvalErrorContains(String msg, String... input) throws Exception {
     try {
-      exec(input);
+      eval(input);
       fail("Expected error containing '" + msg + "' but got no error");
     } catch (SyntaxError | EvalException | EventCollectionApparatus.FailFastException e) {
       assertThat(e).hasMessageThat().contains(msg);
@@ -217,7 +237,7 @@ public class EvaluationTestCase {
 
   public void checkEvalErrorDoesNotContain(String msg, String... input) throws Exception {
     try {
-      exec(input);
+      eval(input);
     } catch (SyntaxError | EvalException | EventCollectionApparatus.FailFastException e) {
       assertThat(e).hasMessageThat().doesNotContain(msg);
     }
@@ -272,9 +292,13 @@ public class EvaluationTestCase {
       setup = new SetupActions();
     }
 
-    /** Allows the execution of several statements before each following test. */
-    public ModalTestCase setUp(String... lines) {
-      setup.registerExec(lines);
+    /**
+     * Allows the execution of several statements before each following test
+     * @param statements The statement(s) to be executed
+     * @return This {@code ModalTestCase}
+     */
+    public ModalTestCase setUp(String... statements) {
+      setup.registerEval(statements);
       return this;
     }
 
@@ -290,97 +314,153 @@ public class EvaluationTestCase {
     }
 
     /**
-     * Evaluates two expressions and asserts that their results are equal.
-     *
-     * @param src The source expression to be evaluated
+     * Evaluates two parameters and compares their results.
+     * @param statement The statement to be evaluated
      * @param expectedEvalString The expression of the expected result
      * @return This {@code ModalTestCase}
      * @throws Exception
      */
-    public ModalTestCase testEval(String src, String expectedEvalString) throws Exception {
-      runTest(createComparisonTestable(src, expectedEvalString, true));
+    public ModalTestCase testEval(String statement, String expectedEvalString) throws Exception {
+      runTest(createComparisonTestable(statement, expectedEvalString, true));
       return this;
     }
 
-    /** Evaluates an expression and compares its result to the expected object. */
-    public ModalTestCase testExpression(String src, Object expected) throws Exception {
-      runTest(createComparisonTestable(src, expected, false));
+    /**
+     * Evaluates the given statement and compares its result to the expected object
+     * @param statement
+     * @param expected
+     * @return This {@code ModalTestCase}
+     * @throws Exception
+     */
+    public ModalTestCase testStatement(String statement, Object expected) throws Exception {
+      runTest(createComparisonTestable(statement, expected, false));
       return this;
     }
 
-    /** Evaluates an expression and compares its result to the ordered list of expected objects. */
-    public ModalTestCase testExactOrder(String src, Object... items) throws Exception {
-      runTest(collectionTestable(src, items));
+    /**
+     * Evaluates the given statement and compares its result to the collection of expected objects
+     * without considering their order
+     * @param statement The statement to be evaluated
+     * @param items The expected items
+     * @return This {@code ModalTestCase}
+     * @throws Exception
+     */
+    public ModalTestCase testCollection(String statement, Object... items) throws Exception {
+      runTest(collectionTestable(statement, false, items));
       return this;
     }
 
-    /** Evaluates an expression and checks whether it fails with the expected error. */
-    public ModalTestCase testIfExactError(String expectedError, String... lines) throws Exception {
-      runTest(errorTestable(true, expectedError, lines));
+    /**
+     * Evaluates the given statement and compares its result to the collection of expected objects
+     * while considering their order
+     * @param statement The statement to be evaluated
+     * @param items The expected items, in order
+     * @return This {@code ModalTestCase}
+     * @throws Exception
+     */
+    public ModalTestCase testExactOrder(String statement, Object... items) throws Exception {
+      runTest(collectionTestable(statement, true, items));
       return this;
     }
 
-    /** Evaluates the expresson and checks whether it fails with the expected error. */
-    public ModalTestCase testIfErrorContains(String expectedError, String... lines)
+    /**
+     * Evaluates the given statement and checks whether the given error message appears
+     * @param expectedError The expected error message
+     * @param statements The statement(s) to be evaluated
+     * @return This ModalTestCase
+     * @throws Exception
+     */
+    public ModalTestCase testIfExactError(String expectedError, String... statements)
         throws Exception {
-      runTest(errorTestable(false, expectedError, lines));
+      runTest(errorTestable(true, expectedError, statements));
       return this;
     }
 
-    /** Looks up the value of the specified variable and compares it to the expected value. */
+    /**
+     * Evaluates the given statement and checks whether an error that contains the expected message
+     * occurs
+     * @param expectedError
+     * @param statements
+     * @return This ModalTestCase
+     * @throws Exception
+     */
+    public ModalTestCase testIfErrorContains(String expectedError, String... statements)
+        throws Exception {
+      runTest(errorTestable(false, expectedError, statements));
+      return this;
+    }
+
+    /**
+     * Looks up the value of the specified variable and compares it to the expected value
+     * @param name
+     * @param expected
+     * @return This ModalTestCase
+     * @throws Exception
+     */
     public ModalTestCase testLookup(String name, Object expected) throws Exception {
       runTest(createLookUpTestable(name, expected));
       return this;
     }
 
     /**
-     * Creates a Testable that checks whether the evaluation of the given expression fails with the
-     * expected error.
-     *
-     * @param exactMatch whether the error message must be identical to the expected error.
+     * Creates a Testable that checks whether the evaluation of the given statement leads to the
+     * expected error
+     * @param statements
+     * @param error
+     * @param exactMatch If true, the error message has to be identical to the expected error
+     * @return An instance of Testable that runs the error check
      */
     protected Testable errorTestable(
-        final boolean exactMatch, final String error, final String... lines) {
+        final boolean exactMatch, final String error, final String... statements) {
       return new Testable() {
         @Override
         public void run() throws Exception {
           if (exactMatch) {
-            checkEvalError(error, lines);
+            checkEvalError(error, statements);
           } else {
-            checkEvalErrorContains(error, lines);
+            checkEvalErrorContains(error, statements);
           }
         }
       };
     }
 
     /**
-     * Creates a Testable that checks whether the value of the expression is a sequence containing
-     * the expected elements.
+     * Creates a testable that checks whether the evaluation of the given statement leads to a list
+     * that contains exactly the expected objects
+     * @param statement The statement to be evaluated
+     * @param ordered Determines whether the order of the elements is checked as well
+     * @param expected Expected objects
+     * @return An instance of Testable that runs the check
      */
-    protected Testable collectionTestable(final String src, final Object... expected) {
+    protected Testable collectionTestable(
+        final String statement, final boolean ordered, final Object... expected) {
       return new Testable() {
         @Override
         public void run() throws Exception {
-          assertThat((Iterable<?>) eval(src)).containsExactly(expected).inOrder();
+          Ordered tmp = assertThat((Iterable<?>) eval(statement)).containsExactly(expected);
+
+          if (ordered) {
+            tmp.inOrder();
+          }
         }
       };
     }
 
     /**
-     * Creates a testable that compares the value of the expression to a specified result.
+     * Creates a testable that compares the evaluation of the given statement to a specified result
      *
-     * @param src The expression to be evaluated
+     * @param statement The statement to be evaluated
      * @param expected Either the expected object or an expression whose evaluation leads to the
-     *     expected object
+     *  expected object
      * @param expectedIsExpression Signals whether {@code expected} is an object or an expression
      * @return An instance of Testable that runs the comparison
      */
     protected Testable createComparisonTestable(
-        final String src, final Object expected, final boolean expectedIsExpression) {
+        final String statement, final Object expected, final boolean expectedIsExpression) {
       return new Testable() {
         @Override
         public void run() throws Exception {
-          Object actual = eval(src);
+          Object actual = eval(statement);
           Object realExpected = expected;
 
           // We could also print the actual object and compare the string to the expected
@@ -470,13 +550,17 @@ public class EvaluationTestCase {
           });
     }
 
-    /** Registers a sequence of statements for execution prior to a test. */
-    public void registerExec(final String... lines) {
+    /**
+     * Registers a statement for evaluation prior to a test
+     *
+     * @param statements
+     */
+    public void registerEval(final String... statements) {
       setup.add(
           new Testable() {
             @Override
             public void run() throws Exception {
-              EvaluationTestCase.this.exec(lines);
+              EvaluationTestCase.this.eval(statements);
             }
           });
     }
