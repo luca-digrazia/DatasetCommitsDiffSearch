@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.CommandLine;
-import com.google.devtools.build.lib.actions.CommandLineItemSimpleFormatter;
 import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
@@ -1145,7 +1144,6 @@ public class SkylarkActionFactory implements SkylarkValue {
             false /* uniquify */,
             null /* terminateWith */,
             loc);
-
       } else {
         if (mapFn != Runtime.NONE && skylarkSemantics.incompatibleDisallowOldStyleArgsAdd()) {
           throw new EvalException(
@@ -1256,8 +1254,7 @@ public class SkylarkActionFactory implements SkylarkValue {
           noneable = true,
           doc =
               "An optional format string pattern, applied to each string returned by the "
-                  + "<code>map_each</code> function. "
-                  + "The format string must have exactly one '%s' placeholder."
+                  + "<code>map_each</code> function."
         ),
         @Param(
           name = "before_each",
@@ -1426,9 +1423,7 @@ public class SkylarkActionFactory implements SkylarkValue {
           positional = false,
           defaultValue = "None",
           noneable = true,
-          doc =
-              "An optional format string pattern applied to the joined string. "
-                  + "The format string must have exactly one '%s' placeholder."
+          doc = "An optional format string pattern applied to the joined string."
         ),
         @Param(
           name = "omit_if_empty",
@@ -1516,9 +1511,9 @@ public class SkylarkActionFactory implements SkylarkValue {
         SkylarkList skylarkList = (SkylarkList) value;
         vectorArg = new SkylarkCustomCommandLine.VectorArg.Builder(skylarkList);
       }
-      validateMapEach(mapEach, loc);
-      validateFormatString("format_each", formatEach);
-      validateFormatString("format_joined", formatJoined);
+      if (mapEach != null) {
+        validateMapEach(mapEach, loc);
+      }
       vectorArg
           .setLocation(loc)
           .setArgName(argName)
@@ -1554,11 +1549,7 @@ public class SkylarkActionFactory implements SkylarkValue {
       }
     }
 
-    private void validateMapEach(@Nullable BaseFunction mapEach, Location loc)
-        throws EvalException {
-      if (mapEach == null) {
-        return;
-      }
+    private void validateMapEach(BaseFunction mapEach, Location loc) throws EvalException {
       Shape shape = mapEach.getSignature().getSignature().getShape();
       boolean valid =
           shape.getMandatoryPositionals() == 1
@@ -1571,22 +1562,11 @@ public class SkylarkActionFactory implements SkylarkValue {
       }
     }
 
-    private void validateFormatString(String argumentName, @Nullable String formatStr)
-        throws EvalException {
-      if (formatStr != null
-          && skylarkSemantics.incompatibleDisallowOldStyleArgsAdd()
-          && !CommandLineItemSimpleFormatter.isValid(formatStr)) {
-        throw new EvalException(
-            null,
-            String.format(
-                "Invalid value for parameter \"%s\": Expected string with a single \"%%s\"",
-                argumentName));
-      }
-    }
-
     private void addScalarArg(Object value, String format, BaseFunction mapFn, Location loc)
         throws EvalException {
-      validateFormatString("format", format);
+      if (!EvalUtils.isImmutable(value)) {
+        throw new EvalException(null, "arg must be an immutable type");
+      }
       if (format == null && mapFn == null) {
         commandLine.add(value);
       } else {

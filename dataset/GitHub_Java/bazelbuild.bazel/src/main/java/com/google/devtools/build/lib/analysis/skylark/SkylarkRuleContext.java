@@ -1093,9 +1093,10 @@ public final class SkylarkRuleContext implements SkylarkValue {
           @ParamType(type = SkylarkNestedSet.class),
         },
         generic1 = Artifact.class,
-        defaultValue = "unbound",
+        defaultValue = "None",
         named = true,
         positional = false,
+        noneable = true,
         doc =
             "List of the any tools needed by the action. Tools are inputs with additional "
                 + "runfiles that are automatically made available to the action."
