@@ -247,7 +247,6 @@ public final class ApplicationManifest {
     return Optional.empty();
   }
 
-
   private static boolean useLegacyMerging(RuleContext ruleContext) {
     boolean legacy = false;
     if (ruleContext.isLegalFragment(AndroidConfiguration.class)

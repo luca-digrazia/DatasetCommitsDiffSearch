@@ -89,7 +89,7 @@ public abstract class ResourceContainer implements ValidatedAndroidData {
     return getAndroidAssets().getAssets();
   }
 
-  public abstract AndroidAssets getAndroidAssets();
+  abstract AndroidAssets getAndroidAssets();
 
   @Override
   public ImmutableList<Artifact> getResources() {
