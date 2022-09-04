@@ -21,8 +21,8 @@ package org.graylog2.rest.resources.system;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
-import org.graylog2.rest.documentation.annotations.Api;
-import org.graylog2.rest.documentation.annotations.ApiOperation;
+import com.sun.jersey.api.core.ResourceConfig;
+import org.graylog2.Core;
 import org.graylog2.rest.resources.RestResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,26 +30,32 @@ import org.slf4j.LoggerFactory;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@Api(value = "System/Throughput", description = "Message throughput of this node")
 @Path("/system/throughput")
 public class ThroughputResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(ThroughputResource.class);
 
-    @GET @Timed
-    @ApiOperation(value = "Current hroughput of this node in messages per second")
+    @Context
+    ResourceConfig rc;
+
+    @GET
+    @Timed
     @Produces(MediaType.APPLICATION_JSON)
-    public String total() {
+    public String total(@QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+
         Map<String, Object> result = Maps.newHashMap();
         result.put("throughput", core.getCurrentThroughput());
 
-        return json(result);
+        return json(result, prettyPrint);
     }
 
 }

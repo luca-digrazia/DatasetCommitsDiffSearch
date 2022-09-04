@@ -20,22 +20,27 @@
 package org.graylog2.rest.resources.streams;
 
 import com.beust.jcommander.internal.Lists;
-import com.codahale.metrics.annotation.Timed;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
+import com.sun.jersey.api.core.ResourceConfig;
+import com.codahale.metrics.annotation.Timed;
 import org.bson.types.ObjectId;
+import org.graylog2.Core;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.database.ValidationException;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.streams.requests.CreateRequest;
 import org.graylog2.streams.StreamImpl;
-import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.graylog2.database.ValidationException;
+import org.joda.time.DateTime;
+
 import javax.ws.rs.*;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
@@ -49,11 +54,18 @@ import java.util.Map;
 public class StreamResource extends RestResource {
 	private static final Logger LOG = LoggerFactory.getLogger(StreamResource.class);
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Context
+    ResourceConfig rc;
+
     @POST
     @Timed
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response create(String body, @QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+
         CreateRequest cr;
         try {
             cr = objectMapper.readValue(body, CreateRequest.class);
@@ -87,6 +99,8 @@ public class StreamResource extends RestResource {
     @Timed
     @Produces(MediaType.APPLICATION_JSON)
     public String get(@QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+        
         List<Map<String, Object>> streams = Lists.newArrayList();
         for (Stream stream : StreamImpl.loadAllEnabled(core)) {
         	streams.add(((StreamImpl) stream).asMap());
@@ -111,6 +125,8 @@ public class StreamResource extends RestResource {
     @GET @Path("/{streamId}") @Timed
     @Produces(MediaType.APPLICATION_JSON)
     public String get(@PathParam("streamId") String streamId, @QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+
         if (streamId == null || streamId.isEmpty()) {
         	LOG.error("Missing streamId. Returning HTTP 400.");
         	throw new WebApplicationException(400);
@@ -128,6 +144,8 @@ public class StreamResource extends RestResource {
 
     @DELETE @Path("/{streamId}") @Timed
     public Response delete(@PathParam("streamId") String streamId) {
+        Core core = (Core) rc.getProperty("core");
+
         if (streamId == null || streamId.isEmpty()) {
         	LOG.error("Missing streamId. Returning HTTP 400.");
         	throw new WebApplicationException(400);

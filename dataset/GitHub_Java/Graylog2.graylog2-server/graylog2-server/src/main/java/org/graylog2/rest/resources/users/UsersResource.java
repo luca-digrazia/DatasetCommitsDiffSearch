@@ -19,8 +19,11 @@
  */
 package org.graylog2.rest.resources.users;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
+import com.sun.jersey.api.core.ResourceConfig;
 import org.bson.types.ObjectId;
+import org.graylog2.Core;
 import org.graylog2.database.ValidationException;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.users.requests.AuthenticationRequest;
@@ -30,6 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.*;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
@@ -43,11 +47,18 @@ public class UsersResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(RestResource.class);
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Context
+    ResourceConfig rc;
+
     @POST // This is a post request because sending (hashed) user credentials as GET params sucks.
     @Path("/authenticate")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response authenticate(String body, @QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+
         if (body == null || body.isEmpty()) {
             LOG.error("Missing parameters. Returning HTTP 400.");
             throw new WebApplicationException(400);
@@ -78,6 +89,8 @@ public class UsersResource extends RestResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response create(String body, @QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+
         if (body == null || body.isEmpty()) {
             LOG.error("Missing parameters. Returning HTTP 400.");
             throw new WebApplicationException(400);

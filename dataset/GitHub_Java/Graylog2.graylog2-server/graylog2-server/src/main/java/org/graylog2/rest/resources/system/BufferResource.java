@@ -21,34 +21,38 @@ package org.graylog2.rest.resources.system;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
+import com.sun.jersey.api.core.ResourceConfig;
 import org.graylog2.Core;
 import org.graylog2.buffers.BufferWatermark;
-import org.graylog2.rest.documentation.annotations.Api;
-import org.graylog2.rest.documentation.annotations.ApiOperation;
 import org.graylog2.rest.resources.RestResource;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@Api(value = "System/Buffers", description = "Buffer information of this node.")
 @Path("/system/buffers")
 public class BufferResource extends RestResource {
 
+    @Context
+    ResourceConfig rc;
+
     @GET @Timed
-    @ApiOperation(value = "Get current utilization of buffers and caches of this node.")
     @Produces(MediaType.APPLICATION_JSON)
-    public String utilization() {
+    public String utilization(@QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+
         Map<String, Object> result = Maps.newHashMap();
         result.put("buffers", buffers(core));
         result.put("master_caches", masterCaches(core));
 
-        return json(result);
+        return json(result, prettyPrint);
     }
 
     private Map<String, Object> masterCaches(Core core) {

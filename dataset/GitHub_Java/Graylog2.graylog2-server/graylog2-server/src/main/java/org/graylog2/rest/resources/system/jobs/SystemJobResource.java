@@ -22,8 +22,8 @@ package org.graylog2.rest.resources.system.jobs;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.rest.documentation.annotations.*;
+import com.sun.jersey.api.core.ResourceConfig;
+import org.graylog2.Core;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.jobs.requests.TriggerRequest;
 import org.graylog2.system.jobs.NoSuchJobException;
@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.*;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
@@ -43,17 +44,19 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@RequiresAuthentication
-@Api(value = "System/Jobs", description = "Systemjobs")
 @Path("/system/jobs")
 public class SystemJobResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(SystemJobResource.class);
 
+    @Context
+    ResourceConfig rc;
+
     @GET @Timed
-    @ApiOperation(value = "List currently running jobs")
     @Produces(MediaType.APPLICATION_JSON)
-    public String list() {
+    public String list(@QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+
         List<Map<String, Object>> jobs = Lists.newArrayList();
 
         for (Map.Entry<String, SystemJob> x : core.getSystemJobManager().getRunningJobs().entrySet()) {
@@ -63,17 +66,15 @@ public class SystemJobResource extends RestResource {
         Map<String, Object> result = Maps.newHashMap();
         result.put("jobs", jobs);
 
-        return json(result);
+        return json(result, prettyPrint);
     }
 
     @GET @Timed
     @Path("/{jobId}")
-    @ApiOperation(value = "Get information of a specific currently running job")
     @Produces(MediaType.APPLICATION_JSON)
-    @ApiResponses(value = {
-            @ApiResponse(code = 404, message = "Job not found.")
-    })
-    public String get(@ApiParam(title = "jobId", required = true) @PathParam("jobId") String jobId) {
+    public String get(@PathParam("jobId") String jobId, @QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+
         if (jobId == null || jobId.isEmpty()) {
             LOG.error("Missing jobId. Returning HTTP 400.");
             throw new WebApplicationException(400);
@@ -86,19 +87,15 @@ public class SystemJobResource extends RestResource {
             throw new WebApplicationException(404);
         }
 
-        return json(job.toMap());
+        return json(job.toMap(), prettyPrint);
     }
 
     @POST @Timed
-    @ApiOperation(value = "Trigger new job")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @ApiResponses(value = {
-            @ApiResponse(code = 202, message = "Job accepted."),
-            @ApiResponse(code = 400, message = "There is no such systemjob type."),
-            @ApiResponse(code = 403, message = "Maximum concurrency level of this systemjob type reached.")
-    })
-    public Response trigger(@ApiParam(title = "JSON body", required = true) String body) {
+    public Response trigger(String body, @QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+
         if (body == null || body.isEmpty()) {
             LOG.error("Missing parameters. Returning HTTP 400.");
             throw new WebApplicationException(400);
@@ -123,7 +120,7 @@ public class SystemJobResource extends RestResource {
         try {
             core.getSystemJobManager().submit(job);
         } catch (SystemJobConcurrencyException e) {
-            LOG.error("Maximum concurrency level of this job reached. ", e);
+            LOG.error("Concurrency level of this job reached: " + e.getMessage());
             throw new WebApplicationException(403);
         }
 

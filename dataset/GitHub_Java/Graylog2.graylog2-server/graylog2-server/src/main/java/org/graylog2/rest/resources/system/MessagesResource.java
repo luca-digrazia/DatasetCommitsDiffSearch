@@ -20,11 +20,14 @@
 package org.graylog2.rest.resources.system;
 
 import com.codahale.metrics.annotation.Timed;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.sun.jersey.api.core.ResourceConfig;
+import org.graylog2.Core;
+import org.graylog2.system.activities.SystemMessage;
 import org.graylog2.plugin.Tools;
 import org.graylog2.rest.resources.RestResource;
-import org.graylog2.system.activities.SystemMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,6 +35,7 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import java.util.List;
 import java.util.Map;
@@ -44,9 +48,16 @@ public class MessagesResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(MessagesResource.class);
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Context
+    ResourceConfig rc;
+
     @GET @Timed
     @Produces(MediaType.APPLICATION_JSON)
     public String all(@QueryParam("page") int page, @QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+
         List<Map<String, Object>> messages = Lists.newArrayList();
 
         for (SystemMessage sm : SystemMessage.all(core, page(page))) {
