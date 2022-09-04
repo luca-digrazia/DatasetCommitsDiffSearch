@@ -40,7 +40,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class FileAppenderFactoryTest {
 
@@ -52,7 +52,7 @@ class FileAppenderFactoryTest {
     private final Validator validator = BaseValidator.newValidator();
 
     @Test
-    void isDiscoverable() {
+    void isDiscoverable() throws Exception {
         assertThat(new DiscoverableSubtypeResolver().getDiscoveredSubtypes())
                 .contains(FileAppenderFactory.class);
     }
@@ -70,7 +70,7 @@ class FileAppenderFactoryTest {
     }
 
     @Test
-    void isRolling(@TempDir Path tempDir) {
+    void isRolling(@TempDir Path tempDir) throws Exception {
         // the method we want to test is protected, so we need to override it so we can see it
         FileAppenderFactory<ILoggingEvent> fileAppenderFactory = new FileAppenderFactory<ILoggingEvent>() {
             @Override
@@ -86,23 +86,21 @@ class FileAppenderFactoryTest {
     }
 
     @Test
-    void testAppenderIsStarted(@TempDir Path tempDir) {
-        FileAppenderFactory<ILoggingEvent> fileAppenderFactory = new FileAppenderFactory<>();
-        fileAppenderFactory.setCurrentLogFilename(tempDir.resolve("application.log").toString());
+    void testAppenderIsStarted(@TempDir Path tempDir) throws Exception {
+        FileAppenderFactory<ILoggingEvent> fileAppenderFactory = new FileAppenderFactory<ILoggingEvent>();
+        fileAppenderFactory.setCurrentLogFilename("application.log");
         fileAppenderFactory.setArchive(true);
         fileAppenderFactory.setArchivedFileCount(20);
         fileAppenderFactory.setArchivedLogFilenamePattern("application-%i.log");
         fileAppenderFactory.setMaxFileSize(DataSize.megabytes(500));
         fileAppenderFactory.setImmediateFlush(false);
         fileAppenderFactory.setThreshold("ERROR");
-        Appender<ILoggingEvent> appender = fileAppenderFactory.build(new LoggerContext(),
+        Appender appender = fileAppenderFactory.build(new LoggerContext(),
             "test-app",
             new DropwizardLayoutFactory(),
             new NullLevelFilterFactory<>(),
             new AsyncLoggingEventAppenderFactory());
         assertThat(appender.isStarted()).isTrue();
-        appender.stop();
-        assertThat(appender.isStarted()).isFalse();
     }
 
     @Test
@@ -192,7 +190,7 @@ class FileAppenderFactoryTest {
 
         final String file = rollingAppender.getFile();
         assertThat(file).contains("test-archived-name-")
-                        .endsWith(LocalDateTime.now(appenderFactory.getTimeZone().toZoneId()).format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) + ".log");
+                        .endsWith(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) + ".log");
     }
 
     @Test
@@ -284,7 +282,7 @@ class FileAppenderFactoryTest {
     }
 
     @Test
-    void defaultIsNotNeverBlock() {
+    void defaultIsNotNeverBlock() throws Exception {
         FileAppenderFactory<ILoggingEvent> fileAppenderFactory = new FileAppenderFactory<>();
         fileAppenderFactory.setArchive(false);
         // default neverBlock
@@ -387,10 +385,10 @@ class FileAppenderFactoryTest {
     void invalidUseOfTotalSizeCap() {
         final YamlConfigurationFactory<FileAppenderFactory> factory =
             new YamlConfigurationFactory<>(FileAppenderFactory.class, validator, mapper, "dw");
-
-        assertThatExceptionOfType(ConfigurationValidationException.class)
-            .isThrownBy(() -> factory.build(new File(Resources.getResource("yaml/appender_file_cap_invalid.yaml").getFile())))
-            .withMessageContaining("totalSizeCap has no effect when using maxFileSize and an archivedLogFilenamePattern " +
+        assertThatThrownBy(() ->
+            factory.build(new File(Resources.getResource("yaml/appender_file_cap_invalid.yaml").getFile()))
+        ).isExactlyInstanceOf(ConfigurationValidationException.class)
+            .hasMessageContaining("totalSizeCap has no effect when using maxFileSize and an archivedLogFilenamePattern " +
                 "without %d, as archivedFileCount implicitly controls the total size cap");
     }
 }
