@@ -20,17 +20,16 @@
 
 package org.graylog2.messagehandlers.gelf;
 
-import org.apache.log4j.Logger;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.bson.types.ObjectId;
-import org.graylog2.Tools;
+import org.graylog2.Log;
 import org.graylog2.blacklists.Blacklist;
 import org.graylog2.blacklists.BlacklistRule;
 import org.graylog2.streams.Router;
-import org.graylog2.streams.Stream;
 import org.graylog2.streams.StreamRule;
 import org.graylog2.streams.matchers.StreamRuleMatcherIF;
-
-import java.util.*;
 
 /**
  * GELFMessage.java: Jul 20, 2010 6:57:28 PM
@@ -40,8 +39,6 @@ import java.util.*;
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GELFMessage {
-
-    private static final Logger LOG = Logger.getLogger(GELFMessage.class);
 
     private String version = null;
     private String shortMessage = null;
@@ -53,7 +50,7 @@ public class GELFMessage {
     private int timestamp = 0;
     private String facility = null;
     private Map<String, String> additionalData = new HashMap<String, String>();
-    private List<Stream> streams = null;
+    private List<ObjectId> streams = null;
     private boolean convertedFromSyslog = false;
 
     private boolean filterOut = false;
@@ -261,11 +258,11 @@ public class GELFMessage {
     }
 
 
-    public void setStreams(List<Stream> streams) {
+    public void setStreams(List<ObjectId> streams) {
         this.streams = streams;
     }
 
-    public List<Stream> getStreams() {
+    public List<ObjectId> getStreams() {
         if (this.streams != null) {
             return this.streams;
         }
@@ -273,21 +270,11 @@ public class GELFMessage {
         return Router.route(this);
     }
 
-    public List<ObjectId> getStreamIds() {
-        ArrayList<ObjectId> ids = new ArrayList<ObjectId>();
-
-        for (Stream stream : this.getStreams()) {
-            ids.add(stream.getId());
-        }
-
-        return ids;
-    }
-
     public boolean matchStreamRule(StreamRuleMatcherIF matcher, StreamRule rule) {
         try {
             return matcher.match(this, rule);
         } catch (Exception e) {
-            LOG.warn("Could not match stream rule <" + rule.getRuleType() + "/" + rule.getValue() + ">: " + e.getMessage(), e);
+            Log.warn("Could not match stream rule <" + rule.getRuleType() + "/" + rule.getValue() + ">: " + e.toString());
             return false;
         }
     }
@@ -296,7 +283,7 @@ public class GELFMessage {
         for (Blacklist blacklist : blacklists) {
             for (BlacklistRule rule : blacklist.getRules()) {
                 if (this.getShortMessage().matches(rule.getTerm())) {
-                    LOG.info("Message <" + this.toString() + "> is blacklisted. First match on " + rule.getTerm());
+                    Log.info("Message <" + this.toString() + "> is blacklisted. First match on " + rule.getTerm());
                     return true;
                 }
             }
@@ -312,41 +299,6 @@ public class GELFMessage {
 
     public boolean convertedFromSyslog() {
         return this.convertedFromSyslog;
-    }
-
-    /**
-     * Converts message to a String consisting of the host and the short message
-     * separated by a dash. Optimized for later full text searching.
-     *
-     * @return boolean
-     */
-    public String toOneLiner() {
-        String msg = this.getHost() + " - " + this.getShortMessage();
-
-        msg += " severity=" + Tools.syslogLevelToReadable(this.getLevel());
-        msg += ",facility=" + this.getFacility();
-
-        if (this.getFile() != null) {
-            msg += ",file=" + this.getFile();
-        }
-
-        if (this.getLine() != 0) {
-            msg += ",line=" + this.getLine();
-        }
-
-        if (this.getAdditionalData().size() > 0) {
-            // Add additional fields. XXX PERFORMANCE
-            Map<String,String> additionalFields = this.getAdditionalData();
-            Set<String> set = additionalFields.keySet();
-            Iterator<String> iter = set.iterator();
-            while(iter.hasNext()) {
-                String key = iter.next();
-                String value = additionalFields.get(key);
-                msg += "," + key + "=" + value;
-            }
-        }
-
-        return msg;
     }
 
     /**
