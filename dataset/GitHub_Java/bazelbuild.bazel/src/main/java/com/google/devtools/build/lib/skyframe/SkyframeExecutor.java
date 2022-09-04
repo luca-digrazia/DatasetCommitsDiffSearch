@@ -129,10 +129,10 @@ import com.google.devtools.build.lib.pkgcache.LoadingOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PackageOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.pkgcache.QueryTransitivePackagePreloader;
 import com.google.devtools.build.lib.pkgcache.TargetParsingPhaseTimeEvent;
 import com.google.devtools.build.lib.pkgcache.TargetPatternPreloader;
 import com.google.devtools.build.lib.pkgcache.TestFilter;
+import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.GoogleAutoProfilerUtils;
 import com.google.devtools.build.lib.profiler.Profiler;
@@ -318,7 +318,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
   protected final SkyframeActionExecutor skyframeActionExecutor;
   private ActionExecutionFunction actionExecutionFunction;
   protected SkyframeProgressReceiver progressReceiver;
-  private CyclesReporter cyclesReporter = null;
+  private final AtomicReference<CyclesReporter> cyclesReporter = new AtomicReference<>();
 
   @VisibleForTesting boolean lastAnalysisDiscarded = false;
 
@@ -421,8 +421,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     this.packageManager =
         new SkyframePackageManager(
             new SkyframePackageLoader(),
-            new QueryTransitivePackagePreloader(this::getDriver),
+            new SkyframeTransitivePackageLoader(this::getDriver),
             syscalls,
+            cyclesReporter,
             pkgLocator,
             numPackagesLoaded,
             this);
@@ -539,7 +540,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     map.put(SkyFunctions.PACKAGE_ERROR, new PackageErrorFunction());
     map.put(SkyFunctions.PACKAGE_ERROR_MESSAGE, new PackageErrorMessageFunction());
     map.put(SkyFunctions.TARGET_PATTERN_ERROR, new TargetPatternErrorFunction());
-    map.put(TransitiveTargetKey.NAME, new TransitiveTargetFunction(ruleClassProvider));
+    map.put(SkyFunctions.TRANSITIVE_TARGET, new TransitiveTargetFunction(ruleClassProvider));
     map.put(Label.TRANSITIVE_TRAVERSAL, getTransitiveTraversalFunction());
     map.put(
         SkyFunctions.CONFIGURED_TARGET,
@@ -1370,7 +1371,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     }
 
     // Reset the stateful SkyframeCycleReporter, which contains cycles from last run.
-    cyclesReporter = createCyclesReporter();
+    cyclesReporter.set(createCyclesReporter());
   }
 
   private void setSiblingDirectoryLayout(boolean experimentalSiblingRepositoryLayout) {
@@ -2089,17 +2090,10 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
               toConfigurationKey(platformMappingValue, depFragments, toOption);
           BuildConfigurationValue configValue =
               ((BuildConfigurationValue) configsResult.get(configKey));
+          // configValue will be null here if there was an exception thrown during configuration
+          // creation. This will be reported elsewhere.
           if (configValue != null) {
             builder.put(key, configValue.getConfiguration());
-          } else if (configsResult.errorMap().containsKey(configKey)) {
-            ErrorInfo configError = configsResult.getError(configKey);
-            if (configError.getException() instanceof InvalidConfigurationException) {
-              // Wrap underlying exception to make it clearer to developers which line of code
-              // actually threw exception.
-              InvalidConfigurationException underlying =
-                  (InvalidConfigurationException) configError.getException();
-              throw new InvalidConfigurationException(underlying.getDetailedExitCode(), underlying);
-            }
           }
         }
       }
@@ -2173,14 +2167,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
       EvaluationResult<SkyValue> newlyLoaded =
           evaluateSkyKeys(eventHandler, buildSettingPackageKeys, true);
       if (newlyLoaded.hasError()) {
-        Map.Entry<SkyKey, ErrorInfo> errorEntry =
-            Preconditions.checkNotNull(
-                Iterables.getFirst(newlyLoaded.errorMap().entrySet(), null), newlyLoaded);
         throw new TransitionException(
             new NoSuchPackageException(
-                ((PackageValue.Key) errorEntry.getKey()).argument(),
+                ((PackageValue.Key) newlyLoaded.getError().getRootCauseOfException()).argument(),
                 "Unable to find build setting package",
-                errorEntry.getValue().getException()));
+                newlyLoaded.getError().getException()));
       }
       buildSettingPackageKeys.forEach(
           k -> buildSettingPackages.put(k, (PackageValue) newlyLoaded.get(k)));
@@ -2220,14 +2211,17 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     try {
       result =
           callUninterruptibly(
-              () -> {
-                synchronized (valueLookupLock) {
-                  try {
-                    skyframeBuildView.enableAnalysis(true);
-                    return evaluate(
-                        skyKeys, keepGoing, /*numThreads=*/ DEFAULT_THREAD_COUNT, eventHandler);
-                  } finally {
-                    skyframeBuildView.enableAnalysis(false);
+              new Callable<EvaluationResult<SkyValue>>() {
+                @Override
+                public EvaluationResult<SkyValue> call() throws Exception {
+                  synchronized (valueLookupLock) {
+                    try {
+                      skyframeBuildView.enableAnalysis(true);
+                      return evaluate(
+                          skyKeys, keepGoing, /*numThreads=*/ DEFAULT_THREAD_COUNT, eventHandler);
+                    } finally {
+                      skyframeBuildView.enableAnalysis(false);
+                    }
                   }
                 }
               });
@@ -2436,6 +2430,14 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     return a -> result.get(ActionLookupConflictFindingValue.key(a)) != null;
   }
 
+  /** Returns a Skyframe-based {@link SkyframeTransitivePackageLoader} implementation. */
+  @VisibleForTesting
+  TransitivePackageLoader pkgLoader() {
+    checkActive();
+    return new SkyframeLabelVisitor(
+        new SkyframeTransitivePackageLoader(this::getDriver), cyclesReporter);
+  }
+
   /**
    * For internal use in queries: performs a graph update to make sure the transitive closure of the
    * specified {@code universeKey} is present in the graph, and returns the {@link
@@ -2575,16 +2577,16 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
             throw new BuildFileContainsErrorsException(
                 pkgName, "Cycle encountered while loading package " + pkgName);
           }
-          Throwable e = Preconditions.checkNotNull(error.getException(), "%s %s", pkgName, error);
+          Throwable e = error.getException();
           // PackageFunction should be catching, swallowing, and rethrowing all transitive
           // errors as NoSuchPackageExceptions or constructing packages with errors, since we're in
           // keep_going mode.
-          Throwables.throwIfInstanceOf(e, NoSuchPackageException.class);
+          Throwables.propagateIfInstanceOf(e, NoSuchPackageException.class);
           throw new IllegalStateException(
               "Unexpected Exception type from PackageValue for '"
                   + pkgName
-                  + "'' with error: "
-                  + error,
+                  + "'' with root causes: "
+                  + error.getRootCauses().toList().toString(),
               e);
         }
         return result.get(key).getPackage();
@@ -2731,8 +2733,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
 
   private CyclesReporter createCyclesReporter() {
     return new CyclesReporter(
-        new TargetCycleReporter(packageManager),
+        new TransitiveTargetCycleReporter(packageManager),
         new ActionArtifactCycleReporter(packageManager),
+        new ConfiguredTargetCycleReporter(packageManager),
         new TestExpansionCycleReporter(packageManager),
         new RegisteredToolchainsCycleReporter(),
         // TODO(ulfjack): The StarlarkModuleCycleReporter swallows previously reported cycles
@@ -2741,7 +2744,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
   }
 
   CyclesReporter getCyclesReporter() {
-    return cyclesReporter;
+    return cyclesReporter.get();
   }
 
   /** Convenience method with same semantics as {@link CyclesReporter#reportCycles}. */
