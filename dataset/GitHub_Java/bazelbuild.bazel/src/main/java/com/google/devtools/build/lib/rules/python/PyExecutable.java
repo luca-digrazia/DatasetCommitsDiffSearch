@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CcFlagsSupplier;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.syntax.Type;
@@ -61,6 +62,8 @@ public abstract class PyExecutable implements RuleConfiguredTargetFactory {
       return null;
     }
 
+    NestedSet<String> imports = common.getImports();
+
     CcInfo ccInfo =
         semantics.buildCcInfoProvider(ruleContext.getPrerequisites("deps", Mode.TARGET));
 
@@ -71,7 +74,8 @@ public abstract class PyExecutable implements RuleConfiguredTargetFactory {
         .merge(commonRunfiles);
     semantics.collectDefaultRunfilesForBinary(ruleContext, defaultRunfilesBuilder);
 
-    Artifact realExecutable = common.createExecutable(ccInfo, defaultRunfilesBuilder);
+    Artifact realExecutable =
+        semantics.createExecutable(ruleContext, common, ccInfo, imports, defaultRunfilesBuilder);
 
     Runfiles defaultRunfiles = defaultRunfilesBuilder.build();
 
@@ -105,7 +109,7 @@ public abstract class PyExecutable implements RuleConfiguredTargetFactory {
 
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext);
-    common.addCommonTransitiveInfoProviders(builder, common.getFilesToBuild());
+    common.addCommonTransitiveInfoProviders(builder, common.getFilesToBuild(), imports);
 
     semantics.postInitExecutable(ruleContext, runfilesSupport, common);
 
@@ -114,6 +118,7 @@ public abstract class PyExecutable implements RuleConfiguredTargetFactory {
         .add(RunfilesProvider.class, runfilesProvider)
         .setRunfilesSupport(runfilesSupport, realExecutable)
         .addNativeDeclaredProvider(new PyCcLinkParamsProvider(ccInfo))
+        .add(PythonImportsProvider.class, new PythonImportsProvider(imports))
         .build();
   }
 
