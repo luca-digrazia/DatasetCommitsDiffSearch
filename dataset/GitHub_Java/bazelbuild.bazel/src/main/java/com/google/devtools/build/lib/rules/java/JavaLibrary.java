@@ -22,10 +22,11 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.LinkerInput;
-import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.ClasspathType;
+import com.google.devtools.build.lib.rules.java.JavaCompilationArgs.ClasspathType;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
 
 /**
@@ -162,10 +163,24 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
         new ClasspathConfiguredFragment(
             javaArtifacts, attributes, neverLink, helper.getBootclasspathOrDefault()));
 
-    JavaCompilationArgsProvider javaCompilationArgs =
-        common.collectJavaCompilationArgs(neverLink, false);
+    JavaCompilationArgs javaCompilationArgs =
+        common.collectJavaCompilationArgs(false, neverLink, false);
+    JavaCompilationArgs recursiveJavaCompilationArgs =
+        common.collectJavaCompilationArgs(true, neverLink, false);
+    NestedSet<Artifact> compileTimeJavaDepArtifacts = common.collectCompileTimeDependencyArtifacts(
+        javaArtifacts.getCompileTimeDependencyArtifact());
     NestedSet<LinkerInput> transitiveJavaNativeLibraries =
         common.collectTransitiveJavaNativeLibraries();
+
+    ProtoJavaApiInfoAspectProvider.Builder protoAspectBuilder =
+        ProtoJavaApiInfoAspectProvider.builder();
+    for (TransitiveInfoCollection dep : common.getDependencies()) {
+      ProtoJavaApiInfoAspectProvider protoProvider =
+          JavaInfo.getProvider(ProtoJavaApiInfoAspectProvider.class, dep);
+      if (protoProvider != null) {
+        protoAspectBuilder.addTransitive(protoProvider);
+      }
+    }
 
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext);
@@ -175,7 +190,9 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
       builder.add(GeneratedExtensionRegistryProvider.class, generatedExtensionRegistryProvider);
     }
 
-    JavaCompilationArgsProvider compilationArgsProvider = javaCompilationArgs;
+    JavaCompilationArgsProvider compilationArgsProvider =
+        JavaCompilationArgsProvider.create(
+            javaCompilationArgs, recursiveJavaCompilationArgs, compileTimeJavaDepArtifacts);
     JavaSourceJarsProvider sourceJarsProvider = sourceJarsProviderBuilder.build();
     JavaRuleOutputJarsProvider ruleOutputJarsProvider = ruleOutputJarsProviderBuilder.build();
 
@@ -198,11 +215,11 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     JavaInfo javaInfo = javaInfoBuilder
         .addProvider(JavaCompilationArgsProvider.class, compilationArgsProvider)
         .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
+        .addProvider(ProtoJavaApiInfoAspectProvider.class, protoAspectBuilder.build())
         .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
         // TODO(bazel-team): this should only happen for java_plugin
         .addProvider(JavaPluginInfoProvider.class, pluginInfoProvider)
         .setRuntimeJars(javaArtifacts.getRuntimeJars())
-        .setJavaConstraints(JavaCommon.getConstraints(ruleContext))
         .setNeverlink(neverLink)
         .build();
 
@@ -215,10 +232,11 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
         .setFilesToBuild(filesToBuild)
         .addProvider(new JavaNativeLibraryProvider(transitiveJavaNativeLibraries))
         .addProvider(JavaSourceInfoProvider.fromJavaTargetAttributes(attributes, semantics))
-        .addNativeDeclaredProvider(new ProguardSpecProvider(proguardSpecs))
+        .addProvider(new ProguardSpecProvider(proguardSpecs))
         .addNativeDeclaredProvider(javaInfo)
         .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars)
         .addOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL, proguardSpecs);
+
 
     if (ruleContext.hasErrors()) {
       return null;
