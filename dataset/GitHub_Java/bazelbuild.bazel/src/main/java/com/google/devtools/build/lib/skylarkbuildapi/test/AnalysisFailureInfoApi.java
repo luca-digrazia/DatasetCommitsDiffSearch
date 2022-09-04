@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics.FlagIdentifier;
 
 /**
  * Encapsulates information about an analysis-phase error which would have occurred during a build.
@@ -47,17 +48,17 @@ import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
         + "<code>causes</code> equal to the union of the <code>causes</code> of the "
         + "dependencies.</li></ul>",
     documented = false)
-public interface AnalysisFailureInfoApi<AnalysisFailureApiT extends AnalysisFailureApi>
-    extends SkylarkValue {
+public interface AnalysisFailureInfoApi extends SkylarkValue {
 
   @SkylarkCallable(
       name = "causes",
-      doc =
-          "A depset of <code>AnalysisFailure</code> objects describing the failures that "
-              + "occurred in this target or its dependencies.",
+      doc = "A depset of <code>AnalysisFailure</code> objects describing the failures that "
+          + "occurred in this target or its dependencies.",
       documented = false,
-      structField = true)
-  public SkylarkNestedSet /*<AnalysisFailureApiT>*/ getCauses();
+      structField = true,
+      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_ANALYSIS_TESTING_IMPROVEMENTS
+  )
+  public SkylarkNestedSet getCauses();
 
   /** Provider class for {@link AnalysisFailureInfoApi} objects. */
   @SkylarkModule(name = "Provider", documented = false, doc = "")
