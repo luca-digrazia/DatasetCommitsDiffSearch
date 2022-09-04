@@ -1,9 +1,5 @@
 package io.quarkus.vertx.core.deployment;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import javax.inject.Singleton;
@@ -30,7 +26,6 @@ import io.quarkus.vertx.core.runtime.VertxLogDelegateFactory;
 import io.quarkus.vertx.core.runtime.config.VertxConfiguration;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Vertx;
-import io.vertx.core.VertxOptions;
 import io.vertx.core.spi.resolver.ResolverProvider;
 
 class VertxCoreProcessor {
@@ -71,18 +66,11 @@ class VertxCoreProcessor {
     @Record(value = ExecutionTime.RUNTIME_INIT)
     CoreVertxBuildItem build(VertxCoreRecorder recorder,
             LaunchModeBuildItem launchMode, ShutdownContextBuildItem shutdown, VertxConfiguration config,
-            List<VertxOptionsConsumerBuildItem> vertxOptionsConsumers,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeanBuildItemBuildProducer,
             BuildProducer<ServiceStartBuildItem> serviceStartBuildItem) {
 
-        Collections.sort(vertxOptionsConsumers);
-        List<Consumer<VertxOptions>> consumers = new ArrayList<>(vertxOptionsConsumers.size());
-        for (VertxOptionsConsumerBuildItem x : vertxOptionsConsumers) {
-            consumers.add(x.getConsumer());
-        }
-
         Supplier<Vertx> vertx = recorder.configureVertx(config,
-                launchMode.getLaunchMode(), shutdown, consumers);
+                launchMode.getLaunchMode(), shutdown);
         syntheticBeanBuildItemBuildProducer.produce(SyntheticBeanBuildItem.configure(Vertx.class)
                 .types(Vertx.class)
                 .scope(Singleton.class)
