@@ -16,7 +16,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import java.util.function.Consumer;
 
 public class DAOTest {
     static {
@@ -34,8 +33,6 @@ public class DAOTest {
         private boolean useSqlComments = false;
         private Set<Class<?>> entityClasses = new LinkedHashSet<>();
         private Map<String, String> properties = new HashMap<>();
-        private Consumer<Configuration> configurationCustomizer = c -> {
-        };
 
         public B setUrl(String url) {
             this.url = url;
@@ -77,11 +74,6 @@ public class DAOTest {
             return (B) this;
         }
 
-        public B customizeConfiguration(Consumer<Configuration> configurationCustomizer) {
-            this.configurationCustomizer = configurationCustomizer;
-            return (B) this;
-        }
-
         protected DAOTest buildDAOTest() {
             final Configuration config = new Configuration();
             config.setProperty(AvailableSettings.URL, url);
@@ -104,8 +96,6 @@ public class DAOTest {
 
             entityClasses.forEach(config::addAnnotatedClass);
             properties.forEach(config::setProperty);
-
-            configurationCustomizer.accept(config);
 
             return new DAOTest(config.buildSessionFactory());
         }
