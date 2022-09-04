@@ -77,8 +77,6 @@ public final class ResourceDependencies {
 
   private final NestedSet<Artifact> transitiveAapt2RTxt;
 
-  private final NestedSet<Artifact> transitiveAapt2ValidationArtifacts;
-
   private final NestedSet<Artifact> transitiveSymbolsBin;
 
   private final NestedSet<Artifact> transitiveCompiledSymbols;
@@ -106,8 +104,6 @@ public final class ResourceDependencies {
     NestedSetBuilder<Artifact> transitiveResources = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveManifests = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveAapt2RTxt = NestedSetBuilder.naiveLinkOrder();
-    NestedSetBuilder<Artifact> transitiveAapt2ValidationArtifacts =
-        NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveSymbolsBin = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveCompiledSymbols = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveStaticLib = NestedSetBuilder.naiveLinkOrder();
@@ -119,8 +115,6 @@ public final class ResourceDependencies {
       transitiveResources.addTransitive(resources.getTransitiveResources());
       transitiveManifests.addTransitive(resources.getTransitiveManifests());
       transitiveAapt2RTxt.addTransitive(resources.getTransitiveAapt2RTxt());
-      transitiveAapt2ValidationArtifacts.addTransitive(
-          resources.getTransitiveAapt2ValidationArtifacts());
       transitiveSymbolsBin.addTransitive(resources.getTransitiveSymbolsBin());
       transitiveCompiledSymbols.addTransitive(resources.getTransitiveCompiledSymbols());
       transitiveStaticLib.addTransitive(resources.getTransitiveStaticLib());
@@ -134,7 +128,6 @@ public final class ResourceDependencies {
         transitiveResources.build(),
         transitiveManifests.build(),
         transitiveAapt2RTxt.build(),
-        transitiveAapt2ValidationArtifacts.build(),
         transitiveSymbolsBin.build(),
         transitiveCompiledSymbols.build(),
         transitiveStaticLib.build(),
@@ -149,7 +142,6 @@ public final class ResourceDependencies {
         .add("transitiveResources", transitiveResources)
         .add("transitiveManifests", transitiveManifests)
         .add("transitiveAapt2RTxt", transitiveAapt2RTxt)
-        .add("transitiveAapt2ValidationArtifacts", transitiveAapt2ValidationArtifacts)
         .add("transitiveSymbolsBin", transitiveSymbolsBin)
         .add("transitiveCompiledSymbols", transitiveCompiledSymbols)
         .add("transitiveStaticLib", transitiveStaticLib)
@@ -173,7 +165,6 @@ public final class ResourceDependencies {
         NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER),
         NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER),
         NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER),
-        NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER),
         NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER));
   }
 
@@ -184,7 +175,6 @@ public final class ResourceDependencies {
       NestedSet<Artifact> transitiveResources,
       NestedSet<Artifact> transitiveManifests,
       NestedSet<Artifact> transitiveAapt2RTxt,
-      NestedSet<Artifact> transitiveAapt2ValidationArtifacts,
       NestedSet<Artifact> transitiveSymbolsBin,
       NestedSet<Artifact> transitiveCompiledSymbols,
       NestedSet<Artifact> transitiveStaticLib,
@@ -195,7 +185,6 @@ public final class ResourceDependencies {
     this.transitiveResources = transitiveResources;
     this.transitiveManifests = transitiveManifests;
     this.transitiveAapt2RTxt = transitiveAapt2RTxt;
-    this.transitiveAapt2ValidationArtifacts = transitiveAapt2ValidationArtifacts;
     this.transitiveSymbolsBin = transitiveSymbolsBin;
     this.transitiveCompiledSymbols = transitiveCompiledSymbols;
     this.transitiveStaticLib = transitiveStaticLib;
@@ -234,7 +223,6 @@ public final class ResourceDependencies {
         transitiveResources,
         transitiveManifests,
         transitiveAapt2RTxt,
-        transitiveAapt2ValidationArtifacts,
         transitiveSymbolsBin,
         transitiveCompiledSymbols,
         transitiveStaticLib,
@@ -280,8 +268,6 @@ public final class ResourceDependencies {
             .build(),
         withDirectAndTransitive(newDirectResource.getManifest(), transitiveManifests),
         withDirectAndTransitive(newDirectResource.getAapt2RTxt(), transitiveAapt2RTxt),
-        withDirectAndTransitive(
-            newDirectResource.getAapt2ValidationArtifact(), transitiveAapt2ValidationArtifacts),
         withDirectAndTransitive(newDirectResource.getSymbols(), transitiveSymbolsBin),
         withDirectAndTransitive(newDirectResource.getCompiledSymbols(), transitiveCompiledSymbols),
         withDirectAndTransitive(newDirectResource.getStaticLibrary(), transitiveStaticLib),
@@ -312,7 +298,6 @@ public final class ResourceDependencies {
         transitiveResources,
         transitiveManifests,
         transitiveAapt2RTxt,
-        transitiveAapt2ValidationArtifacts,
         transitiveSymbolsBin,
         transitiveCompiledSymbols,
         transitiveStaticLib,
@@ -367,10 +352,6 @@ public final class ResourceDependencies {
 
   public NestedSet<Artifact> getTransitiveAapt2RTxt() {
     return transitiveAapt2RTxt;
-  }
-
-  NestedSet<Artifact> getTransitiveAapt2ValidationArtifacts() {
-    return transitiveAapt2ValidationArtifacts;
   }
 
   public NestedSet<Artifact> getTransitiveSymbolsBin() {

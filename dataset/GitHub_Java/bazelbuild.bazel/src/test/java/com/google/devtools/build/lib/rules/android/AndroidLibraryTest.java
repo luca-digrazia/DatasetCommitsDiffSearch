@@ -1780,21 +1780,13 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
 
     ConfiguredTarget target = getConfiguredTarget("//java/lib1");
 
-    List<String> rClassArgs = getRClassGenerationArgs(target);
-    assertThat(getDependencyResourceLabels(rClassArgs, "--primaryData"))
+    List<String> args = getResourceMergingArgs(target);
+    assertThat(getDependencyResourceLabels(args, "--primaryData"))
         .containsExactly("//java/lib1:lib1");
-    assertThat(getDependencyResourceLabels(rClassArgs, "--directData"))
+    assertThat(getDependencyResourceLabels(args, "--directData"))
         .containsExactly("//java/lib2:lib2");
-    assertThat(rClassArgs).doesNotContain("--data");
+    assertThat(args).doesNotContain("--data");
     assertNoEvents();
-
-    // "merged resources" still needs the entire transitive closure
-    assertThat(
-            getDependencyResourceLabels(
-                getGeneratingSpawnActionArgs(
-                    getValidatedAndroidResources(target).getMergedResources()),
-                "--data"))
-        .contains("//java/lib3:lib3");
   }
 
   // Note that this is really testing the 'feature' mechanism of Bazel rather than this specific
@@ -1830,7 +1822,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
 
     ConfiguredTarget target = getConfiguredTarget("//java/lib1");
 
-    List<String> args = getRClassGenerationArgs(target);
+    List<String> args = getResourceMergingArgs(target);
     assertThat(getDependencyResourceLabels(args, "--data")).containsExactly("//java/lib3:lib3");
     assertNoEvents();
   }
@@ -2599,15 +2591,11 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
   }
 
   /** Returns command-line arguments used in the AndroidCompiledResourceMerger action. */
-  private List<String> getRClassGenerationArgs(ConfiguredTarget androidLibrary) throws Exception {
+  private List<String> getResourceMergingArgs(ConfiguredTarget androidLibrary) throws Exception {
     return getGeneratingSpawnActionArgs(
-        getValidatedAndroidResources(androidLibrary).getJavaClassJar());
-  }
-
-  private static ValidatedAndroidResources getValidatedAndroidResources(
-      ConfiguredTarget androidLibrary) {
-    return Iterables.getOnlyElement(
-        androidLibrary.get(AndroidResourcesInfo.PROVIDER).getDirectAndroidResources());
+        Iterables.getOnlyElement(
+                androidLibrary.get(AndroidResourcesInfo.PROVIDER).getDirectAndroidResources())
+            .getJavaClassJar());
   }
 
   /**
