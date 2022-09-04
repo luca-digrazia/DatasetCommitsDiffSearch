@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import javax.persistence.PersistenceException;
 
-import org.hibernate.boot.archive.scan.spi.Scanner;
 import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 import org.hibernate.jpa.boot.internal.PersistenceXmlParser;
 import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
@@ -19,9 +18,9 @@ public final class PersistenceUnitsHolder {
 
 	private static final Object NO_NAME_TOKEN = new Object();
 
-	public static void initializeJpa(List<ParsedPersistenceXmlDescriptor> parsedPersistenceXmlDescriptors, Scanner scanner) {
+	public static void initializeJpa(List<ParsedPersistenceXmlDescriptor> parsedPersistenceXmlDescriptors) {
 		final List<PersistenceUnitDescriptor> units = convertPersistenceUnits( parsedPersistenceXmlDescriptors );
-		final Map<String,RecordedState> metadata = constructMetadataAdvance( parsedPersistenceXmlDescriptors , scanner);
+		final Map<String,RecordedState> metadata = constructMetadataAdvance( parsedPersistenceXmlDescriptors );
 		COMPACT_UNITS = new PUStatus( units, metadata );
 	}
 
@@ -42,13 +41,14 @@ public final class PersistenceUnitsHolder {
 		//(check for the runtime provided properties to be empty as well)
 		Map<Object, Object> configurationOverrides = Collections.emptyMap();
 		List<ParsedPersistenceXmlDescriptor> ret = PersistenceXmlParser.locatePersistenceUnits(configurationOverrides);
+		initializeJpa(ret);
 		return ret;
 	}
 
-	private static Map<String,RecordedState> constructMetadataAdvance(final List<ParsedPersistenceXmlDescriptor> parsedPersistenceXmlDescriptors, Scanner scanner) {
+	private static Map<String,RecordedState> constructMetadataAdvance(final List<ParsedPersistenceXmlDescriptor> parsedPersistenceXmlDescriptors) {
 		Map all = new HashMap(  );
 		for ( PersistenceUnitDescriptor unit : parsedPersistenceXmlDescriptors ) {
-			RecordedState m = createMetadata( unit , scanner);
+			RecordedState m = createMetadata( unit );
 			Object previous = all.put( unitName( unit ), m );
 			if ( previous != null ) {
 				throw new IllegalStateException( "Duplicate persistence unit name: " + unit.getName() );
@@ -76,8 +76,8 @@ public final class PersistenceUnitsHolder {
 		return name;
 	}
 
-	private static RecordedState createMetadata(PersistenceUnitDescriptor unit, Scanner scanner) {
-		FastBootMetadataBuilder fastBootMetadataBuilder = new FastBootMetadataBuilder( unit, scanner );
+	private static RecordedState createMetadata(PersistenceUnitDescriptor unit) {
+		FastBootMetadataBuilder fastBootMetadataBuilder = new FastBootMetadataBuilder( unit );
 		return fastBootMetadataBuilder.build();
 	}
 
