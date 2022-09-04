@@ -309,7 +309,7 @@ public final class OptionsParser {
     try {
       return args.remove();
     } catch (NoSuchElementException e) {
-      throw new InvalidCommandLineException(arg + ": missing argument", e);
+      throw new InvalidCommandLineException(arg + ": missing argument");
     }
   }
 
