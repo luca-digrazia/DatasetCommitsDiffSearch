@@ -368,7 +368,7 @@ public final class JavaCompilationHelper {
     JavaTargetAttributes attributes = getAttributes();
     JavaHeaderCompileActionBuilder builder = new JavaHeaderCompileActionBuilder(getRuleContext());
     builder.setSourceFiles(attributes.getSourceFiles());
-    builder.setSourceJars(attributes.getSourceJars());
+    builder.addSourceJars(attributes.getSourceJars());
     builder.setClasspathEntries(attributes.getCompileTimeClassPath());
     builder.setBootclasspathEntries(
         ImmutableList.copyOf(Iterables.concat(getBootclasspathOrDefault(), getExtdirInputs())));
