@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
-import javax.annotation.Nullable;
 
 /** An {@link ActionTemplate} that expands into {@link CppCompileAction}s at execution time. */
 public final class CppCompileActionTemplate extends ActionKeyCacher
@@ -128,12 +127,9 @@ public final class CppCompileActionTemplate extends ActionKeyCacher
         TreeFileArtifact outputTreeFileArtifact =
             ActionInputHelper.treeFileArtifactWithNoGeneratingActionSet(
                 outputTreeArtifact, PathFragment.create(outputName), artifactOwner);
-        TreeFileArtifact dotdFileArtifact = null;
-        if (dotdTreeArtifact != null) {
-          dotdFileArtifact =
-              ActionInputHelper.treeFileArtifactWithNoGeneratingActionSet(
-                  dotdTreeArtifact, PathFragment.create(outputName + ".d"), artifactOwner);
-        }
+        TreeFileArtifact dotdFileArtifact =
+            ActionInputHelper.treeFileArtifactWithNoGeneratingActionSet(
+                dotdTreeArtifact, PathFragment.create(outputName + ".d"), artifactOwner);
         expandedActions.add(
             createAction(
                 inputTreeFileArtifact, outputTreeFileArtifact, dotdFileArtifact, privateHeaders));
@@ -170,10 +166,7 @@ public final class CppCompileActionTemplate extends ActionKeyCacher
         cppCompileActionBuilder.buildPrunableHeaders(),
         cppCompileActionBuilder.getCcCompilationContext().getDeclaredIncludeDirs(),
         cppCompileActionBuilder.getBuiltinIncludeDirectories(),
-        cppCompileActionBuilder.buildInputsForInvalidation(),
-        toolchain
-            .getCppConfigurationEvenThoughItCanBeDifferentThanWhatTargetHas()
-            .validateTopLevelHeaderInclusions());
+        cppCompileActionBuilder.buildInputsForInvalidation());
   }
 
   private boolean shouldCompileHeaders() {
@@ -183,7 +176,7 @@ public final class CppCompileActionTemplate extends ActionKeyCacher
   private CppCompileAction createAction(
       Artifact sourceTreeFileArtifact,
       Artifact outputTreeFileArtifact,
-      @Nullable Artifact dotdFileArtifact,
+      Artifact dotdFileArtifact,
       ImmutableList<Artifact> privateHeaders)
       throws ActionTemplateExpansionException {
     CppCompileActionBuilder builder = new CppCompileActionBuilder(cppCompileActionBuilder);
@@ -199,11 +192,9 @@ public final class CppCompileActionTemplate extends ActionKeyCacher
     buildVariables.overrideStringVariable(
         CompileBuildVariables.OUTPUT_FILE.getVariableName(),
         outputTreeFileArtifact.getExecPathString());
-    if (dotdFileArtifact != null) {
-      buildVariables.overrideStringVariable(
-          CompileBuildVariables.DEPENDENCY_FILE.getVariableName(),
-          dotdFileArtifact.getExecPathString());
-    }
+    buildVariables.overrideStringVariable(
+        CompileBuildVariables.DEPENDENCY_FILE.getVariableName(),
+        dotdFileArtifact.getExecPathString());
 
     builder.setVariables(buildVariables.build());
 
@@ -287,9 +278,6 @@ public final class CppCompileActionTemplate extends ActionKeyCacher
 
   @Override
   public ImmutableSet<Artifact> getOutputs() {
-    if (dotdTreeArtifact == null) {
-      return ImmutableSet.of(outputTreeArtifact);
-    }
     return ImmutableSet.of(outputTreeArtifact, dotdTreeArtifact);
   }
 
