@@ -5,8 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.io.CharStreams;
 import com.google.common.io.Resources;
-
-import io.dropwizard.configuration.YamlConfigurationFactory;
+import io.dropwizard.configuration.ConfigurationFactory;
 import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.jetty.HttpConnectorFactory;
@@ -46,7 +45,7 @@ public class SimpleServerFactoryTest {
     public void setUp() throws Exception {
         objectMapper.getSubtypeResolver().registerSubtypes(ConsoleAppenderFactory.class,
                 FileAppenderFactory.class, SyslogAppenderFactory.class, HttpConnectorFactory.class);
-        http = new YamlConfigurationFactory<>(SimpleServerFactory.class, validator, objectMapper, "dw")
+        http = new ConfigurationFactory<>(SimpleServerFactory.class, validator, objectMapper, "dw")
                 .build(new File(Resources.getResource("yaml/simple_server.yml").toURI()));
     }
 

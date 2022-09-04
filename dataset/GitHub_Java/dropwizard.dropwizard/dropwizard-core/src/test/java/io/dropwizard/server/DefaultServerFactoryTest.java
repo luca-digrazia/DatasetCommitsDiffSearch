@@ -4,8 +4,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.CharStreams;
 import com.google.common.io.Resources;
-
-import io.dropwizard.configuration.YamlConfigurationFactory;
+import io.dropwizard.configuration.ConfigurationFactory;
 import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.jersey.errors.EarlyEofExceptionMapper;
@@ -62,9 +61,9 @@ public class DefaultServerFactoryTest {
                                                            SyslogAppenderFactory.class,
                                                            HttpConnectorFactory.class);
 
-        http = new YamlConfigurationFactory<>(DefaultServerFactory.class,
-                                              BaseValidator.newValidator(),
-                                              objectMapper, "dw")
+        http = new ConfigurationFactory<>(DefaultServerFactory.class,
+                                          BaseValidator.newValidator(),
+                                          objectMapper, "dw")
                 .build(new File(Resources.getResource("yaml/server.yml").toURI()));
     }
 

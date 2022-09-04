@@ -8,13 +8,11 @@ import io.dropwizard.jetty.MutableServletContextHandler;
 import io.dropwizard.setup.Environment;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.thread.ThreadPool;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * Tests that the {@link JerseyEnvironment#getUrlPattern()} is set by the following priority order:
@@ -36,14 +34,14 @@ public class AbstractServerFactoryTest {
     private static final String RUN_SET_PATTERN = "/set/from/run/*";
     private static final String YAML_SET_PATTERN = "/set/from/yaml/*";
 
-    @BeforeEach
-    void before() {
+    @Before
+    public void before() {
         when(environment.jersey()).thenReturn(jerseyEnvironment);
         when(environment.getApplicationContext()).thenReturn(new MutableServletContextHandler());
     }
 
     @Test
-    void usesYamlDefinedPattern() {
+    public void usesYamlDefinedPattern() {
         serverFactory.setJerseyRootPath(YAML_SET_PATTERN);
         jerseyEnvironment.setUrlPattern(RUN_SET_PATTERN);
 
@@ -53,7 +51,7 @@ public class AbstractServerFactoryTest {
     }
 
     @Test
-    void usesRunDefinedPatternWhenNoYaml() {
+    public void usesRunDefinedPatternWhenNoYaml() {
         jerseyEnvironment.setUrlPattern(RUN_SET_PATTERN);
 
         serverFactory.build(environment);
@@ -62,7 +60,7 @@ public class AbstractServerFactoryTest {
     }
 
     @Test
-    void usesDefaultPatternWhenNoneSet() {
+    public void usesDefaultPatternWhenNoneSet() {
         serverFactory.build(environment);
 
         assertThat(jerseyEnvironment.getUrlPattern()).isEqualTo(DEFAULT_PATTERN);
@@ -88,9 +86,9 @@ public class AbstractServerFactoryTest {
             return server;
         }
 
-        @Override
-        public void configure(Environment environment) {
-            // left blank intentionally
-        }
+		@Override
+		public void configure(Environment environment) {
+			// left blank intentionally
+		}
     }
 }
