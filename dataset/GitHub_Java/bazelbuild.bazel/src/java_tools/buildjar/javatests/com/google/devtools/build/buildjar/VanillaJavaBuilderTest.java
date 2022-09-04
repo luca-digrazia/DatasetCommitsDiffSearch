@@ -176,6 +176,8 @@ public class VanillaJavaBuilderTest {
                 source.toString(),
                 "--output",
                 output.toString(),
+                "--bootclasspath",
+                Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString(),
                 "--tempdir",
                 temporaryFolder.newFolder().toString(),
                 "--classdir",
@@ -325,6 +327,6 @@ public class VanillaJavaBuilderTest {
 
     ImmutableMap<String, byte[]> outputEntries = readJar(nativeHeaderOutput.toFile());
     assertThat(outputEntries.keySet())
-        .containsAtLeast("test_BarWithNativeMethod.h", "test_FooWithNativeMethod.h");
+        .containsAllOf("test_BarWithNativeMethod.h", "test_FooWithNativeMethod.h");
   }
 }
