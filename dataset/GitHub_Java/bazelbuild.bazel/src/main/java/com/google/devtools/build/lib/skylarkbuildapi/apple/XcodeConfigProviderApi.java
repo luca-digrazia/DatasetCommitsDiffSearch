@@ -15,8 +15,10 @@
 package com.google.devtools.build.lib.skylarkbuildapi.apple;
 
 import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
+import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 
 /**
  * An interface for an info type containing the set of Apple versions computed from command line
@@ -24,9 +26,12 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
  */
 @SkylarkModule(
     name = "XcodeVersionConfig",
+    category = SkylarkModuleCategory.PROVIDER,
     doc = "The set of Apple versions computed from command line options and the xcode_config rule.")
-public interface XcodeConfigProviderApi<ApplePlatformApiT extends ApplePlatformApi,
-    ApplePlatformTypeApiT extends ApplePlatformTypeApi> extends StructApi {
+public interface XcodeConfigProviderApi<
+        ApplePlatformApiT extends ApplePlatformApi,
+        ApplePlatformTypeApiT extends ApplePlatformTypeApi>
+    extends StructApi {
 
   @SkylarkCallable(name = "xcode_version",
       doc = "Returns the Xcode version that is being used to build.<p>"
@@ -37,12 +42,31 @@ public interface XcodeConfigProviderApi<ApplePlatformApiT extends ApplePlatformA
   @SkylarkCallable(
       name = "minimum_os_for_platform_type",
       doc = "The minimum compatible OS version for target simulator and devices for a particular "
-          + "platform type.")
+          + "platform type.",
+      parameters = {
+        @Param(
+            name = "platform_type",
+            positional = true,
+            named = false,
+            type = ApplePlatformTypeApi.class,
+            doc = "The apple platform type."
+        ),
+      }
+  )
   public DottedVersionApi<?> getMinimumOsForPlatformType(ApplePlatformTypeApiT platformType);
 
   @SkylarkCallable(
       name = "sdk_version_for_platform",
       doc = "The version of the platform SDK that will be used to build targets for the given "
-          + "platform.")
+          + "platform.",
+      parameters = {
+        @Param(
+            name = "platform",
+            positional = true,
+            named = false,
+            type = ApplePlatformApi.class,
+            doc = "The apple platform."
+        ),
+      })
   public DottedVersionApi<?> getSdkVersionForPlatform(ApplePlatformApiT platform);
 }

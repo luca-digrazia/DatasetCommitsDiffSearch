@@ -14,16 +14,17 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.test;
 
-import com.google.devtools.build.lib.syntax.StarlarkValue;
-import net.starlark.java.annot.StarlarkBuiltin;
-import net.starlark.java.annot.StarlarkDocumentationCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 
 /** Contains information about instrumented files sources and instrumentation metadata. */
-@StarlarkBuiltin(
+@SkylarkModule(
     name = "InstrumentedFilesInfo",
-    category = StarlarkDocumentationCategory.PROVIDER,
+    category = SkylarkModuleCategory.PROVIDER,
     doc =
-        "Contains information about instrumented source files and instrumentation metadata files "
-            + "for purposes of <a href=\"../rules.html#code-coverage-instrumentation\">code "
-            + "coverage data collection</a>.")
-public interface InstrumentedFilesInfoApi extends StarlarkValue {}
+        "Contains information about instrumented file sources and instrumentation metadata "
+            + "for purposes of code coverage. Rule targets which return an instance of this "
+            + "provider signal to the build system that certain sources should be targeted for "
+            + "code coverage analysis.")
+public interface InstrumentedFilesInfoApi extends SkylarkValue {}
