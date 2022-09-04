@@ -115,8 +115,8 @@ public class BuildEventServiceTransport implements BuildEventTransport {
         BuildEventProtocolOptions bepOptions,
         BuildEventServiceProtoUtil besProtoUtil,
         Clock clock,
-        ExitFunction exitFunction,
-        ArtifactGroupNamer namer) {
+        ExitFunction exitFunction) {
+
       return new BuildEventServiceTransport(
           besClient,
           localFileUploader,
@@ -127,8 +127,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
           publishLifecycleEvents,
           closeTimeout != null ? closeTimeout : Duration.ZERO,
           sleeper != null ? sleeper : new JavaSleeper(),
-          buildEventLogger != null ? buildEventLogger : (e) -> {},
-          namer);
+          buildEventLogger != null ? buildEventLogger : (e) -> {});
     }
   }
 
@@ -142,8 +141,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
       boolean publishLifecycleEvents,
       Duration closeTimeout,
       Sleeper sleeper,
-      BuildEventLogger buildEventLogger,
-      ArtifactGroupNamer namer) {
+      BuildEventLogger buildEventLogger) {
     this.besUploader =
         new BuildEventServiceUploader(
             besClient,
@@ -155,8 +153,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
             exitFunc,
             sleeper,
             clock,
-            buildEventLogger,
-            namer);
+            buildEventLogger);
   }
 
   @Override
@@ -180,8 +177,8 @@ public class BuildEventServiceTransport implements BuildEventTransport {
   }
 
   @Override
-  public void sendBuildEvent(BuildEvent event) {
-    besUploader.enqueueEvent(event);
+  public void sendBuildEvent(BuildEvent event, final ArtifactGroupNamer namer) {
+    besUploader.enqueueEvent(event, namer);
   }
 
   /** BuildEventLogger can be used to log build event (stats). */
@@ -236,7 +233,6 @@ public class BuildEventServiceTransport implements BuildEventTransport {
     private final Sleeper sleeper;
     private final Clock clock;
     private final BuildEventLogger buildEventLogger;
-    private final ArtifactGroupNamer namer;
 
     /**
      * The event queue contains two types of events: - Build events, sorted by sequence number, that
@@ -266,8 +262,8 @@ public class BuildEventServiceTransport implements BuildEventTransport {
 
     /**
      * The thread that calls the lifecycle RPCs and does the build event upload. It's started lazily
-     * on the first call to {@link #enqueueEvent(BuildEvent)} or {@link #close()} (which ever comes
-     * first).
+     * on the first call to {@link #enqueueEvent(BuildEvent, ArtifactGroupNamer)} or {@link
+     * #close()} (which ever comes first).
      */
     @GuardedBy("lock")
     private Thread uploadThread;
@@ -287,8 +283,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
         ExitFunction exitFunc,
         Sleeper sleeper,
         Clock clock,
-        BuildEventLogger buildEventLogger,
-        ArtifactGroupNamer namer) {
+        BuildEventLogger buildEventLogger) {
       this.besClient = Preconditions.checkNotNull(besClient);
       this.localFileUploader = Preconditions.checkNotNull(localFileUploader);
       this.besProtoUtil = Preconditions.checkNotNull(besProtoUtil);
@@ -299,11 +294,10 @@ public class BuildEventServiceTransport implements BuildEventTransport {
       this.sleeper = Preconditions.checkNotNull(sleeper);
       this.clock = Preconditions.checkNotNull(clock);
       this.buildEventLogger = Preconditions.checkNotNull(buildEventLogger);
-      this.namer = Preconditions.checkNotNull(namer);
     }
 
     /** Enqueues an event for uploading to a BES backend. */
-    public void enqueueEvent(BuildEvent event) {
+    public void enqueueEvent(BuildEvent event, ArtifactGroupNamer namer) {
       // This needs to happen outside a synchronized block as it may trigger
       // stdout/stderr and lead to a deadlock. See b/109725432
       ListenableFuture<PathConverter> localFileUploadFuture =

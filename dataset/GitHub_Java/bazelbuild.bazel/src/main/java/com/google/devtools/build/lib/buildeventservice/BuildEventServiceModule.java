@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
 import com.google.devtools.build.lib.buildeventservice.BuildEventServiceTransport.BuildEventLogger;
 import com.google.devtools.build.lib.buildeventservice.BuildEventServiceTransport.ExitFunction;
 import com.google.devtools.build.lib.buildeventservice.client.BuildEventServiceClient;
-import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
 import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
@@ -43,7 +42,6 @@ import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BuildEventStreamer;
 import com.google.devtools.build.lib.runtime.BuildEventTransportFactory;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.runtime.CountingArtifactGroupNamer;
 import com.google.devtools.build.lib.runtime.SynchronizedOutputStream;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -183,11 +181,10 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
                     .select(protocolOptions.buildEventUploadStrategy)
                     .create(env));
 
-    CountingArtifactGroupNamer namer = new CountingArtifactGroupNamer();
     try {
       BuildEventTransport besTransport;
       try {
-        besTransport = tryCreateBesTransport(env, uploaderSupplier, namer);
+        besTransport = tryCreateBesTransport(env, uploaderSupplier);
       } catch (IOException | OptionsParsingException e) {
         String message = "Failed to create BuildEventTransport: " + e;
         logger.log(Level.WARNING, message, e);
@@ -205,7 +202,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
 
       ImmutableSet<BuildEventTransport> bepTransports =
           BuildEventTransportFactory.createFromOptions(
-              env, env.getBlazeModuleEnvironment()::exit, protocolOptions, uploaderSupplier, namer);
+              env, env.getBlazeModuleEnvironment()::exit, protocolOptions, uploaderSupplier);
 
       ImmutableSet.Builder<BuildEventTransport> transportsBuilder =
           ImmutableSet.<BuildEventTransport>builder().addAll(bepTransports);
@@ -215,8 +212,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
 
       ImmutableSet<BuildEventTransport> transports = transportsBuilder.build();
       if (!transports.isEmpty()) {
-        return new BuildEventStreamer(
-            transports, env.getReporter(), buildEventStreamOptions, namer);
+        return new BuildEventStreamer(transports, env.getReporter(), buildEventStreamOptions);
       }
     } catch (Exception e) {
       reportError(
@@ -229,9 +225,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
 
   @Nullable
   private BuildEventTransport tryCreateBesTransport(
-      CommandEnvironment env,
-      Supplier<BuildEventArtifactUploader> uploaderSupplier,
-      ArtifactGroupNamer namer)
+      CommandEnvironment env, Supplier<BuildEventArtifactUploader> uploaderSupplier)
       throws IOException, OptionsParsingException {
     OptionsParsingResult optionsProvider = env.getOptions();
     T besOptions =
@@ -308,8 +302,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
                   besProtoUtil,
                   env.getRuntime().getClock(),
                   bazelExitFunction(
-                      env.getReporter(), env.getBlazeModuleEnvironment(), besResultsUrl),
-                  namer);
+                      env.getReporter(), env.getBlazeModuleEnvironment(), besResultsUrl));
       logger.fine("BuildEventServiceTransport was created successfully");
       return besTransport;
     }
