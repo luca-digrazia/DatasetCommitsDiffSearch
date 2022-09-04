@@ -15,19 +15,16 @@ package com.google.devtools.build.lib.remote.util;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.google.common.base.Preconditions;
+import build.bazel.remote.execution.v2.Action;
+import build.bazel.remote.execution.v2.Digest;
+import build.bazel.remote.execution.v2.DigestFunction;
 import com.google.common.hash.HashCode;
-import com.google.common.hash.HashingOutputStream;
 import com.google.common.io.BaseEncoding;
-import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.FileArtifactValue;
-import com.google.devtools.build.lib.actions.MetadataProvider;
-import com.google.devtools.build.lib.actions.cache.DigestUtils;
 import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
+import com.google.devtools.build.lib.remote.common.RemoteCacheClient.ActionKey;
 import com.google.devtools.build.lib.vfs.DigestHashFunction;
+import com.google.devtools.build.lib.vfs.DigestUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.remoteexecution.v1test.Action;
-import com.google.devtools.remoteexecution.v1test.Digest;
 import com.google.protobuf.Message;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -36,30 +33,26 @@ import java.io.OutputStream;
 /** Utility methods to work with {@link Digest}. */
 public class DigestUtil {
 
-  /**
-   * A special type of Digest that is used only as a remote action cache key. This is a separate
-   * type in order to prevent accidentally using other Digests as action keys.
-   */
-  public static final class ActionKey {
-    private final Digest digest;
-
-    public Digest getDigest() {
-      return digest;
-    }
-
-    private ActionKey(Digest digest) {
-      this.digest = digest;
-    }
-  }
-
   private final DigestHashFunction hashFn;
 
   public DigestUtil(DigestHashFunction hashFn) {
     this.hashFn = hashFn;
   }
 
+  /** Returns the currently used digest function. */
+  public DigestFunction.Value getDigestFunction() {
+    for (String name : hashFn.getNames()) {
+      try {
+        return DigestFunction.Value.valueOf(name);
+      } catch (IllegalArgumentException e) {
+        // continue.
+      }
+    }
+    return DigestFunction.Value.UNKNOWN;
+  }
+
   public Digest compute(byte[] blob) {
-    return buildDigest(hashFn.getHash().hashBytes(blob).toString(), blob.length);
+    return buildDigest(hashFn.getHashFunction().hashBytes(blob).toString(), blob.length);
   }
 
   public Digest compute(Path file) throws IOException {
@@ -67,7 +60,7 @@ public class DigestUtil {
   }
 
   public Digest compute(Path file, long fileSize) throws IOException {
-    return buildDigest(DigestUtils.getDigestOrFail(file, fileSize), fileSize);
+    return buildDigest(DigestUtils.getDigestWithManualFallback(file, fileSize), fileSize);
   }
 
   public Digest compute(VirtualActionInput input) throws IOException {
@@ -89,16 +82,21 @@ public class DigestUtil {
     return compute(str.getBytes(UTF_8));
   }
 
-  public DigestUtil.ActionKey computeActionKey(Action action) {
-    return new DigestUtil.ActionKey(compute(action));
+  public ActionKey computeActionKey(Action action) {
+    return new ActionKey(compute(action));
   }
 
   /**
    * Assumes that the given Digest is a valid digest of an Action, and creates an ActionKey wrapper.
    * This should not be called on the client side!
    */
-  public DigestUtil.ActionKey asActionKey(Digest digest) {
-    return new DigestUtil.ActionKey(digest);
+  public ActionKey asActionKey(Digest digest) {
+    return new ActionKey(digest);
+  }
+
+  /** Returns the hash of {@code data} in binary. */
+  public byte[] hash(byte[] data) {
+    return hashFn.getHashFunction().hashBytes(data).asBytes();
   }
 
   public static Digest buildDigest(byte[] hash, long size) {
@@ -113,22 +111,15 @@ public class DigestUtil {
     return BaseEncoding.base16().lowerCase().encode(hash.asBytes());
   }
 
-  public HashingOutputStream newHashingOutputStream(OutputStream out) {
-    return new HashingOutputStream(hashFn.getHash(), out);
+  public DigestOutputStream newDigestOutputStream(OutputStream out) {
+    return new DigestOutputStream(hashFn.getHashFunction(), out);
   }
 
-  public String toString(Digest digest) {
+  public static String toString(Digest digest) {
     return digest.getHash() + "/" + digest.getSizeBytes();
   }
 
-  public static Digest getFromInputCache(ActionInput input, MetadataProvider cache)
-      throws IOException {
-    FileArtifactValue metadata = cache.getMetadata(input);
-    Preconditions.checkNotNull(metadata, "Input cache %s returned no value for %s", cache, input);
-    Preconditions.checkNotNull(
-        metadata.getDigest(),
-        "Null digest for %s, possible directory. Data dependencies on directories are not allowed.",
-        input);
-    return buildDigest(metadata.getDigest(), metadata.getSize());
+  public static byte[] toBinaryDigest(Digest digest) {
+    return HashCode.fromString(digest.getHash()).asBytes();
   }
 }

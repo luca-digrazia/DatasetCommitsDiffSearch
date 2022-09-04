@@ -37,7 +37,7 @@ import com.google.common.base.Ascii;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.flogger.GoogleLogger;
+import com.google.common.hash.HashCode;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -73,8 +73,6 @@ import javax.annotation.Nullable;
 /** A RemoteActionCache implementation that uses gRPC calls to a remote cache server. */
 @ThreadSafe
 public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
-
   private final CallCredentialsProvider callCredentialsProvider;
   private final ReferenceCountedChannel channel;
   private final RemoteOptions options;
@@ -347,6 +345,7 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
                   data.writeTo(out);
                   offset.addAndGet(data.size());
                 } catch (IOException e) {
+                  future.setException(e);
                   // Cancel the call.
                   throw new RuntimeException(e);
                 }
@@ -374,9 +373,6 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
                   future.set(null);
                 } catch (IOException e) {
                   future.setException(e);
-                } catch (RuntimeException e) {
-                  logger.atWarning().withCause(e).log("Unexpected exception");
-                  future.setException(e);
                 }
               }
             });
@@ -386,7 +382,7 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
   @Override
   public ListenableFuture<Void> uploadFile(Digest digest, Path path) {
     return uploader.uploadBlobAsync(
-        digest,
+        HashCode.fromString(digest.getHash()),
         Chunker.builder().setInput(digest.getSizeBytes(), path).build(),
         /* forceUpload= */ true);
   }
@@ -394,6 +390,8 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
   @Override
   public ListenableFuture<Void> uploadBlob(Digest digest, ByteString data) {
     return uploader.uploadBlobAsync(
-        digest, Chunker.builder().setInput(data.toByteArray()).build(), /* forceUpload= */ true);
+        HashCode.fromString(digest.getHash()),
+        Chunker.builder().setInput(data.toByteArray()).build(),
+        /* forceUpload= */ true);
   }
 }
