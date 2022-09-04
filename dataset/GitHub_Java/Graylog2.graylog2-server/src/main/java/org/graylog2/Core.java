@@ -20,7 +20,6 @@
 
 package org.graylog2;
 
-import org.graylog2.plugin.Tools;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -50,8 +49,6 @@ import org.graylog2.activities.ActivityWriter;
 import org.graylog2.cluster.Cluster;
 import org.graylog2.database.HostCounterCacheImpl;
 import org.graylog2.indexer.Deflector;
-import org.graylog2.initializers.*;
-import org.graylog2.inputs.StandardInputSet;
 import org.graylog2.inputs.amqp.AMQPInput;
 import org.graylog2.inputs.gelf.GELFTCPInput;
 import org.graylog2.inputs.gelf.GELFUDPInput;
@@ -65,7 +62,6 @@ import org.graylog2.plugin.alarms.transports.Transport;
 import org.graylog2.plugin.alarms.transports.TransportConfigurationException;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.filters.MessageFilter;
-import org.graylog2.plugin.initializers.InitializerConfigurationException;
 import org.graylog2.plugin.inputs.MessageInputConfigurationException;
 import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
 import org.graylog2.plugins.PluginConfiguration;
@@ -92,11 +88,9 @@ public class Core implements GraylogServer {
     private static final int SCHEDULED_THREADS_POOL_SIZE = 30;
     private ScheduledExecutorService scheduler;
 
-    public static final String GRAYLOG2_VERSION = "0.10.0-rc.2";
+    public static final String GRAYLOG2_VERSION = "0.10.0-preview.2";
 
     public static final String MASTER_COUNTER_NAME = "master";
-
-    public static final String THROUGHPUT_COUNTER_NAME = "throughput";
     
     private int lastReceivedMessageTimestamp = 0;
 
@@ -128,6 +122,15 @@ public class Core implements GraylogServer {
     
     private boolean localMode = false;
     private boolean statsMode = false;
+    
+    public static final Set<Class> STANDARD_INPUTS = new HashSet<Class>() {{ 
+        add(GELFTCPInput.class);
+        add(GELFUDPInput.class);
+        add(GELFHttpInput.class);
+        add(AMQPInput.class);
+        add(SyslogTCPInput.class);
+        add(SyslogUDPInput.class);
+    }};
 
     public void initialize(Configuration configuration) {
         serverId = Tools.generateServerId();
@@ -155,7 +158,6 @@ public class Core implements GraylogServer {
         
         messageCounterManager = new MessageCounterManagerImpl();
         messageCounterManager.register(MASTER_COUNTER_NAME);
-        messageCounterManager.register(THROUGHPUT_COUNTER_NAME);
 
         hostCounterCache = new HostCounterCacheImpl();
 
@@ -210,6 +212,7 @@ public class Core implements GraylogServer {
     @Override
     public void run() {
 
+        // initiate the mongodb connection, this might fail but it will retry to establish the connection
         gelfChunkManager.start();
         BlacklistCache.initialize(this);
         StreamCache.initialize(this);
@@ -240,14 +243,13 @@ public class Core implements GraylogServer {
         loadPlugins(MessageFilter.class, "filters");
         loadPlugins(MessageOutput.class, "outputs");
         loadPlugins(AlarmCallback.class, "alarm_callbacks");
-        loadPlugins(Transport.class, "transports");
         loadPlugins(Initializer.class, "initializers");
         loadPlugins(MessageInput.class, "inputs");
         
         // Initialize all registered transports.
         for (Transport transport : this.transports) {
             try {
-                Map<String, String> config;
+                Map<String, String> config = Maps.newHashMap();
                 
                 // The built in transport methods get a more convenient configuration from graylog2.conf.
                 if (transport.getClass().getCanonicalName().equals("org.graylog2.alarms.transports.EmailTransport")) {
@@ -256,7 +258,7 @@ public class Core implements GraylogServer {
                     config = configuration.getJabberTransportConfiguration();
                 } else {
                     // Load custom plugin config.
-                    config = PluginConfiguration.load(this, transport.getClass().getCanonicalName());
+                    // config = PluginConfiguration.load(transport.getClass().getCanonicalName(), "transports")
                 }
                 
                 transport.initialize(config);
@@ -280,29 +282,14 @@ public class Core implements GraylogServer {
         
         // Initialize all registered initializers.
         for (Initializer initializer : this.initializers) {
-            try {
-                if (StandardInitializerSet.get().contains(initializer.getClass())) {
-                    // This is a built-in initializer. We don't need special configs for them.
-                    initializer.initialize(this, null);
-                } else {
-                    // This is a plugin. Initialize with custom config from Mongo.
-                    initializer.initialize(this, PluginConfiguration.load(
-                            this,
-                            initializer.getClass().getCanonicalName())
-                    );
-                }
-                
-                LOG.debug("Initialized initializer: {}", initializer.getClass().getSimpleName());
-            } catch (InitializerConfigurationException e) {
-                
-            }
-            
+            initializer.initialize();
+            LOG.debug("Initialized initializer: {}", initializer.getClass().getSimpleName());
         }
 
         // Initialize all registered inputs.
         for (MessageInput input : this.inputs) {
             try {
-                if (StandardInputSet.get().contains(input.getClass())) {
+                if (STANDARD_INPUTS.contains(input.getClass())) {
                     // This is a built-in input. Initialize with config from graylog2.conf.
                     input.initialize(configuration.getInputConfig(input.getClass()), this);
                 } else {
@@ -313,11 +300,11 @@ public class Core implements GraylogServer {
                             this
                     );
                 }
-                
-                LOG.debug("Initialized input: {}", input.getName());
             } catch (MessageInputConfigurationException e) {
                 LOG.error("Could not initialize input <{}>.", input.getClass().getCanonicalName(), e);
             }
+            
+            LOG.debug("Initialized input: {}", input.getName());
         }
         
         // Initialize all registered outputs.
