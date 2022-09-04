@@ -46,7 +46,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.DependencyKind;
 import com.google.devtools.build.lib.analysis.ResolvedToolchainContext;
-import com.google.devtools.build.lib.analysis.RuleContext.InvalidExecGroupException;
 import com.google.devtools.build.lib.analysis.ToolchainCollection;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
@@ -839,6 +838,15 @@ public final class SkyframeBuildView {
         || cause instanceof NoSuchPackageException;
   }
 
+  /** Special flake for error cases when loading CROSSTOOL for C++ rules */
+  // TODO(b/110087561): Remove when CROSSTOOL file is not loaded anymore
+  public static class CcCrosstoolException extends Exception implements SaneAnalysisException {
+
+    public CcCrosstoolException(String message) {
+      super(message);
+    }
+  }
+
   public ArtifactFactory getArtifactFactory() {
     return artifactFactory;
   }
@@ -878,7 +886,7 @@ public final class SkyframeBuildView {
       OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> prerequisiteMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       @Nullable ToolchainCollection<ResolvedToolchainContext> toolchainContexts)
-      throws InterruptedException, ActionConflictException, InvalidExecGroupException {
+      throws InterruptedException, ActionConflictException {
     Preconditions.checkState(
         enableAnalysis, "Already in execution phase %s %s", target, configuration);
     Preconditions.checkNotNull(analysisEnvironment);
