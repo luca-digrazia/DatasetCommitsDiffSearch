@@ -32,7 +32,7 @@ import org.androidannotations.logger.formatter.FormatterSimple;
 
 public class MessagerAppender extends Appender {
 
-	private final List<Message> errors = new LinkedList<>();
+	private static List<Message> errors = new LinkedList<>();
 
 	private Messager messager;
 
@@ -66,6 +66,7 @@ public class MessagerAppender extends Appender {
 				ElementDetails elementDetails = error.getElementDetails();
 				messager.printMessage(error.kind, error.message, elementDetails.getElement(), elementDetails.getAnnotationMirror());
 			}
+			errors.clear();
 		}
 	}
 
