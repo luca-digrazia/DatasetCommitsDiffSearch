@@ -113,6 +113,19 @@ public class JavaOptions extends FragmentOptions {
   public Label hostJavaBase;
 
   @Option(
+      name = "incompatible_use_remotejdk_as_host_javabase",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help =
+          "If enabled, uses a JDK downloaded from a remote repository instead of the embedded JDK.")
+  public boolean useRemoteJdkAsHostJavaBase;
+
+  @Option(
       name = "incompatible_use_jdk10_as_host_javabase",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
@@ -448,16 +461,6 @@ public class JavaOptions extends FragmentOptions {
   public boolean strictDepsJavaProtos;
 
   @Option(
-      name = "disallow_strict_deps_for_jpl",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS, OptionEffectTag.EAGERNESS_TO_EXIT},
-      help =
-          "If set, any java_proto_library or java_mutable_proto_library which sets the "
-              + "strict_deps attribute explicitly will fail to build.")
-  public boolean isDisallowStrictDepsForJpl;
-
-  @Option(
       name = "experimental_java_header_compilation_disable_javac_fallback",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
@@ -589,6 +592,8 @@ public class JavaOptions extends FragmentOptions {
     if (hostJavaBase == null) {
       if (useJDK10AsHostJavaBase) {
         return Label.parseAbsoluteUnchecked("@bazel_tools//tools/jdk:remote_jdk10");
+      } else if (useRemoteJdkAsHostJavaBase) {
+        return Label.parseAbsoluteUnchecked("@bazel_tools//tools/jdk:remote_jdk");
       } else {
         return Label.parseAbsoluteUnchecked("@bazel_tools//tools/jdk:host_jdk");
       }
