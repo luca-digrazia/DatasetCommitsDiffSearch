@@ -1221,8 +1221,8 @@ public class ParserTest extends EvaluationTestCase {
     List<Statement> statements = parseFileForSkylark("load('//foo/bar:file.bzl', 'fun_test')\n");
     LoadStatement stmt = (LoadStatement) statements.get(0);
     assertThat(stmt.getImport().getValue()).isEqualTo("//foo/bar:file.bzl");
-    assertThat(stmt.getBindings()).hasSize(1);
-    Identifier sym = stmt.getBindings().get(0).getLocalName();
+    assertThat(stmt.getSymbols()).hasSize(1);
+    Identifier sym = stmt.getSymbols().get(0);
     int startOffset = sym.getLocation().getStartOffset();
     int endOffset = sym.getLocation().getEndOffset();
     assertThat(startOffset).named("getStartOffset()").isEqualTo(27);
@@ -1234,7 +1234,7 @@ public class ParserTest extends EvaluationTestCase {
     List<Statement> statements = parseFileForSkylark("load('//foo/bar:file.bzl', 'fun_test',)\n");
     LoadStatement stmt = (LoadStatement) statements.get(0);
     assertThat(stmt.getImport().getValue()).isEqualTo("//foo/bar:file.bzl");
-    assertThat(stmt.getBindings()).hasSize(1);
+    assertThat(stmt.getSymbols()).hasSize(1);
   }
 
   @Test
@@ -1242,7 +1242,7 @@ public class ParserTest extends EvaluationTestCase {
     List<Statement> statements = parseFileForSkylark("load(':file.bzl', 'foo', 'bar')\n");
     LoadStatement stmt = (LoadStatement) statements.get(0);
     assertThat(stmt.getImport().getValue()).isEqualTo(":file.bzl");
-    assertThat(stmt.getBindings()).hasSize(2);
+    assertThat(stmt.getSymbols()).hasSize(2);
   }
 
   @Test
@@ -1278,10 +1278,10 @@ public class ParserTest extends EvaluationTestCase {
     List<Statement> statements =
         parseFileForSkylark("load('//foo/bar:file.bzl', my_alias = 'lawl')\n");
     LoadStatement stmt = (LoadStatement) statements.get(0);
-    ImmutableList<LoadStatement.Binding> actualSymbols = stmt.getBindings();
+    ImmutableList<Identifier> actualSymbols = stmt.getSymbols();
 
     assertThat(actualSymbols).hasSize(1);
-    Identifier sym = actualSymbols.get(0).getLocalName();
+    Identifier sym = actualSymbols.get(0);
     assertThat(sym.getName()).isEqualTo("my_alias");
     int startOffset = sym.getLocation().getStartOffset();
     int endOffset = sym.getLocation().getEndOffset();
@@ -1299,14 +1299,14 @@ public class ParserTest extends EvaluationTestCase {
     List<Statement> statements =
         parseFileForSkylark(String.format("load('//foo/bar:file.bzl', %s)\n", loadSymbolString));
     LoadStatement stmt = (LoadStatement) statements.get(0);
-    ImmutableList<LoadStatement.Binding> actualSymbols = stmt.getBindings();
+    ImmutableList<Identifier> actualSymbols = stmt.getSymbols();
 
     assertThat(actualSymbols).hasSize(expectedSymbols.length);
 
     List<String> actualSymbolNames = new LinkedList<>();
 
-    for (LoadStatement.Binding binding : actualSymbols) {
-      actualSymbolNames.add(binding.getLocalName().getName());
+    for (Identifier identifier : actualSymbols) {
+      actualSymbolNames.add(identifier.getName());
     }
 
     assertThat(actualSymbolNames).containsExactly((Object[]) expectedSymbols);
