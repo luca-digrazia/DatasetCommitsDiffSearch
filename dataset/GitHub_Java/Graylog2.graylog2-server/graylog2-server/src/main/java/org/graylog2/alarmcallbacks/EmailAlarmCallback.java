@@ -16,13 +16,13 @@
  */
 package org.graylog2.alarmcallbacks;
 
+import com.google.common.base.Throwables;
 import com.google.common.collect.Lists;
 import org.graylog2.alerts.AlertSender;
 import org.graylog2.alerts.FormattedEmailAlertSender;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.MessageSummary;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallbackConfigurationException;
@@ -62,8 +62,19 @@ public class EmailAlarmCallback implements AlarmCallback {
         AlertCondition alertCondition = result.getTriggeredCondition();
         if (stream.getAlertReceivers().size() > 0) {
             try {
-                if (alertCondition.getBacklogSize() > 0 && result.getMatchingMessages() != null) {
-                    alertSender.sendEmails(stream, result, getAlarmBacklog(result));
+                if (alertCondition.getBacklog() > 0 && alertCondition.getSearchHits() != null) {
+                    List<Message> backlog = Lists.newArrayList();
+
+                    for (Message searchHit : alertCondition.getSearchHits()) {
+                        backlog.add(searchHit);
+                    }
+
+                    // Read as many messages as possible (max: backlog size) from backlog.
+                    int readTo = alertCondition.getBacklog();
+                    if(backlog.size() < readTo) {
+                        readTo = backlog.size();
+                    }
+                    alertSender.sendEmails(stream, result, backlog.subList(0, readTo));
                 } else {
                     alertSender.sendEmails(stream, result);
                 }
@@ -74,7 +85,7 @@ public class EmailAlarmCallback implements AlarmCallback {
                         .addType(Notification.Type.EMAIL_TRANSPORT_CONFIGURATION_INVALID)
                         .addSeverity(Notification.Severity.NORMAL)
                         .addDetail("stream_id", stream.getId())
-                        .addDetail("exception", e.getMessage());
+                        .addDetail("exception", Throwables.getStackTraceAsString(e));
                 notificationService.publishIfFirst(notification);
             } catch (Exception e) {
                 LOG.error("Stream [" + stream + "] has alert receivers and is triggered, but sending emails failed", e);
@@ -93,19 +104,6 @@ public class EmailAlarmCallback implements AlarmCallback {
                 notificationService.publishIfFirst(notification);
             }
         }
-    }
-
-    protected List<Message> getAlarmBacklog(AlertCondition.CheckResult result) {
-        final AlertCondition alertCondition = result.getTriggeredCondition();
-        final List<MessageSummary> backlogSummaries = result.getMatchingMessages()
-                .subList(0, Math.min(alertCondition.getBacklogSize(), result.getMatchingMessages().size()));
-        final List<Message> backlog = Lists.newArrayList();
-
-        for (MessageSummary messageSummary : backlogSummaries) {
-            backlog.add(messageSummary.getRawMessage());
-        }
-
-        return backlog;
     }
 
     @Override
