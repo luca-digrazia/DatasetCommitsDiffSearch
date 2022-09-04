@@ -592,7 +592,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
   private final PrerequisiteValidator prerequisiteValidator;
 
-  private final Environment.GlobalFrame globals;
+  private final Environment.Frame globals;
 
   private final ImmutableList<NativeProvider> nativeProviders;
 
@@ -739,7 +739,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     return BuildOptions.of(configurationOptions, optionsProvider);
   }
 
-  private Environment.GlobalFrame createGlobals(
+  private Environment.Frame createGlobals(
       ImmutableMap<String, Object> skylarkAccessibleToplLevels,
       ImmutableList<Class<?>> modules) {
     try (Mutability mutability = Mutability.create("ConfiguredRuleClassProvider globals")) {
@@ -772,7 +772,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
   private Environment createSkylarkRuleClassEnvironment(
       Mutability mutability,
-      Environment.GlobalFrame globals,
+      Environment.Frame globals,
       SkylarkSemantics skylarkSemantics,
       EventHandler eventHandler,
       String astFileContentHashCode,
