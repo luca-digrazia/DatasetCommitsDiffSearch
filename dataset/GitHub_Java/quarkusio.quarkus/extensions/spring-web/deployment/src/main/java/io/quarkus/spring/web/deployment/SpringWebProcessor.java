@@ -38,9 +38,9 @@ import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.gizmo.ClassOutput;
 import io.quarkus.resteasy.common.deployment.ResteasyCommonProcessor;
 import io.quarkus.resteasy.common.deployment.ResteasyJaxrsProviderBuildItem;
-import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceDefiningAnnotationBuildItem;
-import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodAnnotationsBuildItem;
-import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodParamAnnotations;
+import io.quarkus.resteasy.server.common.deployment.AdditionalJaxRsResourceDefiningAnnotationBuildItem;
+import io.quarkus.resteasy.server.common.deployment.AdditionalJaxRsResourceMethodAnnotationsBuildItem;
+import io.quarkus.resteasy.server.common.deployment.AdditionalJaxRsResourceMethodParamAnnotations;
 import io.quarkus.undertow.deployment.BlacklistedServletContainerInitializerBuildItem;
 import io.quarkus.undertow.deployment.ServletInitParamBuildItem;
 
@@ -259,8 +259,6 @@ public class SpringWebProcessor {
             BuildProducer<ResteasyJaxrsProviderBuildItem> providersProducer,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClassProducer) {
 
-        TypesUtil typesUtil = new TypesUtil(Thread.currentThread().getContextClassLoader());
-
         // Look for all exception classes that are annotated with @ResponseStatus
 
         IndexView index = beanArchiveIndexBuildItem.getIndex();
@@ -270,13 +268,12 @@ public class SpringWebProcessor {
                 generatedExceptionMappers.produce(new GeneratedClassBuildItem(true, name, data));
             }
         };
-        generateMappersForResponseStatusOnException(providersProducer, index, classOutput, typesUtil);
-        generateMappersForExceptionHandlerInControllerAdvice(providersProducer, reflectiveClassProducer, index, classOutput,
-                typesUtil);
+        generateMappersForResponseStatusOnException(providersProducer, index, classOutput);
+        generateMappersForExceptionHandlerInControllerAdvice(providersProducer, reflectiveClassProducer, index, classOutput);
     }
 
     private void generateMappersForResponseStatusOnException(BuildProducer<ResteasyJaxrsProviderBuildItem> providersProducer,
-            IndexView index, ClassOutput classOutput, TypesUtil typesUtil) {
+            IndexView index, ClassOutput classOutput) {
         Collection<AnnotationInstance> responseStatusInstances = index
                 .getAnnotations(RESPONSE_STATUS);
 
@@ -288,7 +285,7 @@ public class SpringWebProcessor {
             if (AnnotationTarget.Kind.CLASS != instance.target().kind()) {
                 continue;
             }
-            if (!typesUtil.isAssignable(Exception.class, instance.target().asClass().name())) {
+            if (!isException(instance.target().asClass(), index)) {
                 continue;
             }
 
@@ -299,8 +296,7 @@ public class SpringWebProcessor {
 
     private void generateMappersForExceptionHandlerInControllerAdvice(
             BuildProducer<ResteasyJaxrsProviderBuildItem> providersProducer,
-            BuildProducer<ReflectiveClassBuildItem> reflectiveClassProducer, IndexView index, ClassOutput classOutput,
-            TypesUtil typesUtil) {
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClassProducer, IndexView index, ClassOutput classOutput) {
 
         AnnotationInstance controllerAdviceInstance = getSingleControllerAdviceInstance(index);
         if (controllerAdviceInstance == null) {
@@ -336,15 +332,43 @@ public class SpringWebProcessor {
                         "void methods annotated with @ExceptionHandler must also be annotated with @ResponseStatus");
             }
 
-            // we need to generate one JAX-RS ExceptionMapper per Exception type
+            List<Type> parameters = method.parameters();
+            boolean parametersSupported = true;
+            if (parameters.size() > 1) {
+                parametersSupported = false;
+            } else if (parameters.size() == 1) {
+                parametersSupported = isException(index.getClassByName(parameters.get(0).name()), index);
+            }
+
+            if (!parametersSupported) {
+                throw new IllegalStateException(
+                        "The only supported (optional) parameter type method for methods annotated with @ExceptionHandler is the exception type");
+            }
+
             Type[] handledExceptionTypes = exceptionHandlerInstance.value().asClassArray();
             for (Type handledExceptionType : handledExceptionTypes) {
                 String name = new ControllerAdviceAbstractExceptionMapperGenerator(method, handledExceptionType.name(),
-                        classOutput, typesUtil).generate();
+                        classOutput, index).generate();
                 providersProducer.produce(new ResteasyJaxrsProviderBuildItem(name));
             }
 
         }
+    }
+
+    private boolean isException(ClassInfo classInfo, IndexView index) {
+        if (classInfo == null) {
+            return false;
+        }
+
+        if (OBJECT.equals(classInfo.name())) {
+            return false;
+        }
+
+        if (EXCEPTION.equals(classInfo.superName()) || RUNTIME_EXCEPTION.equals(classInfo.superName())) {
+            return true;
+        }
+
+        return isException(index.getClassByName(classInfo.superName()), index);
     }
 
     private AnnotationInstance getSingleControllerAdviceInstance(IndexView index) {
