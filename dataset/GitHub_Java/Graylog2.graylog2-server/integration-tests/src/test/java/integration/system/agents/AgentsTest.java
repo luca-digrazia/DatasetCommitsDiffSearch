@@ -1,3 +1,19 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package integration.system.agents;
 
 import integration.BaseRestTest;
@@ -18,12 +34,13 @@ import static org.assertj.jodatime.api.Assertions.assertThat;
 @RequiresVersion(">=1.1.0")
 public class AgentsTest extends BaseRestTest {
     private final String resourcePrefix = "/system/agents";
+    private final String resourceEndpoint = resourcePrefix + "/register";
 
     @Test
     public void testRegisterAgent() throws Exception {
         given().when()
                     .body(jsonResourceForMethod())
-                    .post(resourcePrefix + "/register")
+                    .post(resourceEndpoint)
                 .then()
                     .statusCode(202);
     }
@@ -32,7 +49,7 @@ public class AgentsTest extends BaseRestTest {
     public void testRegisterInvalidAgent() throws Exception {
         given().when()
                     .body(jsonResourceForMethod())
-                    .post(resourcePrefix + "/register")
+                    .post(resourceEndpoint)
                 .then()
                     .statusCode(400);
     }
@@ -50,7 +67,7 @@ public class AgentsTest extends BaseRestTest {
     public void testGetAgent() throws Exception {
         given().when()
                     .body(jsonResourceForMethod())
-                    .post(resourcePrefix + "/register")
+                    .post(resourceEndpoint)
                 .then()
                     .statusCode(202);
 
@@ -60,13 +77,13 @@ public class AgentsTest extends BaseRestTest {
                     .statusCode(200)
                     .assertThat()
                         .body("id", is("getAgentTest"))
-                        .body(".", containsAllKeys("id", "node_id", "node_details", "last_seen"));
+                        .body(".", containsAllKeys("id", "node_id", "node_details", "last_seen", "active"))
+                        .body("active", is(true));
     }
 
     @Test
     public void testTouchAgent() throws Exception {
         final String agentId = "testTouchAgentId";
-        final String resourceEndpoint = resourcePrefix + "/register";
 
         given().when()
                 .body(jsonResourceForMethod())
