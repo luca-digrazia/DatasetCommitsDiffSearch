@@ -17,11 +17,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.PlatformConfigurationLoader;
-import com.google.devtools.build.lib.analysis.ShellConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
-import com.google.devtools.build.lib.bazel.rules.BazelRuleClassProvider;
-import com.google.devtools.build.lib.bazel.rules.BazelRuleClassProvider.StrictActionEnvOptions;
+import com.google.devtools.build.lib.bazel.rules.BazelConfiguration;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPythonConfiguration;
 import com.google.devtools.build.lib.packages.util.BazelMockCcSupport;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
@@ -241,6 +239,7 @@ public final class BazelAnalysisMock extends AnalysisMock {
         .add("android_library(name = 'incremental_split_stub_application')")
         .add("sh_binary(name = 'stubify_manifest', srcs = ['empty.sh'])")
         .add("sh_binary(name = 'merge_dexzips', srcs = ['empty.sh'])")
+        .add("sh_binary(name = 'merge_manifests', srcs = ['empty.sh'])")
         .add("sh_binary(name = 'build_split_manifest', srcs = ['empty.sh'])")
         .add("filegroup(name = 'debug_keystore', srcs = ['fake.file'])")
         .add("sh_binary(name = 'shuffle_jars', srcs = ['empty.sh'])")
@@ -282,11 +281,8 @@ public final class BazelAnalysisMock extends AnalysisMock {
   @Override
   public List<ConfigurationFragmentFactory> getDefaultConfigurationFragmentFactories() {
     return ImmutableList.<ConfigurationFragmentFactory>of(
+        new BazelConfiguration.Loader(),
         new CppConfigurationLoader(CpuTransformer.IDENTITY),
-        new ShellConfiguration.Loader(
-            BazelRuleClassProvider.SHELL_EXECUTABLE,
-            ShellConfiguration.Options.class,
-            StrictActionEnvOptions.class),
         new PythonConfigurationLoader(),
         new BazelPythonConfiguration.Loader(),
         new JavaConfigurationLoader(),

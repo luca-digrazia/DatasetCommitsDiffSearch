@@ -142,7 +142,7 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
         Substitution.of("%android_merged_assets%", "jar:file:" + resourcesLocation + "!/assets"));
     substitutions.add(
         Substitution.of(
-            "%android_custom_package%", resourceApk.getPrimaryResources().getJavaPackage()));
+            "%android_custom_package%", resourceApk.getPrimaryResource().getJavaPackage()));
 
     boolean generateBinaryResources =
         androidLocalTestConfiguration.useAndroidLocalTestBinaryResources();
@@ -371,7 +371,7 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     if (resourceApk.getResourceJavaClassJar() == null) {
       new RClassGeneratorActionBuilder(ruleContext)
           .targetAaptVersion(AndroidAaptVersion.chooseTargetAaptVersion(ruleContext))
-          .withPrimary(resourceApk.getPrimaryResources())
+          .withPrimary(resourceApk.getPrimaryResource())
           .withDependencies(resourceApk.getResourceDependencies())
           .setClassJarOut(resourceClassJar)
           .build();
@@ -398,11 +398,11 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     if (AndroidResources.definesAndroidResources(ruleContext.attributes())) {
       AndroidResources.validateRuleContext(ruleContext);
       ApplicationManifest ruleManifest = androidSemantics.getManifestForRule(ruleContext);
-      applicationManifest = ruleManifest.mergeWith(ruleContext, resourceDependencies);
+      applicationManifest = ruleManifest.mergeWith(ruleContext, resourceDependencies, false);
     } else {
       // we don't have a manifest, merge like android_library with a stub manifest
       ApplicationManifest dummyManifest = ApplicationManifest.generatedManifest(ruleContext);
-      applicationManifest = dummyManifest.mergeWith(ruleContext, resourceDependencies);
+      applicationManifest = dummyManifest.mergeWith(ruleContext, resourceDependencies, false);
     }
     return applicationManifest;
   }

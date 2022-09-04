@@ -52,10 +52,8 @@ public class BazelAndroidLocalTestRule implements RuleDefinition {
           "java_library",
           "java_lite_proto_library");
 
-  static final ImplicitOutputsFunction ANDROID_ROBOLECTRIC_IMPLICIT_OUTPUTS = fromFunctions(
-      JavaSemantics.JAVA_BINARY_CLASS_JAR,
-      JavaSemantics.JAVA_BINARY_SOURCE_JAR,
-      JavaSemantics.JAVA_BINARY_DEPLOY_JAR);
+  static final ImplicitOutputsFunction ANDROID_ROBOLECTRIC_IMPLICIT_OUTPUTS =
+      fromFunctions(JavaSemantics.JAVA_BINARY_CLASS_JAR, JavaSemantics.JAVA_BINARY_SOURCE_JAR);
 
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
@@ -171,7 +169,5 @@ android_library(
   <li><code><var>name</var>.jar</code>: A Java archive of the test.</li>
   <li><code><var>name</var>-src.jar</code>: An archive containing the sources
     ("source jar").</li>
-  <li><code><var>name</var>_deploy.jar</code>: A Java deploy archive suitable
-    for deployment (only built if explicitly requested).</li>
 </ul>
 <!-- #END_BLAZE_RULE.IMPLICIT_OUTPUTS --> */
