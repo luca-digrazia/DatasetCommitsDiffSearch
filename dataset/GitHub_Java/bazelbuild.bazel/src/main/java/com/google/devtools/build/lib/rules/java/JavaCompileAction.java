@@ -657,6 +657,8 @@ public final class JavaCompileAction extends SpawnAction {
       checkNotNull(classDirectory, "classDirectory should not be null");
       checkNotNull(tempDirectory, "tempDirectory should not be null");
 
+      final String pathSeparator = configuration.getHostPathSeparator();
+
       CustomCommandLine.Builder result = CustomCommandLine.builder();
 
       result.add("--classdir").addPath(classDirectory);
@@ -680,16 +682,17 @@ public final class JavaCompileAction extends SpawnAction {
         result.addExecPath("--output_deps_proto", outputDepsProto);
       }
       if (!extdirInputs.isEmpty()) {
-        result.addExecPaths("--extclasspath", extdirInputs);
+        result.addJoinExecPaths("--extdir", pathSeparator, extdirInputs);
       }
       if (!bootclasspathEntries.isEmpty()) {
-        result.addExecPaths("--bootclasspath", bootclasspathEntries);
+        result.addJoinExecPaths(
+            "--bootclasspath", pathSeparator, bootclasspathEntries);
       }
       if (!sourcePathEntries.isEmpty()) {
-        result.addExecPaths("--sourcepath", sourcePathEntries);
+        result.addJoinExecPaths("--sourcepath", pathSeparator, sourcePathEntries);
       }
       if (!processorPath.isEmpty()) {
-        result.addExecPaths("--processorpath", processorPath);
+        result.addJoinExecPaths("--processorpath", pathSeparator, processorPath);
       }
       if (!processorNames.isEmpty()) {
         result.add("--processors", processorNames);
@@ -726,7 +729,8 @@ public final class JavaCompileAction extends SpawnAction {
       }
 
       if (!classpathEntries.isEmpty()) {
-        result.addExecPaths("--classpath", classpathEntries);
+        result.addJoinExecPaths(
+            "--classpath", pathSeparator, classpathEntries);
       }
 
       // strict_java_deps controls whether the mapping from jars to targets is
