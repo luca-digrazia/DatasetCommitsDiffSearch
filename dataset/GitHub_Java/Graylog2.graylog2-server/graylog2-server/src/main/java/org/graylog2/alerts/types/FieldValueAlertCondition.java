@@ -19,7 +19,6 @@
  */
 package org.graylog2.alerts.types;
 
-import org.elasticsearch.search.SearchHits;
 import org.graylog2.Core;
 import org.graylog2.alerts.AlertCondition;
 import org.graylog2.indexer.IndexHelper;
@@ -41,7 +40,6 @@ import java.util.Map;
 public class FieldValueAlertCondition extends AlertCondition {
 
     private static final Logger LOG = LoggerFactory.getLogger(FieldValueAlertCondition.class);
-    private SearchHits searchHits = null;
 
     public enum CheckType {
         MEAN, MIN, MAX, SUM, STDDEV
@@ -83,11 +81,9 @@ public class FieldValueAlertCondition extends AlertCondition {
 
     @Override
     protected CheckResult runCheck() {
-        this.searchHits = null;
         try {
             String filter = "streams:"+stream.getId();
             FieldStatsResult fieldStatsResult = core.getIndexer().searches().fieldStats(field, "*", filter, new RelativeRange(time * 60));
-            this.searchHits = fieldStatsResult.getSearchHits();
 
             if (fieldStatsResult.getCount() == 0) {
                 LOG.debug("Alert check <{}> did not match any messages. Returning not triggered.", type);
@@ -163,8 +159,4 @@ public class FieldValueAlertCondition extends AlertCondition {
         }
     }
 
-    @Override
-    public SearchHits getSearchHits() {
-        return this.searchHits;
-    }
 }
