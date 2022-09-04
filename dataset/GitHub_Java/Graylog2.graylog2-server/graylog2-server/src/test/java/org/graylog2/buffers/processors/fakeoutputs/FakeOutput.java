@@ -48,9 +48,9 @@ public class FakeOutput implements MessageOutput {
     }
 
     @Override
-    public void write(Message message) throws Exception {
+    public void write(List<Message> messages, OutputStreamConfiguration streamConfiguration) throws Exception {
         this.callCount++;
-        this.writeCount++;
+        this.writeCount += messages.size();
     }
 
     @Override
@@ -67,17 +67,7 @@ public class FakeOutput implements MessageOutput {
     public String getName() {
         return "FAKE OUTPUT";
     }
-
-    @Override
-    public String getHumanName() {
-        return "A fake only output";
-    }
-
-    @Override
-    public String getLinkToDocs() {
-        return null;
-    }
-
+    
     public int getCallCount() {
         return callCount;
     }

@@ -32,10 +32,9 @@ import java.util.Map;
 public interface MessageOutput {
 
     public void initialize(Configuration config) throws MessageOutputConfigurationException;
-    public void write(Message message) throws Exception;
+    public void write(List<Message> messages, OutputStreamConfiguration streamConfiguration) throws Exception;
     public ConfigurationRequest getRequestedConfiguration();
     public Map<String, String> getRequestedStreamConfiguration();
     public String getName();
-    public String getHumanName();
-    public String getLinkToDocs();
+    
 }

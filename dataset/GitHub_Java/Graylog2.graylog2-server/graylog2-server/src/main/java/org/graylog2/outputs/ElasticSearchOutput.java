@@ -28,7 +28,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
 import com.google.inject.Inject;
 import org.graylog2.indexer.Indexer;
-import org.graylog2.indexer.messages.Messages;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
@@ -66,16 +65,16 @@ public class ElasticSearchOutput implements MessageOutput {
     }
 
     @Override
-    public void write(Message message) throws Exception {
+    public void write(List<Message> messages, OutputStreamConfiguration streamConfig) throws Exception {
+        LOG.debug("Writing <{}> messages.", messages.size());
         if (LOG.isTraceEnabled()) {
-            LOG.trace("Writing message id to [{}]: <{}>", getName(), message.getId());
+            final List<String> sortedIds = Ordering.natural().sortedCopy(Lists.transform(messages, Message.ID_FUNCTION));
+            LOG.trace("Writing message ids to [{}]: <{}>", getName(), Joiner.on(", ").join(sortedIds));
         }
 
         writes.mark();
 
         Timer.Context tcx = processTime.time();
-        List<Message> messages = Lists.newArrayList();
-        messages.add(message);
         indexer.bulkIndex(messages);
         tcx.stop();
     }
@@ -102,13 +101,4 @@ public class ElasticSearchOutput implements MessageOutput {
         return Maps.newHashMap();
     }
 
-    @Override
-    public String getHumanName() {
-        return "ElasticSearch Output";
-    }
-
-    @Override
-    public String getLinkToDocs() {
-        return null;
-    }
 }

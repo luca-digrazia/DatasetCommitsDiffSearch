@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 TORCH GmbH
+ * Copyright 2013-2014 TORCH GmbH
  *
  * This file is part of Graylog2.
  *
@@ -13,76 +13,56 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
+ *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.outputs;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-import org.graylog2.database.NotFoundException;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.outputs.MessageOutput;
-import org.graylog2.plugin.streams.Output;
-import org.graylog2.streams.OutputService;
+import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.List;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@Singleton
 public class OutputRegistry {
 
-    private final Logger LOG = LoggerFactory.getLogger(this.getClass());
+    private static final Logger LOG = LoggerFactory.getLogger(OutputRegistry.class);
 
-    private final Map<String, MessageOutput> runningMessageOutputs;
-    private final MessageOutput defaultMessageOutput;
-    private final OutputService outputService;
-    private final MessageOutputFactory messageOutputFactory;
+    private List<MessageOutput> outputs;
 
-    @Inject
-    public OutputRegistry(@DefaultMessageOutput MessageOutput defaultMessageOutput,
-                          OutputService outputService,
-                          MessageOutputFactory messageOutputFactory) {
-        this.defaultMessageOutput = defaultMessageOutput;
-        this.outputService = outputService;
-        this.messageOutputFactory = messageOutputFactory;
-        this.runningMessageOutputs = new HashMap<>();
+    public OutputRegistry() {
+        outputs = Lists.newArrayList();
     }
 
-    public MessageOutput getOutputForId(String id) {
-        if (!getRunningMessageOutputs().containsKey(id))
+    public void register(MessageOutput output) {
+        this.outputs.add(output);
+    }
+
+    public void initialize() {
+        for(MessageOutput o : outputs) {
             try {
-                final Output output = outputService.load(id);
-                register(id, launchOutput(output));
-            } catch (NotFoundException e) {
-                return null;
+                o.initialize(new Configuration(new HashMap<String, Object>()));
+                LOG.info("Initialized output <{}>.", o.getClass().getCanonicalName());
+            } catch (MessageOutputConfigurationException e) {
+                LOG.error("Could not initialize output <{}>", o.getClass().getCanonicalName(), e);
             }
-        return getRunningMessageOutputs().get(id);
+        }
     }
 
-    protected void register(String id, MessageOutput output) {
-        this.runningMessageOutputs.put(id, output);
+    public List<MessageOutput> get() {
+        return new ImmutableList.Builder<MessageOutput>().addAll(outputs).build();
     }
 
-    protected MessageOutput launchOutput(Output output) {
-        return messageOutputFactory.fromStreamOutput(output);
-    }
-
-    protected Map<String, MessageOutput> getRunningMessageOutputs() {
-        return ImmutableMap.copyOf(runningMessageOutputs);
-    }
-
-    public Set<MessageOutput> getMessageOutputs() {
-        Set<MessageOutput> runningOutputs = new HashSet<>(this.runningMessageOutputs.values());
-        runningOutputs.add(defaultMessageOutput);
-        return ImmutableSet.copyOf(this.runningMessageOutputs.values());
+    public int count() {
+        return outputs.size();
     }
 }
