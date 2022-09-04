@@ -14,24 +14,40 @@
 
 package com.google.devtools.build.lib.skyframe.serialization;
 
-import com.google.common.collect.ImmutableList;
+import com.google.protobuf.CodedInputStream;
+import com.google.protobuf.CodedOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.List;
 
-class ArrayListCodec<T> extends NullableListCodec<T> {
-  @SuppressWarnings("unchecked")
+@SuppressWarnings("rawtypes")
+class ArrayListCodec implements ObjectCodec<ArrayList> {
+
   @Override
-  public Class<List<T>> getEncodedClass() {
-    return (Class<List<T>>) (Class<?>) ArrayList.class;
+  public Class<ArrayList> getEncodedClass() {
+    return ArrayList.class;
   }
 
   @Override
-  public List<Class<? extends List<T>>> additionalEncodedClasses() {
-    return ImmutableList.of();
+  public void serialize(SerializationContext context, ArrayList list, CodedOutputStream codedOut)
+      throws IOException, SerializationException {
+    codedOut.writeInt32NoTag(list.size());
+    for (Object obj : list) {
+      context.serialize(obj, codedOut);
+    }
   }
 
   @Override
-  protected List<T> maybeTransform(ArrayList<T> startingList) {
-    return startingList;
+  public ArrayList deserialize(DeserializationContext context, CodedInputStream codedIn)
+      throws SerializationException, IOException {
+    int length = codedIn.readInt32();
+    if (length < 0) {
+      throw new SerializationException("Expected non-negative length: " + length);
+    }
+
+    ArrayList<Object> list = new ArrayList<>(length);
+    for (int i = 0; i < length; ++i) {
+      list.add(context.deserialize(codedIn));
+    }
+    return list;
   }
 }

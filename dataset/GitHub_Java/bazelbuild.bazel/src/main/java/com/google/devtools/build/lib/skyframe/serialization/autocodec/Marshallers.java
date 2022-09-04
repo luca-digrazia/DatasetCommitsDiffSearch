@@ -571,7 +571,7 @@ class Marshallers {
 
   /** Returns the TypeMirror corresponding to {@code clazz}. */
   private TypeMirror getType(Class<?> clazz) {
-    return AutoCodecUtil.getType(clazz, env);
+    return env.getElementUtils().getTypeElement((clazz.getCanonicalName())).asType();
   }
 
   static boolean isVariableOrWildcardType(TypeMirror type) {
