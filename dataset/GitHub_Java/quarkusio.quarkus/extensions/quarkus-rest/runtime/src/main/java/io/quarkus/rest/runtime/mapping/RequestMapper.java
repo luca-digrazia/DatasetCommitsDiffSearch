@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 
+import io.vertx.core.net.impl.URIDecoder;
+
 public class RequestMapper<T> {
 
     /**
@@ -51,7 +53,9 @@ public class RequestMapper<T> {
             return null;
         }
 
-        for (RequestPath<T> potentialMatch : initialMatch.getValue()) {
+        List<RequestPath<T>> value = initialMatch.getValue();
+        for (int index = 0; index < value.size(); index++) {
+            RequestPath<T> potentialMatch = value.get(index);
             String[] params = new String[maxParams];
             int paramCount = 0;
             boolean matched = true;
@@ -67,7 +71,7 @@ public class RequestMapper<T> {
                     }
                     matchPos = matcher.end();
                     for (String name : segment.names) {
-                        params[paramCount++] = matcher.group(name);
+                        params[paramCount++] = URIDecoder.decodeURIComponent(matcher.group(name), false);
                     }
                 } else if (segment.type == URITemplate.Type.LITERAL) {
                     //make sure the literal text is the same
@@ -90,19 +94,23 @@ public class RequestMapper<T> {
                     while (matchPos < pathLength && path.charAt(matchPos) != '/') {
                         matchPos++;
                     }
-                    params[paramCount++] = path.substring(start, matchPos);
+                    params[paramCount++] = URIDecoder.decodeURIComponent(path.substring(start, matchPos), false);
                 }
             }
             if (paramCount < params.length) {
                 params[paramCount] = null;
             }
             boolean fullMatch = matchPos == pathLength;
+            if (!prefixAllowed && !fullMatch) {
+                //according to the spec every template ends with (/.*)?
+                prefixAllowed = path.charAt(matchPos) == '/' && matchPos == pathLength - 1;
+            }
             if (matched && (fullMatch || prefixAllowed)) {
                 String remaining;
                 if (fullMatch) {
                     remaining = "";
                 } else {
-                    if (initialMatch.getMatched().length() == 1) {
+                    if (matchPos == 1) {
                         remaining = path;
                     } else {
                         remaining = path.substring(matchPos);
