@@ -45,6 +45,7 @@ import org.jboss.jandex.Index;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.resteasy.plugins.server.servlet.HttpServlet30Dispatcher;
+import org.jboss.resteasy.plugins.server.servlet.ResteasyBootstrapClasses;
 import org.jboss.resteasy.plugins.server.servlet.ResteasyContextParameters;
 import org.jboss.shamrock.deployment.ArchiveContext;
 import org.jboss.shamrock.deployment.ProcessorContext;
@@ -67,10 +68,11 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
 
     private static final DotName APPLICATION_PATH = DotName.createSimple("javax.ws.rs.ApplicationPath");
     private static final DotName PATH = DotName.createSimple("javax.ws.rs.Path");
-    private static final DotName XML_ROOT = DotName.createSimple("javax.xml.bind.annotation.XmlRootElement");
 
-    private static final DotName[] METHOD_ANNOTATIONS = {
-            DotName.createSimple("javax.ws.rs.GET"),
+    public static final Set<String> BOOT_CLASSES = new HashSet<String>();
+    public static final Set<String> BUILTIN_PROVIDERS;
+
+    private static final DotName[] METHOD_ANNOTATIONS = {DotName.createSimple("javax.ws.rs.GET"),
             DotName.createSimple("javax.ws.rs.HEAD"),
             DotName.createSimple("javax.ws.rs.DELETE"),
             DotName.createSimple("javax.ws.rs.OPTIONS"),
@@ -79,24 +81,64 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
             DotName.createSimple("javax.ws.rs.PUT"),
     };
 
+    static {
+        Collections.addAll(BOOT_CLASSES, ResteasyBootstrapClasses.BOOTSTRAP_CLASSES);
+
+        final Set<String> providers = new HashSet<>();
+        try {
+            Enumeration<URL> en;
+            if (System.getSecurityManager() == null) {
+                en = Thread.currentThread().getContextClassLoader().getResources("META-INF/services/" + Providers.class.getName());
+            } else {
+                en = AccessController.doPrivileged(new PrivilegedExceptionAction<Enumeration<URL>>() {
+                    @Override
+                    public Enumeration<URL> run() throws IOException {
+                        return Thread.currentThread().getContextClassLoader().getResources("META-INF/services/" + Providers.class.getName());
+                    }
+                });
+            }
+
+            while (en.hasMoreElements()) {
+                final URL url = en.nextElement();
+                InputStream is;
+                if (System.getSecurityManager() == null) {
+                    is = url.openStream();
+                } else {
+                    is = AccessController.doPrivileged(new PrivilegedExceptionAction<InputStream>() {
+                        @Override
+                        public InputStream run() throws IOException {
+                            return url.openStream();
+                        }
+                    });
+                }
+
+                try {
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        line = line.trim();
+                        if (line.equals("")) continue;
+                        providers.add(line);
+                    }
+                } finally {
+                    is.close();
+                }
+            }
+            BUILTIN_PROVIDERS = Collections.unmodifiableSet(providers);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+    }
 
     @Override
     public void process(ArchiveContext archiveContext, ProcessorContext processorContext) throws Exception {
-        //this is pretty yuck, and does not really belong here, but it is needed to get the json-p
-        //provider to work
-        processorContext.addReflectiveClass("org.glassfish.json.JsonProviderImpl");
-        processorContext.addReflectiveClass("com.fasterxml.jackson.module.jaxb.JaxbAnnotationIntrospector");
 
         Index index = archiveContext.getIndex();
         List<AnnotationInstance> app = index.getAnnotations(APPLICATION_PATH);
         if (app.isEmpty()) {
             return;
         }
-        //List<AnnotationInstance> xmlRoot = index.getAnnotations(XML_ROOT);
-        //if(!xmlRoot.isEmpty()) {
-        processorContext.addReflectiveClass("com.sun.xml.bind.v2.ContextFactory");
-        processorContext.addReflectiveClass("com.sun.xml.internal.bind.v2.ContextFactory");
-        //}
         AnnotationInstance appPath = app.get(0);
         String path = appPath.value().asString();
         try (BytecodeRecorder recorder = processorContext.addStaticInitTask(RuntimePriority.JAXRS_DEPLOYMENT)) {
@@ -126,7 +168,7 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
                 undertow.addServletContextParameter(null, ResteasyContextParameters.RESTEASY_SCANNED_RESOURCES, sb.toString());
                 undertow.addServletContextParameter(null, "resteasy.servlet.mapping.prefix", path);
                 processorContext.addReflectiveClass(HttpServlet30Dispatcher.class.getName());
-                for (String i : loadProviders()) {
+                for (String i : BUILTIN_PROVIDERS) {
                     processorContext.addReflectiveClass(i);
                 }
             }
@@ -136,10 +178,7 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
             for (AnnotationInstance instance : instances) {
                 MethodInfo method = instance.target().asMethod();
                 if (method.returnType().kind() == Type.Kind.CLASS) {
-                    String className = method.returnType().asClassType().name().toString();
-                    if (!className.equals(String.class.getName())) {
-                        processorContext.addReflectiveClass(className);
-                    }
+                    processorContext.addReflectiveClass(method.returnType().asClassType().name().toString());
                 }
             }
         }
@@ -151,43 +190,4 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
         return RuntimePriority.JAXRS_DEPLOYMENT;
     }
 
-    private Set<String> loadProviders() {
-
-        final Set<String> providers = new HashSet<>();
-        try {
-            Enumeration<URL> en;
-            en = Thread.currentThread().getContextClassLoader().getResources("META-INF/services/" + Providers.class.getName());
-
-            while (en.hasMoreElements()) {
-                final URL url = en.nextElement();
-                InputStream is;
-                if (System.getSecurityManager() == null) {
-                    is = url.openStream();
-                } else {
-                    is = AccessController.doPrivileged(new PrivilegedExceptionAction<InputStream>() {
-                        @Override
-                        public InputStream run() throws IOException {
-                            return url.openStream();
-                        }
-                    });
-                }
-
-                try {
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        line = line.trim();
-                        if (line.equals("")) continue;
-                        providers.add(line);
-                    }
-                } finally {
-                    is.close();
-                }
-            }
-            return Collections.unmodifiableSet(providers);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
-    }
 }

@@ -1,7 +1,6 @@
 package org.jboss.shamrock.deployment;
 
 import java.io.IOException;
-import java.util.List;
 
 import org.jboss.shamrock.deployment.codegen.BytecodeRecorder;
 
@@ -15,7 +14,7 @@ public interface ProcessorContext {
     /**
      * Adds a new static init task with the given priority. This task will be from a static init
      * block in priority order
-     * <p>
+     *
      * These tasks are always run before deployment tasks
      *
      * @param priority The priority
@@ -33,12 +32,13 @@ public interface ProcessorContext {
 
     /**
      * This method is used to indicate that a given class requires reflection.
-     * <p>
+     *
      * It is used in the graal output to allow the class to be reflected when running on substrate VM
      *
      * @param className The class name
      */
-    void addReflectiveClass(String ... className);
+    void addReflectiveClass(String className);
 
     void addGeneratedClass(String name, byte[] classData) throws IOException;
+
 }

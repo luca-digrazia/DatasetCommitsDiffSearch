@@ -46,7 +46,6 @@ import org.jboss.shamrock.runtime.StartupContext;
 import org.jboss.shamrock.runtime.StartupTask;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -57,25 +56,16 @@ import org.objectweb.asm.Type;
 public class Runner {
 
     private static final AtomicInteger COUNT = new AtomicInteger();
-    public static final String MAIN_CLASS_INTERNAL = "org/jboss/shamrock/runner/GeneratedMain";
-    public static final String MAIN_CLASS = MAIN_CLASS_INTERNAL.replace("/", ".");
+    public static final String MAIN_CLASS = "org/jboss/shamrock/runner/Main";
     private static final String GRAAL_AUTOFEATURE = "org/jboss/shamrock/runner/AutoFeature";
     private static final String STATIC_INIT_TIME = "STATIC_INIT_TIME";
     private static final String STARTUP_CONTEXT = "STARTUP_CONTEXT";
 
     private final List<ResourceProcessor> processors;
     private final ClassOutput output;
-    private final DeploymentProcessorInjection injection;
-    private final ClassLoader classLoader;
-    private final boolean useStaticInit;
 
-    public Runner(ClassOutput classOutput, boolean useStaticInit) {
-        this(classOutput, Runner.class.getClassLoader(), useStaticInit);
-    }
-
-    public Runner(ClassOutput classOutput, ClassLoader cl, boolean useStaticInit) {
-        this.useStaticInit = useStaticInit;
-        Iterator<ResourceProcessor> loader = ServiceLoader.load(ResourceProcessor.class, cl).iterator();
+    public Runner(ClassOutput classOutput) {
+        Iterator<ResourceProcessor> loader = ServiceLoader.load(ResourceProcessor.class).iterator();
         List<ResourceProcessor> processors = new ArrayList<>();
         while (loader.hasNext()) {
             processors.add(loader.next());
@@ -83,58 +73,49 @@ public class Runner {
         processors.sort(Comparator.comparingInt(ResourceProcessor::getPriority));
         this.processors = Collections.unmodifiableList(processors);
         this.output = classOutput;
-        this.injection = new DeploymentProcessorInjection(cl);
-        this.classLoader = cl;
     }
 
 
     public void run(Path root) throws IOException {
-        ClassLoader old = Thread.currentThread().getContextClassLoader();
-        Thread.currentThread().setContextClassLoader(classLoader);
-        try {
-            Indexer indexer = new Indexer();
-            Files.walkFileTree(root, new FileVisitor<Path>() {
-                @Override
-                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                    if (file.toString().endsWith(".class")) {
-                        try (InputStream stream = Files.newInputStream(file)) {
-                            indexer.index(stream);
-                        }
-                    }
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                    return FileVisitResult.CONTINUE;
-                }
-            });
-            Index index = indexer.complete();
-            ArchiveContext context = new ArchiveContextImpl(index, root);
-            ProcessorContextImpl processorContext = new ProcessorContextImpl();
-            for (ResourceProcessor processor : processors) {
-                try {
-                    injection.injectClass(processor);
-                    processor.process(context, processorContext);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
+        Indexer indexer = new Indexer();
+        Files.walkFileTree(root, new FileVisitor<Path>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                return FileVisitResult.CONTINUE;
             }
-            processorContext.writeMainClass();
-            processorContext.writeAutoFeature();
-        } finally {
-            Thread.currentThread().setContextClassLoader(old);
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                if (file.toString().endsWith(".class")) {
+                    try (InputStream stream = Files.newInputStream(file)) {
+                        indexer.index(stream);
+                    }
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        Index index = indexer.complete();
+        ArchiveContext context = new ArchiveContextImpl(index, root);
+        ProcessorContextImpl processorContext = new ProcessorContextImpl();
+        for (ResourceProcessor processor : processors) {
+            try {
+                processor.process(context, processorContext);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
+        processorContext.writeMainClass();
+        processorContext.writeAutoFeature();
     }
 
 
@@ -171,14 +152,14 @@ public class Runner {
         public BytecodeRecorder addStaticInitTask(int priority) {
             String className = getClass().getName() + "$$Proxy" + COUNT.incrementAndGet();
             staticInitTasks.add(new DeploymentTaskHolder(className, priority));
-            return new BytecodeRecorderImpl(classLoader, className, StartupTask.class, output);
+            return new BytecodeRecorderImpl(className, StartupTask.class, output);
         }
 
         @Override
         public BytecodeRecorder addDeploymentTask(int priority) {
             String className = getClass().getName() + "$$Proxy" + COUNT.incrementAndGet();
             tasks.add(new DeploymentTaskHolder(className, priority));
-            return new BytecodeRecorderImpl(classLoader, className, StartupTask.class, output);
+            return new BytecodeRecorderImpl(className, StartupTask.class, output);
         }
 
         @Override
@@ -194,16 +175,10 @@ public class Runner {
         void writeMainClass() throws IOException {
 
             Collections.sort(tasks);
-            if(!useStaticInit) {
-                staticInitTasks.sort(Comparator.reverseOrder());
-                tasks.addAll(0, staticInitTasks);
-                staticInitTasks.clear();
-            } else {
-                Collections.sort(staticInitTasks);
-            }
+            Collections.sort(staticInitTasks);
 
             ClassWriter file = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-            file.visit(Opcodes.V1_8, ACC_PUBLIC | ACC_SUPER, MAIN_CLASS_INTERNAL, null, Type.getInternalName(Object.class), null);
+            file.visit(Opcodes.V1_8, ACC_PUBLIC | ACC_SUPER, MAIN_CLASS, null, Type.getInternalName(Object.class), null);
 
             // constructor
             MethodVisitor mv = file.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
@@ -218,12 +193,12 @@ public class Runner {
 
             mv = file.visitMethod(ACC_PUBLIC | ACC_STATIC, "<clinit>", "()V", null, null);
             mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(System.class), "currentTimeMillis", "()J", false);
-            mv.visitFieldInsn(PUTSTATIC, MAIN_CLASS_INTERNAL, STATIC_INIT_TIME, "J");
+            mv.visitFieldInsn(PUTSTATIC, MAIN_CLASS, STATIC_INIT_TIME, "J");
             mv.visitTypeInsn(NEW, Type.getInternalName(StartupContext.class));
             mv.visitInsn(DUP);
             mv.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(StartupContext.class), "<init>", "()V", false);
             mv.visitInsn(DUP);
-            mv.visitFieldInsn(PUTSTATIC, MAIN_CLASS_INTERNAL, STARTUP_CONTEXT, "L" + Type.getInternalName(StartupContext.class) + ";");
+            mv.visitFieldInsn(PUTSTATIC, MAIN_CLASS, STARTUP_CONTEXT, "L" + Type.getInternalName(StartupContext.class) + ";");
             for (DeploymentTaskHolder holder : staticInitTasks) {
                 mv.visitInsn(DUP);
                 String className = holder.className.replace(".", "/");
@@ -241,7 +216,7 @@ public class Runner {
             mv = file.visitMethod(ACC_PUBLIC | ACC_STATIC, "main", "([Ljava/lang/String;)V", null, null);
             mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(System.class), "currentTimeMillis", "()J", false);
             mv.visitVarInsn(LSTORE, 2);
-            mv.visitFieldInsn(GETSTATIC, MAIN_CLASS_INTERNAL, STARTUP_CONTEXT, "L" + Type.getInternalName(StartupContext.class) + ";");
+            mv.visitFieldInsn(GETSTATIC, MAIN_CLASS, STARTUP_CONTEXT, "L" + Type.getInternalName(StartupContext.class) + ";");
             for (DeploymentTaskHolder holder : tasks) {
                 mv.visitInsn(DUP);
                 String className = holder.className.replace(".", "/");
@@ -268,7 +243,7 @@ public class Runner {
             //time since static init started
             mv.visitFieldInsn(GETSTATIC, Type.getInternalName(System.class), "out", "L" + Type.getInternalName(PrintStream.class) + ";");
             mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(System.class), "currentTimeMillis", "()J", false);
-            mv.visitFieldInsn(GETSTATIC, MAIN_CLASS_INTERNAL, STATIC_INIT_TIME, "J");
+            mv.visitFieldInsn(GETSTATIC, MAIN_CLASS, STATIC_INIT_TIME, "J");
             mv.visitInsn(LSUB);
             mv.visitFieldInsn(GETSTATIC, Type.getInternalName(System.class), "out", "L" + Type.getInternalName(PrintStream.class) + ";");
             mv.visitLdcInsn("Time since static init started ");
@@ -283,7 +258,7 @@ public class Runner {
             mv.visitEnd();
             file.visitEnd();
 
-            output.writeClass(MAIN_CLASS_INTERNAL, file.toByteArray());
+            output.writeClass(MAIN_CLASS, file.toByteArray());
         }
 
         void writeAutoFeature() throws IOException {
@@ -305,39 +280,23 @@ public class Runner {
 
 
             for (String holder : reflectiveClasses) {
-                Label lTryBlockStart = new Label();
-                Label lTryBlockEnd = new Label();
-                Label lCatchBlockStart = new Label();
-                Label lCatchBlockEnd = new Label();
-
-                // set up try-catch block for RuntimeException
-                mv.visitTryCatchBlock(lTryBlockStart, lTryBlockEnd,
-                        lCatchBlockStart, "java/lang/Exception");
-
-                // started the try block
-                mv.visitLabel(lTryBlockStart);
                 mv.visitLdcInsn(1);
                 mv.visitTypeInsn(ANEWARRAY, "java/lang/Class");
                 mv.visitInsn(DUP);
                 mv.visitLdcInsn(0);
                 String internalName = holder.replace(".", "/");
-                mv.visitLdcInsn(holder);
-                mv.visitMethodInsn(INVOKESTATIC, "java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;", false);
+                mv.visitLdcInsn(Type.getObjectType(internalName));
                 mv.visitInsn(AASTORE);
                 mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/Class;)V", false);
 
                 //now load everything else
-                mv.visitLdcInsn(holder);
-                mv.visitMethodInsn(INVOKESTATIC, "java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;", false);
+                mv.visitLdcInsn(Type.getObjectType(internalName));
                 mv.visitInsn(DUP);
                 mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getDeclaredConstructors", "()[Ljava/lang/reflect/Constructor;", false);
                 mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/reflect/Executable;)V", false);
                 //now load everything else
                 mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getMethods", "()[Ljava/lang/reflect/Method;", false);
                 mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/reflect/Executable;)V", false);
-                mv.visitLabel(lTryBlockEnd);
-                mv.visitLabel(lCatchBlockStart);
-                mv.visitLabel(lCatchBlockEnd);
             }
             mv.visitInsn(RETURN);
             mv.visitMaxs(0, 2);

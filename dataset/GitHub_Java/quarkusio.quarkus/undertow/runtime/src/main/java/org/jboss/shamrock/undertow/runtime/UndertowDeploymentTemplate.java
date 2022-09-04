@@ -12,7 +12,6 @@ import org.jboss.shamrock.runtime.StartupContext;
 
 import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
-import io.undertow.server.handlers.resource.ClassPathResourceManager;
 import io.undertow.servlet.Servlets;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
@@ -33,12 +32,13 @@ public class UndertowDeploymentTemplate {
         d.setDeploymentName(name);
         d.setContextPath("/");
         ClassLoader cl = UndertowDeploymentTemplate.class.getClassLoader();
-        if(cl == null) {
-            cl = new ClassLoader() {};
+        if (cl != null) {
+            d.setClassLoader(cl);
+        } else {
+            //remove once graal release with CL support is availible
+            d.setClassLoader(new ClassLoader() {
+            });
         }
-        d.setClassLoader(cl);
-        //should be fixed in Graal RC5
-        //d.setResourceManager(new ClassPathResourceManager(d.getClassLoader(), "META-INF/resources"));
         return d;
     }
 
@@ -62,9 +62,9 @@ public class UndertowDeploymentTemplate {
         info.addInitParameter(name, value);
     }
 
-    public void startUndertow(StartupContext startupContext, @ContextObject("servletHandler") HttpHandler handler, String port) throws ServletException {
+    public void deploy(StartupContext startupContext, @ContextObject("servletHandler") HttpHandler handler) throws ServletException {
         Undertow val = Undertow.builder()
-                .addHttpListener(Integer.parseInt(port), "localhost")
+                .addHttpListener(8080, "localhost")
                 .setHandler(handler)
                 .build();
         val.start();
