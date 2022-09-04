@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.analysis.test;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.analysis.OptionsDiffPredicate;
@@ -25,7 +26,6 @@ import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
-import com.google.devtools.build.lib.analysis.config.RequiresOptions;
 import com.google.devtools.build.lib.analysis.test.TestShardingStrategy.ShardingStrategyConverter;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.TestTimeout;
@@ -34,7 +34,6 @@ import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDefinition;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
-import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.TriState;
@@ -44,7 +43,6 @@ import java.util.List;
 import java.util.Map;
 
 /** Test-related options. */
-@RequiresOptions(options = {TestConfiguration.TestOptions.class})
 public class TestConfiguration extends Fragment {
   public static final OptionsDiffPredicate SHOULD_INVALIDATE_FOR_OPTION_DIFF =
       (options, changedOption, oldValue, newValue) -> {
@@ -261,28 +259,6 @@ public class TestConfiguration extends Fragment {
                 + "coverage run.")
     public boolean fetchAllCoverageOutputs;
 
-    @Option(
-        name = "incompatible_exclusive_test_sandboxed",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        metadataTags = {
-            OptionMetadataTag.INCOMPATIBLE_CHANGE,
-            OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-        },
-        help =
-            "If true, exclusive tests will run with sandboxed strategy. Add 'local' tag to force "
-                + "an exclusive test run locally")
-    public boolean incompatibleExclusiveTestSandboxed;
-
-    @Option(
-        name = "experimental_split_coverage_postprocessing",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
-        effectTags = {OptionEffectTag.EXECUTION},
-        help = "If true, then Bazel will run coverage postprocessing for test in a new spawn.")
-    public boolean splitCoveragePostProcessing;
-
     @Override
     public FragmentOptions getHost() {
       TestOptions hostOptions = (TestOptions) getDefault();
@@ -301,24 +277,27 @@ public class TestConfiguration extends Fragment {
     @Override
     public Fragment create(BuildOptions buildOptions)
         throws InvalidConfigurationException {
-      // TODO(gregce): Have TestConfiguration set itself to a non-functional state if this is true.
       if (!buildOptions.contains(TestOptions.class)) {
         return null;
       }
-      return new TestConfiguration(buildOptions);
+      return new TestConfiguration(buildOptions.get(TestOptions.class));
     }
 
     @Override
     public Class<? extends Fragment> creates() {
       return TestConfiguration.class;
     }
+
+    @Override
+    public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
+      return ImmutableSet.of(TestOptions.class);
+    }
   }
 
   private final TestOptions options;
   private final ImmutableMap<TestTimeout, Duration> testTimeout;
 
-  private TestConfiguration(BuildOptions buildOptions) {
-    TestOptions options = buildOptions.get(TestOptions.class);
+  private TestConfiguration(TestOptions options) {
     this.options = options;
     this.testTimeout = ImmutableMap.copyOf(options.testTimeout);
   }
@@ -348,12 +327,6 @@ public class TestConfiguration extends Fragment {
     return options.testShardingStrategy;
   }
 
-  /**
-   * Whether the persistent test runner is enabled. Note that not all test rules support this
-   * feature, in which case Bazel should fall back to the normal test runner. Therefore, this method
-   * must only be called by test rules, and never for test actions. For actions, use {@code
-   * TestTargetProperties.isPersistentTestRunner} instead.
-   */
   public boolean isPersistentTestRunner() {
     return options.persistentTestRunner;
   }
@@ -389,14 +362,6 @@ public class TestConfiguration extends Fragment {
 
   public boolean fetchAllCoverageOutputs() {
     return options.fetchAllCoverageOutputs;
-  }
-
-  public boolean incompatibleExclusiveTestSandboxed() {
-    return options.incompatibleExclusiveTestSandboxed;
-  }
-
-  public boolean splitCoveragePostProcessing() {
-    return options.splitCoveragePostProcessing;
   }
 
   /**
