@@ -1,7 +1,8 @@
 package io.quarkus.oidc.runtime;
 
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 import javax.annotation.PostConstruct;
 import javax.enterprise.context.ApplicationScoped;
@@ -26,10 +27,10 @@ public class DefaultTenantConfigResolver {
     @Inject
     Instance<TenantConfigResolver> tenantConfigResolver;
 
-    private final Map<String, TenantConfigContext> dynamicTenantsConfig = new ConcurrentHashMap<>();
-
-    @Inject
-    TenantConfigBean tenantConfigBean;
+    private volatile Map<String, TenantConfigContext> staticTenantsConfig;
+    private volatile TenantConfigContext defaultTenant;
+    private volatile Function<OidcTenantConfig, TenantConfigContext> tenantConfigContextFactory;
+    private volatile Map<String, TenantConfigContext> dynamicTenantsConfig;
 
     @PostConstruct
     public void verifyResolvers() {
@@ -37,6 +38,7 @@ public class DefaultTenantConfigResolver {
             if (tenantConfigResolver.isAmbiguous()) {
                 throw new IllegalStateException("Multiple " + TenantConfigResolver.class + " beans registered");
             }
+            dynamicTenantsConfig = new HashMap<>();
         }
         if (tenantResolver.isAmbiguous()) {
             throw new IllegalStateException("Multiple " + TenantResolver.class + " beans registered");
@@ -62,7 +64,22 @@ public class DefaultTenantConfigResolver {
         return config;
     }
 
+    void setTenantsConfig(Map<String, TenantConfigContext> tenantsConfig) {
+        this.staticTenantsConfig = tenantsConfig;
+    }
+
+    void setDefaultTenant(TenantConfigContext defaultTenant) {
+        this.defaultTenant = defaultTenant;
+    }
+
+    void setTenantConfigContextFactory(Function<OidcTenantConfig, TenantConfigContext> tenantConfigContextFactory) {
+        this.tenantConfigContextFactory = tenantConfigContextFactory;
+    }
+
     private TenantConfigContext getTenantConfigFromTenantResolver(RoutingContext context) {
+        if (staticTenantsConfig == null) {
+            throw new IllegalStateException("staticTenantsConfig is null");
+        }
 
         String tenantId = null;
 
@@ -70,12 +87,12 @@ public class DefaultTenantConfigResolver {
             tenantId = tenantResolver.get().resolve(context);
         }
 
-        TenantConfigContext configContext = tenantId != null ? tenantConfigBean.getStaticTenantsConfig().get(tenantId) : null;
+        TenantConfigContext configContext = tenantId != null ? staticTenantsConfig.get(tenantId) : null;
         if (configContext == null) {
             if (tenantId != null && !tenantId.isEmpty()) {
                 LOG.debugf("No configuration with a tenant id '%s' has been found, using the default configuration");
             }
-            configContext = tenantConfigBean.getDefaultTenant();
+            configContext = defaultTenant;
         }
         return configContext;
     }
@@ -107,7 +124,7 @@ public class DefaultTenantConfigResolver {
                 if (tenantContext == null && create) {
                     synchronized (dynamicTenantsConfig) {
                         return dynamicTenantsConfig.computeIfAbsent(tenantId,
-                                clientId -> tenantConfigBean.getTenantConfigContextFactory().apply(tenantConfig));
+                                clientId -> tenantConfigContextFactory.apply(tenantConfig));
                     }
                 }
 
