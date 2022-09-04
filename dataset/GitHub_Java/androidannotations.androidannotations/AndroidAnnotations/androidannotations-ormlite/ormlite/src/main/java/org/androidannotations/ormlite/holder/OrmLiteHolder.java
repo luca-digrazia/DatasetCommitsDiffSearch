@@ -15,10 +15,14 @@
  */
 package org.androidannotations.ormlite.holder;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JFieldVar;
+import static com.helger.jcodemodel.JExpr._null;
+import static com.helger.jcodemodel.JMod.PRIVATE;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.lang.model.type.TypeMirror;
+
 import org.androidannotations.helper.CaseHelper;
 import org.androidannotations.helper.ModelConstants;
 import org.androidannotations.holder.EComponentHolder;
@@ -26,16 +30,14 @@ import org.androidannotations.holder.HasLifecycleMethods;
 import org.androidannotations.ormlite.helper.OrmLiteClasses;
 import org.androidannotations.plugin.PluginClassHolder;
 
-import javax.lang.model.type.TypeMirror;
-import java.util.HashMap;
-import java.util.Map;
-
-import static com.sun.codemodel.JExpr._null;
-import static com.sun.codemodel.JMod.PRIVATE;
+import com.helger.jcodemodel.AbstractJClass;
+import com.helger.jcodemodel.IJExpression;
+import com.helger.jcodemodel.JBlock;
+import com.helger.jcodemodel.JFieldVar;
 
 public class OrmLiteHolder extends PluginClassHolder<EComponentHolder> {
 
-	private Map<TypeMirror, JFieldVar> databaseHelperRefs = new HashMap<TypeMirror, JFieldVar>();
+	private Map<TypeMirror, JFieldVar> databaseHelperRefs = new HashMap<>();
 
 	public OrmLiteHolder(EComponentHolder holder) {
 		super(holder);
@@ -51,14 +53,14 @@ public class OrmLiteHolder extends PluginClassHolder<EComponentHolder> {
 	}
 
 	private JFieldVar setDatabaseHelperRef(TypeMirror databaseHelperTypeMirror) {
-		JClass databaseHelperClass = refClass(databaseHelperTypeMirror.toString());
+		AbstractJClass databaseHelperClass = getJClass(databaseHelperTypeMirror.toString());
 		String fieldName = CaseHelper.lowerCaseFirst(databaseHelperClass.name()) + ModelConstants.generationSuffix();
 		JFieldVar databaseHelperRef = getGeneratedClass().field(PRIVATE, databaseHelperClass, fieldName);
 		databaseHelperRefs.put(databaseHelperTypeMirror, databaseHelperRef);
 
-		JExpression dbHelperClass = databaseHelperClass.dotclass();
-		holder().getInitBody().assign(databaseHelperRef, //
-				refClass(OrmLiteClasses.OPEN_HELPER_MANAGER).staticInvoke("getHelper").arg(holder().getContextRef()).arg(dbHelperClass));
+		IJExpression dbHelperClass = databaseHelperClass.dotclass();
+		holder().getInitBodyInjectionBlock().assign(databaseHelperRef, //
+				getJClass(OrmLiteClasses.OPEN_HELPER_MANAGER).staticInvoke("getHelper").arg(holder().getContextRef()).arg(dbHelperClass));
 
 		return databaseHelperRef;
 	}
@@ -67,7 +69,7 @@ public class OrmLiteHolder extends PluginClassHolder<EComponentHolder> {
 		if (holder() instanceof HasLifecycleMethods) {
 			JBlock destroyBody = ((HasLifecycleMethods) holder()).getOnDestroyBeforeSuperBlock();
 
-			destroyBody.staticInvoke(refClass(OrmLiteClasses.OPEN_HELPER_MANAGER), "releaseHelper");
+			destroyBody.staticInvoke(getJClass(OrmLiteClasses.OPEN_HELPER_MANAGER), "releaseHelper");
 			destroyBody.assign(databaseHelperRef, _null());
 		}
 	}

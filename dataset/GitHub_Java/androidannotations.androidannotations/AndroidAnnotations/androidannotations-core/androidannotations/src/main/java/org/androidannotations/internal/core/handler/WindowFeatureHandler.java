@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -44,13 +44,11 @@ public class WindowFeatureHandler extends BaseAnnotationHandler<EActivityHolder>
 		int[] features = annotation.value();
 
 		TypeElement appCompatActivity = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.APPCOMPAT_ACTIVITY);
-		TypeElement androidxAppCompatActivity = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.ANDROIDX_APPCOMPAT_ACTIVITY);
 		TypeElement actionBarActivity = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.ACTIONBAR_ACTIVITY);
 		TypeElement type = (TypeElement) element;
 
 		String methodName;
-		if ((appCompatActivity != null && annotationHelper.isSubtype(type, appCompatActivity)) || (androidxAppCompatActivity != null && annotationHelper.isSubtype(type, androidxAppCompatActivity))
-				|| (actionBarActivity != null && annotationHelper.isSubtype(type, actionBarActivity))) {
+		if ((appCompatActivity != null && annotationHelper.isSubtype(type, appCompatActivity)) || (actionBarActivity != null && annotationHelper.isSubtype(type, actionBarActivity))) {
 			methodName = "supportRequestWindowFeature";
 		} else {
 			methodName = "requestWindowFeature";

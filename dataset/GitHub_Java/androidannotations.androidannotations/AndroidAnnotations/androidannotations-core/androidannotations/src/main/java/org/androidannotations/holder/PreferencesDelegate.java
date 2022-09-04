@@ -28,7 +28,6 @@ import javax.lang.model.util.Types;
 import org.androidannotations.helper.CanonicalNameConstants;
 
 import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJAssignmentTarget;
 import com.helger.jcodemodel.IJExpression;
 import com.helger.jcodemodel.JBlock;
 import com.helger.jcodemodel.JExpr;
@@ -37,7 +36,7 @@ import com.helger.jcodemodel.JInvocation;
 import com.helger.jcodemodel.JMethod;
 import com.helger.jcodemodel.JVar;
 
-public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponentWithViewSupportHolder>implements HasPreferences {
+public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponentWithViewSupportHolder> implements HasPreferences {
 
 	protected JBlock addPreferencesFromResourceInjectionBlock;
 	protected JBlock addPreferencesFromResourceAfterInjectionBlock;
@@ -86,8 +85,8 @@ public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponent
 		method.annotate(Override.class);
 		JVar preferencesResIdParam = method.param(int.class, "preferencesResId");
 		method.body().invoke(JExpr._super(), "addPreferencesFromResource").arg(preferencesResIdParam);
-		addPreferencesFromResourceInjectionBlock = method.body().blockVirtual();
-		addPreferencesFromResourceAfterInjectionBlock = method.body().blockVirtual();
+		addPreferencesFromResourceInjectionBlock = method.body().blockSimple();
+		addPreferencesFromResourceAfterInjectionBlock = method.body().blockSimple();
 	}
 
 	private JInvocation findPreferenceByKey(JFieldRef idRef) {
@@ -97,16 +96,32 @@ public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponent
 	}
 
 	@Override
-	public FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, AbstractJClass preferenceClass) {
-		return getFoundPreferenceHolder(idRef, preferenceClass, null);
+	public void assignFindPreferenceByKey(JFieldRef idRef, AbstractJClass preferenceClass, JFieldRef fieldRef) {
+		String idRefString = idRef.name();
+		FoundPreferenceHolder foundViewHolder = (FoundPreferenceHolder) holder.foundHolders.get(idRefString);
+
+		JBlock block = getAddPreferencesFromResourceInjectionBlock();
+		IJExpression assignExpression;
+
+		if (foundViewHolder != null) {
+			assignExpression = foundViewHolder.getOrCastRef(preferenceClass);
+		} else {
+			assignExpression = findPreferenceByKey(idRef);
+			if (preferenceClass != null && preferenceClass != getClasses().PREFERENCE && preferenceClass != getClasses().SUPPORT_V7_PREFERENCE) {
+				assignExpression = cast(preferenceClass, assignExpression);
+			}
+			holder.foundHolders.put(idRefString, new FoundPreferenceHolder(this, preferenceClass, fieldRef, block));
+		}
+
+		block.assign(fieldRef, assignExpression);
 	}
 
 	@Override
-	public FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, AbstractJClass preferenceClass, IJAssignmentTarget fieldRef) {
+	public FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, AbstractJClass preferenceClass) {
 		String idRefString = idRef.name();
 		FoundPreferenceHolder foundPreferenceHolder = (FoundPreferenceHolder) holder.foundHolders.get(idRefString);
 		if (foundPreferenceHolder == null) {
-			foundPreferenceHolder = createFoundPreferenceAndIfNotNullBlock(idRef, preferenceClass, fieldRef);
+			foundPreferenceHolder = createFoundPreferenceAndIfNotNullBlock(idRef, preferenceClass);
 			holder.foundHolders.put(idRefString, foundPreferenceHolder);
 		}
 		return foundPreferenceHolder;
@@ -122,9 +137,9 @@ public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponent
 		return basePreferenceClass;
 	}
 
-	private FoundPreferenceHolder createFoundPreferenceAndIfNotNullBlock(JFieldRef idRef, AbstractJClass preferenceClass, IJAssignmentTarget fieldRef) {
+	private FoundPreferenceHolder createFoundPreferenceAndIfNotNullBlock(JFieldRef idRef, AbstractJClass preferenceClass) {
 		IJExpression findPreferenceExpression = findPreferenceByKey(idRef);
-		JBlock block = getAddPreferencesFromResourceInjectionBlock();
+		JBlock block = getAddPreferencesFromResourceInjectionBlock().blockSimple();
 
 		if (preferenceClass == null) {
 			preferenceClass = basePreferenceClass;
@@ -132,13 +147,8 @@ public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponent
 			findPreferenceExpression = cast(preferenceClass, findPreferenceExpression);
 		}
 
-		IJAssignmentTarget foundPref = fieldRef;
-		if (foundPref == null) {
-			foundPref = block.decl(preferenceClass, "preference_" + idRef.name(), findPreferenceExpression);
-		} else {
-			block.add(foundPref.assign(findPreferenceExpression));
-		}
-		return new FoundPreferenceHolder(this, preferenceClass, foundPref, block);
+		JVar preference = block.decl(preferenceClass, "preference", findPreferenceExpression);
+		return new FoundPreferenceHolder(this, preferenceClass, preference, block);
 	}
 
 	@Override

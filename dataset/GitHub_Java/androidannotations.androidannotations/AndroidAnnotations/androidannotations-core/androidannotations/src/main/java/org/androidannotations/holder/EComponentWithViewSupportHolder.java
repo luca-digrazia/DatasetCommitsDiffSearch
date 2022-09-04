@@ -63,7 +63,6 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	protected JMethod findSupportFragmentByTag;
 	private Map<String, TextWatcherHolder> textWatcherHolders = new HashMap<>();
 	private Map<String, OnSeekBarChangeListenerHolder> onSeekBarChangeListenerHolders = new HashMap<>();
-	private Map<String, PageChangeHolder> pageChangeHolders = new HashMap<>();
 	private KeyEventCallbackMethodsDelegate<EComponentWithViewSupportHolder> keyEventCallbackMethodsDelegate;
 
 	public EComponentWithViewSupportHolder(AndroidAnnotationsEnvironment environment, TypeElement annotatedElement) throws Exception {
@@ -112,9 +111,9 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		onViewChanged = getGeneratedClass().method(PUBLIC, getCodeModel().VOID, "onViewChanged");
 		onViewChanged.annotate(Override.class);
 		onViewChangedBody = onViewChanged.body();
-		onViewChangedBodyBeforeInjectionBlock = onViewChangedBody.blockVirtual();
-		onViewChangedBodyInjectionBlock = onViewChangedBody.blockVirtual();
-		onViewChangedBodyAfterInjectionBlock = onViewChangedBody.blockVirtual();
+		onViewChangedBodyBeforeInjectionBlock = onViewChangedBody.blockSimple();
+		onViewChangedBodyInjectionBlock = onViewChangedBody.blockSimple();
+		onViewChangedBodyAfterInjectionBlock = onViewChangedBody.blockSimple();
 		onViewChangedHasViewsParam = onViewChanged.param(HasViews.class, "hasViews");
 		AbstractJClass notifierClass = getJClass(OnViewChangedNotifier.class);
 		getInitBodyInjectionBlock().staticInvoke(notifierClass, "registerOnViewChangedListener").arg(_this());
@@ -301,33 +300,6 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		foundViewHolder.getIfNotNullBlock().invoke(foundViewHolder.getRef(), "setOnSeekBarChangeListener").arg(_new(onSeekbarChangeListenerClass));
 
 		return new OnSeekBarChangeListenerHolder(this, onSeekbarChangeListenerClass);
-	}
-
-	public PageChangeHolder getPageChangeHolder(JFieldRef idRef, TypeMirror viewParameterType, boolean hasAddOnPageChangeListenerMethod) {
-		String idRefString = idRef.name();
-		PageChangeHolder pageChangeHolder = pageChangeHolders.get(idRefString);
-		if (pageChangeHolder == null) {
-			pageChangeHolder = createPageChangeHolder(idRef, viewParameterType, hasAddOnPageChangeListenerMethod);
-			pageChangeHolders.put(idRefString, pageChangeHolder);
-		}
-		return pageChangeHolder;
-	}
-
-	private PageChangeHolder createPageChangeHolder(JFieldRef idRef, TypeMirror viewParameterType, boolean hasAddOnPageChangeListenerMethod) {
-		JDefinedClass onPageChangeListenerClass = getCodeModel().anonymousClass(getClasses().PAGE_CHANGE_LISTENER);
-		AbstractJClass viewClass = getClasses().VIEW_PAGER;
-		if (viewParameterType != null) {
-			viewClass = getJClass(viewParameterType.toString());
-		}
-		JBlock onViewChangedBody = getOnViewChangedBodyInjectionBlock().blockSimple();
-		JVar viewVariable = onViewChangedBody.decl(FINAL, viewClass, "view", cast(viewClass, findViewById(idRef)));
-		JBlock block = onViewChangedBody._if(viewVariable.ne(JExpr._null()))._then();
-		if (hasAddOnPageChangeListenerMethod) {
-			block.invoke(viewVariable, "addOnPageChangeListener").arg(_new(onPageChangeListenerClass));
-		} else {
-			block.invoke(viewVariable, "setOnPageChangeListener").arg(_new(onPageChangeListenerClass));
-		}
-		return new PageChangeHolder(this, viewVariable, onPageChangeListenerClass);
 	}
 
 	@Override

@@ -15,8 +15,6 @@
  */
 package org.androidannotations.holder;
 
-import static com.helger.jcodemodel.JExpr.FALSE;
-import static com.helger.jcodemodel.JExpr.TRUE;
 import static com.helger.jcodemodel.JExpr._new;
 import static com.helger.jcodemodel.JExpr._null;
 import static com.helger.jcodemodel.JExpr._super;
@@ -25,7 +23,6 @@ import static com.helger.jcodemodel.JExpr.ref;
 import static com.helger.jcodemodel.JMod.PRIVATE;
 import static com.helger.jcodemodel.JMod.PUBLIC;
 import static com.helger.jcodemodel.JMod.STATIC;
-import static com.helger.jcodemodel.JMod.VOLATILE;
 import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import javax.lang.model.element.TypeElement;
@@ -49,7 +46,6 @@ import com.helger.jcodemodel.JVar;
 public class EFragmentHolder extends EComponentWithViewSupportHolder implements HasInstanceState, HasOptionsMenu, HasOnActivityResult, HasReceiverRegistration, HasPreferences {
 
 	private JFieldVar contentView;
-	private JFieldVar viewDestroyedField;
 	private JBlock setContentViewBlock;
 	private JVar inflater;
 	private JVar container;
@@ -210,19 +206,6 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 
 	private void setContentView() {
 		contentView = generatedClass.field(PRIVATE, getClasses().VIEW, "contentView" + generationSuffix());
-	}
-
-	public JFieldVar getViewDestroyedField() {
-		if (viewDestroyedField == null) {
-			setViewDestroyedField();
-		}
-		return viewDestroyedField;
-	}
-
-	private void setViewDestroyedField() {
-		viewDestroyedField = generatedClass.field(PRIVATE | VOLATILE, getCodeModel().BOOLEAN, "viewDestroyed" + generationSuffix());
-		getSetContentViewBlock().assign(viewDestroyedField, FALSE);
-		getOnDestroyViewAfterSuperBlock().assign(viewDestroyedField, TRUE);
 	}
 
 	private void setOnCreateView() {

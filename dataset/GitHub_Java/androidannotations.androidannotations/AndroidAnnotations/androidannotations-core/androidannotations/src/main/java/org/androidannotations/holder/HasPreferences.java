@@ -16,7 +16,6 @@
 package org.androidannotations.holder;
 
 import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJAssignmentTarget;
 import com.helger.jcodemodel.JBlock;
 import com.helger.jcodemodel.JFieldRef;
 
@@ -28,9 +27,9 @@ public interface HasPreferences extends GeneratedClassHolder {
 
 	JBlock getAddPreferencesFromResourceAfterInjectionBlock();
 
-	FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, AbstractJClass preferenceClass);
+	void assignFindPreferenceByKey(JFieldRef idRef, AbstractJClass preferenceClass, JFieldRef fieldRef);
 
-	FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, AbstractJClass preferenceClass, IJAssignmentTarget fieldRef);
+	FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, AbstractJClass preferenceClass);
 
 	boolean usingSupportV7Preference();
 
