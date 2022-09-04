@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.skyframe.PackageFunction.ActionOnIOExceptionReadingBuildFile;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.skyframe.SkyFunction;
 
 /** Hardcoded constants describing bazel-on-skyframe behavior. */
 public class BazelSkyframeExecutorConstants {
@@ -32,15 +31,16 @@ public class BazelSkyframeExecutorConstants {
   /**
    * The file .bazelignore can be used to specify directories to be ignored by bazel
    *
-   * <p>This is intended for directories containing non-bazel sources (either generated, or
-   * versioned sources built by other tools) that happen to contain a file called BUILD.
+   * <p>This is intended for directories containing non-bazel sources (either generated,
+   * or versioned sources built by other tools) that happen to contain a file called BUILD.</p>
    *
-   * <p>For the time being, this ignore functionality is limited by the fact that it is applied only
-   * after pattern expansion. So if a pattern expansion fails (e.g., due to symlink-cycles) and
-   * therefore fails the build, this ignore functionality currently has no chance to kick in.
+   * <p>For the time being, this ignore functionality is limited by the fact that it is
+   * applied only after pattern expansion. So if a pattern expansion fails (e.g., due to
+   * symlink-cycles) and therefore fails the build, this ignore functionality currently
+   * has no chance to kick in.</p>
    */
-  public static final SkyFunction BLACKLISTED_PACKAGE_PREFIXES_FUNCTION =
-      new BlacklistedPackagePrefixesFunction(PathFragment.create(".bazelignore"));
+  public static final PathFragment ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE =
+      PathFragment.create(".bazelignore");
 
   public static final CrossRepositoryLabelViolationStrategy
       CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY = CrossRepositoryLabelViolationStrategy.ERROR;
@@ -54,7 +54,8 @@ public class BazelSkyframeExecutorConstants {
 
   public static SequencedSkyframeExecutor.Builder newBazelSkyframeExecutorBuilder() {
     return SequencedSkyframeExecutor.builder()
-        .setBlacklistedPackagePrefixesFunction(BLACKLISTED_PACKAGE_PREFIXES_FUNCTION)
+        .setHardcodedBlacklistedPackagePrefixes(HARDCODED_BLACKLISTED_PACKAGE_PREFIXES)
+        .setAdditionalBlacklistedPackagePrefixesFile(ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE)
         .setActionOnIOExceptionReadingBuildFile(ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE)
         .setCrossRepositoryLabelViolationStrategy(CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY)
         .setBuildFilesByPriority(BUILD_FILES_BY_PRIORITY);

@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisOptions;
 import com.google.devtools.build.lib.analysis.AnalysisResult;
@@ -45,9 +44,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
-import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.configuredtargets.InputFileConfiguredTarget;
-import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -452,11 +449,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     } catch (LabelSyntaxException e) {
       throw new AssertionError(e);
     }
-    try {
-      return skyframeExecutor.getConfiguredTargetAndDataForTesting(reporter, parsedLabel, config);
-    } catch (StarlarkTransition.TransitionException | InvalidConfigurationException e) {
-      throw new AssertionError(e);
-    }
+    return skyframeExecutor.getConfiguredTargetAndDataForTesting(reporter, parsedLabel, config);
   }
 
   protected Target getTarget(String label) throws InterruptedException {
@@ -501,12 +494,8 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     } catch (LabelSyntaxException e) {
       throw new AssertionError(e);
     }
-    try {
-      return skyframeExecutor.getConfiguredTargetAndDataForTesting(
-          reporter, parsedLabel, configuration);
-    } catch (StarlarkTransition.TransitionException | InvalidConfigurationException e) {
-      throw new AssertionError(e);
-    }
+    return skyframeExecutor.getConfiguredTargetAndDataForTesting(
+        reporter, parsedLabel, configuration);
   }
 
   protected final BuildConfiguration getConfiguration(TransitiveInfoCollection ct) {
@@ -529,25 +518,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   protected Artifact getBinArtifact(String packageRelativePath, ConfiguredTarget owner)
       throws InterruptedException {
     Label label = owner.getLabel();
-    ActionLookupValue.ActionLookupKey actionLookupKey =
-        ConfiguredTargetKey.of(label, owner.getConfigurationKey(), /*isHostConfiguration=*/ false);
-    ActionLookupValue actionLookupValue;
-    try {
-      actionLookupValue =
-          (ActionLookupValue)
-              skyframeExecutor.getEvaluatorForTesting().getExistingValue(actionLookupKey);
-    } catch (InterruptedException e) {
-      throw new IllegalStateException(e);
-    }
-    PathFragment rootRelativePath = label.getPackageFragment().getRelative(packageRelativePath);
-    for (ActionAnalysisMetadata action : actionLookupValue.getActions()) {
-      for (Artifact output : action.getOutputs()) {
-        if (output.getRootRelativePath().equals(rootRelativePath)) {
-          return output;
-        }
-      }
-    }
-    // Fall back: some tests don't actually need the right owner.
     return buildView
         .getArtifactFactory()
         .getDerivedArtifact(

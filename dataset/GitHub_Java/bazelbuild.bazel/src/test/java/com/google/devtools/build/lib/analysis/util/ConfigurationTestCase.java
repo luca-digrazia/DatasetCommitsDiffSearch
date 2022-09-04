@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.util;
 
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
@@ -114,11 +114,6 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
     mockToolsConfig.create("/bazel_tools_workspace/WORKSPACE", "workspace(name = 'bazel_tools')");
     mockToolsConfig.create("/bazel_tools_workspace/tools/build_defs/repo/BUILD");
     mockToolsConfig.create(
-        "/bazel_tools_workspace/tools/build_defs/repo/utils.bzl",
-        "def maybe(repo_rule, name, **kwargs):",
-        "  if name not in native.existing_rules():",
-        "    repo_rule(name = name, **kwargs)");
-    mockToolsConfig.create(
         "/bazel_tools_workspace/tools/build_defs/repo/http.bzl",
         "def http_archive(**kwargs):",
         "  pass",
@@ -187,19 +182,20 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
 
   protected void checkError(String expectedMessage, String... options) throws Exception {
     reporter.removeHandler(failFastHandler);
-    assertThrows(InvalidConfigurationException.class, () -> create(options));
-    assertContainsEvent(expectedMessage);
+    try {
+      create(options);
+      fail();
+    } catch (InvalidConfigurationException e) {
+      assertContainsEvent(expectedMessage);
+    }
   }
 
   protected BuildConfigurationCollection createCollection(String... args) throws Exception {
-    OptionsParser parser =
-        OptionsParser.builder()
-            .optionsClasses(
-                ImmutableList.<Class<? extends OptionsBase>>builder()
-                    .addAll(buildOptionClasses)
-                    .add(TestOptions.class)
-                    .build())
-            .build();
+    OptionsParser parser = OptionsParser.newOptionsParser(
+        ImmutableList.<Class<? extends OptionsBase>>builder()
+        .addAll(buildOptionClasses)
+        .add(TestOptions.class)
+        .build());
     parser.parse(TestConstants.PRODUCT_SPECIFIC_FLAGS);
     parser.parse(args);
 
