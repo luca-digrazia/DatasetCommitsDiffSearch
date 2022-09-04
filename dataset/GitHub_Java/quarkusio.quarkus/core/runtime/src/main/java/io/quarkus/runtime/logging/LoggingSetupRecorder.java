@@ -93,8 +93,7 @@ public class LoggingSetupRecorder {
         InitialConfigurator.DELAYED_HANDLER.setHandlers(handlers.toArray(EmbeddedConfigurator.NO_HANDLERS));
     }
 
-    private boolean hasColorSupport() {
-
+    private boolean workingConsole() {
         if (System.console() != null) {
             if (IS_WINDOWS && !(IS_CON_EMU_ANSI || IS_CYGWIN || IS_MINGW_XTERM)) {
                 // On Windows without a known good emulator
@@ -116,7 +115,7 @@ public class LoggingSetupRecorder {
     private ErrorManager configureConsoleHandler(ConsoleConfig config, ErrorManager errorManager,
             List<LogCleanupFilterElement> filterElements, ArrayList<Handler> handlers) {
         final PatternFormatter formatter;
-        if (config.color && hasColorSupport()) {
+        if (config.color && workingConsole()) {
             formatter = new ColorPatternFormatter(config.darken, config.format);
         } else {
             formatter = new PatternFormatter(config.format);
