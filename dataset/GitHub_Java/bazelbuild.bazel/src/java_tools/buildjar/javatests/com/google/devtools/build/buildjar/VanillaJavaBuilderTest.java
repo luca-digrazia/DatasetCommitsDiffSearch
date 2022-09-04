@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.buildjar;
 
+import static com.google.common.base.StandardSystemProperty.JAVA_HOME;
 import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -77,34 +78,28 @@ public class VanillaJavaBuilderTest {
       jos.putNextEntry(new JarEntry("B.java"));
       jos.write("class B {}".getBytes(UTF_8));
     }
-    Path resource = temporaryFolder.newFile("resource.properties").toPath();
-    Files.write(resource, "hello".getBytes(UTF_8));
 
     VanillaJavaBuilderResult result =
         run(
             ImmutableList.of(
                 "--javacopts",
                 "-Xep:FallThrough:ERROR",
+                "--",
                 "--sources",
                 source.toString(),
                 "--source_jars",
                 sourceJar.toString(),
                 "--output",
                 output.toString(),
-                "--classpath_resources",
-                resource.toString(),
                 "--bootclasspath",
-                Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString(),
-                "--classdir",
-                temporaryFolder.newFolder().toString()));
+                Paths.get(JAVA_HOME.value()).resolve("lib/rt.jar").toString()));
 
     assertThat(result.output()).isEmpty();
     assertThat(result.ok()).isTrue();
 
     ImmutableMap<String, byte[]> outputEntries = readJar(output.toFile());
     assertThat(outputEntries.keySet())
-        .containsExactly(
-            "META-INF/", "META-INF/MANIFEST.MF", "A.class", "B.class", "resource.properties");
+        .containsExactly("META-INF/", "META-INF/MANIFEST.MF", "A.class", "B.class");
   }
 
   @Test
@@ -132,17 +127,181 @@ public class VanillaJavaBuilderTest {
                 "--javacopts",
                 "-Xlint:all",
                 "-Werror",
+                "--",
                 "--sources",
                 source.toString(),
                 "--output",
                 output.toString(),
                 "--bootclasspath",
-                Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString(),
-                "--classdir",
-                temporaryFolder.newFolder().toString()));
+                Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString()));
 
     assertThat(result.output()).contains("possible fall-through");
     assertThat(result.ok()).isFalse();
     assertThat(Files.exists(output)).isFalse();
+  }
+
+  @Test
+  public void diagnosticWithoutSource() throws Exception {
+    Path source = temporaryFolder.newFile("Test.java").toPath();
+    Path output = temporaryFolder.newFolder().toPath().resolve("out.jar");
+    Files.write(
+        source,
+        ImmutableList.of(
+            "import java.util.ArrayList;",
+            "import java.util.List;",
+            "abstract class A {",
+            "  abstract void f(List<String> xs);",
+            "  {",
+            "    f(new ArrayList<>());",
+            "  }",
+            "}"),
+        UTF_8);
+
+    VanillaJavaBuilderResult result =
+        run(
+            ImmutableList.of(
+                "--javacopts",
+                "-source",
+                "7",
+                "-Xlint:none",
+                "--",
+                "--sources",
+                source.toString(),
+                "--output",
+                output.toString()));
+
+    assertThat(result.output()).contains("note: Some messages have been simplified");
+    assertThat(result.ok()).isFalse();
+    assertThat(Files.exists(output)).isFalse();
+  }
+
+  @Test
+  public void cleanOutputDirectories() throws Exception {
+    Path source = temporaryFolder.newFile("Test.java").toPath();
+    Path output = temporaryFolder.newFile("out.jar").toPath();
+    Files.write(
+        source,
+        ImmutableList.of(
+            "class A {", //
+            "}"),
+        UTF_8);
+    Path sourceJar = temporaryFolder.newFile("src.srcjar").toPath();
+    try (OutputStream os = Files.newOutputStream(sourceJar);
+        JarOutputStream jos = new JarOutputStream(os)) {
+      jos.putNextEntry(new JarEntry("B.java"));
+      jos.write("class B {}".getBytes(UTF_8));
+    }
+
+    Path classDir = temporaryFolder.newFolder().toPath();
+    Files.write(
+        classDir.resolve("extra.class"),
+        new byte[] {(byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe});
+
+    VanillaJavaBuilderResult result =
+        run(
+            ImmutableList.of(
+                "--javacopts",
+                "-Xep:FallThrough:ERROR",
+                "--",
+                "--sources",
+                source.toString(),
+                "--source_jars",
+                sourceJar.toString(),
+                "--output",
+                output.toString(),
+                "--bootclasspath",
+                Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString()));
+
+    assertThat(result.output()).isEmpty();
+    assertThat(result.ok()).isTrue();
+
+    ImmutableMap<String, byte[]> outputEntries = readJar(output.toFile());
+    assertThat(outputEntries.keySet())
+        .containsExactly("META-INF/", "META-INF/MANIFEST.MF", "A.class", "B.class");
+  }
+
+  // suppress unpopular deferred diagnostic notes for sunapi, deprecation, and unchecked
+  @Test
+  public void testDeferredDiagnostics() throws Exception {
+    Path b = temporaryFolder.newFile("B.java").toPath();
+    Path a = temporaryFolder.newFile("A.java").toPath();
+    Path output = temporaryFolder.newFile("out.jar").toPath();
+    Files.write(
+        b,
+        ImmutableList.of(
+            "@Deprecated", //
+            "class B {}"),
+        UTF_8);
+    Files.write(
+        a,
+        ImmutableList.of(
+            "import java.util.*;", //
+            "public class A {",
+            "  sun.misc.Unsafe theUnsafe;",
+            "  B b;",
+            "  List l = new ArrayList<>();",
+            "}"),
+        UTF_8);
+
+    VanillaJavaBuilderResult result =
+        run(
+            ImmutableList.of(
+                "--sources",
+                a.toString(),
+                b.toString(),
+                "--output",
+                output.toString(),
+                "--bootclasspath",
+                Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString()));
+
+    assertThat(result.output()).isEmpty();
+    assertThat(result.ok()).isTrue();
+  }
+
+  @Test
+  public void nativeHeaders() throws Exception {
+    Path foo = temporaryFolder.newFile("FooWithNativeMethod.java").toPath();
+    Path bar = temporaryFolder.newFile("BarWithNativeMethod.java").toPath();
+    Path output = temporaryFolder.newFile("out.jar").toPath();
+    Path nativeHeaderOutput = temporaryFolder.newFile("out-native-headers.jar").toPath();
+    Files.write(
+        foo,
+        ImmutableList.of(
+            "package test;",
+            "public class FooWithNativeMethod {",
+            "  public static native byte[] g(String s);",
+            "}"),
+        UTF_8);
+    Files.write(
+        bar,
+        ImmutableList.of(
+            "package test;",
+            "public class BarWithNativeMethod {",
+            "  public static native byte[] g(String s);",
+            "}"),
+        UTF_8);
+
+    VanillaJavaBuilderResult result =
+        run(
+            ImmutableList.of(
+                "--javacopts",
+                "-Xep:FallThrough:ERROR",
+                "--",
+                "--sources",
+                foo.toString(),
+                bar.toString(),
+                "--output",
+                output.toString(),
+                "--native_header_output",
+                nativeHeaderOutput.toString(),
+                "--bootclasspath",
+                Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString()));
+
+    assertThat(result.output()).isEmpty();
+    assertThat(result.ok()).isTrue();
+
+    ImmutableMap<String, byte[]> outputEntries = readJar(nativeHeaderOutput.toFile());
+    assertThat(outputEntries.keySet())
+        .containsAtLeast("test_BarWithNativeMethod.h", "test_FooWithNativeMethod.h");
   }
 }

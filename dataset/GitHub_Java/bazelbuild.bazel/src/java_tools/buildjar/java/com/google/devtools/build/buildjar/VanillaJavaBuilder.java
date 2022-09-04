@@ -64,6 +64,7 @@ import javax.tools.ToolProvider;
  * <ul>
  *   <li>Error Prone
  *   <li>strict Java deps
+ *   <li>header compilation
  *   <li>Android desugaring
  *   <li>coverage instrumentation
  *   <li>genclass handling for IDEs
