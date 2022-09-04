@@ -19,17 +19,16 @@ import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
+import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ConflictException;
-import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.Injectable;
-import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -47,7 +46,7 @@ public final class PrecomputedValue implements SkyValue {
    * An externally-injected precomputed value. Exists so that modules can inject precomputed values
    * into Skyframe's graph.
    *
-   * @see com.google.devtools.build.lib.runtime.WorkspaceBuilder#addPrecomputedValue
+   * @see com.google.devtools.build.lib.runtime.BlazeModule#getPrecomputedSkyframeValues
    */
   public static final class Injected {
     private final Precomputed<?> precomputed;
@@ -58,13 +57,8 @@ public final class PrecomputedValue implements SkyValue {
       this.supplier = supplier;
     }
 
-    public void inject(Injectable injectable) {
+    void inject(Injectable injectable) {
       injectable.inject(precomputed.key, new PrecomputedValue(supplier.get()));
-    }
-
-    @Override
-    public String toString() {
-      return precomputed + ": " + supplier.get();
     }
   }
 
@@ -77,41 +71,38 @@ public final class PrecomputedValue implements SkyValue {
   }
 
   public static final Precomputed<String> DEFAULTS_PACKAGE_CONTENTS =
-      new Precomputed<>(LegacySkyKey.create(SkyFunctions.PRECOMPUTED, "default_pkg"));
+      new Precomputed<>(SkyKey.create(SkyFunctions.PRECOMPUTED, "default_pkg"));
 
   public static final Precomputed<PathFragment> BLACKLISTED_PACKAGE_PREFIXES_FILE =
       new Precomputed<>(
-          LegacySkyKey.create(SkyFunctions.PRECOMPUTED, "blacklisted_package_prefixes_file"));
+          SkyKey.create(SkyFunctions.PRECOMPUTED, "blacklisted_package_prefixes_file"));
 
   public static final Precomputed<RuleVisibility> DEFAULT_VISIBILITY =
-      new Precomputed<>(LegacySkyKey.create(SkyFunctions.PRECOMPUTED, "default_visibility"));
-
-  public static final Precomputed<SkylarkSemanticsOptions> SKYLARK_SEMANTICS =
-      new Precomputed<>(LegacySkyKey.create(SkyFunctions.PRECOMPUTED, "skylark_semantics"));
+      new Precomputed<>(SkyKey.create(SkyFunctions.PRECOMPUTED, "default_visibility"));
 
   static final Precomputed<UUID> BUILD_ID =
-      new Precomputed<>(LegacySkyKey.create(SkyFunctions.PRECOMPUTED, "build_id"));
-
-  static final Precomputed<Map<String, String>> ACTION_ENV =
-      new Precomputed<>(LegacySkyKey.create(SkyFunctions.PRECOMPUTED, "action_env"));
+      new Precomputed<>(SkyKey.create(SkyFunctions.PRECOMPUTED, "build_id"));
 
   static final Precomputed<WorkspaceStatusAction> WORKSPACE_STATUS_KEY =
-      new Precomputed<>(LegacySkyKey.create(SkyFunctions.PRECOMPUTED, "workspace_status_action"));
+      new Precomputed<>(SkyKey.create(SkyFunctions.PRECOMPUTED, "workspace_status_action"));
 
   static final Precomputed<ImmutableList<ActionAnalysisMetadata>> COVERAGE_REPORT_KEY =
-      new Precomputed<>(LegacySkyKey.create(SkyFunctions.PRECOMPUTED, "coverage_report_actions"));
+      new Precomputed<>(SkyKey.create(SkyFunctions.PRECOMPUTED, "coverage_report_actions"));
 
   public static final Precomputed<Map<BuildInfoKey, BuildInfoFactory>> BUILD_INFO_FACTORIES =
-      new Precomputed<>(LegacySkyKey.create(SkyFunctions.PRECOMPUTED, "build_info_factories"));
+      new Precomputed<>(SkyKey.create(SkyFunctions.PRECOMPUTED, "build_info_factories"));
+
+  public static final Precomputed<BlazeDirectories> BLAZE_DIRECTORIES =
+      new Precomputed<>(SkyKey.create(SkyFunctions.PRECOMPUTED, "blaze_directories"));
 
   public static final Precomputed<String> PRODUCT_NAME =
-      new Precomputed<>(LegacySkyKey.create(SkyFunctions.PRECOMPUTED, "product_name"));
+      new Precomputed<>(SkyKey.create(SkyFunctions.PRECOMPUTED, "product_name"));
 
   static final Precomputed<ImmutableMap<ActionAnalysisMetadata, ConflictException>> BAD_ACTIONS =
-      new Precomputed<>(LegacySkyKey.create(SkyFunctions.PRECOMPUTED, "bad_actions"));
+      new Precomputed<>(SkyKey.create(SkyFunctions.PRECOMPUTED, "bad_actions"));
 
   public static final Precomputed<PathPackageLocator> PATH_PACKAGE_LOCATOR =
-      new Precomputed<>(LegacySkyKey.create(SkyFunctions.PRECOMPUTED, "path_package_locator"));
+      new Precomputed<>(SkyKey.create(SkyFunctions.PRECOMPUTED, "path_package_locator"));
 
   private final Object value;
 

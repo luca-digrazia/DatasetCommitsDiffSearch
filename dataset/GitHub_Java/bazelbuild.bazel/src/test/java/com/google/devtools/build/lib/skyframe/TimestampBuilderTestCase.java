@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
-import com.google.devtools.build.lib.actions.cache.ActionCache.Entry;
 import com.google.devtools.build.lib.actions.util.DummyExecutor;
 import com.google.devtools.build.lib.actions.util.TestAction;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
@@ -212,7 +211,6 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
             evaluationProgressReceiver);
     final SequentialBuildDriver driver = new SequentialBuildDriver(evaluator);
     PrecomputedValue.BUILD_ID.set(differencer, UUID.randomUUID());
-    PrecomputedValue.ACTION_ENV.set(differencer, ImmutableMap.<String, String>of());
     PrecomputedValue.PATH_PACKAGE_LOCATOR.set(differencer, pkgLocator.get());
 
     return new Builder() {
@@ -437,11 +435,6 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     @Override
     public void dump(PrintStream out) {
       out.println("In-memory action cache has " + actionCache.size() + " records");
-    }
-
-    @Override
-    public Entry newEntry(String key, Map<String, String> usedClientEnv, boolean discoversInputs) {
-      return new Entry(key, usedClientEnv, discoversInputs);
     }
   }
 
