@@ -266,8 +266,7 @@ public final class SkylarkAttr implements SkylarkAttrApi {
           builder.hasStarlarkDefinedTransition();
         }
         builder.cfg(new FunctionSplitTransitionProvider(
-            transImpl, env.getSemantics(), env.getEventHandler(),
-            starlarkDefinedTransition.getInputs(), starlarkDefinedTransition.getOutputs()));
+            transImpl, env.getSemantics(), env.getEventHandler()));
       } else if (!trans.equals("target")) {
         throw new EvalException(ast.getLocation(),
             "cfg must be either 'data', 'host', or 'target'.");

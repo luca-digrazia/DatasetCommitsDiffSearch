@@ -1706,8 +1706,10 @@ public final class Attribute implements Comparable<Attribute> {
       return (LateBoundDefault<Void, ValueT>) AlwaysNullLateBoundDefault.INSTANCE;
     }
 
-    LateBoundDefault(
-        boolean useHostConfiguration, Class<FragmentT> fragmentClass, ValueT defaultValue) {
+    protected LateBoundDefault(
+        boolean useHostConfiguration,
+        Class<FragmentT> fragmentClass,
+        ValueT defaultValue) {
       this.useHostConfiguration = useHostConfiguration;
       this.defaultValue = defaultValue;
       this.fragmentClass = fragmentClass;
@@ -1778,7 +1780,7 @@ public final class Attribute implements Comparable<Attribute> {
   public static class LabelLateBoundDefault<FragmentT>
       extends SimpleLateBoundDefault<FragmentT, Label> {
     @AutoCodec.VisibleForSerialization
-    protected LabelLateBoundDefault(
+    LabelLateBoundDefault(
         boolean useHostConfiguration,
         Class<FragmentT> fragmentClass,
         Label defaultValue,
