@@ -163,7 +163,7 @@ public class PathPackageLocator implements Serializable {
       // Replace "%workspace%" with the path of the enclosing workspace directory.
       pathElement = pathElement.replace(workspaceWildcard, workspace.getPathString());
 
-      PathFragment pathElementFragment = PathFragment.create(pathElement);
+      PathFragment pathElementFragment = new PathFragment(pathElement);
 
       // If the path string started with "%workspace%" or "/", it is already absolute,
       // so the following line is a no-op.
@@ -218,7 +218,7 @@ public class PathPackageLocator implements Serializable {
     AtomicReference<? extends UnixGlob.FilesystemCalls> cache = UnixGlob.DEFAULT_SYSCALLS_REF;
     // TODO(bazel-team): correctness in the presence of changes to the location of the WORKSPACE
     // file.
-    return getFilePath(PathFragment.create("WORKSPACE"), cache);
+    return getFilePath(new PathFragment("WORKSPACE"), cache);
   }
 
   private Path getFilePath(PathFragment suffix,
