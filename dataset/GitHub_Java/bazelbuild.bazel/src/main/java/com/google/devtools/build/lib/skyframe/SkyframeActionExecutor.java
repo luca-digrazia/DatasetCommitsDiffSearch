@@ -501,6 +501,19 @@ public final class SkyframeActionExecutor {
     }
   }
 
+  private boolean actionReallyExecuted(Action action, ActionLookupData actionLookupData) {
+    // TODO(b/19539699): This method is used only when the action cache is enabled. It is
+    // incompatible with action rewinding, which removes entries from buildActionMap. Action
+    // rewinding is used only with a disabled action cache.
+    ActionExecutionState cachedRun =
+        Preconditions.checkNotNull(
+            buildActionMap.get(new OwnerlessArtifactWrapper(action.getPrimaryOutput())),
+            "%s %s",
+            action,
+            actionLookupData);
+    return cachedRun.isOwner(actionLookupData);
+  }
+
   void noteActionEvaluationStarted(ActionLookupData actionLookupData, Action action) {
     this.completionReceiver.noteActionEvaluationStarted(actionLookupData, action);
   }
@@ -517,8 +530,7 @@ public final class SkyframeActionExecutor {
       ActionMetadataHandler metadataHandler,
       long actionStartTime,
       ActionExecutionContext actionExecutionContext,
-      ActionLookupData actionLookupData,
-      ActionPostprocessing postprocessing)
+      ActionLookupData actionLookupData)
       throws ActionExecutionException, InterruptedException {
     // ActionExecutionFunction may directly call into ActionExecutionState.getResultOrDependOnFuture
     // if a shared action already passed these checks.
@@ -551,8 +563,7 @@ public final class SkyframeActionExecutor {
                         metadataHandler,
                         actionStartTime,
                         actionExecutionContext,
-                        actionLookupData,
-                        postprocessing)));
+                        actionLookupData)));
     return activeAction.getResultOrDependOnFuture(
         env, actionLookupData, action, completionReceiver);
   }
@@ -658,9 +669,19 @@ public final class SkyframeActionExecutor {
     return token;
   }
 
-  void updateActionCache(
-      Action action, MetadataHandler metadataHandler, Token token, Map<String, String> clientEnv) {
+  void updateActionCacheIfReallyExecuted(
+      Action action,
+      MetadataHandler metadataHandler,
+      Token token,
+      Map<String, String> clientEnv,
+      ActionLookupData actionLookupData) {
     if (!actionCacheChecker.enabled()) {
+      return;
+    }
+    if (!actionReallyExecuted(action, actionLookupData)) {
+      // If an action shared with this one executed, then we need not update the action cache, since
+      // the other action will do it. Moreover, this action is not aware of metadata acquired
+      // during execution, so its metadata handler is likely unusable anyway.
       return;
     }
     try {
@@ -775,19 +796,6 @@ public final class SkyframeActionExecutor {
     ActionResult execute() throws ActionExecutionException, InterruptedException;
   }
 
-  /**
-   * Temporary interface to allow delegation of action postprocessing to ActionExecutionFunction.
-   * The current implementation requires access to local fields in ActionExecutionFunction.
-   */
-  interface ActionPostprocessing {
-    void run(
-        Environment env,
-        Action action,
-        ActionMetadataHandler metadataHandler,
-        Map<String, String> clientEnv)
-        throws InterruptedException;
-  }
-
   /** Represents an action that needs to be run. */
   private final class ActionRunner extends ActionStep {
     private final Action action;
@@ -796,22 +804,19 @@ public final class SkyframeActionExecutor {
     private final ActionExecutionContext actionExecutionContext;
     private final ActionLookupData actionLookupData;
     private final ActionExecutionStatusReporter statusReporter;
-    private final ActionPostprocessing postprocessing;
 
     ActionRunner(
         Action action,
         ActionMetadataHandler metadataHandler,
         long actionStartTime,
         ActionExecutionContext actionExecutionContext,
-        ActionLookupData actionLookupData,
-        ActionPostprocessing postprocessing) {
+        ActionLookupData actionLookupData) {
       this.action = action;
       this.metadataHandler = metadataHandler;
       this.actionStartTime = actionStartTime;
       this.actionExecutionContext = actionExecutionContext;
       this.actionLookupData = actionLookupData;
       this.statusReporter = statusReporterRef.get();
-      this.postprocessing = postprocessing;
     }
 
     @Override
@@ -966,7 +971,7 @@ public final class SkyframeActionExecutor {
         } catch (InterruptedException e) {
           return ActionStepOrResult.of(e);
         }
-        return new ActionCacheWriteStep(actuallyCompleteAction(eventHandler, actionResult));
+        return ActionStepOrResult.of(actuallyCompleteAction(eventHandler, actionResult));
       } catch (ActionExecutionException e) {
         return ActionStepOrResult.of(e);
       } finally {
@@ -1081,27 +1086,6 @@ public final class SkyframeActionExecutor {
         return completeAction(
             actionExecutionContext.getEventHandler(),
             () -> spawnAction.finishSync(futureSpawn, actionExecutionContext.getVerboseFailures()));
-      }
-    }
-
-    private class ActionCacheWriteStep extends ActionStep {
-      private final ActionExecutionValue value;
-
-      public ActionCacheWriteStep(ActionExecutionValue value) {
-        this.value = value;
-      }
-
-      @Override
-      public ActionStepOrResult run(Environment env) {
-        try {
-          postprocessing.run(env, action, metadataHandler, actionExecutionContext.getClientEnv());
-          if (env.valuesMissing()) {
-            return this;
-          }
-        } catch (InterruptedException e) {
-          return ActionStepOrResult.of(e);
-        }
-        return ActionStepOrResult.of(value);
       }
     }
   }

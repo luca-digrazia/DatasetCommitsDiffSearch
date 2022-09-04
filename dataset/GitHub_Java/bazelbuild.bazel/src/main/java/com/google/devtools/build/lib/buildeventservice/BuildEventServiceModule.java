@@ -46,10 +46,7 @@ import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.OptionsParsingResult;
-import java.io.BufferedOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -294,98 +291,48 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       Supplier<BuildEventArtifactUploader> uploaderSupplier,
       CountingArtifactGroupNamer artifactGroupNamer) {
     ImmutableSet.Builder<BuildEventTransport> bepTransportsBuilder = new ImmutableSet.Builder<>();
-    Consumer<AbruptExitException> abruptExitCallback = cmdEnv.getBlazeModuleEnvironment()::exit;
+    Consumer<AbruptExitException> abruptExitFunction = cmdEnv.getBlazeModuleEnvironment()::exit;
 
     if (!Strings.isNullOrEmpty(besStreamOptions.buildEventTextFile)) {
-      try {
-        BufferedOutputStream bepTextOutputStream =
-            new BufferedOutputStream(
-                Files.newOutputStream(Paths.get(besStreamOptions.buildEventTextFile)));
-
-        BuildEventArtifactUploader localFileUploader =
-            besStreamOptions.buildEventTextFilePathConversion
-                ? uploaderSupplier.get()
-                : new LocalFilesArtifactUploader();
-        bepTransportsBuilder.add(
-            new TextFormatFileTransport(
-                bepTextOutputStream,
-                bepOptions,
-                localFileUploader,
-                abruptExitCallback,
-                artifactGroupNamer));
-      } catch (IOException exception) {
-        // TODO(b/125216340): Consider making this a warning instead of an error once the
-        //  associated bug has been resolved.
-        reportError(
-            cmdEnv.getReporter(),
-            cmdEnv.getBlazeModuleEnvironment(),
-            "Unable to write to '"
-                + besStreamOptions.buildEventTextFile
-                + "'. Omitting --build_event_text_file.",
-            exception,
-            ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
-      }
+      BuildEventArtifactUploader localFileUploader =
+          besStreamOptions.buildEventTextFilePathConversion
+              ? uploaderSupplier.get()
+              : new LocalFilesArtifactUploader();
+      bepTransportsBuilder.add(
+          new TextFormatFileTransport(
+              besStreamOptions.buildEventTextFile,
+              bepOptions,
+              localFileUploader,
+              abruptExitFunction,
+              artifactGroupNamer));
     }
 
     if (!Strings.isNullOrEmpty(besStreamOptions.buildEventBinaryFile)) {
-      try {
-        BufferedOutputStream bepBinaryOutputStream =
-            new BufferedOutputStream(
-                Files.newOutputStream(Paths.get(besStreamOptions.buildEventBinaryFile)));
-
-        BuildEventArtifactUploader localFileUploader =
-            besStreamOptions.buildEventBinaryFilePathConversion
-                ? uploaderSupplier.get()
-                : new LocalFilesArtifactUploader();
-        bepTransportsBuilder.add(
-            new BinaryFormatFileTransport(
-                bepBinaryOutputStream,
-                bepOptions,
-                localFileUploader,
-                abruptExitCallback,
-                artifactGroupNamer));
-      } catch (IOException exception) {
-        // TODO(b/125216340): Consider making this a warning instead of an error once the
-        //  associated bug has been resolved.
-        reportError(
-            cmdEnv.getReporter(),
-            cmdEnv.getBlazeModuleEnvironment(),
-            "Unable to write to '"
-                + besStreamOptions.buildEventBinaryFile
-                + "'. Omitting --build_event_binary_file.",
-            exception,
-            ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
-      }
+      BuildEventArtifactUploader localFileUploader =
+          besStreamOptions.buildEventBinaryFilePathConversion
+              ? uploaderSupplier.get()
+              : new LocalFilesArtifactUploader();
+      bepTransportsBuilder.add(
+          new BinaryFormatFileTransport(
+              besStreamOptions.buildEventBinaryFile,
+              bepOptions,
+              localFileUploader,
+              abruptExitFunction,
+              artifactGroupNamer));
     }
 
     if (!Strings.isNullOrEmpty(besStreamOptions.buildEventJsonFile)) {
-      try {
-        BufferedOutputStream bepJsonOutputStream =
-            new BufferedOutputStream(
-                Files.newOutputStream(Paths.get(besStreamOptions.buildEventJsonFile)));
-        BuildEventArtifactUploader localFileUploader =
-            besStreamOptions.buildEventJsonFilePathConversion
-                ? uploaderSupplier.get()
-                : new LocalFilesArtifactUploader();
-        bepTransportsBuilder.add(
-            new JsonFormatFileTransport(
-                bepJsonOutputStream,
-                bepOptions,
-                localFileUploader,
-                abruptExitCallback,
-                artifactGroupNamer));
-      } catch (IOException exception) {
-        // TODO(b/125216340): Consider making this a warning instead of an error once the
-        //  associated bug has been resolved.
-        reportError(
-            cmdEnv.getReporter(),
-            cmdEnv.getBlazeModuleEnvironment(),
-            "Unable to write to '"
-                + besStreamOptions.buildEventJsonFile
-                + "'. Omitting --build_event_json_file.",
-            exception,
-            ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
-      }
+      BuildEventArtifactUploader localFileUploader =
+          besStreamOptions.buildEventJsonFilePathConversion
+              ? uploaderSupplier.get()
+              : new LocalFilesArtifactUploader();
+      bepTransportsBuilder.add(
+          new JsonFormatFileTransport(
+              besStreamOptions.buildEventJsonFile,
+              bepOptions,
+              localFileUploader,
+              abruptExitFunction,
+              artifactGroupNamer));
     }
 
     BuildEventServiceTransport besTransport =
@@ -414,10 +361,11 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
         .collect(ImmutableSet.toImmutableSet());
   }
 
-  // TODO(b/115961387): This method shouldn't exist. It only does because some tests are relying on
-  //  the transport creation logic of this module directly.
+  // TODO(lpino): This method shouldn exist. It only does because some tests are relying on the
+  // transport creation logic of this module directly.
   @VisibleForTesting
   ImmutableSet<BuildEventTransport> getBepTransports() {
     return bepTransports;
   }
 }
+
