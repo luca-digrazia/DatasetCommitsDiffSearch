@@ -104,7 +104,7 @@ class UnitOfWorkAspect {
             return;
         }
         final Transaction txn = session.getTransaction();
-        if (txn != null && txn.getStatus().canRollback()) {
+        if (txn != null && txn.isActive()) {
             txn.rollback();
         }
     }
@@ -114,7 +114,7 @@ class UnitOfWorkAspect {
             return;
         }
         final Transaction txn = session.getTransaction();
-        if (txn != null && txn.getStatus().canRollback()) {
+        if (txn != null && txn.isActive()) {
             txn.commit();
         }
     }
