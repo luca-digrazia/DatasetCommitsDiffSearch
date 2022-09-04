@@ -30,7 +30,7 @@ import org.graylog2.Main;
  *
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
-public final class GELF {
+public class GELF {
 
     /**
      * A ZLIB compressed message (RFC 1950)

@@ -29,7 +29,7 @@ import java.util.Date;
  *
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
-public final class Log {
+public class Log {
     
     /**
      * INFO

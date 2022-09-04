@@ -38,7 +38,7 @@ import org.graylog2.periodical.RRDThread;
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public final class Main {
+public class Main {
 
     /**
      * Controlled by parameter "debug". Enabled more verbose output.
