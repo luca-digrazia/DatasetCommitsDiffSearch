@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.NullEventHandler;
-import com.google.devtools.build.lib.io.FileSymlinkCycleUniquenessFunction;
 import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
@@ -119,18 +118,7 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
             BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER));
     skyFunctions.put(
-        SkyFunctions.PACKAGE,
-        new PackageFunction(
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            /*packageProgress=*/ null,
-            PackageFunction.ActionOnIOExceptionReadingBuildFile.UseOriginalIOException.INSTANCE,
-            PackageFunction.IncrementalityIntent.INCREMENTAL));
+        SkyFunctions.PACKAGE, new PackageFunction(null, null, null, null, null, null, null));
     skyFunctions.put(
         FileStateValue.FILE_STATE,
         new FileStateFunction(
@@ -164,7 +152,7 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
         SkyFunctions.LOCAL_REPOSITORY_LOOKUP,
         new LocalRepositoryLookupFunction(BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER));
     skyFunctions.put(
-        FileSymlinkCycleUniquenessFunction.NAME, new FileSymlinkCycleUniquenessFunction());
+        SkyFunctions.FILE_SYMLINK_CYCLE_UNIQUENESS, new FileSymlinkCycleUniquenessFunction());
 
     ImmutableMap<String, RepositoryFunction> repositoryHandlers =
         ImmutableMap.of(

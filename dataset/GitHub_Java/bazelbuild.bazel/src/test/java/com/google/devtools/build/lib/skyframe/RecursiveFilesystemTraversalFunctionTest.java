@@ -50,8 +50,6 @@ import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.NullEventHandler;
-import com.google.devtools.build.lib.io.FileSymlinkCycleUniquenessFunction;
-import com.google.devtools.build.lib.io.FileSymlinkInfiniteExpansionUniquenessFunction;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
@@ -166,18 +164,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
         new IgnoredPackagePrefixesFunction(
             /*ignoredPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT));
     skyFunctions.put(
-        SkyFunctions.PACKAGE,
-        new PackageFunction(
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            /*packageProgress=*/ null,
-            PackageFunction.ActionOnIOExceptionReadingBuildFile.UseOriginalIOException.INSTANCE,
-            PackageFunction.IncrementalityIntent.INCREMENTAL));
+        SkyFunctions.PACKAGE, new PackageFunction(null, null, null, null, null, null, null));
     skyFunctions.put(
         WorkspaceFileValue.WORKSPACE_FILE,
         new WorkspaceFileFunction(
@@ -194,10 +181,10 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
         SkyFunctions.LOCAL_REPOSITORY_LOOKUP,
         new LocalRepositoryLookupFunction(BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER));
     skyFunctions.put(
-        FileSymlinkInfiniteExpansionUniquenessFunction.NAME,
+        SkyFunctions.FILE_SYMLINK_INFINITE_EXPANSION_UNIQUENESS,
         new FileSymlinkInfiniteExpansionUniquenessFunction());
     skyFunctions.put(
-        FileSymlinkCycleUniquenessFunction.NAME, new FileSymlinkCycleUniquenessFunction());
+        SkyFunctions.FILE_SYMLINK_CYCLE_UNIQUENESS, new FileSymlinkCycleUniquenessFunction());
     // We use a non-hermetic key to allow us to invalidate the proper artifacts on rebuilds. We
     // could have the artifact depend on the corresponding FileValue, but that would not cover the
     // case of a generated directory, which we have test coverage for.

@@ -94,7 +94,8 @@ abstract class ArtifactFunctionTestCase {
         ExternalFilesHelper.createForTesting(
             pkgLocator,
             ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS,
-            directories);
+            directories,
+            BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER);
     differencer = new SequencedRecordingDifferencer();
     evaluator =
         new InMemoryMemoizingEvaluator(
@@ -112,18 +113,7 @@ abstract class ArtifactFunctionTestCase {
                 .put(SkyFunctions.ACTION_EXECUTION, new SimpleActionExecutionFunction())
                 .put(
                     SkyFunctions.PACKAGE,
-                    new PackageFunction(
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        /*packageProgress=*/ null,
-                        PackageFunction.ActionOnIOExceptionReadingBuildFile.UseOriginalIOException
-                            .INSTANCE,
-                        PackageFunction.IncrementalityIntent.INCREMENTAL))
+                    new PackageFunction(null, null, null, null, null, null, null))
                 .put(
                     SkyFunctions.PACKAGE_LOOKUP,
                     new PackageLookupFunction(

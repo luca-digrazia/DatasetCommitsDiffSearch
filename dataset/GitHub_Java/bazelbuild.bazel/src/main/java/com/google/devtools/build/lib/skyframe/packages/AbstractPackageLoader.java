@@ -37,8 +37,6 @@ import com.google.devtools.build.lib.concurrent.ExecutorUtil;
 import com.google.devtools.build.lib.concurrent.NamedForkJoinPool;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.events.StoredEventHandler;
-import com.google.devtools.build.lib.io.FileSymlinkCycleUniquenessFunction;
-import com.google.devtools.build.lib.io.FileSymlinkInfiniteExpansionUniquenessFunction;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.CachingPackageLocator;
@@ -50,7 +48,6 @@ import com.google.devtools.build.lib.packages.Package.ConfigSettingVisibilityPol
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.packages.PackageLoadingListener;
-import com.google.devtools.build.lib.packages.PackageOverheadEstimator;
 import com.google.devtools.build.lib.packages.PackageValidator;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
@@ -63,6 +60,8 @@ import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAc
 import com.google.devtools.build.lib.skyframe.ExternalPackageFunction;
 import com.google.devtools.build.lib.skyframe.FileFunction;
 import com.google.devtools.build.lib.skyframe.FileStateFunction;
+import com.google.devtools.build.lib.skyframe.FileSymlinkCycleUniquenessFunction;
+import com.google.devtools.build.lib.skyframe.FileSymlinkInfiniteExpansionUniquenessFunction;
 import com.google.devtools.build.lib.skyframe.IgnoredPackagePrefixesFunction;
 import com.google.devtools.build.lib.skyframe.ManagedDirectoriesKnowledge;
 import com.google.devtools.build.lib.skyframe.PackageFunction;
@@ -143,8 +142,8 @@ public abstract class AbstractPackageLoader implements PackageLoader {
   protected final ExternalFilesHelper externalFilesHelper;
   protected final BlazeDirectories directories;
   private final HashFunction hashFunction;
-  private final int nonSkyframeGlobbingThreads;
-  @VisibleForTesting final ForkJoinPool forkJoinPoolForNonSkyframeGlobbing;
+  private final int legacyGlobbingThreads;
+  @VisibleForTesting final ForkJoinPool forkJoinPoolForLegacyGlobbing;
   private final int skyframeThreads;
 
   /** Abstract base class of a builder for {@link PackageLoader} instances. */
@@ -153,6 +152,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     protected final BlazeDirectories directories;
     protected final PathPackageLocator pkgLocator;
     final AtomicReference<PathPackageLocator> pkgLocatorRef;
+    private final ExternalPackageHelper externalPackageHelper;
     private ExternalFileAction externalFileAction;
     protected ExternalFilesHelper externalFilesHelper;
     protected ConfiguredRuleClassProvider ruleClassProvider = getDefaultRuleClassProvider();
@@ -160,7 +160,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     protected Reporter commonReporter = new Reporter(new EventBus());
     protected Map<SkyFunctionName, SkyFunction> extraSkyFunctions = new HashMap<>();
     List<PrecomputedValue.Injected> extraPrecomputedValues = new ArrayList<>();
-    int nonSkyframeGlobbingThreads = 1;
+    int legacyGlobbingThreads = 1;
     int skyframeThreads = 1;
 
     protected Builder(
@@ -168,6 +168,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
         Path installBase,
         Path outputBase,
         ImmutableList<BuildFileName> buildFilesByPriority,
+        ExternalPackageHelper externalPackageHelper,
         ExternalFileAction externalFileAction) {
       this.workspaceDir = workspaceDir.asPath();
       Path devNull = workspaceDir.getRelative("/dev/null");
@@ -183,6 +184,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
               directories.getOutputBase(), ImmutableList.of(workspaceDir), buildFilesByPriority);
       this.pkgLocatorRef = new AtomicReference<>(pkgLocator);
       this.externalFileAction = externalFileAction;
+      this.externalPackageHelper = externalPackageHelper;
     }
 
     public Builder setRuleClassProvider(ConfiguredRuleClassProvider ruleClassProvider) {
@@ -222,8 +224,8 @@ public abstract class AbstractPackageLoader implements PackageLoader {
       return this;
     }
 
-    public Builder setNonSkyframeGlobbingThreads(int numThreads) {
-      this.nonSkyframeGlobbingThreads = numThreads;
+    public Builder setLegacyGlobbingThreads(int numThreads) {
+      this.legacyGlobbingThreads = numThreads;
       return this;
     }
 
@@ -252,7 +254,8 @@ public abstract class AbstractPackageLoader implements PackageLoader {
               pkgLocatorRef,
               externalFileAction,
               directories,
-              ManagedDirectoriesKnowledge.NO_MANAGED_DIRECTORIES);
+              ManagedDirectoriesKnowledge.NO_MANAGED_DIRECTORIES,
+              externalPackageHelper);
       return buildImpl();
     }
 
@@ -267,10 +270,10 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     this.commonReporter = builder.commonReporter;
     this.extraSkyFunctions = ImmutableMap.copyOf(builder.extraSkyFunctions);
     this.pkgLocatorRef = builder.pkgLocatorRef;
-    this.nonSkyframeGlobbingThreads = builder.nonSkyframeGlobbingThreads;
-    this.forkJoinPoolForNonSkyframeGlobbing =
+    this.legacyGlobbingThreads = builder.legacyGlobbingThreads;
+    this.forkJoinPoolForLegacyGlobbing =
         NamedForkJoinPool.newNamedPool(
-            "package-loader-globbing-pool", builder.nonSkyframeGlobbingThreads);
+            "package-loader-globbing-pool", builder.legacyGlobbingThreads);
     this.skyframeThreads = builder.skyframeThreads;
     this.directories = builder.directories;
     this.hashFunction = builder.workspaceDir.getFileSystem().getDigestFunction().getHashFunction();
@@ -285,12 +288,11 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     pkgFactory =
         new PackageFactory(
             ruleClassProvider,
-            forkJoinPoolForNonSkyframeGlobbing,
+            forkJoinPoolForLegacyGlobbing,
             getEnvironmentExtensions(),
             "PackageLoader",
             DefaultPackageSettings.INSTANCE,
             PackageValidator.NOOP_VALIDATOR,
-            PackageOverheadEstimator.NOOP_ESTIMATOR,
             PackageLoadingListener.NOOP_LISTENER);
   }
 
@@ -326,7 +328,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
   public void close() {
     // We don't use ForkJoinPool#shutdownNow since it has a performance bug. See
     // http://b/33482341#comment13.
-    forkJoinPoolForNonSkyframeGlobbing.shutdown();
+    forkJoinPoolForLegacyGlobbing.shutdown();
   }
 
   @Override
@@ -443,9 +445,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
         CacheBuilder.newBuilder().build();
     AtomicReference<FilesystemCalls> syscallCacheRef =
         new AtomicReference<>(
-            PerBuildSyscallCache.newBuilder()
-                .setConcurrencyLevel(nonSkyframeGlobbingThreads)
-                .build());
+            PerBuildSyscallCache.newBuilder().setConcurrencyLevel(legacyGlobbingThreads).build());
     pkgFactory.setSyscalls(syscallCacheRef);
     pkgFactory.setMaxDirectoriesToEagerlyVisitInGlobbing(
         MAX_DIRECTORIES_TO_EAGERLY_VISIT_IN_GLOBBING);
@@ -463,9 +463,9 @@ public abstract class AbstractPackageLoader implements PackageLoader {
         .put(
             FileStateValue.FILE_STATE,
             new FileStateFunction(tsgm, syscallCacheRef, externalFilesHelper))
-        .put(FileSymlinkCycleUniquenessFunction.NAME, new FileSymlinkCycleUniquenessFunction())
+        .put(SkyFunctions.FILE_SYMLINK_CYCLE_UNIQUENESS, new FileSymlinkCycleUniquenessFunction())
         .put(
-            FileSymlinkInfiniteExpansionUniquenessFunction.NAME,
+            SkyFunctions.FILE_SYMLINK_INFINITE_EXPANSION_UNIQUENESS,
             new FileSymlinkInfiniteExpansionUniquenessFunction())
         .put(FileValue.FILE, new FileFunction(pkgLocatorRef))
         .put(

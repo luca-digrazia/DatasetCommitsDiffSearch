@@ -17,6 +17,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableList;
@@ -27,6 +28,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.FileValue;
+import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
@@ -35,8 +37,6 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
-import com.google.devtools.build.lib.io.FileSymlinkException;
-import com.google.devtools.build.lib.io.InconsistentFilesystemException;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.CachingPackageLocator;
@@ -187,6 +187,28 @@ public class PackageFunction implements SkyFunction {
     this.packageProgress = packageProgress;
     this.actionOnIOExceptionReadingBuildFile = actionOnIOExceptionReadingBuildFile;
     this.incrementalityIntent = incrementalityIntent;
+  }
+
+  @VisibleForTesting
+  public PackageFunction(
+      PackageFactory packageFactory,
+      CachingPackageLocator pkgLocator,
+      AtomicBoolean showLoadingProgress,
+      Cache<PackageIdentifier, LoadedPackageCacheEntry> packageFunctionCache,
+      Cache<PackageIdentifier, CompiledBuildFile> compiledBuildFileCache,
+      AtomicInteger numPackagesLoaded,
+      @Nullable BzlLoadFunction bzlLoadFunctionForInlining) {
+    this(
+        packageFactory,
+        pkgLocator,
+        showLoadingProgress,
+        packageFunctionCache,
+        compiledBuildFileCache,
+        numPackagesLoaded,
+        bzlLoadFunctionForInlining,
+        /*packageProgress=*/ null,
+        ActionOnIOExceptionReadingBuildFile.UseOriginalIOException.INSTANCE,
+        IncrementalityIntent.INCREMENTAL);
   }
 
   public void setBzlLoadFunctionForInliningForTesting(BzlLoadFunction bzlLoadFunctionForInlining) {

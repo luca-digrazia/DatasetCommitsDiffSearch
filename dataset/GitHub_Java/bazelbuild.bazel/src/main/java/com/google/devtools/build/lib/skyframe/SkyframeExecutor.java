@@ -114,8 +114,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.io.FileSymlinkCycleUniquenessFunction;
-import com.google.devtools.build.lib.io.FileSymlinkInfiniteExpansionUniquenessFunction;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -497,9 +495,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     map.put(SkyFunctions.ACTION_ENVIRONMENT_VARIABLE, new ActionEnvironmentFunction());
     map.put(FileStateValue.FILE_STATE, newFileStateFunction());
     map.put(SkyFunctions.DIRECTORY_LISTING_STATE, newDirectoryListingStateFunction());
-    map.put(FileSymlinkCycleUniquenessFunction.NAME, new FileSymlinkCycleUniquenessFunction());
+    map.put(SkyFunctions.FILE_SYMLINK_CYCLE_UNIQUENESS, new FileSymlinkCycleUniquenessFunction());
     map.put(
-        FileSymlinkInfiniteExpansionUniquenessFunction.NAME,
+        SkyFunctions.FILE_SYMLINK_INFINITE_EXPANSION_UNIQUENESS,
         new FileSymlinkInfiniteExpansionUniquenessFunction());
     map.put(FileValue.FILE, new FileFunction(pkgLocator, nonexistentFileReceiver));
     map.put(SkyFunctions.DIRECTORY_LISTING, new DirectoryListingFunction());
@@ -960,17 +958,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
   /** Whether this executor tracks state for the purpose of improving incremental performance. */
   public boolean tracksStateForIncrementality() {
     return true;
-  }
-
-  /**
-   * Whether this executor may reuse analysis phase nodes for the purpose of improving incremental
-   * performance.
-   *
-   * <p>This may diverge from {@link #tracksStateForIncrementality} in the case where only execution
-   * phase nodes are used for incrementality.
-   */
-  protected boolean isAnalysisIncremental() {
-    return tracksStateForIncrementality();
   }
 
   /**
@@ -1563,13 +1550,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     try (SilentCloseable c =
         Profiler.instance().profile("skyframeActionExecutor.prepareForExecution")) {
       skyframeActionExecutor.prepareForExecution(
-          reporter,
-          executor,
-          options,
-          actionCacheChecker,
-          topDownActionCache,
-          outputService,
-          isAnalysisIncremental());
+          reporter, executor, options, actionCacheChecker, topDownActionCache, outputService);
     }
 
     resourceManager.resetResourceUsage();
@@ -1620,13 +1601,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     try (SilentCloseable c =
         Profiler.instance().profile("skyframeActionExecutor.prepareForExecution")) {
       skyframeActionExecutor.prepareForExecution(
-          reporter,
-          executor,
-          options,
-          actionCacheChecker,
-          topDownActionCache,
-          outputService,
-          isAnalysisIncremental());
+          reporter, executor, options, actionCacheChecker, topDownActionCache, outputService);
     }
 
     resourceManager.resetResourceUsage();
@@ -1656,13 +1631,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
       ActionCacheChecker checker,
       TopDownActionCache topDownActionCache) {
     skyframeActionExecutor.prepareForExecution(
-        reporter,
-        executor,
-        options,
-        checker,
-        topDownActionCache,
-        outputService,
-        isAnalysisIncremental());
+        reporter, executor, options, checker, topDownActionCache, outputService);
   }
 
   private void deleteActionsIfRemoteOptionsChanged(OptionsProvider options)

@@ -355,8 +355,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
             new ActionCacheChecker(
                 actionCache, null, actionKeyContext, ALWAYS_EXECUTE_FILTER, null),
             topDownActionCache,
-            /*outputService=*/ null,
-            /*incrementalAnalysis=*/ true);
+            null);
         skyframeActionExecutor.setActionExecutionProgressReportingObjects(
             EMPTY_PROGRESS_SUPPLIER, EMPTY_COMPLETION_RECEIVER);
 
