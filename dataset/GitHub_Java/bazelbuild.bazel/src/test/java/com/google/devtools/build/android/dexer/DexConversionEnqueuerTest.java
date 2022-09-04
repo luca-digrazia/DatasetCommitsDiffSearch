@@ -20,8 +20,10 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.when;
 
 import com.android.dex.Dex;
+import com.android.dx.command.dexer.DxContext;
 import com.android.dx.dex.DexOptions;
 import com.android.dx.dex.cf.CfOptions;
+import com.android.dx.dex.code.PositionList;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
@@ -64,7 +66,7 @@ public class DexConversionEnqueuerTest {
         new DexConversionEnqueuer(
             zip,
             newDirectExecutorService(),
-            new DexConverter(new Dexing(new DexOptions(), new CfOptions())),
+            new DexConverter(new Dexing(new DxContext(), new DexOptions(), new CfOptions())),
             cache);
   }
 
@@ -130,7 +132,7 @@ public class DexConversionEnqueuerTest {
     assertThat(f.isDone()).isTrue();
     assertThat(f.get().getEntry().getName()).isEqualTo(filename + ".dex");
     assertThat(f.get().getEntry().getTime()).isEqualTo(FILE_TIME);
-    assertThat(f.get().getContent()).isSameAs(dexcode);
+    assertThat(f.get().getContent()).isSameInstanceAs(dexcode);
   }
 
   private byte[] testConvertClassToDex() throws Exception {
@@ -140,17 +142,24 @@ public class DexConversionEnqueuerTest {
     stuffer.call();
     Future<ZipEntryContent> f = stuffer.getFiles().remove();
     assertThat(f.isDone()).isTrue();
+    byte[] dexcode = f.get().getContent();
     assertThat(f.get().getEntry().getName()).isEqualTo(filename + ".dex");
     assertThat(f.get().getEntry().getTime()).isEqualTo(FILE_TIME);
-    assertThat(f.get().getEntry().getSize()).isEqualTo(-1);
-    assertThat(f.get().getEntry().getCompressedSize()).isEqualTo(-1);
-    byte[] dexcode = f.get().getContent();
+    assertThat(f.get().getEntry().getSize()).isEqualTo(dexcode.length);
+    assertThat(f.get().getEntry().getCompressedSize()).isEqualTo(dexcode.length);
+
     Dex dex = new Dex(dexcode);
     assertThat(dex.classDefs()).hasSize(1);
-    assertThat(cache.getIfPresent(DexingKey.create(false, false, bytecode))).isSameAs(dexcode);
-    assertThat(cache.getIfPresent(DexingKey.create(true, false, bytecode))).isNull();
-    assertThat(cache.getIfPresent(DexingKey.create(false, true, bytecode))).isNull();
-    assertThat(cache.getIfPresent(DexingKey.create(true, true, bytecode))).isNull();
+    assertThat(cache.getIfPresent(DexingKey.create(false, false, PositionList.LINES, 13, bytecode)))
+        .isSameInstanceAs(dexcode);
+    assertThat(cache.getIfPresent(DexingKey.create(false, false, PositionList.NONE, 13, bytecode)))
+        .isNull();
+    assertThat(cache.getIfPresent(DexingKey.create(true, false, PositionList.LINES, 13, bytecode)))
+        .isNull();
+    assertThat(cache.getIfPresent(DexingKey.create(false, true, PositionList.LINES, 13, bytecode)))
+        .isNull();
+    assertThat(cache.getIfPresent(DexingKey.create(true, true, PositionList.LINES, 13, bytecode)))
+        .isNull();
     return dexcode;
   }
 
