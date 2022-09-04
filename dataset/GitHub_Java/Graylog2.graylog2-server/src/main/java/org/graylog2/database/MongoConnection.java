@@ -147,9 +147,6 @@ public final class MongoConnection {
         coll.ensureIndex(new BasicDBObject("host", 1));
         coll.ensureIndex(new BasicDBObject("streams", 1));
 
-        coll.ensureIndex(new BasicDBObject("facility", 1));
-        coll.ensureIndex(new BasicDBObject("level", 1));
-
         this.messagesCollection = coll;
         return coll;
     }
