@@ -94,11 +94,8 @@ public class ArtifactFactory implements ArtifactResolver {
     }
 
     /**
-     * Returns artifact if it is present in the cache and has been verified to be valid for this
-     * build, otherwise null. Note that if the artifact's package is not part of the current build,
-     * our differing methods of validating source roots (via {@link PackageRootResolver} and via
-     * {@link #findSourceRoot}) may disagree. In that case, the artifact will be valid, but unusable
-     * by any action (since no action has properly declared it as an input).
+     * Returns artifact if it present in the cache and was created during this build, otherwise
+     * null.
      */
     @ThreadSafe
     Artifact getArtifactIfValid(PathFragment execPath) {
@@ -327,14 +324,8 @@ public class ArtifactFactory implements ArtifactResolver {
    * relativePath} (via {@code baseExecPath.getRelative(relativePath)} if baseExecPath is not null).
    * That Artifact will have root determined by the package roots of this factory if it lives in a
    * subpackage distinct from that of baseExecPath, and {@code baseRoot} otherwise.
-   *
-   * <p>Thread-safety: does only reads until the call to #createArtifactIfNotValid. That may perform
-   * mutations, but is thread-safe. There is the potential for a race in which one thread observes
-   * no matching artifact in {@link #sourceArtifactCache} initially, but when it goes to create it,
-   * does find it there, but that is a benign race.
    */
-  @ThreadSafe
-  public Artifact resolveSourceArtifactWithAncestor(
+  public synchronized Artifact resolveSourceArtifactWithAncestor(
       PathFragment relativePath,
       PathFragment baseExecPath,
       ArtifactRoot baseRoot,
@@ -357,13 +348,20 @@ public class ArtifactFactory implements ArtifactResolver {
     if (isDerivedArtifact(execPath)) {
       return null;
     }
-    Artifact artifact = sourceArtifactCache.getArtifactIfValid(execPath);
-    if (artifact != null) {
-      return artifact;
-    }
     Root sourceRoot =
         findSourceRoot(
             execPath, baseExecPath, baseRoot == null ? null : baseRoot.getRoot(), repositoryName);
+    Artifact artifact = sourceArtifactCache.getArtifactIfValid(execPath);
+    if (artifact != null) {
+      ArtifactRoot artifactRoot = artifact.getRoot();
+      Preconditions.checkState(
+          sourceRoot == null || sourceRoot.equals(artifactRoot.getRoot()),
+          "roots mismatch: %s %s %s",
+          sourceRoot,
+          artifactRoot,
+          artifact);
+      return artifact;
+    }
     return createArtifactIfNotValid(sourceRoot, execPath);
   }
 
@@ -453,10 +451,6 @@ public class ArtifactFactory implements ArtifactResolver {
     return execRoot.getRelative(execPath);
   }
 
-  // Thread-safety: gets from sourceArtifactCache, which can be done concurrently, and may create
-  // an artifact, which is done by #getSourceArtifact in a thread-safe manner. Only non-thread-safe
-  // call is to sourceArtifactCache#markEntryAsValid, which is synchronized on this.
-  @ThreadSafe
   private Artifact createArtifactIfNotValid(Root sourceRoot, PathFragment execPath) {
     if (sourceRoot == null) {
       return null;  // not a path that we can find...
@@ -465,21 +459,7 @@ public class ArtifactFactory implements ArtifactResolver {
     if (artifact != null && sourceRoot.equals(artifact.getRoot().getRoot())) {
       // Source root of existing artifact hasn't changed so we should mark corresponding entry in
       // the cache as valid.
-      // TODO(janakr): markEntryAsValid looks like it should be thread-safe: revisit if contention
-      // here is still an issue.
-      synchronized (this) {
-        Artifact validArtifact = sourceArtifactCache.getArtifactIfValid(execPath);
-        if (validArtifact == null) {
-          // Wasn't previously known to be valid.
-          sourceArtifactCache.markEntryAsValid(execPath);
-        } else {
-          Preconditions.checkState(
-              artifact.equals(validArtifact),
-              "Mismatched artifacts: %s %s",
-              artifact,
-              validArtifact);
-        }
-      }
+      sourceArtifactCache.markEntryAsValid(execPath);
     } else {
       // Must be a new artifact or artifact in the cache is stale, so create a new one.
       artifact = getSourceArtifact(execPath, sourceRoot, ArtifactOwner.NullArtifactOwner.INSTANCE);
@@ -493,8 +473,8 @@ public class ArtifactFactory implements ArtifactResolver {
    *
    * @param execPath The artifact's exec path.
    */
-  @VisibleForTesting // for our own unit tests only.
-  boolean isDerivedArtifact(PathFragment execPath) {
+  @VisibleForTesting  // for our own unit tests only.
+  synchronized boolean isDerivedArtifact(PathFragment execPath) {
     return execPath.startsWith(derivedPathPrefix);
   }
 }
