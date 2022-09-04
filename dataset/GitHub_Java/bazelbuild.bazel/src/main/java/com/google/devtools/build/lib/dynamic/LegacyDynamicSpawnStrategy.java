@@ -402,8 +402,7 @@ public class LegacyDynamicSpawnStrategy implements SpawnActionContext {
     } else {
       return () -> {
         if (outputWriteBarrier.get() != token && !outputWriteBarrier.compareAndSet(null, token)) {
-          throw new DynamicInterruptedException(
-              "Execution stopped because other strategy finished first");
+          throw new InterruptedException();
         }
       };
     }
