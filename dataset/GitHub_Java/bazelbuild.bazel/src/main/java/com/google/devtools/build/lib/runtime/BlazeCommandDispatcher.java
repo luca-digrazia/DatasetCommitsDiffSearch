@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.flags.InvocationPolicyEnforcer;
-import com.google.devtools.build.lib.flags.InvocationPolicyParser;
 import com.google.devtools.build.lib.runtime.commands.ProjectFileSupport;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.AnsiStrippingOutputStream;
@@ -245,7 +244,6 @@ public class BlazeCommandDispatcher {
    */
   int exec(List<String> args, OutErr outErr, LockingMode lockingMode, String clientDescription,
       long firstContactTime) throws ShutdownBlazeServerException, InterruptedException {
-    OriginalCommandLineEvent originalCommandLine = new OriginalCommandLineEvent(args);
     Preconditions.checkNotNull(clientDescription);
     if (args.isEmpty()) { // Default to help command if no arguments specified.
       args = HELP_COMMAND;
@@ -300,8 +298,7 @@ public class BlazeCommandDispatcher {
         outErr.printErrLn("Server shut down " + shutdownReason);
         return ExitCode.LOCAL_ENVIRONMENTAL_ERROR.getNumericExitCode();
       }
-      return execExclusively(
-          originalCommandLine, args, outErr, firstContactTime, commandName, command, waitTimeInMs);
+      return execExclusively(args, outErr, firstContactTime, commandName, command, waitTimeInMs);
     } catch (ShutdownBlazeServerException e) {
       shutdownReason = "explicitly by client " + currentClientDescription;
       throw e;
@@ -313,14 +310,8 @@ public class BlazeCommandDispatcher {
     }
   }
 
-  private int execExclusively(
-      OriginalCommandLineEvent originalCommandLine,
-      List<String> args,
-      OutErr outErr,
-      long firstContactTime,
-      String commandName,
-      BlazeCommand command,
-      long waitTimeInMs)
+  private int execExclusively(List<String> args, OutErr outErr, long firstContactTime,
+      String commandName, BlazeCommand command, long waitTimeInMs)
       throws ShutdownBlazeServerException {
     Command commandAnnotation = command.getClass().getAnnotation(Command.class);
 
@@ -382,14 +373,14 @@ public class BlazeCommandDispatcher {
       parseArgsAndConfigs(env, optionsParser, commandAnnotation, args, rcfileNotes, outErr);
 
       InvocationPolicyEnforcer optionsPolicyEnforcer =
-          new InvocationPolicyEnforcer(runtime.getModuleInvocationPolicy());
+          new InvocationPolicyEnforcer(runtime.getInvocationPolicy());
       optionsPolicyEnforcer.enforce(optionsParser, commandName);
-      optionsPolicyEnforcer = new InvocationPolicyEnforcer(
-          InvocationPolicyParser.parsePolicy(
+      optionsPolicyEnforcer =
+          InvocationPolicyEnforcer.create(
               getRuntime()
                   .getStartupOptionsProvider()
                   .getOptions(BlazeServerStartupOptions.class)
-                  .invocationPolicy));
+                  .invocationPolicy);
       optionsPolicyEnforcer.enforce(optionsParser, commandName);
     } catch (OptionsParsingException e) {
       for (String note : rcfileNotes) {
@@ -492,8 +483,6 @@ public class BlazeCommandDispatcher {
         reporter.handle(Event.warn(warning));
       }
 
-      env.getEventBus().post(originalCommandLine);
-
       ExitCode outcome = command.exec(env, optionsParser);
       outcome = env.precompleteCommand(outcome);
       numericExitCode = outcome.getNumericExitCode();
@@ -527,7 +516,7 @@ public class BlazeCommandDispatcher {
   }
 
   /**
-   * For testing ONLY. Same as {@link #exec}, but automatically
+   * For testing ONLY. Same as {@link #exec(List, OutErr, boolean, String, long)}, but automatically
    * uses the current time.
    */
   @VisibleForTesting
@@ -605,7 +594,7 @@ public class BlazeCommandDispatcher {
           : "Reading options for '" + originalCommand + "' from " + rcfile;
       rcfileNotes.add(source + ":\n"
           + "  " + inherited + "'" + commandToParse + "' options: "
-          + Joiner.on(' ').join(rcfileOptions));
+        + Joiner.on(' ').join(rcfileOptions));
       optionsParser.parse(OptionPriority.RC_FILE, rcfile, rcfileOptions);
     }
   }
