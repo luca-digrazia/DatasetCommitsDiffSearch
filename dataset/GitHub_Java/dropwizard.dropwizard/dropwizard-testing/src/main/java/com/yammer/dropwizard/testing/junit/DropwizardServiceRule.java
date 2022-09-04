@@ -19,8 +19,6 @@ public class DropwizardServiceRule<C extends Configuration> implements TestRule 
     private final String configPath;
 
     private C configuration;
-    private Service<C> service;
-    private Environment environment;
     private Server jettyServer;
 
     public DropwizardServiceRule(Class<? extends Service<C>> serviceClass, String configPath) {
@@ -49,7 +47,7 @@ public class DropwizardServiceRule<C extends Configuration> implements TestRule 
         }
 
         try {
-            service = serviceClass.newInstance();
+            final Service<C> service = serviceClass.newInstance();
 
             final Bootstrap<C> bootstrap = new Bootstrap<C>(service) {
                 @Override
@@ -61,7 +59,6 @@ public class DropwizardServiceRule<C extends Configuration> implements TestRule 
                         }
                     });
                     DropwizardServiceRule.this.configuration = configuration;
-                    DropwizardServiceRule.this.environment = environment;
                     super.runWithBundles(configuration, environment);
                 }
             };
@@ -79,16 +76,4 @@ public class DropwizardServiceRule<C extends Configuration> implements TestRule 
         return configuration;
     }
 
-    public int getLocalPort() {
-        return jettyServer.getConnectors()[0].getLocalPort();
-    }
-
-    @SuppressWarnings("unchecked")
-    public <S extends Service<C>> S getService() {
-        return (S) service;
-    }
-
-    public Environment getEnvironment() {
-        return environment;
-    }
 }
