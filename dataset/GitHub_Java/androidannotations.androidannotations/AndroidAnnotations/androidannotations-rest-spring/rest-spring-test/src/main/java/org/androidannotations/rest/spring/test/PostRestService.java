@@ -15,7 +15,6 @@
  */
 package org.androidannotations.rest.spring.test;
 
-import org.androidannotations.rest.spring.annotations.Body;
 import org.androidannotations.rest.spring.annotations.Field;
 import org.androidannotations.rest.spring.annotations.Part;
 import org.androidannotations.rest.spring.annotations.Post;
@@ -31,7 +30,4 @@ public interface PostRestService extends RestClientSupport {
 
 	@Post("/")
 	void multipart(@Part("otherParam") String postParam, @Part("postParam") String otherParam, @Part String thirdParam);
-
-	@Post("/")
-	void postRequests(@Body String postParam);
 }

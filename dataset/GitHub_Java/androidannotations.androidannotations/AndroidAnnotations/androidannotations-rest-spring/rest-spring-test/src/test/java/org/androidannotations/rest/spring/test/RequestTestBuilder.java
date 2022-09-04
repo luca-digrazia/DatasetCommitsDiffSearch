@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2019 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,7 +15,7 @@
  */
 package org.androidannotations.rest.spring.test;
 
-import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Matchers.argThat;
 import static org.mockito.Mockito.verify;
 
 import java.util.Arrays;
@@ -27,9 +26,9 @@ import java.util.Set;
 import org.apache.http.Header;
 import org.apache.http.message.BasicHeader;
 import org.mockito.ArgumentMatcher;
-import org.mockito.ArgumentMatchers;
+import org.mockito.Matchers;
 import org.mockito.Mockito;
-import org.robolectric.shadows.httpclient.FakeHttp;
+import org.robolectric.Robolectric;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -114,21 +113,21 @@ public class RequestTestBuilder {
 
 		String responseBody = responseContent != null ? responseContent.replaceAll("'", "\"") : "";
 
-		FakeHttp.addPendingHttpResponse(HttpStatus.OK.value(), responseBody, headers);
+		Robolectric.addPendingHttpResponse(HttpStatus.OK.value(), responseBody, headers);
 	}
 
 	private void checkRequest() {
 		if (hasUrlVariables) {
-			verify(restTemplate).exchange(ArgumentMatchers.anyString(), //
-					ArgumentMatchers.any(HttpMethod.class), //
+			verify(restTemplate).exchange(Matchers.anyString(), //
+					Matchers.any(HttpMethod.class), //
 					argThat(entityArgumentMatcher), //
-					ArgumentMatchers.<Class<Object>> any(), //
-					ArgumentMatchers.<Map<String, Object>> any());
+					Matchers.<Class<Object>> any(), //
+					Matchers.<Map<String, Object>> any());
 		} else {
-			verify(restTemplate).exchange(ArgumentMatchers.anyString(), //
-					ArgumentMatchers.any(HttpMethod.class), //
+			verify(restTemplate).exchange(Matchers.anyString(), //
+					Matchers.any(HttpMethod.class), //
 					argThat(entityArgumentMatcher), //
-					ArgumentMatchers.<Class<Object>> any());
+					Matchers.<Class<Object>> any());
 		}
 	}
 
@@ -141,10 +140,11 @@ public class RequestTestBuilder {
 		}
 	}
 
-	public class HttpEntityArgumentMatcher implements ArgumentMatcher<HttpEntity<Void>> {
+	public class HttpEntityArgumentMatcher extends ArgumentMatcher<HttpEntity<Void>> {
 		@Override
-		public boolean matches(HttpEntity<Void> argument) {
-			HttpHeaders httpHeaders = argument.getHeaders();
+		public boolean matches(Object argument) {
+			HttpEntity<?> httpEntity = (HttpEntity<?>) argument;
+			HttpHeaders httpHeaders = httpEntity.getHeaders();
 
 			// Check that cookies set earlier are sent in the request
 			if (requestCookies.size() > 0) {
