@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.util.FileType;
 
 /**
@@ -43,7 +42,6 @@ public class ObjcImportRule implements RuleDefinition {
             .mandatory()
             .nonEmpty()
             .allowedFileTypes(FileType.of(".a")))
-        .addRequiredToolchains(CppRuleClasses.ccToolchainTypeAttribute(environment))
         .build();
   }
 
@@ -52,7 +50,8 @@ public class ObjcImportRule implements RuleDefinition {
     return RuleDefinition.Metadata.builder()
         .name("objc_import")
         .factoryClass(ObjcImport.class)
-        .ancestors(BaseRuleClasses.BaseRule.class, ObjcRuleClasses.AlwaysLinkRule.class)
+        .ancestors(BaseRuleClasses.BaseRule.class, ObjcRuleClasses.AlwaysLinkRule.class,
+            ObjcRuleClasses.XcodegenRule.class)
         .build();
   }
 }

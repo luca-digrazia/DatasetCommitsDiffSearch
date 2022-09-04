@@ -18,6 +18,7 @@ import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 
 /**
@@ -25,7 +26,7 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
  */
 public class ObjcBundleLibraryRule implements RuleDefinition {
   @Override
-  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
+  public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
     return builder
         .requiresConfigurationFragments(ObjcConfiguration.class, AppleConfiguration.class)
         .cfg(AppleCrosstoolTransition.APPLE_CROSSTOOL_TRANSITION)
@@ -38,7 +39,7 @@ public class ObjcBundleLibraryRule implements RuleDefinition {
         .name("objc_bundle_library")
         .factoryClass(ObjcBundleLibrary.class)
         .ancestors(BaseRuleClasses.BaseRule.class, ObjcRuleClasses.ResourcesRule.class,
-            ObjcRuleClasses.BundlingRule.class)
+            ObjcRuleClasses.BundlingRule.class, ObjcRuleClasses.XcodegenRule.class)
         .build();
   }
 }
