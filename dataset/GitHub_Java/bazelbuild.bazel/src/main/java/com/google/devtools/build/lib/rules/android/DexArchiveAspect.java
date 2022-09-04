@@ -134,12 +134,12 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
   public AspectDefinition getDefinition(AspectParameters params) {
     AspectDefinition.Builder result =
         new AspectDefinition.Builder(this)
-            .requireStarlarkProviders(forKey(JavaInfo.PROVIDER.getKey()))
+            .requireSkylarkProviders(forKey(JavaInfo.PROVIDER.getKey()))
             // Latch onto Starlark toolchains in case they have a "runtime" (b/78647825)
-            .requireStarlarkProviders(forKey(ToolchainInfo.PROVIDER.getKey()))
+            .requireSkylarkProviders(forKey(ToolchainInfo.PROVIDER.getKey()))
             // For android_sdk rules, where we just want to get at aidl runtime deps.
-            .requireStarlarkProviders(forKey(AndroidSdkProvider.PROVIDER.getKey()))
-            .requireStarlarkProviders(forKey(ProtoInfo.PROVIDER.getKey()))
+            .requireSkylarkProviders(forKey(AndroidSdkProvider.PROVIDER.getKey()))
+            .requireSkylarkProviders(forKey(ProtoInfo.PROVIDER.getKey()))
             .requireProviderSets(
                 ImmutableList.of(
                     // For proto_lang_toolchain rules, where we just want to get at their runtime

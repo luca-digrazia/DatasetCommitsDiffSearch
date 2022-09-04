@@ -34,9 +34,9 @@ import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
 import com.google.devtools.build.lib.util.FileTypeSet;
-import net.starlark.java.annot.StarlarkBuiltin;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -85,7 +85,7 @@ public class AspectDefinitionTest {
   public static final TestAspectClass TEST_ASPECT_CLASS = new TestAspectClass();
 
   @Test
-  public void testAspectWithImplicitOrLateboundAttribute_addsToAttributeMap() throws Exception {
+  public void testAspectWithImplicitOrLateboundAttribute_AddsToAttributeMap() throws Exception {
     Attribute implicit = attr("$runtime", BuildType.LABEL)
         .value(Label.parseAbsoluteUnchecked("//run:time"))
         .build();
@@ -102,7 +102,7 @@ public class AspectDefinitionTest {
   }
 
   @Test
-  public void testAspectWithDuplicateAttribute_failsToAdd() throws Exception {
+  public void testAspectWithDuplicateAttribute_FailsToAdd() throws Exception {
     assertThrows(
         IllegalArgumentException.class,
         () ->
@@ -116,7 +116,7 @@ public class AspectDefinitionTest {
   }
 
   @Test
-  public void testAspectWithUserVisibleAttribute_failsToAdd() throws Exception {
+  public void testAspectWithUserVisibleAttribute_FailsToAdd() throws Exception {
     assertThrows(
         IllegalArgumentException.class,
         () ->
@@ -129,7 +129,7 @@ public class AspectDefinitionTest {
   }
 
   @Test
-  public void testAttributeAspect_wrapsAndAddsToMap() throws Exception {
+  public void testAttributeAspect_WrapsAndAddsToMap() throws Exception {
     AspectDefinition withAspects = new AspectDefinition.Builder(TEST_ASPECT_CLASS)
         .propagateAlongAttribute("srcs")
         .propagateAlongAttribute("deps")
@@ -140,7 +140,7 @@ public class AspectDefinitionTest {
   }
 
   @Test
-  public void testAttributeAspect_allAttributes() throws Exception {
+  public void testAttributeAspect_AllAttributes() throws Exception {
     AspectDefinition withAspects = new AspectDefinition.Builder(TEST_ASPECT_CLASS)
         .propagateAlongAllAttributes()
         .build();
@@ -150,7 +150,7 @@ public class AspectDefinitionTest {
   }
 
   @Test
-  public void testRequireProvider_addsToSetOfRequiredProvidersAndNames() throws Exception {
+  public void testRequireProvider_AddsToSetOfRequiredProvidersAndNames() throws Exception {
     AspectDefinition requiresProviders =
         new AspectDefinition.Builder(TEST_ASPECT_CLASS)
             .requireProviders(P1.class, P2.class)
@@ -175,8 +175,8 @@ public class AspectDefinitionTest {
         .isFalse();
   }
 
-  @Test
-  public void testRequireProvider_addsTwoSetsOfRequiredProvidersAndNames() throws Exception {
+ @Test
+  public void testRequireProvider_AddsTwoSetsOfRequiredProvidersAndNames() throws Exception {
     AspectDefinition requiresProviders =
         new AspectDefinition.Builder(TEST_ASPECT_CLASS)
             .requireProviderSets(
@@ -203,7 +203,7 @@ public class AspectDefinitionTest {
  }
 
   @Test
-  public void testRequireAspectClass_defaultAcceptsNothing() {
+  public void testRequireAspectClass_DefaultAcceptsNothing() {
     AspectDefinition noAspects = new AspectDefinition.Builder(TEST_ASPECT_CLASS)
         .build();
 
@@ -221,14 +221,14 @@ public class AspectDefinitionTest {
   }
 
   @Test
-  public void testNoConfigurationFragmentPolicySetup_hasNonNullPolicy() throws Exception {
+  public void testNoConfigurationFragmentPolicySetup_HasNonNullPolicy() throws Exception {
     AspectDefinition noPolicy = new AspectDefinition.Builder(TEST_ASPECT_CLASS)
         .build();
     assertThat(noPolicy.getConfigurationFragmentPolicy()).isNotNull();
   }
 
   @Test
-  public void testMissingFragmentPolicy_propagatedToConfigurationFragmentPolicy() throws Exception {
+  public void testMissingFragmentPolicy_PropagatedToConfigurationFragmentPolicy() throws Exception {
     AspectDefinition missingFragments = new AspectDefinition.Builder(TEST_ASPECT_CLASS)
         .setMissingFragmentPolicy(MissingFragmentPolicy.IGNORE)
         .build();
@@ -238,7 +238,7 @@ public class AspectDefinitionTest {
   }
 
   @Test
-  public void testRequiresConfigurationFragments_propagatedToConfigurationFragmentPolicy()
+  public void testRequiresConfigurationFragments_PropagatedToConfigurationFragmentPolicy()
       throws Exception {
     AspectDefinition requiresFragments = new AspectDefinition.Builder(TEST_ASPECT_CLASS)
         .requiresConfigurationFragments(Integer.class, String.class)
@@ -254,7 +254,7 @@ public class AspectDefinitionTest {
   private static class BarFragment extends Fragment {}
 
   @Test
-  public void testRequiresHostConfigurationFragments_propagatedToConfigurationFragmentPolicy()
+  public void testRequiresHostConfigurationFragments_PropagatedToConfigurationFragmentPolicy()
       throws Exception {
     AspectDefinition requiresFragments =
         ConfigAwareAspectBuilder.of(new AspectDefinition.Builder(TEST_ASPECT_CLASS))
@@ -268,12 +268,11 @@ public class AspectDefinitionTest {
   }
 
   @Test
-  public void testRequiresConfigurationFragmentNames_propagatedToConfigurationFragmentPolicy()
+  public void testRequiresConfigurationFragmentNames_PropagatedToConfigurationFragmentPolicy()
       throws Exception {
-    AspectDefinition requiresFragments =
-        new AspectDefinition.Builder(TEST_ASPECT_CLASS)
-            .requiresConfigurationFragmentsByStarlarkBuiltinName(ImmutableList.of("test_fragment"))
-            .build();
+    AspectDefinition requiresFragments = new AspectDefinition.Builder(TEST_ASPECT_CLASS)
+        .requiresConfigurationFragmentsBySkylarkModuleName(ImmutableList.of("test_fragment"))
+        .build();
     assertThat(requiresFragments.getConfigurationFragmentPolicy()).isNotNull();
     assertThat(
         requiresFragments.getConfigurationFragmentPolicy()
@@ -282,11 +281,11 @@ public class AspectDefinitionTest {
   }
 
   @Test
-  public void testRequiresHostConfigurationFragmentNames_propagatedToConfigurationFragmentPolicy()
+  public void testRequiresHostConfigurationFragmentNames_PropagatedToConfigurationFragmentPolicy()
       throws Exception {
     AspectDefinition requiresFragments =
         ConfigAwareAspectBuilder.of(new AspectDefinition.Builder(TEST_ASPECT_CLASS))
-            .requiresHostConfigurationFragmentsByStarlarkBuiltinName(
+            .requiresHostConfigurationFragmentsBySkylarkModuleName(
                 ImmutableList.of("test_fragment"))
             .originalBuilder()
             .build();
@@ -298,17 +297,16 @@ public class AspectDefinitionTest {
   }
 
   @Test
-  public void testEmptyStarlarkConfigurationFragmentPolicySetup_hasNonNullPolicy()
-      throws Exception {
+  public void testEmptySkylarkConfigurationFragmentPolicySetup_HasNonNullPolicy() throws Exception {
     AspectDefinition noPolicy =
         ConfigAwareAspectBuilder.of(new AspectDefinition.Builder(TEST_ASPECT_CLASS))
-            .requiresHostConfigurationFragmentsByStarlarkBuiltinName(ImmutableList.<String>of())
+            .requiresHostConfigurationFragmentsBySkylarkModuleName(ImmutableList.<String>of())
             .originalBuilder()
-            .requiresConfigurationFragmentsByStarlarkBuiltinName(ImmutableList.<String>of())
+            .requiresConfigurationFragmentsBySkylarkModuleName(ImmutableList.<String>of())
             .build();
     assertThat(noPolicy.getConfigurationFragmentPolicy()).isNotNull();
   }
 
-  @StarlarkBuiltin(name = "test_fragment", doc = "test fragment")
+  @SkylarkModule(name = "test_fragment", doc = "test fragment")
   private static final class TestFragment implements StarlarkValue {}
 }

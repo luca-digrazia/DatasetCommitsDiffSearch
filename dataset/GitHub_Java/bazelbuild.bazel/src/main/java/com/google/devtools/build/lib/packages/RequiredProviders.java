@@ -36,7 +36,7 @@ import javax.annotation.Nullable;
  *   <li>accept no dependency (used for aspects-on-aspects to indicate that an aspect never wants to
  *       see any other aspect applied to a target.
  *   <li>accept a dependency that provides all providers from one of several sets of providers. It
- *       just so happens that in all current usages these sets are either all builtin providers or
+ *       just so happens that in all current usages these sets are either all native providers or
  *       all Starlark providers, so this is the only use case this class currently supports.
  * </ul>
  */
@@ -46,14 +46,14 @@ public final class RequiredProviders {
   /** A constraint: either ANY, NONE, or RESTRICTED */
   private final Constraint constraint;
   /**
-   * Sets of builtin providers. If non-empty, {@link #constraint} is {@link Constraint#RESTRICTED}
+   * Sets of native providers. If non-empty, {@link #constraint} is {@link Constraint#RESTRICTED}
    */
   private final ImmutableList<ImmutableSet<Class<? extends TransitiveInfoProvider>>>
-      builtinProviders;
+      nativeProviders;
   /**
-   * Sets of builtin providers. If non-empty, {@link #constraint} is {@link Constraint#RESTRICTED}
+   * Sets of native providers. If non-empty, {@link #constraint} is {@link Constraint#RESTRICTED}
    */
-  private final ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> starlarkProviders;
+  private final ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> skylarkProviders;
 
   public String getDescription() {
     return constraint.getDescription(this);
@@ -79,8 +79,8 @@ public final class RequiredProviders {
 
       @Override
       public boolean satisfies(
-          Predicate<Class<? extends TransitiveInfoProvider>> hasBuiltinProvider,
-          Predicate<StarlarkProviderIdentifier> hasStarlarkProvider,
+          Predicate<Class<? extends TransitiveInfoProvider>> hasNativeProvider,
+          Predicate<StarlarkProviderIdentifier> hasSkylarkProvider,
           RequiredProviders requiredProviders,
           Builder missingProviders) {
         return true;
@@ -108,8 +108,8 @@ public final class RequiredProviders {
 
       @Override
       public boolean satisfies(
-          Predicate<Class<? extends TransitiveInfoProvider>> hasBuiltinProvider,
-          Predicate<StarlarkProviderIdentifier> hasStarlarkProvider,
+          Predicate<Class<? extends TransitiveInfoProvider>> hasNativeProvider,
+          Predicate<StarlarkProviderIdentifier> hasSkylarkProvider,
           RequiredProviders requiredProviders,
           Builder missingProviders) {
         return false;
@@ -137,43 +137,45 @@ public final class RequiredProviders {
           return true;
         }
         return satisfies(
-            advertisedProviderSet.getBuiltinProviders()::contains,
-            advertisedProviderSet.getStarlarkProviders()::contains,
+            advertisedProviderSet.getNativeProviders()::contains,
+            advertisedProviderSet.getSkylarkProviders()::contains,
             requiredProviders,
             missing);
       }
 
       @Override
-      boolean satisfies(
-          Predicate<Class<? extends TransitiveInfoProvider>> hasBuiltinProvider,
-          Predicate<StarlarkProviderIdentifier> hasStarlarkProvider,
+      public boolean satisfies(
+          Predicate<Class<? extends TransitiveInfoProvider>> hasNativeProvider,
+          Predicate<StarlarkProviderIdentifier> hasSkylarkProvider,
           RequiredProviders requiredProviders,
           Builder missingProviders) {
-        for (ImmutableSet<Class<? extends TransitiveInfoProvider>> builtinProviderSet :
-            requiredProviders.builtinProviders) {
-          if (builtinProviderSet.stream().allMatch(hasBuiltinProvider)) {
+        for (ImmutableSet<Class<? extends TransitiveInfoProvider>> nativeProviderSet :
+            requiredProviders.nativeProviders) {
+          if (nativeProviderSet.stream().allMatch(hasNativeProvider)) {
             return true;
           }
 
           // Collect missing providers
           if (missingProviders != null) {
-            missingProviders.addBuiltinSet(
-                builtinProviderSet.stream()
-                    .filter(hasBuiltinProvider.negate())
+            missingProviders.addNativeSet(
+                nativeProviderSet
+                    .stream()
+                    .filter(hasNativeProvider.negate())
                     .collect(ImmutableSet.toImmutableSet()));
           }
         }
 
-        for (ImmutableSet<StarlarkProviderIdentifier> starlarkProviderSet :
-            requiredProviders.starlarkProviders) {
-          if (starlarkProviderSet.stream().allMatch(hasStarlarkProvider)) {
+        for (ImmutableSet<StarlarkProviderIdentifier> skylarkProviderSet :
+            requiredProviders.skylarkProviders) {
+          if (skylarkProviderSet.stream().allMatch(hasSkylarkProvider)) {
             return true;
           }
           // Collect missing providers
           if (missingProviders != null) {
-            missingProviders.addStarlarkSet(
-                starlarkProviderSet.stream()
-                    .filter(hasStarlarkProvider.negate())
+            missingProviders.addSkylarkSet(
+                skylarkProviderSet
+                    .stream()
+                    .filter(hasSkylarkProvider.negate())
                     .collect(ImmutableSet.toImmutableSet()));
           }
         }
@@ -183,13 +185,13 @@ public final class RequiredProviders {
       @Override
       Builder copyAsBuilder(RequiredProviders providers) {
         Builder result = acceptAnyBuilder();
-        for (ImmutableSet<Class<? extends TransitiveInfoProvider>> builtinProviderSet :
-            providers.builtinProviders) {
-          result.addBuiltinSet(builtinProviderSet);
+        for (ImmutableSet<Class<? extends TransitiveInfoProvider>> nativeProviderSet :
+            providers.nativeProviders) {
+          result.addNativeSet(nativeProviderSet);
         }
-        for (ImmutableSet<StarlarkProviderIdentifier> starlarkProviderSet :
-            providers.starlarkProviders) {
-          result.addStarlarkSet(starlarkProviderSet);
+        for (ImmutableSet<StarlarkProviderIdentifier> skylarkProviderSet :
+            providers.skylarkProviders) {
+          result.addSkylarkSet(skylarkProviderSet);
         }
         return result;
       }
@@ -197,25 +199,25 @@ public final class RequiredProviders {
       @Override
       public String getDescription(RequiredProviders providers) {
         StringBuilder result = new StringBuilder();
-        describe(result, providers.builtinProviders, Class::getSimpleName);
-        describe(result, providers.starlarkProviders, id -> "'" + id.toString() + "'");
+        describe(result, providers.nativeProviders, Class::getSimpleName);
+        describe(result, providers.skylarkProviders, id -> "'" + id.toString() + "'");
         return result.toString();
       }
     };
 
     /** Checks if {@code advertisedProviderSet} satisfies these {@code RequiredProviders} */
-    protected abstract boolean satisfies(
+    public abstract boolean satisfies(
         AdvertisedProviderSet advertisedProviderSet,
         RequiredProviders requiredProviders,
         Builder missing);
 
     /**
-     * Checks if a set of providers encoded by predicates {@code hasBuiltinProvider} and {@code
-     * hasStarlarkProvider} satisfies these {@code RequiredProviders}
+     * Checks if a set of providers encoded by predicates {@code hasNativeProviders} and {@code
+     * hasSkylarkProvider} satisfies these {@code RequiredProviders}
      */
     abstract boolean satisfies(
-        Predicate<Class<? extends TransitiveInfoProvider>> hasBuiltinProvider,
-        Predicate<StarlarkProviderIdentifier> hasStarlarkProvider,
+        Predicate<Class<? extends TransitiveInfoProvider>> hasNativeProvider,
+        Predicate<StarlarkProviderIdentifier> hasSkylarkProvider,
         RequiredProviders requiredProviders,
         @Nullable Builder missingProviders);
 
@@ -231,13 +233,13 @@ public final class RequiredProviders {
   }
 
   /**
-   * Checks if a set of providers encoded by predicates {@code hasBuiltinProvider} and {@code
-   * hasStarlarkProvider} satisfies this {@code RequiredProviders} instance.
+   * Checks if a set of providers encoded by predicates {@code hasNativeProviders} and {@code
+   * hasSkylarkProvider} satisfies this {@code RequiredProviders} instance.
    */
   public boolean isSatisfiedBy(
-      Predicate<Class<? extends TransitiveInfoProvider>> hasBuiltinProvider,
-      Predicate<StarlarkProviderIdentifier> hasStarlarkProvider) {
-    return constraint.satisfies(hasBuiltinProvider, hasStarlarkProvider, this, null);
+      Predicate<Class<? extends TransitiveInfoProvider>> hasNativeProvider,
+      Predicate<StarlarkProviderIdentifier> hasSkylarkProvider) {
+    return constraint.satisfies(hasNativeProvider, hasSkylarkProvider, this, null);
   }
 
   /**
@@ -245,10 +247,10 @@ public final class RequiredProviders {
    * accept anything.
    */
   public RequiredProviders getMissing(
-      Predicate<Class<? extends TransitiveInfoProvider>> hasBuiltinProvider,
-      Predicate<StarlarkProviderIdentifier> hasStarlarkProvider) {
+      Predicate<Class<? extends TransitiveInfoProvider>> hasNativeProvider,
+      Predicate<StarlarkProviderIdentifier> hasSkylarkProvider) {
     Builder builder = acceptAnyBuilder();
-    if (constraint.satisfies(hasBuiltinProvider, hasStarlarkProvider, this, builder)) {
+    if (constraint.satisfies(hasNativeProvider, hasSkylarkProvider, this, builder)) {
       // Ignore all collected missing providers.
       return acceptAnyBuilder().build();
     }
@@ -276,16 +278,16 @@ public final class RequiredProviders {
   @VisibleForSerialization
   RequiredProviders(
       Constraint constraint,
-      ImmutableList<ImmutableSet<Class<? extends TransitiveInfoProvider>>> builtinProviders,
-      ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> starlarkProviders) {
+      ImmutableList<ImmutableSet<Class<? extends TransitiveInfoProvider>>> nativeProviders,
+      ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> skylarkProviders) {
     this.constraint = constraint;
 
-    Preconditions.checkState(
-        constraint.equals(Constraint.RESTRICTED)
-            || (builtinProviders.isEmpty() && starlarkProviders.isEmpty()));
+    Preconditions.checkState(constraint.equals(Constraint.RESTRICTED)
+        || (nativeProviders.isEmpty() && skylarkProviders.isEmpty())
+    );
 
-    this.builtinProviders = builtinProviders;
-    this.starlarkProviders = starlarkProviders;
+    this.nativeProviders = nativeProviders;
+    this.skylarkProviders = skylarkProviders;
   }
 
   /** Helper method to describe lists of sets of things. */
@@ -314,13 +316,13 @@ public final class RequiredProviders {
     }
     RequiredProviders that = (RequiredProviders) o;
     return constraint == that.constraint
-        && Objects.equals(builtinProviders, that.builtinProviders)
-        && Objects.equals(starlarkProviders, that.starlarkProviders);
+        && Objects.equals(nativeProviders, that.nativeProviders)
+        && Objects.equals(skylarkProviders, that.skylarkProviders);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(constraint, builtinProviders, starlarkProviders);
+    return Objects.hash(constraint, nativeProviders, skylarkProviders);
   }
 
   /**
@@ -347,14 +349,14 @@ public final class RequiredProviders {
   /** A builder for {@link RequiredProviders} */
   public static class Builder {
     private final ImmutableList.Builder<ImmutableSet<Class<? extends TransitiveInfoProvider>>>
-        builtinProviders;
-    private final ImmutableList.Builder<ImmutableSet<StarlarkProviderIdentifier>> starlarkProviders;
+        nativeProviders;
+    private final ImmutableList.Builder<ImmutableSet<StarlarkProviderIdentifier>> skylarkProviders;
     private Constraint constraint;
 
     private Builder(boolean acceptNone) {
       constraint = acceptNone ? Constraint.NONE : Constraint.ANY;
-      builtinProviders = ImmutableList.builder();
-      starlarkProviders = ImmutableList.builder();
+      nativeProviders = ImmutableList.builder();
+      skylarkProviders = ImmutableList.builder();
     }
 
     /**
@@ -363,29 +365,29 @@ public final class RequiredProviders {
      * <p>If all of these providers are present in the dependency, the dependency satisfies {@link
      * RequiredProviders}.
      */
-    public Builder addStarlarkSet(ImmutableSet<StarlarkProviderIdentifier> starlarkProviderSet) {
+    public Builder addSkylarkSet(ImmutableSet<StarlarkProviderIdentifier> skylarkProviderSet) {
       constraint = Constraint.RESTRICTED;
-      Preconditions.checkState(!starlarkProviderSet.isEmpty());
-      this.starlarkProviders.add(starlarkProviderSet);
+      Preconditions.checkState(!skylarkProviderSet.isEmpty());
+      this.skylarkProviders.add(skylarkProviderSet);
       return this;
     }
 
     /**
-     * Add an alternative set of builtin providers.
+     * Add an alternative set of native providers.
      *
      * <p>If all of these providers are present in the dependency, the dependency satisfies {@link
      * RequiredProviders}.
      */
-    public Builder addBuiltinSet(
-        ImmutableSet<Class<? extends TransitiveInfoProvider>> builtinProviderSet) {
+    public Builder addNativeSet(
+        ImmutableSet<Class<? extends TransitiveInfoProvider>> nativeProviderSet) {
       constraint = Constraint.RESTRICTED;
-      Preconditions.checkState(!builtinProviderSet.isEmpty());
-      this.builtinProviders.add(builtinProviderSet);
+      Preconditions.checkState(!nativeProviderSet.isEmpty());
+      this.nativeProviders.add(nativeProviderSet);
       return this;
     }
 
     public RequiredProviders build() {
-      return new RequiredProviders(constraint, builtinProviders.build(), starlarkProviders.build());
+      return new RequiredProviders(constraint, nativeProviders.build(), skylarkProviders.build());
     }
   }
 }
