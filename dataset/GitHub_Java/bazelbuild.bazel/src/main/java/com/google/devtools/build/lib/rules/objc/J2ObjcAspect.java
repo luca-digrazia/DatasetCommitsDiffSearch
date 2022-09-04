@@ -36,6 +36,7 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
+import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.ConfigAwareAspectBuilder;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
@@ -539,6 +540,14 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
 
     argBuilder.addExecPaths(ImmutableList.copyOf(sources));
 
+    Artifact paramFile = j2ObjcOutputParamFile(ruleContext);
+    ruleContext.registerAction(new ParameterFileWriteAction(
+        ruleContext.getActionOwner(),
+        paramFile,
+        argBuilder.build(),
+        ParameterFile.ParameterFileType.UNQUOTED,
+        ISO_8859_1));
+
     SpawnAction.Builder transpilationAction =
         new SpawnAction.Builder()
             .setMnemonic("TranspilingJ2objc")
@@ -552,12 +561,9 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
             .addTransitiveInputs(JavaRuntimeInfo.forHost(ruleContext).javaBaseInputsMiddleman())
             .addTransitiveInputs(depsHeaderMappingFiles)
             .addTransitiveInputs(depsClassMappingFiles)
+            .addInput(paramFile)
             .addCommandLine(
-                argBuilder.build(),
-                ParamFileInfo.builder(ParameterFile.ParameterFileType.UNQUOTED)
-                    .setCharset(ISO_8859_1)
-                    .setUseAlways(true)
-                    .build())
+                CustomCommandLine.builder().addFormatted("@%s", paramFile.getExecPath()).build())
             .addOutputs(j2ObjcSource.getObjcSrcs())
             .addOutputs(j2ObjcSource.getObjcHdrs())
             .addOutput(outputDependencyMappingFile)
@@ -682,6 +688,10 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
 
   private static Artifact j2ObjcOutputDependencyMappingFile(RuleContext ruleContext) {
     return ObjcRuleClasses.artifactByAppendingToBaseName(ruleContext, ".dependency_mapping.j2objc");
+  }
+
+  private static Artifact j2ObjcOutputParamFile(RuleContext ruleContext) {
+    return ObjcRuleClasses.artifactByAppendingToBaseName(ruleContext, ".param.j2objc");
   }
 
   private static Artifact j2ObjcOutputArchiveSourceMappingFile(RuleContext ruleContext) {

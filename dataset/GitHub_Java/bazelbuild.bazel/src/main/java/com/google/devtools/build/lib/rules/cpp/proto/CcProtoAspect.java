@@ -52,6 +52,8 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
+import com.google.devtools.build.lib.rules.cpp.TransitiveLipoInfoProvider;
+import com.google.devtools.build.lib.rules.cpp.transitions.LipoContextCollectorTransition;
 import com.google.devtools.build.lib.rules.proto.ProtoCommon;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.ToolchainInvocation;
@@ -120,7 +122,12 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
                     .value(PROTO_TOOLCHAIN_LABEL))
             .add(
                 attr(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, LABEL)
-                    .value(ccToolchainAttrValue));
+                    .value(ccToolchainAttrValue))
+            .add(
+                attr(TransitiveLipoInfoProvider.LIPO_CONTEXT_COLLECTOR, LABEL)
+                    .cfg(LipoContextCollectorTransition.INSTANCE)
+                    .value(CppRuleClasses.LIPO_CONTEXT_COLLECTOR)
+                    .skipPrereqValidatorCheck());
 
     return result.build();
   }
@@ -190,7 +197,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
           initializeLinkingHelper(featureConfiguration)
               .link(
                   compilationInfo.getCcCompilationOutputs(),
-                  compilationInfo.getCcCompilationContext());
+                  compilationInfo.getCcCompilationContextInfo());
 
       ccLibraryProviders =
           new TransitiveInfoProviderMapBuilder()
@@ -249,9 +256,6 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
       }
 
       helper.addDeps(ruleContext.getPrerequisites("deps", TARGET));
-
-      // Don't instrument the generated C++ files even when --collect_code_coverage is set.
-      helper.setAllowCoverageInstrumentation(false);
       return helper;
     }
 
@@ -264,6 +268,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
                   ccToolchain(ruleContext),
                   CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext),
                   ruleContext.getConfiguration())
+              .enableCcSpecificLinkParamsProvider()
               .enableCcNativeLibrariesProvider();
       TransitiveInfoCollection runtime = getProtoToolchainProvider().runtime();
       if (runtime != null) {
