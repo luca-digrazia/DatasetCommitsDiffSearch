@@ -25,8 +25,8 @@ import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.indices.jobs.OptimizeIndexJob;
 import org.graylog2.indexer.ranges.CreateNewSingleIndexRangeJob;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
-import org.graylog2.shared.system.activities.Activity;
-import org.graylog2.shared.system.activities.ActivityWriter;
+import org.graylog2.system.activities.Activity;
+import org.graylog2.system.activities.ActivityWriter;
 import org.graylog2.system.jobs.SystemJobConcurrencyException;
 import org.graylog2.system.jobs.SystemJobManager;
 import org.slf4j.Logger;
@@ -78,7 +78,7 @@ public class Deflector { // extends Ablenkblech
         this.createNewSingleIndexRangeJobFactory = createNewSingleIndexRangeJobFactory;
 
         this.deflectorName = buildName(configuration.getElasticSearchIndexPrefix());
-        this.indices = indices;
+            this.indices = indices;
     }
 
     public boolean isUp() {
@@ -138,6 +138,12 @@ public class Deflector { // extends Ablenkblech
             LOG.error("Could not properly create new target <{}>", newTarget);
         }
 
+        if (configuration.isDisableIndexRangeCalculation() && oldTargetNumber != -1) {
+            addSingleIndexRanges(oldTarget);
+            addSingleIndexRanges(newTarget);
+        } else
+            updateIndexRanges();
+
         LOG.info("Done!");
 
         // Point deflector to new index.
@@ -167,12 +173,6 @@ public class Deflector { // extends Ablenkblech
                 }
             }
         }
-
-        if (configuration.isDisableIndexRangeCalculation() && oldTargetNumber != -1) {
-            addSingleIndexRanges(oldTarget);
-            addSingleIndexRanges(newTarget);
-        } else
-            updateIndexRanges();
 
         LOG.info("Done!");
 

@@ -27,8 +27,8 @@ import org.graylog2.indexer.EmptyIndexException;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.ServerStatus;
-import org.graylog2.shared.system.activities.Activity;
-import org.graylog2.shared.system.activities.ActivityWriter;
+import org.graylog2.system.activities.Activity;
+import org.graylog2.system.activities.ActivityWriter;
 import org.graylog2.system.jobs.SystemJob;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +37,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class RebuildIndexRangesJob extends SystemJob {
     public interface Factory {
         public RebuildIndexRangesJob create(Deflector deflector);
@@ -111,17 +114,14 @@ public class RebuildIndexRangesJob extends SystemJob {
             try {
                 ranges.add(calculateRange(index));
             } catch (EmptyIndexException e) {
-                LOG.info("Index [{}] is empty, inserting dummy index range.", index);
-                Map<String, Object> emptyIndexRange = getDeflectorIndexRange(index);
-
+                // if the empty index happens to be the current deflector target, do not skip the index range.
+                // newly created indices have a high likelihood of being empty).
                 if (deflector.getCurrentActualTargetIndex().equals(index)) {
                     LOG.info("Index [{}] is empty but it is the current deflector target. Inserting dummy index range.", index);
+                    ranges.add(getDeflectorIndexRange(index));
                 } else {
-                    emptyIndexRange.put("start", 0);
-                    emptyIndexRange.put("calculated_at", Tools.getUTCTimestamp());
+                    LOG.info("Index [{}] is empty. Not calculating ranges.", index);
                 }
-
-                ranges.add(emptyIndexRange);
             } catch (Exception e) {
                 LOG.info("Could not calculate range of index [" + index + "]. Skipping.", e);
             } finally {

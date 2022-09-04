@@ -21,15 +21,14 @@ import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.plugin.inputs.annotations.Codec;
-import org.graylog2.plugin.inputs.annotations.ConfigClass;
-import org.graylog2.plugin.inputs.annotations.FactoryClass;
+import org.graylog2.plugin.ConfigClass;
+import org.graylog2.plugin.FactoryClass;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.BooleanField;
-import org.graylog2.plugin.inputs.codecs.AbstractCodec;
+import org.graylog2.plugin.inputs.codecs.Codec;
 import org.graylog2.plugin.inputs.codecs.CodecAggregator;
 import org.graylog2.plugin.inputs.transports.NettyTransport;
 import org.graylog2.plugin.journal.RawMessage;
@@ -43,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -54,8 +54,7 @@ import static com.codahale.metrics.MetricRegistry.name;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.base.Throwables.propagate;
 
-@Codec(name = "syslog", displayName = "Syslog")
-public class SyslogCodec extends AbstractCodec {
+public class SyslogCodec implements Codec {
     private static final Logger LOG = LoggerFactory.getLogger(SyslogCodec.class);
 
     private static final Pattern STRUCTURED_SYSLOG_PATTERN = Pattern.compile("<\\d+>\\d.*", Pattern.DOTALL);
@@ -65,12 +64,13 @@ public class SyslogCodec extends AbstractCodec {
     public static final String CK_EXPAND_STRUCTURED_DATA = "expand_structured_data";
     public static final String CK_STORE_FULL_MESSAGE = "store_full_message";
 
+    private final Configuration configuration;
     private final Timer resolveTime;
     private final Timer decodeTime;
 
     @AssistedInject
     public SyslogCodec(@Assisted Configuration configuration, MetricRegistry metricRegistry) {
-        super(configuration);
+        this.configuration = configuration;
         this.resolveTime = metricRegistry.timer(name(SyslogCodec.class, "resolveTime"));
         this.decodeTime = metricRegistry.timer(name(SyslogCodec.class, "decodeTime"));
     }
@@ -79,9 +79,9 @@ public class SyslogCodec extends AbstractCodec {
     @Override
     public Message decode(@Nonnull RawMessage rawMessage) {
         final String msg = new String(rawMessage.getPayload(), StandardCharsets.UTF_8);
-        try (Timer.Context ignored = this.decodeTime.time()) {
-            final InetAddress remoteAddress = rawMessage.getRemoteAddress();
-            return parse(msg, remoteAddress, rawMessage.getTimestamp());
+        try (Timer.Context context = this.decodeTime.time()) {
+            final InetSocketAddress remoteAddress = rawMessage.getRemoteAddress();
+            return parse(msg, remoteAddress.getAddress(), rawMessage.getTimestamp());
         } catch (ClassCastException e) {
             propagate(e);
         }
@@ -159,7 +159,7 @@ public class SyslogCodec extends AbstractCodec {
 
     private String parseHost(SyslogServerEventIF msg, InetAddress remoteAddress) {
         if (remoteAddress != null && configuration.getBoolean(CK_FORCE_RDNS)) {
-            try (Timer.Context ignored = this.resolveTime.time()) {
+            try (Timer.Context context = this.resolveTime.time()) {
                 return Tools.rdnsLookup(remoteAddress);
             } catch (UnknownHostException e) {
                 LOG.warn("Reverse DNS lookup failed. Falling back to parsed hostname.", e);
@@ -192,8 +192,13 @@ public class SyslogCodec extends AbstractCodec {
         return null;
     }
 
+    @Override
+    public String getName() {
+        return "syslog";
+    }
+
     @FactoryClass
-    public interface Factory extends AbstractCodec.Factory<SyslogCodec> {
+    public interface Factory extends Codec.Factory<SyslogCodec> {
         @Override
         SyslogCodec create(Configuration configuration);
 
@@ -202,7 +207,7 @@ public class SyslogCodec extends AbstractCodec {
     }
 
     @ConfigClass
-    public static class Config implements AbstractCodec.Config {
+    public static class Config implements Codec.Config {
         @Override
         public ConfigurationRequest getRequestedConfiguration() {
             final ConfigurationRequest r = new ConfigurationRequest();

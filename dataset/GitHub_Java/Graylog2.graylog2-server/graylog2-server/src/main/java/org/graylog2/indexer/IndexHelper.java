@@ -127,4 +127,6 @@ public class IndexHelper {
         return indices;
     }
 
+    public static class InvalidRangeFormatException extends Exception {
+    }
 }
