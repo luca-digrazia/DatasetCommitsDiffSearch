@@ -17,7 +17,7 @@ package com.google.devtools.build.lib.sandbox;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.runtime.ProcessWrapper;
+import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.time.Duration;
@@ -26,13 +26,14 @@ import java.util.Map;
 import java.util.UUID;
 
 final class DockerCommandLineBuilder {
-  private ProcessWrapper processWrapper;
+  private Path processWrapper;
   private Path dockerClient;
   private String imageName;
   private List<String> commandArguments;
   private Path sandboxExecRoot;
   private Map<String, String> environmentVariables;
   private Duration timeout;
+  private Duration killDelay;
   private boolean createNetworkNamespace;
   private UUID uuid;
   private int uid;
@@ -41,7 +42,7 @@ final class DockerCommandLineBuilder {
   private boolean privileged;
   private List<Map.Entry<String, String>> additionalMounts;
 
-  public DockerCommandLineBuilder setProcessWrapper(ProcessWrapper processWrapper) {
+  public DockerCommandLineBuilder setProcessWrapper(Path processWrapper) {
     this.processWrapper = processWrapper;
     return this;
   }
@@ -74,6 +75,11 @@ final class DockerCommandLineBuilder {
 
   public DockerCommandLineBuilder setTimeout(Duration timeout) {
     this.timeout = timeout;
+    return this;
+  }
+
+  public DockerCommandLineBuilder setKillDelay(Duration killDelay) {
+    this.killDelay = killDelay;
     return this;
   }
 
@@ -168,10 +174,14 @@ final class DockerCommandLineBuilder {
     dockerCmdLine.add(imageName);
     dockerCmdLine.addAll(commandArguments);
 
-    ProcessWrapper.CommandLineBuilder processWrapperCmdLine =
-        processWrapper.commandLineBuilder(dockerCmdLine.build());
+    ProcessWrapperUtil.CommandLineBuilder processWrapperCmdLine =
+        ProcessWrapperUtil.commandLineBuilder(
+            this.processWrapper.getPathString(), dockerCmdLine.build());
     if (timeout != null) {
       processWrapperCmdLine.setTimeout(timeout);
+    }
+    if (killDelay != null) {
+      processWrapperCmdLine.setKillDelay(killDelay);
     }
     return processWrapperCmdLine.build();
   }
