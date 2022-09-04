@@ -30,7 +30,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.graph.Digraph;
-import com.google.devtools.build.lib.graph.Node;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeFormatter;
@@ -43,8 +42,8 @@ import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.ProtoUtils;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.query2.common.CommonQueryOptions;
-import com.google.devtools.build.lib.query2.compat.FakeLoadTarget;
+import com.google.devtools.build.lib.query2.CommonQueryOptions;
+import com.google.devtools.build.lib.query2.FakeLoadTarget;
 import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.SynchronizedDelegatingOutputFormatterCallback;
@@ -107,7 +106,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
   public void setOptions(CommonQueryOptions options, AspectResolver aspectResolver) {
     super.setOptions(options, aspectResolver);
     this.aspectResolver = aspectResolver;
-    this.dependencyFilter = FormatUtils.getDependencyFilter(options);
+    this.dependencyFilter = OutputFormatter.getDependencyFilter(options);
     this.relativeLocations = options.relativeLocations;
     this.includeDefaultValues = options.protoIncludeDefaultValues;
     this.ruleAttributePredicate = newAttributePredicate(options.protoOutputRuleAttributes);
@@ -147,7 +146,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
 
   private static Iterable<Target> getSortedLabels(Digraph<Target> result) {
     return Iterables.transform(
-        result.getTopologicalOrder(new FormatUtils.TargetOrdering()), Node::getLabel);
+        result.getTopologicalOrder(new TargetOrdering()), EXTRACT_NODE_LABEL);
   }
 
   @Override
@@ -172,7 +171,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
           .setName(rule.getLabel().toString())
           .setRuleClass(rule.getRuleClass());
       if (includeLocation()) {
-        rulePb.setLocation(FormatUtils.getLocation(target, relativeLocations));
+        rulePb.setLocation(getLocation(target, relativeLocations));
       }
       addAttributes(rulePb, rule, extraDataForPostProcess);
       String transitiveHashCode = rule.getRuleClassObject().getRuleDefinitionEnvironmentHashCode();
@@ -243,7 +242,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
                        .setName(label.toString());
 
       if (includeLocation()) {
-        output.setLocation(FormatUtils.getLocation(target, relativeLocations));
+        output.setLocation(getLocation(target, relativeLocations));
       }
       targetPb.setType(GENERATED_FILE);
       targetPb.setGeneratedFile(output.build());
@@ -255,7 +254,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
           .setName(label.toString());
 
       if (includeLocation()) {
-        input.setLocation(FormatUtils.getLocation(target, relativeLocations));
+        input.setLocation(getLocation(target, relativeLocations));
       }
 
       if (inputFile.getName().equals("BUILD")) {
@@ -290,7 +289,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
                                            .setName(label.toString());
 
       if (includeLocation()) {
-        input.setLocation(FormatUtils.getLocation(target, relativeLocations));
+        input.setLocation(getLocation(target, relativeLocations));
       }
       targetPb.setType(SOURCE_FILE);
       targetPb.setSourceFile(input.build());
@@ -339,8 +338,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       Object attributeValue;
       if (flattenSelects || !attributeMapper.isConfigurable(attr.getName())) {
         attributeValue =
-            flattenAttributeValues(
-                attr.getType(), PossibleAttributeValues.forRuleAndAttribute(rule, attr));
+            flattenAttributeValues(attr.getType(), getPossibleAttributeValues(rule, attr));
       } else {
         attributeValue = attributeMapper.getSelectorList(attr.getName(), attr.getType());
       }
