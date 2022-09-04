@@ -5,7 +5,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import javax.persistence.NoResultException;
-import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -73,11 +72,5 @@ public class CountryResource {
     @Produces("application/json")
     public Country getOne(@PathParam("id") Long id) {
         return countryRepository.getOne(id);
-    }
-
-    @DELETE
-    @Path("/")
-    public void deleteAllInBatch() {
-        this.countryRepository.deleteAllInBatch();
     }
 }
