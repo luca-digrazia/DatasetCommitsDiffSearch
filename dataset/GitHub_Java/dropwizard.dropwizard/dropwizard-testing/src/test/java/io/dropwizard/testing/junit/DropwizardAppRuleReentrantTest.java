@@ -1,7 +1,9 @@
 package io.dropwizard.testing.junit;
 
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.times;
+
 import io.dropwizard.testing.DropwizardTestSupport;
-import io.dropwizard.testing.app.TestConfiguration;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
@@ -12,22 +14,22 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-
 public class DropwizardAppRuleReentrantTest {
+
     @Rule
-    public final MockitoRule mockitoRule = MockitoJUnit.rule();
+    public MockitoRule mockitoRule = MockitoJUnit.rule();
 
     @Mock
     DropwizardTestSupport<TestConfiguration> testSupport;
-    private Statement statement = mock(Statement.class);
-    private Description description = mock(Description.class);
+
+    @Mock
+    Statement statement;
+
+    @Mock
+    Description description;
 
     @Test
     public void testReentrantRuleStartsApplicationOnlyOnce() throws Throwable {
-        @SuppressWarnings("deprecation")
         DropwizardAppRule<TestConfiguration> dropwizardAppRule = new DropwizardAppRule<>(testSupport);
 
         RuleChain.outerRule(dropwizardAppRule)
