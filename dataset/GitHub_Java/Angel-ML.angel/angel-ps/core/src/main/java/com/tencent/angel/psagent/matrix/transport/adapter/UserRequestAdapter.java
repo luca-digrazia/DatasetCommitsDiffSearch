@@ -30,15 +30,10 @@ import com.tencent.angel.ml.matrix.psf.get.base.GetFunc;
 import com.tencent.angel.ml.matrix.psf.get.base.GetParam;
 import com.tencent.angel.ml.matrix.psf.get.base.GetResult;
 import com.tencent.angel.ml.matrix.psf.get.base.PartitionGetParam;
-import com.tencent.angel.ml.matrix.psf.get.getrows.GetRows;
-import com.tencent.angel.ml.matrix.psf.get.getrows.GetRowsParam;
 import com.tencent.angel.ml.matrix.psf.update.base.PartitionUpdateParam;
 import com.tencent.angel.ml.matrix.psf.update.base.UpdateFunc;
 import com.tencent.angel.ml.matrix.psf.update.base.UpdateParam;
 import com.tencent.angel.ml.matrix.psf.update.base.VoidResult;
-import com.tencent.angel.ps.ParameterServer;
-import com.tencent.angel.ps.ParameterServerId;
-import com.tencent.angel.ps.server.data.request.CheckpointPSRequest;
 import com.tencent.angel.ps.server.data.request.InitFunc;
 import com.tencent.angel.ps.server.data.request.UpdateOp;
 import com.tencent.angel.ps.storage.vector.ServerRow;
@@ -66,7 +61,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import javax.swing.plaf.FontUIResource;
@@ -138,10 +132,6 @@ public class UserRequestAdapter {
 
   private final int colNumThreshold = 10000000;
 
-  private final int maxWaitLockTimeMs;
-
-  private final int maxTryLockTime;
-
   /**
    * Create a new UserRequestAdapter.
    */
@@ -157,11 +147,6 @@ public class UserRequestAdapter {
     requestIdToResultMap = new ConcurrentHashMap<>();
 
     stopped = new AtomicBoolean(false);
-    maxWaitLockTimeMs = PSAgentContext.get().getConf().getInt(
-        "angel.psagent.requestadapter.max.waitlock.time.ms", 10000);
-
-    maxTryLockTime = PSAgentContext.get().getConf().getInt(
-        "angel.psagent.requestadapter.max.trylock.time", 10);
   }
 
   /**
@@ -398,7 +383,7 @@ public class UserRequestAdapter {
 
     // Filter the rowIds which are fetching now
     ReentrantLock lock = getLock(rowIndex.getMatrixId());
-    RowIndex needFetchRows;
+    RowIndex needFetchRows = null;
     try {
       lock.lock();
       resultsMap.put(rowIndex, result);
@@ -654,25 +639,6 @@ public class UserRequestAdapter {
     return result;
   }
 
-  private void tryLock(PartitionResponseCache cache, int requestId) {
-    int index = 0;
-    boolean getLockSuccess = false;
-
-    while(index < maxTryLockTime) {
-      try {
-        getLockSuccess = cache.lock.tryLock(maxWaitLockTimeMs, TimeUnit.MILLISECONDS);
-      } catch (Throwable e) {
-        LOG.error("Can not get result cache lock for request " + requestId + " in " + maxWaitLockTimeMs + " ms ", e);
-      }
-      if(getLockSuccess) {
-        return;
-      }
-      index++;
-    }
-
-    throw new RuntimeException("Get result cache lock for request " + requestId + " failed");
-  }
-
   /**
    * Notify sub-response is received
    *
@@ -686,9 +652,8 @@ public class UserRequestAdapter {
       return;
     }
 
-    tryLock(cache, requestId);
-
     try {
+      cache.lock.lock();
       cache.addSubResponse(subResponse);
       UserRequest request = requests.get(requestId);
 
@@ -697,7 +662,7 @@ public class UserRequestAdapter {
         clear(requestId);
       }
 
-      LOG.debug("request = " + request + ", cache = " + cache);
+      // LOG.info("request = " + request + ", cache = " + cache);
       if (request != null) {
         switch (request.getType()) {
           case GET_PSF:
@@ -763,8 +728,8 @@ public class UserRequestAdapter {
       return;
     }
 
-    tryLock(cache, requestId);
     try {
+      cache.lock.lock();
       clear(requestId);
       result.setExecuteError(
           "Sub-Task " + subTaskId + " execution failed, failed message=" + errorLog);
@@ -838,25 +803,6 @@ public class UserRequestAdapter {
 
   public GetRowsResult getRowsFlow(GetRowsResult result, RowIndex index, int batchSize) {
     return getRowsFlow(result, index, batchSize, -1);
-  }
-
-  public FutureResult<VoidResult> checkpoint(int matrixId, int checkPointId) {
-    List<ParameterServerId> pss = PSAgentContext.get().getMatrixMetaManager().getPss(matrixId);
-    MatrixTransportClient matrixClient = PSAgentContext.get().getMatrixTransportClient();
-
-    CheckpointRequest request = new CheckpointRequest(UserRequestType.CHECKPOINT, matrixId, checkPointId);
-    CheckpointCache cache = new CheckpointCache(pss.size());
-    FutureResult<VoidResult> result = new FutureResult<>();
-    int requestId = request.getRequestId();
-    requestIdToSubresponsMap.put(requestId, cache);
-    requestIdToResultMap.put(requestId, result);
-
-    requests.put(requestId, request);
-    for(ParameterServerId psId : pss) {
-      matrixClient.checkpoint(requestId, matrixId, checkPointId, psId);
-    }
-
-    return result;
   }
 
   class IndexRange {
