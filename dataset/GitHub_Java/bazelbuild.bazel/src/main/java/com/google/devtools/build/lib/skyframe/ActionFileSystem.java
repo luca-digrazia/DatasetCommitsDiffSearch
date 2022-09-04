@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Streams;
 import com.google.common.hash.Hashing;
 import com.google.common.io.BaseEncoding;
-import com.google.common.io.ByteStreams;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputMap;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -422,16 +421,6 @@ final class ActionFileSystem extends AbstractFileSystemWithCustomStat
   @Override
   protected InputStream getInputStream(Path path) throws IOException {
     FileArtifactValue metadata = getMetadataChecked(asExecPath(path));
-    InputStream inputStream = getInputStreamFromMetadata(metadata, path);
-    if (inputStream != null) {
-      return inputStream;
-    }
-    return getSourcePath(path.asFragment()).getInputStream();
-  }
-
-  @Nullable
-  private InputStream getInputStreamFromMetadata(FileArtifactValue metadata, Path path)
-      throws IOException {
     if (metadata instanceof InlineFileArtifactValue) {
       return ((InlineFileArtifactValue) metadata).getInputStream();
     }
@@ -441,12 +430,13 @@ final class ActionFileSystem extends AbstractFileSystemWithCustomStat
     if (metadata instanceof RemoteFileArtifactValue) {
       throw new IOException("ActionFileSystem cannot read remote file: " + path);
     }
-    return null;
+    return getSourcePath(path.asFragment()).getInputStream();
   }
 
   @Override
   protected OutputStream getOutputStream(Path path, boolean append) {
-    return outputs.getUnchecked(asExecPath(path)).getOutputStream(append, path);
+    Preconditions.checkArgument(!append, "ActionFileSystem doesn't support append.");
+    return outputs.getUnchecked(asExecPath(path)).getOutputStream();
   }
 
   @Override
@@ -644,38 +634,23 @@ final class ActionFileSystem extends AbstractFileSystemWithCustomStat
     }
 
     /** Callers are expected to close the returned stream. */
-    public ByteArrayOutputStream getOutputStream(boolean append, Path path) {
-      ByteArrayOutputStream baos = new ByteArrayOutputStream() {
+    public ByteArrayOutputStream getOutputStream() {
+      Preconditions.checkState(metadata == null, "getOutputStream called twice for: %s", artifact);
+      return new ByteArrayOutputStream() {
         @Override
         public void close() throws IOException {
-          flushInternal(true);
+          flush();
           super.close();
         }
 
         @Override
         public void flush() throws IOException {
-          flushInternal(false);
-        }
-
-        private void flushInternal(boolean notify) throws IOException {
           super.flush();
           byte[] data = toByteArray();
           set(new InlineFileArtifactValue(data, Hashing.md5().hashBytes(data).asBytes()),
-              /*notifyConsumer=*/ notify);
+              /*notifyConsumer=*/ true);
         }
       };
-
-      if (append && metadata != null) {
-        try (InputStream in = getInputStreamFromMetadata(metadata, path)) {
-          if (in == null) {
-            throw new IOException("Unable to read file " + path + " with metadata " + metadata);
-          }
-          ByteStreams.copy(in, baos);
-        } catch (IOException e) {
-          throw new IllegalStateException(e);
-        }
-      }
-      return baos;
     }
   }
 }
