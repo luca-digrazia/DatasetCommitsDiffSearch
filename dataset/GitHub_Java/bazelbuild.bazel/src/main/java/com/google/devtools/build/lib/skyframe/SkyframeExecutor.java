@@ -151,7 +151,6 @@ import com.google.devtools.build.skyframe.Differencer.DiffWithDelta.Delta;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver;
 import com.google.devtools.build.skyframe.EvaluationResult;
-import com.google.devtools.build.skyframe.GraphInconsistencyReceiver;
 import com.google.devtools.build.skyframe.ImmutableDiff;
 import com.google.devtools.build.skyframe.Injectable;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
@@ -655,7 +654,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             skyFunctions,
             evaluatorDiffer(),
             progressReceiver,
-            GraphInconsistencyReceiver.THROWING,
             emittedEventState,
             tracksStateForIncrementality());
     buildDriver = getBuildDriver();
