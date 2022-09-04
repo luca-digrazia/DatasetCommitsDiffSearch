@@ -112,61 +112,51 @@ public class LdapResource extends RestResource {
             config.setCredentials(request.systemPassword);
         }
 
-        LdapNetworkConnection connection = null;
+        final LdapNetworkConnection connection;
         try {
-            try {
-                connection = ldapConnector.connect(config);
-            } catch (LdapException e) {
-                response.exception = e.getMessage();
-                response.connected = false;
-                response.systemAuthenticated = false;
-                return response;
-            }
-            response.connected = connection.isConnected();
-            response.systemAuthenticated = connection.isAuthenticated();
-
-            // the web interface allows testing the connection only, in that case we can bail out early.
-            if (request.testConnectOnly) {
-                return response;
-            }
-
-            String userPrincipalName = null;
-            try {
-                final LdapEntry entry = ldapConnector.search(
-                        connection,
-                        request.searchBase,
-                        request.searchPattern,
-                        request.principal,
-                        request.activeDirectory);
-                if (entry != null) {
-                    userPrincipalName = entry.getDn();
-                    response.entry = entry.getAttributes();
-                }
-            } catch (LdapException e) {
-                response.entry = null;
-                response.exception = e.getMessage();
-            } catch (CursorException e) {
-                response.entry = null;
-                response.exception = e.getMessage();
-            }
-            try {
-                response.loginAuthenticated = ldapConnector.authenticate(connection,
-                                                                         userPrincipalName, request.password);
-            } catch (Exception e) {
-                response.loginAuthenticated = false;
-                response.exception = e.getMessage();
-            }
-
+            connection = ldapConnector.connect(config);
+        } catch (LdapException e) {
+            response.exception = e.getMessage();
+            response.connected = false;
+            response.systemAuthenticated = false;
             return response;
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (IOException e) {
-                    log.warn("Unable to close LDAP connection.", e);
-                }
-            }
         }
+        response.connected = connection.isConnected();
+        response.systemAuthenticated = connection.isAuthenticated();
+
+        // the web interface allows testing the connection only, in that case we can bail out early.
+        if (request.testConnectOnly) {
+            return response;
+        }
+
+        String userPrincipalName = null;
+        try {
+            final LdapEntry entry = ldapConnector.search(
+                    connection,
+                    request.searchBase,
+                    request.searchPattern,
+                    request.principal,
+                    request.activeDirectory);
+            if (entry != null) {
+                userPrincipalName = entry.getDn();
+                response.entry = entry.getAttributes();
+            }
+        } catch (LdapException e) {
+            response.entry = null;
+            response.exception = e.getMessage();
+        } catch (CursorException e) {
+            response.entry = null;
+            response.exception = e.getMessage();
+        }
+        try {
+            response.loginAuthenticated = ldapConnector.authenticate(connection,
+                                                                     userPrincipalName, request.password);
+        } catch (Exception e) {
+            response.loginAuthenticated = false;
+            response.exception = e.getMessage();
+        }
+
+        return response;
     }
 
     @PUT
