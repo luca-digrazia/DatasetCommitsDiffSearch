@@ -466,10 +466,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
      */
     protected void deleteCacheFileWhenError() {
         clearCurrentCache();
-        Debuger.printfError("Link Or mCache Error, Please Try Again " + mOriginUrl);
-        if (mCache) {
-            Debuger.printfError("mCache Link " + mUrl);
-        }
+        Debuger.printfError("Link Or mCache Error, Please Try Again" + mUrl);
         mUrl = mOriginUrl;
     }
 
