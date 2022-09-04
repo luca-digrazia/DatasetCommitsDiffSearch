@@ -51,6 +51,7 @@ import com.google.devtools.build.lib.actions.SimpleSpawn;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnContinuation;
 import com.google.devtools.build.lib.actions.SpawnResult;
+import com.google.devtools.build.lib.actions.SpawnStrategy;
 import com.google.devtools.build.lib.actions.extra.CppCompileInfo;
 import com.google.devtools.build.lib.actions.extra.EnvironmentVariable;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
@@ -61,7 +62,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
-import com.google.devtools.build.lib.exec.SpawnStrategyResolver;
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
@@ -1399,9 +1399,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     }
 
     SpawnContinuation spawnContinuation =
-        actionExecutionContext
-            .getContext(SpawnStrategyResolver.class)
-            .beginExecution(spawn, spawnContext);
+        actionExecutionContext.getContext(SpawnStrategy.class).beginExecution(spawn, spawnContext);
     return new CppCompileActionContinuation(
         actionExecutionContext,
         spawnContext,

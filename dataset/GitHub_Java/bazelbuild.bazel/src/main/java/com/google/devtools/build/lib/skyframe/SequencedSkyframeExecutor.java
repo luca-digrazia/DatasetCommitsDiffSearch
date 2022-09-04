@@ -673,9 +673,8 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     TimestampGranularityMonitor tsgm = this.tsgm.get();
     Differencer.Diff diff;
     if (modifiedFileSet.treatEverythingAsModified()) {
-      diff =
-          new FilesystemValueChecker(tsgm, null)
-              .getDirtyKeys(memoizingEvaluator.getValues(), new BasicFilesystemDirtinessChecker());
+      diff = new FilesystemValueChecker(tsgm, null).getDirtyKeys(memoizingEvaluator.getValues(),
+          new BasicFilesystemDirtinessChecker());
     } else {
       diff = getDiff(tsgm, modifiedFileSet.modifiedSourceFiles(), pathEntry);
     }
@@ -694,9 +693,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
 
   @Override
   public void detectModifiedOutputFiles(
-      ModifiedFileSet modifiedOutputFiles,
-      @Nullable Range<Long> lastExecutionTimeRange,
-      boolean trustRemoteArtifacts)
+      ModifiedFileSet modifiedOutputFiles, @Nullable Range<Long> lastExecutionTimeRange)
       throws InterruptedException {
     long startTime = System.nanoTime();
     FilesystemValueChecker fsvc =
@@ -704,10 +701,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     BatchStat batchStatter = outputService == null ? null : outputService.getBatchStatter();
     recordingDiffer.invalidate(
         fsvc.getDirtyActionValues(
-            memoizingEvaluator.getValues(),
-            batchStatter,
-            modifiedOutputFiles,
-            trustRemoteArtifacts));
+            memoizingEvaluator.getValues(), batchStatter, modifiedOutputFiles));
     modifiedFiles += fsvc.getNumberOfModifiedOutputFiles();
     outputDirtyFiles += fsvc.getNumberOfModifiedOutputFiles();
     modifiedFilesDuringPreviousBuild += fsvc.getNumberOfModifiedOutputFilesDuringPreviousBuild();
