@@ -18,7 +18,6 @@ package com.googlecode.androidannotations.processing;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.Serializable;
-import java.lang.annotation.Annotation;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -137,8 +136,8 @@ public class EBeansHolder {
 		classes = new Classes();
 	}
 
-	public EBeanHolder create(Element activityElement, Class<? extends Annotation> eBeanAnnotation) {
-		EBeanHolder activityHolder = new EBeanHolder(this, eBeanAnnotation);
+	public EBeanHolder create(Element activityElement) {
+		EBeanHolder activityHolder = new EBeanHolder(this);
 		EBeanHolders.put(activityElement, activityHolder);
 		return activityHolder;
 	}
