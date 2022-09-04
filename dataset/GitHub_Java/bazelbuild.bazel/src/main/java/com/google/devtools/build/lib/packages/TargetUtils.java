@@ -275,13 +275,9 @@ public final class TargetUtils {
       return true;
     }
 
-    for (AttributeMap.DepEdge depEdge : AggregatingAttributeMapper.of(rule).visitLabels()) {
-      if (rule.isAttributeValueExplicitlySpecified(depEdge.getAttribute())
-          && label.equals(depEdge.getLabel())) {
-        return true;
-      }
-    }
-    return false;
+    ExplicitEdgeVisitor visitor = new ExplicitEdgeVisitor(rule, label);
+    AggregatingAttributeMapper.of(rule).visitLabels(visitor);
+    return visitor.isExplicit();
   }
 
   /**
@@ -308,6 +304,30 @@ public final class TargetUtils {
       return TestTargetUtils.testMatchesFilters(
           ((Rule) input).getRuleTags(), requiredTags, excludedTags, false);
     };
+  }
+
+  private static class ExplicitEdgeVisitor implements AttributeMap.AcceptsLabelAttribute {
+    private final Label expectedLabel;
+    private final Rule rule;
+    private boolean isExplicit = false;
+
+    public ExplicitEdgeVisitor(Rule rule, Label expected) {
+      this.rule = rule;
+      this.expectedLabel = expected;
+    }
+
+    @Override
+    public void acceptLabelAttribute(Label label, Attribute attr) {
+      if (isExplicit || !rule.isAttributeValueExplicitlySpecified(attr)) {
+        // Nothing to do here.
+      } else if (expectedLabel.equals(label)) {
+        isExplicit = true;
+      }
+    }
+
+    public boolean isExplicit() {
+      return isExplicit;
+    }
   }
 
   /**

@@ -18,9 +18,8 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
+import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Package;
@@ -149,19 +148,20 @@ final class TestsInSuiteFunction implements SkyFunction {
     for (Label label : labels) {
       pkgIdentifiers.add(label.getPackageIdentifier());
     }
-    Map<SkyKey, ValueOrException<NoSuchPackageException>> packages =
-        env.getValuesOrThrow(PackageValue.keys(pkgIdentifiers), NoSuchPackageException.class);
+    Map<SkyKey, ValueOrException<BuildFileNotFoundException>> packages = env.getValuesOrThrow(
+        PackageValue.keys(pkgIdentifiers), BuildFileNotFoundException.class);
     if (env.valuesMissing()) {
       return false;
     }
     boolean hasError = false;
     Map<PackageIdentifier, Package> packageMap = new HashMap<>();
-    for (Map.Entry<SkyKey, ValueOrException<NoSuchPackageException>> entry : packages.entrySet()) {
+    for (Map.Entry<SkyKey, ValueOrException<BuildFileNotFoundException>> entry :
+        packages.entrySet()) {
       try {
         packageMap.put(
             (PackageIdentifier) entry.getKey().argument(),
             ((PackageValue) entry.getValue().get()).getPackage());
-      } catch (NoSuchPackageException e) {
+      } catch (BuildFileNotFoundException e) {
         env.getListener().handle(Event.error(e.getMessage()));
         hasError = true;
       }
@@ -171,20 +171,6 @@ final class TestsInSuiteFunction implements SkyFunction {
       Package pkg = packageMap.get(label.getPackageIdentifier());
       if (pkg == null) {
         continue;
-      }
-      if (pkg.containsErrors()) {
-        hasError = true;
-        // Abort the build if --nokeep_going.
-        try {
-          env.getValueOrThrow(
-              PackageErrorFunction.key(label.getPackageIdentifier()),
-              BuildFileContainsErrorsException.class);
-          return false;
-        } catch (BuildFileContainsErrorsException e) {
-          // PackageErrorFunction always throws this exception, and this fact is used by Skyframe to
-          // abort the build. If we get here, it's either because of error bubbling or because we're
-          // in --keep_going mode. In either case, we *should* ignore the exception.
-        }
       }
       try {
         targets.add(pkg.getTarget(label.getName()));

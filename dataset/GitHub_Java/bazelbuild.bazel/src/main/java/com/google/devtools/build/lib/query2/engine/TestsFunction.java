@@ -63,36 +63,26 @@ public class TestsFunction implements QueryFunction {
   @Override
   public <T> QueryTaskFuture<Void> eval(
       final QueryEnvironment<T> env,
-      QueryExpressionContext<T> context,
+      VariableContext<T> context,
       QueryExpression expression,
       List<Argument> args,
       final Callback<T> callback) {
     final Closure<T> closure = new Closure<>(expression, env);
-    final Uniquifier<T> uniquifier = env.createUniquifier();
 
-    return env.eval(
-        args.get(0).getExpression(),
-        context,
-        new Callback<T>() {
-          @Override
-          public void process(Iterable<T> partialResult)
-              throws QueryException, InterruptedException {
-            for (T target : partialResult) {
-              if (env.getAccessor().isTestRule(target)) {
-                if (uniquifier.unique(target)) {
-                  callback.process(ImmutableList.of(target));
-                }
-              } else if (env.getAccessor().isTestSuite(target)) {
-                for (T test : closure.getTestsInSuite(target)) {
-                  T testTarget = env.getOrCreate(test);
-                  if (uniquifier.unique(testTarget)) {
-                    callback.process(ImmutableList.of(testTarget));
-                  }
-                }
-              }
+    return env.eval(args.get(0).getExpression(), context, new Callback<T>() {
+      @Override
+      public void process(Iterable<T> partialResult) throws QueryException, InterruptedException {
+        for (T target : partialResult) {
+          if (env.getAccessor().isTestRule(target)) {
+            callback.process(ImmutableList.of(target));
+          } else if (env.getAccessor().isTestSuite(target)) {
+            for (T test : closure.getTestsInSuite(target)) {
+              callback.process(ImmutableList.of(env.getOrCreate(test)));
             }
           }
-        });
+        }
+      }
+    });
   }
 
   // TODO(ulfjack): This must match the code in TestTargetUtils. However, we don't currently want
