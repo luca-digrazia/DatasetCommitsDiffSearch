@@ -36,10 +36,9 @@ import com.google.devtools.build.lib.analysis.configuredtargets.FileConfiguredTa
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.analysis.util.MockRule;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.SkylarkInfo;
+import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.SkylarkProvider.SkylarkKey;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
-import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.python.PyCommon;
@@ -1632,8 +1631,8 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     SkylarkRuleContext ruleContext = createRuleContext("//test:testing");
 
     Object provider = evalRuleContextCode(ruleContext, "ruleContext.attr.dep[Actions]");
-    assertThat(provider).isInstanceOf(StructImpl.class);
-    assertThat(((StructImpl) provider).getProvider()).isEqualTo(ActionsProvider.INSTANCE);
+    assertThat(provider).isInstanceOf(Info.class);
+    assertThat(((Info) provider).getProvider()).isEqualTo(ActionsProvider.INSTANCE);
     update("actions", provider);
 
     Object mapping = eval("actions.by_file");
@@ -2009,6 +2008,27 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     assertThat((Boolean) result).isTrue();
   }
 
+  @Test
+  public void testStringKeyedLabelDictAttributeInSkylarkRuleContext() throws Exception {
+    scratch.file("jvm/BUILD",
+        "java_runtime(name='runtime', srcs=[], java_home='')",
+        "java_runtime_suite(",
+        "  name = 'suite',",
+        "  runtimes = {'x86': ':runtime'},",
+        "  default = ':runtime',",
+        ")");
+
+    invalidatePackages();
+    SkylarkRuleContext ruleContext = createRuleContext("//jvm:suite");
+    assertNoEvents();
+    String keyString =
+        (String) evalRuleContextCode(ruleContext, "ruleContext.attr.runtimes.keys()[0]");
+    assertThat(keyString).isEqualTo("x86");
+    Label valueLabel =
+        (Label) evalRuleContextCode(ruleContext, "ruleContext.attr.runtimes.values()[0]");
+    assertThat(valueLabel).isEqualTo(Label.parseAbsolute("//jvm:runtime", ImmutableMap.of()));
+  }
+
   // A list of attributes and methods ctx objects have
   private final List<String> ctxAttributes = ImmutableList.of(
       "attr",
@@ -2186,7 +2206,6 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
   public void testMapAttributeOrdering() throws Exception {
     scratch.file("a/a.bzl",
         "key_provider = provider(fields=['keys'])",
@@ -2200,9 +2219,8 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     ConfiguredTarget a = getConfiguredTarget("//a");
     SkylarkKey key =
         new SkylarkKey(Label.parseAbsolute("//a:a.bzl", ImmutableMap.of()), "key_provider");
-
-    SkylarkInfo keyInfo = (SkylarkInfo) a.get(key);
-    SkylarkList<String> keys = (SkylarkList<String>) keyInfo.getValue("keys");
+    @SuppressWarnings("unchecked")
+    SkylarkList<String> keys = (SkylarkList<String>) a.get(key).getValue("keys");
     assertThat(keys).containsExactly("c", "b", "a", "f", "e", "d").inOrder();
   }
 }

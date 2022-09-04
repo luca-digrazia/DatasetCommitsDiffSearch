@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
@@ -40,9 +39,7 @@ public class J2ObjcSourceTest {
   public final void setRootDir() throws Exception  {
     Scratch scratch = new Scratch();
     Path execRoot = scratch.getFileSystem().getPath("/exec");
-    String outSegment = "root";
-    execRoot.getChild(outSegment).createDirectoryAndParents();
-    rootDir = ArtifactRoot.asDerivedRoot(execRoot, outSegment);
+    rootDir = ArtifactRoot.asDerivedRoot(execRoot, scratch.dir("/exec/root"));
   }
 
   @Test
@@ -77,6 +74,6 @@ public class J2ObjcSourceTest {
   }
 
   private Artifact getArtifactForTest(String path) throws Exception {
-    return ActionsTestUtil.createArtifact(rootDir, path);
+    return new Artifact(PathFragment.create(path), rootDir);
   }
 }

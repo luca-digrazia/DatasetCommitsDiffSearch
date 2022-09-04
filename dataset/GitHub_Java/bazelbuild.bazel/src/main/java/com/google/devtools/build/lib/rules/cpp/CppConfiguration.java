@@ -471,8 +471,8 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   @SkylarkConfigurationField(
       name = "cc_toolchain",
       doc = "The label of the target describing the C++ toolchain",
-      defaultLabel = "//tools/cpp:crosstool",
-      defaultInToolRepository = true
+      defaultLabel = "//tools/defaults:crosstool",
+      defaultInToolRepository = false
   )
   public Label getCcToolchainRuleLabel() {
     return ccToolchainLabel;

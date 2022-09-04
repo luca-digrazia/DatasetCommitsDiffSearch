@@ -35,7 +35,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
-import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
@@ -193,12 +192,6 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     switch (configurationDistinguisher) {
       case UNKNOWN:
         return String.format("%s-out/ios_%s-%s/", TestConstants.PRODUCT_NAME, arch, modeSegment);
-      case APPLE_CROSSTOOL:
-        return String.format("%1$s-out/apl-ios_%2$s%3$s-%4$s/",
-            TestConstants.PRODUCT_NAME,
-            arch,
-            minOsSegment,
-            modeSegment);
       case APPLEBIN_IOS:
         return String.format(
             "%1$s-out/ios-%2$s%4$s-%3$s-ios_%2$s-%5$s/",
@@ -381,6 +374,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
             .add(frameworkDir(ApplePlatform.forTarget(PlatformType.IOS, arch)))
             .addAll(frameworkPathFragmentParents.build())
             .add("-Xlinker -objc_abi_version -Xlinker 2")
+            .add("-Xlinker -rpath -Xlinker @executable_path/Frameworks")
             .add("-fobjc-link-runtime")
             .add("-ObjC")
             .addAll(
@@ -412,19 +406,16 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     assertAppleSdkVersionEnv(action, DEFAULT_IOS_SDK_VERSION.toString());
   }
 
-  protected void assertAppleSdkVersionEnv(CommandAction action, String versionString)
-      throws ActionExecutionException {
+  protected void assertAppleSdkVersionEnv(CommandAction action, String versionString) {
     assertThat(action.getIncompleteEnvironmentForTesting())
         .containsEntry("APPLE_SDK_VERSION_OVERRIDE", versionString);
   }
 
-  protected void assertAppleSdkPlatformEnv(CommandAction action, String platformName)
-      throws ActionExecutionException {
+  protected void assertAppleSdkPlatformEnv(CommandAction action, String platformName) {
     assertThat(action.getIncompleteEnvironmentForTesting()).containsEntry("APPLE_SDK_PLATFORM", platformName);
   }
 
-  protected void assertXcodeVersionEnv(CommandAction action, String versionNumber)
-      throws ActionExecutionException {
+  protected void assertXcodeVersionEnv(CommandAction action, String versionNumber) {
     assertThat(action.getIncompleteEnvironmentForTesting()).containsEntry("XCODE_VERSION_OVERRIDE", versionNumber);
   }
 
@@ -479,25 +470,17 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   }
 
   protected ConfiguredTarget addLibWithDepOnFrameworkImport() throws Exception {
-    scratch.file(
-        "fx/defs.bzl",
-        "def _custom_static_framework_import_impl(ctx):",
-        "  return [apple_common.new_objc_provider(",
-        "      static_framework_file=depset(ctx.files.link_inputs))]",
-        "custom_static_framework_import = rule(",
-        "    _custom_static_framework_import_impl,",
-        "    attrs={'link_inputs': attr.label_list(allow_files=True)},",
-        ")");
     scratch.file("fx/fx1.framework/a");
     scratch.file("fx/fx1.framework/b");
     scratch.file("fx/fx2.framework/c");
     scratch.file("fx/fx2.framework/d");
-    scratch.file(
-        "fx/BUILD",
-        "load(':defs.bzl', 'custom_static_framework_import')",
-        "custom_static_framework_import(",
+    scratch.file("fx/BUILD",
+        "objc_framework(",
         "    name = 'fx',",
-        "    link_inputs = glob(['fx1.framework/*', 'fx2.framework/*']),",
+        "    framework_imports = glob(['fx1.framework/*', 'fx2.framework/*']),",
+        "    sdk_frameworks = ['CoreLocation'],",
+        "    weak_sdk_frameworks = ['MediaAccessibility'],",
+        "    sdk_dylibs = ['libdy1'],",
         ")");
     return createLibraryTargetWriter("//lib:lib")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
@@ -819,9 +802,9 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         "    srcs = ['a.m'],",
         "    deps = ['//protos:objc_protos_a', ':no_deps_target'],",
         ")",
-        "objc_library(",
+        "objc_framework(",
         "    name = 'no_deps_target',",
-        "    srcs = ['b.m'],",
+        "    framework_imports = ['x.framework'],",
         ")");
 
     ruleType.scratchTarget(scratch, "deps", "['//libs:objc_lib']");
@@ -839,26 +822,15 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   protected void checkFrameworkDepLinkFlags(RuleType ruleType,
       ExtraLinkArgs extraLinkArgs) throws Exception {
     scratch.file(
-        "libs/defs.bzl",
-        "def _custom_static_framework_import_impl(ctx):",
-        "  return [apple_common.new_objc_provider(",
-        "      static_framework_file=depset(ctx.files.link_inputs))]",
-        "custom_static_framework_import = rule(",
-        "    _custom_static_framework_import_impl,",
-        "    attrs={'link_inputs': attr.label_list(allow_files=True)},",
-        ")");
-    scratch.file("libs/buzzbuzz.framework/buzzbuzz");
-    scratch.file(
         "libs/BUILD",
-        "load(':defs.bzl', 'custom_static_framework_import')",
         "objc_library(",
         "    name = 'objc_lib',",
         "    srcs = ['a.m'],",
         "    deps = [':my_framework'],",
         ")",
-        "custom_static_framework_import(",
+        "objc_framework(",
         "    name = 'my_framework',",
-        "    link_inputs = glob(['buzzbuzz.framework/*']),",
+        "    framework_imports = ['buzzbuzz.framework'],",
         ")");
 
     ruleType.scratchTarget(scratch, "deps", "['//libs:objc_lib']");
@@ -1149,22 +1121,16 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
     switch (codeCoverageMode) {
       case NONE:
-        useConfiguration(
-            "--apple_platform_type=ios", "--compilation_mode=" + compilationModeFlag(mode));
+        useConfiguration("--compilation_mode=" + compilationModeFlag(mode));
         break;
       case GCOV:
         allExpectedCoptsBuilder.addAll(CompilationSupport.CLANG_GCOV_COVERAGE_FLAGS);
-        useConfiguration(
-            "--apple_platform_type=ios",
-            "--collect_code_coverage",
+        useConfiguration("--collect_code_coverage",
             "--compilation_mode=" + compilationModeFlag(mode));
         break;
       case LLVMCOV:
         allExpectedCoptsBuilder.addAll(CompilationSupport.CLANG_LLVM_COVERAGE_FLAGS);
-        useConfiguration(
-            "--apple_platform_type=ios",
-            "--collect_code_coverage",
-            "--experimental_use_llvm_covmap",
+        useConfiguration("--collect_code_coverage", "--experimental_use_llvm_covmap",
             "--compilation_mode=" + compilationModeFlag(mode));
         break;
     }
@@ -1183,8 +1149,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         .addAll(CompilationSupport.DEFAULT_COMPILER_FLAGS)
         .addAll(ObjcConfiguration.DBG_COPTS);
 
-    useConfiguration(
-        "--apple_platform_type=ios", "--compilation_mode=dbg", "--objc_debug_with_GLIBCXX=false");
+    useConfiguration("--compilation_mode=dbg", "--objc_debug_with_GLIBCXX=false");
     scratch.file("x/a.m");
     ruleType.scratchTarget(scratch,
         "srcs", "['a.m']");
@@ -1563,26 +1528,12 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     ruleType.scratchTarget(scratch,
         "dylibs", "['//fx:framework_import']");
 
-    scratch.file(
-        "fx/defs.bzl",
-        "def _custom_dynamic_framework_import_impl(ctx):",
-        "  return [",
-        "    apple_common.new_objc_provider(",
-        "      dynamic_framework_file=depset(ctx.files.link_inputs),",
-        "      dynamic_framework_dir=depset(['fx/MyFramework.framework'])),",
-        "    apple_common.new_dynamic_framework_provider(objc=apple_common.new_objc_provider()),",
-        "  ]",
-        "custom_dynamic_framework_import = rule(",
-        "    _custom_dynamic_framework_import_impl,",
-        "    attrs={'link_inputs': attr.label_list(allow_files=True)},",
-        ")");
     scratch.file("fx/MyFramework.framework/MyFramework");
-    scratch.file(
-        "fx/BUILD",
-        "load(':defs.bzl', 'custom_dynamic_framework_import')",
-        "custom_dynamic_framework_import(",
+    scratch.file("fx/BUILD",
+        "objc_framework(",
         "    name = 'framework_import',",
-        "    link_inputs = glob(['MyFramework.framework/*']),",
+        "    framework_imports = glob(['MyFramework.framework/*']),",
+        "    is_dynamic = 1,",
         ")");
     useConfiguration("--ios_multi_cpus=i386,x86_64");
 
@@ -1797,7 +1748,8 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
   protected void checkAppleSdkIphoneosPlatformEnv(RuleType ruleType) throws Exception {
     ruleType.scratchTarget(scratch);
-    useConfiguration("--apple_platform_type=ios", "--cpu=ios_arm64");
+    useConfiguration(
+        "--cpu=ios_arm64");
 
     CommandAction action = linkAction("//x:x");
 
@@ -2155,9 +2107,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   private void checkCustomModuleMap(RuleType ruleType, boolean targetUnderTestShouldPropagate)
       throws Exception {
     useConfiguration(
-        "--apple_platform_type=ios",
-        "--experimental_objc_enable_module_maps",
-        "--incompatible_strict_objc_module_maps");
+        "--experimental_objc_enable_module_maps", "--incompatible_strict_objc_module_maps");
     ruleType.scratchTarget(scratch, "deps", "['//z:a']");
     scratch.file("z/a.m");
     scratch.file("z/a.h");
@@ -2189,7 +2139,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     assertThat(compileActionA.getArguments()).doesNotContain("-fmodule-name");
 
     String x8664Genfiles =
-        configurationGenfiles("x86_64", ConfigurationDistinguisher.APPLE_CROSSTOOL, null);
+        configurationGenfiles("x86_64", ConfigurationDistinguisher.UNKNOWN, null);
 
     // The target with the module map should propagate it to its direct dependers...
     ObjcProvider provider = providerForTarget("//z:testModuleMap");

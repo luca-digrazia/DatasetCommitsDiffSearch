@@ -447,12 +447,13 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
     reporter.removeHandler(failFastHandler);
     scratch.file("foo/BUILD", "sh_library(name = 'foo', deps = ['//bar:baz/fizz'])");
     Path barBuildFile = scratch.file("bar/BUILD", "sh_library(name = 'bar/baz')");
+    Path bazDir = barBuildFile.getParentDirectory().getRelative("baz");
     scratch.file("bar/baz/BUILD");
-    FileStatus inconsistentFileStatus =
+    FileStatus inconsistentParentFileStatus =
         new FileStatus() {
           @Override
           public boolean isFile() {
-            return false;
+            return true;
           }
 
           @Override
@@ -490,8 +491,8 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
             return 0;
           }
         };
-    fs.stubStat(barBuildFile, inconsistentFileStatus);
-    Set<Label> labels = ImmutableSet.of(Label.parseAbsolute("//bar:baz", ImmutableMap.of()));
+    fs.stubStat(bazDir, inconsistentParentFileStatus);
+    Set<Label> labels = ImmutableSet.of(Label.parseAbsolute("//foo:foo", ImmutableMap.of()));
     getSkyframeExecutor()
         .getPackageManager()
         .newTransitiveLoader()

@@ -18,6 +18,8 @@ import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
@@ -95,7 +97,12 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
   public void testVisitLabels() throws Exception {
     RawAttributeMapper rawMapper = RawAttributeMapper.of(setupGenRule());
     try {
-      rawMapper.visitLabels();
+      rawMapper.visitLabels(new AttributeMap.AcceptsLabelAttribute() {
+        @Override
+        public void acceptLabelAttribute(Label label, Attribute attribute) {
+          // Nothing to do.
+        }
+      });
       fail("Expected label visitation to fail since one attribute is configurable");
     } catch (IllegalArgumentException e) {
       assertThat(e)

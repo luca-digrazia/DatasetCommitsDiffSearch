@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -26,6 +27,7 @@ import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import com.google.devtools.build.lib.packages.util.MockPlatformSupport;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.ToolPath;
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -41,15 +43,21 @@ public class CcToolchainSelectionTest extends BuildViewTestCase {
         mockToolsConfig, analysisMock.ccSupport().getMockCrosstoolLabel());
   }
 
+  private CppCompileAction getCppCompileAction(String label) throws Exception {
+    ConfiguredTarget target = getConfiguredTarget(label);
+    List<CppCompileAction> compilationSteps =
+        actionsTestUtil()
+            .findTransitivePrerequisitesOf(
+                getFilesToBuild(target).iterator().next(), CppCompileAction.class);
+    return compilationSteps.get(0);
+  }
+
   private static final String CPP_TOOLCHAIN_TYPE =
       TestConstants.TOOLS_REPOSITORY + "//tools/cpp:toolchain_type";
 
   @Test
   public void testResolvedCcToolchain() throws Exception {
-    String crosstool = analysisMock.ccSupport().readCrosstoolFile();
-    getAnalysisMock().ccSupport().setupCrosstoolWithRelease(mockToolsConfig, crosstool);
     useConfiguration(
-        "--enabled_toolchain_types=" + CPP_TOOLCHAIN_TYPE,
         "--experimental_platforms=//mock_platform:mock-piii-platform",
         "--extra_toolchains=//mock_platform:toolchain_cc-compiler-piii");
     ConfiguredTarget target =
@@ -61,14 +69,29 @@ public class CcToolchainSelectionTest extends BuildViewTestCase {
             getRuleContext(target)
                 .getToolchainContext()
                 .forToolchainType(Label.parseAbsolute(CPP_TOOLCHAIN_TYPE, ImmutableMap.of()));
-    assertThat(Iterables.getOnlyElement(toolchain.getCompilerFiles()).getExecPathString())
+    assertThat(Iterables.getOnlyElement(toolchain.getCompile()).getExecPathString())
         .endsWith("piii");
   }
 
   @Test
   public void testToolchainSelectionWithPlatforms() throws Exception {
-    String crosstool = analysisMock.ccSupport().readCrosstoolFile();
-    getAnalysisMock().ccSupport().setupCrosstoolWithRelease(mockToolsConfig, crosstool);
+    useConfiguration(
+        "--enabled_toolchain_types=" + CPP_TOOLCHAIN_TYPE,
+        "--experimental_platforms=//mock_platform:mock-piii-platform",
+        "--extra_toolchains=//mock_platform:toolchain_cc-compiler-piii");
+    ScratchAttributeWriter.fromLabelString(this, "cc_library", "//lib")
+        .setList("srcs", "a.cc")
+        .write();
+    CppCompileAction compileAction = getCppCompileAction("//lib");
+    boolean isPiii =
+        ImmutableList.copyOf(compileAction.getInputs())
+            .stream()
+            .anyMatch(artifact -> artifact.getExecPathString().endsWith("piii"));
+    assertThat(isPiii).isTrue();
+  }
+
+  @Test
+  public void testCToolchainSelectionFromCcToolchainAttrs() throws Exception {
     useConfiguration(
         "--enabled_toolchain_types=" + CPP_TOOLCHAIN_TYPE,
         "--experimental_platforms=//mock_platform:mock-piii-platform",

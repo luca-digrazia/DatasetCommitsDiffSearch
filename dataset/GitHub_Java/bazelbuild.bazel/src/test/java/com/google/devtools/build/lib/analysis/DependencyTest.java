@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -48,7 +48,12 @@ public class DependencyTest extends AnalysisTestCase {
     assertThat(nullDep.getConfiguration()).isNull();
     assertThat(nullDep.getAspects().getAllAspects()).isEmpty();
 
-    assertThrows(IllegalStateException.class, () -> nullDep.getTransition());
+    try {
+      nullDep.getTransition();
+      fail("withNullConfiguration-created Dependencies should throw ISE on getTransition()");
+    } catch (IllegalStateException ex) {
+      // good. expected.
+    }
   }
 
   @Test
@@ -63,7 +68,12 @@ public class DependencyTest extends AnalysisTestCase {
     assertThat(targetDep.getConfiguration()).isEqualTo(getTargetConfiguration());
     assertThat(targetDep.getAspects().getAllAspects()).isEmpty();
 
-    assertThrows(IllegalStateException.class, () -> targetDep.getTransition());
+    try {
+      targetDep.getTransition();
+      fail("withConfiguration-created Dependencies should throw ISE on getTransition()");
+    } catch (IllegalStateException ex) {
+      // good. expected.
+    }
   }
 
   @Test
@@ -85,7 +95,12 @@ public class DependencyTest extends AnalysisTestCase {
     assertThat(targetDep.getAspectConfiguration(attributeAspect))
         .isEqualTo(getTargetConfiguration());
 
-    assertThrows(IllegalStateException.class, () -> targetDep.getTransition());
+    try {
+      targetDep.getTransition();
+      fail("withConfigurationAndAspects-created Dependencies should throw ISE on getTransition()");
+    } catch (IllegalStateException ex) {
+      // good. that's what I WANTED to happen.
+    }
   }
 
   @Test
@@ -96,11 +111,13 @@ public class DependencyTest extends AnalysisTestCase {
     AspectDescriptor attributeAspect = new AspectDescriptor(TestAspects.ATTRIBUTE_ASPECT);
     AspectCollection twoAspects = AspectCollection.createForTests(simpleAspect, attributeAspect);
 
-    assertThrows(
-        NullPointerException.class,
-        () ->
-            Dependency.withConfigurationAndAspects(
-                Label.parseAbsolute("//a", ImmutableMap.of()), null, twoAspects));
+    try {
+      Dependency.withConfigurationAndAspects(
+          Label.parseAbsolute("//a", ImmutableMap.of()), null, twoAspects);
+      fail("should not be allowed to create a dependency with a null configuration");
+    } catch (NullPointerException expected) {
+      // good. you fell rrrrright into my trap.
+    }
   }
 
   @Test
@@ -140,7 +157,12 @@ public class DependencyTest extends AnalysisTestCase {
     assertThat(targetDep.getAspectConfiguration(attributeAspect))
         .isEqualTo(getHostConfiguration());
 
-    assertThrows(IllegalStateException.class, () -> targetDep.getTransition());
+    try {
+      targetDep.getTransition();
+      fail("withConfiguredAspects-created Dependencies should throw ISE on getTransition()");
+    } catch (IllegalStateException ex) {
+      // good. all according to keikaku. (TL note: keikaku means plan)
+    }
   }
 
 
@@ -173,12 +195,28 @@ public class DependencyTest extends AnalysisTestCase {
         .containsExactlyElementsIn(twoAspects.getAllAspects());
     assertThat(hostDep.getTransition().isHostTransition()).isTrue();
 
-    assertThrows(IllegalStateException.class, () -> hostDep.getConfiguration());
+    try {
+      hostDep.getConfiguration();
+      fail("withTransitionAndAspects-created Dependencies should throw ISE on getConfiguration()");
+    } catch (IllegalStateException ex) {
+      // good. I knew you would do that.
+    }
 
-    assertThrows(IllegalStateException.class, () -> hostDep.getAspectConfiguration(simpleAspect));
+    try {
+      hostDep.getAspectConfiguration(simpleAspect);
+      fail("withTransitionAndAspects-created Dependencies should throw ISE on "
+          + "getAspectConfiguration()");
+    } catch (IllegalStateException ex) {
+      // good. you're so predictable.
+    }
 
-    assertThrows(
-        IllegalStateException.class, () -> hostDep.getAspectConfiguration(attributeAspect));
+    try {
+      hostDep.getAspectConfiguration(attributeAspect);
+      fail("withTransitionAndAspects-created Dependencies should throw ISE on "
+          + "getAspectConfiguration()");
+    } catch (IllegalStateException ex) {
+      // good. you're so predictable.
+    }
   }
 
   @Test

@@ -249,7 +249,7 @@ public class RuleFactoryTest extends PackageLoadingTestCase {
       Rule rule =
           new Rule(
               pkg,
-              Label.create(pkg.getPackageIdentifier(), "myrule"),
+              pkg.createLabel("myrule"),
               ruleClass,
               Location.fromFile(myPkgPath),
               new AttributeContainer(ruleClass));

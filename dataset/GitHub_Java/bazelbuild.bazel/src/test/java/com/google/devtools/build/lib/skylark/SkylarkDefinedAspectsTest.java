@@ -1477,14 +1477,14 @@ public class SkylarkDefinedAspectsTest extends AnalysisTestCase {
   @Test
   public void aspectFragmentAccessSuccess() throws Exception {
     getConfiguredTargetForAspectFragment(
-        "ctx.fragments.java.strict_java_deps", "'java'", "", "", "");
+        "ctx.fragments.cpp.compiler", "'cpp'", "", "", "");
     assertNoEvents();
   }
 
   @Test
   public void aspectHostFragmentAccessSuccess() throws Exception {
     getConfiguredTargetForAspectFragment(
-        "ctx.host_fragments.java.strict_java_deps", "", "'java'", "", "");
+        "ctx.host_fragments.cpp.compiler", "", "'cpp'", "", "");
     assertNoEvents();
   }
 
@@ -1493,16 +1493,16 @@ public class SkylarkDefinedAspectsTest extends AnalysisTestCase {
     reporter.removeHandler(failFastHandler);
     try {
       getConfiguredTargetForAspectFragment(
-          "ctx.fragments.java.strict_java_deps", "'cpp'", "'java'", "'java'", "");
+          "ctx.fragments.cpp.compiler", "'java'", "'cpp'", "'cpp'", "");
       fail("update() should have failed");
     } catch (ViewCreationFailedException e) {
       // expected
     }
     assertContainsEvent(
-        "//test:aspect.bzl%MyAspect aspect on my_rule has to declare 'java' as a "
+        "//test:aspect.bzl%MyAspect aspect on my_rule has to declare 'cpp' as a "
             + "required fragment in target configuration in order to access it. Please update the "
             + "'fragments' argument of the rule definition "
-            + "(for example: fragments = [\"java\"])");
+            + "(for example: fragments = [\"cpp\"])");
   }
 
   @Test
@@ -1510,16 +1510,16 @@ public class SkylarkDefinedAspectsTest extends AnalysisTestCase {
     reporter.removeHandler(failFastHandler);
     try {
       getConfiguredTargetForAspectFragment(
-          "ctx.host_fragments.java.java_strict_deps", "'java'", "'cpp'", "", "'java'");
+          "ctx.host_fragments.cpp.compiler", "'cpp'", "'java'", "", "'cpp'");
       fail("update() should have failed");
     } catch (ViewCreationFailedException e) {
       // expected
     }
     assertContainsEvent(
-        "//test:aspect.bzl%MyAspect aspect on my_rule has to declare 'java' as a "
+        "//test:aspect.bzl%MyAspect aspect on my_rule has to declare 'cpp' as a "
             + "required fragment in host configuration in order to access it. Please update the "
             + "'host_fragments' argument of the rule definition "
-            + "(for example: host_fragments = [\"java\"])");
+            + "(for example: host_fragments = [\"cpp\"])");
   }
 
   private ConfiguredTarget getConfiguredTargetForAspectFragment(

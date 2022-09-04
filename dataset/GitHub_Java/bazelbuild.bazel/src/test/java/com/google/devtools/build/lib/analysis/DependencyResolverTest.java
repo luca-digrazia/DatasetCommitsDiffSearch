@@ -18,7 +18,6 @@ import static com.google.common.truth.Truth.assertWithMessage;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
@@ -41,9 +40,6 @@ import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.junit.Before;
 import org.junit.Test;
@@ -84,26 +80,14 @@ public class DependencyResolverTest extends AnalysisTestCase {
             throw new IllegalStateException(e);
           }
 
+          @Nullable
           @Override
-          protected Map<Label, Target> getTargets(
-              Iterable<Label> labels,
-              Target fromTarget,
-              NestedSetBuilder<Cause> rootCauses,
-              int labelsSizeHint) {
-            return Streams.stream(labels)
-                .distinct()
-                .collect(
-                    Collectors.toMap(
-                        Function.identity(),
-                        label -> {
-                          try {
-                            return packageManager.getTarget(reporter, label);
-                          } catch (NoSuchPackageException
-                              | NoSuchTargetException
-                              | InterruptedException e) {
-                            throw new IllegalStateException(e);
-                          }
-                        }));
+          protected Target getTarget(Target from, Label label, NestedSetBuilder<Cause> rootCauses) {
+            try {
+              return packageManager.getTarget(reporter, label);
+            } catch (NoSuchPackageException | NoSuchTargetException | InterruptedException e) {
+              throw new IllegalStateException(e);
+            }
           }
 
           @Nullable

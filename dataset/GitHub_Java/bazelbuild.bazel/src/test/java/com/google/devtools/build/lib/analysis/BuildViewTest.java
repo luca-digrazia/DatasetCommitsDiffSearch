@@ -23,7 +23,6 @@ import static org.junit.Assert.fail;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -377,14 +376,8 @@ public class BuildViewTest extends BuildViewTestBase {
         "filegroup(name='top', srcs=[':inner', 'file'])",
         "sh_binary(name='inner', srcs=['script.sh'])");
     ConfiguredTarget top = Iterables.getOnlyElement(update("//package:top").getTargetsToBuild());
-    Iterable<Dependency> targets =
-        getView()
-            .getDirectPrerequisiteDependenciesForTesting(
-                reporter,
-                top,
-                getBuildConfigurationCollection(),
-                /*toolchainLabels=*/ ImmutableSet.of())
-            .values();
+    Iterable<Dependency> targets = getView().getDirectPrerequisiteDependenciesForTesting(
+        reporter, top, getBuildConfigurationCollection(), /*toolchainContext=*/ null).values();
 
     Dependency innerDependency =
         Dependency.withTransitionAndAspects(

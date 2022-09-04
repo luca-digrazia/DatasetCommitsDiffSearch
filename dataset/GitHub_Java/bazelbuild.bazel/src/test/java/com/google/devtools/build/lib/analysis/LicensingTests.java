@@ -468,7 +468,6 @@ public class LicensingTests extends BuildViewTestCase {
         "    all_files = ':every-file',",
         "    dynamic_runtime_libs = ['dynamic-runtime-libs-cherry'],",
         "    static_runtime_libs = ['static-runtime-libs-cherry'])");
-    scratch.file("c/CROSSTOOL", AnalysisMock.get().ccSupport().readCrosstoolFile());
 
     ConfiguredTarget target = getConfiguredTarget("//c:c");
     Map<Label, License> expected = licenses("//c:c", "notice");
@@ -627,6 +626,7 @@ public class LicensingTests extends BuildViewTestCase {
         "  name = 'toolchain',",
         "  licenses = ['restricted'],",
         "  output_licenses = ['unencumbered'],",
+        "  encoding = 'UTF-8',",
         "  source_version = '8',",
         "  target_version = '8',",
         "  bootclasspath = [':bcp'],",

@@ -198,6 +198,8 @@ public class WorkspaceFactory {
       StoredEventHandler localReporter)
       throws InterruptedException {
     if (importedExtensions != null) {
+      Map<String, Extension> map = new HashMap<>(parentImportMap);
+      map.putAll(importedExtensions);
       importMap = ImmutableMap.copyOf(importedExtensions);
     } else {
       importMap = parentImportMap;

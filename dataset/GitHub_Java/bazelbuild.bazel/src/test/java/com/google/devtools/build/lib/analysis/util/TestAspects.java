@@ -229,10 +229,7 @@ public class TestAspects {
     implements ConfiguredAspectFactory {
     @Override
     public ConfiguredAspect create(
-        ConfiguredTargetAndData ctadBase,
-        RuleContext ruleContext,
-        AspectParameters parameters,
-        String toolsRepository)
+        ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters)
         throws ActionConflictException {
       String information = parameters.isEmpty()
           ? ""
@@ -279,10 +276,7 @@ public class TestAspects {
 
     @Override
     public ConfiguredAspect create(
-        ConfiguredTargetAndData ctadBase,
-        RuleContext ruleContext,
-        AspectParameters parameters,
-        String toolsRepository)
+        ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters)
         throws ActionConflictException {
       return new ConfiguredAspect.Builder(this, parameters, ruleContext)
           .addProvider(new FooProvider())
@@ -302,10 +296,7 @@ public class TestAspects {
 
     @Override
     public ConfiguredAspect create(
-        ConfiguredTargetAndData ctadBase,
-        RuleContext ruleContext,
-        AspectParameters parameters,
-        String toolsRepository)
+        ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters)
         throws ActionConflictException {
       return new ConfiguredAspect.Builder(this, parameters, ruleContext)
           .addProvider(new BarProvider())
@@ -443,10 +434,7 @@ public class TestAspects {
 
     @Override
     public ConfiguredAspect create(
-        ConfiguredTargetAndData ctadBase,
-        RuleContext ruleContext,
-        AspectParameters parameters,
-        String toolsRepository)
+        ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters)
         throws ActionConflictException {
       StringBuilder information = new StringBuilder("aspect " + ruleContext.getLabel());
       if (!parameters.isEmpty()) {
@@ -494,10 +482,7 @@ public class TestAspects {
 
     @Override
     public ConfiguredAspect create(
-        ConfiguredTargetAndData ctadBase,
-        RuleContext ruleContext,
-        AspectParameters parameters,
-        String toolsRepository)
+        ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters)
         throws ActionConflictException {
       ruleContext.ruleWarning("Aspect warning on " + ctadBase.getTarget().getLabel());
       return new ConfiguredAspect.Builder(this, parameters, ruleContext).build();
@@ -523,10 +508,7 @@ public class TestAspects {
 
     @Override
     public ConfiguredAspect create(
-        ConfiguredTargetAndData ctadBase,
-        RuleContext ruleContext,
-        AspectParameters parameters,
-        String toolsRepository) {
+        ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters) {
       ruleContext.ruleError("Aspect error");
       return null;
     }
@@ -556,10 +538,7 @@ public class TestAspects {
 
     @Override
     public ConfiguredAspect create(
-        ConfiguredTargetAndData ctadBase,
-        RuleContext context,
-        AspectParameters parameters,
-        String toolsRepository)
+        ConfiguredTargetAndData ctadBase, RuleContext context, AspectParameters parameters)
         throws InterruptedException, ActionConflictException {
       return new ConfiguredAspect.Builder(this, parameters, context).build();
     }
@@ -805,10 +784,7 @@ public class TestAspects {
 
     @Override
     public ConfiguredAspect create(
-        ConfiguredTargetAndData ctadBase,
-        RuleContext context,
-        AspectParameters parameters,
-        String toolsRepository)
+        ConfiguredTargetAndData ctadBase, RuleContext context, AspectParameters parameters)
         throws InterruptedException, ActionConflictException {
       return ConfiguredAspect.builder(this, parameters, context)
           .addProvider(Provider.class, new Provider(ctadBase.getConfiguredTarget().getLabel()))

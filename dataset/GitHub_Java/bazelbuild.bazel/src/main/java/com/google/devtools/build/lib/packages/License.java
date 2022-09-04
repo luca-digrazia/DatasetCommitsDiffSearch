@@ -14,17 +14,22 @@
 
 package com.google.devtools.build.lib.packages;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableTable;
 import com.google.common.collect.Sets;
+import com.google.common.collect.Table;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.skylarkbuildapi.LicenseApi;
-import com.google.devtools.build.lib.syntax.Printer;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -36,7 +41,7 @@ import java.util.Set;
 @Immutable
 @ThreadSafe
 @AutoCodec
-public final class License implements LicenseApi {
+public final class License {
   private final ImmutableSet<LicenseType> licenseTypes;
   private final ImmutableSet<Label> exceptions;
 
@@ -68,15 +73,15 @@ public final class License implements LicenseApi {
   }
 
   /**
-   * Gets the least restrictive license type from the list of licenses declared for a target. For
-   * the purposes of license checking, the license type set of a declared license can be reduced to
-   * its least restrictive member.
+   * Gets the least restrictive license type from the list of licenses declared
+   * for a target. For the purposes of license checking, the license type set of
+   * a declared license can be reduced to its least restrictive member.
    *
    * @param types a collection of license types
    * @return the least restrictive license type
    */
-  public static LicenseType leastRestrictive(Collection<LicenseType> types) {
-    // TODO(gregce): move this method to LicenseCheckingModule when Bazel's tests no longer use it
+  @VisibleForTesting
+  static LicenseType leastRestrictive(Collection<LicenseType> types) {
     return types.isEmpty() ? LicenseType.BY_EXCEPTION_ONLY : Collections.max(types);
   }
 
@@ -129,6 +134,43 @@ public final class License implements LicenseApi {
       }
       return Collections.unmodifiableSet(result);
     }
+  }
+
+  private static final Object MARKER = new Object();
+
+  /**
+   * The license incompatibility set. This contains the set of
+   * (Distribution,License) pairs that should generate errors.
+   */
+  private static Table<DistributionType, LicenseType, Object> LICENSE_INCOMPATIBILIES =
+      createLicenseIncompatibilitySet();
+
+  private static Table<DistributionType, LicenseType, Object> createLicenseIncompatibilitySet() {
+    Table<DistributionType, LicenseType, Object> result = HashBasedTable.create();
+    result.put(DistributionType.CLIENT, LicenseType.RESTRICTED, MARKER);
+    result.put(DistributionType.EMBEDDED, LicenseType.RESTRICTED, MARKER);
+    result.put(DistributionType.INTERNAL, LicenseType.BY_EXCEPTION_ONLY, MARKER);
+    result.put(DistributionType.CLIENT, LicenseType.BY_EXCEPTION_ONLY, MARKER);
+    result.put(DistributionType.WEB, LicenseType.BY_EXCEPTION_ONLY, MARKER);
+    result.put(DistributionType.EMBEDDED, LicenseType.BY_EXCEPTION_ONLY, MARKER);
+    return ImmutableTable.copyOf(result);
+  }
+
+  /**
+   * The license warning set. This contains the set of
+   * (Distribution,License) pairs that should generate warnings when the user
+   * requests verbose license checking.
+   */
+  private static Table<DistributionType, LicenseType, Object> LICENSE_WARNINGS =
+      createLicenseWarningsSet();
+
+  private static Table<DistributionType, LicenseType, Object> createLicenseWarningsSet() {
+    Table<DistributionType, LicenseType, Object> result = HashBasedTable.create();
+    result.put(DistributionType.CLIENT, LicenseType.RECIPROCAL, MARKER);
+    result.put(DistributionType.EMBEDDED, LicenseType.RECIPROCAL, MARKER);
+    result.put(DistributionType.CLIENT, LicenseType.NOTICE, MARKER);
+    result.put(DistributionType.EMBEDDED, LicenseType.NOTICE, MARKER);
+    return ImmutableTable.copyOf(result);
   }
 
   @AutoCodec.Instantiator
@@ -188,6 +230,55 @@ public final class License implements LicenseApi {
   }
 
   /**
+   * Checks if this license is compatible with distributing a particular target
+   * in some set of distribution modes.
+   *
+   * @param dists the modes of distribution
+   * @param target the target which is being checked, and which will be used for
+   *        checking exceptions
+   * @param licensedTarget the target which declared the license being checked.
+   * @param eventHandler a reporter where any licensing issues discovered should be
+   *        reported
+   * @param staticallyLinked whether the target is statically linked under this command
+   * @return true if the license is compatible with the distributions
+   */
+  public boolean checkCompatibility(Set<DistributionType> dists,
+      Target target, Label licensedTarget, EventHandler eventHandler,
+      boolean staticallyLinked) {
+    Location location = (target instanceof Rule) ? ((Rule) target).getLocation() : null;
+
+    LicenseType leastRestrictiveLicense;
+    if (licenseTypes.contains(LicenseType.RESTRICTED_IF_STATICALLY_LINKED)) {
+      Set<LicenseType> tempLicenses = EnumSet.copyOf(licenseTypes);
+      tempLicenses.remove(LicenseType.RESTRICTED_IF_STATICALLY_LINKED);
+      if (staticallyLinked) {
+        tempLicenses.add(LicenseType.RESTRICTED);
+      } else {
+        tempLicenses.add(LicenseType.UNENCUMBERED);
+      }
+      leastRestrictiveLicense = leastRestrictive(tempLicenses);
+    } else {
+      leastRestrictiveLicense = leastRestrictive(licenseTypes);
+    }
+    for (DistributionType dt : dists) {
+      if (LICENSE_INCOMPATIBILIES.contains(dt, leastRestrictiveLicense)) {
+        if (!exceptions.contains(target.getLabel())) {
+          eventHandler.handle(Event.error(location, "Build target '" + target.getLabel()
+              + "' is not compatible with license '" + this + "' from target '"
+                  + licensedTarget + "'"));
+          return false;
+        }
+      } else if (LICENSE_WARNINGS.contains(dt, leastRestrictiveLicense)) {
+        eventHandler.handle(
+            Event.warn(location, "Build target '" + target
+                + "' has a potential licensing issue "
+                + "with a '" + this + "' license from target '" + licensedTarget + "'"));
+      }
+    }
+    return true;
+  }
+
+  /**
    * @return an immutable set of {@link LicenseType}s contained in this {@code
    *         License}
    */
@@ -241,10 +332,5 @@ public final class License implements LicenseApi {
   @Override
   public int hashCode() {
     return licenseTypes.hashCode() * 43 + exceptions.hashCode();
-  }
-
-  @Override
-  public void repr(Printer printer) {
-    printer.append(this.toString());
   }
 }

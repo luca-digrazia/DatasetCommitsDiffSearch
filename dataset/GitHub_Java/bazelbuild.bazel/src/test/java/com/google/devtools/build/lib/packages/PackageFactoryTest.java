@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.util.PackageFactoryApparatus;
 import com.google.devtools.build.lib.packages.util.PackageFactoryTestBase;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -240,9 +239,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     Path buildFile =
         scratch.file("/pina/BUILD", "cc_library(name=PACKAGE_NAME + '-colada')");
 
-    Package pkg =
-        packages.createPackage(
-            "pina", buildFile, "--incompatible_package_name_is_a_function=false");
+    Package pkg = packages.createPackage("pina", buildFile);
     events.assertNoWarningsOrErrors();
     assertThat(pkg.containsErrors()).isFalse();
     assertThat(pkg.getRule("pina-colada")).isNotNull();
@@ -278,10 +275,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
             "genrule(name='c', srcs=[], outs=['ao'], cmd=REPOSITORY_NAME + ' ' + PACKAGE_NAME)");
     Package pkg =
         packages.createPackage(
-            PackageIdentifier.create("@a", PathFragment.create("b")),
-            buildFile,
-            events.reporter(),
-            "--incompatible_package_name_is_a_function=false");
+            PackageIdentifier.create("@a", PathFragment.create("b")), buildFile, events.reporter());
     Rule c = pkg.getRule("c");
     assertThat(AggregatingAttributeMapper.of(c).get("cmd", Type.STRING)).isEqualTo("@a b");
   }
@@ -480,8 +474,6 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     for (String targetName : ImmutableList.of("rule2", "in3", "in4", "out3")) {
       try {
         found.add(pkg.getTarget(targetName));
-        // No fail() here: if there's no exception, we add the name to a list
-        // and we check below that it's empty.
       } catch (NoSuchTargetException e) {
         /* good! */
       }
@@ -861,7 +853,10 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     unreadableSubdir.setReadable(false);
 
     Path file = scratch.file("/pkg/BUILD", "cc_library(name = 'c', srcs = glob(['globs/**']))");
-    MoreAsserts.assertThrows(NoSuchPackageException.class, () -> packages.eval("pkg", file));
+    try {
+      packages.eval("pkg", file);
+    } catch (NoSuchPackageException expected) {
+    }
     events.assertContainsError("Directory is not readable");
   }
 
@@ -1019,6 +1014,8 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
             "sh_library(name='after')");
     Package pkg = packages.eval("a", file);
 
+    assertThat(pkg.getRule("before").getFeatures()).containsExactly("b", "c");
+    assertThat(pkg.getRule("after").getFeatures()).containsExactly("b", "c");
     assertThat(pkg.getFeatures()).containsExactly("b", "c");
   }
 
@@ -1030,8 +1027,10 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     Path parentDir = buildFile.getParentDirectory();
     scratch.file("/e/data.txt");
     throwOnReaddir = parentDir;
-    MoreAsserts.assertThrows(
-        NoSuchPackageException.class, () -> packages.createPackage("e", buildFile));
+    try {
+      packages.createPackage("e", buildFile);
+    } catch (NoSuchPackageException expected) {
+    }
     events.setFailFast(true);
     throwOnReaddir = null;
     Package pkg = packages.createPackage("e", buildFile);
