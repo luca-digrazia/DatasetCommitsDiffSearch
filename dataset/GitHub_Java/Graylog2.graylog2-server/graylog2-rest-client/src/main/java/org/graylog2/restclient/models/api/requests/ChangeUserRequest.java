@@ -17,12 +17,12 @@
 package org.graylog2.restclient.models.api.requests;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.collect.Lists;
 import org.graylog2.restclient.models.User;
 import play.data.validation.Constraints;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 public class ChangeUserRequest extends ApiRequest {
     @Constraints.Required
@@ -31,8 +31,7 @@ public class ChangeUserRequest extends ApiRequest {
     @Constraints.Required
     public String email;
     public List<String> permissions = Collections.emptyList();
-    @JsonProperty
-    public List<String> roles = Lists.newArrayList();
+    public Set<String> roles = Collections.emptySet();
 
     public String timezone;
 
@@ -62,14 +61,6 @@ public class ChangeUserRequest extends ApiRequest {
         this.timezone = timezone;
     }
 
-    public List<String> getRoles() {
-        return roles;
-    }
-
-    public void setRoles(List<String> roles) {
-        this.roles = roles;
-    }
-
     @JsonProperty("session_timeout_ms")
     public long sessionTimeoutMs;
 
@@ -90,6 +81,6 @@ public class ChangeUserRequest extends ApiRequest {
             this.startpage.id = user.getStartpage().getId();
         }
         this.sessionTimeoutMs = user.getSessionTimeoutMs();
-        this.roles = Lists.newArrayList(user.getRoles());
+        this.roles = user.getRoles();
     }
 }

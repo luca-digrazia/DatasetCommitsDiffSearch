@@ -263,7 +263,10 @@ public class UserImpl extends PersistedImpl implements User {
     @SuppressWarnings("unchecked")
     @Override
     public Set<String> getRoleIds() {
-        final List<ObjectId> roles = firstNonNull((List<ObjectId>) fields.get(ROLES), Collections.<ObjectId>emptyList());
+        final List<ObjectId> roles = (List<ObjectId>) fields.get(ROLES);
+        if (roles == null) {
+            return Collections.emptySet();
+        }
         return Sets.newHashSet(Collections2.transform(roles, new ObjectIdStringFunction()));
     }
 
@@ -349,7 +352,7 @@ public class UserImpl extends PersistedImpl implements User {
         @Nonnull
         @Override
         public Set<String> getRoleIds() {
-            return Collections.emptySet();
+            return Sets.newHashSet();
         }
 
         @Override

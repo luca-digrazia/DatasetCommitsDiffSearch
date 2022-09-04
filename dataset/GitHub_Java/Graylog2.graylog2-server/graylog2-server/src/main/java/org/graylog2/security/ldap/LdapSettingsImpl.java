@@ -30,7 +30,6 @@ import org.graylog2.plugin.database.validators.Validator;
 import org.graylog2.security.AESTools;
 import org.graylog2.shared.security.ldap.LdapSettings;
 import org.graylog2.shared.users.Role;
-import org.graylog2.shared.users.Roles;
 import org.graylog2.users.RoleService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -265,7 +264,7 @@ public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
             // we store role ids, but the outside world uses role names to identify them
             try {
                 final Map<String, Role> idToRole = roleService.loadAllIdMap();
-                return Maps.newHashMap(Maps.transformValues(groupMapping, Roles.roleIdToNameFunction(idToRole)));
+                return Maps.newHashMap(Maps.transformValues(groupMapping, new Role.RoleIdToNameFunction(idToRole)));
             } catch (NotFoundException e) {
                 LOG.error("Unable to load role mapping");
                 return Collections.emptyMap();
@@ -281,7 +280,7 @@ public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
         } else {
             // we store ids internally but external users use the group names
             try {
-                final Map<String, Role> nameToRole = Maps.uniqueIndex(roleService.loadAll(), Roles.roleToNameFunction());
+                final Map<String, Role> nameToRole = Maps.uniqueIndex(roleService.loadAll(), new Role.RoleToNameFunction());
 
                 internal = Maps.newHashMap(Maps.transformValues(mapping, new Function<String, String>() {
                     @Nullable
