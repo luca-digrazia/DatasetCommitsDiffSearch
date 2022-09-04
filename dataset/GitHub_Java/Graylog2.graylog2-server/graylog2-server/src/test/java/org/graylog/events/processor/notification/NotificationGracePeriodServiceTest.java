@@ -100,7 +100,7 @@ public class NotificationGracePeriodServiceTest {
 
         final Event event = new TestEvent(DateTime.now(UTC), "testkey");
         final Event event2 = new TestEvent(event.getEventTimestamp().plus(5L), "testkey");
-        final Event event3 = new TestEvent(event2.getEventTimestamp().plus(4L), "testkey");
+        final Event event3 = new TestEvent(event2.getEventTimestamp().plus(9L), "testkey");
 
         assertThat(notificationGracePeriodService.inGracePeriod(definition, "5678", event)).isFalse();
         assertThat(notificationGracePeriodService.inGracePeriod(definition, "5678", event2)).isTrue();
@@ -108,7 +108,7 @@ public class NotificationGracePeriodServiceTest {
     }
 
     @Test
-    public void insideOutsideInsideGracePeriod() {
+    public void insideThenOutsideGracePeriod() {
         final NotificationGracePeriodService notificationGracePeriodService = new NotificationGracePeriodService();
 
         when(settings.gracePeriodMs()).thenReturn(10L);
@@ -117,13 +117,11 @@ public class NotificationGracePeriodServiceTest {
 
         final Event event = new TestEvent(DateTime.now(UTC), "testkey");
         final Event event2 = new TestEvent(event.getEventTimestamp().plus(5L), "testkey");
-        final Event event3 = new TestEvent(event2.getEventTimestamp().plus(6L), "testkey");
-        final Event event4 = new TestEvent(event3.getEventTimestamp().plus(6L), "testkey");
+        final Event event3 = new TestEvent(event2.getEventTimestamp().plus(11L), "testkey");
 
         assertThat(notificationGracePeriodService.inGracePeriod(definition, "5678", event)).isFalse();
         assertThat(notificationGracePeriodService.inGracePeriod(definition, "5678", event2)).isTrue();
         assertThat(notificationGracePeriodService.inGracePeriod(definition, "5678", event3)).isFalse();
-        assertThat(notificationGracePeriodService.inGracePeriod(definition, "5678", event4)).isTrue();
     }
 
     @Test
