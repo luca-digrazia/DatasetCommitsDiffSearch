@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ArrayListMultimap;
@@ -51,6 +52,7 @@ import javax.annotation.Nullable;
  * <p>Invariant: All TestSummary mutations should be performed through the Builder. No direct
  * TestSummary methods (except the constructor) may mutate the object.
  */
+@VisibleForTesting // Ideally package-scoped.
 public class TestSummary implements Comparable<TestSummary>, BuildEventWithOrderConstraint {
   /**
    * Builder class responsible for creating and altering TestSummary objects.
