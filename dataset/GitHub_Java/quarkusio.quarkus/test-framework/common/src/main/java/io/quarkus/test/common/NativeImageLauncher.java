@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.test.common;
 
 import java.io.Closeable;
@@ -10,10 +26,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.ServiceLoader;
 
 import org.eclipse.microprofile.config.ConfigProvider;
 
@@ -26,8 +39,6 @@ public class NativeImageLauncher implements Closeable {
     private final Class<?> testClass;
     private Process quarkusProcess;
     private final int port;
-    private final Map<String, String> systemProps = new HashMap<>();
-    private List<NativeImageStartedNotifier> startedNotifiers;
 
     public NativeImageLauncher(Class<?> testClass) {
         this(testClass, ConfigProvider.getConfig().getOptionalValue("quarkus.http.test-port", Integer.class).orElse(8081));
@@ -36,11 +47,6 @@ public class NativeImageLauncher implements Closeable {
     public NativeImageLauncher(Class<?> testClass, int port) {
         this.testClass = testClass;
         this.port = port;
-        List<NativeImageStartedNotifier> startedNotifiers = new ArrayList<>();
-        for (NativeImageStartedNotifier i : ServiceLoader.load(NativeImageStartedNotifier.class)) {
-            startedNotifiers.add(i);
-        }
-        this.startedNotifiers = startedNotifiers;
     }
 
     public void start() throws IOException {
@@ -52,12 +58,8 @@ public class NativeImageLauncher implements Closeable {
         List<String> args = new ArrayList<>();
         args.add(path);
         args.add("-Dquarkus.http.port=" + port);
-        args.add("-Dquarkus.profile=test");
         args.add("-Dtest.url=" + TestHTTPResourceManager.getUri());
         args.add("-Dquarkus.log.file.path=" + PropertyTestUtil.getLogFileLocation());
-        for (Map.Entry<String, String> e : systemProps.entrySet()) {
-            args.add("-D" + e.getKey() + "=" + e.getValue());
-        }
 
         System.out.println("Executing " + args);
 
@@ -121,11 +123,6 @@ public class NativeImageLauncher implements Closeable {
         while (System.currentTimeMillis() < bailout) {
             try {
                 Thread.sleep(100);
-                for (NativeImageStartedNotifier i : startedNotifiers) {
-                    if (i.isNativeImageStarted()) {
-                        return;
-                    }
-                }
                 try (Socket s = new Socket()) {
                     s.connect(new InetSocketAddress("localhost", port));
                     return;
@@ -135,10 +132,6 @@ public class NativeImageLauncher implements Closeable {
         }
 
         throw new RuntimeException("Unable to start native image in " + IMAGE_WAIT_TIME + "ms");
-    }
-
-    public void addSystemProperties(Map<String, String> systemProps) {
-        this.systemProps.putAll(systemProps);
     }
 
     private static final class ProcessReader implements Runnable {

@@ -94,8 +94,8 @@ public class QuarkusTestExtension
                     .setParent(getClass().getClassLoader())
                     .setOffline(PropertyUtils.getBooleanOrNull(BootstrapClassLoaderFactory.PROP_OFFLINE))
                     .setLocalProjectsDiscovery(
-                            PropertyUtils.getBoolean(BootstrapClassLoaderFactory.PROP_WS_DISCOVERY, true))
-                    .setEnableClasspathCache(PropertyUtils.getBoolean(BootstrapClassLoaderFactory.PROP_CP_CACHE, true))
+                            PropertyUtils.getBoolean(BootstrapClassLoaderFactory.PROP_PROJECT_DISCOVERY, true))
+                    .setClasspathCache(PropertyUtils.getBoolean(BootstrapClassLoaderFactory.PROP_CP_CACHE, true))
                     .newDeploymentClassLoader();
         } catch (BootstrapException e) {
             throw new IllegalStateException("Failed to create the boostrap class loader", e);
