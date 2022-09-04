@@ -20,11 +20,11 @@ import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.BaseFunction;
-import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 
 /** Command line args module. */
 @SkylarkModule(
@@ -110,7 +110,7 @@ import com.google.devtools.build.lib.syntax.StarlarkValue;
             + "  ...\n"
             + ")\n"
             + "</pre>")
-public interface CommandLineArgsApi extends StarlarkValue {
+public interface CommandLineArgsApi extends SkylarkValue {
   @SkylarkCallable(
       name = "add",
       doc =
@@ -194,7 +194,7 @@ public interface CommandLineArgsApi extends StarlarkValue {
                     + "of <code>add_all</code> or <code>add_joined</code> instead.")
       },
       useLocation = true)
-  CommandLineArgsApi addArgument(
+  public CommandLineArgsApi addArgument(
       Object argNameOrValue,
       Object value,
       Object format,
@@ -247,8 +247,8 @@ public interface CommandLineArgsApi extends StarlarkValue {
         @Param(
             name = "values",
             allowedTypes = {
-              @ParamType(type = Sequence.class),
-              @ParamType(type = Depset.class),
+              @ParamType(type = SkylarkList.class),
+              @ParamType(type = SkylarkNestedSet.class),
             },
             defaultValue = "unbound",
             doc = "The list, tuple, or depset whose items will be appended."),
@@ -350,7 +350,7 @@ public interface CommandLineArgsApi extends StarlarkValue {
                     + "its items are filtered)."),
       },
       useLocation = true)
-  CommandLineArgsApi addAll(
+  public CommandLineArgsApi addAll(
       Object argNameOrValue,
       Object values,
       Object mapEach,
@@ -397,8 +397,8 @@ public interface CommandLineArgsApi extends StarlarkValue {
         @Param(
             name = "values",
             allowedTypes = {
-              @ParamType(type = Sequence.class),
-              @ParamType(type = Depset.class),
+              @ParamType(type = SkylarkList.class),
+              @ParamType(type = SkylarkNestedSet.class),
             },
             defaultValue = "unbound",
             doc = "The list, tuple, or depset whose items will be joined."),
@@ -466,7 +466,7 @@ public interface CommandLineArgsApi extends StarlarkValue {
             doc = "Same as for <a href='#add_all.expand_directories'><code>add_all</code></a>.")
       },
       useLocation = true)
-  CommandLineArgsApi addJoined(
+  public CommandLineArgsApi addJoined(
       Object argNameOrValue,
       Object values,
       String joinWith,
@@ -509,7 +509,8 @@ public interface CommandLineArgsApi extends StarlarkValue {
                     + "bazel will decide whether the arguments need to be spilled "
                     + "based on your system and arg length.")
       })
-  CommandLineArgsApi useParamsFile(String paramFileArg, Boolean useAlways) throws EvalException;
+  public CommandLineArgsApi useParamsFile(String paramFileArg, Boolean useAlways)
+      throws EvalException;
 
   @SkylarkCallable(
       name = "set_param_file_format",
@@ -527,5 +528,5 @@ public interface CommandLineArgsApi extends StarlarkValue {
                     + "characters</li></ul>"
                     + "<p>The format defaults to \"shell\" if not called.")
       })
-  CommandLineArgsApi setParamFileFormat(String format) throws EvalException;
+  public CommandLineArgsApi setParamFileFormat(String format) throws EvalException;
 }
