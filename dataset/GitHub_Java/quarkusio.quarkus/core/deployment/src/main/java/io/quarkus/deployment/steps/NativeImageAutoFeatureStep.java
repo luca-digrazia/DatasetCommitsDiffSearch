@@ -22,7 +22,6 @@ import org.graalvm.nativeimage.hosted.RuntimeReflection;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.GeneratedNativeImageClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ForceNonWeakReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.JniRuntimeAccessBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageProxyDefinitionBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
@@ -83,7 +82,6 @@ public class NativeImageAutoFeatureStep {
             List<ReflectiveMethodBuildItem> reflectiveMethods,
             List<ReflectiveFieldBuildItem> reflectiveFields,
             List<ReflectiveClassBuildItem> reflectiveClassBuildItems,
-            List<ForceNonWeakReflectiveClassBuildItem> nonWeakReflectiveClassBuildItems,
             List<ServiceProviderBuildItem> serviceProviderBuildItems,
             List<UnsafeAccessedFieldBuildItem> unsafeAccessedFields,
             List<JniRuntimeAccessBuildItem> jniRuntimeAccessibleClasses) {
@@ -261,13 +259,8 @@ public class NativeImageAutoFeatureStep {
         int count = 0;
 
         final Map<String, ReflectionInfo> reflectiveClasses = new LinkedHashMap<>();
-        final Set<String> forcedNonWeakClasses = new HashSet<>();
-        for (ForceNonWeakReflectiveClassBuildItem nonWeakReflectiveClassBuildItem : nonWeakReflectiveClassBuildItems) {
-            forcedNonWeakClasses.add(nonWeakReflectiveClassBuildItem.getClassName());
-        }
         for (ReflectiveClassBuildItem i : reflectiveClassBuildItems) {
-            addReflectiveClass(reflectiveClasses, forcedNonWeakClasses, i.isConstructors(), i.isMethods(), i.isFields(),
-                    i.areFinalFieldsWritable(),
+            addReflectiveClass(reflectiveClasses, i.isConstructors(), i.isMethods(), i.isFields(), i.areFinalFieldsWritable(),
                     i.isWeak(),
                     i.getClassNames().toArray(new String[0]));
         }
@@ -279,7 +272,7 @@ public class NativeImageAutoFeatureStep {
         }
 
         for (ServiceProviderBuildItem i : serviceProviderBuildItems) {
-            addReflectiveClass(reflectiveClasses, forcedNonWeakClasses, true, false, false, false, false,
+            addReflectiveClass(reflectiveClasses, true, false, false, false, false,
                     i.providers().toArray(new String[] {}));
         }
 
@@ -452,15 +445,13 @@ public class NativeImageAutoFeatureStep {
         }
     }
 
-    public void addReflectiveClass(Map<String, ReflectionInfo> reflectiveClasses, Set<String> forcedNonWeakClasses,
-            boolean constructors, boolean method,
+    public void addReflectiveClass(Map<String, ReflectionInfo> reflectiveClasses, boolean constructors, boolean method,
             boolean fields, boolean finalFieldsWritable, boolean weak,
             String... className) {
         for (String cl : className) {
             ReflectionInfo existing = reflectiveClasses.get(cl);
             if (existing == null) {
-                reflectiveClasses.put(cl, new ReflectionInfo(constructors, method, fields, finalFieldsWritable,
-                        !forcedNonWeakClasses.contains(cl) && weak));
+                reflectiveClasses.put(cl, new ReflectionInfo(constructors, method, fields, finalFieldsWritable, weak));
             } else {
                 if (constructors) {
                     existing.constructors = true;
