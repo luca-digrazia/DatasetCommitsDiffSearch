@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -126,6 +127,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
   private final BuildViewProvider buildViewProvider;
   private final RuleClassProvider ruleClassProvider;
   private final Semaphore cpuBoundSemaphore;
+  private final Supplier<Boolean> removeActionsAfterEvaluation;
   private final BuildOptions defaultBuildOptions;
   /**
    * Indicates whether the set of packages transitively loaded for a given {@link
@@ -140,12 +142,14 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       BuildViewProvider buildViewProvider,
       RuleClassProvider ruleClassProvider,
       Semaphore cpuBoundSemaphore,
+      Supplier<Boolean> removeActionsAfterEvaluation,
       boolean storeTransitivePackagesForPackageRootResolution,
       boolean shouldUnblockCpuWorkWhenFetchingDeps,
       BuildOptions defaultBuildOptions) {
     this.buildViewProvider = buildViewProvider;
     this.ruleClassProvider = ruleClassProvider;
     this.cpuBoundSemaphore = cpuBoundSemaphore;
+    this.removeActionsAfterEvaluation = Preconditions.checkNotNull(removeActionsAfterEvaluation);
     this.storeTransitivePackagesForPackageRootResolution =
         storeTransitivePackagesForPackageRootResolution;
     this.shouldUnblockCpuWorkWhenFetchingDeps = shouldUnblockCpuWorkWhenFetchingDeps;
@@ -452,7 +456,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               configConditions,
               toolchainContext == null
                   ? ImmutableSet.of()
-                  : toolchainContext.resolvedToolchainLabels(),
+                  : toolchainContext.getResolvedToolchainLabels(),
               transitiveRootCauses,
               defaultBuildOptions,
               ((ConfiguredRuleClassProvider) ruleClassProvider).getTrimmingTransitionFactory());
@@ -804,7 +808,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
           ruleConfiguredTarget,
           transitivePackagesForPackageRootResolution == null
               ? null
-              : transitivePackagesForPackageRootResolution.build());
+              : transitivePackagesForPackageRootResolution.build(),
+          removeActionsAfterEvaluation.get());
     } else {
       GeneratingActions generatingActions;
       // Check for conflicting actions within this configured target (that indicates a bug in the
@@ -822,7 +827,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
           generatingActions,
           transitivePackagesForPackageRootResolution == null
               ? null
-              : transitivePackagesForPackageRootResolution.build());
+              : transitivePackagesForPackageRootResolution.build(),
+          removeActionsAfterEvaluation.get());
     }
   }
 
