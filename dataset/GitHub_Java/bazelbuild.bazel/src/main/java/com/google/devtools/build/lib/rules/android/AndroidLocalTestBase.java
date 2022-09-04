@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.Whitelist;
 import com.google.devtools.build.lib.analysis.actions.Substitution;
 import com.google.devtools.build.lib.analysis.actions.Template;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
@@ -39,8 +38,7 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
-import com.google.devtools.build.lib.rules.android.databinding.DataBinding;
-import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
+import com.google.devtools.build.lib.rules.android.DataBinding.DataBindingContext;
 import com.google.devtools.build.lib.rules.java.ClasspathConfiguredFragment;
 import com.google.devtools.build.lib.rules.java.DeployArchiveBuilder;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
@@ -158,13 +156,9 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     String testClass =
         getAndCheckTestClass(ruleContext, ImmutableList.copyOf(attributesBuilder.getSourceFiles()));
     getAndCheckTestSupport(ruleContext);
-
-    if (Whitelist.hasWhitelist(ruleContext, "multiple_proto_rule_types_in_deps_whitelist")
-        && !Whitelist.isAvailable(ruleContext, "multiple_proto_rule_types_in_deps_whitelist")) {
-      javaSemantics.checkForProtoLibraryAndJavaProtoLibraryOnSameProto(ruleContext, javaCommon);
-      if (ruleContext.hasErrors()) {
-        return null;
-      }
+    javaSemantics.checkForProtoLibraryAndJavaProtoLibraryOnSameProto(ruleContext, javaCommon);
+    if (ruleContext.hasErrors()) {
+      return null;
     }
 
     JavaCompilationHelper helper =
