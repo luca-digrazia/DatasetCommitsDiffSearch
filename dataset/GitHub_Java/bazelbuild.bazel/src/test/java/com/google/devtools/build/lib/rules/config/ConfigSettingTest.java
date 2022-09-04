@@ -16,13 +16,13 @@ package com.google.devtools.build.lib.rules.config;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.analysis.config.RequiresOptions;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -110,28 +110,22 @@ public class ConfigSettingTest extends BuildViewTestCase {
   }
 
   @AutoCodec
-  @RequiresOptions(options = {DummyTestOptions.class})
-  static class DummyTestOptionsFragment extends Fragment {
-    private final BuildOptions buildOptions;
-
-    public DummyTestOptionsFragment(BuildOptions buildOptions) {
-      this.buildOptions = buildOptions;
-    }
-    // Getter required to satisfy AutoCodec.
-    public BuildOptions getBuildOptions() {
-      return buildOptions;
-    }
-  }
+  static class DummyTestOptionsFragment extends Fragment {}
 
   private static class DummyTestOptionsLoader implements ConfigurationFragmentFactory {
     @Override
     public Fragment create(BuildOptions buildOptions) {
-      return new DummyTestOptionsFragment(buildOptions);
+      return new DummyTestOptionsFragment();
     }
 
     @Override
     public Class<? extends Fragment> creates() {
       return DummyTestOptionsFragment.class;
+    }
+
+    @Override
+    public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
+      return ImmutableSet.<Class<? extends FragmentOptions>>of(DummyTestOptions.class);
     }
   }
 
