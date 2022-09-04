@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages.util;
 
-import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.base.Verify;
@@ -30,7 +29,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import com.google.protobuf.TextFormat;
-import com.google.protobuf.TextFormat.ParseException;
 import java.io.IOException;
 
 /**
@@ -408,9 +406,6 @@ public abstract class MockCcSupport {
           + "  }"
           + "}";
 
-  public static final String COPY_DYNAMIC_LIBRARIES_TO_BINARY_CONFIGURATION =
-      "" + "feature { " + "  name: 'copy_dynamic_libraries_to_binary'" + "}";
-
   public static final String STATIC_LINK_TWEAKED_CONFIGURATION =
       ""
           + "artifact_name_pattern {"
@@ -453,16 +448,14 @@ public abstract class MockCcSupport {
   public static final String EMPTY_CLIF_MATCH_ACTION_CONFIG =
       emptyActionConfigFor(CppCompileAction.CLIF_MATCH);
 
-  public static final String EMPTY_STRIP_ACTION_CONFIG =
-      emptyActionConfigFor(CppCompileAction.STRIP_ACTION_NAME);
-
   /**
    * Creates action_config for {@code actionName} action using DUMMY_TOOL that doesn't imply any
    * features.
    */
   private static String emptyActionConfigFor(String actionName) {
     return String.format(
-        "action_config {"
+        ""
+            + "action_config {"
             + "  config_name: '%s'"
             + "  action_name: '%s'"
             + "  tool {"
@@ -490,29 +483,6 @@ public abstract class MockCcSupport {
       toolchainBuilder.mergeFrom(toolchain);
     }
     return TextFormat.printToString(builder.build());
-  }
-
-  /** Applies the given function to the first toolchain that applies to the given cpu. */
-  public static String applyToToolchain(
-      String original,
-      String targetCpu,
-      Function<CToolchain.Builder, CToolchain.Builder> transformation)
-      throws ParseException {
-    CrosstoolConfig.CrosstoolRelease.Builder crosstoolBuilder =
-        CrosstoolConfig.CrosstoolRelease.newBuilder();
-    TextFormat.merge(original, crosstoolBuilder);
-    for (int i = 0; i < crosstoolBuilder.getToolchainCount(); i++) {
-      if (crosstoolBuilder.getToolchain(i).getTargetCpu().equals(targetCpu)) {
-        CToolchain.Builder toolchainBuilder =
-            CToolchain.newBuilder(crosstoolBuilder.getToolchain(i));
-        transformation.apply(toolchainBuilder);
-        crosstoolBuilder.removeToolchain(i);
-        crosstoolBuilder.addToolchain(toolchainBuilder.build());
-        break;
-      }
-    }
-
-    return TextFormat.printToString(crosstoolBuilder.build());
   }
 
   public static String addOptionalDefaultCoptsToCrosstool(String original)
@@ -704,7 +674,7 @@ public abstract class MockCcSupport {
     try {
       return PackageIdentifier.create(
           RepositoryName.create(TestConstants.TOOLS_REPOSITORY),
-          PathFragment.create(TestConstants.MOCK_CC_CROSSTOOL_PATH));
+          PathFragment.create(TestConstants.TOOLS_REPOSITORY_PATH));
     } catch (LabelSyntaxException e) {
       Verify.verify(false);
       throw new AssertionError();

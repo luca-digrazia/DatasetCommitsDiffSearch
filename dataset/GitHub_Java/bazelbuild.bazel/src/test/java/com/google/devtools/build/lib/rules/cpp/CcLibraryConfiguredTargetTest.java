@@ -30,11 +30,11 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.FileType;
@@ -226,7 +226,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     ConfiguredTarget hello = getConfiguredTarget("//hello:hello");
     assertThat(
             hello
-                .get(CcLinkParamsInfo.PROVIDER)
+                .get(CcLinkParamsProvider.CC_LINK_PARAMS)
                 .getCcLinkParams(false, false)
                 .getLinkopts()
                 .isEmpty())
@@ -289,7 +289,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         action.getLinkCommandLine().getBuildInfoHeaderArtifacts());
     assertThat(cppLinkInfo.getBuildInfoHeaderArtifactList())
         .containsExactlyElementsIn(buildInfoHeaderArtifacts);
-    assertThat(cppLinkInfo.getLinkOptList()).containsExactlyElementsIn(action.getArguments());
+    assertThat(cppLinkInfo.getLinkOptList())
+        .containsExactlyElementsIn(action.getLinkCommandLine().getRawLinkArgv());
   }
 
   @Test
@@ -323,7 +324,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         action.getLinkCommandLine().getBuildInfoHeaderArtifacts());
     assertThat(cppLinkInfo.getBuildInfoHeaderArtifactList())
         .containsExactlyElementsIn(buildInfoHeaderArtifacts);
-    assertThat(cppLinkInfo.getLinkOptList()).containsExactlyElementsIn(action.getArguments());
+    assertThat(cppLinkInfo.getLinkOptList())
+        .containsExactlyElementsIn(action.getLinkCommandLine().getRawLinkArgv());
   }
 
   @Test
@@ -338,7 +340,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
 
     CppLinkAction action = (CppLinkAction) getGeneratingAction(archive);
 
-    assertThat(action.getArguments()).contains(archive.getExecPathString());
+    assertThat(action.getArgv()).contains(archive.getExecPathString());
   }
 
   @Test
@@ -780,7 +782,6 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
             MockCcSupport.EMPTY_EXECUTABLE_ACTION_CONFIG,
             MockCcSupport.EMPTY_DYNAMIC_LIBRARY_ACTION_CONFIG,
             MockCcSupport.EMPTY_STATIC_LIBRARY_ACTION_CONFIG,
-            MockCcSupport.EMPTY_STRIP_ACTION_CONFIG,
             MockCcSupport.NO_LEGACY_FEATURES_FEATURE);
     useConfiguration();
     scratchConfiguredTarget("a", "a",
@@ -1147,7 +1148,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     Iterable<Artifact> libraries =
         LinkerInputs.toNonSolibArtifacts(
             target
-                .get(CcLinkParamsInfo.PROVIDER)
+                .get(CcLinkParamsProvider.CC_LINK_PARAMS)
                 .getCcLinkParams(true, true)
                 .getLibraries());
     assertThat(artifactsToStrings(libraries)).contains("bin a/libfoo.a");
@@ -1162,7 +1163,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     Iterable<Artifact> libraries =
         LinkerInputs.toNonSolibArtifacts(
             target
-                .get(CcLinkParamsInfo.PROVIDER)
+                .get(CcLinkParamsProvider.CC_LINK_PARAMS)
                 .getCcLinkParams(true, true)
                 .getLibraries());
     assertThat(artifactsToStrings(libraries)).doesNotContain("bin a/libfoo.a");
@@ -1178,7 +1179,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     Iterable<Artifact> libraries =
         LinkerInputs.toNonSolibArtifacts(
             target
-                .get(CcLinkParamsInfo.PROVIDER)
+                .get(CcLinkParamsProvider.CC_LINK_PARAMS)
                 .getCcLinkParams(true, true)
                 .getLibraries());
     assertThat(artifactsToStrings(libraries)).doesNotContain("src a/libfoo.so");

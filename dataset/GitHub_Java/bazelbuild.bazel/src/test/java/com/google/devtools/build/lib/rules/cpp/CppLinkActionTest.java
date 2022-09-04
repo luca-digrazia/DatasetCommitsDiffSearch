@@ -88,7 +88,6 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 "gcc_tool",
                 "dynamic_library_linker_tool",
                 "ar_tool",
-                "strip_tool",
                 true,
                 false))
         .getFeatureConfiguration(
@@ -128,34 +127,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 ImmutableList.<LibraryToLink>of(),
                 featureConfiguration)
             .build();
-    assertThat(linkAction.getArguments()).contains("some_flag");
-  }
-
-  @Test
-  public void testExecutionRequirementsFromCrosstool() throws Exception {
-    FeatureConfiguration featureConfiguration =
-        CcToolchainFeaturesTest.buildFeatures(
-                "action_config {",
-                "   config_name: '" + LinkTargetType.EXECUTABLE.getActionName() + "'",
-                "   action_name: '" + LinkTargetType.EXECUTABLE.getActionName() + "'",
-                "   tool {",
-                "      tool_path: 'DUMMY_TOOL'",
-                "      execution_requirement: 'dummy-exec-requirement'",
-                "   }",
-                "}")
-            .getFeatureConfiguration(
-                FeatureSpecification.create(
-                    ImmutableSet.of(LinkTargetType.EXECUTABLE.getActionName()), ImmutableSet.of()));
-
-    CppLinkAction linkAction =
-        createLinkBuilder(
-                LinkTargetType.EXECUTABLE,
-                "dummyRuleContext/out",
-                ImmutableList.of(),
-                ImmutableList.of(),
-                featureConfiguration)
-            .build();
-    assertThat(linkAction.getExecutionInfo()).containsEntry("dummy-exec-requirement", "");
+    assertThat(linkAction.getArgv()).contains("some_flag");
   }
 
   @Test
