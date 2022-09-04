@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.packages;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
@@ -24,11 +23,11 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.SetMultimap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.Attribute.Transition;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.LabelClass;
 import com.google.devtools.build.lib.syntax.Type.LabelVisitor;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -419,19 +418,13 @@ public final class AspectDefinition {
 
     /**
      * Declares that the implementation of the associated aspect definition requires the given
-     * fragments to be present in the given configuration that isn't the aspect's configuration but
-     * is also readable by the aspect.
-     *
-     * <p>You probably don't want to use this, because aspects generally shouldn't read
-     * configurations other than their own. If you want to declare host config fragments, see
-     * {@link com.google.devtools.build.lib.analysis.config.ConfigAwareAspectBuilder}.
+     * fragments to be present in the host configuration.
      *
      * <p>The value is inherited by subclasses.
      */
-    public Builder requiresConfigurationFragments(Transition transition,
-        Class<?>... configurationFragments) {
-      configurationFragmentPolicy.requiresConfigurationFragments(transition,
-          ImmutableSet.copyOf(configurationFragments));
+    public Builder requiresHostConfigurationFragments(Class<?>... configurationFragments) {
+      configurationFragmentPolicy
+          .requiresHostConfigurationFragments(ImmutableSet.copyOf(configurationFragments));
       return this;
     }
 
@@ -450,21 +443,16 @@ public final class AspectDefinition {
     }
 
     /**
-     * Declares that the implementation of the associated aspect definition requires the given
-     * fragments to be present in the given configuration that isn't the aspect's configuration but
-     * is also readable by the aspect.
+     * Declares the configuration fragments that are required by this rule for the host
+     * configuration.
      *
-     * <p>In contrast to {@link #requiresConfigurationFragments(Transition, Class...)}, this method
-     * takes the Skylark module names of fragments instead of their classes.
-     *
-     * <p>You probably don't want to use this, because aspects generally shouldn't read
-     * configurations other than their own. If you want to declare host config fragments, see
-     * {@link com.google.devtools.build.lib.analysis.config.ConfigAwareAspectBuilder}.
+     * <p>In contrast to {@link #requiresHostConfigurationFragments(Class...)}, this method takes
+     * the Skylark module names of fragments instead of their classes.
      */
-    public Builder requiresConfigurationFragmentsBySkylarkModuleName(Transition transition,
+    public Builder requiresHostConfigurationFragmentsBySkylarkModuleName(
         Collection<String> configurationFragmentNames) {
-      configurationFragmentPolicy.requiresConfigurationFragmentsBySkylarkModuleName(transition,
-          configurationFragmentNames);
+      configurationFragmentPolicy
+          .requiresHostConfigurationFragmentsBySkylarkModuleName(configurationFragmentNames);
       return this;
     }
 

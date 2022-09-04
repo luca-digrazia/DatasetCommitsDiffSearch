@@ -462,7 +462,7 @@ public class RuleClass {
     private boolean publicByDefault = false;
     private boolean binaryOutput = true;
     private boolean workspaceOnly = false;
-    private boolean isExecutableSkylark = false;
+    private boolean outputsDefaultExecutable = false;
     private boolean isConfigMatcher = false;
     private ImplicitOutputsFunction implicitOutputsFunction = ImplicitOutputsFunction.NONE;
     private RuleTransitionFactory transitionFactory;
@@ -550,12 +550,13 @@ public class RuleClass {
      * @throws IllegalStateException if any of the required attributes is missing
      */
     public RuleClass build() {
-      // For built-ins, name == key
-      return build(name, name);
+      return build(name);
     }
 
-    /** Same as {@link #build} except with setting the name and key parameters. */
-    public RuleClass build(String name, String key) {
+    /**
+     * Same as {@link #build} except with setting the name parameter.
+     */
+    public RuleClass build(String name) {
       Preconditions.checkArgument(this.name.isEmpty() || this.name.equals(name));
       type.checkName(name);
       type.checkAttributes(attributes);
@@ -574,7 +575,6 @@ public class RuleClass {
       }
       return new RuleClass(
           name,
-          key,
           skylark,
           skylarkExecutable,
           skylarkTestable,
@@ -582,7 +582,7 @@ public class RuleClass {
           publicByDefault,
           binaryOutput,
           workspaceOnly,
-          isExecutableSkylark,
+          outputsDefaultExecutable,
           implicitOutputsFunction,
           isConfigMatcher,
           transitionFactory,
@@ -929,8 +929,8 @@ public class RuleClass {
      * This rule class outputs a default executable for every rule with the same name as
      * the rules's. Only works for Skylark.
      */
-    public <TYPE> Builder setExecutableSkylark() {
-      this.isExecutableSkylark = true;
+    public <TYPE> Builder setOutputsDefaultExecutable() {
+      this.outputsDefaultExecutable = true;
       return this;
     }
 
@@ -1025,8 +1025,6 @@ public class RuleClass {
 
   private final String name; // e.g. "cc_library"
 
-  private final String key; // Just the name for native, label + name for skylark
-
   /**
    * The kind of target represented by this RuleClass (e.g. "cc_library rule").
    * Note: Even though there is partial duplication with the {@link RuleClass#name} field,
@@ -1042,7 +1040,7 @@ public class RuleClass {
   private final boolean publicByDefault;
   private final boolean binaryOutput;
   private final boolean workspaceOnly;
-  private final boolean isExecutableSkylark;
+  private final boolean outputsDefaultExecutable;
   private final boolean isConfigMatcher;
 
   /**
@@ -1156,7 +1154,6 @@ public class RuleClass {
   @VisibleForTesting
   RuleClass(
       String name,
-      String key,
       boolean isSkylark,
       boolean skylarkExecutable,
       boolean skylarkTestable,
@@ -1164,7 +1161,7 @@ public class RuleClass {
       boolean publicByDefault,
       boolean binaryOutput,
       boolean workspaceOnly,
-      boolean isExecutableSkylark,
+      boolean outputsDefaultExecutable,
       ImplicitOutputsFunction implicitOutputsFunction,
       boolean isConfigMatcher,
       RuleTransitionFactory transitionFactory,
@@ -1183,7 +1180,6 @@ public class RuleClass {
       Set<Label> requiredToolchains,
       Attribute... attributes) {
     this.name = name;
-    this.key = key;
     this.isSkylark = isSkylark;
     this.targetKind = name + Rule.targetKindSuffix();
     this.skylarkExecutable = skylarkExecutable;
@@ -1207,7 +1203,7 @@ public class RuleClass {
     validateNoClashInPublicNames(attributes);
     this.attributes = ImmutableList.copyOf(attributes);
     this.workspaceOnly = workspaceOnly;
-    this.isExecutableSkylark = isExecutableSkylark;
+    this.outputsDefaultExecutable = outputsDefaultExecutable;
     this.configurationFragmentPolicy = configurationFragmentPolicy;
     this.supportsConstraintChecking = supportsConstraintChecking;
     this.requiredToolchains = ImmutableSet.copyOf(requiredToolchains);
@@ -1279,11 +1275,6 @@ public class RuleClass {
    */
   public String getName() {
     return name;
-  }
-
-  /** Returns a unique key. Used for profiling purposes. */
-  public String getKey() {
-    return key;
   }
 
   /**
@@ -1601,8 +1592,6 @@ public class RuleClass {
         // that depends on non-computed default attribute values, and that condition predicate is
         // evaluated by the call to Attribute#getDefaultValue.
         attrsWithComputedDefaults.add(attr);
-      } else if (attr.isLateBound()) {
-        rule.setAttributeValue(attr, attr.getLateBoundDefault(), /*explicit=*/ false);
       } else {
         Object defaultValue = getAttributeNoncomputedDefaultValue(attr, pkgBuilder);
         rule.setAttributeValue(attr, defaultValue, /*explicit=*/ false);
@@ -2023,8 +2012,8 @@ public class RuleClass {
   /**
    * Returns true if this rule class outputs a default executable for every rule.
    */
-  public boolean isExecutableSkylark() {
-    return isExecutableSkylark;
+  public boolean outputsDefaultExecutable() {
+    return outputsDefaultExecutable;
   }
 
   public ImmutableSet<Label> getRequiredToolchains() {
