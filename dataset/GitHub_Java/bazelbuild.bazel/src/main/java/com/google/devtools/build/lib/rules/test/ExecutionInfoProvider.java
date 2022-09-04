@@ -14,9 +14,9 @@
 package com.google.devtools.build.lib.rules.test;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-
+import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import java.util.Map;
 
 /**
@@ -24,17 +24,23 @@ import java.util.Map;
  * tests).
  */
 @Immutable
-public final class ExecutionInfoProvider implements TransitiveInfoProvider {
+public final class ExecutionInfoProvider extends SkylarkClassObject {
+
+  /** Skylark constructor and identifier for ExecutionInfoProvider. */
+  public static final NativeClassObjectConstructor<ExecutionInfoProvider> SKYLARK_CONSTRUCTOR =
+      new NativeClassObjectConstructor<ExecutionInfoProvider>(
+          ExecutionInfoProvider.class, "ExecutionInfo") {};
 
   private final ImmutableMap<String, String> executionInfo;
 
   public ExecutionInfoProvider(Map<String, String> requirements) {
+    super(SKYLARK_CONSTRUCTOR, ImmutableMap.<String, Object>of("requirements", requirements));
     this.executionInfo = ImmutableMap.copyOf(requirements);
   }
 
   /**
    * Returns a map to indicate special execution requirements, such as hardware
-   * platforms, web browsers, etc. Rule tags, such as "requires-XXX", may also be added
+   * platforms, etc. Rule tags, such as "requires-XXX", may also be added
    * as keys to the map.
    */
   public ImmutableMap<String, String> getExecutionInfo() {

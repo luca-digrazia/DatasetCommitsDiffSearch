@@ -18,12 +18,12 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CcFlagsSupplier;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
@@ -77,8 +77,7 @@ public abstract class PyBinary implements RuleConfiguredTargetFactory {
       return null;
     }
 
-    Artifact realExecutable =
-        semantics.createExecutable(ruleContext, common, ccLinkParamsStore, imports);
+    semantics.createExecutable(ruleContext, common, ccLinkParamsStore, imports);
     Runfiles commonRunfiles = collectCommonRunfiles(ruleContext, common, semantics);
 
     Runfiles.Builder defaultRunfilesBuilder = new Runfiles.Builder(
@@ -92,6 +91,7 @@ public abstract class PyBinary implements RuleConfiguredTargetFactory {
             ruleContext,
             defaultRunfiles,
             common.getExecutable(),
+            ruleContext.shouldCreateRunfilesSymlinks(),
             ImmutableList.of(new CcFlagsSupplier(ruleContext)));
 
     if (ruleContext.hasErrors()) {
@@ -117,7 +117,7 @@ public abstract class PyBinary implements RuleConfiguredTargetFactory {
     return builder
         .setFilesToBuild(common.getFilesToBuild())
         .add(RunfilesProvider.class, runfilesProvider)
-        .setRunfilesSupport(runfilesSupport, realExecutable)
+        .setRunfilesSupport(runfilesSupport, common.getExecutable())
         .addNativeDeclaredProvider(new CcLinkParamsProvider(ccLinkParamsStore))
         .add(PythonImportsProvider.class, new PythonImportsProvider(imports));
   }

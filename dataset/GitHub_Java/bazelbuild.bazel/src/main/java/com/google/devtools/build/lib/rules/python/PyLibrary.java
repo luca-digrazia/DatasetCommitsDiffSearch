@@ -14,21 +14,19 @@
 package com.google.devtools.build.lib.rules.python;
 
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
-import com.google.devtools.build.lib.rules.cpp.CcLinkParamsInfo;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
-import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,8 +43,7 @@ public abstract class PyLibrary implements RuleConfiguredTargetFactory {
   protected abstract PythonSemantics createSemantics();
 
   @Override
-  public ConfiguredTarget create(final RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+  public ConfiguredTarget create(final RuleContext ruleContext) throws RuleErrorException {
     PythonSemantics semantics = createSemantics();
     PyCommon common = new PyCommon(ruleContext);
     common.initCommon(common.getDefaultPythonVersion());
@@ -70,7 +67,7 @@ public abstract class PyLibrary implements RuleConfiguredTargetFactory {
                              boolean linkShared) {
         builder.addTransitiveTargets(ruleContext.getPrerequisites("deps", Mode.TARGET),
             PyCcLinkParamsProvider.TO_LINK_PARAMS,
-            CcLinkParamsInfo.TO_LINK_PARAMS);
+            CcLinkParamsProvider.TO_LINK_PARAMS);
       }
     };
 
@@ -86,19 +83,16 @@ public abstract class PyLibrary implements RuleConfiguredTargetFactory {
     } else {
       runfilesBuilder.addTransitiveArtifacts(filesToBuild);
     }
+    runfilesBuilder.setEmptyFilesSupplier(PythonUtils.GET_INIT_PY_FILES);
     runfilesBuilder.add(ruleContext, PythonRunfilesProvider.TO_RUNFILES);
     runfilesBuilder.addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES);
 
     RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
     common.addCommonTransitiveInfoProviders(builder, semantics, filesToBuild);
-
-    CcLinkingInfo.Builder ccLinkingInfoBuilder = CcLinkingInfo.Builder.create();
-    ccLinkingInfoBuilder.setCcLinkParamsInfo(new CcLinkParamsInfo(ccLinkParamsStore));
-
     return builder
         .setFilesToBuild(filesToBuild)
         .add(RunfilesProvider.class, RunfilesProvider.simple(runfilesBuilder.build()))
-        .addNativeDeclaredProvider(ccLinkingInfoBuilder.build())
+        .addNativeDeclaredProvider(new CcLinkParamsProvider(ccLinkParamsStore))
         .add(PythonImportsProvider.class, new PythonImportsProvider(imports))
         .build();
   }

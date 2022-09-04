@@ -23,9 +23,9 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
+import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
-import com.google.devtools.build.lib.rules.apple.XcodeConfig;
 import com.google.devtools.build.lib.rules.apple.XcodeVersionProperties;
 
 /**
@@ -39,6 +39,7 @@ public final class IosDevice implements RuleConfiguredTargetFactory {
         "This rule is deprecated. Please use the new Apple build rules "
             + "(https://github.com/bazelbuild/rules_apple) to build Apple targets.");
 
+    AppleConfiguration appleConfiguration = context.getFragment(AppleConfiguration.class);
     String iosVersionAttribute =
         context.attributes().get(IosDeviceRule.IOS_VERSION_ATTR_NAME, STRING);
     XcodeVersionProperties xcodeVersionProperties =
@@ -50,8 +51,8 @@ public final class IosDevice implements RuleConfiguredTargetFactory {
     DottedVersion xcodeVersion = null;
     if (xcodeVersionProperties != null && xcodeVersionProperties.getXcodeVersion().isPresent()) {
       xcodeVersion = xcodeVersionProperties.getXcodeVersion().get();
-    } else if (XcodeConfig.getXcodeVersion(context) != null) {
-      xcodeVersion = XcodeConfig.getXcodeVersion(context);
+    } else if (appleConfiguration.getXcodeVersion() != null) {
+      xcodeVersion = appleConfiguration.getXcodeVersion();
     }
 
     DottedVersion iosVersion;
@@ -60,7 +61,7 @@ public final class IosDevice implements RuleConfiguredTargetFactory {
     } else if (xcodeVersionProperties != null) {
       iosVersion = xcodeVersionProperties.getDefaultIosSdkVersion();
     } else {
-      iosVersion = XcodeConfig.getSdkVersionForPlatform(context, ApplePlatform.IOS_SIMULATOR);
+      iosVersion = appleConfiguration.getSdkVersionForPlatform(ApplePlatform.IOS_SIMULATOR);
     }
 
     IosDeviceProvider provider =

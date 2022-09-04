@@ -96,7 +96,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -1073,23 +1072,27 @@ public final class RuleContext extends TargetContext
   }
 
   public ImmutableMap<String, String> getMakeVariables(Iterable<String> attributeNames) {
-    ArrayList<MakeVariableProvider> makeVariableProviders = new ArrayList<>();
+    // Using an ImmutableBuilder to complain about duplicate keys. This traversal order of
+    // getPrerequisites isn't well-defined, so this makes sure providers don't secretly stomp on
+    // each other.
+    ImmutableMap.Builder<String, String> makeVariableBuilder = ImmutableMap.builder();
+    ImmutableSet.Builder<MakeVariableProvider> makeVariableProvidersBuilder =
+        ImmutableSet.builder();
 
     for (String attributeName : attributeNames) {
       // TODO(b/37567440): Remove this continue statement.
       if (!attributes().has(attributeName)) {
         continue;
       }
-      Iterables.addAll(makeVariableProviders,
+      makeVariableProvidersBuilder.addAll(
           getPrerequisites(attributeName, Mode.TARGET, MakeVariableProvider.SKYLARK_CONSTRUCTOR));
     }
 
-    LinkedHashMap<String, String> makeVariables = new LinkedHashMap<>();
-    for (MakeVariableProvider makeVariableProvider : makeVariableProviders) {
-      makeVariables.putAll(makeVariableProvider.getMakeVariables());
+    for (MakeVariableProvider makeVariableProvider : makeVariableProvidersBuilder.build()) {
+      makeVariableBuilder.putAll(makeVariableProvider.getMakeVariables());
     }
 
-    return ImmutableMap.copyOf(makeVariables);
+    return makeVariableBuilder.build();
   }
 
   /**

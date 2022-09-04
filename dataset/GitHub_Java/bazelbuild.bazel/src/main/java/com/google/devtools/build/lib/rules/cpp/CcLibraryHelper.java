@@ -303,7 +303,6 @@ public final class CcLibraryHelper {
   private final FdoSupportProvider fdoSupport;
   private String linkedArtifactNameSuffix = "";
   private boolean useDeps = true;
-  private boolean generateModuleMap = true;
 
   /**
    * Creates a CcLibraryHelper.
@@ -1389,17 +1388,13 @@ public final class CcLibraryHelper {
           featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES)
               || featureConfiguration.isEnabled(CppRuleClasses.COMPILE_ALL_MODULES);
       Iterable<CppModuleMap> dependentModuleMaps = collectModuleMaps();
-
-      if (generateModuleMap) {
-        Optional<Artifact> umbrellaHeader = cppModuleMap.getUmbrellaHeader();
-        if (umbrellaHeader.isPresent()) {
-          ruleContext.registerAction(
-              createUmbrellaHeaderAction(umbrellaHeader.get(), publicHeaders));
-        }
-
+      Optional<Artifact> umbrellaHeader = cppModuleMap.getUmbrellaHeader();
+      if (umbrellaHeader.isPresent()) {
         ruleContext.registerAction(
-            createModuleMapAction(cppModuleMap, publicHeaders, dependentModuleMaps, compiled));
+            createUmbrellaHeaderAction(umbrellaHeader.get(), publicHeaders));
       }
+      ruleContext.registerAction(
+          createModuleMapAction(cppModuleMap, publicHeaders, dependentModuleMaps, compiled));
       if (model.getGeneratesPicHeaderModule()) {
         contextBuilder.setPicHeaderModule(model.getPicHeaderModule(cppModuleMap.getArtifact()));
       }
@@ -1598,13 +1593,5 @@ public final class CcLibraryHelper {
 
   public void registerAdditionalModuleMap(CppModuleMap cppModuleMap) {
     this.additionalCppModuleMaps.add(Preconditions.checkNotNull(cppModuleMap));
-  }
-
-  /**
-   * Don't generate a module map for this target if a custom module map is provided.
-   */
-  public CcLibraryHelper doNotGenerateModuleMap() {
-    generateModuleMap = false;
-    return this;
   }
 }
