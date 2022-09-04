@@ -53,12 +53,8 @@ public interface QuiescingExecutor extends Executor {
    */
   void awaitQuiescence(boolean interruptWorkers) throws InterruptedException;
 
-  /**
-   * Prevent quiescence of the executor until the given future is completed. If the executor is
-   * interrupted, then the executor will call {@link ListenableFuture#cancel} with a parameter of
-   * {@code true}.
-   */
-  void dependOnFuture(ListenableFuture<?> future) throws InterruptedException;
+  /** Prevent quiescence of the executor until the given future is completed. */
+  void dependOnFuture(ListenableFuture<?> future);
 
   /** Get latch that is released if a task throws an exception. Used only in tests. */
   @VisibleForTesting

@@ -387,11 +387,11 @@ public class InMemoryNodeEntry implements NodeEntry {
     if (dirtyBuildingState == null) {
       dirtyBuildingState = DirtyBuildingState.createNew();
     }
-    boolean wasEvaluating = dirtyBuildingState.isEvaluating();
-    if (!wasEvaluating) {
+    boolean result = !dirtyBuildingState.isEvaluating();
+    if (result) {
       dirtyBuildingState.startEvaluating();
     }
-    return wasEvaluating ? DependencyState.ALREADY_EVALUATING : DependencyState.NEEDS_SCHEDULING;
+    return result ? DependencyState.NEEDS_SCHEDULING : DependencyState.ALREADY_EVALUATING;
   }
 
   /** Sets {@link #reverseDeps}. Does not alter {@link #reverseDepsDataToConsolidate}. */

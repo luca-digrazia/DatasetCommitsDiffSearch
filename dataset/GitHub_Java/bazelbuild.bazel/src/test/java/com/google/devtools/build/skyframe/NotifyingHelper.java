@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import com.google.auto.value.AutoValue;
 import com.google.common.base.Joiner;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.Maps;
@@ -177,9 +176,13 @@ public class NotifyingHelper {
   /** Receiver to be informed when an event for a given key occurs. */
   public interface Listener {
     @ThreadSafe
-    void accept(SkyKey key, EventType type, Order order, @Nullable Object context);
+    void accept(SkyKey key, EventType type, Order order, Object context);
 
-    Listener NULL_LISTENER = (key, type, order, context) -> {};
+    Listener NULL_LISTENER =
+        new Listener() {
+          @Override
+          public void accept(SkyKey key, EventType type, Order order, Object context) {}
+        };
   }
 
   private static class ErrorRecordingDelegatingListener implements Listener {
@@ -190,14 +193,12 @@ public class NotifyingHelper {
     }
 
     @Override
-    public void accept(SkyKey key, EventType type, Order order, @Nullable Object context) {
+    public void accept(SkyKey key, EventType type, Order order, Object context) {
       try {
         delegate.accept(key, type, order, context);
       } catch (Exception e) {
         TrackingAwaiter.INSTANCE.injectExceptionAndMessage(
-            e,
-            "In NotifyingGraph: "
-                + Joiner.on(", ").join(key, type, order, context == null ? "null" : context));
+            e, "In NotifyingGraph: " + Joiner.on(", ").join(key, type, order, context));
         throw e;
       }
     }
@@ -273,11 +274,7 @@ public class NotifyingHelper {
     public MarkedDirtyResult markDirty(DirtyType dirtyType) throws InterruptedException {
       graphListener.accept(myKey, EventType.MARK_DIRTY, Order.BEFORE, dirtyType);
       MarkedDirtyResult result = super.markDirty(dirtyType);
-      graphListener.accept(
-          myKey,
-          EventType.MARK_DIRTY,
-          Order.AFTER,
-          MarkDirtyAfterContext.create(dirtyType, result != null));
+      graphListener.accept(myKey, EventType.MARK_DIRTY, Order.AFTER, dirtyType);
       return result;
     }
 
@@ -332,23 +329,6 @@ public class NotifyingHelper {
     @Override
     public String toString() {
       return MoreObjects.toStringHelper(this).add("delegate", getThinDelegate()).toString();
-    }
-  }
-
-  /**
-   * A pair of {@link ThinNodeEntry.DirtyType} and a bit saying whether the dirtying was successful,
-   * emitted to the graph listener as the context {@link Order#AFTER} a call to {@link
-   * EventType#MARK_DIRTY} a node.
-   */
-  @AutoValue
-  public abstract static class MarkDirtyAfterContext {
-    public abstract ThinNodeEntry.DirtyType dirtyType();
-
-    public abstract boolean actuallyDirtied();
-
-    static MarkDirtyAfterContext create(
-        ThinNodeEntry.DirtyType dirtyType, boolean actuallyDirtied) {
-      return new AutoValue_NotifyingHelper_MarkDirtyAfterContext(dirtyType, actuallyDirtied);
     }
   }
 }

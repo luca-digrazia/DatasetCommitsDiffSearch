@@ -70,9 +70,4 @@ public class SkyFunctionEnvironmentForTesting extends AbstractSkyFunctionEnviron
   public void dependOnFuture(ListenableFuture<?> future) {
     throw new UnsupportedOperationException();
   }
-
-  @Override
-  public boolean restartPermitted() {
-    return false;
-  }
 }

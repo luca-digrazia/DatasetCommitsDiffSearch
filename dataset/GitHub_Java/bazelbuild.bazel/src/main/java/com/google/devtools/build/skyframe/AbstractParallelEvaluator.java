@@ -20,8 +20,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.common.graph.ImmutableGraph;
-import com.google.common.graph.Traverser;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
@@ -45,7 +43,6 @@ import com.google.devtools.build.skyframe.SkyFunctionException.ReifiedSkyFunctio
 import com.google.devtools.build.skyframe.ThinNodeEntry.DirtyType;
 import java.math.BigInteger;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
@@ -390,7 +387,6 @@ public abstract class AbstractParallelEvaluator {
 
     @Override
     public void run() {
-      SkyFunctionEnvironment env = null;
       try {
         NodeEntry state =
             Preconditions.checkNotNull(graph.get(null, Reason.EVALUATION, skyKey), skyKey);
@@ -405,6 +401,7 @@ public abstract class AbstractParallelEvaluator {
         }
 
         Set<SkyKey> oldDeps = state.getAllRemainingDirtyDirectDeps();
+        SkyFunctionEnvironment env;
         try {
           evaluatorContext
               .getProgressReceiver()
@@ -698,16 +695,6 @@ public abstract class AbstractParallelEvaluator {
         // Do not put any code here! Any code here can race with a re-evaluation of this same node
         // in another thread.
       } catch (InterruptedException ie) {
-        // The current thread can be interrupted at various places during evaluation or while
-        // committing the result in this method. Since we only register the future(s) with the
-        // underlying AbstractQueueVisitor in the registerExternalDeps call above, we have to make
-        // sure that any known futures are correctly canceled if we do not reach that call. Note
-        // that it is safe to cancel a future multiple times.
-        if (env != null && env.externalDeps != null) {
-          for (ListenableFuture<?> future : env.externalDeps) {
-            future.cancel(/*mayInterruptIfRunning=*/ true);
-          }
-        }
         // InterruptedException cannot be thrown by Runnable.run, so we must wrap it.
         // Interrupts can be caught by both the Evaluator and the AbstractQueueVisitor.
         // The former will unwrap the IE and propagate it as is; the latter will throw a new IE.
@@ -740,109 +727,40 @@ public abstract class AbstractParallelEvaluator {
 
   /**
    * If {@code returnedValue} is a {@link Restart} value, then {@code entry} will be reset, and the
-   * other nodes specified by {@code returnedValue.rewindGraph()} will be marked changed via
-   * postorder DFS.
-   *
-   * <p>{@code returnedValue.rewindGraph()} must be empty or must contain {@code key}.
-   *
-   * <p>TODO(b/123993876): this should verify that edges in rewindGraph correspond to deps in the
-   * Skyframe graph. Will require a safe way of requesting deps for nodes which may not be done.
+   * nodes specified by {@code returnedValue.getAdditionalKeysToRestart()} will be marked changed.
    *
    * @return {@code returnedValue instanceof Restart}
    */
-  // Nodes must be marked changed via postorder DFS. To see why, suppose we have this graph:
-  //
-  //   FailedNode   SomeOtherRdepOfR1
-  //       |       /
-  //       |  -----
-  //       | /
-  //       R1
-  //       |
-  //       R2
-  //
-  // Suppose FailedNode (FN) fails and requires that R1 and R2 must be dirtied and run again.
-  // Suppose they aren't dirtied via postorder DFS, so R1 is dirtied first.
-  //
-  // Then, the evaluation thread working on dirtying these nodes is suspended.
-  //
-  // On a separate evaluation thread, SomeOtherRdepOfR1 requests R1. R1 is scheduled for evaluation,
-  // checks its dep R2, and because R2 is done, R1 completes without scheduling R2 for evaluation.
-  //
-  // Then, the evaluation thread working on dirtying these nodes continues its work. It dirties
-  // R2 and schedules FN for evaluation.
-  //
-  // When FN next evaluates, it requests R1, and because R1 is done, R2 is not scheduled for
-  // evaluation, contrary to FN's expectations.
   private boolean maybeHandleRestart(SkyKey key, NodeEntry entry, SkyValue returnedValue)
       throws InterruptedException {
     if (!(returnedValue instanceof Restart)) {
       return false;
     }
+    restart(key, entry);
 
-    ImmutableGraph<SkyKey> rewindGraph = ((Restart) returnedValue).rewindGraph();
-    if (rewindGraph.nodes().isEmpty()) {
-      restart(key, entry);
-      return true;
-    }
-    Preconditions.checkArgument(
-        rewindGraph.nodes().contains(key),
-        "rewindGraph must contain the key for the failed evaluation if it's not empty. key: %s, "
-            + "rewindGraph: %s",
-        key,
-        rewindGraph);
+    Restart restart = (Restart) returnedValue;
 
-    ImmutableList.Builder<SkyKey> builder = ImmutableList.builder();
-    for (SkyKey k : Traverser.forGraph(rewindGraph).depthFirstPostOrder(key)) {
-      if (!k.equals(key)) {
-        builder.add(k);
-      }
-    }
-    ImmutableList<SkyKey> additionalKeysToRestart = builder.build();
-    if (!additionalKeysToRestart.isEmpty()) {
+    Map<SkyKey, ? extends NodeEntry> additionalNodesToRestart =
+        this.evaluatorContext.getBatchValues(
+            key, Reason.INVALIDATION, restart.getAdditionalKeysToRestart());
+    if (!additionalNodesToRestart.isEmpty()) {
       evaluatorContext
           .getGraphInconsistencyReceiver()
           .noteInconsistencyAndMaybeThrow(
-              key, additionalKeysToRestart, Inconsistency.PARENT_FORCE_REBUILD_OF_CHILD);
+              key, additionalNodesToRestart.keySet(), Inconsistency.PARENT_FORCE_REBUILD_OF_CHILD);
     }
-
-    Map<SkyKey, ? extends NodeEntry> additionalNodesToRestart =
-        evaluatorContext.getBatchValues(key, Reason.INVALIDATION, additionalKeysToRestart);
-
-    ArrayList<SkyKey> missingNodes = null;
-    for (SkyKey keyToRestart : additionalKeysToRestart) {
-      NodeEntry restartEntry = additionalNodesToRestart.get(keyToRestart);
-
-      if (restartEntry == null) {
-        if (missingNodes == null) {
-          missingNodes = new ArrayList<>();
-        }
-        missingNodes.add(keyToRestart);
-        continue;
-      }
-
+    for (NodeEntry restartEntry : additionalNodesToRestart.values()) {
       // Nodes are marked "force-rebuild" to ensure that they run, and to allow them to evaluate to
       // a different value than before, even if their versions remain the same.
       restartEntry.markDirty(DirtyType.FORCE_REBUILD);
-      evaluatorContext
-          .getProgressReceiver()
-          .invalidated(keyToRestart, EvaluationProgressReceiver.InvalidationState.DIRTY);
     }
 
-    if (missingNodes != null) {
-      evaluatorContext
-          .getGraphInconsistencyReceiver()
-          .noteInconsistencyAndMaybeThrow(
-              key, missingNodes, Inconsistency.PARENT_FORCE_REBUILD_OF_MISSING_CHILD);
-    }
-
-    // TODO(b/19539699): rdeps of children have to be handled here. If the graph does not keep
-    // edges, nothing has to be done, since there are no reverse deps to keep consistent. If the
-    // graph keeps edges, it's a harder problem. The reverse deps could just be removed, but in the
-    // case that this node is dirty, the deps shouldn't be removed, they should just be transformed
-    // back to "known reverse deps" from "reverse deps declared during this evaluation" (the inverse
-    // of NodeEntry#checkIfDoneForDirtyReverseDep). Such a method doesn't currently exist, but
-    // could.
-    restart(key, entry);
+    // TODO(mschaller): rdeps of children have to be handled here. If the graph does not keep edges,
+    // nothing has to be done, since there are no reverse deps to keep consistent. If the graph
+    // keeps edges, it's a harder problem. The reverse deps could just be removed, but in the case
+    // that this node is dirty, the deps shouldn't be removed, they should just be transformed back
+    // to "known reverse deps" from "reverse deps declared during this evaluation" (the inverse of
+    // NodeEntry#checkIfDoneForDirtyReverseDep). Such a method doesn't currently exist, but could.
     return true;
   }
 

@@ -289,9 +289,4 @@ public class RecordingSkyFunctionEnvironment implements Environment {
   public void dependOnFuture(ListenableFuture<?> future) {
     delegate.dependOnFuture(future);
   }
-
-  @Override
-  public boolean restartPermitted() {
-    return delegate.restartPermitted();
-  }
 }
