@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.License.LicenseParsingException;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SelectorValue;
@@ -31,6 +30,7 @@ import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.syntax.Type.DictType;
 import com.google.devtools.build.lib.syntax.Type.LabelClass;
+import com.google.devtools.build.lib.syntax.Type.LabelVisitor;
 import com.google.devtools.build.lib.syntax.Type.ListType;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -519,21 +519,6 @@ public final class BuildType {
          }
       }
       return keys.build();
-    }
-
-    @Override
-    public String toString() {
-      // Convert to a lib.syntax.SelectorList to guarantee consistency with callers that serialize
-      // directly on that type.
-      List<SelectorValue> selectorValueList = new ArrayList<>();
-      for (Selector<T> element : elements) {
-        selectorValueList.add(new SelectorValue(element.getEntries(), element.getNoMatchError()));
-      }
-      try {
-        return com.google.devtools.build.lib.syntax.SelectorList.of(selectorValueList).toString();
-      } catch (EvalException e) {
-        throw new IllegalStateException("this list should have been validated on creation");
-      }
     }
   }
 

@@ -14,6 +14,9 @@
 package com.google.devtools.build.lib.packages;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
@@ -236,7 +239,7 @@ public class BuildTypeTest {
             /* destDir */ null,
             /* symlinkBehavior */ null,
             /* stripPrefix */ null);
-    assertThat(BuildType.FILESET_ENTRY.convert(input, null, currentRule)).isEqualTo(input);
+    assertEquals(input, BuildType.FILESET_ENTRY.convert(input, null, currentRule));
     assertThat(collectLabels(BuildType.FILESET_ENTRY, input)).containsExactly(entryLabel);
   }
 
@@ -260,7 +263,7 @@ public class BuildTypeTest {
             /* destDir */ null,
             /* symlinkBehavior */ null,
             /* stripPrefix */ null));
-    assertThat(BuildType.FILESET_ENTRY_LIST.convert(input, null, currentRule)).isEqualTo(input);
+    assertEquals(input, BuildType.FILESET_ENTRY_LIST.convert(input, null, currentRule));
     assertThat(collectLabels(BuildType.FILESET_ENTRY_LIST, input)).containsExactly(
         entry1Label, entry2Label);
   }
@@ -275,7 +278,7 @@ public class BuildTypeTest {
         "//conditions:b", "//b:b",
         Selector.DEFAULT_CONDITION_KEY, "//d:d");
     Selector<Label> selector = new Selector<>(input, null, currentRule, BuildType.LABEL);
-    assertThat(selector.getOriginalType()).isEqualTo(BuildType.LABEL);
+    assertEquals(BuildType.LABEL, selector.getOriginalType());
 
     Map<Label, Label> expectedMap = ImmutableMap.of(
         Label.parseAbsolute("//conditions:a"), Label.create("@//a", "a"),
@@ -297,7 +300,7 @@ public class BuildTypeTest {
       new Selector<>(input, null, currentRule, BuildType.LABEL);
       fail("Expected Selector instantiation to fail since the input isn't a selection of labels");
     } catch (ConversionException e) {
-      assertThat(e).hasMessageThat().contains("invalid label 'not a/../label'");
+      assertThat(e.getMessage()).contains("invalid label 'not a/../label'");
     }
   }
 
@@ -313,7 +316,7 @@ public class BuildTypeTest {
       new Selector<>(input, null, currentRule, BuildType.LABEL);
       fail("Expected Selector instantiation to fail since the key isn't a label");
     } catch (ConversionException e) {
-      assertThat(e).hasMessageThat().contains("invalid label 'not a/../label'");
+      assertThat(e.getMessage()).contains("invalid label 'not a/../label'");
     }
   }
 
@@ -326,8 +329,9 @@ public class BuildTypeTest {
         "//conditions:a", "//a:a",
         "//conditions:b", "//b:b",
         BuildType.Selector.DEFAULT_CONDITION_KEY, "//d:d");
-    assertThat(new Selector<>(input, null, currentRule, BuildType.LABEL).getDefault())
-        .isEqualTo(Label.create("@//d", "d"));
+    assertEquals(
+        Label.create("@//d", "d"),
+        new Selector<>(input, null, currentRule, BuildType.LABEL).getDefault());
   }
 
   @Test
@@ -339,13 +343,12 @@ public class BuildTypeTest {
     BuildType.SelectorList<List<Label>> selectorList = new BuildType.SelectorList<>(
         ImmutableList.of(selector1, selector2), null, currentRule, BuildType.LABEL_LIST);
 
-    assertThat(selectorList.getOriginalType()).isEqualTo(BuildType.LABEL_LIST);
+    assertEquals(BuildType.LABEL_LIST, selectorList.getOriginalType());
     assertThat(selectorList.getKeyLabels())
-        .containsExactly(
-            Label.parseAbsolute("//conditions:a"),
-            Label.parseAbsolute("//conditions:b"),
-            Label.parseAbsolute("//conditions:c"),
-            Label.parseAbsolute("//conditions:d"));
+        .containsExactlyElementsIn(
+            ImmutableSet.of(
+                Label.parseAbsolute("//conditions:a"), Label.parseAbsolute("//conditions:b"),
+                Label.parseAbsolute("//conditions:c"), Label.parseAbsolute("//conditions:d")));
 
     List<Selector<List<Label>>> selectors = selectorList.getSelectors();
     assertThat(selectors.get(0).getEntries().entrySet())
@@ -373,7 +376,7 @@ public class BuildTypeTest {
           BuildType.LABEL_LIST);
       fail("Expected SelectorList initialization to fail on mixed element types");
     } catch (ConversionException e) {
-      assertThat(e).hasMessageThat().contains("expected value of type 'list(label)'");
+      assertThat(e.getMessage()).contains("expected value of type 'list(label)'");
     }
   }
 
@@ -395,7 +398,7 @@ public class BuildTypeTest {
     // Conversion to direct type:
     Object converted = BuildType
         .selectableConvert(BuildType.LABEL_LIST, nativeInput, null, currentRule);
-    assertThat(converted instanceof List<?>).isTrue();
+    assertTrue(converted instanceof List<?>);
     assertThat((List<Label>) converted).containsExactlyElementsIn(expectedLabels);
 
     // Conversion to selectable type:
@@ -424,7 +427,7 @@ public class BuildTypeTest {
       BuildType.LABEL_LIST.convert(selectableInput, null, currentRule);
       fail("Expected conversion to fail on a selectable input");
     } catch (ConversionException e) {
-      assertThat(e).hasMessageThat().contains("expected value of type 'list(label)'");
+      assertThat(e.getMessage()).contains("expected value of type 'list(label)'");
     }
   }
 
@@ -433,40 +436,31 @@ public class BuildTypeTest {
    */
   @Test
   public void testReservedKeyLabels() throws Exception {
-    assertThat(BuildType.Selector.isReservedLabel(Label.parseAbsolute("//condition:a"))).isFalse();
-    assertThat(
-            BuildType.Selector.isReservedLabel(
-                Label.parseAbsolute(BuildType.Selector.DEFAULT_CONDITION_KEY)))
-        .isTrue();
+    assertFalse(BuildType.Selector.isReservedLabel(Label.parseAbsolute("//condition:a")));
+    assertTrue(BuildType.Selector.isReservedLabel(
+        Label.parseAbsolute(BuildType.Selector.DEFAULT_CONDITION_KEY)));
   }
 
   @Test
   public void testUnconditionalSelects() throws Exception {
-    assertThat(
-            new Selector<>(
-                    ImmutableMap.of("//conditions:a", "//a:a"), null, currentRule, BuildType.LABEL)
-                .isUnconditional())
-        .isFalse();
-    assertThat(
-            new Selector<>(
-                    ImmutableMap.of(
-                        "//conditions:a",
-                        "//a:a",
-                        BuildType.Selector.DEFAULT_CONDITION_KEY,
-                        "//b:b"),
-                    null,
-                    currentRule,
-                    BuildType.LABEL)
-                .isUnconditional())
-        .isFalse();
-    assertThat(
-            new Selector<>(
-                    ImmutableMap.of(BuildType.Selector.DEFAULT_CONDITION_KEY, "//b:b"),
-                    null,
-                    currentRule,
-                    BuildType.LABEL)
-                .isUnconditional())
-        .isTrue();
+    assertFalse(
+        new Selector<>(
+            ImmutableMap.of("//conditions:a", "//a:a"),
+            null, currentRule, BuildType.LABEL
+        ).isUnconditional());
+    assertFalse(
+        new Selector<>(
+            ImmutableMap.of(
+                "//conditions:a", "//a:a",
+                BuildType.Selector.DEFAULT_CONDITION_KEY, "//b:b"),
+            null, currentRule, BuildType.LABEL
+        ).isUnconditional());
+    assertTrue(
+        new Selector<>(
+            ImmutableMap.of(
+                BuildType.Selector.DEFAULT_CONDITION_KEY, "//b:b"),
+            null, currentRule, BuildType.LABEL
+        ).isUnconditional());
   }
 
   private static FilesetEntry makeFilesetEntry() {
@@ -525,8 +519,13 @@ public class BuildTypeTest {
     // with a List<Label> even though this isn't a valid datatype in the
     // interpreter.
     // Fileset isn't part of bazel, even though FilesetEntry is.
-    assertThat(Printer.repr(createTestFilesetEntry()))
-        .isEqualTo(createExpectedFilesetEntryString('"'));
+    assertEquals(createExpectedFilesetEntryString('"'), Printer.repr(createTestFilesetEntry()));
+  }
+
+  @Test
+  public void testSingleQuotes() throws Exception {
+    assertThat(Printer.repr(createTestFilesetEntry(), '\''))
+        .isEqualTo(createExpectedFilesetEntryString('\''));
   }
 
   @Test
@@ -534,8 +533,9 @@ public class BuildTypeTest {
     FilesetEntry entryDereference =
       createTestFilesetEntry(FilesetEntry.SymlinkBehavior.DEREFERENCE);
 
-    assertThat(Printer.repr(entryDereference))
-        .isEqualTo(createExpectedFilesetEntryString(FilesetEntry.SymlinkBehavior.DEREFERENCE, '"'));
+    assertEquals(
+        createExpectedFilesetEntryString(FilesetEntry.SymlinkBehavior.DEREFERENCE, '"'),
+        Printer.repr(entryDereference));
   }
 
   private FilesetEntry createStripPrefixFilesetEntry(String stripPrefix)  throws Exception {
@@ -585,8 +585,8 @@ public class BuildTypeTest {
 
   @Test
   public void testFilesetTypeDefinition() throws Exception {
-    assertThat(EvalUtils.getDataTypeName(makeFilesetEntry())).isEqualTo("FilesetEntry");
-    assertThat(EvalUtils.isImmutable(makeFilesetEntry())).isFalse();
+    assertEquals("FilesetEntry",  EvalUtils.getDataTypeName(makeFilesetEntry()));
+    assertFalse(EvalUtils.isImmutable(makeFilesetEntry()));
   }
 
   private static ImmutableList<Label> collectLabels(Type<?> type, Object value)

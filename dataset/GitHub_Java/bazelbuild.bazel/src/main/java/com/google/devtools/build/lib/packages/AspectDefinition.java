@@ -68,7 +68,6 @@ public final class AspectDefinition {
    */
   @Nullable private final ImmutableSet<String> restrictToAttributes;
   @Nullable private final ConfigurationFragmentPolicy configurationFragmentPolicy;
-  private final boolean applyToFiles;
 
   public AdvertisedProviderSet getAdvertisedProviders() {
     return advertisedProviders;
@@ -82,8 +81,7 @@ public final class AspectDefinition {
       RequiredProviders requiredAspectProviders,
       ImmutableMap<String, Attribute> attributes,
       @Nullable ImmutableSet<String> restrictToAttributes,
-      @Nullable ConfigurationFragmentPolicy configurationFragmentPolicy,
-      boolean applyToFiles) {
+      @Nullable ConfigurationFragmentPolicy configurationFragmentPolicy) {
     this.aspectClass = aspectClass;
     this.advertisedProviders = advertisedProviders;
     this.requiredProviders = requiredProviders;
@@ -92,7 +90,6 @@ public final class AspectDefinition {
     this.attributes = attributes;
     this.restrictToAttributes = restrictToAttributes;
     this.configurationFragmentPolicy = configurationFragmentPolicy;
-    this.applyToFiles = applyToFiles;
   }
 
   public String getName() {
@@ -147,15 +144,6 @@ public final class AspectDefinition {
    */
   public ConfigurationFragmentPolicy getConfigurationFragmentPolicy() {
     return configurationFragmentPolicy;
-  }
-
-  /**
-   * Returns whether this aspect applies to files.
-   *
-   * Currently only supported for top-level aspects and targets.
-   */
-  public boolean applyToFiles() {
-    return applyToFiles;
   }
 
   /**
@@ -255,7 +243,6 @@ public final class AspectDefinition {
     private LinkedHashSet<String> propagateAlongAttributes = new LinkedHashSet<>();
     private final ConfigurationFragmentPolicy.Builder configurationFragmentPolicy =
         new ConfigurationFragmentPolicy.Builder();
-    private boolean applyToFiles = false;
 
     public Builder(AspectClass aspectClass) {
       this.aspectClass = aspectClass;
@@ -445,17 +432,6 @@ public final class AspectDefinition {
       return this;
     }
 
-    /**
-     * Sets whether this aspect should apply to files.
-     *
-     * Default is <code>false</code>.
-     * Currently only supported for top-level aspects and targets.
-     */
-    public Builder applyToFiles(boolean propagateOverGeneratedFiles) {
-      this.applyToFiles = propagateOverGeneratedFiles;
-      return this;
-    }
-
 
     /**
      * Builds the aspect definition.
@@ -471,8 +447,7 @@ public final class AspectDefinition {
           propagateAlongAttributes == null
               ? null
               : ImmutableSet.copyOf(propagateAlongAttributes),
-          configurationFragmentPolicy.build(),
-          applyToFiles);
+          configurationFragmentPolicy.build());
     }
   }
 }

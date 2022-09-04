@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.syntax.Printer.BasePrinter;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
@@ -250,15 +249,15 @@ public abstract class Type<T> {
    */
   public static class ConversionException extends EvalException {
     private static String message(Type<?> type, Object value, @Nullable Object what) {
-      BasePrinter printer = Printer.getPrinter();
-      printer.append("expected value of type '").append(type.toString()).append("'");
+      StringBuilder builder = new StringBuilder();
+      builder.append("expected value of type '").append(type).append("'");
       if (what != null) {
-        printer.append(" for ").append(what.toString());
+        builder.append(" for ").append(what);
       }
-      printer.append(", but got ");
-      printer.repr(value);
-      printer.append(" (").append(EvalUtils.getDataTypeName(value)).append(")");
-      return printer.toString();
+      builder.append(", but got ");
+      Printer.write(builder, value);
+      builder.append(" (").append(EvalUtils.getDataTypeName(value)).append(")");
+      return builder.toString();
     }
 
     public ConversionException(Type<?> type, Object value, @Nullable Object what) {
@@ -583,7 +582,7 @@ public abstract class Type<T> {
         throws ConversionException {
       Iterable<?> iterable;
       try {
-        iterable = EvalUtils.toIterableStrict(x, null, null);
+        iterable = EvalUtils.toIterableStrict(x, null);
       } catch (EvalException ex) {
         throw new ConversionException(this, x, what);
       }
