@@ -34,6 +34,5 @@ public interface Transport {
     public Map<String, String> getRequestedConfiguration();
     public void transportAlarm(Alarm alarm);
     public String getName();
-    public String getUserFieldName();
 
 }
