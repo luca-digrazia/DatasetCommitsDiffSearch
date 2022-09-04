@@ -14,9 +14,7 @@
 
 package com.google.devtools.build.lib.packages;
 
-import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.protobuf.CodedInputStream;
@@ -39,8 +37,7 @@ public final class SkylarkSemanticsCodec implements ObjectCodec<SkylarkSemantics
   }
 
   @Override
-  public void serialize(
-      SerializationContext context, SkylarkSemantics semantics, CodedOutputStream codedOut)
+  public void serialize(SkylarkSemantics semantics, CodedOutputStream codedOut)
       throws SerializationException, IOException {
     // <== Add new options here in alphabetic order ==>
     codedOut.writeBoolNoTag(semantics.incompatibleBzlDisallowLoadAfterStatement());
@@ -62,7 +59,7 @@ public final class SkylarkSemanticsCodec implements ObjectCodec<SkylarkSemantics
   }
 
   @Override
-  public SkylarkSemantics deserialize(DeserializationContext context, CodedInputStream codedIn)
+  public SkylarkSemantics deserialize(CodedInputStream codedIn)
       throws SerializationException, IOException {
     SkylarkSemantics.Builder builder = SkylarkSemantics.builder();
 

@@ -86,7 +86,7 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
-import com.google.devtools.build.lib.packages.AstParseResult;
+import com.google.devtools.build.lib.packages.AstAfterPreprocessing;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
@@ -117,7 +117,7 @@ import com.google.devtools.build.lib.skyframe.AspectValue.AspectValueKey;
 import com.google.devtools.build.lib.skyframe.DirtinessCheckerUtils.FileDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
 import com.google.devtools.build.lib.skyframe.PackageFunction.ActionOnIOExceptionReadingBuildFile;
-import com.google.devtools.build.lib.skyframe.PackageFunction.IncrementalityIntent;
+import com.google.devtools.build.lib.skyframe.PackageFunction.CacheEntryWithGlobDeps;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompletedReceiver;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ProgressSupplier;
@@ -206,13 +206,13 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   // Cache of partially constructed Package instances, stored between reruns of the PackageFunction
   // (because of missing dependencies, within the same evaluate() run) to avoid loading the same
-  // package twice (first time loading to find imported bzl files and declare Skyframe
-  // dependencies).
+  // package twice (first time loading to find subincludes and declare value dependencies).
   // TODO(bazel-team): remove this cache once we have skyframe-native package loading
   // [skyframe-loading]
-  private final Cache<PackageIdentifier, PackageFunction.BuilderAndGlobDeps>
+  private final Cache<PackageIdentifier, CacheEntryWithGlobDeps<Package.Builder>>
       packageFunctionCache = newPkgFunctionCache();
-  private final Cache<PackageIdentifier, AstParseResult> astCache = newAstCache();
+  private final Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> astCache =
+      newAstCache();
 
   private final AtomicInteger numPackagesLoaded = new AtomicInteger(0);
   private final PackageProgressReceiver packageProgress = new PackageProgressReceiver();
@@ -439,8 +439,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         SkyFunctions.WORKSPACE_FILE,
         new WorkspaceFileFunction(ruleClassProvider, pkgFactory, directories));
     map.put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction());
-    map.put(SkyFunctions.TARGET_COMPLETION, CompletionFunction.targetCompletionFunction());
-    map.put(SkyFunctions.ASPECT_COMPLETION, CompletionFunction.aspectCompletionFunction());
+    map.put(SkyFunctions.TARGET_COMPLETION, CompletionFunction.targetCompletionFunction(eventBus));
+    map.put(SkyFunctions.ASPECT_COMPLETION, CompletionFunction.aspectCompletionFunction(eventBus));
     map.put(SkyFunctions.TEST_COMPLETION, new TestCompletionFunction());
     map.put(SkyFunctions.ARTIFACT, new ArtifactFunction());
     map.put(
@@ -479,8 +479,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       PackageFactory pkgFactory,
       PackageManager packageManager,
       AtomicBoolean showLoadingProgress,
-      Cache<PackageIdentifier, PackageFunction.BuilderAndGlobDeps> packageFunctionCache,
-      Cache<PackageIdentifier, AstParseResult> astCache,
+      Cache<PackageIdentifier, CacheEntryWithGlobDeps<Builder>> packageFunctionCache,
+      Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> astCache,
       AtomicInteger numPackagesLoaded,
       RuleClassProvider ruleClassProvider,
       PackageProgressReceiver packageProgress) {
@@ -493,8 +493,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         numPackagesLoaded,
         null,
         packageProgress,
-        actionOnIOExceptionReadingBuildFile,
-        IncrementalityIntent.INCREMENTAL);
+        actionOnIOExceptionReadingBuildFile);
   }
 
   protected SkyFunction newSkylarkImportLookupFunction(
@@ -792,12 +791,12 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     }
   }
 
-  protected Cache<PackageIdentifier, PackageFunction.BuilderAndGlobDeps>
+  protected Cache<PackageIdentifier, CacheEntryWithGlobDeps<Package.Builder>>
       newPkgFunctionCache() {
     return CacheBuilder.newBuilder().build();
   }
 
-  protected Cache<PackageIdentifier, AstParseResult> newAstCache() {
+  protected Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> newAstCache() {
     return CacheBuilder.newBuilder().build();
   }
 
@@ -1203,7 +1202,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       Set<Artifact> artifactsToBuild,
       Collection<ConfiguredTarget> targetsToBuild,
       Collection<AspectValue> aspects,
-      Set<ConfiguredTarget> targetsToTest,
+      Collection<ConfiguredTarget> targetsToTest,
       boolean exclusiveTesting,
       boolean keepGoing,
       boolean explain,
@@ -1225,7 +1224,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       progressReceiver.executionProgressReceiver = executionProgressReceiver;
       Iterable<SkyKey> artifactKeys = ArtifactSkyKey.mandatoryKeys(artifactsToBuild);
       Iterable<SkyKey> targetKeys =
-          TargetCompletionValue.keys(targetsToBuild, topLevelArtifactContext, targetsToTest);
+          TargetCompletionValue.keys(targetsToBuild, topLevelArtifactContext);
       Iterable<SkyKey> aspectKeys = AspectCompletionValue.keys(aspects, topLevelArtifactContext);
       Iterable<SkyKey> testKeys =
           TestCompletionValue.keys(targetsToTest, topLevelArtifactContext, exclusiveTesting);

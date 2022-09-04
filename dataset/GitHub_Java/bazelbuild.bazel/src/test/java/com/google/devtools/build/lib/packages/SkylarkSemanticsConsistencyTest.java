@@ -16,9 +16,6 @@ package com.google.devtools.build.lib.packages;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
-import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.TestUtils;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.common.options.Options;
@@ -87,10 +84,7 @@ public class SkylarkSemanticsConsistencyTest {
     for (int i = 0; i < NUM_RANDOM_TRIALS; i++) {
       SkylarkSemantics semantics = buildRandomSemantics(new Random(i));
       SkylarkSemantics deserialized =
-          TestUtils.fromBytes(
-              new DeserializationContext(ImmutableMap.of()),
-              codec,
-              TestUtils.toBytes(new SerializationContext(ImmutableMap.of()), codec, semantics));
+          TestUtils.fromBytes(codec, TestUtils.toBytes(codec, semantics));
       assertThat(deserialized).isEqualTo(semantics);
     }
   }
@@ -120,15 +114,18 @@ public class SkylarkSemanticsConsistencyTest {
     return parseOptions(
         // <== Add new options here in alphabetic order ==>
         "--incompatible_bzl_disallow_load_after_statement=" + rand.nextBoolean(),
+        "--incompatible_checked_arithmetic=" + rand.nextBoolean(),
+        "--incompatible_comprehension_variables_do_not_leak=" + rand.nextBoolean(),
         "--incompatible_depset_is_not_iterable=" + rand.nextBoolean(),
         "--incompatible_depset_union=" + rand.nextBoolean(),
+        "--incompatible_dict_literal_has_no_duplicates=" + rand.nextBoolean(),
         "--incompatible_disable_glob_tracking=" + rand.nextBoolean(),
         "--incompatible_disallow_dict_plus=" + rand.nextBoolean(),
+        "--incompatible_disallow_keyword_only_args=" + rand.nextBoolean(),
         "--incompatible_disallow_toplevel_if_statement=" + rand.nextBoolean(),
         "--incompatible_disallow_uncalled_set_constructor=" + rand.nextBoolean(),
         "--incompatible_load_argument_is_label=" + rand.nextBoolean(),
         "--incompatible_new_actions_api=" + rand.nextBoolean(),
-        "--incompatible_remove_native_http_archive=" + rand.nextBoolean(),
         "--incompatible_show_all_print_messages=" + rand.nextBoolean(),
         "--incompatible_string_is_not_iterable=" + rand.nextBoolean(),
         "--internal_skylark_flag_test_canary=" + rand.nextBoolean());
@@ -142,15 +139,18 @@ public class SkylarkSemanticsConsistencyTest {
     return SkylarkSemantics.builder()
         // <== Add new options here in alphabetic order ==>
         .incompatibleBzlDisallowLoadAfterStatement(rand.nextBoolean())
+        .incompatibleCheckedArithmetic(rand.nextBoolean())
+        .incompatibleComprehensionVariablesDoNotLeak(rand.nextBoolean())
         .incompatibleDepsetIsNotIterable(rand.nextBoolean())
         .incompatibleDepsetUnion(rand.nextBoolean())
+        .incompatibleDictLiteralHasNoDuplicates(rand.nextBoolean())
         .incompatibleDisableGlobTracking(rand.nextBoolean())
         .incompatibleDisallowDictPlus(rand.nextBoolean())
+        .incompatibleDisallowKeywordOnlyArgs(rand.nextBoolean())
         .incompatibleDisallowToplevelIfStatement(rand.nextBoolean())
         .incompatibleDisallowUncalledSetConstructor(rand.nextBoolean())
         .incompatibleLoadArgumentIsLabel(rand.nextBoolean())
         .incompatibleNewActionsApi(rand.nextBoolean())
-        .incompatibleRemoveNativeHttpArchive(rand.nextBoolean())
         .incompatibleShowAllPrintMessages(rand.nextBoolean())
         .incompatibleStringIsNotIterable(rand.nextBoolean())
         .internalSkylarkFlagTestCanary(rand.nextBoolean())
