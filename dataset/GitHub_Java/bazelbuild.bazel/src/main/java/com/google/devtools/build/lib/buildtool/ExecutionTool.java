@@ -22,7 +22,6 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSortedSet;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionCacheChecker;
 import com.google.devtools.build.lib.actions.ActionGraph;
@@ -202,10 +201,6 @@ public class ExecutionTool {
     }
   }
 
-  TestActionContext getTestActionContext() {
-    return spawnActionContextMaps.getContext(TestActionContext.class);
-  }
-
   /**
    * Performs the execution phase (phase 3) of the build, in which the Builder is applied to the
    * action graph to bring the targets up to date. (This function will return prior to
@@ -226,7 +221,7 @@ public class ExecutionTool {
       TopLevelArtifactContext topLevelArtifactContext)
       throws BuildFailedException, InterruptedException, TestExecException, AbruptExitException {
     Stopwatch timer = Stopwatch.createStarted();
-    prepare(packageRoots, analysisResult.getNonSymlinkedDirectoriesUnderExecRoot());
+    prepare(packageRoots);
 
     ActionGraph actionGraph = analysisResult.getActionGraph();
 
@@ -411,9 +406,8 @@ public class ExecutionTool {
     }
   }
 
-  private void prepare(
-      PackageRoots packageRoots, ImmutableSortedSet<String> nonSymlinkedDirectoriesUnderExecRoot)
-      throws AbruptExitException, InterruptedException {
+  private void prepare(PackageRoots packageRoots)
+      throws ExecutorInitException, InterruptedException {
     Optional<ImmutableMap<PackageIdentifier, Root>> packageRootMap =
         packageRoots.getPackageRootsMap();
     if (packageRootMap.isPresent()) {
@@ -422,13 +416,8 @@ public class ExecutionTool {
 
       // Plant the symlink forest.
       try (SilentCloseable c = Profiler.instance().profile("plantSymlinkForest")) {
-        SymlinkForest symlinkForest =
-            new SymlinkForest(
-                packageRootMap.get(),
-                getExecRoot(),
-                runtime.getProductName(),
-                nonSymlinkedDirectoriesUnderExecRoot);
-        symlinkForest.plantSymlinkForest();
+        new SymlinkForest(packageRootMap.get(), getExecRoot(), runtime.getProductName())
+            .plantSymlinkForest();
       } catch (IOException e) {
         throw new ExecutorInitException("Source forest creation failed", e);
       }
