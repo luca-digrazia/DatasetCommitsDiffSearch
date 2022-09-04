@@ -173,14 +173,14 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
   private final PathFragment nonConfiguredSysroot;
   private final Label sysrootLabel;
 
-  private final ImmutableList<String> compilerFlags;
-  private final ImmutableList<String> cxxFlags;
-  private final ImmutableList<String> unfilteredCompilerFlags;
+  private final FlagList compilerFlags;
+  private final FlagList cxxFlags;
+  private final FlagList unfilteredCompilerFlags;
   private final ImmutableList<String> cOptions;
 
-  private final ImmutableList<String> mostlyStaticLinkFlags;
-  private final ImmutableList<String> mostlyStaticSharedLinkFlags;
-  private final ImmutableList<String> dynamicLinkFlags;
+  private final FlagList mostlyStaticLinkFlags;
+  private final FlagList mostlyStaticSharedLinkFlags;
+  private final FlagList dynamicLinkFlags;
   private final ImmutableList<String> copts;
   private final ImmutableList<String> cxxopts;
 
@@ -227,15 +227,12 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
       coptsBuilder.add("-fasynchronous-unwind-tables");
       coptsBuilder.add("-DNO_FRAME_POINTER");
     }
-    coptsBuilder.addAll(cppOptions.coptList);
 
-    ImmutableList<String> cxxOpts =
+    ImmutableList.Builder<String> cxxOptsBuilder =
         ImmutableList.<String>builder()
             .addAll(cppToolchainInfo.getCxxFlags())
             .addAll(cppToolchainInfo.getCxxFlagsByCompilationMode().get(compilationMode))
-            .addAll(cppToolchainInfo.getLipoCxxFlags().get(cppOptions.getLipoMode()))
-            .addAll(cppOptions.cxxoptList)
-            .build();
+            .addAll(cppToolchainInfo.getLipoCxxFlags().get(cppOptions.getLipoMode()));
 
     ImmutableList.Builder<String> linkoptsBuilder = ImmutableList.builder();
     linkoptsBuilder.addAll(cppOptions.linkoptList);
@@ -263,16 +260,25 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
             ? cppToolchainInfo.getDefaultSysroot()
             : params.sysrootLabel.getPackageFragment(),
         params.sysrootLabel,
-        coptsBuilder.build(),
-        cxxOpts,
-        ImmutableList.copyOf(toolchain.getUnfilteredCxxFlagList()),
+        new FlagList(coptsBuilder.build(), ImmutableList.copyOf(cppOptions.coptList)),
+        new FlagList(cxxOptsBuilder.build(), ImmutableList.copyOf(cppOptions.cxxoptList)),
+        new FlagList(
+            ImmutableList.copyOf(toolchain.getUnfilteredCxxFlagList()), ImmutableList.of()),
         ImmutableList.copyOf(cppOptions.conlyoptList),
-        cppToolchainInfo.configureAllLegacyLinkOptions(
-            compilationMode, cppOptions.getLipoMode(), LinkingMode.STATIC),
-        cppToolchainInfo.configureAllLegacyLinkOptions(
-            compilationMode, cppOptions.getLipoMode(), LinkingMode.LEGACY_MOSTLY_STATIC_LIBRARIES),
-        cppToolchainInfo.configureAllLegacyLinkOptions(
-            compilationMode, cppOptions.getLipoMode(), LinkingMode.DYNAMIC),
+        new FlagList(
+            cppToolchainInfo.configureAllLegacyLinkOptions(
+                compilationMode, cppOptions.getLipoMode(), LinkingMode.STATIC),
+            ImmutableList.of()),
+        new FlagList(
+            cppToolchainInfo.configureAllLegacyLinkOptions(
+                compilationMode,
+                cppOptions.getLipoMode(),
+                LinkingMode.LEGACY_MOSTLY_STATIC_LIBRARIES),
+            ImmutableList.of()),
+        new FlagList(
+            cppToolchainInfo.configureAllLegacyLinkOptions(
+                compilationMode, cppOptions.getLipoMode(), LinkingMode.DYNAMIC),
+            ImmutableList.of()),
         ImmutableList.copyOf(cppOptions.coptList),
         ImmutableList.copyOf(cppOptions.cxxoptList),
         linkoptsBuilder.build(),
@@ -303,13 +309,13 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
       Label stlLabel,
       PathFragment nonConfiguredSysroot,
       Label sysrootLabel,
-      ImmutableList<String> compilerFlags,
-      ImmutableList<String> cxxFlags,
-      ImmutableList<String> unfilteredCompilerFlags,
+      FlagList compilerFlags,
+      FlagList cxxFlags,
+      FlagList unfilteredCompilerFlags,
       ImmutableList<String> cOptions,
-      ImmutableList<String> mostlyStaticLinkFlags,
-      ImmutableList<String> mostlyStaticSharedLinkFlags,
-      ImmutableList<String> dynamicLinkFlags,
+      FlagList mostlyStaticLinkFlags,
+      FlagList mostlyStaticSharedLinkFlags,
+      FlagList dynamicLinkFlags,
       ImmutableList<String> copts,
       ImmutableList<String> cxxopts,
       ImmutableList<String> linkOptions,
@@ -569,7 +575,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
   )
   @Deprecated
   public ImmutableList<String> getCompilerOptions(Iterable<String> featuresNotUsedAnymore) {
-    return compilerFlags;
+    return compilerFlags.evaluate();
   }
 
   /**
@@ -604,7 +610,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
   )
   @Deprecated
   public ImmutableList<String> getCxxOptions(Iterable<String> featuresNotUsedAnymore) {
-    return cxxFlags;
+    return cxxFlags.evaluate();
   }
 
   /**
@@ -636,11 +642,11 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
   @Deprecated
   ImmutableList<String> getUnfilteredCompilerOptionsDoNotUse(@Nullable PathFragment sysroot) {
     if (sysroot == null) {
-      return unfilteredCompilerFlags;
+      return unfilteredCompilerFlags.evaluate();
     }
     return ImmutableList.<String>builder()
         .add("--sysroot=" + sysroot)
-        .addAll(unfilteredCompilerFlags)
+        .addAll(unfilteredCompilerFlags.evaluate())
         .build();
   }
 
@@ -757,7 +763,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
               ? mostlyStaticSharedLinkFlags
               : dynamicLinkFlags);
     } else {
-      return mostlyStaticLinkFlags;
+      return mostlyStaticLinkFlags.evaluate();
     }
   }
 
@@ -784,7 +790,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
     if (sharedLib) {
       return getSharedLibraryLinkOptions(dynamicLinkFlags);
     } else {
-      return dynamicLinkFlags;
+      return dynamicLinkFlags.evaluate();
     }
   }
 
@@ -795,7 +801,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
    * <p>Deprecated: Use {@link CcToolchainProvider#getSharedLibraryLinkOptions}
    */
   // TODO(b/64384912): Migrate skylark dependants and delete.
-  private ImmutableList<String> getSharedLibraryLinkOptions(ImmutableList<String> flags) {
+  private ImmutableList<String> getSharedLibraryLinkOptions(FlagList flags) {
     return cppToolchainInfo.getSharedLibraryLinkOptions(flags);
   }
 
