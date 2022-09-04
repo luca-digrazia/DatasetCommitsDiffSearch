@@ -9,17 +9,12 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLStreamHandler;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.CodeSource;
 import java.security.MessageDigest;
-import java.security.ProtectionDomain;
-import java.security.cert.Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
@@ -34,7 +29,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
-import java.util.stream.Stream;
 
 import org.jboss.logging.Logger;
 import org.objectweb.asm.ClassReader;
@@ -59,8 +53,6 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
 
     private final Map<String, Path> applicationClasses;
 
-    private final ProtectionDomain defaultProtectionDomain;
-
     private final Path frameworkClassesPath;
     private final Path transformerCache;
 
@@ -79,20 +71,17 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
             Map<String, Path> applicationClasses = new HashMap<>();
             for (Path i : applicationClassesDirectories) {
                 if (Files.isDirectory(i)) {
-                    try (Stream<Path> fileTreeElements = Files.walk(i)) {
-                        fileTreeElements.forEach(new Consumer<Path>() {
-                            @Override
-                            public void accept(Path path) {
-                                if (path.toString().endsWith(".class")) {
-                                    applicationClasses.put(i.relativize(path).toString().replace('\\', '/'), path);
-                                }
+                    Files.walk(i).forEach(new Consumer<Path>() {
+                        @Override
+                        public void accept(Path path) {
+                            if (path.toString().endsWith(".class")) {
+                                applicationClasses.put(i.relativize(path).toString().replace('\\', '/'), path);
                             }
-                        });
-                    }
+                        }
+                    });
                 }
             }
 
-            this.defaultProtectionDomain = createDefaultProtectionDomain(applicationClassesDirectories.get(0));
             this.applicationClasses = applicationClasses;
 
         } catch (IOException e) {
@@ -191,7 +180,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
         if (bytes != null) {
             try {
                 definePackage(name);
-                return defineClass(name, bytes, 0, bytes.length, defaultProtectionDomain);
+                return defineClass(name, bytes, 0, bytes.length);
             } catch (Error e) {
                 //potential race conditions if another thread is loading the same class
                 existing = findLoadedClass(name);
@@ -222,7 +211,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
                 }
                 bytes = handleTransform(name, bytes);
                 definePackage(name);
-                Class<?> clazz = defineClass(name, bytes, 0, bytes.length, defaultProtectionDomain);
+                Class<?> clazz = defineClass(name, bytes, 0, bytes.length);
                 res.complete(clazz);
                 return clazz;
             } catch (RuntimeException e) {
@@ -249,9 +238,9 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
                         debugPath.mkdir();
                     }
                     File classFile = new File(debugPath, dotName + ".class");
-                    try (FileOutputStream classWriter = new FileOutputStream(classFile)) {
-                        classWriter.write(data);
-                    }
+                    FileOutputStream classWriter = new FileOutputStream(classFile);
+                    classWriter.write(data);
+                    classWriter.close();
                     log.infof("Wrote %s", classFile.getAbsolutePath());
                 } catch (Throwable t) {
                     t.printStackTrace();
@@ -291,21 +280,19 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
             for (Path root : archives) {
                 Map<String, Path> classes = new HashMap<>();
                 AtomicBoolean transform = new AtomicBoolean();
-                try (Stream<Path> fileTreeElements = Files.walk(root)) {
-                    fileTreeElements.forEach(new Consumer<Path>() {
-                        @Override
-                        public void accept(Path path) {
-                            if (path.toString().endsWith(".class")) {
-                                String key = root.relativize(path).toString().replace('\\', '/');
-                                classes.put(key, path);
-                                if (bytecodeTransformers
-                                        .containsKey(key.substring(0, key.length() - ".class".length()).replace("/", "."))) {
-                                    transform.set(true);
-                                }
+                Files.walk(root).forEach(new Consumer<Path>() {
+                    @Override
+                    public void accept(Path path) {
+                        if (path.toString().endsWith(".class")) {
+                            String key = root.relativize(path).toString().replace('\\', '/');
+                            classes.put(key, path);
+                            if (bytecodeTransformers
+                                    .containsKey(key.substring(0, key.length() - ".class".length()).replace("/", "."))) {
+                                transform.set(true);
                             }
                         }
-                    });
-                }
+                    }
+                });
                 if (transform.get()) {
                     applicationClasses.putAll(classes);
                 }
@@ -326,7 +313,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
      * See {@link io.quarkus.deployment.proxy.InjectIntoClassloaderClassOutput}
      */
     public Class<?> visibleDefineClass(String name, byte[] b, int off, int len) throws ClassFormatError {
-        return super.defineClass(name, b, off, len, defaultProtectionDomain);
+        return super.defineClass(name, b, off, len);
     }
 
     private void definePackage(String name) {
@@ -493,20 +480,5 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
             }
         }
         return null;
-    }
-
-    private ProtectionDomain createDefaultProtectionDomain(Path applicationClasspath) {
-        URL url = null;
-        if (applicationClasspath != null) {
-            try {
-                URI uri = new URI("file", null, applicationClasspath.toString(), null);
-                url = uri.toURL();
-            } catch (URISyntaxException | MalformedURLException e) {
-                log.error("URL codeSource location for path " + applicationClasspath + " could not be created.");
-            }
-        }
-        CodeSource codesource = new CodeSource(url, (Certificate[]) null);
-        ProtectionDomain protectionDomain = new ProtectionDomain(codesource, null, this, null);
-        return protectionDomain;
     }
 }
