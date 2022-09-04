@@ -36,7 +36,7 @@ import com.google.common.collect.Multimaps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLookupKey;
+import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionRegistry;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -47,8 +47,6 @@ import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
-import com.google.devtools.build.lib.analysis.config.CoreOptions.IncludeConfigFragmentsEnum;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentCollection;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
@@ -211,7 +209,7 @@ public final class RuleContext extends TargetContext
   /** Map of exec group names to ActionOwners. */
   private final Map<String, ActionOwner> actionOwners = new HashMap<>();
 
-  private final SymbolGenerator<ActionLookupKey> actionOwnerSymbolGenerator;
+  private final SymbolGenerator<ActionLookupValue.ActionLookupKey> actionOwnerSymbolGenerator;
 
   /* lazily computed cache for Make variables, computed from the above. See get... method */
   private transient ConfigurationMakeVariableContext configurationMakeVariableContext = null;
@@ -224,7 +222,7 @@ public final class RuleContext extends TargetContext
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       ImmutableList<Class<? extends Fragment>> universalFragments,
       String ruleClassNameForLogging,
-      ActionLookupKey actionLookupKey,
+      ActionLookupValue.ActionLookupKey actionLookupKey,
       ImmutableMap<String, Attribute> aspectAttributes,
       @Nullable ToolchainCollection<ResolvedToolchainContext> toolchainContexts,
       ConstraintSemantics<RuleContext> constraintSemantics,
@@ -269,9 +267,6 @@ public final class RuleContext extends TargetContext
     Set<String> globallyEnabled = new HashSet<>();
     Set<String> globallyDisabled = new HashSet<>();
     parseFeatures(getConfiguration().getDefaultFeatures(), globallyEnabled, globallyDisabled);
-    if (getConfiguration().getFatApkSplitSanitizer().feature != null) {
-      globallyEnabled.add(getConfiguration().getFatApkSplitSanitizer().feature);
-    }
     Set<String> packageEnabled = new HashSet<>();
     Set<String> packageDisabled = new HashSet<>();
     parseFeatures(getRule().getPackage().getFeatures(), packageEnabled, packageDisabled);
@@ -527,7 +522,7 @@ public final class RuleContext extends TargetContext
               transition.isHostTransition() ? "host_" : "", name),
           transition);
     } catch (IllegalArgumentException ex) { // fishy
-      throw new EvalException(ex.getMessage());
+      throw new EvalException(null, ex.getMessage());
     }
   }
 
@@ -551,7 +546,7 @@ public final class RuleContext extends TargetContext
   }
 
   @Override
-  public ActionLookupKey getOwner() {
+  public ActionLookupValue.ActionLookupKey getOwner() {
     return getAnalysisEnvironment().getOwner();
   }
 
@@ -1728,28 +1723,6 @@ public final class RuleContext extends TargetContext
     return this;
   }
 
-  /**
-   * Returns {@code true} if a {@link RequiredConfigFragmentsProvider} should be included for this
-   * rule.
-   */
-  public boolean shouldIncludeRequiredConfigFragmentsProvider() {
-    IncludeConfigFragmentsEnum setting =
-        getConfiguration()
-            .getOptions()
-            .get(CoreOptions.class)
-            .includeRequiredConfigFragmentsProvider;
-    switch (setting) {
-      case OFF:
-        return false;
-      case DIRECT_HOST_ONLY:
-        return getConfiguration().isHostConfiguration();
-      case DIRECT:
-      case TRANSITIVE:
-        return true;
-    }
-    throw new IllegalStateException("Unknown setting: " + setting);
-  }
-
   @Override
   public String toString() {
     return "RuleContext(" + getLabel() + ", " + getConfiguration() + ")";
@@ -1765,7 +1738,7 @@ public final class RuleContext extends TargetContext
     private ImmutableList<Class<? extends Fragment>> universalFragments;
     private final BuildConfiguration configuration;
     private final BuildConfiguration hostConfiguration;
-    private final ActionLookupKey actionOwnerSymbol;
+    private final ActionLookupValue.ActionLookupKey actionOwnerSymbol;
     private final PrerequisiteValidator prerequisiteValidator;
     private final RuleErrorConsumer reporter;
     private OrderedSetMultimap<Attribute, ConfiguredTargetAndData> prerequisiteMap;
@@ -1787,7 +1760,7 @@ public final class RuleContext extends TargetContext
         BuildConfiguration hostConfiguration,
         PrerequisiteValidator prerequisiteValidator,
         ConfigurationFragmentPolicy configurationFragmentPolicy,
-        ActionLookupKey actionOwnerSymbol) {
+        ActionLookupValue.ActionLookupKey actionOwnerSymbol) {
       this.env = Preconditions.checkNotNull(env);
       this.target = Preconditions.checkNotNull(target);
       this.aspects = aspects;

@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
+import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisResult;
 import com.google.devtools.build.lib.analysis.AspectValue;
@@ -1358,6 +1359,60 @@ public class StarlarkDefinedAspectsTest extends AnalysisTestCase {
   }
 
   @Test
+  public void aspectParametersConfigurationField() throws Exception {
+    scratch.file(
+        "test/aspect.bzl",
+        "def _impl(target, ctx):",
+        "   return struct()",
+        "def _rule_impl(ctx):",
+        "   return struct()",
+        "MyAspect = aspect(",
+        "    implementation=_impl,",
+        "    attrs = { '_my_attr' : attr.label(default=",
+        "             configuration_field(fragment='cpp', name = 'cc_toolchain')) },",
+        ")",
+        "my_rule = rule(",
+        "    implementation=_rule_impl,",
+        "    attrs = { 'deps' : attr.label_list(aspects=[MyAspect]) },",
+        ")");
+    scratch.file("test/BUILD", "load('//test:aspect.bzl', 'my_rule')", "my_rule(name = 'xxx')");
+
+    AnalysisResult result = update(ImmutableList.<String>of(), "//test:xxx");
+    assertThat(result.hasError()).isFalse();
+  }
+
+  @Test
+  public void aspectParameterComputedDefault() throws Exception {
+    scratch.file(
+        "test/aspect.bzl",
+        "def _impl(target, ctx):",
+        "   return struct()",
+        "def _rule_impl(ctx):",
+        "   return struct()",
+        "def _defattr():",
+        "   return Label('//foo/bar:baz')",
+        "MyAspect = aspect(",
+        "    implementation=_impl,",
+        "    attrs = { '_extra' : attr.label(default = _defattr) }",
+        ")",
+        "my_rule = rule(",
+        "    implementation=_rule_impl,",
+        "    attrs = { 'deps' : attr.label_list(aspects=[MyAspect]) },",
+        ")");
+    scratch.file("test/BUILD", "load('//test:aspect.bzl', 'my_rule')", "my_rule(name = 'xxx')");
+    reporter.removeHandler(failFastHandler);
+
+    if (keepGoing()) {
+      AnalysisResult result = update("//test:xxx");
+      assertThat(result.hasError()).isTrue();
+    } else {
+      assertThrows(TargetParsingException.class, () -> update("//test:xxx"));
+    }
+    assertContainsEvent(
+        "Aspect attribute '_extra' (label) with computed default value is unsupported.");
+  }
+
+  @Test
   public void aspectParametersOptional() throws Exception {
     scratch.file(
         "test/aspect.bzl",
@@ -2508,10 +2563,10 @@ public class StarlarkDefinedAspectsTest extends AnalysisTestCase {
   // apple_common.objc_proto_aspect is used as an example.
   public void testTopLevelStarlarkObjcProtoAspect() throws Exception {
     MockObjcSupport.setupObjcProtoLibrary(scratch);
-    scratch.file("test_skylark/BUILD");
+    scratch.file("test_starlark/BUILD");
     scratch.file("x/data_filter.pbascii");
     scratch.file(
-        "test_skylark/top_level_stub.bzl",
+        "test_starlark/top_level_stub.bzl",
         "top_level_aspect = apple_common.objc_proto_aspect",
         "",
         "def top_level_stub_impl(ctx):",
@@ -2540,7 +2595,7 @@ public class StarlarkDefinedAspectsTest extends AnalysisTestCase {
 
     scratch.file(
         "bin/BUILD",
-        "load('//test_skylark:top_level_stub.bzl', 'top_level_stub')",
+        "load('//test_starlark:top_level_stub.bzl', 'top_level_stub')",
         "top_level_stub(",
         "  name = 'link_target',",
         "  deps = ['//x:x'],",
@@ -2549,13 +2604,13 @@ public class StarlarkDefinedAspectsTest extends AnalysisTestCase {
     useConfiguration(MockObjcSupport.requiredObjcCrosstoolFlags().toArray(new String[1]));
     AnalysisResult analysisResult =
         update(
-            ImmutableList.of("test_skylark/top_level_stub.bzl%top_level_aspect"),
+            ImmutableList.of("test_starlark/top_level_stub.bzl%top_level_aspect"),
             "//bin:link_target");
     ConfiguredAspect configuredAspect =
         Iterables.getOnlyElement(analysisResult.getAspectsMap().values());
 
     ObjcProtoProvider objcProtoProvider =
-        (ObjcProtoProvider) configuredAspect.get(ObjcProtoProvider.SKYLARK_CONSTRUCTOR.getKey());
+        (ObjcProtoProvider) configuredAspect.get(ObjcProtoProvider.STARLARK_CONSTRUCTOR.getKey());
     assertThat(objcProtoProvider).isNotNull();
   }
 
@@ -3003,6 +3058,50 @@ public class StarlarkDefinedAspectsTest extends AnalysisTestCase {
             Label.parseAbsolute("//test:alpha", ImmutableMap.of()),
             Label.parseAbsolute("//test:beta", ImmutableMap.of()),
             Label.parseAbsolute("//test:charlie", ImmutableMap.of()));
+  }
+
+  @Test
+  public void testAspectActionsDontInheritExecProperties() throws Exception {
+    scratch.file(
+        "test/BUILD",
+        "load('//test:defs.bzl', 'my_rule')",
+        "my_rule(",
+        "  name = 'my_target',",
+        "  deps = [':my_dep'],",
+        ")",
+        "cc_binary(",
+        "  name = 'my_dep',",
+        "  srcs = ['dep.cc'],",
+        "  exec_properties = {'mem': '16g'},",
+        ")");
+    scratch.file(
+        "test/defs.bzl",
+        "def _aspect_impl(target, ctx):",
+        "  f = ctx.actions.declare_file('f.txt')",
+        "  ctx.actions.write(f, 'f')",
+        "  return []",
+        "my_aspect = aspect(",
+        "  implementation = _aspect_impl,",
+        "  attr_aspects = ['deps'],",
+        ")",
+        "def _rule_impl(ctx):",
+        "  pass",
+        "my_rule = rule(",
+        "  implementation = _rule_impl,",
+        "  attrs = {",
+        "    'deps': attr.label_list(aspects = [my_aspect])",
+        "  },",
+        ")");
+    scratch.file("test/dep.cc", "int main() {return 0;}");
+
+    AnalysisResult analysisResult =
+        update(ImmutableList.of("test/defs.bzl%my_aspect"), "//test:my_target");
+    assertThat(analysisResult).isNotNull();
+    ActionOwner owner =
+        Iterables.getOnlyElement(
+                Iterables.getOnlyElement(analysisResult.getAspectsMap().values()).getActions())
+            .getOwner();
+    assertThat(owner.getExecProperties()).isEmpty();
   }
 
   /** StarlarkAspectTest with "keep going" flag */
