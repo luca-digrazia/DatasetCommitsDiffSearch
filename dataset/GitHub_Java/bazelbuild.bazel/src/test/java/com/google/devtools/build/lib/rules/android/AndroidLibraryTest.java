@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.rules.android.AndroidIdeInfoProvider.Source
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompileAction;
 import com.google.devtools.build.lib.rules.java.JavaExportsProvider;
-import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Arrays;
@@ -346,7 +345,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
 
     ConfiguredTarget a = getConfiguredTarget("//java/peach:a");
     Iterable<String> compileTimeJars = ActionsTestUtil.baseArtifactNames(
-        JavaInfo.getProvider(JavaCompilationArgsProvider.class, a)
+        a.getProvider(JavaCompilationArgsProvider.class)
             .getJavaCompilationArgs().getCompileTimeJars());
     assertThat(compileTimeJars).contains("libb-hjar.jar");
     assertThat(compileTimeJars).doesNotContain("libc-hjar.jar");
@@ -958,8 +957,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     ConfiguredTarget libNeverlink = getConfiguredTarget("//java/apps/android:lib_neverlink");
     NestedSet<Artifact> neverLinkFilesToBuild = getFilesToBuild(libNeverlink);
     NestedSet<Artifact> libFilesToBuild = getFilesToBuild(lib);
-    JavaCompilationArgsProvider argsProvider =
-        JavaInfo.getProvider(JavaCompilationArgsProvider.class, foo);
+    JavaCompilationArgsProvider argsProvider = foo.getProvider(JavaCompilationArgsProvider.class);
 
     assertThat(argsProvider.getJavaCompilationArgs().getCompileTimeJars())
         .contains(ActionsTestUtil.getFirstArtifactEndingWith(
