@@ -17,6 +17,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSet.Builder;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
@@ -153,9 +154,9 @@ public class LibrariesToLinkCollector {
    * <p>TODO: Factor out of the bazel binary into build variables for crosstool action_configs.
    */
   public CollectedLibrariesToLink collectLibrariesToLink() {
-    ImmutableSet.Builder<String> librarySearchDirectories = ImmutableSet.builder();
-    ImmutableSet.Builder<String> runtimeLibrarySearchDirectories = ImmutableSet.builder();
-    ImmutableSet.Builder<String> rpathRootsForExplicitSoDeps = ImmutableSet.builder();
+    Builder<String> librarySearchDirectories = ImmutableSet.builder();
+    Builder<String> runtimeLibrarySearchDirectories = ImmutableSet.builder();
+    Builder<String> rpathRootsForExplicitSoDeps = ImmutableSet.builder();
     // List of command line parameters that need to be placed *outside* of
     // --whole-archive ... --no-whole-archive.
     SequenceBuilder librariesToLink = new SequenceBuilder();
@@ -200,7 +201,7 @@ public class LibrariesToLinkCollector {
     Preconditions.checkState(
         ltoMap == null || ltoMap.isEmpty(), "Still have LTO objects left: %s", ltoMap);
 
-    ImmutableSet.Builder<String> allRuntimeLibrarySearchDirectories = ImmutableSet.builder();
+    Builder<String> allRuntimeLibrarySearchDirectories = ImmutableSet.builder();
     // rpath ordering matters for performance; first add the one where most libraries are found.
     if (includeSolibDir) {
       allRuntimeLibrarySearchDirectories.add(rpathRoot);
@@ -217,8 +218,8 @@ public class LibrariesToLinkCollector {
   }
 
   private boolean addLinkerInputs(
-      ImmutableSet.Builder<String> librarySearchDirectories,
-      ImmutableSet.Builder<String> rpathEntries,
+      Builder<String> librarySearchDirectories,
+      Builder<String> rpathEntries,
       SequenceBuilder librariesToLink) {
     boolean includeSolibDir = false;
     for (LinkerInput input : linkerInputs) {
@@ -253,8 +254,8 @@ public class LibrariesToLinkCollector {
   private void addDynamicInputLinkOptions(
       LinkerInput input,
       SequenceBuilder librariesToLink,
-      ImmutableSet.Builder<String> librarySearchDirectories,
-      ImmutableSet.Builder<String> rpathRootsForExplicitSoDeps) {
+      Builder<String> librarySearchDirectories,
+      Builder<String> rpathRootsForExplicitSoDeps) {
     Preconditions.checkState(
         input.getArtifactCategory() == ArtifactCategory.DYNAMIC_LIBRARY
             || input.getArtifactCategory() == ArtifactCategory.INTERFACE_LIBRARY);
@@ -409,8 +410,8 @@ public class LibrariesToLinkCollector {
   }
 
   private boolean addRuntimeLinkerInputs(
-      ImmutableSet.Builder<String> librarySearchDirectories,
-      ImmutableSet.Builder<String> rpathRootsForExplicitSoDeps,
+      Builder<String> librarySearchDirectories,
+      Builder<String> rpathRootsForExplicitSoDeps,
       SequenceBuilder librariesToLink) {
     boolean includeRuntimeSolibDir = false;
     for (LinkerInput input : runtimeLinkerInputs) {
