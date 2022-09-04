@@ -120,7 +120,6 @@ import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunctio
 import com.google.devtools.build.lib.rules.test.BaselineCoverageAction;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.skyframe.AspectValue;
-import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.LegacyLoadingPhaseRunner;
@@ -224,7 +223,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             .build(ruleClassProvider, scratch.getFileSystem());
     tsgm = new TimestampGranularityMonitor(BlazeClock.instance());
     skyframeExecutor =
-        SequencedSkyframeExecutor.create(
+        SequencedSkyframeExecutor.createForTesting(
             pkgFactory,
             directories,
             binTools,
@@ -235,11 +234,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             analysisMock.getSkyFunctions(),
             getPrecomputedValues(),
             ImmutableList.<SkyValueDirtinessChecker>of(),
-            PathFragment.EMPTY_FRAGMENT,
-            analysisMock.getProductName(),
-            BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
-            BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
-            BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE);
+            analysisMock.getProductName());
     skyframeExecutor.injectExtraPrecomputedValues(extraPrecomputedValues);
     packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
     packageCacheOptions.showLoadingProgress = true;
@@ -775,24 +770,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected FileConfiguredTarget getHostFileConfiguredTarget(String label)
       throws LabelSyntaxException {
     return (FileConfiguredTarget) getHostConfiguredTarget(label);
-  }
-
-  /**
-   * Rewrites the WORKSPACE to have the required boilerplate and the given lines of content.
-   *
-   * <p>Triggers Skyframe to reinitialize everything.
-   */
-  public void rewriteWorkspace(String... lines) throws Exception {
-    scratch.overwriteFile(
-        "WORKSPACE",
-        new ImmutableList.Builder<String>()
-            .addAll(analysisMock.getWorkspaceContents(mockToolsConfig))
-            .addAll(ImmutableList.copyOf(lines))
-            .build());
-
-    invalidatePackages();
-    // Need to re-initialize the workspace status.
-    getSkyframeExecutor().injectWorkspaceStatusData("test");
   }
 
   /**
