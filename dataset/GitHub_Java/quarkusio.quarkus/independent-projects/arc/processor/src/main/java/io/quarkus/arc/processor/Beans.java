@@ -428,16 +428,12 @@ final class Beans {
     }
 
     static boolean matches(BeanInfo bean, TypeAndQualifiers typeAndQualifiers) {
-        return matches(bean, typeAndQualifiers.type, typeAndQualifiers.qualifiers);
-    }
-
-    static boolean matches(BeanInfo bean, Type requiredType, Set<AnnotationInstance> requiredQualifiers) {
-        // Bean has all the required qualifiers and a bean type that matches the required type
-        return hasQualifiers(bean, requiredQualifiers) && matchesType(bean, requiredType);
+        // Bean has all the required qualifiers and  a bean type that matches the required type
+        return hasQualifiers(bean, typeAndQualifiers.qualifiers) && matchesType(bean, typeAndQualifiers.type);
     }
 
     static boolean matchesType(BeanInfo bean, Type requiredType) {
-        BeanResolverImpl beanResolver = bean.getDeployment().beanResolver;
+        BeanResolver beanResolver = bean.getDeployment().getBeanResolver();
         for (Type beanType : bean.getTypes()) {
             if (beanResolver.matches(requiredType, beanType)) {
                 return true;
@@ -448,33 +444,25 @@ final class Beans {
 
     static void resolveInjectionPoint(BeanDeployment deployment, InjectionTargetInfo target, InjectionPointInfo injectionPoint,
             List<Throwable> errors) {
-        if (injectionPoint.isDelegate()) {
-            // Skip delegate injection points
-            return;
-        }
         BuiltinBean builtinBean = BuiltinBean.resolve(injectionPoint);
         if (builtinBean != null) {
-            if (BuiltinBean.INJECTION_POINT == builtinBean
+            if (BuiltinBean.INJECTION_POINT.equals(builtinBean)
                     && (target.kind() != TargetKind.BEAN || !BuiltinScope.DEPENDENT.is(target.asBean().getScope()))) {
                 errors.add(new DefinitionException("Only @Dependent beans can access metadata about an injection point: "
                         + injectionPoint.getTargetInfo()));
-            } else if (BuiltinBean.EVENT_METADATA == builtinBean
+            }
+            if (BuiltinBean.EVENT_METADATA.equals(builtinBean)
                     && target.kind() != TargetKind.OBSERVER) {
                 errors.add(new DefinitionException("EventMetadata can be only injected into an observer method: "
                         + injectionPoint.getTargetInfo()));
-            } else if (BuiltinBean.INSTANCE == builtinBean
-                    && injectionPoint.getRequiredType().kind() != Kind.PARAMETERIZED_TYPE) {
-                errors.add(
-                        new DefinitionException("An injection point of raw type javax.enterprise.inject.Instance is defined: "
-                                + injectionPoint.getTargetInfo()));
             }
             // Skip built-in beans
             return;
         }
-        List<BeanInfo> resolved = deployment.beanResolver.resolve(injectionPoint.getTypeAndQualifiers());
+        List<BeanInfo> resolved = deployment.getBeanResolver().resolve(injectionPoint.getTypeAndQualifiers());
         BeanInfo selected = null;
         if (resolved.isEmpty()) {
-            List<BeanInfo> typeMatching = deployment.beanResolver.findTypeMatching(injectionPoint.getRequiredType());
+            List<BeanInfo> typeMatching = deployment.getBeanResolver().findTypeMatching(injectionPoint.getRequiredType());
 
             StringBuilder message = new StringBuilder("Unsatisfied dependency for type ");
             addStandardErroneousDependencyMessage(target, injectionPoint, message);
@@ -519,7 +507,7 @@ final class Beans {
         message.append(target);
     }
 
-    static BeanInfo resolveAmbiguity(Collection<BeanInfo> resolved) {
+    static BeanInfo resolveAmbiguity(List<BeanInfo> resolved) {
         List<BeanInfo> resolvedAmbiguity = new ArrayList<>(resolved);
         // First eliminate default beans
         for (Iterator<BeanInfo> iterator = resolvedAmbiguity.iterator(); iterator.hasNext();) {
@@ -601,25 +589,22 @@ final class Beans {
     }
 
     static boolean hasQualifier(BeanInfo bean, AnnotationInstance required) {
-        return hasQualifier(bean.getDeployment(), required, bean.getQualifiers());
+        return hasQualifier(bean.getDeployment().getQualifier(required.name()), required, bean.getQualifiers());
     }
 
-    static boolean hasQualifier(BeanDeployment beanDeployment, AnnotationInstance requiredQualifier,
+    static boolean hasQualifier(ClassInfo requiredInfo, AnnotationInstance required,
             Collection<AnnotationInstance> qualifiers) {
-        ClassInfo requiredClazz = beanDeployment.getQualifier(requiredQualifier.name());
-        List<AnnotationValue> values = new ArrayList<>();
-        Set<String> nonBindingFields = beanDeployment.getQualifierNonbindingMembers(requiredQualifier.name());
-        for (AnnotationValue val : requiredQualifier.values()) {
-            if (!requiredClazz.method(val.name()).hasAnnotation(DotNames.NONBINDING)
-                    && !nonBindingFields.contains(val.name())) {
-                values.add(val);
+        List<AnnotationValue> binding = new ArrayList<>();
+        for (AnnotationValue val : required.values()) {
+            if (!requiredInfo.method(val.name()).hasAnnotation(DotNames.NONBINDING)) {
+                binding.add(val);
             }
         }
         for (AnnotationInstance qualifier : qualifiers) {
-            if (requiredQualifier.name().equals(qualifier.name())) {
+            if (required.name().equals(qualifier.name())) {
                 // Must have the same annotation member value for each member which is not annotated @Nonbinding
                 boolean matches = true;
-                for (AnnotationValue value : values) {
+                for (AnnotationValue value : binding) {
                     if (!value.equals(qualifier.value(value.name()))) {
                         matches = false;
                         break;
