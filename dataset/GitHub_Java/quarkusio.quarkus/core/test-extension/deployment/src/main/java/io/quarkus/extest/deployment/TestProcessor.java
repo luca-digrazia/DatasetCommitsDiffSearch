@@ -3,7 +3,6 @@ package io.quarkus.extest.deployment;
 import static io.quarkus.deployment.annotations.ExecutionTime.RUNTIME_INIT;
 
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 
 import org.jboss.jandex.AnnotationInstance;
@@ -14,7 +13,9 @@ import org.jboss.logging.Logger;
 
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
+import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
 import io.quarkus.arc.deployment.BeanDefiningAnnotationBuildItem;
+import io.quarkus.arc.runtime.BeanContainerListener;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -22,6 +23,7 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
+import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.extest.runtime.IConfigConsumer;
 import io.quarkus.extest.runtime.ObjectOfValue;
 import io.quarkus.extest.runtime.ObjectValueOf;
@@ -30,6 +32,7 @@ import io.quarkus.extest.runtime.TestBuildAndRunTimeConfig;
 import io.quarkus.extest.runtime.TestBuildTimeConfig;
 import io.quarkus.extest.runtime.TestRunTimeConfig;
 import io.quarkus.extest.runtime.TestTemplate;
+import io.quarkus.runtime.RuntimeValue;
 
 /**
  * A test extension deployment processor
@@ -43,7 +46,7 @@ public final class TestProcessor {
 
     /**
      * Register a extension capability and feature
-     * 
+     *
      * @return test-extension feature build item
      */
     @BuildStep(providesCapabilities = "io.quarkus.test-extension")
@@ -53,7 +56,7 @@ public final class TestProcessor {
 
     /**
      * Register a custom bean defining annotation
-     * 
+     *
      * @return
      */
     @BuildStep
@@ -67,7 +70,7 @@ public final class TestProcessor {
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
     void checkConfig() {
-        // Deployment time configuration
+        // Deployment time configuration	
         if (!buildTimeConfig.btSBV.getValue().equals("StringBasedValue")) {
             throw new IllegalStateException("buildTimeConfig.btSBV != StringBasedValue; " + buildTimeConfig.btSBV.getValue());
         }
@@ -100,12 +103,12 @@ public final class TestProcessor {
             throw new IllegalStateException(
                     "buildTimeConfig.allValues.longPrimitive != 1234567891L; " + buildTimeConfig.allValues.longPrimitive);
         }
-        // quarkus.bt.all-values.double-primitive=3.1415926535897932384
+        // quarkus.bt.all-values.double-primitive=3.1415926535897932384	
         if (Math.IEEEremainder(buildTimeConfig.allValues.doublePrimitive, 3.1415926535897932384) != 0) {
             throw new IllegalStateException("buildTimeConfig.allValues.doublePrimitive != 3.1415926535897932384; "
                     + buildTimeConfig.allValues.doublePrimitive);
         }
-        // quarkus.bt.all-values.opt-double-value=3.1415926535897932384
+        // quarkus.bt.all-values.opt-double-value=3.1415926535897932384	
         if (Math.IEEEremainder(buildTimeConfig.allValues.optDoubleValue.getAsDouble(), 3.1415926535897932384) != 0) {
             throw new IllegalStateException("buildTimeConfig.allValues.optDoubleValue != 3.1415926535897932384; "
                     + buildTimeConfig.allValues.optDoubleValue);
@@ -126,7 +129,7 @@ public final class TestProcessor {
             throw new IllegalStateException(
                     "buildTimeConfig.allValues.simpleMap.size != 2; " + buildTimeConfig.allValues.nestedConfigMap.size());
         }
-        //quarkus.bt.all-values.string-list=value1,value2
+        //quarkus.bt.all-values.string-list=value1,value2	
         if (buildTimeConfig.allValues.stringList.size() != 2) {
             throw new IllegalStateException(
                     "buildTimeConfig.allValues.stringList.size != 2; " + buildTimeConfig.allValues.stringList.size());
@@ -139,7 +142,7 @@ public final class TestProcessor {
             throw new IllegalStateException(
                     "buildTimeConfig.allValues.stringList[1] != value2; " + buildTimeConfig.allValues.stringList.get(1));
         }
-        // quarkus.rt.all-values.long-list=1,2,3
+        // quarkus.rt.all-values.long-list=1,2,3	
         if (buildTimeConfig.allValues.longList.size() != 3) {
             throw new IllegalStateException(
                     "buildTimeConfig.allValues.longList.size != 3; " + buildTimeConfig.allValues.longList.size());
@@ -156,7 +159,7 @@ public final class TestProcessor {
 
     /**
      * Collect the beans with our custom bean defining annotation and configure them with the runtime config
-     * 
+     *
      * @param template - runtime template
      * @param beanArchiveIndex - index of type information
      * @param testBeanProducer - producer for located Class<IConfigConsumer> bean types
@@ -181,7 +184,7 @@ public final class TestProcessor {
 
     /**
      * For each IConfigConsumer type, have the runtime template create a bean and pass in the runtime related configs
-     * 
+     *
      * @param template - runtime template
      * @param testBeans - types of IConfigConsumer found
      * @param beanContainer - bean container to create test bean in
@@ -194,32 +197,6 @@ public final class TestProcessor {
             Class<IConfigConsumer> beanClass = testBeanBuildItem.getConfigConsumer();
             template.configureBeans(beanContainer.getValue(), beanClass, buildAndRunTimeConfig, runTimeConfig);
         }
-    }
-
-    /**
-     * Test for https://github.com/quarkusio/quarkus/issues/1633
-     * 
-     * @param template - runtime template
-     */
-    @BuildStep
-    @Record(RUNTIME_INIT)
-    void referencePrimitiveTypeClasses(TestTemplate template) {
-        HashSet<Class<?>> allPrimitiveTypes = new HashSet<>();
-        allPrimitiveTypes.add(byte.class);
-        allPrimitiveTypes.add(char.class);
-        allPrimitiveTypes.add(short.class);
-        allPrimitiveTypes.add(int.class);
-        allPrimitiveTypes.add(long.class);
-        allPrimitiveTypes.add(float.class);
-        allPrimitiveTypes.add(double.class);
-        allPrimitiveTypes.add(byte[].class);
-        allPrimitiveTypes.add(char[].class);
-        allPrimitiveTypes.add(short[].class);
-        allPrimitiveTypes.add(int[].class);
-        allPrimitiveTypes.add(long[].class);
-        allPrimitiveTypes.add(float[].class);
-        allPrimitiveTypes.add(double[].class);
-        template.validateTypes(allPrimitiveTypes);
     }
 
     @BuildStep
