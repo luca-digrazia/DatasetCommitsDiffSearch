@@ -182,8 +182,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   private final FlagList mostlyStaticLinkFlags;
   private final FlagList mostlyStaticSharedLinkFlags;
   private final FlagList dynamicLinkFlags;
-  private final ImmutableList<String> copts;
-  private final ImmutableList<String> cxxopts;
 
   private final ImmutableList<String> linkOptions;
   private final ImmutableList<String> ltoindexOptions;
@@ -232,9 +230,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
             || (cppOptions.stripBinaries == StripMode.SOMETIMES
                 && compilationMode == CompilationMode.FASTBUILD));
 
-    this.copts = ImmutableList.copyOf(cppOptions.coptList);
-    this.cxxopts = ImmutableList.copyOf(cppOptions.cxxoptList);
-
     ListMultimap<CompilationMode, String> cFlags = ArrayListMultimap.create();
     ListMultimap<CompilationMode, String> cxxFlags = ArrayListMultimap.create();
     for (CrosstoolConfig.CompilationModeFlags flags : toolchain.getCompilationModeFlagsList()) {
@@ -242,7 +237,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
       if (flags.getMode() == CrosstoolConfig.CompilationMode.COVERAGE) {
         continue;
       }
-      CompilationMode realmode = CppToolchainInfo.importCompilationMode(flags.getMode());
+      CompilationMode realmode = importCompilationMode(flags.getMode());
       cFlags.putAll(realmode, flags.getCompilerFlagList());
       cxxFlags.putAll(realmode, flags.getCxxFlagList());
     }
@@ -342,6 +337,11 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
                 compilationMode, lipoMode, LinkingMode.DYNAMIC, cppToolchainInfo.getLdExecutable()),
             FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
             ImmutableList.<String>of());
+  }
+
+  @VisibleForTesting
+  static CompilationMode importCompilationMode(CrosstoolConfig.CompilationMode mode) {
+    return CompilationMode.valueOf(mode.name());
   }
 
   @VisibleForTesting
@@ -550,13 +550,11 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   /**
-   * Returns the default options to use for compiling C, C++, and assembler. This is just the
-   * options that should be used for all three languages. There may be additional C-specific or
-   * C++-specific options that should be used, in addition to the ones returned by this method.
-   *
-   * <p>Deprecated: Use {@link CppHelper#getCompilerOptions}
+   * Returns the default options to use for compiling C, C++, and assembler.
+   * This is just the options that should be used for all three languages.
+   * There may be additional C-specific or C++-specific options that should be used,
+   * in addition to the ones returned by this method.
    */
-  // TODO(b/64384912): Migrate skylark callers and remove.
   @SkylarkCallable(
     name = "compiler_options",
     doc =
@@ -565,7 +563,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
             + "There may be additional C-specific or C++-specific options that should be used, "
             + "in addition to the ones returned by this method"
   )
-  @Deprecated
   public ImmutableList<String> getCompilerOptions(Iterable<String> features) {
     return compilerFlags.evaluate(features);
   }
@@ -584,12 +581,10 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   /**
-   * Returns the list of additional C++-specific options to use for compiling C++. These should be
-   * on the command line after the common options returned by {@link #getCompilerOptions}.
-   *
-   * <p>Deprecated: Use {@link CppHelper#getCxxOptions}
+   * Returns the list of additional C++-specific options to use for compiling
+   * C++. These should be go on the command line after the common options
+   * returned by {@link #getCompilerOptions}.
    */
-  // TODO(b/64384912): Migrate skylark callers and remove.
   @SkylarkCallable(
     name = "cxx_options",
     doc =
@@ -597,7 +592,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
             + "These should be go on the command line after the common options returned by "
             + "<code>compiler_options</code>"
   )
-  @Deprecated
   public ImmutableList<String> getCxxOptions(Iterable<String> features) {
     return cxxFlags.evaluate(features);
   }
@@ -1147,21 +1141,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     return lipoContextCollector;
   }
 
-  /** Returns whether this configuration will use libunwind for stack unwinding. */
-  public boolean isOmitfp() {
-    return cppOptions.experimentalOmitfp;
-  }
-
-  /** Returns copts given at the Bazel command line. */
-  public ImmutableList<String> getCopts() {
-    return copts;
-  }
-
-  /** Returns copts for c++ given at the Bazel command line. */
-  public ImmutableList<String> getCxxopts() {
-    return cxxopts;
-  }
-
   @Override
   public void reportInvalidOptions(EventHandler reporter, BuildOptions buildOptions) {
     CppOptions cppOptions = buildOptions.get(CppOptions.class);
@@ -1366,6 +1345,22 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
       requestedFeatures.add(CppRuleClasses.PER_OBJECT_DEBUG_INFO);
     }
     return requestedFeatures.build();
+  }
+
+  public ImmutableList<String> collectLegacyCompileFlags(
+      String sourceFilename, ImmutableSet<String> features) {
+    ImmutableList.Builder<String> legacyCompileFlags = ImmutableList.builder();
+    legacyCompileFlags.addAll(getCompilerOptions(features));
+    if (CppFileTypes.C_SOURCE.matches(sourceFilename)) {
+      legacyCompileFlags.addAll(getCOptions());
+    }
+    if (CppFileTypes.CPP_SOURCE.matches(sourceFilename)
+        || CppFileTypes.CPP_HEADER.matches(sourceFilename)
+        || CppFileTypes.CPP_MODULE_MAP.matches(sourceFilename)
+        || CppFileTypes.CLIF_INPUT_PROTO.matches(sourceFilename)) {
+      legacyCompileFlags.addAll(getCxxOptions(features));
+    }
+    return legacyCompileFlags.build();
   }
 
   public static PathFragment computeDefaultSysroot(CToolchain toolchain) {
