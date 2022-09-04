@@ -25,6 +25,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.skyframe.serialization.CodecScanningConstants;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Memoization;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationCodeGenerator.Marshaller;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.FieldSpec;
@@ -103,15 +104,16 @@ public class AutoCodecProcessor extends AbstractProcessor {
       if (element instanceof TypeElement) {
         TypeElement encodedType = (TypeElement) element;
         TypeSpec.Builder codecClassBuilder;
+        boolean startMemoizing = annotation.memoization() == Memoization.START_MEMOIZING;
         switch (annotation.strategy()) {
           case INSTANTIATOR:
-            codecClassBuilder = buildClassWithInstantiatorStrategy(encodedType);
+            codecClassBuilder = buildClassWithInstantiatorStrategy(encodedType, startMemoizing);
             break;
           case PUBLIC_FIELDS:
-            codecClassBuilder = buildClassWithPublicFieldsStrategy(encodedType);
+            codecClassBuilder = buildClassWithPublicFieldsStrategy(encodedType, startMemoizing);
             break;
           case AUTO_VALUE_BUILDER:
-            codecClassBuilder = buildClassWithAutoValueBuilderStrategy(encodedType);
+            codecClassBuilder = buildClassWithAutoValueBuilderStrategy(encodedType, startMemoizing);
             break;
           default:
             throw new IllegalArgumentException("Unknown strategy: " + annotation.strategy());
@@ -171,7 +173,8 @@ public class AutoCodecProcessor extends AbstractProcessor {
         .build();
   }
 
-  private TypeSpec.Builder buildClassWithInstantiatorStrategy(TypeElement encodedType) {
+  private TypeSpec.Builder buildClassWithInstantiatorStrategy(
+      TypeElement encodedType, boolean startMemoizing) {
     ExecutableElement constructor = selectInstantiator(encodedType);
     List<? extends VariableElement> fields = constructor.getParameters();
 
@@ -180,14 +183,15 @@ public class AutoCodecProcessor extends AbstractProcessor {
 
     if (encodedType.getAnnotation(AutoValue.class) == null) {
       initializeUnsafeOffsets(codecClassBuilder, encodedType, fields);
-      codecClassBuilder.addMethod(buildSerializeMethodWithInstantiator(encodedType, fields));
+      codecClassBuilder.addMethod(
+          buildSerializeMethodWithInstantiator(encodedType, fields, startMemoizing));
     } else {
       codecClassBuilder.addMethod(
-          buildSerializeMethodWithInstantiatorForAutoValue(encodedType, fields));
+          buildSerializeMethodWithInstantiatorForAutoValue(encodedType, fields, startMemoizing));
     }
 
     MethodSpec.Builder deserializeBuilder =
-        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, env);
+        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, startMemoizing, env);
     buildDeserializeBody(deserializeBuilder, fields);
     addReturnNew(deserializeBuilder, encodedType, constructor, /*builderVar=*/ null, env);
     codecClassBuilder.addMethod(deserializeBuilder.build());
@@ -195,7 +199,8 @@ public class AutoCodecProcessor extends AbstractProcessor {
     return codecClassBuilder;
   }
 
-  private TypeSpec.Builder buildClassWithAutoValueBuilderStrategy(TypeElement encodedType) {
+  private TypeSpec.Builder buildClassWithAutoValueBuilderStrategy(
+      TypeElement encodedType, boolean startMemoizing) {
     TypeElement builderType = findBuilderType(encodedType);
     List<ExecutableElement> getters = findGettersFromType(encodedType, builderType);
     ExecutableElement builderCreationMethod = findBuilderCreationMethod(encodedType, builderType);
@@ -203,7 +208,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
     TypeSpec.Builder codecClassBuilder =
         AutoCodecUtil.initializeCodecClassBuilder(encodedType, env);
     MethodSpec.Builder serializeBuilder =
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, env);
+        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, startMemoizing, env);
     for (ExecutableElement getter : getters) {
       marshallers.writeSerializationCode(
           new Marshaller.Context(
@@ -213,7 +218,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
     }
     codecClassBuilder.addMethod(serializeBuilder.build());
     MethodSpec.Builder deserializeBuilder =
-        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, env);
+        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, startMemoizing, env);
     String builderVarName =
         buildDeserializeBodyWithBuilder(
             encodedType, builderType, deserializeBuilder, getters, builderCreationMethod);
@@ -514,9 +519,9 @@ public class AutoCodecProcessor extends AbstractProcessor {
   }
 
   private MethodSpec buildSerializeMethodWithInstantiator(
-      TypeElement encodedType, List<? extends VariableElement> fields) {
+      TypeElement encodedType, List<? extends VariableElement> fields, boolean startMemoizing) {
     MethodSpec.Builder serializeBuilder =
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, env);
+        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, startMemoizing, env);
     for (VariableElement parameter : fields) {
       Optional<FieldValueAndClass> hasField =
           getFieldByNameRecursive(encodedType, parameter.getSimpleName().toString());
@@ -619,16 +624,17 @@ public class AutoCodecProcessor extends AbstractProcessor {
   }
 
   private MethodSpec buildSerializeMethodWithInstantiatorForAutoValue(
-      TypeElement encodedType, List<? extends VariableElement> fields) {
+      TypeElement encodedType, List<? extends VariableElement> fields, boolean startMemoizing) {
     MethodSpec.Builder serializeBuilder =
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, env);
+        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, startMemoizing, env);
     for (VariableElement parameter : fields) {
       addSerializeParameterWithGetter(encodedType, parameter, serializeBuilder);
     }
     return serializeBuilder.build();
   }
 
-  private TypeSpec.Builder buildClassWithPublicFieldsStrategy(TypeElement encodedType) {
+  private TypeSpec.Builder buildClassWithPublicFieldsStrategy(
+      TypeElement encodedType, boolean startMemoizing) {
     TypeSpec.Builder codecClassBuilder =
         AutoCodecUtil.initializeCodecClassBuilder(encodedType, env);
     ImmutableList<? extends VariableElement> publicFields =
@@ -636,9 +642,10 @@ public class AutoCodecProcessor extends AbstractProcessor {
             .stream()
             .filter(this::isPublicField)
             .collect(toImmutableList());
-    codecClassBuilder.addMethod(buildSerializeMethodWithPublicFields(encodedType, publicFields));
+    codecClassBuilder.addMethod(
+        buildSerializeMethodWithPublicFields(encodedType, publicFields, startMemoizing));
     MethodSpec.Builder deserializeBuilder =
-        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, env);
+        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, startMemoizing, env);
     buildDeserializeBody(deserializeBuilder, publicFields);
     addInstantiatePopulateFieldsAndReturn(deserializeBuilder, encodedType, publicFields);
     codecClassBuilder.addMethod(deserializeBuilder.build());
@@ -654,9 +661,9 @@ public class AutoCodecProcessor extends AbstractProcessor {
   }
 
   private MethodSpec buildSerializeMethodWithPublicFields(
-      TypeElement encodedType, List<? extends VariableElement> fields) {
+      TypeElement encodedType, List<? extends VariableElement> fields, boolean startMemoizing) {
     MethodSpec.Builder serializeBuilder =
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, env);
+        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, startMemoizing, env);
     for (VariableElement parameter : fields) {
       String paramAccessor = "input." + parameter.getSimpleName();
       marshallers.writeSerializationCode(
