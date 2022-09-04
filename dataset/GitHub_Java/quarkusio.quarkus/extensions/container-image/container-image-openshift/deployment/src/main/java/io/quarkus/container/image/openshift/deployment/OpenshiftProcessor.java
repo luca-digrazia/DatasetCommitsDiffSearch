@@ -238,14 +238,9 @@ public class OpenshiftProcessor {
         LOG.info("Performing openshift binary build with jar on server: " + kubernetesClient.getClient().getMasterUrl()
                 + " in namespace:" + namespace + ".");
 
-        if (packageConfig.isFastJar()) {
-            createContainerImage(kubernetesClient, openshiftYml.get(), config, "target", jar.getPath().getParent(),
-                    jar.getPath().getParent());
-        } else {
-            createContainerImage(kubernetesClient, openshiftYml.get(), config, "target", jar.getPath().getParent(),
-                    jar.getPath(),
-                    jar.getLibraryDir());
-        }
+        createContainerImage(kubernetesClient, openshiftYml.get(), config, "target", out.getOutputDirectory(),
+                jar.getPath(),
+                out.getOutputDirectory().resolve("lib"));
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "jar-container", Collections.emptyMap()));
     }
 
@@ -282,7 +277,7 @@ public class OpenshiftProcessor {
             return;
         }
 
-        createContainerImage(kubernetesClient, openshiftYml.get(), config, null, out.getOutputDirectory(),
+        createContainerImage(kubernetesClient, openshiftYml.get(), config, "target", out.getOutputDirectory(),
                 nativeImage.getPath());
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "native-container", Collections.emptyMap()));
     }
