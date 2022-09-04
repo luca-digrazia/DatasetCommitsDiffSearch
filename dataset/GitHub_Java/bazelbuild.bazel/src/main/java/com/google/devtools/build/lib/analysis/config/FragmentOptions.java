@@ -53,10 +53,8 @@ public abstract class FragmentOptions extends OptionsBase implements Cloneable, 
   }
 
   /**
-   * Returns an instance of {@code FragmentOptions} with all flags adjusted to be suitable for
-   * forming configurations.
-   *
-   * <p>If this instance is already suitable, it will be returned without creating a new instance.
+   * Creates a new instance of this {@code FragmentOptions} with all flags adjusted to be suitable
+   * for forming configurations.
    *
    * <p>Motivation: Sometimes a fragment's physical option values, as set by the options parser, do
    * not correspond to their logical interpretation. For example, an option may need custom code to
@@ -73,7 +71,7 @@ public abstract class FragmentOptions extends OptionsBase implements Cloneable, 
    * method. Step 2) is the responsibility of each transition implementation.
    */
   public FragmentOptions getNormalized() {
-    return this;
+    return clone();
   }
 
   /** Tracks limitations on referring to an option in a {@code config_setting}. */
