@@ -18,6 +18,7 @@ import com.google.auto.value.AutoValue;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.packages.Rule;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,7 +29,7 @@ import java.util.regex.Pattern;
  *   If you are adding a new execution requirement, pay attention to the following:
  *   <li>If its name starts with one of the supported prefixes, then it can be also used as a tag on
  *       a target and will be propagated to the execution requirements, see for prefixes {@link
- *       com.google.devtools.build.lib.packages.TargetUtils#getExecutionInfo}
+ *       com.google.devtools.build.lib.packages.TargetUtils#getExecutionInfo(Rule)}
  *   <li>If this is a potentially conflicting execution requirements, e.g. you are adding a pair
  *       'requires-x' and 'block-x', you MUST take care of a potential conflict in the Executor that
  *       is using new execution requirements. As an example, see {@link
@@ -156,15 +157,6 @@ public class ExecutionRequirements {
   public static final String SUPPORTS_WORKERS = "supports-workers";
 
   public static final String SUPPORTS_MULTIPLEX_WORKERS = "supports-multiplex-workers";
-
-  /** Specify the type of worker protocol the worker uses. */
-  public static final String REQUIRES_WORKER_PROTOCOL = "requires-worker-protocol";
-
-  /** Denotes what the type of worker protocol the worker uses. */
-  public enum WorkerProtocolFormat {
-    JSON,
-    PROTO,
-  }
 
   /** Override for the action's mnemonic to allow for better worker process reuse. */
   public static final String WORKER_KEY_MNEMONIC = "worker-key-mnemonic";

@@ -14,13 +14,9 @@
 
 package com.google.devtools.build.lib.actions;
 
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Spawn.Code;
 import com.google.devtools.build.lib.util.CommandDescriptionForm;
 import com.google.devtools.build.lib.util.CommandFailureUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Map;
@@ -92,48 +88,28 @@ public final class Spawns {
         .equals(spawn.getExecutionInfo().get(ExecutionRequirements.SUPPORTS_MULTIPLEX_WORKERS));
   }
 
-  /**
-   * Returns which worker protocol format a Spawn claims a persistent worker uses. Defaults to proto
-   * if the protocol format is not specified.
-   */
-  public static ExecutionRequirements.WorkerProtocolFormat getWorkerProtocolFormat(Spawn spawn)
-      throws IOException {
-    String protocolFormat =
-        spawn.getExecutionInfo().get(ExecutionRequirements.REQUIRES_WORKER_PROTOCOL);
-
-    if (protocolFormat != null) {
-      switch (protocolFormat) {
-        case "json":
-          return ExecutionRequirements.WorkerProtocolFormat.JSON;
-        case "proto":
-          return ExecutionRequirements.WorkerProtocolFormat.PROTO;
-        default:
-          throw new IOException(
-              "requires-worker-protocol must be set to a valid worker protocol format: json or"
-                  + " proto");
-      }
-    } else {
-      return ExecutionRequirements.WorkerProtocolFormat.PROTO;
-    }
-  }
-
   /** Returns the mnemonic that should be used in the worker's key. */
   public static String getWorkerKeyMnemonic(Spawn spawn) {
     String customValue = spawn.getExecutionInfo().get(ExecutionRequirements.WORKER_KEY_MNEMONIC);
     return customValue != null ? customValue : spawn.getMnemonic();
   }
 
-  /**
-   * Parse the timeout key in the spawn execution info, if it exists. Otherwise, return {@link
-   * Duration#ZERO}.
-   */
+  /** Parse the timeout key in the spawn execution info, if it exists. Otherwise, return -1. */
   public static Duration getTimeout(Spawn spawn) throws ExecException {
-    return getTimeout(spawn, Duration.ZERO);
+    String timeoutStr = spawn.getExecutionInfo().get(ExecutionRequirements.TIMEOUT);
+    if (timeoutStr == null) {
+      return Duration.ZERO;
+    }
+    try {
+      return Duration.ofSeconds(Integer.parseInt(timeoutStr));
+    } catch (NumberFormatException e) {
+      throw new UserExecException("could not parse timeout: ", e);
+    }
   }
 
   /**
    * Parse the timeout key in the spawn execution info, if it exists. Otherwise, return
-   * defaultTimeout, or {@code Duration.ZERO} if that is null.
+   * defaultTimeout, or 0 if that is null.
    */
   public static Duration getTimeout(Spawn spawn, Duration defaultTimeout) throws ExecException {
     String timeoutStr = spawn.getExecutionInfo().get(ExecutionRequirements.TIMEOUT);
@@ -143,12 +119,7 @@ public final class Spawns {
     try {
       return Duration.ofSeconds(Integer.parseInt(timeoutStr));
     } catch (NumberFormatException e) {
-      throw new UserExecException(
-          e,
-          FailureDetail.newBuilder()
-              .setMessage("could not parse timeout")
-              .setSpawn(FailureDetails.Spawn.newBuilder().setCode(Code.INVALID_TIMEOUT))
-              .build());
+      throw new UserExecException("could not parse timeout: ", e);
     }
   }
 

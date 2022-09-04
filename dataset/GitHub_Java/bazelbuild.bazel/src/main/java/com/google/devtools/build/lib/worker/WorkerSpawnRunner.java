@@ -156,6 +156,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
     runfilesTreeUpdater.updateRunfilesDirectory(
         execRoot,
         spawn.getRunfilesSupplier(),
+        context.getPathResolver(),
         binTools,
         spawn.getEnvironment(),
         context.getFileOutErr());
@@ -175,6 +176,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
         WorkerFilesHash.getWorkerFilesWithHashes(
             spawn,
             context.getArtifactExpander(),
+            context.getPathResolver(),
             context.getMetadataProvider());
 
     HashCode workerFilesCombinedHash = WorkerFilesHash.getCombinedHash(workerFiles);
