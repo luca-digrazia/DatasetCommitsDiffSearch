@@ -420,10 +420,7 @@ public class QuarkusDev extends QuarkusTask {
         }
 
         SourceSetContainer sourceSets = javaConvention.getSourceSets();
-        SourceSet mainSourceSet = sourceSets.findByName(SourceSet.MAIN_SOURCE_SET_NAME);
-        if (mainSourceSet == null) {
-            return;
-        }
+        SourceSet mainSourceSet = sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
         Set<String> sourcePaths = new HashSet<>();
         Set<String> sourceParentPaths = new HashSet<>();
 
