@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.analysis;
 import static com.google.devtools.build.lib.pkgcache.PackageManager.PackageManagerStatistics;
 
 import com.google.common.collect.ImmutableList;
+
 import java.util.Collection;
 
 /**
@@ -26,62 +27,38 @@ public class AnalysisPhaseCompleteEvent {
 
   private final Collection<ConfiguredTarget> topLevelTargets;
   private final long timeInMs;
-  private int targetsLoaded;
-  private int targetsConfigured;
+  private int targetsVisited;
   private final PackageManagerStatistics pkgManagerStats;
-  private final int actionsConstructed;
-  private final boolean analysisCacheDropped;
 
   /**
    * Construct the event.
-   *
    * @param topLevelTargets The set of active topLevelTargets that remain.
    */
-  public AnalysisPhaseCompleteEvent(
-      Collection<? extends ConfiguredTarget> topLevelTargets,
-      int targetsLoaded,
-      int targetsConfigured,
-      long timeInMs,
-      PackageManagerStatistics pkgManagerStats,
-      int actionsConstructed,
-      boolean analysisCacheDropped) {
+  public AnalysisPhaseCompleteEvent(Collection<? extends ConfiguredTarget> topLevelTargets,
+      int targetsVisited, long timeInMs, PackageManagerStatistics pkgManagerStats) {
     this.timeInMs = timeInMs;
     this.topLevelTargets = ImmutableList.copyOf(topLevelTargets);
-    this.targetsLoaded = targetsLoaded;
-    this.targetsConfigured = targetsConfigured;
+    this.targetsVisited = targetsVisited;
     this.pkgManagerStats = pkgManagerStats;
-    this.actionsConstructed = actionsConstructed;
-    this.analysisCacheDropped = analysisCacheDropped;
   }
 
   /**
-   * Returns the set of active topLevelTargets remaining, which is a subset of the topLevelTargets
-   * we attempted to analyze.
+   * @return The set of active topLevelTargets remaining, which is a subset
+   *     of the topLevelTargets we attempted to analyze.
    */
   public Collection<ConfiguredTarget> getTopLevelTargets() {
     return topLevelTargets;
   }
 
-  /** Returns the number of targets loaded during analysis */
-  public int getTargetsLoaded() {
-    return targetsLoaded;
-  }
-
-  /** Returns the number of targets configured during analysis */
-  public int getTargetsConfigured() {
-    return targetsConfigured;
+  /**
+   * @return The number of topLevelTargets freshly visited during analysis
+   */
+  public int getTargetsVisited() {
+    return targetsVisited;
   }
 
   public long getTimeInMs() {
     return timeInMs;
-  }
-
-  public int getActionsConstructed() {
-    return actionsConstructed;
-  }
-
-  public boolean wasAnalysisCacheDropped() {
-    return analysisCacheDropped;
   }
 
   /**
