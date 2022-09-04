@@ -22,7 +22,6 @@ import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -164,9 +163,6 @@ public final class ConfigFeatureFlagTransitionFactoryTest extends BuildViewTestC
   public void transition_equalsTester() throws Exception {
     scratch.file(
         "a/BUILD",
-        "filegroup(",
-        "    name = 'not_a_flagsetter',",
-        "    srcs = [])",
         "feature_flag_setter(",
         "    name = 'empty',",
         "    flag_values = {})",
@@ -197,7 +193,6 @@ public final class ConfigFeatureFlagTransitionFactoryTest extends BuildViewTestC
         "    allowed_values = ['a', 'b'],",
         "    default_value = 'a')");
 
-    Rule nonflag = (Rule) getTarget("//a:not_a_flagsetter");
     Rule empty = (Rule) getTarget("//a:empty");
     Rule empty2 = (Rule) getTarget("//a:empty2");
     Rule flagSetterA = (Rule) getTarget("//a:flag_setter_a");
@@ -212,10 +207,6 @@ public final class ConfigFeatureFlagTransitionFactoryTest extends BuildViewTestC
         new ConfigFeatureFlagTransitionFactory("flag_values");
 
     new EqualsTester()
-        .addEqualityGroup(
-            // transition for non flags target
-            factory.buildTransitionFor(nonflag),
-            NoTransition.INSTANCE)
         .addEqualityGroup(
             // transition with empty map
             factory.buildTransitionFor(empty),
