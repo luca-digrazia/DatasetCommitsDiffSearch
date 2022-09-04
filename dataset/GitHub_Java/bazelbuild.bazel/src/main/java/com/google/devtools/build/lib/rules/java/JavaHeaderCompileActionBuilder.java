@@ -86,6 +86,7 @@ public class JavaHeaderCompileActionBuilder {
   @Nullable private String injectingRuleKind;
   private PathFragment tempDirectory;
   private StrictDepsMode strictJavaDeps = StrictDepsMode.OFF;
+  private boolean reduceClasspath = true;
   private NestedSet<Artifact> directJars = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
   private NestedSet<Artifact> compileTimeDependencyArtifacts =
       NestedSetBuilder.emptySet(Order.STABLE_ORDER);
@@ -197,6 +198,12 @@ public class JavaHeaderCompileActionBuilder {
   public JavaHeaderCompileActionBuilder setStrictJavaDeps(StrictDepsMode strictJavaDeps) {
     checkNotNull(strictJavaDeps, "strictJavaDeps must not be null");
     this.strictJavaDeps = strictJavaDeps;
+    return this;
+  }
+
+  /** Enables reduced classpaths. */
+  public JavaHeaderCompileActionBuilder setReduceClasspath(boolean reduceClasspath) {
+    this.reduceClasspath = reduceClasspath;
     return this;
   }
 
@@ -330,8 +337,7 @@ public class JavaHeaderCompileActionBuilder {
         ruleContext.getConfiguration().getFragment(JavaConfiguration.class);
     ImmutableMap<String, String> executionInfo = ImmutableMap.of();
     Consumer<Pair<ActionExecutionContext, List<SpawnResult>>> resultConsumer = null;
-    JavaClasspathMode classpathMode = javaConfiguration.getReduceJavaClasspath();
-    if (classpathMode == JavaClasspathMode.BAZEL) {
+    if (javaConfiguration.getReduceJavaClasspath() == JavaClasspathMode.BAZEL) {
       if (javaConfiguration.inmemoryJdepsFiles()) {
         executionInfo =
             ImmutableMap.of(
@@ -408,7 +414,7 @@ public class JavaHeaderCompileActionBuilder {
         commandLine.addExecPaths("--deps_artifacts", compileTimeDependencyArtifacts);
       }
     }
-    if (classpathMode != JavaClasspathMode.OFF && strictJavaDeps != StrictDepsMode.OFF) {
+    if (reduceClasspath && strictJavaDeps != StrictDepsMode.OFF) {
       commandLine.add("--reduce_classpath");
     } else {
       commandLine.add("--noreduce_classpath");
