@@ -24,6 +24,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.devtools.build.lib.actions.ActionInputMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FileArtifactValue.RemoteFileArtifactValue;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
@@ -32,6 +33,7 @@ import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -58,7 +60,7 @@ public class RemoteActionFileSystemTest {
     MockitoAnnotations.initMocks(this);
     fs = new InMemoryFileSystem(new JavaClock(), HASH_FUNCTION);
     execRoot = fs.getPath("/exec");
-    outputRoot = ArtifactRoot.asDerivedRoot(execRoot, execRoot.getRelative("out"));
+    outputRoot = ArtifactRoot.asDerivedRoot(execRoot, RootType.Output, "out");
     outputRoot.getRoot().asPath().createDirectoryAndParents();
   }
 
@@ -125,7 +127,36 @@ public class RemoteActionFileSystemTest {
     verifyNoMoreInteractions(inputFetcher);
   }
 
-  private FileSystem newRemoteActionFileSystem(ActionInputMap inputs) {
+  @Test
+  public void testDeleteRemoteFile() throws Exception {
+    // arrange
+    ActionInputMap inputs = new ActionInputMap(1);
+    Artifact remoteArtifact = createRemoteArtifact("remote-file", "remote contents", inputs);
+    RemoteActionFileSystem actionFs = newRemoteActionFileSystem(inputs);
+
+    // act
+    boolean success = actionFs.delete(remoteArtifact.getPath().asFragment());
+
+    // assert
+    assertThat(success).isTrue();
+  }
+
+  @Test
+  public void testDeleteLocalFile() throws Exception {
+    // arrange
+    ActionInputMap inputs = new ActionInputMap(0);
+    RemoteActionFileSystem actionFs = newRemoteActionFileSystem(inputs);
+    Path filePath = actionFs.getPath(execRoot.getPathString()).getChild("local-file");
+    FileSystemUtils.writeContent(filePath, StandardCharsets.UTF_8, "local contents");
+
+    // act
+    boolean success = actionFs.delete(filePath.asFragment());
+
+    // assert
+    assertThat(success).isTrue();
+  }
+
+  private RemoteActionFileSystem newRemoteActionFileSystem(ActionInputMap inputs) {
     return new RemoteActionFileSystem(
         fs,
         execRoot.asFragment(),
@@ -142,7 +173,7 @@ public class RemoteActionFileSystemTest {
     byte[] b = contents.getBytes(StandardCharsets.UTF_8);
     HashCode h = HASH_FUNCTION.getHashFunction().hashBytes(b);
     FileArtifactValue f =
-        new RemoteFileArtifactValue(h.asBytes(), b.length, /* locationIndex= */ 1);
+        new RemoteFileArtifactValue(h.asBytes(), b.length, /* locationIndex= */ 1, "action-id");
     inputs.putWithNoDepOwner(a, f);
     return a;
   }
@@ -153,7 +184,12 @@ public class RemoteActionFileSystemTest {
     Path p = outputRoot.getRoot().asPath().getRelative(pathFragment);
     FileSystemUtils.writeContent(p, StandardCharsets.UTF_8, contents);
     Artifact a = ActionsTestUtil.createArtifact(outputRoot, p);
-    inputs.putWithNoDepOwner(a, FileArtifactValue.create(a.getPath(), /* isShareable= */ true));
+    Path path = a.getPath();
+    // Caution: there's a race condition between stating the file and computing the
+    // digest. We need to stat first, since we're using the stat to detect changes.
+    // We follow symlinks here to be consistent with getDigest.
+    inputs.putWithNoDepOwner(
+        a, FileArtifactValue.createFromStat(path, path.stat(Symlinks.FOLLOW), true));
     return a;
   }
 }

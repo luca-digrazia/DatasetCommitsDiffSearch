@@ -52,11 +52,7 @@ public abstract class FileSystem {
    */
   protected static final class NotASymlinkException extends IOException {
     public NotASymlinkException(PathFragment path) {
-      super(path.getPathString() + " is not a symlink");
-    }
-
-    public NotASymlinkException(PathFragment path, Throwable cause) {
-      super(path.getPathString() + " is not a symlink", cause);
+      super(path + " is not a symlink");
     }
   }
 
@@ -176,15 +172,6 @@ public abstract class FileSystem {
    * specification.
    */
   public abstract boolean createDirectory(PathFragment path) throws IOException;
-
-  /**
-   * Creates a writable directory at a given path or makes existing directory writable if it is
-   * already present. Returns whether a new directory was created.
-   *
-   * <p>This method is not atomic -- concurrent modifications for the same path will result in
-   * undefined behavior.
-   */
-  protected abstract boolean createWritableDirectory(PathFragment path) throws IOException;
 
   /**
    * Creates all directories up to the path. See {@link Path#createDirectoryAndParents} for
@@ -367,7 +354,7 @@ public abstract class FileSystem {
     }
 
     if (maxLinks-- == 0) {
-      throw new FileSymlinkLoopException(naive);
+      throw new IOException(naive + " (Too many levels of symbolic links)");
     }
     if (linkTarget.isAbsolute()) {
       dir = PathFragment.createAlreadyNormalized(linkTarget.getDriveStr());
@@ -738,16 +725,6 @@ public abstract class FileSystem {
       throws IOException;
 
   /**
-   * Creates an OutputStream accessing the file denoted by path.
-   *
-   * @param append whether to open the output stream in append mode
-   * @param internal whether the file is a Bazel internal file
-   * @throws IOException if there was an error opening the file for writing
-   */
-  protected abstract OutputStream getOutputStream(
-      PathFragment path, boolean append, boolean internal) throws IOException;
-
-  /**
    * Renames the file denoted by "sourceNode" to the location "targetNode". See {@link
    * Path#renameTo} for specification.
    */
@@ -797,5 +774,4 @@ public abstract class FileSystem {
    * implement this in order to warm the filesystem's internal caches.
    */
   protected void prefetchPackageAsync(PathFragment path, int maxDirs) {}
-
 }
