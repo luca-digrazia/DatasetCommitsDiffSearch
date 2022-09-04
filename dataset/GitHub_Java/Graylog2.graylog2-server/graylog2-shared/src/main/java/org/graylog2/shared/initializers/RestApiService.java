@@ -1,25 +1,22 @@
-/**
- * The MIT License
- * Copyright (c) 2012 TORCH GmbH
+/*
+ * Copyright 2012-2014 TORCH GmbH
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * This file is part of Graylog2.
  *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
+ * Graylog2 is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * Graylog2 is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.shared.initializers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,16 +29,13 @@ import org.glassfish.jersey.server.ContainerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.filter.EncodingFilter;
 import org.glassfish.jersey.server.internal.scanning.PackageNamesScanner;
-import org.glassfish.jersey.server.model.Resource;
 import org.graylog2.jersey.container.netty.NettyContainer;
 import org.graylog2.jersey.container.netty.SecurityContextFactory;
-import org.graylog2.plugin.rest.PluginRestResource;
 import org.graylog2.plugin.rest.WebApplicationExceptionMapper;
-import org.graylog2.plugin.BaseConfiguration;
+import org.graylog2.shared.BaseConfiguration;
 import org.graylog2.plugin.rest.AnyExceptionClassMapper;
 import org.graylog2.plugin.rest.JacksonPropertyExceptionMapper;
 import org.graylog2.shared.rest.CORSFilter;
-import org.graylog2.shared.rest.PrintModelProcessor;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
@@ -55,13 +49,10 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import javax.ws.rs.Path;
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.container.DynamicFeature;
 import javax.ws.rs.ext.ExceptionMapper;
 import java.net.InetSocketAddress;
-import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -71,13 +62,12 @@ import java.util.concurrent.Executors;
  */
 @Singleton
 public class RestApiService extends AbstractIdleService {
-    private static final Logger LOG = LoggerFactory.getLogger(RestApiService.class);
+    private final Logger LOG = LoggerFactory.getLogger(RestApiService.class);
     private final BaseConfiguration configuration;
     private final SecurityContextFactory securityContextFactory;
     private final Set<Class<? extends DynamicFeature>> dynamicFeatures;
     private final Set<Class<? extends ContainerResponseFilter>> containerResponseFilters;
     private final Set<Class<? extends ExceptionMapper>> exceptionMappers;
-    private final Map<String, Set<PluginRestResource>> pluginRestResources;
     private final ObjectMapper objectMapper;
     private ServerBootstrap bootstrap;
 
@@ -87,14 +77,12 @@ public class RestApiService extends AbstractIdleService {
                           Set<Class<? extends DynamicFeature>> dynamicFeatures,
                           Set<Class<? extends ContainerResponseFilter>> containerResponseFilters,
                           Set<Class<? extends ExceptionMapper>> exceptionMappers,
-                          Map<String, Set<PluginRestResource>> pluginRestResources,
                           ObjectMapper objectMapper) {
         this.configuration = configuration;
         this.securityContextFactory = securityContextFactory;
         this.dynamicFeatures = dynamicFeatures;
         this.containerResponseFilters = containerResponseFilters;
         this.exceptionMappers = exceptionMappers;
-        this.pluginRestResources = pluginRestResources;
         this.objectMapper = objectMapper;
     }
 
@@ -142,10 +130,7 @@ public class RestApiService extends AbstractIdleService {
             rc.register(CORSFilter.class);
         }
 
-        rc.registerResources(prefixPluginResources("/plugins", pluginRestResources));
-
-        if(LOG.isDebugEnabled())
-            rc.register(PrintModelProcessor.class);
+        /*rc = rc.registerFinder(new PackageNamesScanner(new String[]{"org.graylog2.rest.resources"}, true));*/
 
         final NettyContainer jerseyHandler = ContainerFactory.createContainer(NettyContainer.class, rc);
         if (securityContextFactory != null) {
@@ -175,24 +160,6 @@ public class RestApiService extends AbstractIdleService {
         ));
 
         LOG.info("Started REST API at <{}>", configuration.getRestListenUri());
-    }
-
-    private Set<Resource> prefixPluginResources(String pluginPrefix, Map<String, Set<PluginRestResource>> pluginResourceMap) {
-        final Set<Resource> result = new HashSet<>();
-        for (Map.Entry<String, Set<PluginRestResource>> entry : pluginResourceMap.entrySet()) {
-            for (PluginRestResource pluginRestResource : entry.getValue()) {
-                StringBuilder resourcePath = new StringBuilder(pluginPrefix).append("/").append(entry.getKey());
-                final Path pathAnnotation = Resource.getPath(pluginRestResource.getClass());
-                final String path = (pathAnnotation.value() == null ? "" : pathAnnotation.value());
-                if (!path.startsWith("/"))
-                    resourcePath.append("/");
-
-                final Resource.Builder resourceBuilder = Resource.builder(pluginRestResource.getClass()).path(resourcePath.append(path).toString());
-                final Resource resource = resourceBuilder.build();
-                result.add(resource);
-            }
-        }
-        return result;
     }
 
     @Override
