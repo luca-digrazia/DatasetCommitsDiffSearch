@@ -22,7 +22,10 @@ package org.graylog2.inputs.gelf;
 
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import org.graylog2.plugin.inputs.*;
+import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.inputs.MessageInputConfiguration;
+import org.graylog2.plugin.inputs.MessageInputConfigurationException;
+import org.graylog2.plugin.inputs.MessageInputConfigurationRequest;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.ChannelException;
 import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
@@ -61,7 +64,7 @@ public class GELFTCPInput implements MessageInput {
     }
 
     @Override
-    public void launch() throws MisfireException {
+    public void start() {
         /*final ExecutorService bossThreadPool = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
                         .setNameFormat("input-gelftcp-boss-%d")

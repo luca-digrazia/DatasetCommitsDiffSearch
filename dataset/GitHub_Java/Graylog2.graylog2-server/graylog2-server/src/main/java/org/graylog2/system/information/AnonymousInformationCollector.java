@@ -20,12 +20,10 @@
 package org.graylog2.system.information;
 
 import com.google.common.collect.Maps;
-import com.google.inject.Inject;
 import org.graylog2.Core;
 import org.graylog2.blacklists.Blacklist;
 import org.graylog2.cluster.Node;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.shared.filters.FilterRegistry;
 import org.graylog2.streams.StreamImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,9 +36,6 @@ import java.util.Map;
 public class AnonymousInformationCollector {
     
     private static final Logger LOG = LoggerFactory.getLogger(AnonymousInformationCollector.class);
-
-    @Inject
-    private FilterRegistry filterRegistry;
     
     Core server;
     
@@ -54,7 +49,7 @@ public class AnonymousInformationCollector {
         info.put("version", Core.GRAYLOG2_VERSION);
         info.put("number_of_loaded_modules", numberOfLoadedModules());
         info.put("number_of_elasticsearch_nodes", server.getIndexer().cluster().getNumberOfNodes());
-        info.put("number_of_graylog2_server_nodes", Node.allActive(server, Node.Type.SERVER).size());
+        info.put("number_of_graylog2_server_nodes", Node.allActive(server).size());
         info.put("number_of_total_messages", server.getIndexer().indices().getTotalNumberOfMessages());
         info.put("number_of_indices", server.getDeflector().getAllDeflectorIndices().size());
         info.put("number_of_streams", StreamImpl.loadAllEnabled(server).size());
@@ -69,7 +64,7 @@ public class AnonymousInformationCollector {
         try {
             Map<String, Integer> plugins = Maps.newHashMap();
             plugins.put("initializers", server.initializers().count());
-            plugins.put("filters", filterRegistry.size());
+            plugins.put("filters", server.getFilters().size());
             plugins.put("outputs", server.outputs().count());
             plugins.put("transports", server.getTransports().size());
             plugins.put("alarm_callbacks", server.getAlarmCallbacks().size());

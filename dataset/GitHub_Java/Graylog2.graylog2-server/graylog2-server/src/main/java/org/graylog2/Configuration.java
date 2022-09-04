@@ -20,6 +20,22 @@
 
 package org.graylog2;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.UnknownHostException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
+import org.graylog2.inputs.gelf.GELFTCPInput;
+import org.graylog2.inputs.gelf.GELFUDPInput;
+import org.graylog2.inputs.http.GELFHttpInput;
+import org.graylog2.inputs.syslog.SyslogTCPInput;
+import org.graylog2.inputs.syslog.SyslogUDPInput;
+import org.graylog2.plugin.inputs.MessageInput;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.github.joschi.jadconfig.Parameter;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.ValidatorMethod;
@@ -28,19 +44,15 @@ import com.github.joschi.jadconfig.validators.FileReadableValidator;
 import com.github.joschi.jadconfig.validators.InetPortValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.google.common.collect.Lists;
-import com.lmax.disruptor.*;
+import com.google.common.collect.Maps;
+import com.lmax.disruptor.BlockingWaitStrategy;
+import com.lmax.disruptor.BusySpinWaitStrategy;
+import com.lmax.disruptor.SleepingWaitStrategy;
+import com.lmax.disruptor.WaitStrategy;
+import com.lmax.disruptor.YieldingWaitStrategy;
 import com.mongodb.ServerAddress;
-import org.graylog2.plugin.Tools;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.core.UriBuilder;
-import java.net.SocketException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.UnknownHostException;
-import java.util.Arrays;
-import java.util.List;
 
 /**
  * Helper class to hold configuration of Graylog2
@@ -60,10 +72,7 @@ public class Configuration {
     
     @Parameter(value = "rest_listen_uri", required = true)
     private String restListenUri = "http://127.0.0.1:12900/";
-
-    @Parameter(value = "rest_transport_uri", required = false)
-    private String restTransportUri;
-
+    
     @Parameter(value = "udp_recvbuffer_sizes", required = true, validator = PositiveIntegerValidator.class)
     private int udpRecvBufferSizes = 1048576;
     
@@ -148,6 +157,9 @@ public class Configuration {
     @Parameter("rules_file")
     private String droolsRulesFile;
 
+    @Parameter(value = "enable_tokenizer_filter", required = true)
+    private boolean enableTokenizerFilter = true;
+
     @Parameter(value = "enable_graphite_output", required = false)
     private boolean enableGraphiteOutput = false;
 
@@ -186,15 +198,6 @@ public class Configuration {
 
     @Parameter(value = "plugin_dir", required = false)
     private String pluginDir = "plugin";
-
-    @Parameter(value = "node_id_file", required = false)
-    private String nodeIdFile = "graylog2-server-node-id";
-
-    @Parameter(value = "root_username", required = false)
-    private String rootUsername = "admin";
-
-    @Parameter(value = "root_password_sha1", required = true)
-    private String rootPasswordSha1;
 
     public boolean isMaster() {
         return isMaster;
@@ -357,6 +360,10 @@ public class Configuration {
         return replicaServers;
     }
 
+    public boolean isEnableTokenizerFilter() {
+        return enableTokenizerFilter;
+    }
+
     public boolean isEnableGraphiteOutput() {
         return enableGraphiteOutput;
     }
@@ -412,33 +419,18 @@ public class Configuration {
         return pluginDir;
     }
 
-    public String getNodeIdFile() {
-        return nodeIdFile;
-    }
-
     @ValidatorMethod
     public void validate() throws ValidationException {
 
         if (isMongoUseAuth() && (null == getMongoUser() || null == getMongoPassword())) {
+
             throw new ValidationException("mongodb_user and mongodb_password have to be set if mongodb_useauth is true");
         }
     }
 
     public URI getRestListenUri() {
-        return getUriStandard(restListenUri);
-    }
-
-    public URI getRestTransportUri() {
-        if (restTransportUri == null || restTransportUri.isEmpty()) {
-            return null;
-        }
-
-        return getUriStandard(restTransportUri);
-    }
-
-    private URI getUriStandard(String from) {
         try {
-            URI uri = new URI(from);
+            URI uri = new URI(restListenUri);
 
             // The port is set to -1 if not defined. Default to 80 here.
             if (uri.getPort() == -1) {
@@ -451,15 +443,4 @@ public class Configuration {
         }
     }
 
-    public String getRootUsername() {
-        return rootUsername;
-    }
-
-    public String getRootPasswordSha1() {
-        return rootPasswordSha1;
-    }
-
-    public void setRestTransportUri(String restTransportUri) {
-        this.restTransportUri = restTransportUri;
-    }
 }

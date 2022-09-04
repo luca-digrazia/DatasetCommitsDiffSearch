@@ -24,16 +24,14 @@ import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog2.Core;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.plugin.inputs.MisfireException;
-import org.graylog2.system.activities.Activity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -54,7 +52,7 @@ public class Inputs {
         runningInputs = Maps.newHashMap();
     }
 
-    public String launch(final MessageInput input) {
+    public String start(final MessageInput input) {
         String id = UUID.randomUUID().toString();
 
         input.setId(id);
@@ -64,14 +62,7 @@ public class Inputs {
             @Override
             public void run() {
                 LOG.info("Starting [{}] input with ID <{}>", input.getClass().getCanonicalName(), input.getId());
-                try {
-                    input.launch();
-                } catch (MisfireException e) {
-                    String msg = "The [" + input.getClass().getCanonicalName() + "] input with ID <" + input.getId() + "> " +
-                            "was accepted but misfired. Reason: " + e.getMessage();
-                    core.getActivityWriter().write(new Activity(msg, Inputs.class));
-                    LOG.error(msg, e);
-                }
+                input.start();
             }
         });
 
@@ -86,14 +77,7 @@ public class Inputs {
         return runningInputs.size();
     }
 
-    public static MessageInput factory(String type) throws NoSuchInputTypeException {
-        try {
-            Class c = Class.forName(type);
-            return (MessageInput) c.newInstance();
-        } catch (ClassNotFoundException e) {
-             throw new NoSuchInputTypeException("There is no input of type <" + type + "> registered.");
-        } catch (Exception e) {
-            throw new RuntimeException("Could not create input of type <" + type + ">", e);
-        }
+    public static MessageInput factory(String type) {
+
     }
 }

@@ -30,7 +30,7 @@ public interface MessageInput {
     
     public void configure(MessageInputConfiguration config, GraylogServer graylogServer) throws MessageInputConfigurationException;
 
-    public void launch() throws MisfireException;
+    public void start();
     public void stop();
 
     public MessageInputConfigurationRequest getRequestedConfiguration();

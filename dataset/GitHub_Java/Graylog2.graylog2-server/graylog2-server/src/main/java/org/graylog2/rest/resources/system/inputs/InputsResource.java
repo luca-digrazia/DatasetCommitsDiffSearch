@@ -27,7 +27,6 @@ import org.bson.types.ObjectId;
 import org.graylog2.Core;
 import org.graylog2.database.ValidationException;
 import org.graylog2.inputs.Inputs;
-import org.graylog2.inputs.NoSuchInputTypeException;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.MessageInputConfiguration;
 import org.graylog2.plugin.inputs.MessageInputConfigurationException;
@@ -44,7 +43,6 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
-import java.net.BindException;
 import java.util.Map;
 
 /**
@@ -79,26 +77,16 @@ public class InputsResource extends RestResource {
         MessageInputConfiguration inputConfig = new MessageInputConfiguration();
 
         // Build input.
-        MessageInput input = null;
+        MessageInput input = Inputs.factory(lr.inputType);
         try {
-            input = Inputs.factory(lr.type);
             input.configure(inputConfig, core);
-        } catch (NoSuchInputTypeException e) {
-            LOG.error("There is no such input type registered.", e);
-            throw new WebApplicationException(e, Response.Status.NOT_FOUND);
         } catch (MessageInputConfigurationException e) {
             LOG.error("Missing or invalid input configuration.", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
 
         // Launch input.
-        String inputId;
-        try {
-            inputId = core.inputs().launch(input);
-        } catch (Exception e) {
-            LOG.error("Could not launch new input.", e);
-            throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);
-        }
+        String inputId = core.inputs().start(input);
 
         // Persist input.
         ObjectId id;
@@ -112,9 +100,9 @@ public class InputsResource extends RestResource {
 
         Map<String, Object> result = Maps.newHashMap();
         result.put("input_id", inputId);
-        //result.put("persist_id", id.toStringMongod());
+        result.put("persist_id", id.toStringMongod());
 
-        return Response.status(Response.Status.ACCEPTED).entity(json(result, prettyPrint)).build();
+        return Response.status(Response.Status.CREATED).entity(json(result, prettyPrint)).build();
     }
 
 }
