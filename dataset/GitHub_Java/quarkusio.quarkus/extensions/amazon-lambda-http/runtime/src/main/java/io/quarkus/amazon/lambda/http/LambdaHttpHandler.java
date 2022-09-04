@@ -7,12 +7,14 @@ import java.net.InetSocketAddress;
 import java.nio.channels.Channels;
 import java.nio.channels.WritableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.security.Principal;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import org.jboss.logging.Logger;
@@ -137,7 +139,7 @@ public class LambdaHttpHandler implements RequestHandler<APIGatewayV2HTTPEvent, 
                     if (baos != null) {
                         if (isBinary(responseBuilder.getHeaders().get("Content-Type"))) {
                             responseBuilder.setIsBase64Encoded(true);
-                            responseBuilder.setBody(Base64.getEncoder().encodeToString(baos.toByteArray()));
+                            responseBuilder.setBody(Base64.getMimeEncoder().encodeToString(baos.toByteArray()));
                         } else {
                             responseBuilder.setBody(new String(baos.toByteArray(), StandardCharsets.UTF_8));
                         }
@@ -167,6 +169,10 @@ public class LambdaHttpHandler implements RequestHandler<APIGatewayV2HTTPEvent, 
         quarkusHeaders.setContextObject(Context.class, context);
         quarkusHeaders.setContextObject(APIGatewayV2HTTPEvent.class, request);
         quarkusHeaders.setContextObject(APIGatewayV2HTTPEvent.RequestContext.class, request.getRequestContext());
+        final Principal principal = getPrincipal(request);
+        if (principal != null) {
+            quarkusHeaders.setContextObject(Principal.class, principal);
+        }
         DefaultHttpRequest nettyRequest = new DefaultHttpRequest(HttpVersion.HTTP_1_1,
                 HttpMethod.valueOf(request.getRequestContext().getHttp().getMethod()), ofNullable(request.getRawQueryString())
                         .filter(q -> !q.isEmpty()).map(q -> request.getRawPath() + '?' + q).orElse(request.getRawPath()),
@@ -186,7 +192,7 @@ public class LambdaHttpHandler implements RequestHandler<APIGatewayV2HTTPEvent, 
         HttpContent requestContent = LastHttpContent.EMPTY_LAST_CONTENT;
         if (request.getBody() != null) {
             if (request.getIsBase64Encoded()) {
-                ByteBuf body = Unpooled.wrappedBuffer(Base64.getDecoder().decode(request.getBody()));
+                ByteBuf body = Unpooled.wrappedBuffer(Base64.getMimeDecoder().decode(request.getBody()));
                 requestContent = new DefaultLastHttpContent(body);
             } else {
                 ByteBuf body = Unpooled.copiedBuffer(request.getBody(), StandardCharsets.UTF_8); //TODO: do we need to look at the request encoding?
@@ -212,12 +218,66 @@ public class LambdaHttpHandler implements RequestHandler<APIGatewayV2HTTPEvent, 
         return baos;
     }
 
+    static Set<String> binaryTypes = new HashSet<>();
+
+    static {
+        binaryTypes.add("application/octet-stream");
+        binaryTypes.add("image/jpeg");
+        binaryTypes.add("image/png");
+        binaryTypes.add("image/gif");
+    }
+
     private boolean isBinary(String contentType) {
         if (contentType != null) {
-            String ct = contentType.toLowerCase(Locale.ROOT);
-            return !(ct.startsWith("text") || ct.contains("json") || ct.contains("xml") || ct.contains("yaml"));
+            int index = contentType.indexOf(';');
+            if (index >= 0) {
+                return binaryTypes.contains(contentType.substring(0, index));
+            } else {
+                return binaryTypes.contains(contentType);
+            }
         }
         return false;
+    }
+
+    private Principal getPrincipal(APIGatewayV2HTTPEvent request) {
+        final Map<String, String> systemEnvironment = System.getenv();
+        final boolean isSamLocal = Boolean.parseBoolean(systemEnvironment.get("AWS_SAM_LOCAL"));
+        if (isSamLocal) {
+            final String forcedUserName = systemEnvironment.get("QUARKUS_AWS_LAMBDA_FORCE_USER_NAME");
+            if (forcedUserName != null && !forcedUserName.isEmpty()) {
+                log.info("Forcing local user to " + forcedUserName);
+                return new Principal() {
+
+                    @Override
+                    public String getName() {
+                        return forcedUserName;
+                    }
+
+                };
+            }
+        } else {
+            final APIGatewayV2HTTPEvent.RequestContext requestContext = request.getRequestContext();
+            if (requestContext != null) {
+                final APIGatewayV2HTTPEvent.RequestContext.Authorizer authorizer = requestContext.getAuthorizer();
+                if (authorizer != null) {
+                    final APIGatewayV2HTTPEvent.RequestContext.Authorizer.JWT jwt = authorizer.getJwt();
+                    if (jwt != null) {
+                        final Map<String, String> claims = jwt.getClaims();
+                        if (claims != null) {
+                            final String jwtUsername = claims.get("cognito:username");
+                            if (jwtUsername != null && !jwtUsername.isEmpty())
+                                return new Principal() {
+                                    @Override
+                                    public String getName() {
+                                        return jwtUsername;
+                                    }
+                                };
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 
 }
