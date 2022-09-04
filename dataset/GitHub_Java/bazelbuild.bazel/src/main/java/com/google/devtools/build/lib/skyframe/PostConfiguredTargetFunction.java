@@ -24,16 +24,18 @@ import com.google.devtools.build.lib.analysis.Dependency;
 import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAspectOrderException;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.NoSuchTargetException;
+import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
+import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ConflictException;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
@@ -62,15 +64,12 @@ public class PostConfiguredTargetFunction implements SkyFunction {
 
   private final SkyframeExecutor.BuildViewProvider buildViewProvider;
   private final RuleClassProvider ruleClassProvider;
-  private final BuildOptions defaultBuildOptions;
 
   public PostConfiguredTargetFunction(
       SkyframeExecutor.BuildViewProvider buildViewProvider,
-      RuleClassProvider ruleClassProvider,
-      BuildOptions defaultBuildOptions) {
+      RuleClassProvider ruleClassProvider) {
     this.buildViewProvider = Preconditions.checkNotNull(buildViewProvider);
     this.ruleClassProvider = ruleClassProvider;
-    this.defaultBuildOptions = defaultBuildOptions;
   }
 
   @Nullable
@@ -92,14 +91,18 @@ public class PostConfiguredTargetFunction implements SkyFunction {
     }
 
     ConfiguredTarget ct = ctValue.getConfiguredTarget();
-    ConfiguredTargetAndData configuredTargetAndData =
-        ConfiguredTargetAndData.fromConfiguredTargetInSkyframe(ct, env);
-    if (configuredTargetAndData == null) {
-      return null;
+
+    Package targetPkg =
+        ((PackageValue) env.getValue(PackageValue.key(ct.getLabel().getPackageIdentifier())))
+            .getPackage();
+    Target target = null;
+    try {
+      target = targetPkg.getTarget(ct.getLabel().getName());
+    } catch (NoSuchTargetException e) {
+      throw new IllegalStateException("Name already verified", e);
     }
-    TargetAndConfiguration ctgValue =
-        new TargetAndConfiguration(
-            configuredTargetAndData.getTarget(), configuredTargetAndData.getConfiguration());
+
+    TargetAndConfiguration ctgValue = new TargetAndConfiguration(target, ct.getConfiguration());
 
     ImmutableMap<Label, ConfigMatchingProvider> configConditions =
         getConfigurableAttributeConditions(ctgValue, env);
@@ -110,9 +113,7 @@ public class PostConfiguredTargetFunction implements SkyFunction {
     OrderedSetMultimap<Attribute, Dependency> deps;
     try {
       BuildConfiguration hostConfiguration =
-          buildViewProvider
-              .getSkyframeBuildView()
-              .getHostConfiguration(configuredTargetAndData.getConfiguration());
+          buildViewProvider.getSkyframeBuildView().getHostConfiguration(ct.getConfiguration());
       SkyframeDependencyResolver resolver =
           buildViewProvider.getSkyframeBuildView().createDependencyResolver(env);
       // We don't track root causes here - this function is only invoked for successfully analyzed
@@ -124,12 +125,10 @@ public class PostConfiguredTargetFunction implements SkyFunction {
               hostConfiguration,
               /*aspect=*/ null,
               configConditions,
-              /*toolchainLabels*/ ImmutableSet.of(),
-              defaultBuildOptions);
-      if (configuredTargetAndData.getConfiguration() != null) {
-        deps =
-            ConfigurationResolver.resolveConfigurations(
-                env, ctgValue, deps, hostConfiguration, ruleClassProvider, defaultBuildOptions);
+              /*toolchainLabels=*/ ImmutableSet.of());
+      if (ct.getConfiguration() != null) {
+        deps = ConfigurationResolver.resolveConfigurations(env, ctgValue, deps, hostConfiguration,
+            ruleClassProvider);
       }
     } catch (EvalException | ConfiguredTargetFunction.DependencyEvaluationException
         | InvalidConfigurationException | InconsistentAspectOrderException e) {

@@ -81,7 +81,6 @@ import com.google.devtools.build.lib.pkgcache.PackageManager.PackageManagerStati
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectValueKey;
-import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.CoverageReportValue;
@@ -614,10 +613,7 @@ public class BuildView {
     }
 
     Set<ConfiguredTarget> targetsToSkip =
-        new TopLevelConstraintSemantics(
-                skyframeExecutor.getPackageManager(),
-                input -> skyframeExecutor.getConfiguration(eventHandler, input),
-                eventHandler)
+        new TopLevelConstraintSemantics(skyframeExecutor.getPackageManager(), eventHandler)
             .checkTargetEnvironmentRestrictions(skyframeAnalysisResult.getConfiguredTargets());
 
     AnalysisResult result =
@@ -958,60 +954,20 @@ public class BuildView {
 
   // For testing
   @VisibleForTesting
-  public Collection<ConfiguredTarget> getDirectPrerequisitesForTesting(
-      ExtendedEventHandler eventHandler,
-      ConfiguredTarget ct,
+  public Iterable<ConfiguredTarget> getDirectPrerequisitesForTesting(
+      ExtendedEventHandler eventHandler, ConfiguredTarget ct,
       BuildConfigurationCollection configurations)
-      throws EvalException, InvalidConfigurationException, InterruptedException,
-          InconsistentAspectOrderException {
+      throws EvalException, InvalidConfigurationException,
+      InterruptedException, InconsistentAspectOrderException {
     return Collections2.transform(
-        getConfiguredTargetAndDataDirectPrerequisitesForTesting(eventHandler, ct, configurations),
+        skyframeExecutor.getConfiguredTargetsForTesting(
+            eventHandler,
+            ct.getConfiguration(),
+            ImmutableSet.copyOf(
+                getDirectPrerequisiteDependenciesForTesting(
+                        eventHandler, ct, configurations, /*toolchainContext=*/ null)
+                    .values())),
         ConfiguredTargetAndData::getConfiguredTarget);
-  }
-
-  // TODO(janakr): pass the configuration in as a parameter here and above.
-  @VisibleForTesting
-  public Collection<ConfiguredTargetAndData>
-      getConfiguredTargetAndDataDirectPrerequisitesForTesting(
-          ExtendedEventHandler eventHandler,
-          ConfiguredTarget ct,
-          BuildConfigurationCollection configurations)
-          throws EvalException, InvalidConfigurationException, InterruptedException,
-              InconsistentAspectOrderException {
-    return getConfiguredTargetAndDataDirectPrerequisitesForTesting(
-        eventHandler, ct, ct.getConfigurationKey(), configurations);
-  }
-
-  @VisibleForTesting
-  public Collection<ConfiguredTargetAndData>
-      getConfiguredTargetAndDataDirectPrerequisitesForTesting(
-          ExtendedEventHandler eventHandler,
-          ConfiguredTargetAndData ct,
-          BuildConfigurationCollection configurations)
-          throws EvalException, InvalidConfigurationException, InterruptedException,
-              InconsistentAspectOrderException {
-    return getConfiguredTargetAndDataDirectPrerequisitesForTesting(
-        eventHandler,
-        ct.getConfiguredTarget(),
-        ct.getConfiguredTarget().getConfigurationKey(),
-        configurations);
-  }
-
-  private Collection<ConfiguredTargetAndData>
-      getConfiguredTargetAndDataDirectPrerequisitesForTesting(
-          ExtendedEventHandler eventHandler,
-          ConfiguredTarget ct,
-          BuildConfigurationValue.Key configuration,
-          BuildConfigurationCollection configurations)
-          throws EvalException, InvalidConfigurationException, InterruptedException,
-              InconsistentAspectOrderException {
-    return skyframeExecutor.getConfiguredTargetsForTesting(
-        eventHandler,
-        configuration,
-        ImmutableSet.copyOf(
-            getDirectPrerequisiteDependenciesForTesting(
-                    eventHandler, ct, configurations, /*toolchainContext=*/ null)
-                .values()));
   }
 
   @VisibleForTesting
@@ -1069,11 +1025,9 @@ public class BuildView {
 
       @Override
       protected List<BuildConfiguration> getConfigurations(
-          FragmentClassSet fragments,
-          Iterable<BuildOptions> buildOptions,
-          BuildOptions defaultBuildOptions) {
+          FragmentClassSet fragments, Iterable<BuildOptions> buildOptions) {
         Preconditions.checkArgument(
-            fragments.fragmentClasses().equals(ct.getConfigurationKey().getFragments()),
+            ct.getConfiguration().fragmentClasses().equals(fragments),
             "Mismatch: %s %s",
             ct,
             fragments);
@@ -1092,9 +1046,7 @@ public class BuildView {
     }
 
     DependencyResolver dependencyResolver = new SilentDependencyResolver();
-    TargetAndConfiguration ctgNode =
-        new TargetAndConfiguration(
-            target, skyframeExecutor.getConfiguration(eventHandler, ct.getConfigurationKey()));
+    TargetAndConfiguration ctgNode = new TargetAndConfiguration(target, ct.getConfiguration());
     return dependencyResolver.dependentNodeMap(
         ctgNode,
         configurations.getHostConfiguration(),
@@ -1102,8 +1054,7 @@ public class BuildView {
         getConfigurableAttributeKeysForTesting(eventHandler, ctgNode),
         toolchainContext == null
             ? ImmutableSet.of()
-            : toolchainContext.getResolvedToolchainLabels(),
-        skyframeExecutor.getDefaultBuildOptions());
+            : toolchainContext.getResolvedToolchainLabels());
   }
 
   /**
@@ -1144,7 +1095,7 @@ public class BuildView {
 
     ImmutableMultimap<Dependency, ConfiguredTargetAndData> cts =
         skyframeExecutor.getConfiguredTargetMapForTesting(
-            eventHandler, target.getConfigurationKey(), ImmutableSet.copyOf(depNodeNames.values()));
+            eventHandler, target.getConfiguration(), ImmutableSet.copyOf(depNodeNames.values()));
 
     OrderedSetMultimap<Attribute, ConfiguredTargetAndData> result = OrderedSetMultimap.create();
     for (Map.Entry<Attribute, Dependency> entry : depNodeNames.entries()) {
@@ -1195,9 +1146,9 @@ public class BuildView {
   }
 
   @VisibleForTesting
-  public ConfiguredTargetAndData getConfiguredTargetAndDataForTesting(
+  public ConfiguredTargetAndData getConfiguredTargetAndTargetForTesting(
       ExtendedEventHandler eventHandler, Label label, BuildConfiguration config) {
-    return skyframeExecutor.getConfiguredTargetAndDataForTesting(eventHandler, label, config);
+    return skyframeExecutor.getConfiguredTargetAndTargetForTesting(eventHandler, label, config);
   }
 
   /**

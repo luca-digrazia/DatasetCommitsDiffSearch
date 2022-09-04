@@ -91,8 +91,6 @@ public abstract class DependencyResolver {
    * @param aspect the aspect applied to this target (if any)
    * @param configConditions resolver for config_setting labels
    * @param toolchainLabels required toolchain labels
-   * @param defaultBuildOptions default build options provided to the server to use for creating
-   *     diffs during SkyKey construction
    * @return a mapping of each attribute in this rule or aspects to its dependent nodes
    */
   public final OrderedSetMultimap<Attribute, Dependency> dependentNodeMap(
@@ -100,8 +98,7 @@ public abstract class DependencyResolver {
       BuildConfiguration hostConfig,
       @Nullable Aspect aspect,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      ImmutableSet<Label> toolchainLabels,
-      BuildOptions defaultBuildOptions)
+      ImmutableSet<Label> toolchainLabels)
       throws EvalException, InvalidConfigurationException, InterruptedException,
           InconsistentAspectOrderException {
     NestedSetBuilder<Label> rootCauses = NestedSetBuilder.<Label>stableOrder();
@@ -112,8 +109,7 @@ public abstract class DependencyResolver {
             aspect != null ? ImmutableList.of(aspect) : ImmutableList.<Aspect>of(),
             configConditions,
             toolchainLabels,
-            rootCauses,
-            defaultBuildOptions);
+            rootCauses);
     if (!rootCauses.isEmpty()) {
       throw new IllegalStateException(rootCauses.build().iterator().next().toString());
     }
@@ -148,8 +144,6 @@ public abstract class DependencyResolver {
    * @param toolchainLabels required toolchain labels
    * @param rootCauses collector for dep labels that can't be (loading phase) loaded @return a
    *     mapping of each attribute in this rule or aspects to its dependent nodes
-   * @param defaultBuildOptions default build options provided by the server to use for creating
-   *     diffs during SkyKey construction
    */
   public final OrderedSetMultimap<Attribute, Dependency> dependentNodeMap(
       TargetAndConfiguration node,
@@ -157,8 +151,7 @@ public abstract class DependencyResolver {
       Iterable<Aspect> aspects,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       ImmutableSet<Label> toolchainLabels,
-      NestedSetBuilder<Label> rootCauses,
-      BuildOptions defaultBuildOptions)
+      NestedSetBuilder<Label> rootCauses)
       throws EvalException, InvalidConfigurationException, InterruptedException,
           InconsistentAspectOrderException {
     Target target = node.getTarget();
@@ -175,14 +168,7 @@ public abstract class DependencyResolver {
       visitTargetVisibility(node, rootCauses, outgoingEdges.get(null));
     } else if (target instanceof Rule) {
       visitRule(
-          node,
-          hostConfig,
-          aspects,
-          configConditions,
-          toolchainLabels,
-          rootCauses,
-          outgoingEdges,
-          defaultBuildOptions);
+          node, hostConfig, aspects, configConditions, toolchainLabels, rootCauses, outgoingEdges);
     } else if (target instanceof PackageGroup) {
       visitPackageGroup(node, (PackageGroup) target, rootCauses, outgoingEdges.get(null));
     } else {
@@ -199,8 +185,7 @@ public abstract class DependencyResolver {
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       ImmutableSet<Label> toolchainLabels,
       NestedSetBuilder<Label> rootCauses,
-      OrderedSetMultimap<Attribute, Dependency> outgoingEdges,
-      BuildOptions defaultBuildOptions)
+      OrderedSetMultimap<Attribute, Dependency> outgoingEdges)
       throws EvalException, InvalidConfigurationException, InconsistentAspectOrderException,
           InterruptedException {
     Preconditions.checkArgument(node.getTarget() instanceof Rule);
@@ -214,7 +199,7 @@ public abstract class DependencyResolver {
 
     visitTargetVisibility(node, rootCauses, outgoingEdges.get(null));
     resolveEarlyBoundAttributes(depResolver);
-    resolveLateBoundAttributes(depResolver, ruleConfig, hostConfig, defaultBuildOptions);
+    resolveLateBoundAttributes(depResolver, ruleConfig, hostConfig);
 
     Attribute toolchainsAttribute =
         attributeMap.getAttributeDefinition(PlatformSemantics.TOOLCHAINS_ATTR);
@@ -345,38 +330,34 @@ public abstract class DependencyResolver {
   /**
    * Resolves the dependencies for all late-bound attributes in this rule.
    *
-   * <p>Late-bound attributes need special handling because they require configuration transitions
-   * to determine their values.
+   * <p>Late-bound attributes need special handling because they require configuration
+   * transitions to determine their values.
    *
    * <p>In other words, the normal process of dependency resolution is:
-   *
    * <ol>
-   *   <li>Find every label value in the rule's attributes
+   *   <li>Find every label value in the rule's attributes</li>
    *   <li>Apply configuration transitions over each value to get its dep configuration
-   *   <li>Return each value with its dep configuration
+   *   <li>Return each value with its dep configuration</li>
    * </ol>
    *
-   * This doesn't work for late-bound attributes because you can't get their values without knowing
-   * the configuration first. And that configuration may not be the owning rule's configuration.
-   * Specifically, {@link LateBoundDefault#useHostConfiguration()} switches to the host config and
-   * late-bound split attributes branch into multiple split configs.
+   * This doesn't work for late-bound attributes because you can't get their values without
+   * knowing the configuration first. And that configuration may not be the owning rule's
+   * configuration. Specifically, {@link LateBoundDefault#useHostConfiguration()} switches to the
+   * host config and late-bound split attributes branch into multiple split configs.
    *
-   * <p>This method implements that logic and makes sure the normal configuration transition logic
-   * mixes with it cleanly.
+   * <p>This method implements that logic and makes sure the normal configuration
+   * transition logic mixes with it cleanly.
    *
    * @param depResolver the resolver for this rule's deps
    * @param ruleConfig the rule's configuration
    * @param hostConfig the equivalent host configuration
-   * @param defaultBuildOptions default build options provided by the server to use for creating
-   *     diffs during SkyKey construction
    */
   private void resolveLateBoundAttributes(
       RuleResolver depResolver,
       BuildConfiguration ruleConfig,
-      BuildConfiguration hostConfig,
-      BuildOptions defaultBuildOptions)
+      BuildConfiguration hostConfig)
       throws EvalException, InvalidConfigurationException, InconsistentAspectOrderException,
-          InterruptedException {
+             InterruptedException{
     ConfiguredAttributeMapper attributeMap = depResolver.attributeMap;
     for (AttributeAndOwner attributeAndOwner : depResolver.attributes) {
       Attribute attribute = attributeAndOwner.attribute;
@@ -396,7 +377,7 @@ public abstract class DependencyResolver {
         // non-split branch, which calls TransitionResolver.evaluateTransition, which returns its
         // "host mode" result without ever looking at the split.
         Iterable<BuildConfiguration> splitConfigs =
-            getConfigurations(ruleConfig.fragmentClasses(), splitOptions, defaultBuildOptions);
+            getConfigurations(ruleConfig.fragmentClasses(), splitOptions);
         if (splitConfigs == null) {
           continue; // Need Skyframe deps.
         }
@@ -877,11 +858,8 @@ public abstract class DependencyResolver {
       throws InterruptedException;
 
   /**
-   * Returns the build configurations with the given fragments and {@link
-   * BuildOptions.OptionsDiffForReconstruction} resulting from calling {@link
-   * BuildOptions#diffForReconstruction} between the {@code defaultBuildOptions} and the provided
-   * {@code buildOptions}. Results will be returned in the order the {@code buildOptions} are
-   * provided.
+   * Returns the build configurations with the given options and fragments, in the same order as the
+   * input options.
    *
    * <p>Returns null if any configurations aren't ready to be returned at this moment. If
    * getConfigurations returns null once or more during a {@link #dependentNodeMap} call, the
@@ -890,9 +868,7 @@ public abstract class DependencyResolver {
    */
   @Nullable
   protected abstract List<BuildConfiguration> getConfigurations(
-      FragmentClassSet fragments,
-      Iterable<BuildOptions> buildOptions,
-      BuildOptions defaultBuildOptions)
+      FragmentClassSet fragments, Iterable<BuildOptions> buildOptions)
       throws InvalidConfigurationException, InterruptedException;
 
   /**
