@@ -162,6 +162,16 @@ class PlaceholderIdFieldInitializerBuilder {
     return nextSlot;
   }
 
+  private static String normalizeAttrName(String attrName) {
+    // In addition to ".", attributes can have ":", e.g., for "android:textColor".
+    Preconditions.checkArgument(!attrName.contains("::"), "invalid name %s", attrName);
+    return normalizeName(attrName).replace(':', '_');
+  }
+
+  private static String normalizeName(String resourceName) {
+    return resourceName.replace('.', '_');
+  }
+
   public static PlaceholderIdFieldInitializerBuilder from(
       AndroidFrameworkAttrIdProvider androidIdProvider) {
     return new PlaceholderIdFieldInitializerBuilder(androidIdProvider);
@@ -239,7 +249,7 @@ class PlaceholderIdFieldInitializerBuilder {
       styleableAttrs.put(normalizedStyleableName, normalizedAttrs);
     }
     for (Map.Entry<FullyQualifiedName, Boolean> attrEntry : attrs.entrySet()) {
-      String normalizedAttrName = normalizeAttrName(attrEntry.getKey());
+      String normalizedAttrName = normalizeAttrName(attrEntry.getKey().qualifiedName());
       normalizedAttrs.put(normalizedAttrName, attrEntry.getValue());
     }
   }
@@ -476,16 +486,5 @@ class PlaceholderIdFieldInitializerBuilder {
       }
     }
     return initList.build();
-  }
-
-  static String normalizeAttrName(FullyQualifiedName fqn) {
-    String attrName = fqn.qualifiedName();
-    // In addition to ".", attributes can have ":", e.g., for "android:textColor".
-    Preconditions.checkArgument(!attrName.contains("::"), "invalid name %s", attrName);
-    return normalizeName(attrName).replace(':', '_');
-  }
-
-  static String normalizeName(String resourceName) {
-    return resourceName.replace('.', '_');
   }
 }
