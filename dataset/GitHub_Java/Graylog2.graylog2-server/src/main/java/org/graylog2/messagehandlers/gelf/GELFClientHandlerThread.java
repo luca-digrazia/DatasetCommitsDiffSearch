@@ -20,9 +20,8 @@
 
 package org.graylog2.messagehandlers.gelf;
 
-import org.apache.log4j.Logger;
-
 import java.net.DatagramPacket;
+import org.graylog2.Log;
 
 
 /**
@@ -30,11 +29,9 @@ import java.net.DatagramPacket;
  *
  * Thread that handles a GELF client.
  *
- * @author Lennart Koopmann <lennart@socketfeed.com>
+ * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GELFClientHandlerThread extends Thread {
-
-    private static final Logger LOG = Logger.getLogger(GELFClientHandlerThread.class);
 
     private DatagramPacket receivedGelfSentence;
 
@@ -54,31 +51,31 @@ public class GELFClientHandlerThread extends Thread {
         try {
             GELFClientHandlerIF client = null;
             if (GELF.isChunkedMessage(this.receivedGelfSentence)) {
-                LOG.info("Received message is chunked. Handling now.");
+                Log.info("Received message is chunked. Handling now.");
                 client = new ChunkedGELFClientHandler(this.receivedGelfSentence);
             } else {
-                LOG.info("Received message is not chunked. Handling now.");
+                Log.info("Received message is not chunked. Handling now.");
                 client = new SimpleGELFClientHandler(this.receivedGelfSentence);
             }
             client.handle();
         } catch (InvalidGELFTypeException e) {
-            LOG.error("Invalid GELF type in message: " + e.getMessage(), e);
+            Log.crit("Invalid GELF type in message: " + e.toString());
         } catch (InvalidGELFHeaderException e) {
-            LOG.error("Invalid GELF header in message: " + e.getMessage(), e);
+            Log.crit("Invalid GELF header in message: " + e.toString());
         } catch (InvalidGELFCompressionMethodException e) {
-            LOG.error("Invalid compression method of GELF message: " + e.getMessage(), e);
+            Log.crit("Invalid compression method of GELF message: " + e.toString());
         } catch (java.util.zip.DataFormatException e) {
-            LOG.error("Invalid compression data format in GELF message: " + e.getMessage(), e);
+            Log.crit("Invalid compression data format in GELF message: " + e.toString());
         } catch (java.io.UnsupportedEncodingException e) {
-            LOG.error("Invalid enconding of GELF message: " + e.getMessage(), e);
+            Log.crit("Invalid enconding of GELF message: " + e.toString());
         } catch (java.io.EOFException e) {
-            LOG.error("EOF Exception while handling GELF message: " + e.getMessage(), e);
+            Log.crit("EOF Exception while handling GELF message: " + e.toString());
         } catch (java.net.SocketException e) {
-            LOG.error("SocketException while handling GELF message: " + e.getMessage(), e);
+            Log.crit("SocketException while handling GELF message: " + e.toString());
         } catch (java.io.IOException e) {
-            LOG.error("IO Error while handling GELF message: " + e.getMessage(), e);
+            Log.crit("IO Error while handling GELF message: " + e.toString());
         } catch (Exception e) {
-            LOG.error("Exception caught while handling GELF message: " + e.getMessage(), e);
+            Log.crit("Exception caught while handling GELF message: " + e.toString());
         }
     }
 
