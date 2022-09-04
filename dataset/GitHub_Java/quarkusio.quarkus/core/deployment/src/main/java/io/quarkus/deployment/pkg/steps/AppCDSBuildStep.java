@@ -27,6 +27,7 @@ import io.quarkus.deployment.pkg.builditem.JarBuildItem;
 import io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem;
 import io.quarkus.deployment.steps.MainClassBuildStep;
 import io.quarkus.runtime.LaunchMode;
+import io.quarkus.runtime.util.JavaVersionUtil;
 import io.quarkus.utilities.JavaBinFinder;
 
 public class AppCDSBuildStep {
@@ -305,6 +306,10 @@ public class AppCDSBuildStep {
                 return false;
             }
 
+            if (!JavaVersionUtil.isJava11OrHigher()) {
+                log.warn("AppCDS can only be used with Java 11+.");
+                return false;
+            }
             return true;
         }
     }
